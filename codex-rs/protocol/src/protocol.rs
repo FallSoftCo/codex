@@ -208,6 +208,16 @@ pub struct ConversationTextParams {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct HollywoodInputMessage {
+    pub message_id: i64,
+    pub room: String,
+    pub sender_id: String,
+    pub body: String,
+    #[serde(default)]
+    pub mentions: Vec<String>,
+}
+
 /// Submission operation
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -245,6 +255,11 @@ pub enum Op {
         #[serde(skip_serializing_if = "Option::is_none")]
         final_output_json_schema: Option<Value>,
     },
+
+    /// External room traffic delivered into the normal turn-input path.
+    ///
+    /// This is contextual input for reasoning, not a task directive.
+    HollywoodInput { message: HollywoodInputMessage },
 
     /// Similar to [`Op::UserInput`], but contains additional context required
     /// for a turn of a [`crate::codex_thread::CodexThread`].
@@ -581,6 +596,7 @@ impl Op {
             Self::RealtimeConversationText(_) => "realtime_conversation_text",
             Self::RealtimeConversationClose => "realtime_conversation_close",
             Self::UserInput { .. } => "user_input",
+            Self::HollywoodInput { .. } => "hollywood_input",
             Self::UserTurn { .. } => "user_turn",
             Self::InterAgentCommunication { .. } => "inter_agent_communication",
             Self::OverrideTurnContext { .. } => "override_turn_context",

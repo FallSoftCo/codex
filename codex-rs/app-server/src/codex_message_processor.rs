@@ -9,6 +9,12 @@ use crate::error_code::INVALID_REQUEST_ERROR_CODE;
 use crate::fuzzy_file_search::FuzzyFileSearchSession;
 use crate::fuzzy_file_search::run_fuzzy_file_search;
 use crate::fuzzy_file_search::start_fuzzy_file_search_session;
+use crate::hollywood::DEFAULT_HOLLYWOOD_ROOM;
+use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
+use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
+use crate::hollywood::HollywoodConfig;
+use crate::hollywood::poll_messages as poll_hollywood_messages;
+use crate::hollywood::prime_from_latest as prime_hollywood_from_latest;
 use crate::models::supported_models;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
@@ -127,6 +133,12 @@ use codex_app_server_protocol::ThreadDecrementElicitationParams;
 use codex_app_server_protocol::ThreadDecrementElicitationResponse;
 use codex_app_server_protocol::ThreadForkParams;
 use codex_app_server_protocol::ThreadForkResponse;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
+use codex_app_server_protocol::ThreadHollywoodAttachResponse;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetResponse;
+use codex_app_server_protocol::ThreadHollywoodDetachParams;
+use codex_app_server_protocol::ThreadHollywoodDetachResponse;
 use codex_app_server_protocol::ThreadIncrementElicitationParams;
 use codex_app_server_protocol::ThreadIncrementElicitationResponse;
 use codex_app_server_protocol::ThreadItem;
@@ -272,6 +284,7 @@ use codex_protocol::protocol::ConversationStartParams;
 use codex_protocol::protocol::ConversationTextParams;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::GitInfo as CoreGitInfo;
+use codex_protocol::protocol::HollywoodInputMessage as CoreHollywoodInputMessage;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::McpAuthStatus as CoreMcpAuthStatus;
 use codex_protocol::protocol::McpServerRefreshConfig;
@@ -317,6 +330,7 @@ use tokio::sync::Mutex;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::watch;
+use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use toml::Value as TomlValue;
@@ -711,6 +725,18 @@ impl CodexMessageProcessor {
             }
             ClientRequest::ThreadUnsubscribe { request_id, params } => {
                 self.thread_unsubscribe(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadHollywoodAttach { request_id, params } => {
+                self.thread_hollywood_attach(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadHollywoodDetach { request_id, params } => {
+                self.thread_hollywood_detach(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadHollywoodAttentionSet { request_id, params } => {
+                self.thread_hollywood_attention_set(to_connection_request_id(request_id), params)
                     .await;
             }
             ClientRequest::ThreadResume { request_id, params } => {
@@ -5560,6 +5586,103 @@ impl CodexMessageProcessor {
             .await;
     }
 
+    async fn thread_hollywood_attach(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadHollywoodAttachParams,
+    ) {
+        let (thread_id, _) = match self.load_thread(&params.thread_id).await {
+            Ok(v) => v,
+            Err(error) => {
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        {
+            let mut thread_state = thread_state.lock().await;
+            thread_state.hollywood.attach(HollywoodConfig {
+                url: params
+                    .url
+                    .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+                room: params
+                    .room
+                    .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
+                attention: params.attention.unwrap_or_default(),
+            });
+        }
+        Self::log_listener_attach_result(
+            self.ensure_conversation_listener(
+                thread_id,
+                request_id.connection_id,
+                /*raw_events_enabled*/ false,
+                ApiVersion::V2,
+            )
+            .await,
+            thread_id,
+            request_id.connection_id,
+            "hollywood-thread",
+        );
+        self.outgoing
+            .send_response(request_id, ThreadHollywoodAttachResponse {})
+            .await;
+    }
+
+    async fn thread_hollywood_detach(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadHollywoodDetachParams,
+    ) {
+        let (thread_id, _) = match self.load_thread(&params.thread_id).await {
+            Ok(v) => v,
+            Err(error) => {
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+        self.thread_state_manager
+            .thread_state(thread_id)
+            .await
+            .lock()
+            .await
+            .hollywood
+            .detach();
+        self.outgoing
+            .send_response(request_id, ThreadHollywoodDetachResponse {})
+            .await;
+    }
+
+    async fn thread_hollywood_attention_set(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadHollywoodAttentionSetParams,
+    ) {
+        let (thread_id, _) = match self.load_thread(&params.thread_id).await {
+            Ok(v) => v,
+            Err(error) => {
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        if !thread_state
+            .lock()
+            .await
+            .hollywood
+            .set_attention(params.attention)
+        {
+            self.send_invalid_request_error(
+                request_id,
+                "Hollywood is not attached for this thread".to_string(),
+            )
+            .await;
+            return;
+        }
+        self.outgoing
+            .send_response(request_id, ThreadHollywoodAttentionSetResponse {})
+            .await;
+    }
+
     async fn archive_thread_common(
         &mut self,
         thread_id: ThreadId,
@@ -7405,7 +7528,10 @@ impl CodexMessageProcessor {
             codex_home,
         } = listener_task_context;
         let outgoing_for_task = Arc::clone(&outgoing);
+        let hollywood_client = reqwest::Client::new();
         tokio::spawn(async move {
+            let mut hollywood_poll = tokio::time::interval(HOLLYWOOD_POLL_INTERVAL);
+            hollywood_poll.set_missed_tick_behavior(MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
                     _ = &mut cancel_rx => {
@@ -7454,6 +7580,115 @@ impl CodexMessageProcessor {
                             codex_home.as_path(),
                         )
                         .await;
+                    }
+                    _ = hollywood_poll.tick() => {
+                        let (config, after_id, should_prime) = {
+                            let mut state = thread_state.lock().await;
+                            let Some(config) = state.hollywood.config() else {
+                                continue;
+                            };
+                            (
+                                config,
+                                state.hollywood.last_seen_message_id(),
+                                state.hollywood.take_start_from_latest(),
+                            )
+                        };
+
+                        if should_prime {
+                            match prime_hollywood_from_latest(&hollywood_client, &config).await {
+                                Ok(last_id) => {
+                                    thread_state
+                                        .lock()
+                                        .await
+                                        .hollywood
+                                        .set_last_seen_message_id(last_id);
+                                }
+                                Err(err) => {
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        "failed to prime Hollywood cursor: {err}"
+                                    );
+                                }
+                            }
+                            continue;
+                        }
+
+                        match poll_hollywood_messages(
+                            &hollywood_client,
+                            &config,
+                            after_id,
+                            conversation_id,
+                        ).await {
+                            Ok(result) => {
+                                if result.last_id > after_id {
+                                    thread_state
+                                        .lock()
+                                        .await
+                                        .hollywood
+                                        .set_last_seen_message_id(result.last_id);
+                                }
+                                let subscribed_connection_ids = thread_state_manager
+                                    .subscribed_connection_ids(conversation_id)
+                                    .await;
+                                if subscribed_connection_ids.is_empty() {
+                                    continue;
+                                }
+                                let thread_outgoing = ThreadScopedOutgoingMessageSender::new(
+                                    outgoing_for_task.clone(),
+                                    subscribed_connection_ids,
+                                    conversation_id,
+                                );
+                                for message in result.messages {
+                                    if message.attention
+                                        == codex_app_server_protocol::HollywoodMessageAttention::Focused
+                                        && !message.self_authored
+                                    {
+                                        let submit_result = conversation
+                                            .submit(Op::HollywoodInput {
+                                                message: CoreHollywoodInputMessage {
+                                                    message_id: message.notification_message.id,
+                                                    room: message.notification_message.room.clone(),
+                                                    sender_id: message
+                                                        .notification_message
+                                                        .sender_id
+                                                        .clone()
+                                                        .unwrap_or_else(|| "unknown".to_string()),
+                                                    body: message.notification_message.body.clone(),
+                                                    mentions: message
+                                                        .notification_message
+                                                        .mentions
+                                                        .clone(),
+                                                },
+                                            })
+                                            .await;
+                                        if let Err(err) = submit_result {
+                                            tracing::debug!(
+                                                conversation_id = %conversation_id,
+                                                "failed to submit Hollywood input to core: {err}"
+                                            );
+                                        }
+                                    }
+                                    thread_outgoing
+                                        .send_server_notification(ServerNotification::ThreadHollywoodMessage(
+                                            codex_app_server_protocol::HollywoodMessageNotification {
+                                                thread_id: conversation_id.to_string(),
+                                                message: message.notification_message,
+                                                attention: message.attention,
+                                                mentioned: message.mentioned,
+                                                self_authored: message.self_authored,
+                                            },
+                                        ))
+                                        .await;
+                                }
+                            }
+                            Err(err) => {
+                                tracing::debug!(
+                                    conversation_id = %conversation_id,
+                                    room = config.room,
+                                    "Hollywood poll failed: {err}"
+                                );
+                            }
+                        }
                     }
                     listener_command = listener_command_rx.recv() => {
                         let Some(listener_command) = listener_command else {

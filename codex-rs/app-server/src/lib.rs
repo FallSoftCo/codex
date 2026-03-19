@@ -75,6 +75,7 @@ mod filters;
 mod fs_api;
 mod fs_watch;
 mod fuzzy_file_search;
+mod hollywood;
 pub mod in_process;
 mod message_processor;
 mod models;

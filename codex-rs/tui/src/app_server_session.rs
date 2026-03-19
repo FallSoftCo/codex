@@ -30,6 +30,8 @@ use codex_app_server_protocol::ThreadCompactStartParams;
 use codex_app_server_protocol::ThreadCompactStartResponse;
 use codex_app_server_protocol::ThreadForkParams;
 use codex_app_server_protocol::ThreadForkResponse;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
+use codex_app_server_protocol::ThreadHollywoodAttachResponse;
 use codex_app_server_protocol::ThreadListParams;
 use codex_app_server_protocol::ThreadListResponse;
 use codex_app_server_protocol::ThreadLoadedListParams;
@@ -88,7 +90,9 @@ use color_eyre::eyre::ContextCompat;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
 use std::collections::HashMap;
+use std::env;
 use std::path::PathBuf;
+use tracing::warn;
 
 pub(crate) struct AppServerBootstrap {
     pub(crate) account_auth_mode: Option<AuthMode>,
@@ -311,7 +315,10 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/start failed during TUI bootstrap")?;
-        started_thread_from_start_response(response, config).await
+        let started = started_thread_from_start_response(response, config).await?;
+        self.maybe_auto_attach_hollywood(started.session.thread_id)
+            .await;
+        Ok(started)
     }
 
     pub(crate) async fn resume_thread(
@@ -333,7 +340,10 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/resume failed during TUI bootstrap")?;
-        started_thread_from_resume_response(response, &config).await
+        let started = started_thread_from_resume_response(response, &config).await?;
+        self.maybe_auto_attach_hollywood(started.session.thread_id)
+            .await;
+        Ok(started)
     }
 
     pub(crate) async fn fork_thread(
@@ -355,13 +365,31 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/fork failed during TUI bootstrap")?;
-        started_thread_from_fork_response(response, &config).await
+        let started = started_thread_from_fork_response(response, &config).await?;
+        self.maybe_auto_attach_hollywood(started.session.thread_id)
+            .await;
+        Ok(started)
     }
 
     fn thread_params_mode(&self) -> ThreadParamsMode {
         match &self.client {
             AppServerClient::InProcess(_) => ThreadParamsMode::Embedded,
             AppServerClient::Remote(_) => ThreadParamsMode::Remote,
+        }
+    }
+
+    async fn maybe_auto_attach_hollywood(&mut self, thread_id: ThreadId) {
+        let Some(params) = hollywood_auto_attach_params(thread_id) else {
+            return;
+        };
+        let request_id = self.next_request_id();
+        let result: Result<ThreadHollywoodAttachResponse> = self
+            .client
+            .request_typed(ClientRequest::ThreadHollywoodAttach { request_id, params })
+            .await
+            .wrap_err("thread/hollywood/attach failed during TUI bootstrap");
+        if let Err(err) = result {
+            warn!("Hollywood auto-attach failed: {err}");
         }
     }
 
@@ -872,6 +900,40 @@ fn thread_start_params_from_config(
         persist_extended_history: true,
         ..ThreadStartParams::default()
     }
+}
+
+fn hollywood_auto_attach_params(thread_id: ThreadId) -> Option<ThreadHollywoodAttachParams> {
+    let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
+    let has_explicit_config =
+        env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
+    let enabled = auto_attach
+        .as_deref()
+        .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(has_explicit_config);
+    if !enabled {
+        return None;
+    }
+
+    let mode = match env::var("HOLLYWOOD_ATTENTION_MODE")
+        .unwrap_or_else(|_| "focused".to_string())
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "ambient" => codex_app_server_protocol::HollywoodAttentionMode::Ambient,
+        "broad" => codex_app_server_protocol::HollywoodAttentionMode::Broad,
+        _ => codex_app_server_protocol::HollywoodAttentionMode::Focused,
+    };
+
+    Some(ThreadHollywoodAttachParams {
+        thread_id: thread_id.to_string(),
+        url: env::var("HOLLYWOOD_URL").ok(),
+        room: env::var("HOLLYWOOD_ROOM").ok(),
+        attention: Some(codex_app_server_protocol::HollywoodAttentionSettings {
+            mode,
+            include_at_all: true,
+            include_at_room: true,
+        }),
+    })
 }
 
 fn thread_resume_params_from_config(

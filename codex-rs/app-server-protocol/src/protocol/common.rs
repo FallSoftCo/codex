@@ -259,6 +259,21 @@ client_request_definitions! {
         params: v2::ThreadUnsubscribeParams,
         response: v2::ThreadUnsubscribeResponse,
     },
+    #[experimental("thread/hollywood/attach")]
+    ThreadHollywoodAttach => "thread/hollywood/attach" {
+        params: v2::ThreadHollywoodAttachParams,
+        response: v2::ThreadHollywoodAttachResponse,
+    },
+    #[experimental("thread/hollywood/detach")]
+    ThreadHollywoodDetach => "thread/hollywood/detach" {
+        params: v2::ThreadHollywoodDetachParams,
+        response: v2::ThreadHollywoodDetachResponse,
+    },
+    #[experimental("thread/hollywood/attention/set")]
+    ThreadHollywoodAttentionSet => "thread/hollywood/attention/set" {
+        params: v2::ThreadHollywoodAttentionSetParams,
+        response: v2::ThreadHollywoodAttentionSetResponse,
+    },
     #[experimental("thread/increment_elicitation")]
     /// Increment the thread-local out-of-band elicitation counter.
     ///
@@ -974,6 +989,8 @@ server_notification_definitions! {
     ThreadRealtimeError => "thread/realtime/error" (v2::ThreadRealtimeErrorNotification),
     #[experimental("thread/realtime/closed")]
     ThreadRealtimeClosed => "thread/realtime/closed" (v2::ThreadRealtimeClosedNotification),
+    #[experimental("thread/hollywood/message")]
+    ThreadHollywoodMessage => "thread/hollywood/message" (v2::HollywoodMessageNotification),
 
     /// Notifies the user of world-writable directories on Windows, which cannot be protected by the sandbox.
     WindowsWorldWritableWarning => "windows/worldWritableWarning" (v2::WindowsWorldWritableWarningNotification),

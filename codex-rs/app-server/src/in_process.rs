@@ -693,7 +693,12 @@ mod tests {
     use super::*;
     use codex_app_server_protocol::ClientInfo;
     use codex_app_server_protocol::ConfigRequirementsReadResponse;
+    use codex_app_server_protocol::HollywoodMessageAttention;
+    use codex_app_server_protocol::InitializeCapabilities;
+    use codex_app_server_protocol::ServerNotification;
     use codex_app_server_protocol::SessionSource as ApiSessionSource;
+    use codex_app_server_protocol::ThreadHollywoodAttachParams;
+    use codex_app_server_protocol::ThreadHollywoodAttachResponse;
     use codex_app_server_protocol::ThreadStartParams;
     use codex_app_server_protocol::ThreadStartResponse;
     use codex_app_server_protocol::Turn;
@@ -730,7 +735,10 @@ mod tests {
                     title: None,
                     version: "0.0.0".to_string(),
                 },
-                capabilities: None,
+                capabilities: Some(InitializeCapabilities {
+                    experimental_api: true,
+                    opt_out_notification_methods: None,
+                }),
             },
             channel_capacity,
         };
@@ -788,6 +796,113 @@ mod tests {
                 .await
                 .expect("in-process runtime should shutdown cleanly");
         }
+    }
+
+    #[tokio::test]
+    async fn hollywood_attach_surfaces_room_mentions_as_thread_notifications() {
+        let mut client = start_test_client(SessionSource::Cli).await;
+        let response = client
+            .request(ClientRequest::ThreadStart {
+                request_id: RequestId::Integer(20),
+                params: ThreadStartParams {
+                    ephemeral: Some(true),
+                    ..ThreadStartParams::default()
+                },
+            })
+            .await
+            .expect("request transport should work")
+            .expect("thread/start should succeed");
+        let parsed: ThreadStartResponse =
+            serde_json::from_value(response).expect("thread/start response should parse");
+        let thread_id = parsed.thread.id;
+
+        let response = client
+            .request(ClientRequest::ThreadHollywoodAttach {
+                request_id: RequestId::Integer(21),
+                params: ThreadHollywoodAttachParams {
+                    thread_id: thread_id.clone(),
+                    url: Some("http://127.0.0.1:8765".to_string()),
+                    room: Some("main".to_string()),
+                    attention: None,
+                },
+            })
+            .await
+            .expect("attach transport should work")
+            .expect("attach should succeed");
+        let _parsed: ThreadHollywoodAttachResponse =
+            serde_json::from_value(response).expect("attach response should parse");
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let sender_id = format!("hollywood-smoke-{}", uuid::Uuid::new_v4());
+        let body = format!("smoke ping @{thread_id}");
+        reqwest::Client::new()
+            .post("http://127.0.0.1:8765/hollywood/v1/messages")
+            .json(&serde_json::json!({
+                "room": "main",
+                "sender_id": sender_id,
+                "body": body,
+            }))
+            .send()
+            .await
+            .expect("Hollywood send request should succeed")
+            .error_for_status()
+            .expect("Hollywood send response should be successful");
+
+        let (notification, saw_turn_started) = timeout(Duration::from_secs(8), async {
+            let mut hollywood_notification = None;
+            let mut saw_turn_started = false;
+            loop {
+                let Some(event) = client.next_event().await else {
+                    panic!("in-process client disconnected before Hollywood notification");
+                };
+                match event {
+                    InProcessServerEvent::ServerNotification(
+                        ServerNotification::ThreadHollywoodMessage(notification),
+                    ) => {
+                        hollywood_notification = Some(notification);
+                        if saw_turn_started {
+                            break (
+                                hollywood_notification
+                                    .expect("Hollywood notification should be present"),
+                                saw_turn_started,
+                            );
+                        }
+                    }
+                    InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
+                        notification,
+                    )) if notification.thread_id == thread_id => {
+                        saw_turn_started = true;
+                        if hollywood_notification.is_some() {
+                            break (
+                                hollywood_notification
+                                    .expect("Hollywood notification should be present"),
+                                saw_turn_started,
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for Hollywood notification");
+
+        assert_eq!(notification.thread_id, thread_id);
+        assert_eq!(notification.message.body, body);
+        assert_eq!(
+            notification.message.sender_id.as_deref(),
+            Some(sender_id.as_str())
+        );
+        assert!(notification.mentioned);
+        assert!(!notification.self_authored);
+        assert_eq!(notification.attention, HollywoodMessageAttention::Focused);
+        assert!(saw_turn_started);
+
+        client
+            .shutdown()
+            .await
+            .expect("in-process runtime should shutdown cleanly");
     }
 
     #[tokio::test]

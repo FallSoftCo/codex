@@ -135,6 +135,10 @@ pub enum NonSteerableTurnKind {
     Compact,
 }
 
+const fn default_true() -> bool {
+    true
+}
+
 /// This translation layer make sure that we expose codex error code in camel case.
 ///
 /// When an upstream HTTP status is available (for example, from the Responses API or a provider),
@@ -2899,6 +2903,79 @@ pub enum ThreadUnsubscribeStatus {
     Unsubscribed,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodAttentionMode {
+    Focused,
+    Ambient,
+    Broad,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct HollywoodAttentionSettings {
+    pub mode: HollywoodAttentionMode,
+    #[serde(default = "default_true")]
+    pub include_at_all: bool,
+    #[serde(default = "default_true")]
+    pub include_at_room: bool,
+}
+
+impl Default for HollywoodAttentionSettings {
+    fn default() -> Self {
+        Self {
+            mode: HollywoodAttentionMode::Focused,
+            include_at_all: true,
+            include_at_room: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodAttachParams {
+    pub thread_id: String,
+    #[ts(optional = nullable)]
+    pub url: Option<String>,
+    #[ts(optional = nullable)]
+    pub room: Option<String>,
+    #[ts(optional = nullable)]
+    pub attention: Option<HollywoodAttentionSettings>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodAttachResponse {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodDetachParams {
+    pub thread_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodDetachResponse {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodAttentionSetParams {
+    pub thread_id: String,
+    pub attention: HollywoodAttentionSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodAttentionSetResponse {}
+
 /// Parameters for `thread/increment_elicitation`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -3997,6 +4074,43 @@ pub struct ThreadRealtimeErrorNotification {
 pub struct ThreadRealtimeClosedNotification {
     pub thread_id: String,
     pub reason: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodMessageAttention {
+    Focused,
+    Ambient,
+    Broad,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct HollywoodMessage {
+    pub id: i64,
+    pub room: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub sender_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub recipient_id: Option<String>,
+    pub body: String,
+    pub created_at: String,
+    pub mentions: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct HollywoodMessageNotification {
+    pub thread_id: String,
+    pub message: HollywoodMessage,
+    pub attention: HollywoodMessageAttention,
+    pub mentioned: bool,
+    pub self_authored: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
