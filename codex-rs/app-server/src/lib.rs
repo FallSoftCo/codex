@@ -67,6 +67,7 @@ mod external_agent_config_api;
 mod filters;
 mod fs_api;
 mod fuzzy_file_search;
+mod hollywood;
 pub mod in_process;
 mod message_processor;
 mod models;

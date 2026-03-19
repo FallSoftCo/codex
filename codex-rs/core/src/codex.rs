@@ -4174,6 +4174,10 @@ async fn submission_loop(sess: Arc<Session>, config: Arc<Config>, rx_sub: Receiv
                     handle_realtime_conversation_close(&sess, sub.id.clone()).await;
                     false
                 }
+                Op::HollywoodInput { message } => {
+                    handlers::hollywood_input(&sess, sub.id.clone(), message).await;
+                    false
+                }
                 Op::OverrideTurnContext {
                     cwd,
                     approval_policy,
@@ -4389,6 +4393,7 @@ mod handlers {
     use crate::review_prompts::resolve_review_request;
     use crate::rollout::RolloutRecorder;
     use crate::rollout::session_index;
+    use crate::session_prefix::format_hollywood_message;
     use crate::tasks::CompactTask;
     use crate::tasks::UndoTask;
     use crate::tasks::UserShellCommandMode;
@@ -4399,6 +4404,7 @@ mod handlers {
     use codex_protocol::protocol::ErrorEvent;
     use codex_protocol::protocol::Event;
     use codex_protocol::protocol::EventMsg;
+    use codex_protocol::protocol::HollywoodInputMessage;
     use codex_protocol::protocol::ListCustomPromptsResponseEvent;
     use codex_protocol::protocol::ListSkillsResponseEvent;
     use codex_protocol::protocol::McpServerRefreshConfig;
@@ -4435,6 +4441,26 @@ mod handlers {
 
     pub async fn clean_background_terminals(sess: &Arc<Session>) {
         sess.close_unified_exec_processes().await;
+    }
+
+    pub async fn hollywood_input(
+        sess: &Arc<Session>,
+        sub_id: String,
+        message: HollywoodInputMessage,
+    ) {
+        let wrapped = format_hollywood_message(&message);
+        user_input_or_turn(
+            sess,
+            sub_id,
+            Op::UserInput {
+                items: vec![UserInput::Text {
+                    text: wrapped,
+                    text_elements: Vec::new(),
+                }],
+                final_output_json_schema: None,
+            },
+        )
+        .await;
     }
 
     pub async fn override_turn_context(
@@ -5528,32 +5554,43 @@ pub(crate) async fn run_turn(
     if run_pending_session_start_hooks(&sess, &turn_context).await {
         return last_agent_message;
     }
-    let user_prompt_submit_outcome =
-        run_user_prompt_submit_hooks(&sess, &turn_context, UserMessageItem::new(&input).message())
-            .await;
-    if user_prompt_submit_outcome.should_stop {
-        record_additional_contexts(
+    if matches!(
+        parse_turn_item(&response_item),
+        Some(TurnItem::UserMessage(_))
+    ) {
+        let user_prompt_submit_outcome = run_user_prompt_submit_hooks(
             &sess,
             &turn_context,
-            user_prompt_submit_outcome.additional_contexts,
+            UserMessageItem::new(&input).message(),
         )
         .await;
-        return last_agent_message;
-    }
-    let additional_contexts = user_prompt_submit_outcome.additional_contexts;
-    sess.services
-        .analytics_events_client
-        .track_app_mentioned(tracking.clone(), mentioned_app_invocations);
-    for plugin in mentioned_plugin_metadata {
+        if user_prompt_submit_outcome.should_stop {
+            record_additional_contexts(
+                &sess,
+                &turn_context,
+                user_prompt_submit_outcome.additional_contexts,
+            )
+            .await;
+            return last_agent_message;
+        }
+        let additional_contexts = user_prompt_submit_outcome.additional_contexts;
         sess.services
             .analytics_events_client
-            .track_plugin_used(tracking.clone(), plugin);
+            .track_app_mentioned(tracking.clone(), mentioned_app_invocations);
+        for plugin in mentioned_plugin_metadata {
+            sess.services
+                .analytics_events_client
+                .track_plugin_used(tracking.clone(), plugin);
+        }
+        sess.merge_connector_selection(explicitly_enabled_connectors.clone())
+            .await;
+        sess.record_user_prompt_and_emit_turn_item(turn_context.as_ref(), &input, response_item)
+            .await;
+        record_additional_contexts(&sess, &turn_context, additional_contexts).await;
+    } else {
+        sess.record_conversation_items(&turn_context, std::slice::from_ref(&response_item))
+            .await;
     }
-    sess.merge_connector_selection(explicitly_enabled_connectors.clone())
-        .await;
-    sess.record_user_prompt_and_emit_turn_item(turn_context.as_ref(), &input, response_item)
-        .await;
-    record_additional_contexts(&sess, &turn_context, additional_contexts).await;
     // Track the previous-turn baseline from the regular user-turn path only so
     // standalone tasks (compact/shell/review/undo) cannot suppress future
     // model/realtime injections.

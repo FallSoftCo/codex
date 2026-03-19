@@ -3504,6 +3504,38 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    fn on_hollywood_message(
+        &mut self,
+        notification: codex_app_server_protocol::HollywoodMessageNotification,
+    ) {
+        let sender = notification
+            .message
+            .sender_id
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+        let attention = match notification.attention {
+            codex_app_server_protocol::HollywoodMessageAttention::Focused => "focused",
+            codex_app_server_protocol::HollywoodMessageAttention::Ambient => "ambient",
+            codex_app_server_protocol::HollywoodMessageAttention::Broad => "broad",
+        };
+        let prefix = if notification.mentioned {
+            format!("[hollywood @{sender}]")
+        } else {
+            format!("[hollywood {attention}]")
+        };
+        self.add_to_history(history_cell::new_info_event(
+            format!("{prefix} {}", notification.message.body),
+            /*hint*/ None,
+        ));
+        if notification.mentioned {
+            self.notify(Notification::HollywoodMention {
+                sender,
+                body: notification.message.body,
+            });
+        }
+        self.request_redraw();
+    }
+
     #[cfg(test)]
     fn on_background_event(&mut self, message: String) {
         debug!("BackgroundEvent: {message}");
@@ -6033,6 +6065,11 @@ impl ChatWidget {
                             reason: notification.reason,
                         },
                     );
+                }
+            }
+            ServerNotification::ThreadHollywoodMessage(notification) => {
+                if !from_replay {
+                    self.on_hollywood_message(notification);
                 }
             }
             ServerNotification::ServerRequestResolved(_)
@@ -10467,6 +10504,10 @@ enum Notification {
         question_count: usize,
         summary: Option<String>,
     },
+    HollywoodMention {
+        sender: String,
+        body: String,
+    },
 }
 
 impl Notification {
@@ -10507,6 +10548,12 @@ impl Notification {
                 (1, None) => "Question requested".to_string(),
                 (count, _) => format!("Questions requested: {count}"),
             },
+            Notification::HollywoodMention { sender, body } => {
+                format!(
+                    "Hollywood mention from {sender}: {}",
+                    truncate_text(body, /*max_graphemes*/ 30)
+                )
+            }
         }
     }
 
@@ -10518,6 +10565,7 @@ impl Notification {
             | Notification::ElicitationRequested { .. } => "approval-requested",
             Notification::PlanModePrompt { .. } => "plan-mode-prompt",
             Notification::UserInputRequested { .. } => "user-input-requested",
+            Notification::HollywoodMention { .. } => "hollywood-mention",
         }
     }
 
@@ -10528,7 +10576,8 @@ impl Notification {
             | Notification::EditApprovalRequested { .. }
             | Notification::ElicitationRequested { .. }
             | Notification::PlanModePrompt { .. }
-            | Notification::UserInputRequested { .. } => 1,
+            | Notification::UserInputRequested { .. }
+            | Notification::HollywoodMention { .. } => 1,
         }
     }
 
