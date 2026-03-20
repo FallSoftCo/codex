@@ -15,6 +15,7 @@
 - [Skills](#skills)
 - [Apps](#apps)
 - [Auth endpoints](#auth-endpoints)
+- [Hollywood integration](#hollywood-integration)
 - [Experimental API Opt-in](#experimental-api-opt-in)
 
 ## Protocol
@@ -143,6 +144,9 @@ Example with notification opt-out:
 - `thread/status/changed` — notification emitted when a loaded thread’s status changes (`threadId` + new `status`).
 - `thread/archive` — move a thread’s rollout file into the archived directory; returns `{}` on success and emits `thread/archived`.
 - `thread/unsubscribe` — unsubscribe this connection from thread turn/item events. If this was the last subscriber, the server shuts down and unloads the thread, then emits `thread/closed`.
+- `thread/hollywood/attach` — attach a loaded thread to a Hollywood room and begin polling inbound room traffic for that thread (experimental).
+- `thread/hollywood/detach` — detach a thread from Hollywood and stop polling room traffic for that thread (experimental).
+- `thread/hollywood/attention/set` — update the attention policy (`focused`, `ambient`, `broad`) for an attached Hollywood thread (experimental).
 - `thread/name/set` — set or update a thread’s user-facing name for either a loaded thread or a persisted rollout; returns `{}` on success and emits `thread/name/updated` to initialized, opted-in clients. Thread names are not required to be unique; name lookups resolve to the most recently updated thread.
 - `thread/unarchive` — move an archived rollout file back into the sessions directory; returns the restored `thread` on success and emits `thread/unarchived`.
 - `thread/compact/start` — trigger conversation history compaction for a thread; returns `{}` immediately while progress streams through standard turn/item notifications.
@@ -838,6 +842,8 @@ Event notifications are the server-initiated event stream for thread lifecycles,
 
 Thread realtime uses a separate thread-scoped notification surface. `thread/realtime/*` notifications are ephemeral transport events, not `ThreadItem`s, and are not returned by `thread/read`, `thread/resume`, or `thread/fork`.
 
+Hollywood uses its own thread-scoped notification surface as well. `thread/hollywood/message` notifications report inbound room traffic that passed the current attention policy for the thread.
+
 ### Notification opt-out
 
 Clients can suppress specific notifications per connection by sending exact method names in `initialize.params.capabilities.optOutNotificationMethods`.
@@ -871,6 +877,57 @@ The thread realtime API emits thread-scoped notifications for session lifecycle 
 - `thread/realtime/closed` — `{ threadId, reason }` when the realtime transport closes (experimental).
 
 Because audio is intentionally separate from `ThreadItem`, clients can opt out of `thread/realtime/outputAudio/delta` independently with `optOutNotificationMethods`.
+
+### Hollywood events (experimental)
+
+The Hollywood integration emits thread-scoped notifications for inbound room traffic:
+
+- `thread/hollywood/message` — `{ threadId, message, attention, mentioned, selfAuthored }`
+
+`message` currently contains:
+
+- `id`
+- `room`
+- `senderId`
+- `recipientId`
+- `body`
+- `createdAt`
+- `mentions`
+
+`attention` is one of:
+
+- `focused`
+- `ambient`
+- `broad`
+
+These notifications are separate from `ThreadItem` history. They report room activity that the app-server surfaced for the thread after applying Hollywood attention rules.
+
+## Hollywood integration
+
+Hollywood is an experimental local multi-agent coordination surface. A thread can attach to a Hollywood room, receive thread-scoped notifications for room activity, and submit focused messages into the Codex runtime as structured contextual input.
+
+Current thread-scoped requests:
+
+- `thread/hollywood/attach`
+- `thread/hollywood/detach`
+- `thread/hollywood/attention/set`
+
+Current attention modes:
+
+- `focused`
+- `ambient`
+- `broad`
+
+Environment-driven TUI bootstrap currently uses:
+
+- `HOLLYWOOD_AUTO_ATTACH`
+- `HOLLYWOOD_URL`
+- `HOLLYWOOD_ROOM`
+- `HOLLYWOOD_ATTENTION_MODE`
+
+Current implementation note: the app-server inbox and notification path are native, but core still routes `HollywoodInput` through the normal user-input path after wrapping it as structured contextual input. That keeps the current integration usable while preserving a clean upstream phase boundary between app-server inbox behavior and deeper core-native external-message semantics.
+
+For a more focused overview of the current design and rollout guidance, see [Hollywood integration](../docs/hollywood_integration.md).
 
 ### Windows sandbox setup events
 
