@@ -41,6 +41,7 @@ pub(crate) struct HollywoodRuntimeState {
     config: Option<HollywoodConfig>,
     last_seen_message_id: i64,
     start_from_latest: bool,
+    startup_turn_pending: bool,
     recent_activity_at: Option<Instant>,
     last_turn_started_at: Option<Instant>,
     autonomous_turn_pending: bool,
@@ -51,6 +52,7 @@ impl HollywoodRuntimeState {
         self.config = Some(config);
         self.last_seen_message_id = 0;
         self.start_from_latest = true;
+        self.startup_turn_pending = true;
         self.recent_activity_at = None;
         self.last_turn_started_at = None;
         self.autonomous_turn_pending = false;
@@ -60,6 +62,7 @@ impl HollywoodRuntimeState {
         self.config = None;
         self.last_seen_message_id = 0;
         self.start_from_latest = false;
+        self.startup_turn_pending = false;
         self.recent_activity_at = None;
         self.last_turn_started_at = None;
         self.autonomous_turn_pending = false;
@@ -97,6 +100,7 @@ impl HollywoodRuntimeState {
 
     pub(crate) fn note_turn_started(&mut self, now: Instant) {
         self.last_turn_started_at = Some(now);
+        self.startup_turn_pending = false;
         self.autonomous_turn_pending = false;
     }
 
@@ -110,6 +114,18 @@ impl HollywoodRuntimeState {
 
     pub(crate) fn clear_autonomous_turn_pending(&mut self) {
         self.autonomous_turn_pending = false;
+    }
+
+    pub(crate) fn should_start_startup_turn(&self) -> bool {
+        self.config.is_some() && self.startup_turn_pending && !self.autonomous_turn_pending
+    }
+
+    pub(crate) fn clear_startup_turn_pending(&mut self) {
+        self.startup_turn_pending = false;
+    }
+
+    pub(crate) fn mark_startup_turn_pending(&mut self) {
+        self.startup_turn_pending = true;
     }
 
     pub(crate) fn should_start_autonomous_turn(&self, now: Instant) -> bool {
@@ -210,9 +226,29 @@ pub(crate) fn format_hollywood_context_message(
         "include_at_all": config.attention.include_at_all,
         "include_at_room": config.attention.include_at_room,
         "identities": hollywood_identities(thread_id),
+        "startup_protocol": {
+            "announce_presence": true,
+            "read_recent_room_context": true,
+            "ask_user_for_tasking_when_unassigned": true,
+            "relay_assigned_scope_to_room": true,
+            "relay_material_conclusions_to_room": true,
+        },
+        "broadcast_guidance": [
+            "Use sparse room-wide broadcasts for presence, scope changes, blockers, handoffs, and major completion updates.",
+            "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.",
+            "When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update so other agents and the user-facing session can converge on the same conclusion.",
+        ],
     })
     .to_string();
     format!("{HOLLYWOOD_CONTEXT_OPEN_TAG}\n{payload_json}\n{HOLLYWOOD_CONTEXT_CLOSE_TAG}")
+}
+
+pub(crate) fn startup_handshake_message(thread_id: ThreadId, config: &HollywoodConfig) -> String {
+    let identities = hollywood_identities(thread_id).join(", ");
+    format!(
+        "Startup protocol: you have just attached to the local Hollywood room `{}` as session identities [{}]. Before doing substantive work, send one short room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself. If you do not yet have a concrete user-assigned task, ask the user what they want you to work on. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. Use room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, and material conclusions that peers should know. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        config.room, identities
+    )
 }
 
 async fn fetch_messages(
@@ -487,6 +523,18 @@ mod tests {
         assert!(!state.should_start_autonomous_turn(now + Duration::from_secs(3)));
         state.note_message_activity(now + Duration::from_secs(1));
         assert!(state.should_start_autonomous_turn(now + Duration::from_secs(3)));
+    }
+
+    #[test]
+    fn attach_marks_startup_turn_pending_until_first_turn_starts() {
+        let mut state = HollywoodRuntimeState::default();
+        state.attach(HollywoodConfig::default());
+
+        assert!(state.should_start_startup_turn());
+
+        state.note_turn_started(Instant::now());
+
+        assert!(!state.should_start_startup_turn());
     }
 
     #[test]
