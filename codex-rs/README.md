@@ -15,6 +15,7 @@ You can also install via Homebrew (`brew install --cask codex`) or download a pl
 
 ## Documentation quickstart
 
+- Exploring the experimental Hollywood-aware fork flow? Start with [`experimental-hollywood-quickstart.md`](../docs/experimental-hollywood-quickstart.md).
 - First run with Codex? Start with [`docs/getting-started.md`](../docs/getting-started.md) (links to the walkthrough for prompts, keyboard shortcuts, and session management).
 - Want deeper control? See [`docs/config.md`](../docs/config.md) and [`docs/install.md`](../docs/install.md).
 

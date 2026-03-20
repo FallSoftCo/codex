@@ -28,6 +28,9 @@ brew install --cask codex
 
 Then simply run `codex` to get started.
 
+If you are here for the experimental Losangelex + Hollywood multi-agent stack,
+start with the [Experimental Hollywood Quickstart](./docs/experimental-hollywood-quickstart.md).
+
 <details>
 <summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
 
@@ -53,6 +56,7 @@ You can also use Codex with an API key, but this requires [additional setup](htt
 ## Docs
 
 - [**Codex Documentation**](https://developers.openai.com/codex)
+- [**Experimental Hollywood Quickstart**](./docs/experimental-hollywood-quickstart.md)
 - [**Contributing**](./docs/contributing.md)
 - [**Installing & building**](./docs/install.md)
 - [**Open source fund**](./docs/open-source-fund.md)
