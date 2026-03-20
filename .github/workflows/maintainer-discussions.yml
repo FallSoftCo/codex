@@ -1,0 +1,105 @@
+name: Maintainer Agent - Discussions
+
+on:
+  discussion:
+    types: [created, edited]
+  discussion_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  discussions: write
+
+jobs:
+  engage:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Draft maintainer reply
+        id: codex
+        if: ${{ secrets.CODEX_OPENAI_API_KEY != '' }}
+        uses: openai/codex-action@main
+        with:
+          openai-api-key: ${{ secrets.CODEX_OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: |
+            You are the maintainer agent for the public losangelex repository.
+
+            Write one concise GitHub Discussions reply.
+
+            Goals:
+            - Be practical and specific.
+            - Help the user choose between issue tracker vs discussion when needed.
+            - Ask clarifying questions only when they are necessary.
+            - Encourage architecture and workflow discussion here rather than in bug reports.
+            - If the topic appears security-sensitive, direct the user to security@openai.com.
+
+            Discussion title:
+            ${{ github.event.discussion.title }}
+
+            Discussion body:
+            ${{ github.event.discussion.body }}
+
+            Latest comment body:
+            ${{ github.event.comment.body }}
+          output-schema: |
+            {
+              "type": "object",
+              "properties": {
+                "comment": { "type": "string" }
+              },
+              "required": ["comment"],
+              "additionalProperties": false
+            }
+
+      - name: Post maintainer reply
+        uses: actions/github-script@v7
+        env:
+          CODEX_OUTPUT: ${{ steps.codex.outputs.final-message }}
+        with:
+          script: |
+            const discussion = context.payload.discussion;
+            if (!discussion) return;
+
+            const title = discussion.title || "";
+            const body = discussion.body || "";
+            const lower = `${title}\n${body}`.toLowerCase();
+            const securitySensitive = /\bsecurity|vulnerability|token|secret|credential|auth bypass|rce\b/.test(lower);
+
+            let comment = null;
+            const raw = (process.env.CODEX_OUTPUT || "").replace(/\r/g, "");
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw);
+                if (typeof parsed.comment === "string" && parsed.comment.trim()) {
+                  comment = parsed.comment.trim();
+                }
+              } catch {}
+            }
+
+            if (!comment) {
+              if (securitySensitive) {
+                comment = [
+                  "Thanks for raising this.",
+                  "If this may involve a vulnerability or secret exposure, please move the details to security@openai.com instead of continuing in public.",
+                ].join("\n\n");
+              } else {
+                comment = [
+                  "Thanks for opening this discussion.",
+                  "This is the right place for open-ended workflow, architecture, and product questions. If this turns into a reproducible defect, open an issue with a minimal repro and environment details.",
+                ].join("\n\n");
+              }
+            }
+
+            const mutation = `
+              mutation($discussionId: ID!, $body: String!) {
+                addDiscussionComment(input: {discussionId: $discussionId, body: $body}) {
+                  comment { id }
+                }
+              }
+            `;
+
+            await github.graphql(mutation, {
+              discussionId: discussion.node_id,
+              body: comment,
+            });
