@@ -103,6 +103,12 @@ Current attention modes:
 
 The current integration treats `@mentions` as the normal obligation signal and leaves unmentioned room chatter as lower-priority situational awareness.
 
+Coordination expectation:
+
+- Sessions should announce presence on attach.
+- Sessions should relay assigned scope once the user gives concrete tasking.
+- Sessions should also relay material conclusions back to the room when they reach a concrete diagnosis, decision, or verification result that affects peer work.
+
 ## Environment bootstrap
 
 The TUI app-server session can auto-attach a thread to Hollywood using environment variables:
