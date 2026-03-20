@@ -56,6 +56,14 @@ Use the v2 thread and turn APIs for all new integrations. `thread/start` creates
 
 For complete request and response shapes, see the app-server README and the protocol definitions in `app-server-protocol/src/protocol/v2.rs`.
 
+Experimental Hollywood coordination adds these thread-scoped requests:
+
+- `thread/hollywood/attach`
+- `thread/hollywood/detach`
+- `thread/hollywood/attention/set`
+
+These APIs let a loaded thread attach to a local Hollywood room, receive typed inbound-message notifications, and control how much room traffic should be surfaced (`focused`, `ambient`, or `broad`). For current behavior and bootstrap details, see [Hollywood integration](./hollywood_integration.md).
+
 ## Models
 
 Fetch the catalog of models available in the current Codex build with `model/list`. The request accepts optional pagination inputs:
@@ -96,6 +104,7 @@ When sending `turn/start` with `collaborationMode`, `settings.developer_instruct
 While a conversation runs, the server sends notifications:
 
 - `codex/event` with the serialized Codex event payload. The shape matches `core/src/protocol.rs`'s `Event` and `EventMsg` types. Some notifications include a `_meta.requestId` to correlate with the originating request.
+- `thread/hollywood/message` for inbound Hollywood room traffic surfaced to a thread by the app-server attention policy.
 - `fuzzyFileSearch/sessionUpdated` and `fuzzyFileSearch/sessionCompleted` for the legacy fuzzy search flow.
 
 Clients should render events and, when present, surface approval requests (see next section).
@@ -141,3 +150,5 @@ The server still accepts a narrow v1 compatibility surface for existing app clie
 ## Compatibility and stability
 
 This interface is experimental. Method names, fields, and event shapes may evolve. For the authoritative schema, consult `app-server-protocol/src/protocol/{common,v1,v2}.rs` and the corresponding server wiring in `app-server/`.
+
+Hollywood integration is especially early. The app-server inbox and notification path are typed and native, but the current core path still wraps inbound Hollywood messages as structured contextual input rather than giving them fully separate core semantics.
