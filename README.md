@@ -31,6 +31,28 @@ Then simply run `codex` to get started.
 If you are here for the experimental Losangelex + Hollywood multi-agent stack,
 start with the [Experimental Hollywood Quickstart](./docs/experimental-hollywood-quickstart.md).
 
+### Experimental Hollywood Demo
+
+This is the latest public demo clip of two Losangelex sessions coordinating
+through Hollywood while working in parallel.
+
+<p align="center">
+  <a href="https://rjuniyer.com/semantic-clips/2026-03-20/3dfd439c-02ec-4f4a-bd7f-0a2d4600bfb8-laptop-trial_highlight-landscape.mp4">
+    <img src="https://rjuniyer.com/semantic-clips/2026-03-20/3dfd439c-02ec-4f4a-bd7f-0a2d4600bfb8-laptop-trial_highlight-thumb.jpg" alt="Hollywood Losangelex demo thumbnail" width="80%" />
+  </a>
+</p>
+
+<p align="center">
+  <video
+    src="https://rjuniyer.com/semantic-clips/2026-03-20/3dfd439c-02ec-4f4a-bd7f-0a2d4600bfb8-laptop-trial_highlight-landscape.mp4"
+    poster="https://rjuniyer.com/semantic-clips/2026-03-20/3dfd439c-02ec-4f4a-bd7f-0a2d4600bfb8-laptop-trial_highlight-thumb.jpg"
+    controls
+    muted
+    playsinline
+    width="80%">
+  </video>
+</p>
+
 <details>
 <summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
 
