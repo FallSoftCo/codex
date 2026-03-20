@@ -20,8 +20,9 @@ fn serialize_workspace_write_environment_context() {
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
     );
 
     let expected = format!(
@@ -49,7 +50,8 @@ fn serialize_environment_context_with_network() {
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
         Some(network),
-        /*subagents*/ None,
+        None,
+        None,
     );
 
     let expected = format!(
@@ -73,12 +75,13 @@ fn serialize_environment_context_with_network() {
 #[test]
 fn serialize_read_only_environment_context() {
     let context = EnvironmentContext::new(
-        /*cwd*/ None,
+        None,
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
     );
 
     let expected = r#"<environment_context>
@@ -93,12 +96,13 @@ fn serialize_read_only_environment_context() {
 #[test]
 fn serialize_external_sandbox_environment_context() {
     let context = EnvironmentContext::new(
-        /*cwd*/ None,
+        None,
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
     );
 
     let expected = r#"<environment_context>
@@ -113,12 +117,13 @@ fn serialize_external_sandbox_environment_context() {
 #[test]
 fn serialize_external_sandbox_with_restricted_network_environment_context() {
     let context = EnvironmentContext::new(
-        /*cwd*/ None,
+        None,
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
     );
 
     let expected = r#"<environment_context>
@@ -133,12 +138,13 @@ fn serialize_external_sandbox_with_restricted_network_environment_context() {
 #[test]
 fn serialize_full_access_environment_context() {
     let context = EnvironmentContext::new(
-        /*cwd*/ None,
+        None,
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
     );
 
     let expected = r#"<environment_context>
@@ -155,18 +161,20 @@ fn equals_except_shell_compares_cwd() {
     let context1 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
         fake_shell(),
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
         fake_shell(),
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
     assert!(context1.equals_except_shell(&context2));
 }
@@ -176,18 +184,20 @@ fn equals_except_shell_ignores_sandbox_policy() {
     let context1 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
         fake_shell(),
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
         fake_shell(),
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
 
     assert!(context1.equals_except_shell(&context2));
@@ -198,18 +208,20 @@ fn equals_except_shell_compares_cwd_differences() {
     let context1 = EnvironmentContext::new(
         Some(PathBuf::from("/repo1")),
         fake_shell(),
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo2")),
         fake_shell(),
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
 
     assert!(!context1.equals_except_shell(&context2));
@@ -224,10 +236,11 @@ fn equals_except_shell_ignores_shell() {
             shell_path: "/bin/bash".into(),
             shell_snapshot: crate::shell::empty_shell_snapshot_receiver(),
         },
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
@@ -236,10 +249,11 @@ fn equals_except_shell_ignores_shell() {
             shell_path: "/bin/zsh".into(),
             shell_snapshot: crate::shell::empty_shell_snapshot_receiver(),
         },
-        /*current_date*/ None,
-        /*timezone*/ None,
-        /*network*/ None,
-        /*subagents*/ None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
 
     assert!(context1.equals_except_shell(&context2));
@@ -252,8 +266,9 @@ fn serialize_environment_context_with_subagents() {
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
-        /*network*/ None,
+        None,
         Some("- agent-1: atlas\n- agent-2".to_string()),
+        None,
     );
 
     let expected = format!(

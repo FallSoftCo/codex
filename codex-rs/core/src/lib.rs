@@ -37,6 +37,7 @@ mod flags;
 #[cfg(test)]
 mod git_info_tests;
 mod guardian;
+mod hollywood;
 mod hook_runtime;
 mod installation_id;
 pub(crate) mod instructions;

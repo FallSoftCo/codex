@@ -1,5 +1,6 @@
 use crate::codex::TurnContext;
 use crate::contextual_user_message::ENVIRONMENT_CONTEXT_FRAGMENT;
+use crate::hollywood::HollywoodEnvironmentContext;
 use crate::shell::Shell;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::TurnContextItem;
@@ -17,6 +18,7 @@ pub(crate) struct EnvironmentContext {
     pub timezone: Option<String>,
     pub network: Option<NetworkContext>,
     pub subagents: Option<String>,
+    pub hollywood: Option<HollywoodEnvironmentContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -33,6 +35,7 @@ impl EnvironmentContext {
         timezone: Option<String>,
         network: Option<NetworkContext>,
         subagents: Option<String>,
+        hollywood: Option<HollywoodEnvironmentContext>,
     ) -> Self {
         Self {
             cwd,
@@ -41,6 +44,7 @@ impl EnvironmentContext {
             timezone,
             network,
             subagents,
+            hollywood,
         }
     }
 
@@ -54,6 +58,7 @@ impl EnvironmentContext {
             timezone,
             network,
             subagents,
+            hollywood,
             shell: _,
         } = other;
         self.cwd == *cwd
@@ -61,6 +66,7 @@ impl EnvironmentContext {
             && self.timezone == *timezone
             && self.network == *network
             && self.subagents == *subagents
+            && self.hollywood == *hollywood
     }
 
     pub fn diff_from_turn_context_item(
@@ -89,6 +95,7 @@ impl EnvironmentContext {
             timezone,
             network,
             /*subagents*/ None,
+            /*hollywood*/ None,
         )
     }
 
@@ -100,6 +107,7 @@ impl EnvironmentContext {
             turn_context.timezone.clone(),
             Self::network_from_turn_context(turn_context),
             /*subagents*/ None,
+            /*hollywood*/ None,
         )
     }
 
@@ -111,6 +119,7 @@ impl EnvironmentContext {
             turn_context_item.timezone.clone(),
             Self::network_from_turn_context_item(turn_context_item),
             /*subagents*/ None,
+            /*hollywood*/ None,
         )
     }
 
@@ -118,6 +127,11 @@ impl EnvironmentContext {
         if !subagents.is_empty() {
             self.subagents = Some(subagents);
         }
+        self
+    }
+
+    pub fn with_hollywood(mut self, hollywood: Option<HollywoodEnvironmentContext>) -> Self {
+        self.hollywood = hollywood;
         self
     }
 
@@ -202,6 +216,27 @@ impl EnvironmentContext {
             lines.push("  <subagents>".to_string());
             lines.extend(subagents.lines().map(|line| format!("    {line}")));
             lines.push("  </subagents>".to_string());
+        }
+        if let Some(hollywood) = self.hollywood {
+            lines.push("  <hollywood>".to_string());
+            lines.push(format!("    <attached>{}</attached>", hollywood.attached));
+            lines.push(format!("    <url>{}</url>", hollywood.url));
+            lines.push(format!("    <room>{}</room>", hollywood.room));
+            lines.push(format!(
+                "    <attention_mode>{}</attention_mode>",
+                hollywood.attention_mode
+            ));
+            lines.push("    <identities>".to_string());
+            for identity in hollywood.identities {
+                lines.push(format!("      <identity>{identity}</identity>"));
+            }
+            lines.push("    </identities>".to_string());
+            lines.push("    <tools>".to_string());
+            for tool in hollywood.tools {
+                lines.push(format!("      <tool>{tool}</tool>"));
+            }
+            lines.push("    </tools>".to_string());
+            lines.push("  </hollywood>".to_string());
         }
         ENVIRONMENT_CONTEXT_FRAGMENT.wrap(lines.join("\n"))
     }

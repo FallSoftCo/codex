@@ -3774,6 +3774,7 @@ impl Session {
             contextual_user_sections.push(
                 EnvironmentContext::from_turn_context(turn_context, shell.as_ref())
                     .with_subagents(subagents)
+                    .with_hollywood(crate::hollywood::environment_context(self.conversation_id))
                     .serialize_to_xml(),
             );
         }
@@ -4815,7 +4816,6 @@ mod handlers {
     use codex_protocol::protocol::EventMsg;
     use codex_protocol::protocol::InterAgentCommunication;
     use codex_protocol::protocol::HollywoodInputMessage;
-    use codex_protocol::protocol::InterAgentCommunication;
     use codex_protocol::protocol::ListSkillsResponseEvent;
     use codex_protocol::protocol::McpServerRefreshConfig;
     use codex_protocol::protocol::Op;

@@ -6,11 +6,16 @@ use codex_protocol::ThreadId;
 use reqwest::Client;
 use serde::Deserialize;
 use std::time::Duration;
+use std::time::Instant;
 use uuid::Uuid;
+
+const HOLLYWOOD_CONTEXT_OPEN_TAG: &str = "<hollywood_context>";
+const HOLLYWOOD_CONTEXT_CLOSE_TAG: &str = "</hollywood_context>";
 
 pub(crate) const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 pub(crate) const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
 pub(crate) const HOLLYWOOD_POLL_INTERVAL: Duration = Duration::from_millis(1500);
+pub(crate) const HOLLYWOOD_AUTONOMOUS_COOLDOWN: Duration = Duration::from_secs(2);
 const HOLLYWOOD_PAGE_LIMIT: i64 = 100;
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 
@@ -36,6 +41,9 @@ pub(crate) struct HollywoodRuntimeState {
     config: Option<HollywoodConfig>,
     last_seen_message_id: i64,
     start_from_latest: bool,
+    recent_activity_at: Option<Instant>,
+    last_turn_started_at: Option<Instant>,
+    autonomous_turn_pending: bool,
 }
 
 impl HollywoodRuntimeState {
@@ -43,12 +51,18 @@ impl HollywoodRuntimeState {
         self.config = Some(config);
         self.last_seen_message_id = 0;
         self.start_from_latest = true;
+        self.recent_activity_at = None;
+        self.last_turn_started_at = None;
+        self.autonomous_turn_pending = false;
     }
 
     pub(crate) fn detach(&mut self) {
         self.config = None;
         self.last_seen_message_id = 0;
         self.start_from_latest = false;
+        self.recent_activity_at = None;
+        self.last_turn_started_at = None;
+        self.autonomous_turn_pending = false;
     }
 
     pub(crate) fn set_attention(&mut self, attention: HollywoodAttentionSettings) -> bool {
@@ -75,6 +89,48 @@ impl HollywoodRuntimeState {
         let value = self.start_from_latest;
         self.start_from_latest = false;
         value
+    }
+
+    pub(crate) fn note_message_activity(&mut self, now: Instant) {
+        self.recent_activity_at = Some(now);
+    }
+
+    pub(crate) fn note_turn_started(&mut self, now: Instant) {
+        self.last_turn_started_at = Some(now);
+        self.autonomous_turn_pending = false;
+    }
+
+    pub(crate) fn note_turn_finished(&mut self) {
+        self.autonomous_turn_pending = false;
+    }
+
+    pub(crate) fn mark_autonomous_turn_pending(&mut self) {
+        self.autonomous_turn_pending = true;
+    }
+
+    pub(crate) fn clear_autonomous_turn_pending(&mut self) {
+        self.autonomous_turn_pending = false;
+    }
+
+    pub(crate) fn should_start_autonomous_turn(&self, now: Instant) -> bool {
+        if self.config.is_none() || self.autonomous_turn_pending {
+            return false;
+        }
+
+        let Some(recent_activity_at) = self.recent_activity_at else {
+            return false;
+        };
+
+        if let Some(last_turn_started_at) = self.last_turn_started_at {
+            if recent_activity_at <= last_turn_started_at {
+                return false;
+            }
+            if now.duration_since(last_turn_started_at) < HOLLYWOOD_AUTONOMOUS_COOLDOWN {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -141,6 +197,24 @@ pub(crate) async fn poll_messages(
     })
 }
 
+pub(crate) fn format_hollywood_context_message(
+    thread_id: ThreadId,
+    config: &HollywoodConfig,
+) -> String {
+    let payload_json = serde_json::json!({
+        "attached": true,
+        "meaning": "Hollywood is the local inter-agent room and messaging system in this runtime, not a physical place.",
+        "url": config.url,
+        "room": config.room,
+        "attention_mode": config.attention.mode,
+        "include_at_all": config.attention.include_at_all,
+        "include_at_room": config.attention.include_at_room,
+        "identities": hollywood_identities(thread_id),
+    })
+    .to_string();
+    format!("{HOLLYWOOD_CONTEXT_OPEN_TAG}\n{payload_json}\n{HOLLYWOOD_CONTEXT_CLOSE_TAG}")
+}
+
 async fn fetch_messages(
     client: &Client,
     config: &HollywoodConfig,
@@ -196,7 +270,13 @@ fn classify_message(
         HollywoodMessageAttention::Focused
     } else {
         match attention.mode {
-            HollywoodAttentionMode::Focused => return None,
+            HollywoodAttentionMode::Focused => {
+                if self_authored {
+                    HollywoodMessageAttention::Ambient
+                } else {
+                    return None;
+                }
+            }
             HollywoodAttentionMode::Ambient => HollywoodMessageAttention::Ambient,
             HollywoodAttentionMode::Broad => HollywoodMessageAttention::Broad,
         }
@@ -381,6 +461,32 @@ mod tests {
 
         assert!(classified.self_authored);
         assert_eq!(classified.attention, HollywoodMessageAttention::Broad);
+    }
+
+    #[test]
+    fn focused_mode_keeps_self_authored_messages_as_ambient() {
+        let message = sample_message("hello room", Some("sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le"));
+        let classified = classify_message(
+            message,
+            &identities(),
+            &HollywoodAttentionSettings::default(),
+        )
+        .expect("focused mode should keep self-authored messages for room activity tracking");
+
+        assert!(classified.self_authored);
+        assert_eq!(classified.attention, HollywoodMessageAttention::Ambient);
+    }
+
+    #[test]
+    fn autonomous_turn_requires_activity_after_last_turn_start() {
+        let mut state = HollywoodRuntimeState::default();
+        state.attach(HollywoodConfig::default());
+        let now = Instant::now();
+        state.note_turn_started(now);
+        state.note_message_activity(now - Duration::from_secs(1));
+        assert!(!state.should_start_autonomous_turn(now + Duration::from_secs(3)));
+        state.note_message_activity(now + Duration::from_secs(1));
+        assert!(state.should_start_autonomous_turn(now + Duration::from_secs(3)));
     }
 
     #[test]

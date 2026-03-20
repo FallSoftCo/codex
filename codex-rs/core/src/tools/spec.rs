@@ -1,5 +1,8 @@
 use crate::shell::Shell;
 use crate::shell::ShellType;
+use crate::tools::handlers::HollywoodReadHandler;
+use crate::tools::handlers::HollywoodSendHandler;
+use crate::tools::handlers::HollywoodStatusHandler;
 use crate::tools::handlers::agent_jobs::BatchJobHandler;
 use crate::tools::handlers::multi_agents_common::DEFAULT_WAIT_TIMEOUT_MS;
 use crate::tools::handlers::multi_agents_common::MAX_WAIT_TIMEOUT_MS;
@@ -10,12 +13,16 @@ use codex_mcp::ToolInfo;
 use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_tools::DiscoverableTool;
 use codex_tools::ToolHandlerKind;
+use codex_tools::JsonSchema;
+use codex_tools::ResponsesApiTool;
 use codex_tools::ToolRegistryPlanAppTool;
 use codex_tools::ToolRegistryPlanParams;
+use codex_tools::ToolSpec;
 use codex_tools::ToolUserShellType;
 use codex_tools::ToolsConfig;
 use codex_tools::WaitAgentTimeoutOptions;
 use codex_tools::build_tool_registry_plan;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -27,6 +34,94 @@ pub(crate) fn tool_user_shell_type(user_shell: &Shell) -> ToolUserShellType {
         ShellType::Sh => ToolUserShellType::Sh,
         ShellType::Cmd => ToolUserShellType::Cmd,
     }
+}
+
+fn create_hollywood_status_tool() -> ToolSpec {
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_status".to_string(),
+        description: "Check whether Hollywood is configured and reachable for this session. Use this when you need to know whether you can coordinate with other agents through the local Hollywood room."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties: BTreeMap::new(),
+            required: Some(Vec::new()),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+fn create_hollywood_read_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "room".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional room to read from. Defaults to the configured Hollywood room."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "after_id".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional message id cursor. When provided, only newer messages are returned."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "limit".to_string(),
+            JsonSchema::Number {
+                description: Some("Optional maximum number of messages to return. Defaults to 20, max 100.".to_string()),
+            },
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_read".to_string(),
+        description: "Read messages from the configured Hollywood room. Use this when you need explicit room context beyond the ambient runtime stream."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(Vec::new()),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+fn create_hollywood_send_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "text".to_string(),
+            JsonSchema::String {
+                description: Some("Message body to send to Hollywood. Use @mentions when you need another agent's attention.".to_string()),
+            },
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::String {
+                description: Some("Optional room override. Defaults to the configured Hollywood room.".to_string()),
+            },
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_send".to_string(),
+        description: "Send a message to Hollywood as this agent. Use this to coordinate with other agents through the local Hollywood room."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["text".to_string()]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
 }
 
 pub(crate) fn build_specs_with_discoverable_tools(
@@ -231,6 +326,15 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 builder.register_handler(handler.name, Arc::new(WaitAgentHandlerV2));
             }
         }
+    }
+
+    if !cfg!(test) && crate::hollywood::HollywoodSessionConfig::from_env().is_some() {
+        builder.push_spec(create_hollywood_status_tool());
+        builder.push_spec(create_hollywood_read_tool());
+        builder.push_spec(create_hollywood_send_tool());
+        builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
+        builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));
+        builder.register_handler("hollywood_send", Arc::new(HollywoodSendHandler));
     }
     builder
 }

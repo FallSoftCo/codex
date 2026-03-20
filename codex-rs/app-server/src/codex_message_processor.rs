@@ -13,6 +13,7 @@ use crate::hollywood::DEFAULT_HOLLYWOOD_ROOM;
 use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
 use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
 use crate::hollywood::HollywoodConfig;
+use crate::hollywood::format_hollywood_context_message;
 use crate::hollywood::poll_messages as poll_hollywood_messages;
 use crate::hollywood::prime_from_latest as prime_hollywood_from_latest;
 use crate::models::supported_models;
@@ -325,6 +326,7 @@ use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio::sync::broadcast;
@@ -5591,26 +5593,33 @@ impl CodexMessageProcessor {
         request_id: ConnectionRequestId,
         params: ThreadHollywoodAttachParams,
     ) {
-        let (thread_id, _) = match self.load_thread(&params.thread_id).await {
+        let (thread_id, thread) = match self.load_thread(&params.thread_id).await {
             Ok(v) => v,
             Err(error) => {
                 self.outgoing.send_error(request_id, error).await;
                 return;
             }
         };
+        let hollywood_config = HollywoodConfig {
+            url: params
+                .url
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room: params
+                .room
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
+            attention: params.attention.unwrap_or_default(),
+        };
         let thread_state = self.thread_state_manager.thread_state(thread_id).await;
         {
             let mut thread_state = thread_state.lock().await;
-            thread_state.hollywood.attach(HollywoodConfig {
-                url: params
-                    .url
-                    .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
-                room: params
-                    .room
-                    .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
-                attention: params.attention.unwrap_or_default(),
-            });
+            thread_state.hollywood.attach(hollywood_config.clone());
         }
+        thread
+            .inject_user_message_without_turn(format_hollywood_context_message(
+                thread_id,
+                &hollywood_config,
+            ))
+            .await;
         Self::log_listener_attach_result(
             self.ensure_conversation_listener(
                 thread_id,
@@ -7553,6 +7562,15 @@ impl CodexMessageProcessor {
                         let raw_events_enabled = {
                             let mut thread_state = thread_state.lock().await;
                             thread_state.track_current_turn_event(&event.msg);
+                            match &event.msg {
+                                EventMsg::TurnStarted(_) => {
+                                    thread_state.hollywood.note_turn_started(Instant::now());
+                                }
+                                EventMsg::TurnComplete(_) | EventMsg::TurnAborted(_) => {
+                                    thread_state.hollywood.note_turn_finished();
+                                }
+                                _ => {}
+                            }
                             thread_state.experimental_raw_events
                         };
                         let subscribed_connection_ids = thread_state_manager
@@ -7620,6 +7638,7 @@ impl CodexMessageProcessor {
                             conversation_id,
                         ).await {
                             Ok(result) => {
+                                let now = Instant::now();
                                 if result.last_id > after_id {
                                     thread_state
                                         .lock()
@@ -7630,19 +7649,35 @@ impl CodexMessageProcessor {
                                 let subscribed_connection_ids = thread_state_manager
                                     .subscribed_connection_ids(conversation_id)
                                     .await;
-                                if subscribed_connection_ids.is_empty() {
-                                    continue;
-                                }
                                 let thread_outgoing = ThreadScopedOutgoingMessageSender::new(
                                     outgoing_for_task.clone(),
-                                    subscribed_connection_ids,
+                                    subscribed_connection_ids.clone(),
                                     conversation_id,
                                 );
+                                let mut submitted_focused_input = false;
                                 for message in result.messages {
+                                    let track_room_activity =
+                                        message.self_authored
+                                            || message.attention
+                                                == codex_app_server_protocol::HollywoodMessageAttention::Focused;
+                                    if track_room_activity {
+                                        thread_state
+                                            .lock()
+                                            .await
+                                            .hollywood
+                                            .note_message_activity(now);
+                                    }
                                     if message.attention
                                         == codex_app_server_protocol::HollywoodMessageAttention::Focused
                                         && !message.self_authored
                                     {
+                                        {
+                                            thread_state
+                                                .lock()
+                                                .await
+                                                .hollywood
+                                                .mark_autonomous_turn_pending();
+                                        }
                                         let submit_result = conversation
                                             .submit(Op::HollywoodInput {
                                                 message: CoreHollywoodInputMessage {
@@ -7661,24 +7696,80 @@ impl CodexMessageProcessor {
                                                 },
                                             })
                                             .await;
+                                        match submit_result {
+                                            Ok(_) => {
+                                                submitted_focused_input = true;
+                                            }
+                                            Err(err) => {
+                                                thread_state
+                                                    .lock()
+                                                    .await
+                                                    .hollywood
+                                                    .clear_autonomous_turn_pending();
+                                                tracing::debug!(
+                                                    conversation_id = %conversation_id,
+                                                    "failed to submit Hollywood input to core: {err}"
+                                                );
+                                            }
+                                        }
+                                    }
+                                    if !subscribed_connection_ids.is_empty() {
+                                        thread_outgoing
+                                            .send_server_notification(ServerNotification::ThreadHollywoodMessage(
+                                                codex_app_server_protocol::HollywoodMessageNotification {
+                                                    thread_id: conversation_id.to_string(),
+                                                    message: message.notification_message,
+                                                    attention: message.attention,
+                                                    mentioned: message.mentioned,
+                                                    self_authored: message.self_authored,
+                                                },
+                                            ))
+                                            .await;
+                                    }
+                                }
+
+                                if !submitted_focused_input {
+                                    let status = thread_watch_manager
+                                        .loaded_status_for_thread(&conversation_id.to_string())
+                                        .await;
+                                    let should_start_autonomous_turn = {
+                                        let state = thread_state.lock().await;
+                                        matches!(status, ThreadStatus::Idle)
+                                            && state.active_turn_snapshot().is_none()
+                                            && state.hollywood.should_start_autonomous_turn(now)
+                                    };
+
+                                    if should_start_autonomous_turn {
+                                        {
+                                            thread_state
+                                                .lock()
+                                                .await
+                                                .hollywood
+                                                .mark_autonomous_turn_pending();
+                                        }
+                                        let submit_result = conversation
+                                            .submit(Op::HollywoodInput {
+                                                message: CoreHollywoodInputMessage {
+                                                    message_id: 0,
+                                                    room: config.room.clone(),
+                                                    sender_id: "hollywood-system".to_string(),
+                                                    body: "Autonomous Hollywood follow-up: room activity happened after your last turn started. Continue collaborating through Hollywood if useful, use @mentions when you need another agent's attention, and stop once no further coordination is needed. Human input can interrupt you at any time.".to_string(),
+                                                    mentions: Vec::new(),
+                                                },
+                                            })
+                                            .await;
                                         if let Err(err) = submit_result {
+                                            thread_state
+                                                .lock()
+                                                .await
+                                                .hollywood
+                                                .clear_autonomous_turn_pending();
                                             tracing::debug!(
                                                 conversation_id = %conversation_id,
-                                                "failed to submit Hollywood input to core: {err}"
+                                                "failed to submit autonomous Hollywood follow-up to core: {err}"
                                             );
                                         }
                                     }
-                                    thread_outgoing
-                                        .send_server_notification(ServerNotification::ThreadHollywoodMessage(
-                                            codex_app_server_protocol::HollywoodMessageNotification {
-                                                thread_id: conversation_id.to_string(),
-                                                message: message.notification_message,
-                                                attention: message.attention,
-                                                mentioned: message.mentioned,
-                                                self_authored: message.self_authored,
-                                            },
-                                        ))
-                                        .await;
                                 }
                             }
                             Err(err) => {

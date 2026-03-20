@@ -1,6 +1,7 @@
 pub(crate) mod agent_jobs;
 pub(crate) mod apply_patch;
 mod dynamic;
+mod hollywood;
 mod js_repl;
 mod list_dir;
 mod mcp;
@@ -36,6 +37,9 @@ pub use apply_patch::ApplyPatchHandler;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::protocol::AskForApproval;
 pub use dynamic::DynamicToolHandler;
+pub use hollywood::HollywoodReadHandler;
+pub use hollywood::HollywoodSendHandler;
+pub use hollywood::HollywoodStatusHandler;
 pub use js_repl::JsReplHandler;
 pub use js_repl::JsReplResetHandler;
 pub use list_dir::ListDirHandler;

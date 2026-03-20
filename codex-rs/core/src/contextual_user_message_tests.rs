@@ -27,6 +27,13 @@ fn detects_subagent_notification_fragment_case_insensitively() {
 }
 
 #[test]
+fn detects_hollywood_context_fragment() {
+    assert!(is_contextual_user_fragment(&ContentItem::InputText {
+        text: "<hollywood_context>\n{\"attached\":true}\n</hollywood_context>".to_string(),
+    }));
+}
+
+#[test]
 fn ignores_regular_user_text() {
     assert!(!is_contextual_user_fragment(&ContentItem::InputText {
         text: "hello".to_string(),
