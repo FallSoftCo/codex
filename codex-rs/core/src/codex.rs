@@ -3525,6 +3525,7 @@ impl Session {
         contextual_user_sections.push(
             EnvironmentContext::from_turn_context(turn_context, shell.as_ref())
                 .with_subagents(subagents)
+                .with_hollywood(crate::hollywood::environment_context(self.conversation_id))
                 .serialize_to_xml(),
         );
 

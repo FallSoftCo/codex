@@ -44,6 +44,7 @@ mod file_watcher;
 mod flags;
 pub mod git_info;
 mod guardian;
+mod hollywood;
 mod hook_runtime;
 pub mod instructions;
 pub mod landlock;

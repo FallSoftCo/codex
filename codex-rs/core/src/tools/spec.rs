@@ -21,6 +21,9 @@ use crate::tools::discoverable::DiscoverablePluginInfo;
 use crate::tools::discoverable::DiscoverableTool;
 use crate::tools::discoverable::DiscoverableToolAction;
 use crate::tools::discoverable::DiscoverableToolType;
+use crate::tools::handlers::HollywoodReadHandler;
+use crate::tools::handlers::HollywoodSendHandler;
+use crate::tools::handlers::HollywoodStatusHandler;
 use crate::tools::handlers::PLAN_TOOL;
 use crate::tools::handlers::TOOL_SEARCH_DEFAULT_LIMIT;
 use crate::tools::handlers::TOOL_SEARCH_TOOL_NAME;
@@ -1349,6 +1352,105 @@ fn create_send_input_tool() -> ToolSpec {
             additional_properties: Some(false.into()),
         },
         output_schema: Some(send_input_output_schema()),
+    })
+}
+
+fn create_hollywood_status_tool() -> ToolSpec {
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_status".to_string(),
+        description: "Check whether Hollywood is configured and reachable for this session. Use this when you need to know whether you can coordinate with other agents through the local Hollywood room."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties: BTreeMap::new(),
+            required: Some(Vec::new()),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+fn create_hollywood_read_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "room".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional room to read from. Defaults to the configured Hollywood room."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "after_id".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional message id cursor. When provided, only newer messages are returned."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "limit".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional maximum number of messages to return. Defaults to 20, max 100."
+                        .to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_read".to_string(),
+        description: "Read messages from the configured Hollywood room. Use this when you need explicit room context beyond the ambient runtime stream."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(Vec::new()),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+fn create_hollywood_send_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "text".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Message body to send to Hollywood. Use @mentions when you need another agent's attention."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional room override. Defaults to the configured Hollywood room."
+                        .to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_send".to_string(),
+        description: "Send a message to Hollywood as this agent. Use this to coordinate with other agents through the local Hollywood room."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["text".to_string()]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
     })
 }
 
@@ -2927,6 +3029,30 @@ pub(crate) fn build_specs_with_discoverable_tools(
             config.code_mode_enabled,
         );
         builder.register_handler("artifacts", artifacts_handler);
+    }
+
+    if !cfg!(test) && crate::hollywood::HollywoodSessionConfig::from_env().is_some() {
+        push_tool_spec(
+            &mut builder,
+            create_hollywood_status_tool(),
+            /*supports_parallel_tool_calls*/ false,
+            config.code_mode_enabled,
+        );
+        push_tool_spec(
+            &mut builder,
+            create_hollywood_read_tool(),
+            /*supports_parallel_tool_calls*/ false,
+            config.code_mode_enabled,
+        );
+        push_tool_spec(
+            &mut builder,
+            create_hollywood_send_tool(),
+            /*supports_parallel_tool_calls*/ false,
+            config.code_mode_enabled,
+        );
+        builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
+        builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));
+        builder.register_handler("hollywood_send", Arc::new(HollywoodSendHandler));
     }
 
     if config.collab_tools {

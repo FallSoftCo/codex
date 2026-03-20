@@ -22,6 +22,7 @@ fn serialize_workspace_write_environment_context() {
         Some("America/Los_Angeles".to_string()),
         None,
         None,
+        None,
     );
 
     let expected = format!(
@@ -49,6 +50,7 @@ fn serialize_environment_context_with_network() {
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
         Some(network),
+        None,
         None,
     );
 
@@ -79,6 +81,7 @@ fn serialize_read_only_environment_context() {
         Some("America/Los_Angeles".to_string()),
         None,
         None,
+        None,
     );
 
     let expected = r#"<environment_context>
@@ -97,6 +100,7 @@ fn serialize_external_sandbox_environment_context() {
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
+        None,
         None,
         None,
     );
@@ -119,6 +123,7 @@ fn serialize_external_sandbox_with_restricted_network_environment_context() {
         Some("America/Los_Angeles".to_string()),
         None,
         None,
+        None,
     );
 
     let expected = r#"<environment_context>
@@ -137,6 +142,7 @@ fn serialize_full_access_environment_context() {
         fake_shell(),
         Some("2026-02-26".to_string()),
         Some("America/Los_Angeles".to_string()),
+        None,
         None,
         None,
     );
@@ -159,10 +165,12 @@ fn equals_except_shell_compares_cwd() {
         None,
         None,
         None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
         fake_shell(),
+        None,
         None,
         None,
         None,
@@ -180,10 +188,12 @@ fn equals_except_shell_ignores_sandbox_policy() {
         None,
         None,
         None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
         fake_shell(),
+        None,
         None,
         None,
         None,
@@ -202,10 +212,12 @@ fn equals_except_shell_compares_cwd_differences() {
         None,
         None,
         None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo2")),
         fake_shell(),
+        None,
         None,
         None,
         None,
@@ -228,6 +240,7 @@ fn equals_except_shell_ignores_shell() {
         None,
         None,
         None,
+        None,
     );
     let context2 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
@@ -236,6 +249,7 @@ fn equals_except_shell_ignores_shell() {
             shell_path: "/bin/zsh".into(),
             shell_snapshot: crate::shell::empty_shell_snapshot_receiver(),
         },
+        None,
         None,
         None,
         None,
@@ -254,6 +268,7 @@ fn serialize_environment_context_with_subagents() {
         Some("America/Los_Angeles".to_string()),
         None,
         Some("- agent-1: atlas\n- agent-2".to_string()),
+        None,
     );
 
     let expected = format!(
