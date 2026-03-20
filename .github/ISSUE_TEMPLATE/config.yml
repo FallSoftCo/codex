@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/openai/codex/discussions
+    about: Use Discussions for workflow questions, design ideas, and open-ended feedback.
+  - name: Security Reporting
+    url: mailto:security@openai.com
+    about: Report vulnerabilities or sensitive security issues privately by email.

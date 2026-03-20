@@ -8,6 +8,8 @@ If you would like to propose a new feature or a change in behavior, please open 
 
 If you encounter a bug, please open a bug report or verify that an existing report already covers the issue. If you would like to help, we encourage you to contribute by sharing analysis, reproduction details, root-cause hypotheses, or a high-level outline of a potential fix directly in the issue thread.
 
+Issues and Discussions may receive an initial response from a maintainer agent. Those replies are meant to speed up triage, request missing details, and route feedback to the right surface. Human maintainers still make roadmap, architecture, and merge decisions.
+
 The Codex team may invite an external contributor to submit a pull request when:
 
 - the problem is well understood,
