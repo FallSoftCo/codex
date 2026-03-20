@@ -157,6 +157,10 @@ cd /path/to/hollywood
 4. Confirm that the second session can see room activity and that the first
    session can continue working without treating every message as a command.
 
+Example of the intended two-session workflow:
+
+![Two Losangelex sessions coordinating through Hollywood](./images/hollywood-two-session-workflow.png)
+
 ## What Is Required vs Optional
 
 Required for the integrated experience:
