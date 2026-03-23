@@ -30,6 +30,10 @@ Then simply run `codex` to get started.
 
 If you are here for the experimental Losangelex + Hollywood multi-agent stack,
 start with the [Experimental Hollywood Quickstart](./docs/experimental-hollywood-quickstart.md).
+The repo also ships a bundled launcher at [`scripts/losangelex`](./scripts/losangelex):
+run it from any working directory to start `losangelex` with Hollywood auto-attach,
+directory-derived room defaults, and the same full-access mode used by the TUI's
+`Full Access` preset.
 
 ### Experimental Hollywood Demo
 

@@ -216,6 +216,14 @@ pub struct HollywoodInputMessage {
     pub body: String,
     #[serde(default)]
     pub mentions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attention: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obligation: Option<String>,
+    #[serde(default)]
+    pub requires_response: bool,
 }
 
 /// Submission operation
@@ -2540,6 +2548,20 @@ impl fmt::Display for SubAgentSource {
 /// NOTE: There used to be an `instructions` field here, which stored user_instructions, but we
 /// now save that on TurnContext. base_instructions stores the base instructions for the session,
 /// and should be used when there is no config override.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HollywoodSessionMeta {
+    pub url: String,
+    pub room: String,
+    #[serde(default)]
+    pub observed_rooms: Vec<String>,
+    #[serde(default)]
+    pub wake_rooms: Vec<String>,
+    pub attention_mode: String,
+    pub include_at_all: bool,
+    pub include_at_room: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, TS)]
 pub struct SessionMeta {
     pub id: ThreadId,
@@ -2582,6 +2604,8 @@ pub struct SessionMeta {
     pub dynamic_tools: Option<Vec<DynamicToolSpec>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hollywood: Option<HollywoodSessionMeta>,
 }
 
 impl Default for SessionMeta {
@@ -2602,6 +2626,7 @@ impl Default for SessionMeta {
             developer_instructions: None,
             dynamic_tools: None,
             memory_mode: None,
+            hollywood: None,
         }
     }
 }

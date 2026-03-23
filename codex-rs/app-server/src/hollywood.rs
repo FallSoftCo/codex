@@ -2,9 +2,20 @@ use codex_app_server_protocol::HollywoodAttentionMode;
 use codex_app_server_protocol::HollywoodAttentionSettings;
 use codex_app_server_protocol::HollywoodMessage;
 use codex_app_server_protocol::HollywoodMessageAttention;
+use codex_app_server_protocol::HollywoodMessageKind;
+use codex_app_server_protocol::ThreadStatus;
+use codex_app_server_protocol::HollywoodSessionAttachOptions;
+use codex_core::parse_agent_mentions;
+use codex_core::CodexThread;
 use codex_protocol::ThreadId;
+use codex_protocol::protocol::HollywoodSessionMeta;
 use reqwest::Client;
 use serde::Deserialize;
+use serde::Serialize;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::env;
+use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use uuid::Uuid;
@@ -16,6 +27,7 @@ pub(crate) const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 pub(crate) const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
 pub(crate) const HOLLYWOOD_POLL_INTERVAL: Duration = Duration::from_millis(1500);
 pub(crate) const HOLLYWOOD_AUTONOMOUS_COOLDOWN: Duration = Duration::from_secs(2);
+pub(crate) const HOLLYWOOD_REGISTRY_SYNC_INTERVAL: Duration = Duration::from_secs(15);
 const HOLLYWOOD_PAGE_LIMIT: i64 = 100;
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 
@@ -23,7 +35,106 @@ const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 pub(crate) struct HollywoodConfig {
     pub(crate) url: String,
     pub(crate) room: String,
+    pub(crate) observed_rooms: Vec<String>,
+    pub(crate) wake_rooms: Vec<String>,
     pub(crate) attention: HollywoodAttentionSettings,
+}
+
+impl HollywoodConfig {
+    pub(crate) fn from_env() -> Option<Self> {
+        let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
+        let has_explicit_config =
+            env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
+        let enabled = auto_attach
+            .as_deref()
+            .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
+            .unwrap_or(has_explicit_config);
+        if !enabled {
+            return None;
+        }
+
+        let mode = match env::var("HOLLYWOOD_ATTENTION_MODE")
+            .unwrap_or_else(|_| "focused".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "ambient" => HollywoodAttentionMode::Ambient,
+            "broad" => HollywoodAttentionMode::Broad,
+            _ => HollywoodAttentionMode::Focused,
+        };
+
+        let room =
+            env::var("HOLLYWOOD_ROOM").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_ROOM.to_string());
+        Some(Self {
+            url: env::var("HOLLYWOOD_URL").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room,
+            observed_rooms: parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok()),
+            wake_rooms: parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok()),
+            attention: HollywoodAttentionSettings {
+                mode,
+                include_at_all: true,
+                include_at_room: true,
+            },
+        })
+    }
+}
+
+impl From<&HollywoodConfig> for HollywoodSessionMeta {
+    fn from(value: &HollywoodConfig) -> Self {
+        Self {
+            url: value.url.clone(),
+            room: value.room.clone(),
+            observed_rooms: value.observed_rooms.clone(),
+            wake_rooms: value.wake_rooms.clone(),
+            attention_mode: hollywood_attention_mode_name(value.attention.mode),
+            include_at_all: value.attention.include_at_all,
+            include_at_room: value.attention.include_at_room,
+        }
+    }
+}
+
+impl TryFrom<&HollywoodSessionMeta> for HollywoodConfig {
+    type Error = String;
+
+    fn try_from(value: &HollywoodSessionMeta) -> Result<Self, Self::Error> {
+        let mode = match value.attention_mode.to_ascii_lowercase().as_str() {
+            "focused" => HollywoodAttentionMode::Focused,
+            "ambient" => HollywoodAttentionMode::Ambient,
+            "broad" => HollywoodAttentionMode::Broad,
+            other => {
+                return Err(format!("unsupported Hollywood attention mode `{other}`"));
+            }
+        };
+        Ok(Self {
+            url: value.url.clone(),
+            room: value.room.clone(),
+            observed_rooms: value.observed_rooms.clone(),
+            wake_rooms: value.wake_rooms.clone(),
+            attention: HollywoodAttentionSettings {
+                mode,
+                include_at_all: value.include_at_all,
+                include_at_room: value.include_at_room,
+            },
+        })
+    }
+}
+
+impl From<&HollywoodSessionAttachOptions> for HollywoodConfig {
+    fn from(value: &HollywoodSessionAttachOptions) -> Self {
+        Self {
+            url: value
+                .url
+                .clone()
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room: value
+                .room
+                .clone()
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
+            observed_rooms: value.observed_rooms.clone(),
+            wake_rooms: value.wake_rooms.clone(),
+            attention: value.attention.clone().unwrap_or_default(),
+        }
+    }
 }
 
 impl Default for HollywoodConfig {
@@ -31,41 +142,99 @@ impl Default for HollywoodConfig {
         Self {
             url: DEFAULT_HOLLYWOOD_URL.to_string(),
             room: DEFAULT_HOLLYWOOD_ROOM.to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
             attention: HollywoodAttentionSettings::default(),
         }
     }
 }
 
+impl HollywoodConfig {
+    pub(crate) fn all_rooms(&self) -> Vec<String> {
+        let mut seen = HashSet::new();
+        let mut rooms = Vec::new();
+        for room in std::iter::once(&self.room).chain(self.observed_rooms.iter()) {
+            if !room.is_empty() && seen.insert(room.clone()) {
+                rooms.push(room.clone());
+            }
+        }
+        rooms
+    }
+
+    pub(crate) fn effective_wake_rooms(&self) -> HashSet<String> {
+        let wake_rooms = if self.wake_rooms.is_empty() {
+            vec![self.room.clone()]
+        } else {
+            self.wake_rooms.clone()
+        };
+        wake_rooms
+            .into_iter()
+            .filter(|room| !room.is_empty())
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct HollywoodRoomState {
+    last_seen_message_id: i64,
+    start_from_latest: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct HollywoodRuntimeState {
     config: Option<HollywoodConfig>,
-    last_seen_message_id: i64,
-    start_from_latest: bool,
+    room_states: HashMap<String, HollywoodRoomState>,
     startup_turn_pending: bool,
     recent_activity_at: Option<Instant>,
     last_turn_started_at: Option<Instant>,
     autonomous_turn_pending: bool,
+    registry_session_kind: Option<String>,
+    registry_resumed_from: Option<String>,
+    last_registry_sync_at: Option<Instant>,
+    last_registry_status: Option<String>,
 }
 
 impl HollywoodRuntimeState {
-    pub(crate) fn attach(&mut self, config: HollywoodConfig) {
+    pub(crate) fn attach(
+        &mut self,
+        config: HollywoodConfig,
+        session_kind: impl Into<String>,
+        resumed_from: Option<String>,
+    ) {
         self.config = Some(config);
-        self.last_seen_message_id = 0;
-        self.start_from_latest = true;
+        self.room_states.clear();
+        if let Some(config) = &self.config {
+            for room in config.all_rooms() {
+                self.room_states.insert(
+                    room,
+                    HollywoodRoomState {
+                        last_seen_message_id: 0,
+                        start_from_latest: true,
+                    },
+                );
+            }
+        }
         self.startup_turn_pending = true;
         self.recent_activity_at = None;
         self.last_turn_started_at = None;
         self.autonomous_turn_pending = false;
+        self.registry_session_kind = Some(session_kind.into());
+        self.registry_resumed_from = resumed_from;
+        self.last_registry_sync_at = None;
+        self.last_registry_status = None;
     }
 
     pub(crate) fn detach(&mut self) {
         self.config = None;
-        self.last_seen_message_id = 0;
-        self.start_from_latest = false;
+        self.room_states.clear();
         self.startup_turn_pending = false;
         self.recent_activity_at = None;
         self.last_turn_started_at = None;
         self.autonomous_turn_pending = false;
+        self.registry_session_kind = None;
+        self.registry_resumed_from = None;
+        self.last_registry_sync_at = None;
+        self.last_registry_status = None;
     }
 
     pub(crate) fn set_attention(&mut self, attention: HollywoodAttentionSettings) -> bool {
@@ -80,17 +249,28 @@ impl HollywoodRuntimeState {
         self.config.clone()
     }
 
-    pub(crate) fn last_seen_message_id(&self) -> i64 {
-        self.last_seen_message_id
+    pub(crate) fn last_seen_message_id(&self, room: &str) -> i64 {
+        self.room_states
+            .get(room)
+            .map(|state| state.last_seen_message_id)
+            .unwrap_or(0)
     }
 
-    pub(crate) fn set_last_seen_message_id(&mut self, message_id: i64) {
-        self.last_seen_message_id = message_id;
+    pub(crate) fn set_last_seen_message_id(&mut self, room: &str, message_id: i64) {
+        let state = self
+            .room_states
+            .entry(room.to_string())
+            .or_insert_with(HollywoodRoomState::default);
+        state.last_seen_message_id = message_id;
     }
 
-    pub(crate) fn take_start_from_latest(&mut self) -> bool {
-        let value = self.start_from_latest;
-        self.start_from_latest = false;
+    pub(crate) fn take_start_from_latest(&mut self, room: &str) -> bool {
+        let state = self
+            .room_states
+            .entry(room.to_string())
+            .or_insert_with(HollywoodRoomState::default);
+        let value = state.start_from_latest;
+        state.start_from_latest = false;
         value
     }
 
@@ -148,6 +328,48 @@ impl HollywoodRuntimeState {
 
         true
     }
+
+    pub(crate) fn registry_session_kind(&self) -> Option<&str> {
+        self.registry_session_kind.as_deref()
+    }
+
+    pub(crate) fn registry_resumed_from(&self) -> Option<&str> {
+        self.registry_resumed_from.as_deref()
+    }
+
+    pub(crate) fn should_sync_registry(&self, now: Instant, status: &str) -> bool {
+        if self.config.is_none() {
+            return false;
+        }
+        if self.last_registry_status.as_deref() != Some(status) {
+            return true;
+        }
+        match self.last_registry_sync_at {
+            None => true,
+            Some(last) => now.duration_since(last) >= HOLLYWOOD_REGISTRY_SYNC_INTERVAL,
+        }
+    }
+
+    pub(crate) fn note_registry_synced(&mut self, now: Instant, status: String) {
+        self.last_registry_sync_at = Some(now);
+        self.last_registry_status = Some(status);
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct HollywoodRegistryUpsertRequest {
+    pub(crate) session_id: String,
+    pub(crate) room: String,
+    pub(crate) attached: bool,
+    pub(crate) cwd: Option<String>,
+    pub(crate) repo_name: Option<String>,
+    pub(crate) attention_mode: String,
+    pub(crate) identities: Vec<String>,
+    pub(crate) session_kind: String,
+    pub(crate) resumed_from: Option<String>,
+    pub(crate) ephemeral: bool,
+    pub(crate) rollout_path: Option<String>,
+    pub(crate) status: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,6 +378,8 @@ struct HollywoodApiMessage {
     room: String,
     sender_id: Option<String>,
     recipient_id: Option<String>,
+    #[serde(default)]
+    message_kind: HollywoodMessageKind,
     body: String,
     created_at: String,
 }
@@ -197,15 +421,21 @@ pub(crate) async fn prime_from_latest(
 pub(crate) async fn poll_messages(
     client: &Client,
     config: &HollywoodConfig,
+    room: &str,
     after_id: i64,
     thread_id: ThreadId,
 ) -> Result<HollywoodPollResult, String> {
-    let response = fetch_messages(client, config, after_id, HOLLYWOOD_PAGE_LIMIT).await?;
+    let mut room_config = config.clone();
+    room_config.room = room.to_string();
+    let response = fetch_messages(client, &room_config, after_id, HOLLYWOOD_PAGE_LIMIT).await?;
     let identities = hollywood_identities(thread_id);
+    let room_can_wake = config.effective_wake_rooms().contains(room);
     let messages = response
         .messages
         .into_iter()
-        .filter_map(|message| classify_message(message, &identities, &config.attention))
+        .filter_map(|message| {
+            classify_message(message, &identities, &config.attention, room_can_wake)
+        })
         .collect();
     Ok(HollywoodPollResult {
         messages,
@@ -213,15 +443,35 @@ pub(crate) async fn poll_messages(
     })
 }
 
+pub(crate) async fn upsert_registry(
+    client: &Client,
+    config: &HollywoodConfig,
+    request: &HollywoodRegistryUpsertRequest,
+) -> Result<(), String> {
+    let url = format!("{}/hollywood/v1/registry", config.url.trim_end_matches('/'));
+    client
+        .post(url)
+        .json(request)
+        .send()
+        .await
+        .map_err(|err| format!("Hollywood registry request failed: {err}"))?
+        .error_for_status()
+        .map_err(|err| format!("Hollywood registry request failed: {err}"))?;
+    Ok(())
+}
+
 pub(crate) fn format_hollywood_context_message(
     thread_id: ThreadId,
     config: &HollywoodConfig,
 ) -> String {
+    let wake_rooms = config.effective_wake_rooms().into_iter().collect::<Vec<_>>();
     let payload_json = serde_json::json!({
         "attached": true,
         "meaning": "Hollywood is the local inter-agent room and messaging system in this runtime, not a physical place.",
         "url": config.url,
         "room": config.room,
+        "observed_rooms": config.observed_rooms.clone(),
+        "wake_rooms": wake_rooms,
         "attention_mode": config.attention.mode,
         "include_at_all": config.attention.include_at_all,
         "include_at_room": config.attention.include_at_room,
@@ -234,9 +484,10 @@ pub(crate) fn format_hollywood_context_message(
             "relay_material_conclusions_to_room": true,
         },
         "broadcast_guidance": [
-            "Use sparse room-wide broadcasts for presence, scope changes, blockers, handoffs, and major completion updates.",
+            "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.",
             "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.",
             "When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update so other agents and the user-facing session can converge on the same conclusion.",
+            "If autonomous Hollywood follow-up finds no new state to report, prefer no user-facing follow-up at all; if one is needed, keep it to a compact status tag rather than a full explanation.",
         ],
     })
     .to_string();
@@ -245,9 +496,17 @@ pub(crate) fn format_hollywood_context_message(
 
 pub(crate) fn startup_handshake_message(thread_id: ThreadId, config: &HollywoodConfig) -> String {
     let identities = hollywood_identities(thread_id).join(", ");
+    let observed = if config.observed_rooms.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " You are also observing rooms [{}].",
+            config.observed_rooms.join(", ")
+        )
+    };
     format!(
-        "Startup protocol: you have just attached to the local Hollywood room `{}` as session identities [{}]. Before doing substantive work, send one short room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself. If you do not yet have a concrete user-assigned task, ask the user what they want you to work on. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. Use room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, and material conclusions that peers should know. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
-        config.room, identities
+        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{} Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself. If you do not yet have a concrete user-assigned task, ask the user what they want you to work on. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        config.room, identities, observed
     )
 }
 
@@ -279,8 +538,9 @@ fn classify_message(
     message: HollywoodApiMessage,
     identities: &[String],
     attention: &HollywoodAttentionSettings,
+    room_can_wake: bool,
 ) -> Option<HollywoodClassifiedMessage> {
-    let mentions = parse_mentions(&message.body);
+    let mentions = parse_agent_mentions(&message.body);
     let self_authored = message
         .sender_id
         .as_ref()
@@ -297,13 +557,26 @@ fn classify_message(
             .iter()
             .any(|identity| mention == &normalize_identity(identity))
     });
-    let at_all = mentions.iter().any(|mention| mention == "all");
-    let at_room = mentions.iter().any(|mention| mention == "room");
+    let at_all = has_special_mention(&message.body, "all");
+    let at_room = has_special_mention(&message.body, "room");
     let broadcast_match =
         (attention.include_at_all && at_all) || (attention.include_at_room && at_room);
 
-    let attention_class = if mentioned || broadcast_match {
-        HollywoodMessageAttention::Focused
+    let direct_match = message.recipient_id.is_some() || message.message_kind == HollywoodMessageKind::Direct;
+    let explicit_broadcast = message.message_kind == HollywoodMessageKind::Broadcast;
+
+    let attention_class = if direct_match || mentioned || broadcast_match {
+        if room_can_wake {
+            HollywoodMessageAttention::Focused
+        } else {
+            HollywoodMessageAttention::Ambient
+        }
+    } else if explicit_broadcast {
+        if room_can_wake {
+            HollywoodMessageAttention::Broadcast
+        } else {
+            HollywoodMessageAttention::Ambient
+        }
     } else {
         match attention.mode {
             HollywoodAttentionMode::Focused => {
@@ -324,6 +597,7 @@ fn classify_message(
             room: message.room,
             sender_id: message.sender_id,
             recipient_id: message.recipient_id,
+            message_kind: message.message_kind,
             body: message.body,
             created_at: message.created_at,
             mentions,
@@ -334,13 +608,82 @@ fn classify_message(
     })
 }
 
-fn hollywood_identities(thread_id: ThreadId) -> Vec<String> {
+pub(crate) fn hollywood_identities(thread_id: ThreadId) -> Vec<String> {
     let raw = thread_id.to_string();
     let mut identities = vec![normalize_identity(&raw)];
     if let Ok(uuid) = Uuid::parse_str(&raw) {
         identities.push(session_id_to_alias(uuid));
     }
     identities
+}
+
+fn parse_room_list(value: Option<String>) -> Vec<String> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|room| !room.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+pub(crate) fn thread_status_name(status: &ThreadStatus) -> String {
+    match status {
+        ThreadStatus::NotLoaded => "unknown".to_string(),
+        ThreadStatus::Idle => "idle".to_string(),
+        ThreadStatus::SystemError => "blocked".to_string(),
+        ThreadStatus::Active { active_flags } => {
+            if active_flags.is_empty() {
+                "active".to_string()
+            } else if active_flags.iter().any(|flag| {
+                matches!(
+                    flag,
+                    codex_app_server_protocol::ThreadActiveFlag::WaitingOnApproval
+                        | codex_app_server_protocol::ThreadActiveFlag::WaitingOnUserInput
+                )
+            }) {
+                "waiting".to_string()
+            } else {
+                "active".to_string()
+            }
+        }
+    }
+}
+
+pub(crate) async fn build_registry_upsert_request(
+    thread_id: ThreadId,
+    thread: &CodexThread,
+    config: &HollywoodConfig,
+    runtime_state: &HollywoodRuntimeState,
+    status: &ThreadStatus,
+) -> HollywoodRegistryUpsertRequest {
+    let snapshot = thread.config_snapshot().await;
+    let cwd = snapshot.cwd.display().to_string();
+    HollywoodRegistryUpsertRequest {
+        session_id: thread_id.to_string(),
+        room: config.room.clone(),
+        attached: true,
+        cwd: Some(cwd.clone()),
+        repo_name: repo_name_from_cwd(snapshot.cwd.as_path()),
+        attention_mode: hollywood_attention_mode_name(config.attention.mode),
+        identities: hollywood_identities(thread_id),
+        session_kind: runtime_state
+            .registry_session_kind()
+            .unwrap_or("attached")
+            .to_string(),
+        resumed_from: runtime_state.registry_resumed_from().map(ToOwned::to_owned),
+        ephemeral: snapshot.ephemeral,
+        rollout_path: thread
+            .rollout_path()
+            .map(|path| path.display().to_string()),
+        status: thread_status_name(status),
+    }
+}
+
+fn repo_name_from_cwd(path: &Path) -> Option<String> {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
 }
 
 fn session_id_to_alias(session_id: Uuid) -> String {
@@ -369,8 +712,7 @@ fn session_id_to_alias(session_id: Uuid) -> String {
     format!("sid-{}", chunks.join("-"))
 }
 
-fn parse_mentions(body: &str) -> Vec<String> {
-    let mut mentions = Vec::new();
+fn has_special_mention(body: &str, expected: &str) -> bool {
     let bytes = body.as_bytes();
     let mut idx = 0;
     while idx < bytes.len() {
@@ -388,20 +730,62 @@ fn parse_mentions(body: &str) -> Vec<String> {
                 break;
             }
         }
-        if idx > start {
-            mentions.push(normalize_identity(&body[start..idx]));
+        if idx > start && normalize_identity(&body[start..idx]) == expected {
+            return true;
         }
     }
-    mentions
+    false
 }
 
 fn normalize_identity(value: &str) -> String {
     value.trim().trim_start_matches('@').to_ascii_lowercase()
 }
 
+fn hollywood_attention_mode_name(mode: HollywoodAttentionMode) -> String {
+    match mode {
+        HollywoodAttentionMode::Focused => "focused".to_string(),
+        HollywoodAttentionMode::Ambient => "ambient".to_string(),
+        HollywoodAttentionMode::Broad => "broad".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+
+    struct EnvGuard {
+        key: &'static str,
+        value: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let prior = std::env::var(key).ok();
+            match value {
+                Some(value) => unsafe {
+                    std::env::set_var(key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(key);
+                },
+            }
+            Self { key, value: prior }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.value.as_deref() {
+                Some(value) => unsafe {
+                    std::env::set_var(self.key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.key);
+                },
+            }
+        }
+    }
 
     fn sample_message(body: &str, sender_id: Option<&str>) -> HollywoodApiMessage {
         HollywoodApiMessage {
@@ -409,6 +793,7 @@ mod tests {
             room: "main".to_string(),
             sender_id: sender_id.map(ToOwned::to_owned),
             recipient_id: None,
+            message_kind: HollywoodMessageKind::Ambient,
             body: body.to_string(),
             created_at: "2026-03-19T20:00:00Z".to_string(),
         }
@@ -428,6 +813,7 @@ mod tests {
             message,
             &identities(),
             &HollywoodAttentionSettings::default(),
+            true,
         )
         .expect("mention should pass focused filter");
 
@@ -435,7 +821,7 @@ mod tests {
         assert_eq!(classified.attention, HollywoodMessageAttention::Focused);
         assert_eq!(
             classified.notification_message.mentions,
-            vec!["sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le".to_string()]
+            vec!["019d0798-12d8-76c3-a812-6e323637aa59".to_string()]
         );
     }
 
@@ -446,6 +832,7 @@ mod tests {
             message,
             &identities(),
             &HollywoodAttentionSettings::default(),
+            true,
         );
 
         assert!(classified.is_none());
@@ -461,6 +848,7 @@ mod tests {
                 mode: HollywoodAttentionMode::Ambient,
                 ..HollywoodAttentionSettings::default()
             },
+            true,
         )
         .expect("ambient mode should keep room chatter");
 
@@ -475,6 +863,7 @@ mod tests {
             message,
             &identities(),
             &HollywoodAttentionSettings::default(),
+            true,
         )
         .expect("@all should be actionable");
 
@@ -492,11 +881,65 @@ mod tests {
                 mode: HollywoodAttentionMode::Broad,
                 ..HollywoodAttentionSettings::default()
             },
+            true,
         )
         .expect("broad mode should keep self-authored message");
 
         assert!(classified.self_authored);
         assert_eq!(classified.attention, HollywoodMessageAttention::Broad);
+    }
+
+    #[test]
+    fn focused_mode_keeps_explicit_broadcasts() {
+        let mut message = sample_message("room-wide discovery ping", Some("peer"));
+        message.message_kind = HollywoodMessageKind::Broadcast;
+        let classified = classify_message(
+            message,
+            &identities(),
+            &HollywoodAttentionSettings::default(),
+            true,
+        )
+        .expect("explicit broadcast should pass focused filter");
+
+        assert_eq!(classified.attention, HollywoodMessageAttention::Broadcast);
+        assert_eq!(
+            classified.notification_message.message_kind,
+            HollywoodMessageKind::Broadcast
+        );
+    }
+
+    #[test]
+    fn focused_messages_in_non_wake_rooms_downgrade_to_ambient() {
+        let message = sample_message("ping @sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le", Some("peer"));
+        let classified = classify_message(
+            message,
+            &identities(),
+            &HollywoodAttentionSettings::default(),
+            false,
+        )
+        .expect("observed-room mention should still be visible");
+
+        assert!(classified.mentioned);
+        assert_eq!(classified.attention, HollywoodMessageAttention::Ambient);
+    }
+
+    #[test]
+    fn explicit_broadcasts_in_non_wake_rooms_downgrade_to_ambient() {
+        let mut message = sample_message("room-wide discovery ping", Some("peer"));
+        message.message_kind = HollywoodMessageKind::Broadcast;
+        let classified = classify_message(
+            message,
+            &identities(),
+            &HollywoodAttentionSettings::default(),
+            false,
+        )
+        .expect("observed-room broadcasts should still be visible");
+
+        assert_eq!(classified.attention, HollywoodMessageAttention::Ambient);
+        assert_eq!(
+            classified.notification_message.message_kind,
+            HollywoodMessageKind::Broadcast
+        );
     }
 
     #[test]
@@ -506,6 +949,7 @@ mod tests {
             message,
             &identities(),
             &HollywoodAttentionSettings::default(),
+            true,
         )
         .expect("focused mode should keep self-authored messages for room activity tracking");
 
@@ -516,7 +960,7 @@ mod tests {
     #[test]
     fn autonomous_turn_requires_activity_after_last_turn_start() {
         let mut state = HollywoodRuntimeState::default();
-        state.attach(HollywoodConfig::default());
+        state.attach(HollywoodConfig::default(), "attached", None);
         let now = Instant::now();
         state.note_turn_started(now);
         state.note_message_activity(now - Duration::from_secs(1));
@@ -528,7 +972,7 @@ mod tests {
     #[test]
     fn attach_marks_startup_turn_pending_until_first_turn_starts() {
         let mut state = HollywoodRuntimeState::default();
-        state.attach(HollywoodConfig::default());
+        state.attach(HollywoodConfig::default(), "attached", None);
 
         assert!(state.should_start_startup_turn());
 
@@ -544,6 +988,59 @@ mod tests {
         assert_eq!(
             session_id_to_alias(uuid),
             "sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn hollywood_config_from_env_uses_defaults_and_attention_mode() {
+        let _auto_attach = EnvGuard::set("HOLLYWOOD_AUTO_ATTACH", Some("1"));
+        let _url = EnvGuard::set("HOLLYWOOD_URL", None);
+        let _room = EnvGuard::set("HOLLYWOOD_ROOM", None);
+        let _mode = EnvGuard::set("HOLLYWOOD_ATTENTION_MODE", Some("ambient"));
+
+        let config = HollywoodConfig::from_env().expect("Hollywood config should load");
+
+        assert_eq!(config.url, DEFAULT_HOLLYWOOD_URL);
+        assert_eq!(config.room, DEFAULT_HOLLYWOOD_ROOM);
+        assert_eq!(config.attention.mode, HollywoodAttentionMode::Ambient);
+        assert!(config.attention.include_at_all);
+        assert!(config.attention.include_at_room);
+    }
+
+    #[test]
+    fn persisted_hollywood_session_meta_round_trips_into_runtime_config() {
+        let persisted = HollywoodSessionMeta {
+            url: "http://127.0.0.1:9000".to_string(),
+            room: "agents".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: vec!["agents".to_string()],
+            attention_mode: "broad".to_string(),
+            include_at_all: false,
+            include_at_room: true,
+        };
+
+        let config = HollywoodConfig::try_from(&persisted).expect("persisted config should parse");
+        let round_trip = HollywoodSessionMeta::from(&config);
+
+        assert_eq!(config.url, persisted.url);
+        assert_eq!(config.room, persisted.room);
+        assert_eq!(config.attention.mode, HollywoodAttentionMode::Broad);
+        assert_eq!(round_trip, persisted);
+    }
+
+    #[test]
+    fn effective_wake_rooms_default_to_primary_room_only() {
+        let config = HollywoodConfig {
+            room: "task-room".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: Vec::new(),
+            ..HollywoodConfig::default()
+        };
+
+        assert_eq!(
+            config.effective_wake_rooms(),
+            HashSet::from(["task-room".to_string()])
         );
     }
 }

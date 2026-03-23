@@ -34,6 +34,27 @@ fn detects_hollywood_context_fragment() {
 }
 
 #[test]
+fn detects_contextual_message_content_only_when_all_parts_are_contextual() {
+    assert!(is_contextual_user_message_content(&[
+        ContentItem::InputText {
+            text: "<hollywood_message>\n{\"message_id\":1}\n</hollywood_message>".to_string(),
+        },
+        ContentItem::InputText {
+            text: "<hollywood_context>\n{\"attached\":true}\n</hollywood_context>".to_string(),
+        },
+    ]));
+
+    assert!(!is_contextual_user_message_content(&[
+        ContentItem::InputText {
+            text: "<hollywood_message>\n{\"message_id\":1}\n</hollywood_message>".to_string(),
+        },
+        ContentItem::InputText {
+            text: "normal user text".to_string(),
+        },
+    ]));
+}
+
+#[test]
 fn ignores_regular_user_text() {
     assert!(!is_contextual_user_fragment(&ContentItem::InputText {
         text: "hello".to_string(),

@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::Error as IoError;
 use std::path::Path;
 use std::path::PathBuf;
+use std::{env, collections::HashSet};
 
 use chrono::SecondsFormat;
 use chrono::Utc;
@@ -53,10 +54,53 @@ use codex_protocol::protocol::RolloutItem;
 use codex_protocol::protocol::RolloutLine;
 use codex_protocol::protocol::SessionMeta;
 use codex_protocol::protocol::SessionMetaLine;
+use codex_protocol::protocol::HollywoodSessionMeta;
 use codex_protocol::protocol::SessionSource;
 use codex_state::StateRuntime;
 use codex_state::ThreadMetadataBuilder;
 use codex_utils_path as path_utils;
+
+const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
+const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
+
+fn rollout_hollywood_meta_from_env() -> Option<HollywoodSessionMeta> {
+    let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
+    let has_explicit_config = env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
+    let enabled = auto_attach
+        .as_deref()
+        .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(has_explicit_config);
+    if !enabled {
+        return None;
+    }
+
+    let room = env::var("HOLLYWOOD_ROOM").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_ROOM.to_string());
+    let observed_rooms = parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok());
+    let wake_rooms = parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok());
+    Some(HollywoodSessionMeta {
+        url: env::var("HOLLYWOOD_URL").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_URL.to_string()),
+        room,
+        observed_rooms,
+        wake_rooms,
+        attention_mode: env::var("HOLLYWOOD_ATTENTION_MODE")
+            .unwrap_or_else(|_| "focused".to_string())
+            .to_ascii_lowercase(),
+        include_at_all: true,
+        include_at_room: true,
+    })
+}
+
+fn parse_room_list(value: Option<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|room| !room.is_empty())
+        .filter(|room| seen.insert((*room).to_string()))
+        .map(ToOwned::to_owned)
+        .collect()
+}
 
 /// Records all [`ResponseItem`]s for a session and flushes them to disk after
 /// every update.
@@ -421,6 +465,7 @@ impl RolloutRecorder {
                         },
                         memory_mode: (!config.generate_memories())
                             .then_some("disabled".to_string()),
+                        hollywood: rollout_hollywood_meta_from_env(),
                     };
 
                     (

@@ -6501,6 +6501,7 @@ impl ChatWidget {
                     );
                 }
             }
+            ServerNotification::ThreadHollywoodMessage(_) => {}
             ServerNotification::ServerRequestResolved(_)
             | ServerNotification::AccountUpdated(_)
             | ServerNotification::AccountRateLimitsUpdated(_)

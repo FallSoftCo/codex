@@ -2645,6 +2645,9 @@ pub struct ThreadStartParams {
     #[experimental("thread/start.persistFullHistory")]
     #[serde(default)]
     pub persist_extended_history: bool,
+    #[experimental("thread/start.hollywood")]
+    #[ts(optional = nullable)]
+    pub hollywood: Option<HollywoodSessionAttachOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, JsonSchema, TS)]
@@ -2760,6 +2763,9 @@ pub struct ThreadResumeParams {
     #[experimental("thread/resume.persistFullHistory")]
     #[serde(default)]
     pub persist_extended_history: bool,
+    #[experimental("thread/resume.hollywood")]
+    #[ts(optional = nullable)]
+    pub hollywood: Option<HollywoodSessionAttachOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS, ExperimentalApi)]
@@ -2849,6 +2855,9 @@ pub struct ThreadForkParams {
     #[experimental("thread/fork.persistFullHistory")]
     #[serde(default)]
     pub persist_extended_history: bool,
+    #[experimental("thread/fork.hollywood")]
+    #[ts(optional = nullable)]
+    pub hollywood: Option<HollywoodSessionAttachOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS, ExperimentalApi)]
@@ -2942,6 +2951,26 @@ pub struct ThreadHollywoodAttachParams {
     pub url: Option<String>,
     #[ts(optional = nullable)]
     pub room: Option<String>,
+    #[serde(default)]
+    pub observed_rooms: Vec<String>,
+    #[serde(default)]
+    pub wake_rooms: Vec<String>,
+    #[ts(optional = nullable)]
+    pub attention: Option<HollywoodAttentionSettings>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct HollywoodSessionAttachOptions {
+    #[ts(optional = nullable)]
+    pub url: Option<String>,
+    #[ts(optional = nullable)]
+    pub room: Option<String>,
+    #[serde(default)]
+    pub observed_rooms: Vec<String>,
+    #[serde(default)]
+    pub wake_rooms: Vec<String>,
     #[ts(optional = nullable)]
     pub attention: Option<HollywoodAttentionSettings>,
 }
@@ -4081,8 +4110,19 @@ pub struct ThreadRealtimeClosedNotification {
 #[ts(export_to = "v2/")]
 pub enum HollywoodMessageAttention {
     Focused,
+    Broadcast,
     Ambient,
     Broad,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodMessageKind {
+    #[default]
+    Ambient,
+    Broadcast,
+    Direct,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -4097,6 +4137,8 @@ pub struct HollywoodMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub recipient_id: Option<String>,
+    #[serde(default)]
+    pub message_kind: HollywoodMessageKind,
     pub body: String,
     pub created_at: String,
     pub mentions: Vec<String>,

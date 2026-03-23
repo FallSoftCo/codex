@@ -16,6 +16,7 @@ use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::Op;
+use codex_protocol::protocol::RolloutItem;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::Submission;
@@ -194,6 +195,10 @@ impl CodexThread {
 
     pub fn state_db(&self) -> Option<StateDbHandle> {
         self.codex.state_db()
+    }
+
+    pub async fn persist_rollout_items(&self, items: &[RolloutItem]) {
+        self.codex.session.persist_rollout_items(items).await;
     }
 
     pub async fn config_snapshot(&self) -> ThreadConfigSnapshot {

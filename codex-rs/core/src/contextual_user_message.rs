@@ -79,6 +79,10 @@ pub(crate) fn is_contextual_user_fragment(content_item: &ContentItem) -> bool {
     parse_hook_prompt_fragment(text).is_some() || is_standard_contextual_user_text(text)
 }
 
+pub(crate) fn is_contextual_user_message_content(content: &[ContentItem]) -> bool {
+    !content.is_empty() && content.iter().all(is_contextual_user_fragment)
+}
+
 pub(crate) fn parse_visible_hook_prompt_message(
     id: Option<&String>,
     content: &[ContentItem],

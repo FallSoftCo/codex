@@ -13,6 +13,7 @@ use codex_app_server_protocol::ConfigWriteResponse;
 use codex_app_server_protocol::GetAccountParams;
 use codex_app_server_protocol::GetAccountRateLimitsResponse;
 use codex_app_server_protocol::GetAccountResponse;
+use codex_app_server_protocol::HollywoodSessionAttachOptions;
 use codex_app_server_protocol::JSONRPCErrorError;
 use codex_app_server_protocol::Model as ApiModel;
 use codex_app_server_protocol::ModelListParams;
@@ -69,6 +70,8 @@ use codex_app_server_protocol::TurnSteerResponse;
 use codex_core::append_message_history_entry;
 use codex_core::config::Config;
 use codex_core::message_history_metadata;
+use codex_core::find_thread_path_by_id_str;
+use codex_core::read_session_meta_line;
 use codex_otel::TelemetryAuthMode;
 use codex_protocol::ThreadId;
 use codex_protocol::openai_models::ModelAvailabilityNux;
@@ -138,12 +141,44 @@ enum ThreadParamsMode {
     Remote,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResumeBootstrapStrategy {
+    NativeResume,
+    LegacyForkMigration,
+}
+
 impl ThreadParamsMode {
     fn model_provider_from_config(self, config: &Config) -> Option<String> {
         match self {
             Self::Embedded => Some(config.model_provider_id.clone()),
             Self::Remote => None,
         }
+    }
+}
+
+async fn determine_resume_bootstrap_strategy(
+    config: &Config,
+    thread_id: ThreadId,
+    thread_params_mode: ThreadParamsMode,
+) -> ResumeBootstrapStrategy {
+    if !matches!(thread_params_mode, ThreadParamsMode::Embedded) {
+        return ResumeBootstrapStrategy::NativeResume;
+    }
+
+    let Ok(Some(rollout_path)) =
+        find_thread_path_by_id_str(config.codex_home.as_path(), &thread_id.to_string()).await
+    else {
+        return ResumeBootstrapStrategy::NativeResume;
+    };
+
+    let Ok(meta_line) = read_session_meta_line(rollout_path.as_path()).await else {
+        return ResumeBootstrapStrategy::NativeResume;
+    };
+
+    if meta_line.meta.hollywood.is_some() {
+        ResumeBootstrapStrategy::NativeResume
+    } else {
+        ResumeBootstrapStrategy::LegacyForkMigration
     }
 }
 
@@ -326,6 +361,20 @@ impl AppServerSession {
         config: Config,
         thread_id: ThreadId,
     ) -> Result<AppServerStartedThread> {
+        let strategy = determine_resume_bootstrap_strategy(
+            &config,
+            thread_id,
+            self.thread_params_mode(),
+        )
+        .await;
+        if strategy == ResumeBootstrapStrategy::LegacyForkMigration {
+            tracing::info!(
+                thread_id = %thread_id,
+                "Legacy session selected for resume; upgrading into native losangelex fork"
+            );
+            return self.fork_thread(config, thread_id).await;
+        }
+
         let request_id = self.next_request_id();
         let response: ThreadResumeResponse = self
             .client
@@ -341,6 +390,12 @@ impl AppServerSession {
             .await
             .wrap_err("thread/resume failed during TUI bootstrap")?;
         let started = started_thread_from_resume_response(response, &config).await?;
+        tracing::info!(
+            requested_thread_id = %thread_id,
+            returned_thread_id = %started.session.thread_id,
+            returned_rollout_path = ?started.session.rollout_path,
+            "thread/resume returned session to TUI"
+        );
         self.maybe_auto_attach_hollywood(started.session.thread_id)
             .await;
         Ok(started)
@@ -380,17 +435,41 @@ impl AppServerSession {
 
     async fn maybe_auto_attach_hollywood(&mut self, thread_id: ThreadId) {
         let Some(params) = hollywood_auto_attach_params(thread_id) else {
+            tracing::debug!(thread_id = %thread_id, "Hollywood auto-attach disabled for thread");
             return;
         };
+        if let Err(err) = self.attach_hollywood(params).await {
+            warn!(thread_id = %thread_id, "Hollywood auto-attach failed: {err}");
+        }
+    }
+
+    pub(crate) async fn attach_hollywood(
+        &mut self,
+        params: ThreadHollywoodAttachParams,
+    ) -> Result<ThreadHollywoodAttachResponse> {
+        let thread_id = params.thread_id.clone();
+        tracing::info!(
+            thread_id = %thread_id,
+            room = params.room.as_deref().unwrap_or("<default>"),
+            url = params.url.as_deref().unwrap_or("<default>"),
+            attention_mode = ?params.attention.as_ref().map(|attention| attention.mode),
+            "Attempting Hollywood auto-attach for thread"
+        );
         let request_id = self.next_request_id();
         let result: Result<ThreadHollywoodAttachResponse> = self
             .client
             .request_typed(ClientRequest::ThreadHollywoodAttach { request_id, params })
             .await
             .wrap_err("thread/hollywood/attach failed during TUI bootstrap");
-        if let Err(err) = result {
-            warn!("Hollywood auto-attach failed: {err}");
+        match result {
+            Ok(_) => {
+                tracing::info!(thread_id = %thread_id, "Hollywood auto-attach succeeded for thread");
+            }
+            Err(ref err) => {
+                warn!(thread_id = %thread_id, "Hollywood auto-attach failed: {err}");
+            }
         }
+        result
     }
 
     pub(crate) async fn thread_list(
@@ -898,11 +977,12 @@ fn thread_start_params_from_config(
         config: config_request_overrides_from_config(config),
         ephemeral: Some(config.ephemeral),
         persist_extended_history: true,
+        hollywood: hollywood_auto_attach_options(),
         ..ThreadStartParams::default()
     }
 }
 
-fn hollywood_auto_attach_params(thread_id: ThreadId) -> Option<ThreadHollywoodAttachParams> {
+fn hollywood_auto_attach_options() -> Option<HollywoodSessionAttachOptions> {
     let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
     let has_explicit_config =
         env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
@@ -924,15 +1004,40 @@ fn hollywood_auto_attach_params(thread_id: ThreadId) -> Option<ThreadHollywoodAt
         _ => codex_app_server_protocol::HollywoodAttentionMode::Focused,
     };
 
-    Some(ThreadHollywoodAttachParams {
-        thread_id: thread_id.to_string(),
+    Some(HollywoodSessionAttachOptions {
         url: env::var("HOLLYWOOD_URL").ok(),
         room: env::var("HOLLYWOOD_ROOM").ok(),
+        observed_rooms: env::var("HOLLYWOOD_OBSERVED_ROOMS")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|room| !room.is_empty())
+            .map(ToOwned::to_owned)
+            .collect(),
+        wake_rooms: env::var("HOLLYWOOD_WAKE_ROOMS")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|room| !room.is_empty())
+            .map(ToOwned::to_owned)
+            .collect(),
         attention: Some(codex_app_server_protocol::HollywoodAttentionSettings {
             mode,
             include_at_all: true,
             include_at_room: true,
         }),
+    })
+}
+
+pub(crate) fn hollywood_auto_attach_params(thread_id: ThreadId) -> Option<ThreadHollywoodAttachParams> {
+    let options = hollywood_auto_attach_options()?;
+    Some(ThreadHollywoodAttachParams {
+        thread_id: thread_id.to_string(),
+        url: options.url,
+        room: options.room,
+        observed_rooms: options.observed_rooms,
+        wake_rooms: options.wake_rooms,
+        attention: options.attention,
     })
 }
 
@@ -952,6 +1057,7 @@ fn thread_resume_params_from_config(
         sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()),
         config: config_request_overrides_from_config(&config),
         persist_extended_history: true,
+        hollywood: hollywood_auto_attach_options(),
         ..ThreadResumeParams::default()
     }
 }
@@ -973,6 +1079,7 @@ fn thread_fork_params_from_config(
         config: config_request_overrides_from_config(&config),
         ephemeral: config.ephemeral,
         persist_extended_history: true,
+        hollywood: hollywood_auto_attach_options(),
         ..ThreadForkParams::default()
     }
 }
@@ -1213,12 +1320,56 @@ fn app_server_credits_snapshot_to_core(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_core::SESSIONS_SUBDIR;
     use codex_app_server_protocol::ThreadStatus;
     use codex_app_server_protocol::Turn;
     use codex_app_server_protocol::TurnStatus;
     use codex_core::config::ConfigBuilder;
+    use codex_protocol::protocol::HollywoodSessionMeta;
+    use codex_protocol::protocol::RolloutItem;
+    use codex_protocol::protocol::RolloutLine;
+    use codex_protocol::protocol::SessionMeta;
+    use codex_protocol::protocol::SessionMetaLine;
+    use codex_protocol::protocol::SessionSource;
     use pretty_assertions::assert_eq;
+    use serial_test::serial;
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
     use tempfile::TempDir;
+
+    struct EnvGuard {
+        key: &'static str,
+        value: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let prior = std::env::var(key).ok();
+            match value {
+                Some(value) => unsafe {
+                    std::env::set_var(key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(key);
+                },
+            }
+            Self { key, value: prior }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.value.as_deref() {
+                Some(value) => unsafe {
+                    std::env::set_var(self.key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.key);
+                },
+            }
+        }
+    }
 
     async fn build_config(temp_dir: &TempDir) -> Config {
         ConfigBuilder::default()
@@ -1226,6 +1377,42 @@ mod tests {
             .build()
             .await
             .expect("config should build")
+    }
+
+    fn write_rollout_session_meta(
+        codex_home: &std::path::Path,
+        thread_id: ThreadId,
+        hollywood: Option<HollywoodSessionMeta>,
+    ) {
+        let day_dir = codex_home.join(SESSIONS_SUBDIR).join("2026").join("03").join("21");
+        fs::create_dir_all(&day_dir).expect("create sessions dir");
+        let filename = format!("rollout-2026-03-21T10-00-00-{thread_id}.jsonl");
+        let rollout_path = day_dir.join(filename);
+        let mut file = File::create(&rollout_path).expect("create rollout");
+        let line = RolloutLine {
+            timestamp: "2026-03-21T10:00:00Z".to_string(),
+            item: RolloutItem::SessionMeta(SessionMetaLine {
+                meta: SessionMeta {
+                    id: thread_id,
+                    forked_from_id: None,
+                    timestamp: "2026-03-21T10:00:00Z".to_string(),
+                    cwd: PathBuf::from("/tmp/project"),
+                    originator: "codex".to_string(),
+                    cli_version: "0.115.0".to_string(),
+                    source: SessionSource::Cli,
+                    agent_nickname: None,
+                    agent_role: None,
+                    model_provider: Some("openai".to_string()),
+                    base_instructions: None,
+                    dynamic_tools: None,
+                    memory_mode: None,
+                    hollywood,
+                },
+                git: None,
+            }),
+        };
+        writeln!(file, "{}", serde_json::to_string(&line).expect("serialize rollout line"))
+            .expect("write rollout line");
     }
 
     #[tokio::test]
@@ -1306,6 +1493,74 @@ mod tests {
         assert_eq!(start.model_provider, None);
         assert_eq!(resume.model_provider, None);
         assert_eq!(fork.model_provider, None);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn thread_resume_params_include_hollywood_when_auto_attach_enabled() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let config = build_config(&temp_dir).await;
+        let thread_id = ThreadId::new();
+        let _auto_attach = EnvGuard::set("HOLLYWOOD_AUTO_ATTACH", Some("1"));
+        let _url = EnvGuard::set("HOLLYWOOD_URL", Some("http://127.0.0.1:8765"));
+        let _room = EnvGuard::set("HOLLYWOOD_ROOM", Some("main"));
+        let _mode = EnvGuard::set("HOLLYWOOD_ATTENTION_MODE", Some("ambient"));
+
+        let params =
+            thread_resume_params_from_config(config.clone(), thread_id, ThreadParamsMode::Remote);
+
+        let hollywood = params
+            .hollywood
+            .expect("Hollywood options should be present");
+        assert_eq!(hollywood.url.as_deref(), Some("http://127.0.0.1:8765"));
+        assert_eq!(hollywood.room.as_deref(), Some("main"));
+        assert_eq!(
+            hollywood
+                .attention
+                .expect("attention should be present")
+                .mode,
+            codex_app_server_protocol::HollywoodAttentionMode::Ambient
+        );
+    }
+
+    #[tokio::test]
+    async fn resume_strategy_migrates_legacy_rollouts_without_hollywood_metadata() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let config = build_config(&temp_dir).await;
+        let thread_id = ThreadId::new();
+        write_rollout_session_meta(config.codex_home.as_path(), thread_id, None);
+
+        let strategy =
+            determine_resume_bootstrap_strategy(&config, thread_id, ThreadParamsMode::Embedded)
+                .await;
+
+        assert_eq!(strategy, ResumeBootstrapStrategy::LegacyForkMigration);
+    }
+
+    #[tokio::test]
+    async fn resume_strategy_keeps_native_rollouts_with_hollywood_metadata() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let config = build_config(&temp_dir).await;
+        let thread_id = ThreadId::new();
+        write_rollout_session_meta(
+            config.codex_home.as_path(),
+            thread_id,
+            Some(HollywoodSessionMeta {
+                url: "http://127.0.0.1:8765".to_string(),
+                room: "main".to_string(),
+                observed_rooms: Vec::new(),
+                wake_rooms: Vec::new(),
+                attention_mode: "focused".to_string(),
+                include_at_all: true,
+                include_at_room: true,
+            }),
+        );
+
+        let strategy =
+            determine_resume_bootstrap_strategy(&config, thread_id, ThreadParamsMode::Embedded)
+                .await;
+
+        assert_eq!(strategy, ResumeBootstrapStrategy::NativeResume);
     }
 
     #[tokio::test]

@@ -23,6 +23,7 @@ use crate::compact::should_use_remote_compact_task;
 use crate::compact_remote::run_inline_remote_auto_compact_task;
 use crate::config::ManagedFeatures;
 use crate::connectors;
+use crate::contextual_user_message::is_contextual_user_message_content;
 use crate::exec_policy::ExecPolicyManager;
 use crate::installation_id::resolve_installation_id;
 use crate::parse_turn_item;
@@ -109,6 +110,7 @@ use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::permissions::NetworkSandboxPolicy;
 use codex_protocol::protocol::FileChange;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::HasLegacyEvent;
 use codex_protocol::protocol::InterAgentCommunication;
 use codex_protocol::protocol::ItemCompletedEvent;
@@ -297,6 +299,7 @@ use crate::skills_watcher::SkillsWatcher;
 use crate::skills_watcher::SkillsWatcherEvent;
 use crate::state::ActiveTurn;
 use crate::state::MailboxDeliveryPhase;
+use crate::state::HollywoodObligation;
 use crate::state::SessionServices;
 use crate::state::SessionState;
 use crate::tasks::GhostSnapshotTask;
@@ -675,6 +678,7 @@ impl Codex {
             auth_manager.clone(),
             models_manager.clone(),
             exec_policy,
+            tx_sub.clone(),
             tx_event.clone(),
             agent_status_tx.clone(),
             conversation_history,
@@ -824,6 +828,7 @@ pub(crate) fn session_loop_termination_from_handle(
 /// A session has at most 1 running task at a time, and can be interrupted by user input.
 pub(crate) struct Session {
     pub(crate) conversation_id: ThreadId,
+    tx_sub: Sender<Submission>,
     tx_event: Sender<Event>,
     agent_status: watch::Sender<AgentStatus>,
     out_of_band_elicitation_paused: watch::Sender<bool>,
@@ -1528,6 +1533,7 @@ impl Session {
         auth_manager: Arc<AuthManager>,
         models_manager: Arc<ModelsManager>,
         exec_policy: Arc<ExecPolicyManager>,
+        tx_sub: Sender<Submission>,
         tx_event: Sender<Event>,
         agent_status: watch::Sender<AgentStatus>,
         initial_history: InitialHistory,
@@ -1998,6 +2004,7 @@ impl Session {
         let (mailbox, mailbox_rx) = Mailbox::new();
         let sess = Arc::new(Session {
             conversation_id,
+            tx_sub: tx_sub.clone(),
             tx_event: tx_event.clone(),
             agent_status,
             out_of_band_elicitation_paused,
@@ -2189,6 +2196,47 @@ impl Session {
             .next_internal_sub_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         format!("auto-compact-{id}")
+    }
+
+    pub(crate) async fn add_hollywood_obligation(&self, message: &HollywoodInputMessage) {
+        let mut state = self.state.lock().await;
+        state.add_hollywood_obligation(message);
+    }
+
+    pub(crate) async fn submit_hollywood_followup(
+        &self,
+        message: HollywoodInputMessage,
+    ) -> CodexResult<()> {
+        let sub = Submission {
+            id: Uuid::now_v7().to_string(),
+            op: Op::HollywoodInput { message },
+            trace: current_span_w3c_trace_context(),
+        };
+        self.tx_sub
+            .send(sub)
+            .await
+            .map_err(|_| CodexErr::InternalAgentDied)
+    }
+
+    pub(crate) async fn mark_hollywood_send_for_turn(&self, turn_id: &str, room: &str) {
+        let mut state = self.state.lock().await;
+        state.mark_hollywood_send_for_turn(turn_id, room);
+    }
+
+    pub(crate) async fn resolve_hollywood_obligations_for_turn(
+        &self,
+        turn_id: &str,
+    ) -> Vec<HollywoodObligation> {
+        let mut state = self.state.lock().await;
+        state.resolve_hollywood_obligations_for_turn(turn_id)
+    }
+
+    pub(crate) async fn prepare_hollywood_obligation_retry(
+        &self,
+        max_attempts: u32,
+    ) -> Vec<HollywoodObligation> {
+        let mut state = self.state.lock().await;
+        state.prepare_hollywood_obligation_retry(max_attempts)
     }
 
     pub(crate) async fn route_realtime_text_input(self: &Arc<Self>, text: String) {
@@ -4803,6 +4851,7 @@ mod handlers {
     use crate::rollout::RolloutRecorder;
     use crate::rollout::session_index;
     use crate::session_prefix::format_hollywood_message;
+    use crate::session_prefix::hollywood_obligation_instruction;
     use crate::tasks::CompactTask;
     use crate::tasks::UndoTask;
     use crate::tasks::UserShellCommandMode;
@@ -4827,6 +4876,9 @@ mod handlers {
     use codex_protocol::protocol::ThreadRolledBackEvent;
     use codex_protocol::protocol::TurnAbortReason;
     use codex_protocol::protocol::WarningEvent;
+    use codex_protocol::models::ContentItem;
+    use codex_protocol::models::ResponseInputItem;
+    use codex_protocol::models::ResponseItem;
     use codex_protocol::request_permissions::RequestPermissionsResponse;
     use codex_protocol::request_user_input::RequestUserInputResponse;
 
@@ -4858,17 +4910,54 @@ mod handlers {
         sub_id: String,
         message: HollywoodInputMessage,
     ) {
+        if message.requires_response || matches!(message.obligation.as_deref(), Some("obligation"))
+        {
+            sess.add_hollywood_obligation(&message).await;
+        }
         let wrapped = format_hollywood_message(&message);
-        user_input_or_turn(
-            sess,
-            sub_id,
-            Op::UserInput {
-                items: vec![UserInput::Text {
-                    text: wrapped,
-                    text_elements: Vec::new(),
-                }],
-                final_output_json_schema: None,
-            },
+        let mut contextual_items = Vec::new();
+        if let Some(instruction) = hollywood_obligation_instruction(&message) {
+            contextual_items.push(ResponseInputItem::Message {
+                role: "developer".to_string(),
+                content: vec![ContentItem::InputText { text: instruction }],
+            });
+        }
+        contextual_items.push(ResponseInputItem::Message {
+            role: "user".to_string(),
+            content: vec![ContentItem::InputText {
+                text: wrapped.clone(),
+            }],
+        });
+
+        if sess.inject_response_items(contextual_items).await.is_ok() {
+            return;
+        }
+
+        let Ok(current_context) = sess.new_turn_with_sub_id(sub_id, SessionSettingsUpdate::default()).await else {
+            return;
+        };
+        sess.maybe_emit_unknown_model_warning_for_turn(current_context.as_ref())
+            .await;
+
+        if let Some(instruction) = hollywood_obligation_instruction(&message) {
+            let developer_item = ResponseItem::Message {
+                id: None,
+                role: "developer".to_string(),
+                content: vec![ContentItem::InputText { text: instruction }],
+                end_turn: None,
+                phase: None,
+            };
+            sess.record_conversation_items(current_context.as_ref(), &[developer_item])
+                .await;
+        }
+
+        sess.spawn_task(
+            Arc::clone(&current_context),
+            vec![UserInput::Text {
+                text: wrapped,
+                text_elements: Vec::new(),
+            }],
+            crate::tasks::RegularTask::new(),
         )
         .await;
     }
@@ -6015,16 +6104,22 @@ pub(crate) async fn run_turn(
         })
         .collect::<Vec<_>>();
 
+    let initial_input_for_turn: ResponseInputItem = ResponseInputItem::from(input.clone());
+    let response_item: ResponseItem = initial_input_for_turn.clone().into();
+    let is_pure_contextual_user_message = matches!(
+        &response_item,
+        ResponseItem::Message { role, content, .. }
+            if role == "user" && is_contextual_user_message_content(content)
+    );
     if run_pending_session_start_hooks(&sess, &turn_context).await {
         return None;
     }
     if !input.is_empty() {
-        let initial_input_for_turn: ResponseInputItem = ResponseInputItem::from(input.clone());
-        let response_item: ResponseItem = initial_input_for_turn.clone().into();
         if matches!(
             parse_turn_item(&response_item),
             Some(TurnItem::UserMessage(_))
-        ) {
+        ) && !is_pure_contextual_user_message
+        {
             let user_prompt_submit_outcome = run_user_prompt_submit_hooks(
                 &sess,
                 &turn_context,

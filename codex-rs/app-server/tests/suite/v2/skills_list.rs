@@ -231,6 +231,7 @@ async fn skills_changed_notification_is_emitted_after_skill_change() -> Result<(
             model: None,
             model_provider: None,
             service_tier: None,
+            hollywood: None,
             cwd: None,
             approval_policy: None,
             approvals_reviewer: None,

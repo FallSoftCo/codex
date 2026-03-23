@@ -22,6 +22,7 @@ use serde_json::Value;
 
 use crate::codex::Session;
 use crate::codex::TurnContext;
+use crate::contextual_user_message::is_contextual_user_message_content;
 use crate::event_mapping::parse_turn_item;
 
 pub(crate) struct HookRuntimeOutcome {
@@ -42,6 +43,7 @@ pub(crate) enum PendingInputRecord {
     },
     ConversationItem {
         response_item: ResponseItem,
+        additional_contexts: Vec<String>,
     },
 }
 
@@ -202,6 +204,17 @@ pub(crate) async fn inspect_pending_input(
     pending_input_item: ResponseInputItem,
 ) -> PendingInputHookDisposition {
     let response_item = ResponseItem::from(pending_input_item);
+    if let ResponseItem::Message { role, content, .. } = &response_item
+        && role == "user"
+        && is_contextual_user_message_content(content)
+    {
+        return PendingInputHookDisposition::Accepted(Box::new(
+            PendingInputRecord::ConversationItem {
+                response_item,
+                additional_contexts: Vec::new(),
+            },
+        ));
+    }
     if let Some(TurnItem::UserMessage(user_message)) = parse_turn_item(&response_item) {
         let user_prompt_submit_outcome =
             run_user_prompt_submit_hooks(sess, turn_context, user_message.message()).await;
@@ -219,6 +232,7 @@ pub(crate) async fn inspect_pending_input(
     } else {
         PendingInputHookDisposition::Accepted(Box::new(PendingInputRecord::ConversationItem {
             response_item,
+            additional_contexts: Vec::new(),
         }))
     }
 }
@@ -242,9 +256,13 @@ pub(crate) async fn record_pending_input(
             .await;
             record_additional_contexts(sess, turn_context, additional_contexts).await;
         }
-        PendingInputRecord::ConversationItem { response_item } => {
+        PendingInputRecord::ConversationItem {
+            response_item,
+            additional_contexts,
+        } => {
             sess.record_conversation_items(turn_context, std::slice::from_ref(&response_item))
                 .await;
+            record_additional_contexts(sess, turn_context, additional_contexts).await;
         }
     }
 }

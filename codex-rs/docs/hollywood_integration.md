@@ -16,8 +16,9 @@ What is native today:
 
 What is not fully first-class yet:
 
-- Core still routes `Op::HollywoodInput` through the normal user-input path after wrapping the message as structured contextual input.
-- That means the app-server inbox and notification path are native, but the deepest core semantics are still layered on top of existing user-turn machinery.
+- Core still builds on the normal turn/task machinery rather than a dedicated external-message task type.
+- That means the app-server inbox and notification path are native, but the deepest core lifecycle is still layered on top of existing user-turn infrastructure.
+- Hollywood obligation metadata is now preserved longer than before, but richer explicit lifecycle/UI state such as "received", "deferred", or "acted on" is still future work.
 
 This phase boundary is intentional and useful for upstreaming. The inbox and attention model can be evaluated separately from deeper core protocol changes.
 
@@ -109,16 +110,25 @@ Coordination expectation:
 - Sessions should relay assigned scope once the user gives concrete tasking.
 - Sessions should also relay material conclusions back to the room when they reach a concrete diagnosis, decision, or verification result that affects peer work.
 
+Current limitation:
+
+- delivery and action are not yet surfaced as a dedicated UI lifecycle
+- so Hollywood handling is behaviorally stronger than before, but still not rendered as a separate obligation-state machine in the TUI
+
 ## Environment bootstrap
 
-The TUI app-server session can auto-attach a thread to Hollywood using environment variables:
+The runtime can derive a default Hollywood attachment from environment variables:
 
 - `HOLLYWOOD_AUTO_ATTACH`
 - `HOLLYWOOD_URL`
 - `HOLLYWOOD_ROOM`
 - `HOLLYWOOD_ATTENTION_MODE`
 
-If auto-attach is enabled, new, resumed, and forked threads attempt `thread/hollywood/attach` automatically during bootstrap.
+If auto-attach is enabled:
+
+- new and forked threads can still bootstrap through the TUI helper
+- resumed threads restore Hollywood server-side from persisted thread/session metadata
+- resumed legacy threads without persisted Hollywood metadata migrate server-side from the current `HOLLYWOOD_*` environment and then persist that config for later resumes
 
 ## Model-visible context
 
@@ -134,6 +144,13 @@ The current instruction model is:
 - treat Hollywood traffic as context to analyze
 - treat `@mentions` as the normal request-for-attention mechanism
 - use room-wide chatter for shared awareness without assuming every message is actionable
+- keep autonomous follow-up silent by default when room activity did not change anything user-visible
+- when a user-visible Hollywood follow-up is still warranted, prefer a compact status line over a full no-op explanation
+
+The next runtime gap to close is richer lifecycle visibility:
+
+- keep explicit lifecycle state such as `delivered`, `surfaced`, `acted_on`, `deferred`, or `ignored`
+- surface that state in the TUI so the human can tell whether another session merely heard a room message or actually handled it
 
 ## Upstreaming guidance
 

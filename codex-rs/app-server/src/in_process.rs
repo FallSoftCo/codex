@@ -823,6 +823,8 @@ mod tests {
                     thread_id: thread_id.clone(),
                     url: Some("http://127.0.0.1:8765".to_string()),
                     room: Some("main".to_string()),
+                    observed_rooms: Vec::new(),
+                    wake_rooms: Vec::new(),
                     attention: None,
                 },
             })
@@ -860,6 +862,9 @@ mod tests {
                     InProcessServerEvent::ServerNotification(
                         ServerNotification::ThreadHollywoodMessage(notification),
                     ) => {
+                        if notification.message.body != body {
+                            continue;
+                        }
                         if saw_turn_started {
                             break (notification, saw_turn_started);
                         }
@@ -898,7 +903,68 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn hollywood_self_authored_room_activity_can_restart_idle_reasoning() {
+    async fn hollywood_attach_starts_startup_handshake_for_idle_threads() {
+        let mut client = start_test_client(SessionSource::Cli).await;
+        let response = client
+            .request(ClientRequest::ThreadStart {
+                request_id: RequestId::Integer(25),
+                params: ThreadStartParams {
+                    ephemeral: Some(true),
+                    ..ThreadStartParams::default()
+                },
+            })
+            .await
+            .expect("request transport should work")
+            .expect("thread/start should succeed");
+        let parsed: ThreadStartResponse =
+            serde_json::from_value(response).expect("thread/start response should parse");
+        let thread_id = parsed.thread.id;
+
+        let response = client
+            .request(ClientRequest::ThreadHollywoodAttach {
+                request_id: RequestId::Integer(26),
+                params: ThreadHollywoodAttachParams {
+                    thread_id: thread_id.clone(),
+                    url: Some("http://127.0.0.1:8765".to_string()),
+                    room: Some("main".to_string()),
+                    observed_rooms: Vec::new(),
+                    wake_rooms: Vec::new(),
+                    attention: None,
+                },
+            })
+            .await
+            .expect("attach transport should work")
+            .expect("attach should succeed");
+        let _parsed: ThreadHollywoodAttachResponse =
+            serde_json::from_value(response).expect("attach response should parse");
+
+        let started = timeout(Duration::from_secs(8), async {
+            loop {
+                let Some(event) = client.next_event().await else {
+                    panic!("in-process client disconnected before startup handshake turn");
+                };
+                if let InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
+                    notification,
+                )) = event
+                    && notification.thread_id == thread_id
+                {
+                    break notification.turn.id;
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for startup handshake turn");
+
+        assert!(!started.is_empty());
+
+        client
+            .shutdown()
+            .await
+            .expect("in-process runtime should shutdown cleanly");
+    }
+
+    #[tokio::test]
+    async fn hollywood_self_authored_room_activity_does_not_restart_idle_reasoning() {
         let mut client = start_test_client(SessionSource::Cli).await;
         let response = client
             .request(ClientRequest::ThreadStart {
@@ -922,6 +988,8 @@ mod tests {
                     thread_id: thread_id.clone(),
                     url: Some("http://127.0.0.1:8765".to_string()),
                     room: Some("main".to_string()),
+                    observed_rooms: Vec::new(),
+                    wake_rooms: Vec::new(),
                     attention: None,
                 },
             })
@@ -947,36 +1015,26 @@ mod tests {
             .error_for_status()
             .expect("Hollywood send response should be successful");
 
-        let (notification, saw_turn_started) = timeout(Duration::from_secs(8), async {
-            let mut hollywood_notification = None;
-            let mut saw_turn_started = false;
+        let notification = timeout(Duration::from_secs(8), async {
             loop {
                 let Some(event) = client.next_event().await else {
-                    panic!("in-process client disconnected before autonomous Hollywood wake");
+                    panic!("in-process client disconnected before self-authored Hollywood notification");
                 };
                 match event {
                     InProcessServerEvent::ServerNotification(
                         ServerNotification::ThreadHollywoodMessage(notification),
                     ) => {
-                        if saw_turn_started {
-                            break (notification, saw_turn_started);
+                        if notification.message.body != body {
+                            continue;
                         }
-                        hollywood_notification = Some(notification);
-                    }
-                    InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
-                        notification,
-                    )) if notification.thread_id == thread_id => {
-                        saw_turn_started = true;
-                        if let Some(notification) = hollywood_notification.take() {
-                            break (notification, saw_turn_started);
-                        }
+                        break notification;
                     }
                     _ => {}
                 }
             }
         })
         .await
-        .expect("timed out waiting for autonomous Hollywood wake");
+        .expect("timed out waiting for self-authored Hollywood notification");
 
         assert_eq!(notification.thread_id, thread_id);
         assert_eq!(notification.message.body, body);
@@ -987,7 +1045,28 @@ mod tests {
         assert!(!notification.mentioned);
         assert!(notification.self_authored);
         assert_eq!(notification.attention, HollywoodMessageAttention::Ambient);
-        assert!(saw_turn_started);
+
+        let unexpected_turn_started = timeout(Duration::from_secs(3), async {
+            loop {
+                let Some(event) = client.next_event().await else {
+                    return false;
+                };
+                if let InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
+                    notification,
+                )) = event
+                {
+                    if notification.thread_id == thread_id {
+                        return true;
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap_or(false);
+        assert!(
+            !unexpected_turn_started,
+            "self-authored Hollywood room activity should not trigger a new turn",
+        );
 
         client
             .shutdown()

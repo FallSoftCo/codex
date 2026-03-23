@@ -2602,6 +2602,7 @@ async fn session_new_fails_when_zsh_fork_enabled_without_zsh_path() {
     };
 
     let (tx_event, _rx_event) = async_channel::unbounded();
+    let (tx_sub, _rx_sub) = async_channel::bounded(1);
     let (agent_status_tx, _agent_status_rx) = watch::channel(AgentStatus::PendingInit);
     let plugins_manager = Arc::new(PluginsManager::new(config.codex_home.clone()));
     let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
@@ -2615,6 +2616,7 @@ async fn session_new_fails_when_zsh_fork_enabled_without_zsh_path() {
         auth_manager,
         models_manager,
         Arc::new(ExecPolicyManager::default()),
+        tx_sub,
         tx_event,
         agent_status_tx,
         InitialHistory::New,
@@ -2817,6 +2819,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let (mailbox, mailbox_rx) = crate::agent::Mailbox::new();
     let session = Session {
         conversation_id,
+        tx_sub: async_channel::bounded(1).0,
         tx_event,
         agent_status: agent_status_tx,
         out_of_band_elicitation_paused: watch::channel(false).0,
@@ -3659,6 +3662,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
     let (mailbox, mailbox_rx) = crate::agent::Mailbox::new();
     let session = Arc::new(Session {
         conversation_id,
+        tx_sub: async_channel::bounded(1).0,
         tx_event,
         agent_status: agent_status_tx,
         out_of_band_elicitation_paused: watch::channel(false).0,

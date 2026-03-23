@@ -27,7 +27,12 @@ SELECT
     archived_at,
     git_sha,
     git_branch,
-    git_origin_url
+    git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room
 FROM threads
 WHERE id = ?
             "#,
@@ -364,7 +369,12 @@ SELECT
     archived_at,
     git_sha,
     git_branch,
-    git_origin_url
+    git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room
 FROM threads
             "#,
         );
@@ -467,8 +477,13 @@ INSERT INTO threads (
     git_sha,
     git_branch,
     git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room,
     memory_mode
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO NOTHING
             "#,
         )
@@ -500,6 +515,36 @@ ON CONFLICT(id) DO NOTHING
         .bind(metadata.git_sha.as_deref())
         .bind(metadata.git_branch.as_deref())
         .bind(metadata.git_origin_url.as_deref())
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.url.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.room.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.attention_mode.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_all),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_room),
+        )
         .bind("enabled")
         .execute(self.pool.as_ref())
         .await?;
@@ -563,6 +608,34 @@ WHERE id = ?
         Ok(result.rows_affected() > 0)
     }
 
+    pub async fn update_thread_hollywood(
+        &self,
+        thread_id: ThreadId,
+        hollywood: Option<&codex_protocol::protocol::HollywoodSessionMeta>,
+    ) -> anyhow::Result<bool> {
+        let result = sqlx::query(
+            r#"
+UPDATE threads
+SET
+    hollywood_url = ?,
+    hollywood_room = ?,
+    hollywood_attention_mode = ?,
+    hollywood_include_at_all = ?,
+    hollywood_include_at_room = ?
+WHERE id = ?
+            "#,
+        )
+        .bind(hollywood.map(|value| value.url.as_str()))
+        .bind(hollywood.map(|value| value.room.as_str()))
+        .bind(hollywood.map(|value| value.attention_mode.as_str()))
+        .bind(hollywood.map(|value| value.include_at_all))
+        .bind(hollywood.map(|value| value.include_at_room))
+        .bind(thread_id.to_string())
+        .execute(self.pool.as_ref())
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     async fn upsert_thread_with_creation_memory_mode(
         &self,
         metadata: &crate::ThreadMetadata,
@@ -594,8 +667,13 @@ INSERT INTO threads (
     git_sha,
     git_branch,
     git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room,
     memory_mode
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     rollout_path = excluded.rollout_path,
     created_at = excluded.created_at,
@@ -618,7 +696,12 @@ ON CONFLICT(id) DO UPDATE SET
     archived_at = excluded.archived_at,
     git_sha = excluded.git_sha,
     git_branch = excluded.git_branch,
-    git_origin_url = excluded.git_origin_url
+    git_origin_url = excluded.git_origin_url,
+    hollywood_url = excluded.hollywood_url,
+    hollywood_room = excluded.hollywood_room,
+    hollywood_attention_mode = excluded.hollywood_attention_mode,
+    hollywood_include_at_all = excluded.hollywood_include_at_all,
+    hollywood_include_at_room = excluded.hollywood_include_at_room
             "#,
         )
         .bind(metadata.id.to_string())
@@ -649,6 +732,36 @@ ON CONFLICT(id) DO UPDATE SET
         .bind(metadata.git_sha.as_deref())
         .bind(metadata.git_branch.as_deref())
         .bind(metadata.git_origin_url.as_deref())
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.url.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.room.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.attention_mode.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_all),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_room),
+        )
         .bind(creation_memory_mode.unwrap_or("enabled"))
         .execute(self.pool.as_ref())
         .await?;
@@ -1033,6 +1146,7 @@ mod tests {
                 developer_instructions: None,
                 dynamic_tools: None,
                 memory_mode: Some("polluted".to_string()),
+                hollywood: None,
             },
             git: None,
         })];
@@ -1092,6 +1206,7 @@ mod tests {
                 developer_instructions: None,
                 dynamic_tools: None,
                 memory_mode: None,
+                hollywood: None,
             },
             git: Some(GitInfo {
                 commit_hash: Some(codex_git_utils::GitSha::new("rollout-sha")),

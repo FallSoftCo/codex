@@ -2,6 +2,7 @@
 
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseItem;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_sandboxing::policy_transforms::merge_permission_profiles;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -33,6 +34,17 @@ pub(crate) struct SessionState {
     pub(crate) active_connector_selection: HashSet<String>,
     pub(crate) pending_session_start_source: Option<codex_hooks::SessionStartSource>,
     granted_permissions: Option<PermissionProfile>,
+    outstanding_hollywood_obligations: Vec<HollywoodObligation>,
+    hollywood_send_rooms_by_turn: HashMap<String, HashSet<String>>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct HollywoodObligation {
+    pub(crate) message_id: i64,
+    pub(crate) room: String,
+    pub(crate) sender_id: String,
+    pub(crate) body: String,
+    pub(crate) attempts: u32,
 }
 
 impl SessionState {
@@ -51,6 +63,8 @@ impl SessionState {
             active_connector_selection: HashSet::new(),
             pending_session_start_source: None,
             granted_permissions: None,
+            outstanding_hollywood_obligations: Vec::new(),
+            hollywood_send_rooms_by_turn: HashMap::new(),
         }
     }
 
@@ -213,6 +227,61 @@ impl SessionState {
 
     pub(crate) fn granted_permissions(&self) -> Option<PermissionProfile> {
         self.granted_permissions.clone()
+    }
+
+    pub(crate) fn add_hollywood_obligation(&mut self, message: &HollywoodInputMessage) {
+        if message.sender_id == "hollywood-system" {
+            return;
+        }
+        let duplicate = self.outstanding_hollywood_obligations.iter().any(|obligation| {
+            (message.message_id > 0 && obligation.message_id == message.message_id)
+                || (obligation.room == message.room
+                    && obligation.sender_id == message.sender_id
+                    && obligation.body == message.body)
+        });
+        if duplicate {
+            return;
+        }
+        self.outstanding_hollywood_obligations.push(HollywoodObligation {
+            message_id: message.message_id,
+            room: message.room.clone(),
+            sender_id: message.sender_id.clone(),
+            body: message.body.clone(),
+            attempts: 0,
+        });
+    }
+
+    pub(crate) fn mark_hollywood_send_for_turn(&mut self, turn_id: &str, room: &str) {
+        self.hollywood_send_rooms_by_turn
+            .entry(turn_id.to_string())
+            .or_default()
+            .insert(room.to_string());
+    }
+
+    pub(crate) fn resolve_hollywood_obligations_for_turn(
+        &mut self,
+        turn_id: &str,
+    ) -> Vec<HollywoodObligation> {
+        let Some(handled_rooms) = self.hollywood_send_rooms_by_turn.remove(turn_id) else {
+            return self.outstanding_hollywood_obligations.clone();
+        };
+        self.outstanding_hollywood_obligations
+            .retain(|obligation| !handled_rooms.contains(&obligation.room));
+        self.outstanding_hollywood_obligations.clone()
+    }
+
+    pub(crate) fn prepare_hollywood_obligation_retry(
+        &mut self,
+        max_attempts: u32,
+    ) -> Vec<HollywoodObligation> {
+        let mut retry = Vec::new();
+        for obligation in &mut self.outstanding_hollywood_obligations {
+            if obligation.attempts < max_attempts {
+                obligation.attempts += 1;
+                retry.push(obligation.clone());
+            }
+        }
+        retry
     }
 }
 

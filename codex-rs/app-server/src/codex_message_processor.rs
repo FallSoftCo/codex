@@ -13,9 +13,13 @@ use crate::hollywood::DEFAULT_HOLLYWOOD_ROOM;
 use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
 use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
 use crate::hollywood::HollywoodConfig;
+use crate::hollywood::build_registry_upsert_request;
 use crate::hollywood::format_hollywood_context_message;
 use crate::hollywood::poll_messages as poll_hollywood_messages;
 use crate::hollywood::prime_from_latest as prime_hollywood_from_latest;
+use crate::hollywood::startup_handshake_message;
+use crate::hollywood::thread_status_name as hollywood_thread_status_name;
+use crate::hollywood::upsert_registry as upsert_hollywood_registry;
 use crate::models::supported_models;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
@@ -2110,6 +2114,7 @@ impl CodexMessageProcessor {
             personality,
             ephemeral,
             persist_extended_history,
+            hollywood: _hollywood,
         } = params;
         let mut typesafe_overrides = self.build_thread_config_overrides(
             model,
@@ -3757,6 +3762,12 @@ impl CodexMessageProcessor {
     }
 
     async fn thread_resume(&mut self, request_id: ConnectionRequestId, params: ThreadResumeParams) {
+        if let Some(rollout_path) = self.legacy_resume_rollout_path(&params).await {
+            self.resume_legacy_thread_via_native_migration(request_id, params, rollout_path)
+                .await;
+            return;
+        }
+
         if let Ok(thread_id) = ThreadId::from_string(&params.thread_id)
             && self
                 .pending_thread_unloads
@@ -3797,6 +3808,7 @@ impl CodexMessageProcessor {
             developer_instructions,
             personality,
             persist_extended_history,
+            hollywood,
         } = params;
 
         let thread_history = if let Some(history) = history {
@@ -3902,6 +3914,15 @@ impl CodexMessageProcessor {
                     request_id.connection_id,
                     "thread",
                 );
+                self.maybe_restore_hollywood_on_resume(
+                    thread_id,
+                    &thread,
+                    request_id.connection_id,
+                    hollywood
+                        .as_ref()
+                        .map(crate::hollywood::HollywoodConfig::from),
+                )
+                .await;
 
                 let mut thread = match self
                     .load_thread_from_resume_source_or_send_internal(
@@ -3963,6 +3984,357 @@ impl CodexMessageProcessor {
                 let error = JSONRPCErrorError {
                     code: INTERNAL_ERROR_CODE,
                     message: format!("error resuming thread: {err}"),
+                    data: None,
+                };
+                self.outgoing.send_error(request_id, error).await;
+            }
+        }
+    }
+
+    async fn legacy_resume_rollout_path(&self, params: &ThreadResumeParams) -> Option<PathBuf> {
+        if params.history.is_some() {
+            return None;
+        }
+
+        let rollout_path = if let Some(path) = params.path.as_ref() {
+            path.clone()
+        } else {
+            let thread_id = ThreadId::from_string(&params.thread_id).ok()?;
+            match find_thread_path_by_id_str(&self.config.codex_home, &thread_id.to_string()).await
+            {
+                Ok(Some(path)) => path,
+                Ok(None) | Err(_) => return None,
+            }
+        };
+
+        let meta_line = read_session_meta_line(rollout_path.as_path()).await.ok()?;
+        meta_line.meta.hollywood.is_none().then_some(rollout_path)
+    }
+
+    async fn resume_legacy_thread_via_native_migration(
+        &mut self,
+        request_id: ConnectionRequestId,
+        params: ThreadResumeParams,
+        rollout_path: PathBuf,
+    ) {
+        tracing::info!(
+            rollout_path = %rollout_path.display(),
+            requested_thread_id = params.thread_id,
+            "legacy thread/resume selected native migration"
+        );
+
+        let ThreadResumeParams {
+            thread_id,
+            history: _,
+            path: _,
+            model,
+            model_provider,
+            service_tier,
+            cwd,
+            approval_policy,
+            approvals_reviewer,
+            sandbox,
+            config: request_overrides,
+            base_instructions,
+            developer_instructions,
+            personality,
+            persist_extended_history,
+            hollywood,
+        } = params;
+
+        let source_thread_id = ThreadId::from_string(&thread_id).ok();
+        let history_cwd =
+            read_history_cwd_from_state_db(&self.config, source_thread_id, rollout_path.as_path())
+                .await;
+        let mut typesafe_overrides = self.build_thread_config_overrides(
+            model,
+            model_provider,
+            service_tier,
+            cwd,
+            approval_policy,
+            approvals_reviewer,
+            sandbox,
+            base_instructions,
+            developer_instructions,
+            personality,
+        );
+
+        if let Some(source_thread_id) = source_thread_id
+            && let Some(state_db_ctx) = get_state_db(&self.config).await
+            && let Ok(Some(persisted_metadata)) = state_db_ctx.get_thread(source_thread_id).await
+        {
+            let mut request_overrides = request_overrides;
+            merge_persisted_resume_metadata(
+                &mut request_overrides,
+                &mut typesafe_overrides,
+                &persisted_metadata,
+            );
+            let cloud_requirements = self.current_cloud_requirements();
+            let cli_overrides = self.current_cli_overrides();
+            let runtime_feature_enablement = self.current_runtime_feature_enablement();
+            let config = match derive_config_for_cwd(
+                &cli_overrides,
+                request_overrides,
+                typesafe_overrides,
+                history_cwd,
+                &cloud_requirements,
+                &self.config.codex_home,
+                &runtime_feature_enablement,
+            )
+            .await
+            {
+                Ok(config) => config,
+                Err(err) => {
+                    let error = config_load_error(&err);
+                    self.outgoing.send_error(request_id, error).await;
+                    return;
+                }
+            };
+
+            let rollout_history = match RolloutRecorder::get_rollout_history(&rollout_path).await {
+                Ok(history) => history,
+                Err(err) => {
+                    self.send_invalid_request_error(
+                        request_id,
+                        format!("failed to load rollout `{}`: {err}", rollout_path.display()),
+                    )
+                    .await;
+                    return;
+                }
+            };
+            let fork_items = rollout_history.get_rollout_items();
+            let response_history = InitialHistory::Forked(fork_items.clone());
+            let fallback_model_provider = config.model_provider_id.clone();
+
+            match self
+                .thread_manager
+                .resume_thread_with_history(
+                    config,
+                    InitialHistory::Forked(fork_items),
+                    self.auth_manager.clone(),
+                    persist_extended_history,
+                    self.request_trace_context(&request_id).await,
+                )
+                .await
+            {
+                Ok(NewThread {
+                    thread_id,
+                    thread,
+                    session_configured,
+                }) => {
+                    let Some(new_rollout_path) = session_configured.rollout_path.as_ref() else {
+                        self.send_internal_error(
+                            request_id,
+                            format!("rollout path missing for migrated thread {thread_id}"),
+                        )
+                        .await;
+                        return;
+                    };
+                    Self::log_listener_attach_result(
+                        self.ensure_conversation_listener(
+                            thread_id,
+                            request_id.connection_id,
+                            /*raw_events_enabled*/ false,
+                            ApiVersion::V2,
+                        )
+                        .await,
+                        thread_id,
+                        request_id.connection_id,
+                        "thread",
+                    );
+                    self.maybe_restore_hollywood_on_resume(
+                        thread_id,
+                        &thread,
+                        request_id.connection_id,
+                        hollywood
+                            .as_ref()
+                            .map(crate::hollywood::HollywoodConfig::from),
+                    )
+                    .await;
+
+                    let mut thread = match self
+                        .load_thread_from_resume_source_or_send_internal(
+                            thread_id,
+                            thread.as_ref(),
+                            &response_history,
+                            new_rollout_path.as_path(),
+                            fallback_model_provider.as_str(),
+                            Some(&persisted_metadata),
+                        )
+                        .await
+                    {
+                        Ok(thread) => thread,
+                        Err(message) => {
+                            self.send_internal_error(request_id, message).await;
+                            return;
+                        }
+                    };
+
+                    self.thread_watch_manager.upsert_thread(thread.clone()).await;
+                    let thread_status = self
+                        .thread_watch_manager
+                        .loaded_status_for_thread(&thread.id)
+                        .await;
+                    set_thread_status_and_interrupt_stale_turns(
+                        &mut thread,
+                        thread_status,
+                        /*has_live_in_progress_turn*/ false,
+                    );
+
+                    let response = ThreadResumeResponse {
+                        thread,
+                        model: session_configured.model,
+                        model_provider: session_configured.model_provider_id,
+                        service_tier: session_configured.service_tier,
+                        cwd: session_configured.cwd,
+                        approval_policy: session_configured.approval_policy.into(),
+                        approvals_reviewer: session_configured.approvals_reviewer.into(),
+                        sandbox: session_configured.sandbox_policy.into(),
+                        reasoning_effort: session_configured.reasoning_effort,
+                    };
+                    self.outgoing.send_response(request_id, response).await;
+                }
+                Err(err) => {
+                    let error = JSONRPCErrorError {
+                        code: INTERNAL_ERROR_CODE,
+                        message: format!("error migrating legacy thread during resume: {err}"),
+                        data: None,
+                    };
+                    self.outgoing.send_error(request_id, error).await;
+                }
+            }
+            return;
+        }
+
+        let cloud_requirements = self.current_cloud_requirements();
+        let cli_overrides = self.current_cli_overrides();
+        let runtime_feature_enablement = self.current_runtime_feature_enablement();
+        let config = match derive_config_for_cwd(
+            &cli_overrides,
+            request_overrides,
+            typesafe_overrides,
+            history_cwd,
+            &cloud_requirements,
+            &self.config.codex_home,
+            &runtime_feature_enablement,
+        )
+        .await
+        {
+            Ok(config) => config,
+            Err(err) => {
+                let error = config_load_error(&err);
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+
+        let rollout_history = match RolloutRecorder::get_rollout_history(&rollout_path).await {
+            Ok(history) => history,
+            Err(err) => {
+                self.send_invalid_request_error(
+                    request_id,
+                    format!("failed to load rollout `{}`: {err}", rollout_path.display()),
+                )
+                .await;
+                return;
+            }
+        };
+        let fork_items = rollout_history.get_rollout_items();
+        let response_history = InitialHistory::Forked(fork_items.clone());
+        let fallback_model_provider = config.model_provider_id.clone();
+
+        match self
+            .thread_manager
+            .resume_thread_with_history(
+                config,
+                InitialHistory::Forked(fork_items),
+                self.auth_manager.clone(),
+                persist_extended_history,
+                self.request_trace_context(&request_id).await,
+            )
+            .await
+        {
+            Ok(NewThread {
+                thread_id,
+                thread,
+                session_configured,
+            }) => {
+                let Some(new_rollout_path) = session_configured.rollout_path.as_ref() else {
+                    self.send_internal_error(
+                        request_id,
+                        format!("rollout path missing for migrated thread {thread_id}"),
+                    )
+                    .await;
+                    return;
+                };
+                Self::log_listener_attach_result(
+                    self.ensure_conversation_listener(
+                        thread_id,
+                        request_id.connection_id,
+                        /*raw_events_enabled*/ false,
+                        ApiVersion::V2,
+                    )
+                    .await,
+                    thread_id,
+                    request_id.connection_id,
+                    "thread",
+                );
+                self.maybe_restore_hollywood_on_resume(
+                    thread_id,
+                    &thread,
+                    request_id.connection_id,
+                    hollywood
+                        .as_ref()
+                        .map(crate::hollywood::HollywoodConfig::from),
+                )
+                .await;
+
+                let mut thread = match self
+                    .load_thread_from_resume_source_or_send_internal(
+                        thread_id,
+                        thread.as_ref(),
+                        &response_history,
+                        new_rollout_path.as_path(),
+                        fallback_model_provider.as_str(),
+                        /*persisted_resume_metadata*/ None,
+                    )
+                    .await
+                {
+                    Ok(thread) => thread,
+                    Err(message) => {
+                        self.send_internal_error(request_id, message).await;
+                        return;
+                    }
+                };
+
+                self.thread_watch_manager.upsert_thread(thread.clone()).await;
+                let thread_status = self
+                    .thread_watch_manager
+                    .loaded_status_for_thread(&thread.id)
+                    .await;
+                set_thread_status_and_interrupt_stale_turns(
+                    &mut thread,
+                    thread_status,
+                    /*has_live_in_progress_turn*/ false,
+                );
+
+                let response = ThreadResumeResponse {
+                    thread,
+                    model: session_configured.model,
+                    model_provider: session_configured.model_provider_id,
+                    service_tier: session_configured.service_tier,
+                    cwd: session_configured.cwd,
+                    approval_policy: session_configured.approval_policy.into(),
+                    approvals_reviewer: session_configured.approvals_reviewer.into(),
+                    sandbox: session_configured.sandbox_policy.into(),
+                    reasoning_effort: session_configured.reasoning_effort,
+                };
+                self.outgoing.send_response(request_id, response).await;
+            }
+            Err(err) => {
+                let error = JSONRPCErrorError {
+                    code: INTERNAL_ERROR_CODE,
+                    message: format!("error migrating legacy thread during resume: {err}"),
                     data: None,
                 };
                 self.outgoing.send_error(request_id, error).await;
@@ -4088,6 +4460,16 @@ impl CodexMessageProcessor {
                 existing_thread.clone(),
                 thread_state.clone(),
                 ApiVersion::V2,
+            )
+            .await;
+            self.maybe_restore_hollywood_on_resume(
+                existing_thread_id,
+                &existing_thread,
+                request_id.connection_id,
+                params
+                    .hollywood
+                    .as_ref()
+                    .map(crate::hollywood::HollywoodConfig::from),
             )
             .await;
 
@@ -4310,6 +4692,7 @@ impl CodexMessageProcessor {
             developer_instructions,
             ephemeral,
             persist_extended_history,
+            hollywood: _hollywood,
         } = params;
 
         let (rollout_path, source_thread_id) = if let Some(path) = path {
@@ -5607,31 +5990,25 @@ impl CodexMessageProcessor {
             room: params
                 .room
                 .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
+            observed_rooms: params.observed_rooms,
+            wake_rooms: params.wake_rooms,
             attention: params.attention.unwrap_or_default(),
         };
-        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-        {
-            let mut thread_state = thread_state.lock().await;
-            thread_state.hollywood.attach(hollywood_config.clone());
-        }
-        thread
-            .inject_user_message_without_turn(format_hollywood_context_message(
-                thread_id,
-                &hollywood_config,
-            ))
-            .await;
-        Self::log_listener_attach_result(
-            self.ensure_conversation_listener(
-                thread_id,
-                request_id.connection_id,
-                /*raw_events_enabled*/ false,
-                ApiVersion::V2,
-            )
-            .await,
+        self.attach_hollywood_runtime(
             thread_id,
+            &thread,
             request_id.connection_id,
-            "hollywood-thread",
-        );
+            hollywood_config.clone(),
+            "explicit_attach",
+        )
+        .await;
+        if let Err(error) = self
+            .persist_thread_hollywood_metadata(thread_id, Some(&thread), Some(&hollywood_config))
+            .await
+        {
+            self.outgoing.send_error(request_id, error).await;
+            return;
+        }
         self.outgoing
             .send_response(request_id, ThreadHollywoodAttachResponse {})
             .await;
@@ -5649,13 +6026,17 @@ impl CodexMessageProcessor {
                 return;
             }
         };
-        self.thread_state_manager
-            .thread_state(thread_id)
-            .await
-            .lock()
-            .await
-            .hollywood
-            .detach();
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        thread_state.lock().await.hollywood.detach();
+        tracing::info!(conversation_id = %thread_id, "Hollywood detached for thread");
+        if let Some(thread) = self.thread_manager.get_thread(thread_id).await.ok()
+            && let Err(error) = self
+                .persist_thread_hollywood_metadata(thread_id, Some(&thread), None)
+                .await
+        {
+            self.outgoing.send_error(request_id, error).await;
+            return;
+        }
         self.outgoing
             .send_response(request_id, ThreadHollywoodDetachResponse {})
             .await;
@@ -5666,7 +6047,7 @@ impl CodexMessageProcessor {
         request_id: ConnectionRequestId,
         params: ThreadHollywoodAttentionSetParams,
     ) {
-        let (thread_id, _) = match self.load_thread(&params.thread_id).await {
+        let (thread_id, thread) = match self.load_thread(&params.thread_id).await {
             Ok(v) => v,
             Err(error) => {
                 self.outgoing.send_error(request_id, error).await;
@@ -5674,22 +6055,221 @@ impl CodexMessageProcessor {
             }
         };
         let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-        if !thread_state
-            .lock()
-            .await
-            .hollywood
-            .set_attention(params.attention)
-        {
+        let persisted = {
+            let mut thread_state = thread_state.lock().await;
+            if !thread_state.hollywood.set_attention(params.attention) {
+                None
+            } else {
+                thread_state.hollywood.config()
+            }
+        };
+        let Some(persisted) = persisted else {
             self.send_invalid_request_error(
                 request_id,
                 "Hollywood is not attached for this thread".to_string(),
             )
             .await;
             return;
+        };
+        if let Err(error) = self
+            .persist_thread_hollywood_metadata(thread_id, Some(&thread), Some(&persisted))
+            .await
+        {
+            self.outgoing.send_error(request_id, error).await;
+            return;
         }
         self.outgoing
             .send_response(request_id, ThreadHollywoodAttentionSetResponse {})
             .await;
+    }
+
+    async fn attach_hollywood_runtime(
+        &self,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        connection_id: ConnectionId,
+        hollywood_config: HollywoodConfig,
+        source: &str,
+    ) {
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        {
+            let mut thread_state = thread_state.lock().await;
+            let session_kind = match source {
+                "resume_request" | "persisted_resume_restore" | "legacy_resume_migration" => {
+                    "resumed"
+                }
+                "explicit_attach" => "attached",
+                other => other,
+            };
+            let resumed_from = matches!(
+                source,
+                "resume_request" | "persisted_resume_restore" | "legacy_resume_migration"
+            )
+            .then(|| thread_id.to_string());
+            thread_state
+                .hollywood
+                .attach(hollywood_config.clone(), session_kind, resumed_from);
+        }
+        tracing::info!(
+            conversation_id = %thread_id,
+            room = hollywood_config.room,
+            url = hollywood_config.url,
+            attention_mode = ?hollywood_config.attention.mode,
+            include_at_all = hollywood_config.attention.include_at_all,
+            include_at_room = hollywood_config.attention.include_at_room,
+            source,
+            "Hollywood attached for thread"
+        );
+        thread
+            .inject_user_message_without_turn(format_hollywood_context_message(
+                thread_id,
+                &hollywood_config,
+            ))
+            .await;
+        Self::log_listener_attach_result(
+            self.ensure_conversation_listener(
+                thread_id,
+                connection_id,
+                /*raw_events_enabled*/ false,
+                ApiVersion::V2,
+            )
+            .await,
+            thread_id,
+            connection_id,
+            "hollywood-thread",
+        );
+    }
+
+    async fn persist_thread_hollywood_metadata(
+        &self,
+        thread_id: ThreadId,
+        loaded_thread: Option<&Arc<CodexThread>>,
+        hollywood_config: Option<&HollywoodConfig>,
+    ) -> Result<(), JSONRPCErrorError> {
+        if loaded_thread.is_some_and(|thread| thread.rollout_path().is_none()) {
+            return Ok(());
+        }
+        let Some(state_db_ctx) = get_state_db(&self.config).await else {
+            return Ok(());
+        };
+        self.ensure_thread_metadata_row_exists(thread_id, &state_db_ctx, loaded_thread)
+            .await?;
+
+        let persisted = hollywood_config.map(codex_protocol::protocol::HollywoodSessionMeta::from);
+        state_db_ctx
+            .update_thread_hollywood(thread_id, persisted.as_ref())
+            .await
+            .map_err(|err| JSONRPCErrorError {
+                code: INTERNAL_ERROR_CODE,
+                message: format!(
+                    "failed to persist Hollywood metadata for thread {thread_id}: {err}"
+                ),
+                data: None,
+            })?;
+
+        if let Some(thread) = loaded_thread {
+            self.persist_rollout_hollywood_metadata(thread, persisted)
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn persist_rollout_hollywood_metadata(
+        &self,
+        thread: &Arc<CodexThread>,
+        hollywood: Option<codex_protocol::protocol::HollywoodSessionMeta>,
+    ) {
+        let Some(rollout_path) = thread.rollout_path() else {
+            return;
+        };
+        let mut session_meta_line = match read_session_meta_line(rollout_path.as_path()).await {
+            Ok(session_meta_line) => session_meta_line,
+            Err(err) => {
+                warn!(
+                    "failed to read session metadata from rollout {} while persisting Hollywood state: {err}",
+                    rollout_path.display()
+                );
+                return;
+            }
+        };
+        session_meta_line.meta.hollywood = hollywood;
+        thread
+            .persist_rollout_items(&[RolloutItem::SessionMeta(session_meta_line)])
+            .await;
+    }
+
+    async fn maybe_restore_hollywood_on_resume(
+        &self,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        connection_id: ConnectionId,
+        requested_hollywood: Option<HollywoodConfig>,
+    ) {
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        if thread_state.lock().await.hollywood.config().is_some() {
+            return;
+        }
+
+        let mut restore_source = "persisted_resume_restore";
+        let mut hollywood_config = requested_hollywood;
+        if hollywood_config.is_some() {
+            restore_source = "resume_request";
+        }
+        if hollywood_config.is_none()
+            && let Some(state_db_ctx) = get_state_db(&self.config).await
+        {
+            match state_db_ctx.get_thread(thread_id).await {
+                Ok(Some(metadata)) => {
+                    if let Some(persisted) = metadata.hollywood.as_ref() {
+                        match HollywoodConfig::try_from(persisted) {
+                            Ok(config) => {
+                                hollywood_config = Some(config);
+                            }
+                            Err(err) => {
+                                warn!(
+                                    "ignoring invalid persisted Hollywood metadata for thread {thread_id}: {err}"
+                                );
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    warn!(
+                        "failed to load persisted Hollywood metadata for thread {thread_id}: {err}"
+                    );
+                }
+            }
+        }
+
+        if hollywood_config.is_none() {
+            hollywood_config = HollywoodConfig::from_env();
+            restore_source = "legacy_resume_migration";
+        }
+
+        let Some(hollywood_config) = hollywood_config else {
+            return;
+        };
+
+        if restore_source == "legacy_resume_migration"
+            && let Err(err) = self
+                .persist_thread_hollywood_metadata(thread_id, Some(thread), Some(&hollywood_config))
+                .await
+        {
+            warn!(
+                "failed to persist migrated Hollywood metadata for resumed thread {thread_id}: {}",
+                err.message
+            );
+        }
+
+        self.attach_hollywood_runtime(
+            thread_id,
+            thread,
+            connection_id,
+            hollywood_config,
+            restore_source,
+        )
+        .await;
     }
 
     async fn archive_thread_common(
@@ -7600,184 +8180,395 @@ impl CodexMessageProcessor {
                         .await;
                     }
                     _ = hollywood_poll.tick() => {
-                        let (config, after_id, should_prime) = {
-                            let mut state = thread_state.lock().await;
+                        let config = {
+                            let state = thread_state.lock().await;
                             let Some(config) = state.hollywood.config() else {
                                 continue;
                             };
-                            (
-                                config,
-                                state.hollywood.last_seen_message_id(),
-                                state.hollywood.take_start_from_latest(),
-                            )
+                            config
                         };
 
-                        if should_prime {
-                            match prime_hollywood_from_latest(&hollywood_client, &config).await {
-                                Ok(last_id) => {
-                                    thread_state
-                                        .lock()
-                                        .await
-                                        .hollywood
-                                        .set_last_seen_message_id(last_id);
-                                }
-                                Err(err) => {
-                                    tracing::debug!(
-                                        conversation_id = %conversation_id,
-                                        "failed to prime Hollywood cursor: {err}"
-                                    );
-                                }
-                            }
-                            continue;
-                        }
+                        for room in config.all_rooms() {
+                            let (after_id, should_prime) = {
+                                let mut state = thread_state.lock().await;
+                                (
+                                    state.hollywood.last_seen_message_id(&room),
+                                    state.hollywood.take_start_from_latest(&room),
+                                )
+                            };
 
-                        match poll_hollywood_messages(
-                            &hollywood_client,
-                            &config,
-                            after_id,
-                            conversation_id,
-                        ).await {
-                            Ok(result) => {
-                                let now = Instant::now();
-                                if result.last_id > after_id {
-                                    thread_state
-                                        .lock()
-                                        .await
-                                        .hollywood
-                                        .set_last_seen_message_id(result.last_id);
-                                }
-                                let subscribed_connection_ids = thread_state_manager
-                                    .subscribed_connection_ids(conversation_id)
-                                    .await;
-                                let thread_outgoing = ThreadScopedOutgoingMessageSender::new(
-                                    outgoing_for_task.clone(),
-                                    subscribed_connection_ids.clone(),
-                                    conversation_id,
+                            if should_prime {
+                                let mut room_config = config.clone();
+                                room_config.room = room.clone();
+                                tracing::debug!(
+                                    conversation_id = %conversation_id,
+                                    room = room,
+                                    previous_after_id = after_id,
+                                    "priming Hollywood cursor from latest"
                                 );
-                                let mut submitted_focused_input = false;
-                                for message in result.messages {
-                                    let track_room_activity =
-                                        message.self_authored
-                                            || message.attention
-                                                == codex_app_server_protocol::HollywoodMessageAttention::Focused;
-                                    if track_room_activity {
+                                match prime_hollywood_from_latest(&hollywood_client, &room_config).await {
+                                    Ok(last_id) => {
                                         thread_state
                                             .lock()
                                             .await
                                             .hollywood
-                                            .note_message_activity(now);
+                                            .set_last_seen_message_id(&room, last_id);
+                                        tracing::debug!(
+                                            conversation_id = %conversation_id,
+                                            room = room,
+                                            previous_after_id = after_id,
+                                            primed_last_id = last_id,
+                                            "primed Hollywood cursor from latest"
+                                        );
                                     }
-                                    if message.attention
-                                        == codex_app_server_protocol::HollywoodMessageAttention::Focused
-                                        && !message.self_authored
-                                    {
-                                        {
-                                            thread_state
-                                                .lock()
-                                                .await
-                                                .hollywood
-                                                .mark_autonomous_turn_pending();
-                                        }
-                                        let submit_result = conversation
-                                            .submit(Op::HollywoodInput {
-                                                message: CoreHollywoodInputMessage {
-                                                    message_id: message.notification_message.id,
-                                                    room: message.notification_message.room.clone(),
-                                                    sender_id: message
-                                                        .notification_message
-                                                        .sender_id
-                                                        .clone()
-                                                        .unwrap_or_else(|| "unknown".to_string()),
-                                                    body: message.notification_message.body.clone(),
-                                                    mentions: message
-                                                        .notification_message
-                                                        .mentions
-                                                        .clone(),
-                                                },
-                                            })
-                                            .await;
-                                        match submit_result {
-                                            Ok(_) => {
-                                                submitted_focused_input = true;
-                                            }
-                                            Err(err) => {
-                                                thread_state
-                                                    .lock()
-                                                    .await
-                                                    .hollywood
-                                                    .clear_autonomous_turn_pending();
-                                                tracing::debug!(
-                                                    conversation_id = %conversation_id,
-                                                    "failed to submit Hollywood input to core: {err}"
-                                                );
-                                            }
-                                        }
-                                    }
-                                    if !subscribed_connection_ids.is_empty() {
-                                        thread_outgoing
-                                            .send_server_notification(ServerNotification::ThreadHollywoodMessage(
-                                                codex_app_server_protocol::HollywoodMessageNotification {
-                                                    thread_id: conversation_id.to_string(),
-                                                    message: message.notification_message,
-                                                    attention: message.attention,
-                                                    mentioned: message.mentioned,
-                                                    self_authored: message.self_authored,
-                                                },
-                                            ))
-                                            .await;
-                                    }
-                                }
-
-                                if !submitted_focused_input {
-                                    let status = thread_watch_manager
-                                        .loaded_status_for_thread(&conversation_id.to_string())
-                                        .await;
-                                    let should_start_autonomous_turn = {
-                                        let state = thread_state.lock().await;
-                                        matches!(status, ThreadStatus::Idle)
-                                            && state.active_turn_snapshot().is_none()
-                                            && state.hollywood.should_start_autonomous_turn(now)
-                                    };
-
-                                    if should_start_autonomous_turn {
-                                        {
-                                            thread_state
-                                                .lock()
-                                                .await
-                                                .hollywood
-                                                .mark_autonomous_turn_pending();
-                                        }
-                                        let submit_result = conversation
-                                            .submit(Op::HollywoodInput {
-                                                message: CoreHollywoodInputMessage {
-                                                    message_id: 0,
-                                                    room: config.room.clone(),
-                                                    sender_id: "hollywood-system".to_string(),
-                                                    body: "Autonomous Hollywood follow-up: room activity happened after your last turn started. Continue collaborating through Hollywood if useful, use @mentions when you need another agent's attention, and stop once no further coordination is needed. Human input can interrupt you at any time.".to_string(),
-                                                    mentions: Vec::new(),
-                                                },
-                                            })
-                                            .await;
-                                        if let Err(err) = submit_result {
-                                            thread_state
-                                                .lock()
-                                                .await
-                                                .hollywood
-                                                .clear_autonomous_turn_pending();
-                                            tracing::debug!(
-                                                conversation_id = %conversation_id,
-                                                "failed to submit autonomous Hollywood follow-up to core: {err}"
-                                            );
-                                        }
+                                    Err(err) => {
+                                        tracing::debug!(
+                                            conversation_id = %conversation_id,
+                                            room = room,
+                                            previous_after_id = after_id,
+                                            "failed to prime Hollywood cursor: {err}"
+                                        );
                                     }
                                 }
                             }
-                            Err(err) => {
+                        }
+
+                        let status = thread_watch_manager
+                            .loaded_status_for_thread(&conversation_id.to_string())
+                            .await;
+                        let now = Instant::now();
+                        let maybe_registry_sync = {
+                            let state = thread_state.lock().await;
+                            let status_name = hollywood_thread_status_name(&status);
+                            if state.hollywood.should_sync_registry(now, &status_name) {
+                                Some((state.hollywood.clone(), status_name))
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some((runtime_state, status_name)) = maybe_registry_sync
+                            && let Some(config_for_registry) = runtime_state.config()
+                        {
+                            let request = build_registry_upsert_request(
+                                conversation_id,
+                                conversation.as_ref(),
+                                &config_for_registry,
+                                &runtime_state,
+                                &status,
+                            )
+                            .await;
+                            match upsert_hollywood_registry(
+                                &hollywood_client,
+                                &config_for_registry,
+                                &request,
+                            )
+                            .await
+                            {
+                                Ok(()) => {
+                                    thread_state
+                                        .lock()
+                                        .await
+                                        .hollywood
+                                        .note_registry_synced(now, status_name);
+                                }
+                                Err(err) => {
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        room = config_for_registry.room,
+                                        "failed to sync Hollywood registry: {err}"
+                                    );
+                                }
+                            }
+                        }
+                        let should_start_startup_turn = {
+                            let state = thread_state.lock().await;
+                            matches!(status, ThreadStatus::Idle)
+                                && state.active_turn_snapshot().is_none()
+                                && state.hollywood.should_start_startup_turn()
+                        };
+                        if should_start_startup_turn {
+                            {
+                                let mut state = thread_state.lock().await;
+                                state.hollywood.clear_startup_turn_pending();
+                                state.hollywood.mark_autonomous_turn_pending();
+                            }
+                            let submit_result = conversation
+                                .submit(Op::HollywoodInput {
+                                    message: CoreHollywoodInputMessage {
+                                        message_id: 0,
+                                        room: config.room.clone(),
+                                        sender_id: "hollywood-system".to_string(),
+                                        body: startup_handshake_message(conversation_id, &config),
+                                        mentions: Vec::new(),
+                                        attention: Some("focused".to_string()),
+                                        message_kind: Some("direct".to_string()),
+                                        obligation: Some("obligation".to_string()),
+                                        requires_response: true,
+                                    },
+                                })
+                                .await;
+                            if let Err(err) = submit_result {
+                                let mut state = thread_state.lock().await;
+                                state.hollywood.mark_startup_turn_pending();
+                                state.hollywood.clear_autonomous_turn_pending();
                                 tracing::debug!(
                                     conversation_id = %conversation_id,
-                                    room = config.room,
-                                    "Hollywood poll failed: {err}"
+                                    "failed to submit Hollywood startup handshake to core: {err}"
                                 );
+                            }
+                        }
+
+                        let mut merged_messages = Vec::new();
+                        for room in config.all_rooms() {
+                            let after_id = {
+                                let state = thread_state.lock().await;
+                                state.hollywood.last_seen_message_id(&room)
+                            };
+                            match poll_hollywood_messages(
+                                &hollywood_client,
+                                &config,
+                                &room,
+                                after_id,
+                                conversation_id,
+                            )
+                            .await
+                            {
+                                Ok(result) => {
+                                    let classified_message_count = result.messages.len();
+                                    let focused_message_count = result
+                                        .messages
+                                        .iter()
+                                        .filter(|message| {
+                                            message.attention
+                                                == codex_app_server_protocol::HollywoodMessageAttention::Focused
+                                        })
+                                        .count();
+                                    let ambient_message_count = result
+                                        .messages
+                                        .iter()
+                                        .filter(|message| {
+                                            message.attention
+                                                == codex_app_server_protocol::HollywoodMessageAttention::Ambient
+                                        })
+                                        .count();
+                                    let broad_message_count = result
+                                        .messages
+                                        .iter()
+                                        .filter(|message| {
+                                            message.attention
+                                                == codex_app_server_protocol::HollywoodMessageAttention::Broad
+                                        })
+                                        .count();
+                                    let broadcast_message_count = result
+                                        .messages
+                                        .iter()
+                                        .filter(|message| {
+                                            message.attention
+                                                == codex_app_server_protocol::HollywoodMessageAttention::Broadcast
+                                        })
+                                        .count();
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        room = room,
+                                        after_id,
+                                        poll_last_id = result.last_id,
+                                        classified_message_count,
+                                        focused_message_count,
+                                        broadcast_message_count,
+                                        ambient_message_count,
+                                        broad_message_count,
+                                        "Hollywood poll completed"
+                                    );
+                                    if result.last_id > after_id {
+                                        thread_state
+                                            .lock()
+                                            .await
+                                            .hollywood
+                                            .set_last_seen_message_id(&room, result.last_id);
+                                        tracing::debug!(
+                                            conversation_id = %conversation_id,
+                                            room = room,
+                                            previous_after_id = after_id,
+                                            updated_last_seen_message_id = result.last_id,
+                                            "advanced Hollywood cursor"
+                                        );
+                                    } else {
+                                        tracing::debug!(
+                                            conversation_id = %conversation_id,
+                                            room = room,
+                                            after_id,
+                                            poll_last_id = result.last_id,
+                                            "Hollywood cursor unchanged after poll"
+                                        );
+                                    }
+                                    merged_messages.extend(result.messages);
+                                }
+                                Err(err) => {
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        room = room,
+                                        "Hollywood poll failed: {err}"
+                                    );
+                                }
+                            }
+                        }
+
+                        merged_messages.sort_by_key(|message| message.notification_message.id);
+                        let now = Instant::now();
+                        let subscribed_connection_ids = thread_state_manager
+                            .subscribed_connection_ids(conversation_id)
+                            .await;
+                        let thread_outgoing = ThreadScopedOutgoingMessageSender::new(
+                            outgoing_for_task.clone(),
+                            subscribed_connection_ids.clone(),
+                            conversation_id,
+                        );
+                        let mut submitted_focused_input = false;
+                        for message in merged_messages {
+                            let actionable_attention = matches!(
+                                message.attention,
+                                codex_app_server_protocol::HollywoodMessageAttention::Focused
+                                    | codex_app_server_protocol::HollywoodMessageAttention::Broadcast
+                            );
+                            let track_room_activity = actionable_attention && !message.self_authored;
+                            if track_room_activity {
+                                thread_state
+                                    .lock()
+                                    .await
+                                    .hollywood
+                                    .note_message_activity(now);
+                            }
+                            let message_is_focused = message.attention
+                                == codex_app_server_protocol::HollywoodMessageAttention::Focused;
+                            let message_is_broadcast = message.attention
+                                == codex_app_server_protocol::HollywoodMessageAttention::Broadcast;
+                            let can_submit_now = message_is_focused
+                                || (message_is_broadcast
+                                    && matches!(status, ThreadStatus::Idle)
+                                    && thread_state.lock().await.active_turn_snapshot().is_none());
+                            if can_submit_now && !message.self_authored {
+                                {
+                                    thread_state
+                                        .lock()
+                                        .await
+                                        .hollywood
+                                        .mark_autonomous_turn_pending();
+                                }
+                                let submit_result = conversation
+                                    .submit(Op::HollywoodInput {
+                                        message: CoreHollywoodInputMessage {
+                                            message_id: message.notification_message.id,
+                                            room: message.notification_message.room.clone(),
+                                            sender_id: message
+                                                .notification_message
+                                                .sender_id
+                                                .clone()
+                                                .unwrap_or_else(|| "unknown".to_string()),
+                                            body: message.notification_message.body.clone(),
+                                            mentions: message.notification_message.mentions.clone(),
+                                            attention: Some(match message.attention {
+                                                codex_app_server_protocol::HollywoodMessageAttention::Focused => "focused",
+                                                codex_app_server_protocol::HollywoodMessageAttention::Broadcast => "broadcast",
+                                                codex_app_server_protocol::HollywoodMessageAttention::Ambient => "ambient",
+                                                codex_app_server_protocol::HollywoodMessageAttention::Broad => "broad",
+                                            }.to_string()),
+                                            message_kind: Some(match message.notification_message.message_kind {
+                                                codex_app_server_protocol::HollywoodMessageKind::Ambient => "ambient",
+                                                codex_app_server_protocol::HollywoodMessageKind::Broadcast => "broadcast",
+                                                codex_app_server_protocol::HollywoodMessageKind::Direct => "direct",
+                                            }.to_string()),
+                                            obligation: Some(
+                                                if matches!(message.attention, codex_app_server_protocol::HollywoodMessageAttention::Focused | codex_app_server_protocol::HollywoodMessageAttention::Broadcast) {
+                                                    "obligation"
+                                                } else if message.mentioned {
+                                                    "attention"
+                                                } else {
+                                                    "ambient"
+                                                }
+                                                .to_string()
+                                            ),
+                                            requires_response: matches!(
+                                                message.attention,
+                                                codex_app_server_protocol::HollywoodMessageAttention::Focused
+                                                    | codex_app_server_protocol::HollywoodMessageAttention::Broadcast
+                                            ),
+                                        },
+                                    })
+                                    .await;
+                                match submit_result {
+                                    Ok(_) => {
+                                        submitted_focused_input = true;
+                                    }
+                                    Err(err) => {
+                                        thread_state
+                                            .lock()
+                                            .await
+                                            .hollywood
+                                            .clear_autonomous_turn_pending();
+                                        tracing::debug!(
+                                            conversation_id = %conversation_id,
+                                            "failed to submit Hollywood input to core: {err}"
+                                        );
+                                    }
+                                }
+                            }
+                            if !subscribed_connection_ids.is_empty() {
+                                thread_outgoing
+                                    .send_server_notification(ServerNotification::ThreadHollywoodMessage(
+                                        codex_app_server_protocol::HollywoodMessageNotification {
+                                            thread_id: conversation_id.to_string(),
+                                            message: message.notification_message,
+                                            attention: message.attention,
+                                            mentioned: message.mentioned,
+                                            self_authored: message.self_authored,
+                                        },
+                                    ))
+                                    .await;
+                            }
+                        }
+
+                        if !submitted_focused_input {
+                            let should_start_autonomous_turn = {
+                                let state = thread_state.lock().await;
+                                matches!(status, ThreadStatus::Idle)
+                                    && state.active_turn_snapshot().is_none()
+                                    && state.hollywood.should_start_autonomous_turn(now)
+                            };
+
+                            if should_start_autonomous_turn {
+                                {
+                                    thread_state
+                                        .lock()
+                                        .await
+                                        .hollywood
+                                        .mark_autonomous_turn_pending();
+                                }
+                                let submit_result = conversation
+                                    .submit(Op::HollywoodInput {
+                                        message: CoreHollywoodInputMessage {
+                                            message_id: 0,
+                                            room: config.room.clone(),
+                                            sender_id: "hollywood-system".to_string(),
+                                            body: "Autonomous Hollywood follow-up: room activity happened after your last turn started. Continue collaborating through Hollywood if useful, use @mentions when you need another agent's attention, and stop once no further coordination is needed. Human input can interrupt you at any time.".to_string(),
+                                            mentions: Vec::new(),
+                                            attention: Some("focused".to_string()),
+                                            message_kind: Some("direct".to_string()),
+                                            obligation: Some("attention".to_string()),
+                                            requires_response: false,
+                                        },
+                                    })
+                                    .await;
+                                if let Err(err) = submit_result {
+                                    thread_state
+                                        .lock()
+                                        .await
+                                        .hollywood
+                                        .clear_autonomous_turn_pending();
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        "failed to submit autonomous Hollywood follow-up to core: {err}"
+                                    );
+                                }
                             }
                         }
                     }
@@ -9531,6 +10322,7 @@ mod tests {
             model: None,
             model_provider: None,
             service_tier: Some(Some(codex_protocol::config_types::ServiceTier::Fast)),
+            hollywood: None,
             cwd: None,
             approval_policy: None,
             approvals_reviewer: None,

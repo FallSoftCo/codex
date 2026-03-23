@@ -65,6 +65,7 @@ fn apply_session_meta_from_item(metadata: &mut ThreadMetadata, meta_line: &Sessi
         metadata.git_branch = git.branch.clone();
         metadata.git_origin_url = git.repository_url.clone();
     }
+    metadata.hollywood = meta_line.meta.hollywood.clone();
 }
 
 fn apply_turn_context(metadata: &mut ThreadMetadata, turn_ctx: &TurnContextItem) {
@@ -260,6 +261,7 @@ mod tests {
                     developer_instructions: None,
                     dynamic_tools: None,
                     memory_mode: None,
+                    hollywood: None,
                 },
                 git: None,
             }),
@@ -388,6 +390,7 @@ mod tests {
                     developer_instructions: None,
                     dynamic_tools: None,
                     memory_mode: None,
+                    hollywood: None,
                 },
                 git: None,
             }),
@@ -424,6 +427,7 @@ mod tests {
             git_sha: None,
             git_branch: None,
             git_origin_url: None,
+            hollywood: None,
         }
     }
 

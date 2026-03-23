@@ -28,6 +28,7 @@ use crate::hook_runtime::inspect_pending_input;
 use crate::hook_runtime::record_additional_contexts;
 use crate::hook_runtime::record_pending_input;
 use crate::state::ActiveTurn;
+use crate::state::HollywoodObligation;
 use crate::state::RunningTask;
 use crate::state::TaskKind;
 use codex_login::AuthManager;
@@ -41,6 +42,7 @@ use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseInputItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::RolloutItem;
 use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::TurnAbortReason;
@@ -59,7 +61,8 @@ pub(crate) use user_shell::UserShellCommandTask;
 pub(crate) use user_shell::execute_user_shell_command;
 
 const GRACEFULL_INTERRUPTION_TIMEOUT_MS: u64 = 100;
-const TURN_ABORTED_INTERRUPTED_GUIDANCE: &str = "The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.";
+const TURN_ABORTED_INTERRUPTED_GUIDANCE: &str = "The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed; verify current state before retrying.";
+const HOLLYWOOD_OBLIGATION_MAX_RETRIES: u32 = 2;
 
 /// Shared model-visible marker used by both the real interrupt path and
 /// interrupted fork snapshots.
@@ -523,6 +526,35 @@ impl Session {
         });
         self.send_event(turn_context.as_ref(), event).await;
 
+        let unresolved = self
+            .resolve_hollywood_obligations_for_turn(&turn_context.sub_id)
+            .await;
+        let retry = if unresolved.is_empty() {
+            Vec::new()
+        } else {
+            self.prepare_hollywood_obligation_retry(HOLLYWOOD_OBLIGATION_MAX_RETRIES)
+                .await
+        };
+        if !retry.is_empty() {
+            let message = HollywoodInputMessage {
+                message_id: 0,
+                room: retry
+                    .first()
+                    .map(|obligation| obligation.room.clone())
+                    .unwrap_or_else(|| "hollywood".to_string()),
+                sender_id: "hollywood-system".to_string(),
+                body: format_unresolved_hollywood_obligation_followup(&retry),
+                mentions: Vec::new(),
+                attention: Some("focused".to_string()),
+                message_kind: Some("direct".to_string()),
+                obligation: Some("obligation".to_string()),
+                requires_response: true,
+            };
+            if let Err(err) = self.submit_hollywood_followup(message).await {
+                tracing::warn!(?err, "failed to requeue unresolved Hollywood obligations");
+            }
+        }
+
         if should_clear_active_turn {
             let session = Arc::clone(self);
             let _scheduler = tokio::task::spawn_blocking(move || {
@@ -607,6 +639,27 @@ impl Session {
         });
         self.send_event(task.turn_context.as_ref(), event).await;
     }
+}
+
+fn format_unresolved_hollywood_obligation_followup(
+    obligations: &[HollywoodObligation],
+) -> String {
+    let summary = obligations
+        .iter()
+        .map(|obligation| {
+            format!(
+                "- room=`{}` sender=`{}` attempt={} body={}",
+                obligation.room,
+                obligation.sender_id,
+                obligation.attempts,
+                obligation.body
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Outstanding Hollywood obligations remain unresolved after the last turn. Continue coordinating until you handle them with hollywood_send, an explicit claim, defer, or ignore in-room.\n{summary}"
+    )
 }
 
 #[cfg(test)]

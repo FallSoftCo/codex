@@ -1143,6 +1143,7 @@ async fn test_updated_at_uses_file_mtime() -> Result<()> {
                 developer_instructions: None,
                 dynamic_tools: None,
                 memory_mode: None,
+                hollywood: None,
             },
             git: None,
         }),

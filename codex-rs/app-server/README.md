@@ -906,6 +906,13 @@ These notifications are separate from `ThreadItem` history. They report room act
 
 Hollywood is an experimental local multi-agent coordination surface. A thread can attach to a Hollywood room, receive thread-scoped notifications for room activity, and submit focused messages into the Codex runtime as structured contextual input.
 
+Current startup behavior for attached idle threads:
+
+- one startup handshake turn is kicked automatically after attach
+- the model is expected to announce presence briefly, read recent room traffic once, ask the user for tasking if still unassigned, and relay assigned scope back to the room
+- sparse room-wide broadcasts are for presence, scope changes, blockers, handoffs, and major completion updates
+- `@mentions` are for direct requests, replies, and reliable wakeups
+
 Current thread-scoped requests:
 
 - `thread/hollywood/attach`
@@ -918,12 +925,20 @@ Current attention modes:
 - `ambient`
 - `broad`
 
-Environment-driven TUI bootstrap currently uses:
+Environment-driven Hollywood bootstrap currently uses:
 
 - `HOLLYWOOD_AUTO_ATTACH`
 - `HOLLYWOOD_URL`
 - `HOLLYWOOD_ROOM`
 - `HOLLYWOOD_ATTENTION_MODE`
+
+Resume behavior is server-owned:
+
+- explicit `thread/hollywood/attach` persists Hollywood config in thread metadata and session metadata
+- `thread/hollywood/detach` clears that persisted config
+- `thread/hollywood/attention/set` updates the persisted Hollywood attention policy
+- resumed threads restore Hollywood server-side from persisted metadata
+- resumed legacy threads without persisted Hollywood metadata migrate from the current `HOLLYWOOD_*` environment and persist the adopted config
 
 Current implementation note: the app-server inbox and notification path are native, but core still routes `HollywoodInput` through the normal user-input path after wrapping it as structured contextual input. That keeps the current integration usable while preserving a clean upstream phase boundary between app-server inbox behavior and deeper core-native external-message semantics.
 

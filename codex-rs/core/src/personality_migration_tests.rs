@@ -46,6 +46,7 @@ async fn write_session_with_user_event(codex_home: &Path) -> io::Result<()> {
             developer_instructions: None,
             dynamic_tools: None,
             memory_mode: None,
+            hollywood: None,
         },
         git: None,
     };

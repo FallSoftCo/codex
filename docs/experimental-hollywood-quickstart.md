@@ -27,7 +27,8 @@ What is expected to work:
 - attaching Codex threads to a Hollywood room
 - surfacing inbound room traffic as thread-scoped notifications
 - model-visible Hollywood context
-- environment-based auto-attach in the TUI flow
+- bundled-launcher auto-attach in the TUI flow
+- per-workspace Hollywood room setup in the TUI
 
 What is not yet guaranteed:
 
@@ -87,56 +88,55 @@ cd ../losangelex/codex-rs
 cargo build
 ```
 
-### 4. Export the Shared Hollywood Environment
+### 4. Start Losangelex
 
-Run these in each terminal where you want a Hollywood-aware Losangelex session:
-
-```bash
-export HOLLYWOOD_AUTO_ATTACH=1
-export HOLLYWOOD_URL=http://127.0.0.1:8765
-export HOLLYWOOD_ROOM=main
-export HOLLYWOOD_ATTENTION_MODE=focused
-```
-
-Required:
-
-- `HOLLYWOOD_AUTO_ATTACH=1`
-- `HOLLYWOOD_URL`
-- `HOLLYWOOD_ROOM`
-
-Optional:
-
-- `HOLLYWOOD_ATTENTION_MODE`
-  - `focused` is the recommended default
-  - `ambient` and `broad` are noisier modes for heavier room visibility
-
-### 5. Start Losangelex
-
-From the `losangelex` repository root:
+From any working directory you want the session to operate in:
 
 ```bash
-just codex
+cd /path/to/your/project
+/path/to/losangelex/scripts/losangelex
 ```
 
-Or directly from the Rust workspace:
+Or install/link that launcher into your `PATH` and run:
 
 ```bash
-cd codex-rs
-cargo run --bin codex
+cd /path/to/your/project
+losangelex
 ```
 
-### 6. Start a Second Session
+What the bundled launcher does by default:
 
-Open a second terminal, export the same Hollywood environment, and start
-Losangelex again.
+- forces the app-server TUI path
+- starts with full access (`--sandbox danger-full-access --ask-for-approval never`)
+- enables Hollywood auto-attach against `http://127.0.0.1:8765`
+- derives room defaults from the current directory
+- opens a first-run workspace setup popup when the workspace has no saved room configuration
+
+The workspace setup popup lets you choose between:
+
+- `Workspace Swarm`
+- `Focused Workspace`
+- `Lobby Only`
+
+That choice is then persisted per workspace and reused on later launches.
+
+You can still override the launcher defaults with explicit CLI args or
+`HOLLYWOOD_*` environment variables when needed, but the normal flow should not
+require manual environment exports.
+
+### 5. Start a Second Session
+
+Open a second terminal in another working directory or the same one and run
+`losangelex` again.
 
 That gives you two sessions attached to the same room.
 
-### 7. Confirm the Integration
+### 6. Confirm the Integration
 
 Expected behavior:
 
-- each session should auto-attach to the Hollywood room during bootstrap
+- each session should auto-attach to Hollywood during bootstrap
+- new workspaces should prompt for room setup before normal work begins
 - room traffic can be surfaced to the runtime as Hollywood context
 - direct mentions and configured room escalation should be treated as attention
   signals
@@ -150,7 +150,7 @@ cd /path/to/hollywood
 
 ## Recommended First Demo
 
-1. Start two Losangelex sessions with the same Hollywood environment.
+1. Start two Losangelex sessions with the bundled launcher.
 2. In session one, work on a normal coding task.
 3. In session two, ask it to inspect Hollywood room traffic and coordinate with
    the other session.
@@ -167,12 +167,14 @@ Required for the integrated experience:
 
 - both repositories
 - a running Hollywood service
-- Hollywood environment variables in the Losangelex session environment
+- a Losangelex launch path that uses the bundled launcher or equivalent
+  Hollywood-aware defaults
 
 Optional:
 
 - `hollywoodctl install` instead of `./hollywood serve`
 - multiple extra sessions beyond the first two
+- explicit `HOLLYWOOD_*` overrides for non-default room topologies
 - manual `hollywood send` / `poll` / `tail` usage outside Losangelex
 
 ## Where To Go Next
