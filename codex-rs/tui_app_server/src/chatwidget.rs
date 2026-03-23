@@ -3515,6 +3515,7 @@ impl ChatWidget {
             .unwrap_or_else(|| "unknown".to_string());
         let attention = match notification.attention {
             codex_app_server_protocol::HollywoodMessageAttention::Focused => "focused",
+            codex_app_server_protocol::HollywoodMessageAttention::Broadcast => "broadcast",
             codex_app_server_protocol::HollywoodMessageAttention::Ambient => "ambient",
             codex_app_server_protocol::HollywoodMessageAttention::Broad => "broad",
         };
@@ -8883,6 +8884,145 @@ impl ChatWidget {
 
     #[cfg(not(target_os = "windows"))]
     pub(crate) fn open_windows_sandbox_fallback_prompt(&mut self, _preset: ApprovalPreset) {}
+
+    fn losangelex_setup_slugify_room(value: &str) -> String {
+        let mut slug = String::new();
+        let mut previous_dash = false;
+        for ch in value.chars().flat_map(|c| c.to_lowercase()) {
+            if ch.is_ascii_alphanumeric() {
+                slug.push(ch);
+                previous_dash = false;
+            } else if !previous_dash {
+                slug.push('-');
+                previous_dash = true;
+            }
+        }
+        let slug = slug.trim_matches('-').to_string();
+        if slug.is_empty() {
+            "workspace".to_string()
+        } else {
+            slug
+        }
+    }
+
+    fn losangelex_default_primary_room(cwd: &Path) -> String {
+        let base = cwd
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("main");
+        match base {
+            "Development" | "Downloads" | "Desktop" | "Documents" | "src" | "code"
+            | "workspace" => "main".to_string(),
+            _ => Self::losangelex_setup_slugify_room(base),
+        }
+    }
+
+    pub(crate) fn open_losangelex_setup_prompt(&mut self) {
+        let inferred_primary = Self::losangelex_default_primary_room(&self.config.cwd);
+        let workspace_swarm_observed = if inferred_primary == "main" {
+            Vec::new()
+        } else {
+            vec!["main".to_string()]
+        };
+        let workspace_swarm_wake = if inferred_primary == "main" {
+            vec!["main".to_string()]
+        } else {
+            vec![inferred_primary.clone(), "main".to_string()]
+        };
+        let focused_observed = if inferred_primary == "main" {
+            Vec::new()
+        } else {
+            vec!["main".to_string()]
+        };
+        let focused_wake = vec![inferred_primary.clone()];
+
+        let title_line = Line::from("Losangelex room setup").bold();
+        let body_line = Line::from(format!(
+            "Choose how this session should listen in Hollywood for {}.",
+            self.config.cwd.display()
+        ));
+        let details_line = Line::from(format!(
+            "Recommended: primary room `{}`, observe `main`, wake on both the workspace room and `main`.",
+            inferred_primary
+        ));
+
+        let header = ColumnRenderable::with(vec![
+            Box::new(Paragraph::new(title_line).wrap(Wrap { trim: false })) as Box<dyn Renderable>,
+            Box::new(Paragraph::new(vec![body_line]).wrap(Wrap { trim: false })) as Box<dyn Renderable>,
+            Box::new(Paragraph::new(vec![details_line]).wrap(Wrap { trim: false })) as Box<dyn Renderable>,
+        ]);
+
+        let workspace_name = inferred_primary.clone();
+        let workspace_observed = workspace_swarm_observed.clone();
+        let workspace_wake = workspace_swarm_wake.clone();
+        let focused_name = inferred_primary.clone();
+        let focused_observed_rooms = focused_observed.clone();
+        let focused_wake_rooms = focused_wake.clone();
+
+        let items = vec![
+            SelectionItem {
+                name: "Workspace Swarm".to_string(),
+                description: Some(format!(
+                    "Primary `{workspace_name}`. Observe `main`. Wake on `{workspace_name}` and `main`."
+                )),
+                actions: vec![Box::new(move |tx| {
+                    tx.send(AppEvent::ApplyLosangelexHollywoodSetup {
+                        primary_room: workspace_name.clone(),
+                        observed_rooms: workspace_observed.clone(),
+                        wake_rooms: workspace_wake.clone(),
+                    });
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Focused Workspace".to_string(),
+                description: Some(format!(
+                    "Primary `{focused_name}`. Observe `main`. Wake only on `{focused_name}`."
+                )),
+                actions: vec![Box::new(move |tx| {
+                    tx.send(AppEvent::ApplyLosangelexHollywoodSetup {
+                        primary_room: focused_name.clone(),
+                        observed_rooms: focused_observed_rooms.clone(),
+                        wake_rooms: focused_wake_rooms.clone(),
+                    });
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Lobby Only".to_string(),
+                description: Some("Use `main` as the primary and only wake-generating room.".to_string()),
+                actions: vec![Box::new(move |tx| {
+                    tx.send(AppEvent::ApplyLosangelexHollywoodSetup {
+                        primary_room: "main".to_string(),
+                        observed_rooms: Vec::new(),
+                        wake_rooms: vec!["main".to_string()],
+                    });
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            header: Box::new(header),
+            ..Default::default()
+        });
+    }
+
+    pub(crate) fn maybe_prompt_losangelex_setup(&mut self, show_now: bool) {
+        if show_now
+            && std::env::var("LOSANGELEX_PRODUCT_NAME")
+                .ok()
+                .as_deref()
+                == Some("losangelex")
+        {
+            self.open_losangelex_setup_prompt();
+        }
+    }
 
     #[cfg(target_os = "windows")]
     pub(crate) fn maybe_prompt_windows_sandbox_enable(&mut self, show_now: bool) {

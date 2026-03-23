@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="/home/ai/Development/losangelex/codex-rs"
+binary_path="$repo_root/target/debug/codex"
+launch_cwd="${PWD}"
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+migration_dir="$codex_home/losangelex"
+migration_marker="$migration_dir/migration-v1.json"
+workspace_setup_file="$migration_dir/workspace-room-setups-v1.json"
+
+slugify_room() {
+  local raw="$1"
+  local slug
+  slug="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-*//; s/-*$//; s/--*/-/g')"
+  if [[ -z "$slug" ]]; then
+    slug="workspace"
+  fi
+  printf '%s\n' "$slug"
+}
+
+default_primary_room() {
+  local cwd="$1"
+  local base
+  base="$(basename "$cwd")"
+  case "$cwd" in
+    "$HOME"|"$HOME/"|"/")
+      printf 'main\n'
+      return
+      ;;
+  esac
+
+  case "$base" in
+    Development|Downloads|Desktop|Documents|src|code|workspace)
+      printf 'main\n'
+      ;;
+    *)
+      slugify_room "$base"
+      ;;
+  esac
+}
+
+load_persisted_workspace_setup() {
+  local file="$1"
+  local cwd="$2"
+  python3 - "$file" "$cwd" <<'PY'
+import json, sys
+path, cwd = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+setup = (data.get("workspaces") or {}).get(cwd)
+if not isinstance(setup, dict):
+    sys.exit(0)
+print(setup.get("primary_room", "") or "")
+print(",".join(setup.get("observed_rooms", []) or []))
+print(",".join(setup.get("wake_rooms", []) or []))
+PY
+}
+
+primary_room="${HOLLYWOOD_ROOM:-}"
+observed_rooms="${HOLLYWOOD_OBSERVED_ROOMS:-}"
+wake_rooms="${HOLLYWOOD_WAKE_ROOMS:-}"
+
+if [[ -z "${primary_room}" && -z "${observed_rooms}" && -z "${wake_rooms}" && -f "$workspace_setup_file" ]]; then
+  mapfile -t persisted_setup < <(load_persisted_workspace_setup "$workspace_setup_file" "$launch_cwd")
+  if [[ ${#persisted_setup[@]} -ge 1 && -n "${persisted_setup[0]}" ]]; then
+    primary_room="${persisted_setup[0]}"
+    observed_rooms="${persisted_setup[1]:-}"
+    wake_rooms="${persisted_setup[2]:-}"
+  fi
+fi
+
+if [[ -z "${primary_room}" ]]; then
+  primary_room="$(default_primary_room "$launch_cwd")"
+fi
+
+if [[ "$primary_room" != "main" ]]; then
+  if [[ -z "$observed_rooms" ]]; then
+    observed_rooms="main"
+  fi
+  if [[ -z "$wake_rooms" ]]; then
+    wake_rooms="${primary_room},main"
+  fi
+else
+  if [[ -z "$wake_rooms" ]]; then
+    wake_rooms="main"
+  fi
+fi
+
+export HOLLYWOOD_AUTO_ATTACH="${HOLLYWOOD_AUTO_ATTACH:-1}"
+export HOLLYWOOD_URL="${HOLLYWOOD_URL:-http://127.0.0.1:8765}"
+export HOLLYWOOD_ROOM="$primary_room"
+export HOLLYWOOD_OBSERVED_ROOMS="$observed_rooms"
+export HOLLYWOOD_WAKE_ROOMS="$wake_rooms"
+export HOLLYWOOD_ATTENTION_MODE="${HOLLYWOOD_ATTENTION_MODE:-focused}"
+export LOSANGELEX_CLIENT_NAME="${LOSANGELEX_CLIENT_NAME:-losangelex-tui}"
+export LOSANGELEX_PRODUCT_NAME="${LOSANGELEX_PRODUCT_NAME:-losangelex}"
+
+extra_args=()
+has_explicit_cwd=0
+has_explicit_sandbox=0
+has_explicit_approval=0
+has_explicit_full_bypass=0
+prev_arg=""
+for arg in "$@"; do
+  if [[ "$prev_arg" == "--cd" || "$prev_arg" == "-C" ]]; then
+    has_explicit_cwd=1
+  elif [[ "$prev_arg" == "--sandbox" ]]; then
+    has_explicit_sandbox=1
+  elif [[ "$prev_arg" == "--ask-for-approval" ]]; then
+    has_explicit_approval=1
+  fi
+  case "$arg" in
+    --cd=*|-C=*)
+      has_explicit_cwd=1
+      ;;
+    --sandbox=*)
+      has_explicit_sandbox=1
+      ;;
+    --ask-for-approval=*)
+      has_explicit_approval=1
+      ;;
+    --dangerously-bypass-approvals-and-sandbox)
+      has_explicit_full_bypass=1
+      ;;
+  esac
+  prev_arg="$arg"
+done
+
+if [[ $has_explicit_cwd -eq 0 ]]; then
+  extra_args=(--cd "$launch_cwd")
+fi
+
+if [[ $has_explicit_sandbox -eq 0 && $has_explicit_full_bypass -eq 0 ]]; then
+  extra_args+=(--sandbox danger-full-access)
+fi
+
+if [[ $has_explicit_approval -eq 0 && $has_explicit_full_bypass -eq 0 ]]; then
+  extra_args+=(--ask-for-approval never)
+fi
+
+if [[ ! -f "$migration_marker" ]]; then
+  mkdir -p "$migration_dir"
+  existing_state=0
+  for path in \
+    "$codex_home/auth.json" \
+    "$codex_home/config.toml" \
+    "$codex_home/state_5.sqlite" \
+    "$codex_home/sessions"
+  do
+    if [[ -e "$path" ]]; then
+      existing_state=1
+      break
+    fi
+  done
+
+  cat >"$migration_marker" <<JSON
+{
+  "schema_version": 1,
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "codex_home": "$codex_home",
+  "launch_cwd": "$launch_cwd",
+  "reused_existing_codex_state": $existing_state,
+  "hollywood": {
+    "auto_attach": "${HOLLYWOOD_AUTO_ATTACH}",
+    "url": "${HOLLYWOOD_URL}",
+    "room": "${HOLLYWOOD_ROOM}",
+    "observed_rooms": "${HOLLYWOOD_OBSERVED_ROOMS}",
+    "wake_rooms": "${HOLLYWOOD_WAKE_ROOMS}",
+    "attention_mode": "${HOLLYWOOD_ATTENTION_MODE}"
+  }
+}
+JSON
+
+  export LOSANGELEX_FIRST_RUN_MIGRATION=1
+  if [[ $existing_state -eq 1 ]]; then
+    printf '%s\n' \
+      "losangelex first run: reusing CODEX_HOME at $codex_home" \
+      "Hollywood auto-attach defaults to primary room ${HOLLYWOOD_ROOM} with observed rooms [${HOLLYWOOD_OBSERVED_ROOMS}] and wake rooms [${HOLLYWOOD_WAKE_ROOMS}]" >&2
+  else
+    printf '%s\n' \
+      "losangelex first run: initialized at $codex_home" \
+      "Hollywood auto-attach defaults to primary room ${HOLLYWOOD_ROOM} with observed rooms [${HOLLYWOOD_OBSERVED_ROOMS}] and wake rooms [${HOLLYWOOD_WAKE_ROOMS}]" >&2
+  fi
+fi
+
+if [[ -x "$binary_path" ]]; then
+  exec "$binary_path" --enable tui_app_server "${extra_args[@]}" "$@"
+fi
+
+cd "$repo_root"
+exec cargo +stable run -p codex-cli --bin codex -- --enable tui_app_server "${extra_args[@]}" "$@"

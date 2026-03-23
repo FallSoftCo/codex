@@ -415,6 +415,8 @@ impl RolloutRecorder {
                         },
                         memory_mode: (!config.memories.generate_memories)
                             .then_some("disabled".to_string()),
+                        hollywood: crate::hollywood::HollywoodSessionConfig::from_env()
+                            .map(Into::into),
                     };
 
                     (

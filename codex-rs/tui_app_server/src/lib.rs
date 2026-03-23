@@ -339,7 +339,7 @@ pub fn normalize_remote_addr(addr: &str) -> color_eyre::Result<String> {
 async fn connect_remote_app_server(websocket_url: String) -> color_eyre::Result<AppServerClient> {
     let app_server = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
         websocket_url,
-        client_name: "codex-tui".to_string(),
+        client_name: tui_client_name(),
         client_version: env!("CARGO_PKG_VERSION").to_string(),
         experimental_api: true,
         opt_out_notification_methods: Vec::new(),
@@ -433,7 +433,7 @@ where
         config_warnings,
         session_source: codex_protocol::protocol::SessionSource::Cli,
         enable_codex_api_key_env: false,
-        client_name: "codex-tui".to_string(),
+        client_name: tui_client_name(),
         client_version: env!("CARGO_PKG_VERSION").to_string(),
         experimental_api: true,
         opt_out_notification_methods: Vec::new(),
@@ -442,6 +442,13 @@ where
     .await
     .wrap_err("failed to start embedded app server")?;
     Ok(client)
+}
+
+fn tui_client_name() -> String {
+    std::env::var("LOSANGELEX_CLIENT_NAME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "codex-tui".to_string())
 }
 
 async fn shutdown_app_server_if_present(app_server: Option<AppServerSession>) {

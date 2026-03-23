@@ -57,6 +57,7 @@ use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ServerNotification;
 use codex_app_server_protocol::ServerRequest;
 use codex_app_server_protocol::SkillsListResponse;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
 use codex_app_server_protocol::ThreadRollbackResponse;
 use codex_app_server_protocol::Turn;
 use codex_app_server_protocol::TurnStatus;
@@ -106,9 +107,12 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -138,6 +142,49 @@ use self::pending_interactive_replay::PendingInteractiveReplayState;
 
 const EXTERNAL_EDITOR_HINT: &str = "Save and close external editor to continue.";
 const THREAD_EVENT_CHANNEL_CAPACITY: usize = 32768;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct LosangelexWorkspaceSetup {
+    primary_room: String,
+    #[serde(default)]
+    observed_rooms: Vec<String>,
+    #[serde(default)]
+    wake_rooms: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct LosangelexWorkspaceSetupStore {
+    #[serde(default)]
+    workspaces: BTreeMap<String, LosangelexWorkspaceSetup>,
+}
+
+fn losangelex_workspace_setup_path(codex_home: &Path) -> PathBuf {
+    codex_home
+        .join("losangelex")
+        .join("workspace-room-setups-v1.json")
+}
+
+fn persist_losangelex_workspace_setup(
+    codex_home: &Path,
+    cwd: &Path,
+    setup: LosangelexWorkspaceSetup,
+) -> Result<()> {
+    let path = losangelex_workspace_setup_path(codex_home);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut store = if path.exists() {
+        serde_json::from_slice::<LosangelexWorkspaceSetupStore>(&fs::read(&path)?)
+            .unwrap_or_default()
+    } else {
+        LosangelexWorkspaceSetupStore::default()
+    };
+    store
+        .workspaces
+        .insert(cwd.display().to_string(), setup);
+    fs::write(path, serde_json::to_vec_pretty(&store)?)?;
+    Ok(())
+}
 
 enum ThreadInteractiveRequest {
     Approval(ApprovalRequest),
@@ -2774,11 +2821,26 @@ impl App {
         tui: &mut tui::Tui,
         started: AppServerStartedThread,
     ) -> Result<()> {
+        let replacement_thread_id = started.session.thread_id;
+        let replacement_rollout_path = started.session.rollout_path.clone();
+        tracing::info!(
+            replacement_thread_id = %replacement_thread_id,
+            replacement_rollout_path = ?replacement_rollout_path,
+            previous_primary_thread_id = ?self.primary_thread_id,
+            previous_chat_widget_thread_id = ?self.chat_widget.thread_id(),
+            "replacing TUI chat widget with app-server thread"
+        );
         let init = self.chatwidget_init_for_forked_or_resumed_thread(tui, self.config.clone());
         self.chat_widget = ChatWidget::new_with_app_event(init);
         self.reset_thread_event_state();
         self.enqueue_primary_thread_session(started.session, started.turns)
-            .await
+            .await?;
+        tracing::info!(
+            active_primary_thread_id = ?self.primary_thread_id,
+            active_chat_widget_thread_id = ?self.chat_widget.thread_id(),
+            "TUI chat widget replacement applied"
+        );
+        Ok(())
     }
 
     fn fresh_session_config(&self) -> Config {
@@ -3090,6 +3152,7 @@ impl App {
         }
         chat_widget
             .maybe_prompt_windows_sandbox_enable(should_prompt_windows_sandbox_nux_at_startup);
+        chat_widget.maybe_prompt_losangelex_setup(is_first_run);
 
         let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
         #[cfg(not(debug_assertions))]
@@ -4522,6 +4585,45 @@ impl App {
             }
             AppEvent::OpenPermissionsPopup => {
                 self.chat_widget.open_permissions_popup();
+            }
+            AppEvent::ApplyLosangelexHollywoodSetup {
+                primary_room,
+                observed_rooms,
+                wake_rooms,
+            } => {
+                if let Some(thread_id) = self.active_thread_id.or(self.chat_widget.thread_id()) {
+                    let mut params =
+                        crate::app_server_session::hollywood_auto_attach_params(thread_id)
+                            .unwrap_or(ThreadHollywoodAttachParams {
+                                thread_id: thread_id.to_string(),
+                                url: None,
+                                room: None,
+                                observed_rooms: Vec::new(),
+                                wake_rooms: Vec::new(),
+                                attention: None,
+                            });
+                    params.room = Some(primary_room.clone());
+                    params.observed_rooms = observed_rooms.clone();
+                    params.wake_rooms = wake_rooms.clone();
+                    app_server.attach_hollywood(params).await?;
+                    persist_losangelex_workspace_setup(
+                        self.config.codex_home.as_path(),
+                        self.config.cwd.as_path(),
+                        LosangelexWorkspaceSetup {
+                            primary_room: primary_room.clone(),
+                            observed_rooms: observed_rooms.clone(),
+                            wake_rooms: wake_rooms.clone(),
+                        },
+                    )?;
+                    self.chat_widget.add_to_history(history_cell::new_info_event(
+                        format!(
+                            "Losangelex setup applied: primary `{primary_room}`, observed [{}], wake [{}]",
+                            observed_rooms.join(", "),
+                            wake_rooms.join(", ")
+                        ),
+                        None,
+                    ));
+                }
             }
             AppEvent::OpenReviewBranchPicker(cwd) => {
                 self.chat_widget.show_review_branch_picker(&cwd).await;

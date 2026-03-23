@@ -396,6 +396,13 @@ pub(crate) enum AppEvent {
     /// Re-open the permissions presets popup.
     OpenPermissionsPopup,
 
+    /// Apply and persist Losangelex Hollywood room setup for the current thread.
+    ApplyLosangelexHollywoodSetup {
+        primary_room: String,
+        observed_rooms: Vec<String>,
+        wake_rooms: Vec<String>,
+    },
+
     /// Live update for the in-progress voice recording placeholder. Carries
     /// the placeholder `id` and the text to display (e.g., an ASCII meter).
     #[cfg(not(target_os = "linux"))]

@@ -6,6 +6,8 @@ Integrate Hollywood as a native event source in Codex so agent-to-agent messages
 
 The model is room-wide visibility with attention filtering, not direct-message-first delivery.
 
+For user-visible follow-up behavior, the right default is silence on no-op room checks. If post-answer Hollywood activity does not change conclusions, there should be no extra user-facing paragraph; if a user-visible follow-up is still useful, it should be a compact status line rather than repetitive prose.
+
 ## Conclusion
 
 The best integration point is the Rust app-server plus protocol layer, with a small core-protocol extension.
@@ -31,6 +33,8 @@ The current system already has the right architecture for native external events
 What is missing is a first-class runtime concept for "external agent message" and "agent attention policy".
 
 Today, `turn/start` ends up as `Op::UserInput` after optional turn-context overrides, which means Hollywood traffic has no native representation and would have to be smuggled in as ordinary user input. That is the wrong abstraction.
+
+There was also a separate participation gap beyond transport and routing: a Hollywood message could be delivered into the runtime without carrying durable obligation semantics. The current implementation now preserves Hollywood attention/obligation metadata longer in core and injects focused coordination hints alongside contextual Hollywood messages, but richer explicit lifecycle visibility is still future work.
 
 Direct-message-first filtering is also the wrong abstraction for Hollywood. Agents should be able to share a room and maintain common awareness while still focusing their attention primarily through `@mentions`.
 
@@ -59,8 +63,24 @@ Suggested payload fields:
 - message id
 - created at
 - delivery policy used
+- obligation class
+- lifecycle state
 
 This avoids pretending that an inter-agent message is a human user turn.
+
+Recommended lifecycle states:
+
+- `delivered`
+- `surfaced`
+- `acted_on`
+- `deferred`
+- `ignored`
+
+Recommended obligation classes:
+
+- `ambient`
+- `attention`
+- `obligation`
 
 ### 2. App-server protocol
 
@@ -139,6 +159,21 @@ This preserves:
 - selective focus
 - explicit agent coordination through `@mentions`
 
+### Obligation model
+
+Attention alone is not enough. The runtime also needs to preserve whether a Hollywood message created a real coordination obligation.
+
+Examples that should usually become `obligation` rather than generic context:
+
+- `@agent please claim this slice`
+- `@agent reply with status`
+- `@agent join room task-x`
+- direct request/reply loops where another session is clearly waiting
+
+Ambient chatter and passive discovery should remain lower-weight `attention` or `ambient` input.
+
+The important design point is that a message should not stop existing as a coordination obligation just because it was injected once as pending text.
+
 ### Instruction-level behavior
 
 Runtime attention is only half of the feature. The model also needs explicit instruction-level guidance so it uses Hollywood coherently.
@@ -163,6 +198,7 @@ The TUI should not own Hollywood transport. It should only render and apply poli
 - if a turn is running: queue, steer, or interrupt based on configured policy
 - show ambient room traffic separately from actionable `@mention` traffic
 - show pending Hollywood items distinctly from normal queued user messages
+- show Hollywood obligation state explicitly so the human can tell whether a focused room message was delivered, surfaced, deferred, or acted on
 
 ### 6. Delivery policy
 
@@ -179,6 +215,15 @@ Recommended split:
 
 - attention policy decides what the agent meaningfully reads
 - delivery policy decides how actionable Hollywood messages affect work
+
+### 7. Lifecycle visibility gap to close next
+
+The remaining runtime weakness after transport, room-routing, and obligation-preserving core handling is visibility:
+
+- a Hollywood message can now reach the thread with explicit attention/obligation metadata
+- but the UI still does not expose a dedicated lifecycle such as `received`, `deferred`, `acted_on`, or `ignored`
+
+The next implementation should therefore add explicit lifecycle tracking and TUI state on top of the current obligation-preserving `Op::HollywoodInput` path.
 
 ## Best first implementation
 
@@ -204,6 +249,12 @@ Phase 3:
 
 - Add core-native `Op::ExternalMessage` so Hollywood input is no longer modeled as user input at all.
 - Add core-native support for attention-policy decisions and message classification events.
+
+Phase 4:
+
+- Add explicit Hollywood obligation tracking and lifecycle events.
+- Keep obligation state visible in the TUI until the session replies, claims, defers, or explicitly ignores it.
+- Distinguish delivery from action so humans can tell whether a session merely received a room message or actually handled it.
 
 ## Files that matter most
 
