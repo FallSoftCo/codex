@@ -35,6 +35,7 @@ or phase-less assistant message item.
 
 - Golden path tutorial: `docs/getting-started.md`
 - API reference (signatures + behavior): `docs/api-reference.md`
+- Realtime audio streaming: `docs/realtime-audio.md`
 - Common decisions and pitfalls: `docs/faq.md`
 - Runnable examples index: `examples/README.md`
 - Jupyter walkthrough notebook: `notebooks/sdk_walkthrough.ipynb`

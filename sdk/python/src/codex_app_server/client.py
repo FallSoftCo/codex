@@ -37,6 +37,7 @@ from .generated.v2_all import (
     TurnSteerResponse,
 )
 from .models import (
+    EmptyResponse,
     InitializeResponse,
     JsonObject,
     JsonValue,
@@ -348,6 +349,45 @@ class AppServerClient:
             "thread/compact/start",
             {"threadId": thread_id},
             response_model=ThreadCompactStartResponse,
+        )
+
+    def thread_realtime_start(self, thread_id: str, prompt: str) -> EmptyResponse:
+        return self.request(
+            "thread/realtime/start",
+            {"threadId": thread_id, "prompt": prompt},
+            response_model=EmptyResponse,
+        )
+
+    def thread_realtime_append_audio(
+        self,
+        thread_id: str,
+        audio: JsonObject | BaseModel,
+    ) -> EmptyResponse:
+        payload_audio = (
+            audio.model_dump(by_alias=True, exclude_none=True, mode="json")
+            if isinstance(audio, BaseModel)
+            else audio
+        )
+        if not isinstance(payload_audio, dict):
+            raise TypeError("audio must be a generated model or JSON object")
+        return self.request(
+            "thread/realtime/appendAudio",
+            {"threadId": thread_id, "audio": payload_audio},
+            response_model=EmptyResponse,
+        )
+
+    def thread_realtime_append_text(self, thread_id: str, text: str) -> EmptyResponse:
+        return self.request(
+            "thread/realtime/appendText",
+            {"threadId": thread_id, "text": text},
+            response_model=EmptyResponse,
+        )
+
+    def thread_realtime_stop(self, thread_id: str) -> EmptyResponse:
+        return self.request(
+            "thread/realtime/stop",
+            {"threadId": thread_id},
+            response_model=EmptyResponse,
         )
 
     def turn_start(

@@ -327,6 +327,72 @@ def test_thread_run_accepts_string_input_and_returns_run_result() -> None:
     )
 
 
+def test_thread_realtime_methods_delegate_to_client() -> None:
+    client = AppServerClient()
+    seen: list[tuple[str, object]] = []
+
+    client.thread_realtime_start = lambda thread_id, prompt: seen.append(("start", (thread_id, prompt)))  # type: ignore[method-assign]
+    client.thread_realtime_append_audio = lambda thread_id, audio: seen.append(("audio", (thread_id, audio)))  # type: ignore[method-assign]
+    client.thread_realtime_append_text = lambda thread_id, text: seen.append(("text", (thread_id, text)))  # type: ignore[method-assign]
+    client.thread_realtime_stop = lambda thread_id: seen.append(("stop", thread_id))  # type: ignore[method-assign]
+
+    thread = Thread(client, "thread-1")
+    thread.realtime_start("prompt")
+    thread.realtime_append_audio({"data": "AQID"})
+    thread.realtime_append_text("hello")
+    thread.realtime_stop()
+
+    assert seen == [
+        ("start", ("thread-1", "prompt")),
+        ("audio", ("thread-1", {"data": "AQID"})),
+        ("text", ("thread-1", "hello")),
+        ("stop", "thread-1"),
+    ]
+
+
+def test_async_thread_realtime_methods_delegate_to_client() -> None:
+    async def scenario() -> None:
+        codex = AsyncCodex()
+
+        async def fake_ensure_initialized() -> None:
+            return None
+
+        seen: list[tuple[str, object]] = []
+
+        async def fake_start(thread_id: str, prompt: str) -> None:
+            seen.append(("start", (thread_id, prompt)))
+
+        async def fake_audio(thread_id: str, audio: object) -> None:
+            seen.append(("audio", (thread_id, audio)))
+
+        async def fake_text(thread_id: str, text: str) -> None:
+            seen.append(("text", (thread_id, text)))
+
+        async def fake_stop(thread_id: str) -> None:
+            seen.append(("stop", thread_id))
+
+        codex._ensure_initialized = fake_ensure_initialized  # type: ignore[method-assign]
+        codex._client.thread_realtime_start = fake_start  # type: ignore[method-assign]
+        codex._client.thread_realtime_append_audio = fake_audio  # type: ignore[method-assign]
+        codex._client.thread_realtime_append_text = fake_text  # type: ignore[method-assign]
+        codex._client.thread_realtime_stop = fake_stop  # type: ignore[method-assign]
+
+        thread = AsyncThread(codex, "thread-1")
+        await thread.realtime_start("prompt")
+        await thread.realtime_append_audio({"data": "AQID"})
+        await thread.realtime_append_text("hello")
+        await thread.realtime_stop()
+
+        assert seen == [
+            ("start", ("thread-1", "prompt")),
+            ("audio", ("thread-1", {"data": "AQID"})),
+            ("text", ("thread-1", "hello")),
+            ("stop", "thread-1"),
+        ]
+
+    asyncio.run(scenario())
+
+
 def test_thread_run_uses_last_completed_assistant_message_as_final_response() -> None:
     client = AppServerClient()
     first_item_notification = _item_completed_notification(text="First message")

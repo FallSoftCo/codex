@@ -134,6 +134,18 @@ class AsyncAppServerClient:
     async def thread_compact(self, thread_id: str) -> ThreadCompactStartResponse:
         return await self._call_sync(self._sync.thread_compact, thread_id)
 
+    async def thread_realtime_start(self, thread_id: str, prompt: str):
+        return await self._call_sync(self._sync.thread_realtime_start, thread_id, prompt)
+
+    async def thread_realtime_append_audio(self, thread_id: str, audio):
+        return await self._call_sync(self._sync.thread_realtime_append_audio, thread_id, audio)
+
+    async def thread_realtime_append_text(self, thread_id: str, text: str):
+        return await self._call_sync(self._sync.thread_realtime_append_text, thread_id, text)
+
+    async def thread_realtime_stop(self, thread_id: str):
+        return await self._call_sync(self._sync.thread_realtime_stop, thread_id)
+
     async def turn_start(
         self,
         thread_id: str,

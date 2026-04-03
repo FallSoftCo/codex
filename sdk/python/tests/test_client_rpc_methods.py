@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from codex_app_server.client import AppServerClient, _params_dict
-from codex_app_server.generated.v2_all import ThreadListParams, ThreadTokenUsageUpdatedNotification
+from codex_app_server.generated.v2_all import (
+    ThreadListParams,
+    ThreadRealtimeAudioChunk,
+    ThreadTokenUsageUpdatedNotification,
+)
 from codex_app_server.models import UnknownNotification
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +29,56 @@ def test_thread_set_name_and_compact_use_current_rpc_methods() -> None:
 
     assert calls[0][0] == "thread/name/set"
     assert calls[1][0] == "thread/compact/start"
+
+
+def test_thread_realtime_rpc_methods_use_current_names() -> None:
+    client = AppServerClient()
+    calls: list[tuple[str, dict[str, Any] | None]] = []
+
+    def fake_request(method: str, params, *, response_model):  # type: ignore[no-untyped-def]
+        calls.append((method, params))
+        return response_model.model_validate({})
+
+    client.request = fake_request  # type: ignore[method-assign]
+
+    client.thread_realtime_start("thread-1", "voice prompt")
+    client.thread_realtime_append_audio(
+        "thread-1",
+        ThreadRealtimeAudioChunk(
+            data="AQID",
+            sample_rate=24_000,
+            num_channels=1,
+            samples_per_channel=3,
+            item_id=None,
+        ),
+    )
+    client.thread_realtime_append_text("thread-1", "hello")
+    client.thread_realtime_stop("thread-1")
+
+    assert calls[0] == (
+        "thread/realtime/start",
+        {"threadId": "thread-1", "prompt": "voice prompt"},
+    )
+    assert calls[1] == (
+        "thread/realtime/appendAudio",
+        {
+            "threadId": "thread-1",
+            "audio": {
+                "data": "AQID",
+                "sampleRate": 24_000,
+                "numChannels": 1,
+                "samplesPerChannel": 3,
+            },
+        },
+    )
+    assert calls[2] == (
+        "thread/realtime/appendText",
+        {"threadId": "thread-1", "text": "hello"},
+    )
+    assert calls[3] == (
+        "thread/realtime/stop",
+        {"threadId": "thread-1"},
+    )
 
 
 def test_generated_params_models_are_snake_case_and_dump_by_alias() -> None:

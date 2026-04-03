@@ -26,6 +26,7 @@ from .generated.v2_all import (
     ThreadItem,
     ThreadForkParams,
     ThreadListParams,
+    ThreadRealtimeAudioChunk,
     ThreadResumeParams,
     ThreadSortKey,
     ThreadSourceKind,
@@ -37,6 +38,13 @@ from .generated.v2_all import (
     TurnSteerParams,
 )
 from .models import InitializeResponse
+from .realtime_audio import (
+    iter_pcm16le_audio_chunks,
+    iter_wav_audio_bytes_chunks,
+    iter_wav_audio_chunks,
+    iter_wav_audio_file_chunks,
+    pcm16le_audio_chunk,
+)
 from .api import (
     AsyncCodex,
     AsyncThread,
@@ -78,6 +86,7 @@ __all__ = [
     "SkillInput",
     "MentionInput",
     "ThreadItem",
+    "ThreadRealtimeAudioChunk",
     "ThreadTokenUsageUpdatedNotification",
     "TurnCompletedNotification",
     "AskForApproval",
@@ -98,6 +107,11 @@ __all__ = [
     "TurnStartParams",
     "TurnSteerParams",
     "retry_on_overload",
+    "pcm16le_audio_chunk",
+    "iter_pcm16le_audio_chunks",
+    "iter_wav_audio_chunks",
+    "iter_wav_audio_file_chunks",
+    "iter_wav_audio_bytes_chunks",
     "AppServerError",
     "TransportClosedError",
     "JsonRpcError",

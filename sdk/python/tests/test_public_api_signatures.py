@@ -117,6 +117,10 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "service_tier",
             "summary",
         ],
+        Thread.realtime_start: [],
+        Thread.realtime_append_audio: [],
+        Thread.realtime_append_text: [],
+        Thread.realtime_stop: [],
         AsyncCodex.thread_start: [
             "approval_policy",
             "approvals_reviewer",
@@ -192,6 +196,10 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "service_tier",
             "summary",
         ],
+        AsyncThread.realtime_start: [],
+        AsyncThread.realtime_append_audio: [],
+        AsyncThread.realtime_append_text: [],
+        AsyncThread.realtime_stop: [],
     }
 
     for fn, expected_kwargs in expected.items():

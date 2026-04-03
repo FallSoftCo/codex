@@ -22,6 +22,7 @@ from .generated.v2_all import (
     ThreadListParams,
     ThreadListResponse,
     ThreadReadResponse,
+    ThreadRealtimeAudioChunk,
     ThreadResumeParams,
     ThreadSetNameResponse,
     ThreadSortKey,
@@ -547,6 +548,18 @@ class Thread:
     def compact(self) -> ThreadCompactStartResponse:
         return self._client.thread_compact(self.id)
 
+    def realtime_start(self, prompt: str) -> None:
+        self._client.thread_realtime_start(self.id, prompt)
+
+    def realtime_append_audio(self, audio: ThreadRealtimeAudioChunk | JsonObject) -> None:
+        self._client.thread_realtime_append_audio(self.id, audio)
+
+    def realtime_append_text(self, text: str) -> None:
+        self._client.thread_realtime_append_text(self.id, text)
+
+    def realtime_stop(self) -> None:
+        self._client.thread_realtime_stop(self.id)
+
 
 @dataclass(slots=True)
 class AsyncThread:
@@ -638,6 +651,25 @@ class AsyncThread:
     async def compact(self) -> ThreadCompactStartResponse:
         await self._codex._ensure_initialized()
         return await self._codex._client.thread_compact(self.id)
+
+    async def realtime_start(self, prompt: str) -> None:
+        await self._codex._ensure_initialized()
+        await self._codex._client.thread_realtime_start(self.id, prompt)
+
+    async def realtime_append_audio(
+        self,
+        audio: ThreadRealtimeAudioChunk | JsonObject,
+    ) -> None:
+        await self._codex._ensure_initialized()
+        await self._codex._client.thread_realtime_append_audio(self.id, audio)
+
+    async def realtime_append_text(self, text: str) -> None:
+        await self._codex._ensure_initialized()
+        await self._codex._client.thread_realtime_append_text(self.id, text)
+
+    async def realtime_stop(self) -> None:
+        await self._codex._ensure_initialized()
+        await self._codex._client.thread_realtime_stop(self.id)
 
 
 @dataclass(slots=True)
