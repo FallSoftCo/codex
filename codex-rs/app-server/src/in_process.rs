@@ -1018,7 +1018,9 @@ mod tests {
         let notification = timeout(Duration::from_secs(8), async {
             loop {
                 let Some(event) = client.next_event().await else {
-                    panic!("in-process client disconnected before self-authored Hollywood notification");
+                    panic!(
+                        "in-process client disconnected before self-authored Hollywood notification"
+                    );
                 };
                 match event {
                     InProcessServerEvent::ServerNotification(

@@ -3,10 +3,10 @@ use codex_app_server_protocol::HollywoodAttentionSettings;
 use codex_app_server_protocol::HollywoodMessage;
 use codex_app_server_protocol::HollywoodMessageAttention;
 use codex_app_server_protocol::HollywoodMessageKind;
-use codex_app_server_protocol::ThreadStatus;
 use codex_app_server_protocol::HollywoodSessionAttachOptions;
-use codex_core::parse_agent_mentions;
+use codex_app_server_protocol::ThreadStatus;
 use codex_core::CodexThread;
+use codex_core::parse_agent_mentions;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::HollywoodSessionMeta;
 use reqwest::Client;
@@ -464,7 +464,10 @@ pub(crate) fn format_hollywood_context_message(
     thread_id: ThreadId,
     config: &HollywoodConfig,
 ) -> String {
-    let wake_rooms = config.effective_wake_rooms().into_iter().collect::<Vec<_>>();
+    let wake_rooms = config
+        .effective_wake_rooms()
+        .into_iter()
+        .collect::<Vec<_>>();
     let payload_json = serde_json::json!({
         "attached": true,
         "meaning": "Hollywood is the local inter-agent room and messaging system in this runtime, not a physical place.",
@@ -562,7 +565,8 @@ fn classify_message(
     let broadcast_match =
         (attention.include_at_all && at_all) || (attention.include_at_room && at_room);
 
-    let direct_match = message.recipient_id.is_some() || message.message_kind == HollywoodMessageKind::Direct;
+    let direct_match =
+        message.recipient_id.is_some() || message.message_kind == HollywoodMessageKind::Direct;
     let explicit_broadcast = message.message_kind == HollywoodMessageKind::Broadcast;
 
     let attention_class = if direct_match || mentioned || broadcast_match {
@@ -673,9 +677,7 @@ pub(crate) async fn build_registry_upsert_request(
             .to_string(),
         resumed_from: runtime_state.registry_resumed_from().map(ToOwned::to_owned),
         ephemeral: snapshot.ephemeral,
-        rollout_path: thread
-            .rollout_path()
-            .map(|path| path.display().to_string()),
+        rollout_path: thread.rollout_path().map(|path| path.display().to_string()),
         status: thread_status_name(status),
     }
 }

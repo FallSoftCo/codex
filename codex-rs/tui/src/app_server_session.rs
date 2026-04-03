@@ -361,12 +361,9 @@ impl AppServerSession {
         config: Config,
         thread_id: ThreadId,
     ) -> Result<AppServerStartedThread> {
-        let strategy = determine_resume_bootstrap_strategy(
-            &config,
-            thread_id,
-            self.thread_params_mode(),
-        )
-        .await;
+        let strategy =
+            determine_resume_bootstrap_strategy(&config, thread_id, self.thread_params_mode())
+                .await;
         if strategy == ResumeBootstrapStrategy::LegacyForkMigration {
             tracing::info!(
                 thread_id = %thread_id,
@@ -1029,7 +1026,9 @@ fn hollywood_auto_attach_options() -> Option<HollywoodSessionAttachOptions> {
     })
 }
 
-pub(crate) fn hollywood_auto_attach_params(thread_id: ThreadId) -> Option<ThreadHollywoodAttachParams> {
+pub(crate) fn hollywood_auto_attach_params(
+    thread_id: ThreadId,
+) -> Option<ThreadHollywoodAttachParams> {
     let options = hollywood_auto_attach_options()?;
     Some(ThreadHollywoodAttachParams {
         thread_id: thread_id.to_string(),
@@ -1320,10 +1319,10 @@ fn app_server_credits_snapshot_to_core(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_core::SESSIONS_SUBDIR;
     use codex_app_server_protocol::ThreadStatus;
     use codex_app_server_protocol::Turn;
     use codex_app_server_protocol::TurnStatus;
+    use codex_core::SESSIONS_SUBDIR;
     use codex_core::config::ConfigBuilder;
     use codex_protocol::protocol::HollywoodSessionMeta;
     use codex_protocol::protocol::RolloutItem;
@@ -1384,7 +1383,11 @@ mod tests {
         thread_id: ThreadId,
         hollywood: Option<HollywoodSessionMeta>,
     ) {
-        let day_dir = codex_home.join(SESSIONS_SUBDIR).join("2026").join("03").join("21");
+        let day_dir = codex_home
+            .join(SESSIONS_SUBDIR)
+            .join("2026")
+            .join("03")
+            .join("21");
         fs::create_dir_all(&day_dir).expect("create sessions dir");
         let filename = format!("rollout-2026-03-21T10-00-00-{thread_id}.jsonl");
         let rollout_path = day_dir.join(filename);
@@ -1411,8 +1414,12 @@ mod tests {
                 git: None,
             }),
         };
-        writeln!(file, "{}", serde_json::to_string(&line).expect("serialize rollout line"))
-            .expect("write rollout line");
+        writeln!(
+            file,
+            "{}",
+            serde_json::to_string(&line).expect("serialize rollout line")
+        )
+        .expect("write rollout line");
     }
 
     #[tokio::test]

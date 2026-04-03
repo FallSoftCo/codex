@@ -233,22 +233,26 @@ impl SessionState {
         if message.sender_id == "hollywood-system" {
             return;
         }
-        let duplicate = self.outstanding_hollywood_obligations.iter().any(|obligation| {
-            (message.message_id > 0 && obligation.message_id == message.message_id)
-                || (obligation.room == message.room
-                    && obligation.sender_id == message.sender_id
-                    && obligation.body == message.body)
-        });
+        let duplicate = self
+            .outstanding_hollywood_obligations
+            .iter()
+            .any(|obligation| {
+                (message.message_id > 0 && obligation.message_id == message.message_id)
+                    || (obligation.room == message.room
+                        && obligation.sender_id == message.sender_id
+                        && obligation.body == message.body)
+            });
         if duplicate {
             return;
         }
-        self.outstanding_hollywood_obligations.push(HollywoodObligation {
-            message_id: message.message_id,
-            room: message.room.clone(),
-            sender_id: message.sender_id.clone(),
-            body: message.body.clone(),
-            attempts: 0,
-        });
+        self.outstanding_hollywood_obligations
+            .push(HollywoodObligation {
+                message_id: message.message_id,
+                room: message.room.clone(),
+                sender_id: message.sender_id.clone(),
+                body: message.body.clone(),
+                attempts: 0,
+            });
     }
 
     pub(crate) fn mark_hollywood_send_for_turn(&mut self, turn_id: &str, room: &str) {

@@ -4170,7 +4170,9 @@ impl CodexMessageProcessor {
                         }
                     };
 
-                    self.thread_watch_manager.upsert_thread(thread.clone()).await;
+                    self.thread_watch_manager
+                        .upsert_thread(thread.clone())
+                        .await;
                     let thread_status = self
                         .thread_watch_manager
                         .loaded_status_for_thread(&thread.id)
@@ -4307,7 +4309,9 @@ impl CodexMessageProcessor {
                     }
                 };
 
-                self.thread_watch_manager.upsert_thread(thread.clone()).await;
+                self.thread_watch_manager
+                    .upsert_thread(thread.clone())
+                    .await;
                 let thread_status = self
                     .thread_watch_manager
                     .loaded_status_for_thread(&thread.id)

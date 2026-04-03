@@ -110,9 +110,9 @@ use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::permissions::NetworkSandboxPolicy;
 use codex_protocol::protocol::FileChange;
-use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::HasLegacyEvent;
 use codex_protocol::protocol::InterAgentCommunication;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::ItemCompletedEvent;
 use codex_protocol::protocol::ItemStartedEvent;
 use codex_protocol::protocol::RawResponseItemEvent;
@@ -4859,6 +4859,10 @@ mod handlers {
     use crate::tasks::execute_user_shell_command;
     use codex_mcp::collect_mcp_snapshot_from_manager;
     use codex_mcp::compute_auth_statuses;
+    use codex_protocol::custom_prompts::CustomPrompt;
+    use codex_protocol::models::ContentItem;
+    use codex_protocol::models::ResponseInputItem;
+    use codex_protocol::models::ResponseItem;
     use codex_protocol::protocol::CodexErrorInfo;
     use codex_protocol::protocol::ErrorEvent;
     use codex_protocol::protocol::Event;
@@ -4876,9 +4880,6 @@ mod handlers {
     use codex_protocol::protocol::ThreadRolledBackEvent;
     use codex_protocol::protocol::TurnAbortReason;
     use codex_protocol::protocol::WarningEvent;
-    use codex_protocol::models::ContentItem;
-    use codex_protocol::models::ResponseInputItem;
-    use codex_protocol::models::ResponseItem;
     use codex_protocol::request_permissions::RequestPermissionsResponse;
     use codex_protocol::request_user_input::RequestUserInputResponse;
 
@@ -4933,7 +4934,10 @@ mod handlers {
             return;
         }
 
-        let Ok(current_context) = sess.new_turn_with_sub_id(sub_id, SessionSettingsUpdate::default()).await else {
+        let Ok(current_context) = sess
+            .new_turn_with_sub_id(sub_id, SessionSettingsUpdate::default())
+            .await
+        else {
             return;
         };
         sess.maybe_emit_unknown_model_warning_for_turn(current_context.as_ref())

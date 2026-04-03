@@ -59,8 +59,7 @@ pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) 
         )),
         Some("attention") => Some(format!(
             "Hollywood attention update: inspect the attached Hollywood message from `{}` in room `{}` and decide whether it changes your current work or requires a concise follow-up.",
-            message.sender_id,
-            message.room,
+            message.sender_id, message.room,
         )),
         _ => None,
     }

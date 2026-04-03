@@ -46,7 +46,8 @@ impl HollywoodSessionConfig {
             return None;
         }
 
-        let room = env::var("HOLLYWOOD_ROOM").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_ROOM.to_string());
+        let room =
+            env::var("HOLLYWOOD_ROOM").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_ROOM.to_string());
         let observed_rooms = parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok());
         let wake_rooms = parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok());
         Some(Self {
@@ -193,7 +194,10 @@ fn alias_to_session_id(alias: &str) -> Option<String> {
     let mut bytes = Vec::new();
 
     for byte in payload.bytes() {
-        let value = match BASE32_ALPHABET.iter().position(|candidate| *candidate == byte) {
+        let value = match BASE32_ALPHABET
+            .iter()
+            .position(|candidate| *candidate == byte)
+        {
             Some(index) => index as u8,
             None => return None,
         };
@@ -262,6 +266,9 @@ mod tests {
             "@all ping @room @sid-agor-cp2j-755r-fcup-xtau-5phv-we and @not-an-agent",
         );
 
-        assert_eq!(mentions, vec!["019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string()]);
+        assert_eq!(
+            mentions,
+            vec!["019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string()]
+        );
     }
 }

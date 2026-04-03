@@ -641,18 +641,13 @@ impl Session {
     }
 }
 
-fn format_unresolved_hollywood_obligation_followup(
-    obligations: &[HollywoodObligation],
-) -> String {
+fn format_unresolved_hollywood_obligation_followup(obligations: &[HollywoodObligation]) -> String {
     let summary = obligations
         .iter()
         .map(|obligation| {
             format!(
                 "- room=`{}` sender=`{}` attempt={} body={}",
-                obligation.room,
-                obligation.sender_id,
-                obligation.attempts,
-                obligation.body
+                obligation.room, obligation.sender_id, obligation.attempts, obligation.body
             )
         })
         .collect::<Vec<_>>()

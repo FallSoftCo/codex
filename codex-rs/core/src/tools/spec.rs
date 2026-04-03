@@ -168,13 +168,17 @@ fn create_hollywood_team_up_tool() -> ToolSpec {
         (
             "room".to_string(),
             JsonSchema::String {
-                description: Some("Optional control room for the team record. Defaults to main.".to_string()),
+                description: Some(
+                    "Optional control room for the team record. Defaults to main.".to_string(),
+                ),
             },
         ),
         (
             "task_room".to_string(),
             JsonSchema::String {
-                description: Some("Optional working room members should join after accepting.".to_string()),
+                description: Some(
+                    "Optional working room members should join after accepting.".to_string(),
+                ),
             },
         ),
         (
@@ -204,7 +208,10 @@ fn create_hollywood_team_status_tool() -> ToolSpec {
         (
             "room".to_string(),
             JsonSchema::String {
-                description: Some("Optional room to inspect. Defaults to the configured Hollywood room.".to_string()),
+                description: Some(
+                    "Optional room to inspect. Defaults to the configured Hollywood room."
+                        .to_string(),
+                ),
             },
         ),
         (

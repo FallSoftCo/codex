@@ -260,11 +260,9 @@ impl ToolHandler for HollywoodSendHandler {
         let target_identities = resolve_target_identities(&args);
         let room = match args.room.clone() {
             Some(room) => room,
-            None => {
-                select_room_for_targets(&config, &target_identities)
-                    .await
-                    .map_err(FunctionCallError::RespondToModel)?
-            }
+            None => select_room_for_targets(&config, &target_identities)
+                .await
+                .map_err(FunctionCallError::RespondToModel)?,
         };
         let sender_id = invocation.session.conversation_id.to_string();
         let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
@@ -368,12 +366,20 @@ impl ToolHandler for HollywoodTeamUpHandler {
             }))
             .send()
             .await
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team create failed: {err}")))?
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!("Hollywood team create failed: {err}"))
+            })?
             .error_for_status()
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team create failed: {err}")))?
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!("Hollywood team create failed: {err}"))
+            })?
             .json::<serde_json::Value>()
             .await
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team response parse failed: {err}")))?;
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "Hollywood team response parse failed: {err}"
+                ))
+            })?;
 
         let result = HollywoodTeamUpResult {
             url: config.url,
@@ -409,18 +415,23 @@ impl ToolHandler for HollywoodTeamStatusHandler {
         let url = format!("{}/hollywood/v1/teams", config.url.trim_end_matches('/'));
         let response = Client::new()
             .get(&url)
-            .query(&[
-                ("room", room.as_str()),
-                ("limit", &limit.to_string()),
-            ])
+            .query(&[("room", room.as_str()), ("limit", &limit.to_string())])
             .send()
             .await
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}")))?
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}"))
+            })?
             .error_for_status()
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}")))?
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}"))
+            })?
             .json::<serde_json::Value>()
             .await
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team response parse failed: {err}")))?;
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "Hollywood team response parse failed: {err}"
+                ))
+            })?;
 
         let result = HollywoodTeamStatusResult {
             url: config.url,
@@ -453,12 +464,17 @@ impl ToolHandler for HollywoodTeamMemberUpdateHandler {
 
         let session_id = match args.session_id.as_deref() {
             Some(value) => canonicalize_agent_identity(value).ok_or_else(|| {
-                FunctionCallError::RespondToModel("invalid session_id for hollywood_team_member_update".to_string())
+                FunctionCallError::RespondToModel(
+                    "invalid session_id for hollywood_team_member_update".to_string(),
+                )
             })?,
             None => invocation.session.conversation_id.to_string(),
         };
 
-        let url = format!("{}/hollywood/v1/team-members", config.url.trim_end_matches('/'));
+        let url = format!(
+            "{}/hollywood/v1/team-members",
+            config.url.trim_end_matches('/')
+        );
         let response = Client::new()
             .post(&url)
             .json(&json!({
@@ -472,12 +488,24 @@ impl ToolHandler for HollywoodTeamMemberUpdateHandler {
             }))
             .send()
             .await
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team member update failed: {err}")))?
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "Hollywood team member update failed: {err}"
+                ))
+            })?
             .error_for_status()
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team member update failed: {err}")))?
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "Hollywood team member update failed: {err}"
+                ))
+            })?
             .json::<serde_json::Value>()
             .await
-            .map_err(|err| FunctionCallError::RespondToModel(format!("Hollywood team member response parse failed: {err}")))?;
+            .map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "Hollywood team member response parse failed: {err}"
+                ))
+            })?;
 
         let result = HollywoodTeamMemberUpdateResult {
             url: config.url,
