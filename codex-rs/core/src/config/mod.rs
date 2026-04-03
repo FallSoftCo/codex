@@ -2035,6 +2035,7 @@ impl Config {
                 .map_or_else(RealtimeConfig::default, |realtime| RealtimeConfig {
                     version: realtime.version.unwrap_or_default(),
                     session_type: realtime.session_type.unwrap_or_default(),
+                    api_key_env_var: realtime.api_key_env_var,
                 }),
             experimental_realtime_ws_backend_prompt: cfg.experimental_realtime_ws_backend_prompt,
             experimental_realtime_ws_startup_context: cfg.experimental_realtime_ws_startup_context,

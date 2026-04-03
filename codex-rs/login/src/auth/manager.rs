@@ -403,18 +403,19 @@ impl ChatgptAuth {
 pub const OPENAI_API_KEY_ENV_VAR: &str = "OPENAI_API_KEY";
 pub const CODEX_API_KEY_ENV_VAR: &str = "CODEX_API_KEY";
 
-pub fn read_openai_api_key_from_env() -> Option<String> {
-    env::var(OPENAI_API_KEY_ENV_VAR)
+pub fn read_api_key_from_env_var(env_var: &str) -> Option<String> {
+    env::var(env_var)
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }
 
+pub fn read_openai_api_key_from_env() -> Option<String> {
+    read_api_key_from_env_var(OPENAI_API_KEY_ENV_VAR)
+}
+
 pub fn read_codex_api_key_from_env() -> Option<String> {
-    env::var(CODEX_API_KEY_ENV_VAR)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+    read_api_key_from_env_var(CODEX_API_KEY_ENV_VAR)
 }
 
 /// Delete the auth.json file inside `codex_home` if it exists. Returns `Ok(true)`

@@ -88,4 +88,25 @@ developer message Codex inserts when realtime becomes active. It only affects
 the realtime start message in prompt history and does not change websocket
 backend prompt settings or the realtime end/inactive message.
 
+## Realtime API key setup
+
+If you want realtime voice to use a dedicated OpenAI API key while the rest of
+Codex continues using ChatGPT login, configure a separate environment variable
+name in `~/.codex/config.toml`:
+
+```toml
+[realtime]
+api_key_env_var = "CODEX_REALTIME_API_KEY"
+```
+
+Then export the actual key before starting Codex:
+
+```bash
+export CODEX_REALTIME_API_KEY=your_openai_api_key
+codex
+```
+
+This keeps the secret out of `config.toml`; Codex only stores the environment
+variable name there.
+
 Ctrl+C/Ctrl+D quitting uses a ~1 second double-press hint (`ctrl + c again to quit`).

@@ -1472,6 +1472,9 @@
     "RealtimeToml": {
       "additionalProperties": false,
       "properties": {
+        "api_key_env_var": {
+          "type": "string"
+        },
         "type": {
           "$ref": "#/definitions/RealtimeWsMode"
         },

@@ -30,6 +30,8 @@ use core_test_support::wait_for_event_match;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
+use serial_test::serial;
+use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 use std::time::Duration;
@@ -362,6 +364,141 @@ async fn conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth() -> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial(realtime_api_key_env)]
+async fn conversation_start_prefers_dedicated_realtime_env_var_with_chatgpt_auth() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let _openai_env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "openai-env-key");
+    let _realtime_env_guard = EnvGuard::set("CODEX_REALTIME_API_KEY", "dedicated-realtime-key");
+    let server = start_websocket_server(vec![
+        vec![],
+        vec![vec![json!({
+            "type": "session.updated",
+            "session": { "id": "sess_env", "instructions": "backend prompt" }
+        })]],
+    ])
+    .await;
+
+    let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    builder = builder.with_config(|config| {
+        config.realtime.api_key_env_var = Some("CODEX_REALTIME_API_KEY".to_string());
+    });
+    let test = builder.build_with_websocket_server(&server).await?;
+    assert!(
+        server
+            .wait_for_handshakes(/*expected*/ 1, Duration::from_secs(2))
+            .await
+    );
+
+    test.codex
+        .submit(Op::RealtimeConversationStart(ConversationStartParams {
+            prompt: "backend prompt".to_string(),
+            session_id: None,
+        }))
+        .await?;
+
+    let started = wait_for_event_match(&test.codex, |msg| match msg {
+        EventMsg::RealtimeConversationStarted(started) => Some(Ok(started.clone())),
+        EventMsg::Error(err) => Some(Err(err.clone())),
+        _ => None,
+    })
+    .await
+    .unwrap_or_else(|err: ErrorEvent| panic!("conversation start failed: {err:?}"));
+    assert!(started.session_id.is_some());
+
+    assert_eq!(
+        server.handshakes()[1].header("authorization").as_deref(),
+        Some("Bearer dedicated-realtime-key")
+    );
+
+    test.codex.submit(Op::RealtimeConversationClose).await?;
+    let _closed = wait_for_event_match(&test.codex, |msg| match msg {
+        EventMsg::RealtimeConversationClosed(closed) => Some(closed.clone()),
+        _ => None,
+    })
+    .await;
+
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial(realtime_api_key_env)]
+async fn conversation_start_with_missing_dedicated_realtime_env_var_emits_actionable_error()
+-> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let _openai_env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "");
+    let _realtime_env_guard = EnvGuard::set("CODEX_REALTIME_API_KEY", "");
+    let server = start_websocket_server(vec![vec![]]).await;
+
+    let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    builder = builder.with_config(|config| {
+        config.realtime.api_key_env_var = Some("CODEX_REALTIME_API_KEY".to_string());
+    });
+    let test = builder.build_with_websocket_server(&server).await?;
+
+    test.codex
+        .submit(Op::RealtimeConversationStart(ConversationStartParams {
+            prompt: "backend prompt".to_string(),
+            session_id: None,
+        }))
+        .await?;
+
+    let err = wait_for_event_match(&test.codex, |msg| match msg {
+        EventMsg::RealtimeConversationRealtime(RealtimeConversationRealtimeEvent {
+            payload: RealtimeEvent::Error(message),
+        }) => Some(message.clone()),
+        _ => None,
+    })
+    .await;
+
+    assert_eq!(
+        err,
+        "realtime voice requires the `CODEX_REALTIME_API_KEY` environment variable. Set `[realtime].api_key_env_var = \"CODEX_REALTIME_API_KEY\"` in ~/.codex/config.toml and export `CODEX_REALTIME_API_KEY` before starting Codex."
+    );
+
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial(realtime_api_key_env)]
+async fn conversation_start_without_realtime_api_key_emits_setup_error() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let _env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "");
+    let server = start_websocket_server(vec![vec![]]).await;
+    let test = test_codex()
+        .with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing())
+        .build_with_websocket_server(&server)
+        .await?;
+
+    test.codex
+        .submit(Op::RealtimeConversationStart(ConversationStartParams {
+            prompt: "backend prompt".to_string(),
+            session_id: None,
+        }))
+        .await?;
+
+    let err = wait_for_event_match(&test.codex, |msg| match msg {
+        EventMsg::RealtimeConversationRealtime(RealtimeConversationRealtimeEvent {
+            payload: RealtimeEvent::Error(message),
+        }) => Some(message.clone()),
+        _ => None,
+    })
+    .await;
+
+    assert_eq!(
+        err,
+        "realtime voice requires API key auth. Configure `[realtime].api_key_env_var` in ~/.codex/config.toml and export that environment variable before starting Codex."
+    );
+
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn conversation_transport_close_emits_closed_event() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
@@ -476,7 +613,10 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
         _ => None,
     })
     .await;
-    assert_eq!(err, "realtime conversation requires API key auth");
+    assert_eq!(
+        err,
+        "realtime voice requires API key auth. Configure `[realtime].api_key_env_var` in ~/.codex/config.toml and export that environment variable before starting Codex."
+    );
 
     let closed = timeout(Duration::from_millis(200), async {
         wait_for_event_match(&test.codex, |msg| match msg {
@@ -490,6 +630,32 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
 
     server.shutdown().await;
     Ok(())
+}
+
+struct EnvGuard {
+    key: &'static str,
+    original: Option<OsString>,
+}
+
+impl EnvGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let original = std::env::var_os(key);
+        unsafe {
+            std::env::set_var(key, value);
+        }
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        unsafe {
+            match &self.original {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

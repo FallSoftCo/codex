@@ -268,7 +268,7 @@ fn serialize_environment_context_with_subagents() {
         Some("America/Los_Angeles".to_string()),
         None,
         Some("- agent-1: atlas\n- agent-2".to_string()),
-        None,
+        /*hollywood*/ None,
     );
 
     let expected = format!(

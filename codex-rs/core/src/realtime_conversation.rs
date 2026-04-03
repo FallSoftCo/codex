@@ -20,6 +20,7 @@ use codex_config::config_toml::RealtimeWsMode;
 use codex_config::config_toml::RealtimeWsVersion;
 use codex_login::CodexAuth;
 use codex_login::default_client::default_headers;
+use codex_login::read_api_key_from_env_var;
 use codex_login::read_openai_api_key_from_env;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_protocol::error::CodexErr;
@@ -460,9 +461,9 @@ async fn prepare_realtime_start(
         .auth_manager()
         .unwrap_or_else(|| Arc::clone(&sess.services.auth_manager));
     let auth = auth_manager.auth().await;
-    let realtime_api_key = realtime_api_key(auth.as_ref(), &provider)?;
     let mut api_provider = provider.to_api_provider(Some(AuthMode::ApiKey))?;
     let config = sess.get_config().await;
+    let realtime_api_key = realtime_api_key(auth.as_ref(), &provider, &config)?;
     if let Some(realtime_ws_base_url) = &config.experimental_realtime_ws_base_url {
         api_provider.base_url = realtime_ws_base_url.clone();
     }
@@ -632,7 +633,20 @@ fn realtime_text_from_handoff_request(handoff: &RealtimeHandoffRequested) -> Opt
         .or((!handoff.input_transcript.is_empty()).then_some(handoff.input_transcript.clone()))
 }
 
-fn realtime_api_key(auth: Option<&CodexAuth>, provider: &ModelProviderInfo) -> CodexResult<String> {
+fn realtime_api_key(
+    auth: Option<&CodexAuth>,
+    provider: &ModelProviderInfo,
+    config: &crate::config::Config,
+) -> CodexResult<String> {
+    if let Some(env_var) = config.realtime.api_key_env_var.as_deref() {
+        if let Some(api_key) = read_api_key_from_env_var(env_var) {
+            return Ok(api_key);
+        }
+
+        return Err(CodexErr::InvalidRequest(format!(
+            "realtime voice requires the `{env_var}` environment variable. Set `[realtime].api_key_env_var = \"{env_var}\"` in ~/.codex/config.toml and export `{env_var}` before starting Codex."
+        )));
+    }
     if let Some(api_key) = provider.api_key()? {
         return Ok(api_key);
     }
@@ -654,7 +668,8 @@ fn realtime_api_key(auth: Option<&CodexAuth>, provider: &ModelProviderInfo) -> C
     }
 
     Err(CodexErr::InvalidRequest(
-        "realtime conversation requires API key auth".to_string(),
+        "realtime voice requires API key auth. Configure `[realtime].api_key_env_var` in ~/.codex/config.toml and export that environment variable before starting Codex."
+            .to_string(),
     ))
 }
 

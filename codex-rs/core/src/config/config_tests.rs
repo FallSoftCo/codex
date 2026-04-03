@@ -6377,6 +6377,7 @@ type = "transcription"
         Some(RealtimeToml {
             version: Some(RealtimeWsVersion::V2),
             session_type: Some(RealtimeWsMode::Transcription),
+            api_key_env_var: None,
         })
     );
 
@@ -6392,6 +6393,44 @@ type = "transcription"
         RealtimeConfig {
             version: RealtimeWsVersion::V2,
             session_type: RealtimeWsMode::Transcription,
+            api_key_env_var: None,
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn realtime_api_key_env_var_loads_from_config_toml() -> std::io::Result<()> {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[realtime]
+api_key_env_var = "CODEX_REALTIME_API_KEY"
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+
+    assert_eq!(
+        cfg.realtime,
+        Some(RealtimeToml {
+            version: None,
+            session_type: None,
+            api_key_env_var: Some("CODEX_REALTIME_API_KEY".to_string()),
+        })
+    );
+
+    let codex_home = TempDir::new()?;
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        codex_home.path().to_path_buf(),
+    )?;
+
+    assert_eq!(
+        config.realtime,
+        RealtimeConfig {
+            version: RealtimeWsVersion::default(),
+            session_type: RealtimeWsMode::default(),
+            api_key_env_var: Some("CODEX_REALTIME_API_KEY".to_string()),
         }
     );
     Ok(())
