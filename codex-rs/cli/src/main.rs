@@ -1,3 +1,5 @@
+use chrono::DateTime;
+use chrono::Utc;
 use clap::Args;
 use clap::CommandFactory;
 use clap::Parser;
@@ -51,6 +53,7 @@ use codex_core::config::find_codex_home;
 use codex_features::FEATURES;
 use codex_features::Stage;
 use codex_features::is_known_feature_key;
+use codex_protocol::ThreadId;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::user_input::UserInput;
 use codex_terminal_detection::TerminalName;
@@ -137,6 +140,9 @@ enum Subcommand {
 
     /// Fork a previous interactive session (picker by default; use --last to fork the most recent).
     Fork(ForkCommand),
+
+    /// Manage persisted scheduled thread wakeups.
+    Schedule(ScheduleCommand),
 
     /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
     #[clap(name = "cloud", alias = "cloud-tasks")]
@@ -255,6 +261,104 @@ struct ForkCommand {
 
     #[clap(flatten)]
     config_overrides: TuiCli,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleCommand {
+    #[command(subcommand)]
+    subcommand: ScheduleSubcommand,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum ScheduleSubcommand {
+    /// Schedule a one-shot wakeup for a thread at a specific UTC timestamp.
+    AddAt(ScheduleAddAtCommand),
+
+    /// Schedule a periodic wakeup for a thread at a fixed interval.
+    AddEvery(ScheduleAddEveryCommand),
+
+    /// List scheduled tasks.
+    List(ScheduleListCommand),
+
+    /// List scheduled task runs.
+    Runs(ScheduleRunsCommand),
+
+    /// Delete a scheduled task.
+    Remove(ScheduleRemoveCommand),
+
+    /// Trigger a scheduled task immediately.
+    RunNow(ScheduleRunNowCommand),
+}
+
+#[derive(Debug, Args)]
+struct ScheduleTaskBaseArgs {
+    /// Thread/session id to wake when the schedule fires.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: String,
+
+    /// Short human-readable label for the scheduled task.
+    #[arg(long, value_name = "TITLE")]
+    title: String,
+
+    /// Prompt injected into the thread when the schedule fires.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+
+    /// Mark the wakeup as requiring a response.
+    #[arg(long, default_value_t = true)]
+    requires_response: bool,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleAddAtCommand {
+    #[command(flatten)]
+    task: ScheduleTaskBaseArgs,
+
+    /// UTC timestamp in RFC3339 format, for example 2026-04-08T13:00:00Z.
+    #[arg(long, value_name = "RFC3339_UTC")]
+    at: String,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleAddEveryCommand {
+    #[command(flatten)]
+    task: ScheduleTaskBaseArgs,
+
+    /// Fixed interval like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    every: String,
+
+    /// Optional UTC timestamp in RFC3339 format for the first run.
+    #[arg(long, value_name = "RFC3339_UTC")]
+    start_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleListCommand {
+    /// Optional thread/session id filter.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleRunsCommand {
+    /// Optional scheduled task id filter.
+    #[arg(long, value_name = "TASK_ID")]
+    task_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleRemoveCommand {
+    /// Scheduled task id.
+    #[arg(value_name = "TASK_ID")]
+    task_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleRunNowCommand {
+    /// Scheduled task id.
+    #[arg(value_name = "TASK_ID")]
+    task_id: String,
 }
 
 #[derive(Debug, Parser)]
@@ -802,6 +906,14 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             .await?;
             handle_app_exit(exit_info)?;
         }
+        Some(Subcommand::Schedule(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "schedule",
+            )?;
+            run_schedule_command(cmd, &root_config_overrides, &interactive).await?;
+        }
         Some(Subcommand::Login(mut login_cli)) => {
             reject_remote_mode_for_subcommand(
                 root_remote.as_deref(),
@@ -1227,6 +1339,181 @@ async fn run_debug_clear_memories_command(
     println!("{message}");
 
     Ok(())
+}
+
+async fn run_schedule_command(
+    cmd: ScheduleCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite_home.clone(), config.model_provider_id.clone()).await?;
+    match cmd.subcommand {
+        ScheduleSubcommand::AddAt(args) => {
+            let thread_id = parse_thread_id_arg(args.task.thread_id.as_str())?;
+            let at = parse_utc_timestamp(args.at.as_str())?;
+            state_db
+                .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    thread_id: thread_id.to_string(),
+                    title: args.task.title,
+                    prompt: args.task.prompt,
+                    kind: codex_state::ScheduledTaskKind::Once,
+                    next_run_at: at,
+                    interval_seconds: None,
+                    requires_response: args.task.requires_response,
+                })
+                .await?;
+            println!("Scheduled one-shot wakeup for thread {thread_id} at {at}.");
+        }
+        ScheduleSubcommand::AddEvery(args) => {
+            let thread_id = parse_thread_id_arg(args.task.thread_id.as_str())?;
+            let interval_seconds = parse_schedule_duration(args.every.as_str())?;
+            let next_run_at = match args.start_at.as_deref() {
+                Some(value) => parse_utc_timestamp(value)?,
+                None => Utc::now() + chrono::Duration::seconds(interval_seconds),
+            };
+            state_db
+                .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    thread_id: thread_id.to_string(),
+                    title: args.task.title,
+                    prompt: args.task.prompt,
+                    kind: codex_state::ScheduledTaskKind::Interval,
+                    next_run_at,
+                    interval_seconds: Some(interval_seconds),
+                    requires_response: args.task.requires_response,
+                })
+                .await?;
+            println!(
+                "Scheduled recurring wakeup for thread {thread_id} every {}s starting at {next_run_at}.",
+                interval_seconds
+            );
+        }
+        ScheduleSubcommand::List(args) => {
+            let thread_id = args
+                .thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let tasks = state_db.list_scheduled_tasks(thread_id).await?;
+            if tasks.is_empty() {
+                println!("No scheduled tasks found.");
+            } else {
+                for task in tasks {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        task.id,
+                        task.thread_id,
+                        task.kind.as_str(),
+                        task.next_run_at.to_rfc3339(),
+                        if task.enabled { "enabled" } else { "disabled" },
+                        task.title,
+                        task.last_run_status
+                            .map(|status| status.as_str().to_string())
+                            .unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        ScheduleSubcommand::Runs(args) => {
+            let runs = state_db
+                .list_scheduled_task_runs(args.task_id.as_deref())
+                .await?;
+            if runs.is_empty() {
+                println!("No scheduled task runs found.");
+            } else {
+                for run in runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        run.id,
+                        run.scheduled_task_id,
+                        run.status.as_str(),
+                        run.started_at.to_rfc3339(),
+                        run.turn_id.unwrap_or_else(|| "-".to_string()),
+                        run.summary
+                            .unwrap_or_else(|| run.error.unwrap_or_else(|| "-".to_string()))
+                    );
+                }
+            }
+        }
+        ScheduleSubcommand::Remove(args) => {
+            if state_db
+                .delete_scheduled_task(args.task_id.as_str())
+                .await?
+            {
+                println!("Removed scheduled task {}.", args.task_id);
+            } else {
+                println!("Scheduled task {} was not found.", args.task_id);
+            }
+        }
+        ScheduleSubcommand::RunNow(args) => {
+            if state_db
+                .trigger_scheduled_task_now(args.task_id.as_str())
+                .await?
+            {
+                println!("Scheduled task {} is now due.", args.task_id);
+            } else {
+                println!("Scheduled task {} was not found.", args.task_id);
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn load_config_for_state_commands(
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<Config> {
+    let cli_kv_overrides = root_config_overrides
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+    let overrides = ConfigOverrides {
+        config_profile: interactive.config_profile.clone(),
+        ..Default::default()
+    };
+    Config::load_with_cli_overrides_and_harness_overrides(cli_kv_overrides, overrides)
+        .await
+        .map_err(Into::into)
+}
+
+fn parse_thread_id_arg(value: &str) -> anyhow::Result<ThreadId> {
+    ThreadId::from_string(value).map_err(anyhow::Error::msg)
+}
+
+fn parse_utc_timestamp(value: &str) -> anyhow::Result<DateTime<Utc>> {
+    let parsed = DateTime::parse_from_rfc3339(value)
+        .map_err(|err| anyhow::anyhow!("invalid RFC3339 timestamp `{value}`: {err}"))?
+        .with_timezone(&Utc);
+    Ok(parsed)
+}
+
+fn parse_schedule_duration(value: &str) -> anyhow::Result<i64> {
+    if value.len() < 2 {
+        return Err(anyhow::anyhow!(
+            "invalid duration `{value}`; use forms like 30s, 5m, 1h, or 1d"
+        ));
+    }
+    let (count, unit) = value.split_at(value.len() - 1);
+    let count: i64 = count
+        .parse()
+        .map_err(|err| anyhow::anyhow!("invalid duration `{value}`: {err}"))?;
+    let seconds = match unit {
+        "s" => count,
+        "m" => count * 60,
+        "h" => count * 60 * 60,
+        "d" => count * 60 * 60 * 24,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "invalid duration unit `{unit}` in `{value}`; use s, m, h, or d"
+            ));
+        }
+    };
+    if seconds <= 0 {
+        return Err(anyhow::anyhow!("duration must be positive"));
+    }
+    Ok(seconds)
 }
 
 /// Prepend root-level overrides so they have lower precedence than

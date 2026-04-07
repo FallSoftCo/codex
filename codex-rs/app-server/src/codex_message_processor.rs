@@ -446,6 +446,7 @@ pub(crate) struct CodexMessageProcessor {
     pending_fuzzy_searches: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     fuzzy_search_sessions: Arc<Mutex<HashMap<String, FuzzyFileSearchSession>>>,
     background_tasks: TaskTracker,
+    scheduler_shutdown: CancellationToken,
     feedback: CodexFeedback,
     log_db: Option<LogDbLayer>,
 }
@@ -470,6 +471,44 @@ struct ListenerTaskContext {
     codex_home: PathBuf,
 }
 
+#[derive(Clone)]
+struct ScheduledTaskContext {
+    auth_manager: Arc<AuthManager>,
+    thread_manager: Arc<ThreadManager>,
+    outgoing: Arc<OutgoingMessageSender>,
+    analytics_events_client: AnalyticsEventsClient,
+    config: Arc<Config>,
+    arg0_paths: Arg0DispatchPaths,
+    cli_overrides: Arc<RwLock<Vec<(String, TomlValue)>>>,
+    runtime_feature_enablement: Arc<RwLock<BTreeMap<String, bool>>>,
+    cloud_requirements: Arc<RwLock<CloudRequirementsLoader>>,
+    thread_state_manager: ThreadStateManager,
+    thread_watch_manager: ThreadWatchManager,
+}
+
+impl ScheduledTaskContext {
+    fn current_cli_overrides(&self) -> Vec<(String, TomlValue)> {
+        self.cli_overrides
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
+    fn current_runtime_feature_enablement(&self) -> BTreeMap<String, bool> {
+        self.runtime_feature_enablement
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
+    fn current_cloud_requirements(&self) -> CloudRequirementsLoader {
+        self.cloud_requirements
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EnsureConversationListenerResult {
     Attached,
@@ -482,6 +521,11 @@ enum RefreshTokenRequestOutcome {
     FailedTransiently,
     FailedPermanently,
 }
+
+const SCHEDULED_TASK_POLL_INTERVAL: Duration = Duration::from_secs(10);
+const SCHEDULED_TASK_LEASE_DURATION: Duration = Duration::from_secs(120);
+const SCHEDULED_TASK_BUSY_RETRY_DELAY: Duration = Duration::from_secs(60);
+const SCHEDULED_TASK_CLAIM_LIMIT: usize = 8;
 
 pub(crate) struct CodexMessageProcessorArgs {
     pub(crate) auth_manager: Arc<AuthManager>,
@@ -552,7 +596,7 @@ impl CodexMessageProcessor {
             feedback,
             log_db,
         } = args;
-        Self {
+        let processor = Self {
             auth_manager,
             thread_manager,
             outgoing: outgoing.clone(),
@@ -570,9 +614,239 @@ impl CodexMessageProcessor {
             pending_fuzzy_searches: Arc::new(Mutex::new(HashMap::new())),
             fuzzy_search_sessions: Arc::new(Mutex::new(HashMap::new())),
             background_tasks: TaskTracker::new(),
+            scheduler_shutdown: CancellationToken::new(),
             feedback,
             log_db,
+        };
+        processor.spawn_scheduled_task_runtime();
+        processor
+    }
+
+    fn spawn_scheduled_task_runtime(&self) {
+        let context = ScheduledTaskContext {
+            auth_manager: Arc::clone(&self.auth_manager),
+            thread_manager: Arc::clone(&self.thread_manager),
+            outgoing: Arc::clone(&self.outgoing),
+            analytics_events_client: self.analytics_events_client.clone(),
+            config: Arc::clone(&self.config),
+            arg0_paths: self.arg0_paths.clone(),
+            cli_overrides: Arc::clone(&self.cli_overrides),
+            runtime_feature_enablement: Arc::clone(&self.runtime_feature_enablement),
+            cloud_requirements: Arc::clone(&self.cloud_requirements),
+            thread_state_manager: self.thread_state_manager.clone(),
+            thread_watch_manager: self.thread_watch_manager.clone(),
+        };
+        let shutdown = self.scheduler_shutdown.clone();
+        self.background_tasks.spawn(async move {
+            Self::scheduled_task_runtime_loop(context, shutdown).await;
+        });
+    }
+
+    async fn scheduled_task_runtime_loop(
+        context: ScheduledTaskContext,
+        shutdown: CancellationToken,
+    ) {
+        let mut interval = tokio::time::interval(SCHEDULED_TASK_POLL_INTERVAL);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                _ = interval.tick() => {
+                    if let Err(err) = Self::poll_due_scheduled_tasks(&context).await {
+                        warn!("scheduled task poll failed: {err}");
+                    }
+                    if let Err(err) = Self::monitor_running_scheduled_tasks(&context).await {
+                        warn!("scheduled task monitor failed: {err}");
+                    }
+                }
+            }
         }
+    }
+
+    async fn poll_due_scheduled_tasks(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let worker_id = format!("app-server-scheduler-{}", std::process::id());
+        let tasks = state_db
+            .claim_due_scheduled_tasks(
+                Utc::now(),
+                worker_id.as_str(),
+                SCHEDULED_TASK_CLAIM_LIMIT,
+                SCHEDULED_TASK_LEASE_DURATION,
+            )
+            .await?;
+        for task in tasks {
+            if let Err(err) = Self::execute_claimed_scheduled_task(context, &state_db, task).await {
+                warn!("scheduled task execution failed: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    async fn execute_claimed_scheduled_task(
+        context: &ScheduledTaskContext,
+        state_db: &StateDbHandle,
+        task: codex_state::ClaimedScheduledTask,
+    ) -> anyhow::Result<()> {
+        let thread_id = ThreadId::from_string(&task.thread_id)?;
+        let thread = Self::load_scheduled_task_thread(context, thread_id).await?;
+        let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+        Self::ensure_listener_task_running_task(
+            ListenerTaskContext {
+                thread_manager: Arc::clone(&context.thread_manager),
+                thread_state_manager: context.thread_state_manager.clone(),
+                outgoing: Arc::clone(&context.outgoing),
+                analytics_events_client: context.analytics_events_client.clone(),
+                general_analytics_enabled: context
+                    .config
+                    .features
+                    .enabled(Feature::GeneralAnalytics),
+                thread_watch_manager: context.thread_watch_manager.clone(),
+                fallback_model_provider: context.config.model_provider_id.clone(),
+                codex_home: context.config.codex_home.clone(),
+            },
+            thread_id,
+            Arc::clone(&thread),
+            thread_state,
+            ApiVersion::V2,
+        )
+        .await;
+
+        let status = context
+            .thread_watch_manager
+            .loaded_status_for_thread(&task.thread_id)
+            .await;
+        if matches!(status, ThreadStatus::Active { .. }) {
+            let retry_at =
+                Utc::now() + chrono::Duration::from_std(SCHEDULED_TASK_BUSY_RETRY_DELAY)?;
+            state_db
+                .record_scheduled_task_start_failure(
+                    &task,
+                    Utc::now(),
+                    retry_at,
+                    "thread is already active; rescheduling",
+                )
+                .await?;
+            return Ok(());
+        }
+
+        let turn_id = thread
+            .submit(Op::UserInput {
+                items: vec![CoreInputItem::Text {
+                    text: task.prompt.clone(),
+                    text_elements: Vec::new(),
+                }],
+                final_output_json_schema: None,
+            })
+            .await?;
+
+        state_db
+            .start_scheduled_task_run(&task, &turn_id, Utc::now())
+            .await?;
+        Ok(())
+    }
+
+    async fn monitor_running_scheduled_tasks(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let runs = state_db.list_running_scheduled_task_runs().await?;
+        for run in runs {
+            match context
+                .thread_watch_manager
+                .loaded_status_for_thread(&run.thread_id)
+                .await
+            {
+                ThreadStatus::Active { .. } => {}
+                ThreadStatus::Idle | ThreadStatus::NotLoaded => {
+                    state_db
+                        .complete_scheduled_task_run(
+                            &run.id,
+                            &run.scheduled_task_id,
+                            codex_state::ScheduledTaskRunStatus::Completed,
+                            Utc::now(),
+                            Some(
+                                "scheduled turn finished; inspect the thread transcript for output",
+                            ),
+                            None,
+                        )
+                        .await?;
+                }
+                ThreadStatus::SystemError => {
+                    state_db
+                        .complete_scheduled_task_run(
+                            &run.id,
+                            &run.scheduled_task_id,
+                            codex_state::ScheduledTaskRunStatus::Failed,
+                            Utc::now(),
+                            Some("thread entered system error state during scheduled run"),
+                            Some("thread entered system error state"),
+                        )
+                        .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn load_scheduled_task_thread(
+        context: &ScheduledTaskContext,
+        thread_id: ThreadId,
+    ) -> anyhow::Result<Arc<CodexThread>> {
+        if let Ok(thread) = context.thread_manager.get_thread(thread_id).await {
+            return Ok(thread);
+        }
+
+        let rollout_path =
+            find_thread_path_by_id_str(&context.config.codex_home, &thread_id.to_string())
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("no rollout found for thread {thread_id}"))?;
+        let thread_history = RolloutRecorder::get_rollout_history(&rollout_path).await?;
+        let history_cwd = thread_history.session_cwd();
+        let Some(state_db_ctx) = get_state_db(context.config.as_ref()).await else {
+            return Err(anyhow::anyhow!(
+                "state db unavailable for scheduled task resume"
+            ));
+        };
+        let persisted_metadata = state_db_ctx
+            .get_thread(thread_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("persisted metadata missing for thread {thread_id}"))?;
+
+        let mut request_overrides = None;
+        let mut typesafe_overrides = ConfigOverrides {
+            codex_linux_sandbox_exe: context.arg0_paths.codex_linux_sandbox_exe.clone(),
+            main_execve_wrapper_exe: context.arg0_paths.main_execve_wrapper_exe.clone(),
+            ..Default::default()
+        };
+        merge_persisted_resume_metadata(
+            &mut request_overrides,
+            &mut typesafe_overrides,
+            &persisted_metadata,
+        );
+        let config = derive_config_for_cwd(
+            &context.current_cli_overrides(),
+            request_overrides,
+            typesafe_overrides,
+            history_cwd,
+            &context.current_cloud_requirements(),
+            &context.config.codex_home,
+            &context.current_runtime_feature_enablement(),
+        )
+        .await?;
+
+        let new_thread = context
+            .thread_manager
+            .resume_thread_with_history(
+                config,
+                thread_history,
+                Arc::clone(&context.auth_manager),
+                false,
+                None,
+            )
+            .await?;
+        Ok(new_thread.thread)
     }
 
     async fn load_latest_config(
@@ -2167,6 +2441,7 @@ impl CodexMessageProcessor {
     }
 
     pub(crate) async fn drain_background_tasks(&self) {
+        self.scheduler_shutdown.cancel();
         self.background_tasks.close();
         if tokio::time::timeout(Duration::from_secs(10), self.background_tasks.wait())
             .await

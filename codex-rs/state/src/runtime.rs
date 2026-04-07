@@ -55,6 +55,7 @@ mod backfill;
 mod logs;
 mod memories;
 mod remote_control;
+mod schedules;
 #[cfg(test)]
 mod test_support;
 mod threads;

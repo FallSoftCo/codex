@@ -11,11 +11,13 @@ mod model;
 mod paths;
 mod runtime;
 
+pub use model::ClaimedScheduledTask;
 pub use model::LogEntry;
 pub use model::LogQuery;
 pub use model::LogRow;
 pub use model::Phase2InputSelection;
 pub use model::Phase2JobClaimOutcome;
+pub use model::RunningScheduledTaskRun;
 /// Preferred entrypoint: owns configuration and metrics.
 pub use runtime::StateRuntime;
 
@@ -37,6 +39,11 @@ pub use model::BackfillStats;
 pub use model::BackfillStatus;
 pub use model::DirectionalThreadSpawnEdgeStatus;
 pub use model::ExtractionOutcome;
+pub use model::ScheduledTask;
+pub use model::ScheduledTaskCreateParams;
+pub use model::ScheduledTaskKind;
+pub use model::ScheduledTaskRun;
+pub use model::ScheduledTaskRunStatus;
 pub use model::SortKey;
 pub use model::Stage1JobClaim;
 pub use model::Stage1JobClaimOutcome;

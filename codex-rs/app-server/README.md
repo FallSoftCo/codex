@@ -8,6 +8,7 @@
 - [Message Schema](#message-schema)
 - [Core Primitives](#core-primitives)
 - [Lifecycle Overview](#lifecycle-overview)
+- [Scheduled Tasks](#scheduled-tasks)
 - [Initialization](#initialization)
 - [API Overview](#api-overview)
 - [Events](#events)
@@ -83,6 +84,26 @@ Use the thread APIs to create, list, or archive conversations. Drive a conversat
 - Begin a turn: To send user input, call `turn/start` with the target `threadId` and the user's input. Optional fields let you override model, cwd, sandbox policy, approval policy, approvals reviewer, etc. This immediately returns the new turn object. The app-server emits `turn/started` when that turn actually begins running.
 - Stream events: After `turn/start`, keep reading JSON-RPC notifications on stdout. You’ll see `item/started`, `item/completed`, deltas like `item/agentMessage/delta`, tool progress, etc. These represent streaming model output plus any side effects (commands, tool calls, reasoning notes).
 - Finish the turn: When the model is done (or the turn is interrupted via making the `turn/interrupt` call), the server sends `turn/completed` with the final turn state and token usage.
+
+## Scheduled Tasks
+
+Losangelex includes a minimal persisted scheduler for thread wakeups.
+
+- Create schedules from the CLI with `codex schedule ...`.
+- Schedule definitions live in the shared SQLite state DB.
+- `codex app-server` is the runtime host that claims due schedules and starts the corresponding turns.
+- Scheduled runs use the stored prompt as a normal thread user input, so output is persisted in the thread transcript like any other turn.
+
+Current scope:
+
+- one-shot `add-at`
+- fixed-interval `add-every`
+- run inspection via `codex schedule runs`
+
+Current limitation:
+
+- schedules only fire while an app-server process is running
+- run completion status is best-effort and derived from thread runtime state, while the thread transcript remains the source of truth for full output
 
 ## Initialization
 
