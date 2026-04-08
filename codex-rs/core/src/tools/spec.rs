@@ -500,7 +500,10 @@ pub(crate) fn build_specs_with_discoverable_tools(
         }
     }
 
-    if !cfg!(test) && crate::hollywood::HollywoodSessionConfig::from_env().is_some() {
+    if !cfg!(test)
+        && config.hollywood_tools_enabled
+        && crate::hollywood::HollywoodSessionConfig::from_env().is_some()
+    {
         builder.push_spec(create_hollywood_status_tool());
         builder.push_spec(create_hollywood_read_tool());
         builder.push_spec(create_hollywood_send_tool());

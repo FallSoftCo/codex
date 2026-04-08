@@ -140,6 +140,65 @@ fn test_full_toolset_specs_for_gpt5_codex_unified_exec_web_search() {
 }
 
 #[test]
+fn tester_tool_plan_exposes_only_terminal_harness_basics() {
+    let model_info = model_info();
+    let mut features = Features::with_defaults();
+    features.enable(Feature::UnifiedExec);
+    features.enable(Feature::ApplyPatchFreeform);
+    features.enable(Feature::JsRepl);
+    features.enable(Feature::ToolSearch);
+    features.enable(Feature::ToolSuggest);
+    features.enable(Feature::Apps);
+    features.enable(Feature::Plugins);
+    features.enable(Feature::Collab);
+    features.enable(Feature::RequestPermissionsTool);
+
+    let available_models = Vec::new();
+    let config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        web_search_mode: Some(WebSearchMode::Live),
+        session_source: SessionSource::Custom("tester:terminal_harness".to_string()),
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+    let dynamic_tools = vec![DynamicToolSpec {
+        name: "custom_tool".to_string(),
+        description: "custom".to_string(),
+        input_schema: json!({"type":"object"}),
+        defer_loading: false,
+    }];
+    let (tools, _) = build_specs(
+        &config,
+        Some(HashMap::from([(
+            "mcp__demo".to_string(),
+            mcp_tool("demo", "demo", json!({"type":"object"})),
+        )])),
+        Some(vec![app_tool(
+            "lookup",
+            "mcp__codex_apps__demo",
+            "demo",
+            Some("Demo"),
+            Some("Demo connector"),
+        )]),
+        &dynamic_tools,
+    );
+
+    assert_contains_tool_names(&tools, &["exec_command", "write_stdin", "update_plan"]);
+    assert_lacks_tool_name(&tools, "apply_patch");
+    assert_lacks_tool_name(&tools, "request_user_input");
+    assert_lacks_tool_name(&tools, "request_permissions");
+    assert_lacks_tool_name(&tools, "js_repl");
+    assert_lacks_tool_name(&tools, "tool_search");
+    assert_lacks_tool_name(&tools, "tool_suggest");
+    assert_lacks_tool_name(&tools, "spawn_agent");
+    assert_lacks_tool_name(&tools, "view_image");
+    assert_lacks_tool_name(&tools, "list_mcp_resources");
+    assert_lacks_tool_name(&tools, "custom_tool");
+}
+
+#[test]
 fn test_build_specs_collab_tools_enabled() {
     let model_info = model_info();
     let mut features = Features::with_defaults();

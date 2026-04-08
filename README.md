@@ -113,6 +113,7 @@ Current shipped pieces:
 
 - persisted tester definitions and lifecycle reports
 - app-server-hosted tester startup
+- hard tool gating for tester sessions, with `terminal_harness` mapped to concrete runtime access
 - optional controller-thread wakeups through the scheduler
 - CLI management via `codex tester ...`
 

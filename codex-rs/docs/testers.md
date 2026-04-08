@@ -66,7 +66,7 @@ The tester thread itself is the interactive process. The controller thread can r
 
 ## Limitations
 
-- Testers are real Codex threads, but their allowed interfaces are currently enforced by instructions, not by hard tool gating.
+- Testers now enforce a hard tool boundary. In v1, `terminal_harness` is the only allowed interface that currently maps to concrete tool access; other interface labels remain profile metadata until additional adapters are implemented.
 - Testers currently report lifecycle changes and summaries, not rich structured evaluations.
 - Controller wakeups depend on the scheduled-task runtime, so an app-server must be running.
 - A tester can be stopped from further management, but v1 does not forcibly terminate an already-running turn.

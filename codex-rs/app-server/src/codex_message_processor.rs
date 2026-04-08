@@ -878,14 +878,19 @@ impl CodexMessageProcessor {
         )
         .await?;
 
+        let tester_session_source = codex_protocol::protocol::SessionSource::Custom(format!(
+            "tester:{}",
+            tester.allowed_interfaces.join(",")
+        ));
         let new_thread = match context
             .thread_manager
-            .start_thread_with_tools_and_service_name(
+            .start_thread_with_tools_and_service_name_and_source(
                 config,
                 Vec::new(),
                 true,
                 Some("tester".to_string()),
                 None,
+                tester_session_source,
             )
             .await
         {

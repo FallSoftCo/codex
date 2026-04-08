@@ -163,7 +163,7 @@ pub fn build_tool_registry_plan(
         plan.register_handler("shell_command", ToolHandlerKind::ShellCommand);
     }
 
-    if params.mcp_tools.is_some() {
+    if config.mcp_tools_enabled && params.mcp_tools.is_some() {
         plan.push_spec(
             create_list_mcp_resources_tool(),
             /*supports_parallel_tool_calls*/ true,
@@ -206,17 +206,19 @@ pub fn build_tool_registry_plan(
         plan.register_handler("js_repl_reset", ToolHandlerKind::JsReplReset);
     }
 
-    plan.push_spec(
-        create_request_user_input_tool(request_user_input_tool_description(
-            config.default_mode_request_user_input,
-        )),
-        /*supports_parallel_tool_calls*/ false,
-        config.code_mode_enabled,
-    );
-    plan.register_handler(
-        REQUEST_USER_INPUT_TOOL_NAME,
-        ToolHandlerKind::RequestUserInput,
-    );
+    if config.request_user_input_enabled {
+        plan.push_spec(
+            create_request_user_input_tool(request_user_input_tool_description(
+                config.default_mode_request_user_input,
+            )),
+            /*supports_parallel_tool_calls*/ false,
+            config.code_mode_enabled,
+        );
+        plan.register_handler(
+            REQUEST_USER_INPUT_TOOL_NAME,
+            ToolHandlerKind::RequestUserInput,
+        );
+    }
 
     if config.request_permissions_tool_enabled {
         plan.push_spec(
@@ -334,7 +336,7 @@ pub fn build_tool_registry_plan(
         );
     }
 
-    if config.has_environment {
+    if config.has_environment && config.view_image_enabled {
         plan.push_spec(
             create_view_image_tool(ViewImageToolOptions {
                 can_request_original_image_detail: config.can_request_original_image_detail,
@@ -446,7 +448,9 @@ pub fn build_tool_registry_plan(
         }
     }
 
-    if let Some(mcp_tools) = params.mcp_tools {
+    if config.mcp_tools_enabled
+        && let Some(mcp_tools) = params.mcp_tools
+    {
         let mut entries: Vec<(String, &McpTool)> = mcp_tools
             .iter()
             .map(|(name, tool)| (name.clone(), tool))
@@ -472,21 +476,23 @@ pub fn build_tool_registry_plan(
         }
     }
 
-    for tool in params.dynamic_tools {
-        match dynamic_tool_to_responses_api_tool(tool) {
-            Ok(converted_tool) => {
-                plan.push_spec(
-                    ToolSpec::Function(converted_tool),
-                    /*supports_parallel_tool_calls*/ false,
-                    config.code_mode_enabled,
-                );
-                plan.register_handler(tool.name.clone(), ToolHandlerKind::DynamicTool);
-            }
-            Err(error) => {
-                tracing::error!(
-                    "Failed to convert dynamic tool {:?} to OpenAI tool: {error:?}",
-                    tool.name
-                );
+    if config.dynamic_tools_enabled {
+        for tool in params.dynamic_tools {
+            match dynamic_tool_to_responses_api_tool(tool) {
+                Ok(converted_tool) => {
+                    plan.push_spec(
+                        ToolSpec::Function(converted_tool),
+                        /*supports_parallel_tool_calls*/ false,
+                        config.code_mode_enabled,
+                    );
+                    plan.register_handler(tool.name.clone(), ToolHandlerKind::DynamicTool);
+                }
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to convert dynamic tool {:?} to OpenAI tool: {error:?}",
+                        tool.name
+                    );
+                }
             }
         }
     }

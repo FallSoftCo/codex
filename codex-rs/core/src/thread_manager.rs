@@ -499,6 +499,32 @@ impl ThreadManager {
         .await
     }
 
+    pub async fn start_thread_with_tools_and_service_name_and_source(
+        &self,
+        config: Config,
+        dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
+        persist_extended_history: bool,
+        metrics_service_name: Option<String>,
+        parent_trace: Option<W3cTraceContext>,
+        session_source: SessionSource,
+    ) -> CodexResult<NewThread> {
+        Box::pin(self.state.spawn_thread_with_source(
+            config,
+            InitialHistory::New,
+            Arc::clone(&self.state.auth_manager),
+            self.agent_control(),
+            session_source,
+            dynamic_tools,
+            persist_extended_history,
+            metrics_service_name,
+            /*inherited_shell_snapshot*/ None,
+            /*inherited_exec_policy*/ None,
+            parent_trace,
+            /*user_shell_override*/ None,
+        ))
+        .await
+    }
+
     pub async fn resume_thread_from_rollout(
         &self,
         config: Config,

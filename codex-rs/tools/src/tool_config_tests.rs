@@ -198,3 +198,62 @@ fn image_generation_requires_feature_and_supported_model() {
     assert!(supported_tools_config.image_gen_tool);
     assert!(!unsupported_tools_config.image_gen_tool);
 }
+
+#[test]
+fn tester_session_source_hard_disables_non_terminal_tools() {
+    let model_info = model_info();
+    let mut features = Features::with_defaults();
+    features.enable(Feature::UnifiedExec);
+    features.enable(Feature::ApplyPatchFreeform);
+    features.enable(Feature::JsRepl);
+    features.enable(Feature::ToolSearch);
+    features.enable(Feature::ToolSuggest);
+    features.enable(Feature::Apps);
+    features.enable(Feature::Plugins);
+    features.enable(Feature::Collab);
+    features.enable(Feature::RequestPermissionsTool);
+
+    let available_models = Vec::new();
+    let tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        web_search_mode: Some(WebSearchMode::Live),
+        session_source: SessionSource::Custom("tester:terminal_harness".to_string()),
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+
+    assert_eq!(tools_config.shell_type, ConfigShellToolType::UnifiedExec);
+    assert!(tools_config.tester_tool_policy.is_some());
+    assert!(tools_config.request_permissions_tool_enabled == false);
+    assert!(tools_config.request_user_input_enabled == false);
+    assert!(tools_config.apply_patch_tool_type.is_none());
+    assert!(!tools_config.js_repl_enabled);
+    assert!(!tools_config.search_tool);
+    assert!(!tools_config.tool_suggest);
+    assert!(!tools_config.collab_tools);
+    assert!(!tools_config.mcp_tools_enabled);
+    assert!(!tools_config.dynamic_tools_enabled);
+    assert!(!tools_config.hollywood_tools_enabled);
+}
+
+#[test]
+fn tester_without_terminal_harness_has_no_shell_tools() {
+    let model_info = model_info();
+    let mut features = Features::with_defaults();
+    features.enable(Feature::UnifiedExec);
+
+    let available_models = Vec::new();
+    let tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        web_search_mode: Some(WebSearchMode::Live),
+        session_source: SessionSource::Custom("tester:browser".to_string()),
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+
+    assert_eq!(tools_config.shell_type, ConfigShellToolType::Disabled);
+}
