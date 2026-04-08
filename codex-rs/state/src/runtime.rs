@@ -58,6 +58,7 @@ mod remote_control;
 mod schedules;
 #[cfg(test)]
 mod test_support;
+mod testers;
 mod threads;
 
 pub use remote_control::RemoteControlEnrollmentRecord;

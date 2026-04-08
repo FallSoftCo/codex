@@ -144,6 +144,9 @@ enum Subcommand {
     /// Manage persisted scheduled thread wakeups.
     Schedule(ScheduleCommand),
 
+    /// Manage interactive tester runtimes.
+    Tester(TesterCommand),
+
     /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
     #[clap(name = "cloud", alias = "cloud-tasks")]
     Cloud(CloudTasksCli),
@@ -359,6 +362,98 @@ struct ScheduleRunNowCommand {
     /// Scheduled task id.
     #[arg(value_name = "TASK_ID")]
     task_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct TesterCommand {
+    #[command(subcommand)]
+    subcommand: TesterSubcommand,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum TesterSubcommand {
+    /// Create a tester that the app-server will start as a dedicated thread.
+    Create(TesterCreateCommand),
+
+    /// List testers.
+    List,
+
+    /// List persisted tester reports.
+    Reports(TesterReportsCommand),
+
+    /// Queue a prompt into an existing tester thread.
+    Prompt(TesterPromptCommand),
+
+    /// Stop a tester from receiving further runtime updates.
+    Stop(TesterStopCommand),
+}
+
+#[derive(Debug, Parser)]
+struct TesterCreateCommand {
+    /// Human-readable tester name.
+    #[arg(long, value_name = "NAME")]
+    name: String,
+
+    /// Objective the tester should pursue interactively.
+    #[arg(long, value_name = "OBJECTIVE")]
+    objective: String,
+
+    /// Optional background/context for the tester.
+    #[arg(long, value_name = "TEXT")]
+    background: Option<String>,
+
+    /// Optional skill-level label, for example novice or intermediate.
+    #[arg(long, value_name = "LEVEL")]
+    skill_level: Option<String>,
+
+    /// Optional temperament label, for example impatient or persistent.
+    #[arg(long, value_name = "TEMPERAMENT")]
+    temperament: Option<String>,
+
+    /// Starting knowledge the tester is allowed to rely on.
+    #[arg(long = "starting-knowledge", value_name = "TEXT")]
+    starting_knowledge: Vec<String>,
+
+    /// Constraint the tester must obey. May be passed multiple times.
+    #[arg(long = "constraint", value_name = "TEXT")]
+    constraints: Vec<String>,
+
+    /// Allowed interface label. May be passed multiple times.
+    #[arg(long = "allowed-interface", value_name = "INTERFACE")]
+    allowed_interfaces: Vec<String>,
+
+    /// Optional controller thread that should be woken when the tester reports state changes.
+    #[arg(long, value_name = "THREAD_ID")]
+    controller_thread_id: Option<String>,
+
+    /// Optional working directory for the tester runtime.
+    #[arg(long, value_name = "PATH")]
+    cwd: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+struct TesterReportsCommand {
+    /// Optional tester id filter.
+    #[arg(long, value_name = "TESTER_ID")]
+    tester_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TesterPromptCommand {
+    /// Tester id.
+    #[arg(value_name = "TESTER_ID")]
+    tester_id: String,
+
+    /// Prompt to inject into the tester thread immediately.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+}
+
+#[derive(Debug, Parser)]
+struct TesterStopCommand {
+    /// Tester id.
+    #[arg(value_name = "TESTER_ID")]
+    tester_id: String,
 }
 
 #[derive(Debug, Parser)]
@@ -914,6 +1009,14 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             )?;
             run_schedule_command(cmd, &root_config_overrides, &interactive).await?;
         }
+        Some(Subcommand::Tester(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "tester",
+            )?;
+            run_tester_command(cmd, &root_config_overrides, &interactive).await?;
+        }
         Some(Subcommand::Login(mut login_cli)) => {
             reject_remote_mode_for_subcommand(
                 root_remote.as_deref(),
@@ -1459,6 +1562,123 @@ async fn run_schedule_command(
             }
         }
     }
+    Ok(())
+}
+
+async fn run_tester_command(
+    cmd: TesterCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite_home.clone(), config.model_provider_id.clone()).await?;
+
+    match cmd.subcommand {
+        TesterSubcommand::Create(args) => {
+            if args.allowed_interfaces.is_empty() {
+                anyhow::bail!("at least one --allowed-interface is required");
+            }
+            let controller_thread_id = args
+                .controller_thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let tester_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_tester(codex_state::TesterCreateParams {
+                    id: tester_id.clone(),
+                    name: args.name,
+                    objective: args.objective,
+                    background: args.background,
+                    skill_level: args.skill_level,
+                    temperament: args.temperament,
+                    starting_knowledge: args.starting_knowledge,
+                    constraints: args.constraints,
+                    allowed_interfaces: args.allowed_interfaces,
+                    controller_thread_id: controller_thread_id.map(|id| id.to_string()),
+                    cwd: args.cwd,
+                })
+                .await?;
+            println!("Created tester {tester_id}.");
+        }
+        TesterSubcommand::List => {
+            let testers = state_db.list_testers().await?;
+            if testers.is_empty() {
+                println!("No testers found.");
+            } else {
+                for tester in testers {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        tester.id,
+                        tester.status.as_str(),
+                        tester.tester_thread_id.unwrap_or_else(|| "-".to_string()),
+                        tester
+                            .controller_thread_id
+                            .unwrap_or_else(|| "-".to_string()),
+                        tester.name,
+                        tester.objective
+                    );
+                }
+            }
+        }
+        TesterSubcommand::Reports(args) => {
+            let reports = state_db
+                .list_tester_reports(args.tester_id.as_deref())
+                .await?;
+            if reports.is_empty() {
+                println!("No tester reports found.");
+            } else {
+                for report in reports {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}",
+                        report.id,
+                        report.tester_id,
+                        report.report_kind.as_str(),
+                        report.created_at.to_rfc3339(),
+                        report.summary
+                    );
+                }
+            }
+        }
+        TesterSubcommand::Prompt(args) => {
+            let tester = state_db
+                .get_tester(args.tester_id.as_str())
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("tester {} was not found", args.tester_id))?;
+            let tester_thread_id = tester
+                .tester_thread_id
+                .ok_or_else(|| anyhow::anyhow!("tester {} has not started yet", args.tester_id))?;
+            let schedule_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                    id: schedule_id.clone(),
+                    thread_id: tester_thread_id.clone(),
+                    title: format!("tester:{} prompt", tester.name),
+                    prompt: args.prompt,
+                    kind: codex_state::ScheduledTaskKind::Once,
+                    next_run_at: Utc::now(),
+                    interval_seconds: None,
+                    requires_response: true,
+                })
+                .await?;
+            println!(
+                "Queued prompt for tester {} on thread {} via scheduled task {}.",
+                args.tester_id, tester_thread_id, schedule_id
+            );
+        }
+        TesterSubcommand::Stop(args) => {
+            if state_db.stop_tester(args.tester_id.as_str()).await? {
+                println!("Stopped tester {}.", args.tester_id);
+            } else {
+                println!(
+                    "Tester {} was not found or was already stopped.",
+                    args.tester_id
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 

@@ -23,6 +23,7 @@ It keeps the upstream Codex CLI, TUI, and app-server foundation, then layers on:
 - Losangelex launcher defaults for full-access local work
 - workspace-scoped Hollywood bootstrap and room setup
 - persisted scheduled thread wakeups
+- managed tester runtimes for interactive user-like evaluation
 - upstream-aligned branch history rather than a permanently drifting fork
 
 The current integration target is current upstream `main`, with Losangelex behavior adapted onto that architecture instead of preserving old fork-only seams.
@@ -36,6 +37,7 @@ The current integration target is current upstream `main`, with Losangelex behav
 - [Current Status](#current-status)
 - [Quickstart](#quickstart)
 - [Scheduled Tasks](#scheduled-tasks)
+- [Testers](#testers)
 - [Demo](#demo)
 - [Relationship to Upstream Codex](#relationship-to-upstream-codex)
 - [Docs](#docs)
@@ -102,6 +104,21 @@ Current shipped pieces:
 See:
 
 - [Scheduled Tasks](./codex-rs/docs/scheduled_tasks.md)
+
+### Testers
+
+Losangelex also includes managed testers: dedicated Codex threads that act like interactive user stand-ins instead of fixed scripted transcripts.
+
+Current shipped pieces:
+
+- persisted tester definitions and lifecycle reports
+- app-server-hosted tester startup
+- optional controller-thread wakeups through the scheduler
+- CLI management via `codex tester ...`
+
+See:
+
+- [Testers](./codex-rs/docs/testers.md)
 
 ### Upstream replay completed
 
@@ -227,6 +244,7 @@ After bootstrap, the main entry points are:
 - `scripts/losangelex` for the opinionated local launcher
 - `codex app-server` for the runtime host
 - `codex schedule ...` for persisted wakeups
+- `codex tester ...` for managed tester runtimes
 - Hollywood room traffic and attention policy for multi-agent coordination
 
 ## Scheduled Tasks
@@ -257,6 +275,29 @@ Current limitation:
 - schedules are durable, but they only fire while an app-server process is running
 
 This is the first workflow-oriented primitive in the repo. The next likely direction is broader deferred continuations and watcher-triggered wakeups rather than stopping at cron-like time scheduling.
+
+## Testers
+
+Losangelex ships CLI management for interactive tester runtimes:
+
+```sh
+codex tester create \
+  --name "onboarding-check" \
+  --objective "Try to deploy the app and report friction." \
+  --background "Technical user who is new to this repo." \
+  --starting-knowledge "README only" \
+  --constraint "Do not read source code" \
+  --allowed-interface terminal_harness
+
+codex tester list
+codex tester reports
+codex tester prompt <TESTER_ID> --prompt "Continue and investigate the latest failure."
+codex tester stop <TESTER_ID>
+```
+
+Current limitation:
+
+- testers are durable, but app-server must be running to start them and emit controller wakeups
 
 ## Demo
 
@@ -317,6 +358,7 @@ That direction should still be implemented in an upstream-adaptive way, not by h
 - [FallSoftCo Hollywood-native integration notes](./docs/hollywood-native-integration.md)
 - [Hollywood integration](./codex-rs/docs/hollywood_integration.md)
 - [Scheduled Tasks](./codex-rs/docs/scheduled_tasks.md)
+- [Testers](./codex-rs/docs/testers.md)
 - [App-server README](./codex-rs/app-server/README.md)
 - [Installing & building](./docs/install.md)
 - [Contributing](./docs/contributing.md)

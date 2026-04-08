@@ -526,6 +526,9 @@ const SCHEDULED_TASK_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const SCHEDULED_TASK_LEASE_DURATION: Duration = Duration::from_secs(120);
 const SCHEDULED_TASK_BUSY_RETRY_DELAY: Duration = Duration::from_secs(60);
 const SCHEDULED_TASK_CLAIM_LIMIT: usize = 8;
+const TESTER_POLL_INTERVAL: Duration = Duration::from_secs(10);
+const TESTER_LEASE_DURATION: Duration = Duration::from_secs(120);
+const TESTER_CLAIM_LIMIT: usize = 4;
 
 pub(crate) struct CodexMessageProcessorArgs {
     pub(crate) auth_manager: Arc<AuthManager>,
@@ -619,6 +622,7 @@ impl CodexMessageProcessor {
             log_db,
         };
         processor.spawn_scheduled_task_runtime();
+        processor.spawn_tester_runtime();
         processor
     }
 
@@ -791,6 +795,279 @@ impl CodexMessageProcessor {
         Ok(())
     }
 
+    fn spawn_tester_runtime(&self) {
+        let context = ScheduledTaskContext {
+            auth_manager: Arc::clone(&self.auth_manager),
+            thread_manager: Arc::clone(&self.thread_manager),
+            outgoing: Arc::clone(&self.outgoing),
+            analytics_events_client: self.analytics_events_client.clone(),
+            config: Arc::clone(&self.config),
+            arg0_paths: self.arg0_paths.clone(),
+            cli_overrides: Arc::clone(&self.cli_overrides),
+            runtime_feature_enablement: Arc::clone(&self.runtime_feature_enablement),
+            cloud_requirements: Arc::clone(&self.cloud_requirements),
+            thread_state_manager: self.thread_state_manager.clone(),
+            thread_watch_manager: self.thread_watch_manager.clone(),
+        };
+        let shutdown = self.scheduler_shutdown.clone();
+        self.background_tasks.spawn(async move {
+            Self::tester_runtime_loop(context, shutdown).await;
+        });
+    }
+
+    async fn tester_runtime_loop(context: ScheduledTaskContext, shutdown: CancellationToken) {
+        let mut interval = tokio::time::interval(TESTER_POLL_INTERVAL);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                _ = interval.tick() => {
+                    if let Err(err) = Self::poll_due_testers(&context).await {
+                        warn!("tester poll failed: {err}");
+                    }
+                    if let Err(err) = Self::monitor_testers(&context).await {
+                        warn!("tester monitor failed: {err}");
+                    }
+                }
+            }
+        }
+    }
+
+    async fn poll_due_testers(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let worker_id = format!("app-server-tester-{}", std::process::id());
+        let testers = state_db
+            .claim_pending_testers(
+                Utc::now(),
+                worker_id.as_str(),
+                TESTER_CLAIM_LIMIT,
+                TESTER_LEASE_DURATION,
+            )
+            .await?;
+        for tester in testers {
+            if let Err(err) = Self::execute_claimed_tester(context, &state_db, tester).await {
+                warn!("tester startup failed: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    async fn execute_claimed_tester(
+        context: &ScheduledTaskContext,
+        state_db: &StateDbHandle,
+        tester: codex_state::ClaimedTester,
+    ) -> anyhow::Result<()> {
+        let developer_instructions = Self::build_tester_developer_instructions(&tester);
+        let typesafe_overrides = ConfigOverrides {
+            cwd: tester.cwd.clone(),
+            codex_linux_sandbox_exe: context.arg0_paths.codex_linux_sandbox_exe.clone(),
+            main_execve_wrapper_exe: context.arg0_paths.main_execve_wrapper_exe.clone(),
+            developer_instructions: Some(Some(developer_instructions)),
+            ..Default::default()
+        };
+        let config = derive_config_for_cwd(
+            &context.current_cli_overrides(),
+            None,
+            typesafe_overrides,
+            tester.cwd.clone(),
+            &context.current_cloud_requirements(),
+            &context.config.codex_home,
+            &context.current_runtime_feature_enablement(),
+        )
+        .await?;
+
+        let new_thread = match context
+            .thread_manager
+            .start_thread_with_tools_and_service_name(
+                config,
+                Vec::new(),
+                true,
+                Some("tester".to_string()),
+                None,
+            )
+            .await
+        {
+            Ok(new_thread) => new_thread,
+            Err(err) => {
+                state_db
+                    .mark_tester_start_failed(&tester.id, &err.to_string(), Utc::now())
+                    .await?;
+                return Err(err.into());
+            }
+        };
+
+        let NewThread {
+            thread_id,
+            thread,
+            session_configured: _session_configured,
+            ..
+        } = new_thread;
+        let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+        Self::ensure_listener_task_running_task(
+            ListenerTaskContext {
+                thread_manager: Arc::clone(&context.thread_manager),
+                thread_state_manager: context.thread_state_manager.clone(),
+                outgoing: Arc::clone(&context.outgoing),
+                analytics_events_client: context.analytics_events_client.clone(),
+                general_analytics_enabled: context
+                    .config
+                    .features
+                    .enabled(Feature::GeneralAnalytics),
+                thread_watch_manager: context.thread_watch_manager.clone(),
+                fallback_model_provider: context.config.model_provider_id.clone(),
+                codex_home: context.config.codex_home.clone(),
+            },
+            thread_id,
+            Arc::clone(&thread),
+            thread_state,
+            ApiVersion::V2,
+        )
+        .await;
+
+        let now = Utc::now();
+        let turn_id = thread
+            .submit(Op::UserInput {
+                items: vec![CoreInputItem::Text {
+                    text: Self::build_tester_initial_prompt(&tester),
+                    text_elements: Vec::new(),
+                }],
+                final_output_json_schema: None,
+            })
+            .await?;
+
+        state_db
+            .mark_tester_started(&tester.id, &thread_id.to_string(), now)
+            .await?;
+        state_db
+            .append_tester_report(
+                &tester.id,
+                codex_state::TesterReportKind::Started,
+                format!("tester started on thread {thread_id}"),
+                Some(turn_id.as_str()),
+            )
+            .await?;
+
+        if let Some(controller_thread_id) = tester.controller_thread_id.as_deref() {
+            Self::enqueue_tester_controller_notification(
+                state_db,
+                controller_thread_id,
+                &tester.name,
+                &thread_id.to_string(),
+                "tester started; watch its thread for progress or wait for a follow-up report",
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn monitor_testers(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let testers = state_db.list_monitorable_testers().await?;
+        for tester in testers {
+            let Some(thread_id) = tester.tester_thread_id.as_deref() else {
+                continue;
+            };
+            let loaded_status = context
+                .thread_watch_manager
+                .loaded_status_for_thread(thread_id)
+                .await;
+            let observed = match loaded_status {
+                ThreadStatus::Active { .. } => "active",
+                ThreadStatus::Idle | ThreadStatus::NotLoaded => "idle",
+                ThreadStatus::SystemError => "system_error",
+            };
+            if tester.last_observed_thread_status.as_deref() == Some(observed) {
+                continue;
+            }
+
+            match observed {
+                "active" => {
+                    state_db
+                        .update_tester_runtime_status(
+                            &tester.id,
+                            codex_state::TesterStatus::Running,
+                            Some(observed),
+                            None,
+                        )
+                        .await?;
+                    state_db
+                        .append_tester_report(
+                            &tester.id,
+                            codex_state::TesterReportKind::Progress,
+                            "tester resumed active work".to_string(),
+                            Some("tester thread became active"),
+                        )
+                        .await?;
+                }
+                "idle" => {
+                    let summary = format!("tester is waiting after thread {thread_id} became idle");
+                    state_db
+                        .update_tester_runtime_status(
+                            &tester.id,
+                            codex_state::TesterStatus::Waiting,
+                            Some(observed),
+                            None,
+                        )
+                        .await?;
+                    state_db
+                        .append_tester_report(
+                            &tester.id,
+                            codex_state::TesterReportKind::Waiting,
+                            summary.clone(),
+                            Some("inspect the tester thread transcript for details"),
+                        )
+                        .await?;
+                    if let Some(controller_thread_id) = tester.controller_thread_id.as_deref() {
+                        Self::enqueue_tester_controller_notification(
+                            &state_db,
+                            controller_thread_id,
+                            &tester.name,
+                            thread_id,
+                            summary.as_str(),
+                        )
+                        .await?;
+                    }
+                }
+                "system_error" => {
+                    let summary =
+                        format!("tester failed because thread {thread_id} hit system error");
+                    state_db
+                        .update_tester_runtime_status(
+                            &tester.id,
+                            codex_state::TesterStatus::Failed,
+                            Some(observed),
+                            Some(summary.as_str()),
+                        )
+                        .await?;
+                    state_db
+                        .append_tester_report(
+                            &tester.id,
+                            codex_state::TesterReportKind::Failed,
+                            summary.clone(),
+                            Some("tester thread entered system error"),
+                        )
+                        .await?;
+                    if let Some(controller_thread_id) = tester.controller_thread_id.as_deref() {
+                        Self::enqueue_tester_controller_notification(
+                            &state_db,
+                            controller_thread_id,
+                            &tester.name,
+                            thread_id,
+                            summary.as_str(),
+                        )
+                        .await?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     async fn load_scheduled_task_thread(
         context: &ScheduledTaskContext,
         thread_id: ThreadId,
@@ -900,6 +1177,91 @@ impl CodexMessageProcessor {
         } else {
             format!("{seconds}s")
         }
+    }
+
+    fn build_tester_developer_instructions(tester: &codex_state::ClaimedTester) -> String {
+        let mut lines = vec![
+            "You are operating as a dedicated tester runtime.".to_string(),
+            "Behave like an external user of the system under test, not as the implementation author.".to_string(),
+            "Act interactively based on what you observe instead of following a fixed script.".to_string(),
+            "Do not assume hidden implementation details or read source code unless the tester constraints explicitly allow it.".to_string(),
+            "Use only the interfaces that are explicitly allowed for this tester.".to_string(),
+            "When you become blocked or conclude a turn, summarize what you observed and what you need next in your visible output.".to_string(),
+        ];
+        if !tester.allowed_interfaces.is_empty() {
+            lines.push(format!(
+                "Allowed interfaces: {}.",
+                tester.allowed_interfaces.join(", ")
+            ));
+        }
+        if !tester.constraints.is_empty() {
+            lines.push(format!(
+                "Tester constraints: {}.",
+                tester.constraints.join("; ")
+            ));
+        }
+        lines.join("\n")
+    }
+
+    fn build_tester_initial_prompt(tester: &codex_state::ClaimedTester) -> String {
+        let mut lines = vec![
+            "<tester_profile>".to_string(),
+            format!("name: {}", tester.name),
+            format!("objective: {}", tester.objective),
+        ];
+        if let Some(background) = tester.background.as_deref() {
+            lines.push(format!("background: {background}"));
+        }
+        if let Some(skill_level) = tester.skill_level.as_deref() {
+            lines.push(format!("skill_level: {skill_level}"));
+        }
+        if let Some(temperament) = tester.temperament.as_deref() {
+            lines.push(format!("temperament: {temperament}"));
+        }
+        if !tester.starting_knowledge.is_empty() {
+            lines.push(format!(
+                "starting_knowledge: {}",
+                tester.starting_knowledge.join(" | ")
+            ));
+        }
+        if !tester.constraints.is_empty() {
+            lines.push(format!("constraints: {}", tester.constraints.join(" | ")));
+        }
+        if !tester.allowed_interfaces.is_empty() {
+            lines.push(format!(
+                "allowed_interfaces: {}",
+                tester.allowed_interfaces.join(" | ")
+            ));
+        }
+        lines.push("</tester_profile>".to_string());
+        lines.push(String::new());
+        lines.push(
+            "Begin testing now. Interact through the allowed interfaces only, pursue the objective realistically, and explain blockers or confusion as they happen.".to_string(),
+        );
+        lines.join("\n")
+    }
+
+    async fn enqueue_tester_controller_notification(
+        state_db: &StateDbHandle,
+        controller_thread_id: &str,
+        tester_name: &str,
+        tester_thread_id: &str,
+        summary: &str,
+    ) -> anyhow::Result<()> {
+        state_db
+            .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                id: uuid::Uuid::new_v4().to_string(),
+                thread_id: controller_thread_id.to_string(),
+                title: format!("tester:{tester_name}"),
+                prompt: format!(
+                    "Tester `{tester_name}` on thread `{tester_thread_id}` has an update: {summary}\nInspect the tester thread transcript, decide how to react, and continue the development workflow."
+                ),
+                kind: codex_state::ScheduledTaskKind::Once,
+                next_run_at: Utc::now(),
+                interval_seconds: None,
+                requires_response: true,
+            })
+            .await
     }
 
     async fn load_latest_config(
@@ -11316,5 +11678,53 @@ mod tests {
             CodexMessageProcessor::format_elapsed_seconds(chrono::Duration::seconds(3723)),
             "1h 2m 3s"
         );
+    }
+
+    #[test]
+    fn tester_initial_prompt_contains_profile_and_objective() {
+        let tester = codex_state::ClaimedTester {
+            id: "tester-1".to_string(),
+            name: "onboarding-check".to_string(),
+            objective: "Try to deploy the app and report friction.".to_string(),
+            background: Some("Technical user new to this repo.".to_string()),
+            skill_level: Some("intermediate".to_string()),
+            temperament: Some("persistent".to_string()),
+            starting_knowledge: vec!["README only".to_string()],
+            constraints: vec!["Do not read source code".to_string()],
+            allowed_interfaces: vec!["terminal_harness".to_string()],
+            controller_thread_id: None,
+            cwd: None,
+        };
+
+        let prompt = CodexMessageProcessor::build_tester_initial_prompt(&tester);
+
+        assert!(prompt.contains("<tester_profile>"));
+        assert!(prompt.contains("name: onboarding-check"));
+        assert!(prompt.contains("objective: Try to deploy the app and report friction."));
+        assert!(prompt.contains("allowed_interfaces: terminal_harness"));
+        assert!(prompt.contains("Do not read source code"));
+    }
+
+    #[test]
+    fn tester_developer_instructions_include_interface_constraints() {
+        let tester = codex_state::ClaimedTester {
+            id: "tester-1".to_string(),
+            name: "beta".to_string(),
+            objective: "Evaluate onboarding".to_string(),
+            background: None,
+            skill_level: None,
+            temperament: None,
+            starting_knowledge: Vec::new(),
+            constraints: vec!["No source access".to_string()],
+            allowed_interfaces: vec!["browser".to_string(), "terminal_harness".to_string()],
+            controller_thread_id: None,
+            cwd: None,
+        };
+
+        let instructions = CodexMessageProcessor::build_tester_developer_instructions(&tester);
+
+        assert!(instructions.contains("dedicated tester runtime"));
+        assert!(instructions.contains("Allowed interfaces: browser, terminal_harness."));
+        assert!(instructions.contains("Tester constraints: No source access."));
     }
 }
