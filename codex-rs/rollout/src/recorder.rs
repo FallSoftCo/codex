@@ -1,11 +1,12 @@
 //! Persist Codex session rollouts (.jsonl) so sessions can be replayed or inspected later.
 
+use std::collections::HashSet;
+use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::Error as IoError;
 use std::path::Path;
 use std::path::PathBuf;
-use std::{env, collections::HashSet};
 
 use chrono::SecondsFormat;
 use chrono::Utc;
@@ -48,13 +49,13 @@ use crate::state_db::StateDbHandle;
 use codex_git_utils::collect_git_info;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::GitInfo as ProtocolGitInfo;
+use codex_protocol::protocol::HollywoodSessionMeta;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::ResumedHistory;
 use codex_protocol::protocol::RolloutItem;
 use codex_protocol::protocol::RolloutLine;
 use codex_protocol::protocol::SessionMeta;
 use codex_protocol::protocol::SessionMetaLine;
-use codex_protocol::protocol::HollywoodSessionMeta;
 use codex_protocol::protocol::SessionSource;
 use codex_state::StateRuntime;
 use codex_state::ThreadMetadataBuilder;
@@ -65,7 +66,8 @@ const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
 
 fn rollout_hollywood_meta_from_env() -> Option<HollywoodSessionMeta> {
     let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
-    let has_explicit_config = env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
+    let has_explicit_config =
+        env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
     let enabled = auto_attach
         .as_deref()
         .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))

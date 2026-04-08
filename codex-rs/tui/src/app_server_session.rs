@@ -69,8 +69,8 @@ use codex_app_server_protocol::TurnSteerResponse;
 #[cfg(test)]
 use codex_core::append_message_history_entry;
 use codex_core::config::Config;
-use codex_core::message_history_metadata;
 use codex_core::find_thread_path_by_id_str;
+use codex_core::message_history_metadata;
 use codex_core::read_session_meta_line;
 use codex_otel::TelemetryAuthMode;
 use codex_protocol::ThreadId;
