@@ -236,7 +236,7 @@ WHERE id = ?
     ) -> anyhow::Result<String> {
         let run_id = uuid::Uuid::new_v4().to_string();
         let (enabled, next_run_at) = match task.kind {
-            ScheduledTaskKind::Once => (false, None),
+            ScheduledTaskKind::Once => (false, Some(task.scheduled_for.timestamp())),
             ScheduledTaskKind::Interval => {
                 let interval_seconds = task.interval_seconds.ok_or_else(|| {
                     anyhow::anyhow!("interval scheduled task missing interval_seconds")
@@ -505,4 +505,62 @@ fn advance_interval_after(
         next += interval;
     }
     next
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::StateRuntime;
+
+    #[tokio::test]
+    async fn scheduled_task_once_can_be_claimed_and_started() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let runtime = StateRuntime::init(tempdir.path().to_path_buf(), "test-provider".to_string())
+            .await
+            .expect("state runtime");
+        let thread_id = ThreadId::new();
+        let metadata = crate::runtime::test_support::test_thread_metadata(
+            tempdir.path(),
+            thread_id,
+            tempdir.path().to_path_buf(),
+        );
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("upsert thread");
+
+        let now = Utc::now();
+        runtime
+            .create_scheduled_task(ScheduledTaskCreateParams {
+                id: "task-1".to_string(),
+                thread_id: thread_id.to_string(),
+                title: "once".to_string(),
+                prompt: "ping".to_string(),
+                kind: ScheduledTaskKind::Once,
+                next_run_at: now,
+                interval_seconds: None,
+                requires_response: true,
+            })
+            .await
+            .expect("create scheduled task");
+
+        let claimed = runtime
+            .claim_due_scheduled_tasks(now, "worker-1", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due tasks");
+        assert_eq!(claimed.len(), 1);
+
+        let _run_id = runtime
+            .start_scheduled_task_run(&claimed[0], "turn-1", now)
+            .await
+            .expect("start run");
+
+        let tasks = runtime
+            .list_scheduled_tasks(Some(thread_id))
+            .await
+            .expect("list tasks");
+        assert_eq!(tasks.len(), 1);
+        assert!(!tasks[0].enabled);
+        assert_eq!(tasks[0].last_run_turn_id.as_deref(), Some("turn-1"));
+    }
 }

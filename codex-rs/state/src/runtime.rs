@@ -158,6 +158,7 @@ async fn open_state_sqlite(path: &Path, migrator: &Migrator) -> anyhow::Result<S
         .max_connections(5)
         .connect_with(options)
         .await?;
+    reconcile_legacy_state_migration_versions(&pool).await?;
     migrator.run(&pool).await?;
     let auto_vacuum = sqlx::query_scalar::<_, i64>("PRAGMA auto_vacuum")
         .fetch_one(&pool)
@@ -176,6 +177,46 @@ async fn open_state_sqlite(path: &Path, migrator: &Migrator) -> anyhow::Result<S
         .execute(&pool)
         .await;
     Ok(pool)
+}
+
+async fn reconcile_legacy_state_migration_versions(pool: &SqlitePool) -> anyhow::Result<()> {
+    let migrations_table_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if migrations_table_exists == 0 {
+        return Ok(());
+    }
+
+    // During the Hollywood replay we accidentally created duplicate migration
+    // version `22`, which made fresh databases fail and left some older local
+    // databases with a different numbering history. Normalize both histories
+    // before sqlx validates checksums so either branch can continue upgrading.
+    for (from_version, description, to_version) in [
+        (22_i64, "threads agent path", 23_i64),
+        (23_i64, "drop logs", 24_i64),
+        (24_i64, "remote control enrollments", 25_i64),
+        (25_i64, "scheduled tasks", 26_i64),
+    ] {
+        sqlx::query(
+            r#"
+UPDATE _sqlx_migrations
+SET version = ?
+WHERE version = ?
+  AND description = ?
+  AND NOT EXISTS (SELECT 1 FROM _sqlx_migrations existing WHERE existing.version = ?)
+            "#,
+        )
+        .bind(to_version)
+        .bind(from_version)
+        .bind(description)
+        .bind(to_version)
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
 }
 
 async fn open_logs_sqlite(path: &Path, migrator: &Migrator) -> anyhow::Result<SqlitePool> {
