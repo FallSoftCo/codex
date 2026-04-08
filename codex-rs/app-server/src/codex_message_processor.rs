@@ -731,10 +731,11 @@ impl CodexMessageProcessor {
             return Ok(());
         }
 
+        let wake_at = Utc::now();
         let turn_id = thread
             .submit(Op::UserInput {
                 items: vec![CoreInputItem::Text {
-                    text: task.prompt.clone(),
+                    text: Self::format_scheduled_task_wake_message(&task, wake_at),
                     text_elements: Vec::new(),
                 }],
                 final_output_json_schema: None,
@@ -742,7 +743,7 @@ impl CodexMessageProcessor {
             .await?;
 
         state_db
-            .start_scheduled_task_run(&task, &turn_id, Utc::now())
+            .start_scheduled_task_run(&task, &turn_id, wake_at)
             .await?;
         Ok(())
     }
@@ -847,6 +848,58 @@ impl CodexMessageProcessor {
             )
             .await?;
         Ok(new_thread.thread)
+    }
+
+    fn format_scheduled_task_wake_message(
+        task: &codex_state::ClaimedScheduledTask,
+        wake_at: DateTime<Utc>,
+    ) -> String {
+        let scheduled_for = task
+            .scheduled_for
+            .to_rfc3339_opts(SecondsFormat::Secs, true);
+        let woke_at = wake_at.to_rfc3339_opts(SecondsFormat::Secs, true);
+        let elapsed =
+            Self::format_elapsed_seconds(wake_at.signed_duration_since(task.scheduled_for));
+        let trigger_kind = match task.kind {
+            codex_state::ScheduledTaskKind::Once => "scheduled_once",
+            codex_state::ScheduledTaskKind::Interval => "scheduled_interval",
+        };
+
+        format!(
+            concat!(
+                "<scheduled_task_context>\n",
+                "title: {title}\n",
+                "trigger: {trigger_kind}\n",
+                "scheduled_for: {scheduled_for}\n",
+                "woke_at: {woke_at}\n",
+                "elapsed: {elapsed}\n",
+                "requires_response: {requires_response}\n",
+                "</scheduled_task_context>\n\n",
+                "{prompt}"
+            ),
+            title = task.title,
+            trigger_kind = trigger_kind,
+            scheduled_for = scheduled_for,
+            woke_at = woke_at,
+            elapsed = elapsed,
+            requires_response = task.requires_response,
+            prompt = task.prompt,
+        )
+    }
+
+    fn format_elapsed_seconds(duration: chrono::Duration) -> String {
+        let total_seconds = duration.num_seconds().max(0);
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let seconds = total_seconds % 60;
+
+        if hours > 0 {
+            format!("{hours}h {minutes}m {seconds}s")
+        } else if minutes > 0 {
+            format!("{minutes}m {seconds}s")
+        } else {
+            format!("{seconds}s")
+        }
     }
 
     async fn load_latest_config(
@@ -11213,5 +11266,55 @@ mod tests {
         );
         assert!(!manager.has_subscribers(thread_id).await);
         Ok(())
+    }
+
+    #[test]
+    fn scheduled_task_wake_message_includes_temporal_context() {
+        let scheduled_for = DateTime::parse_from_rfc3339("2026-04-07T18:00:00Z")
+            .expect("scheduled_for")
+            .with_timezone(&Utc);
+        let wake_at = DateTime::parse_from_rfc3339("2026-04-07T18:26:14Z")
+            .expect("wake_at")
+            .with_timezone(&Utc);
+        let task = codex_state::ClaimedScheduledTask {
+            id: "task-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            title: "wait for deploy readiness".to_string(),
+            prompt: "Check whether the deploy finished and summarize outcome.".to_string(),
+            kind: codex_state::ScheduledTaskKind::Once,
+            scheduled_for,
+            interval_seconds: None,
+            requires_response: true,
+        };
+
+        let message = CodexMessageProcessor::format_scheduled_task_wake_message(&task, wake_at);
+
+        assert!(message.contains("<scheduled_task_context>"));
+        assert!(message.contains("trigger: scheduled_once"));
+        assert!(message.contains("scheduled_for: 2026-04-07T18:00:00Z"));
+        assert!(message.contains("woke_at: 2026-04-07T18:26:14Z"));
+        assert!(message.contains("elapsed: 26m 14s"));
+        assert!(message.contains("requires_response: true"));
+        assert!(message.ends_with("Check whether the deploy finished and summarize outcome."));
+    }
+
+    #[test]
+    fn elapsed_seconds_clamps_negative_durations() {
+        assert_eq!(
+            CodexMessageProcessor::format_elapsed_seconds(chrono::Duration::seconds(-5)),
+            "0s"
+        );
+        assert_eq!(
+            CodexMessageProcessor::format_elapsed_seconds(chrono::Duration::seconds(59)),
+            "59s"
+        );
+        assert_eq!(
+            CodexMessageProcessor::format_elapsed_seconds(chrono::Duration::seconds(125)),
+            "2m 5s"
+        );
+        assert_eq!(
+            CodexMessageProcessor::format_elapsed_seconds(chrono::Duration::seconds(3723)),
+            "1h 2m 3s"
+        );
     }
 }
