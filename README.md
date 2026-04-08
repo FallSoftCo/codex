@@ -1,44 +1,266 @@
-<p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
-<p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
 <p align="center">
-  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Codex CLI splash" width="80%" />
+  <strong>Losangelex</strong><br />
+  FallSoftCo's multi-agent Codex fork for local coordination and long-running agent workflows
 </p>
-</br>
-If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="https://developers.openai.com/codex/ide">install in your IDE.</a>
-</br>If you want the desktop app experience, run <code>codex app</code> or visit <a href="https://chatgpt.com/codex?app-landing-page=true">the Codex App page</a>.
-</br>If you are looking for the <em>cloud-based agent</em> from OpenAI, <strong>Codex Web</strong>, go to <a href="https://chatgpt.com/codex">chatgpt.com/codex</a>.</p>
 
----
+<p align="center">
+  <a href="https://github.com/FallSoftCo/losangelex">Losangelex</a>
+  ·
+  <a href="https://github.com/FallSoftCo/hollywood">Hollywood</a>
+</p>
+
+<p align="center">
+  <strong>Status:</strong> Experimental but active<br />
+  <strong>Maintainer:</strong> FallSoftCo<br />
+  <strong>Base:</strong> Upstream Codex, replayed onto current upstream main
+</p>
+
+Losangelex is a FallSoftCo project built on top of upstream Codex.
+
+It keeps the upstream Codex CLI, TUI, and app-server foundation, then layers on:
+
+- native Hollywood room integration in the app-server/runtime
+- Losangelex launcher defaults for full-access local work
+- workspace-scoped Hollywood bootstrap and room setup
+- persisted scheduled thread wakeups
+- upstream-aligned branch history rather than a permanently drifting fork
+
+The current integration target is current upstream `main`, with Losangelex behavior adapted onto that architecture instead of preserving old fork-only seams.
+
+## Table of Contents
+
+- [What Losangelex Is](#what-losangelex-is)
+- [Why Losangelex](#why-losangelex)
+- [What Exists Today](#what-exists-today)
+- [Architecture](#architecture)
+- [Current Status](#current-status)
+- [Quickstart](#quickstart)
+- [Scheduled Tasks](#scheduled-tasks)
+- [Demo](#demo)
+- [Relationship to Upstream Codex](#relationship-to-upstream-codex)
+- [Docs](#docs)
+- [License](#license)
+
+## What Losangelex Is
+
+Losangelex is the runtime side of the FallSoftCo local multi-agent stack.
+
+That stack currently consists of two repositories:
+
+- `FallSoftCo/losangelex`
+  - the Codex-derived runtime, app-server, TUI, launcher, and workflow surface
+- `FallSoftCo/hollywood`
+  - the local room service used for coordination between sessions
+
+The product is the integrated system, not just the fork in isolation.
+
+## Why Losangelex
+
+Losangelex exists because normal single-session coding agents are not enough for the kinds of local autonomous workflows FallSoftCo wants to run.
+
+The project is aimed at:
+
+- multiple local agent sessions coordinating through a shared room
+- long-running work that should survive beyond a single interactive turn
+- runtime behavior that stays close to upstream Codex instead of diverging into an unmaintainable fork
+- local-first experimentation with agent coordination, wakeups, and workflow primitives
+
+In short: Losangelex is the FallSoftCo answer to "what should Codex look like if local multi-agent coordination is treated as a first-class product direction?"
+
+## What Exists Today
+
+### Hollywood-native coordination
+
+Losangelex can attach a thread to a Hollywood room, surface inbound room traffic as typed app-server notifications, and inject focused Hollywood messages into the running thread as structured contextual input.
+
+Current shipped pieces:
+
+- thread-scoped Hollywood attach/detach/attention RPCs
+- attention classification in the app-server
+- persisted Hollywood resume metadata
+- model-visible Hollywood context
+- bundled launcher support for automatic Hollywood bootstrap
+
+See:
+
+- [Experimental Hollywood Quickstart](./docs/experimental-hollywood-quickstart.md)
+- [Hollywood integration](./codex-rs/docs/hollywood_integration.md)
+
+### Scheduled thread wakeups
+
+Losangelex now includes a minimal persisted scheduler for waking a thread later.
+
+Current shipped pieces:
+
+- one-shot wakeups
+- fixed-interval wakeups
+- persisted task definitions in SQLite
+- persisted run records with `turn_id`
+- app-server-hosted execution
+- CLI management via `codex schedule ...`
+
+See:
+
+- [Scheduled Tasks](./codex-rs/docs/scheduled_tasks.md)
+
+### Upstream replay completed
+
+The Hollywood/Losangelex work on this branch has already been replayed onto current upstream instead of remaining on an old pre-merge island. That matters because future work should continue adapting to upstream surfaces, not reviving deleted fork assumptions.
+
+## Architecture
+
+The current architecture is intentionally simple:
+
+```text
+Losangelex launcher / CLI / TUI
+            |
+            v
+      codex app-server
+            |
+            +--> Hollywood room integration
+            |
+            +--> scheduled task runtime
+            |
+            +--> persisted thread state in SQLite
+            |
+            v
+        upstream Codex core
+```
+
+At a high level:
+
+- Hollywood gives sessions a local coordination plane
+- app-server owns thread lifecycle, wakeups, and notifications
+- SQLite stores thread metadata, Hollywood metadata, and scheduled tasks
+- the bundled launcher makes the stack easier to run with consistent defaults
+
+That division is deliberate. Losangelex additions are meant to compose with upstream runtime ownership rather than bypass it.
+
+## Current Status
+
+This stack is usable, but still experimental.
+
+Expected to work:
+
+- Hollywood room-aware sessions
+- per-workspace room bootstrap through the bundled launcher
+- app-server-native Hollywood notifications and attachment state
+- persisted scheduled wakeups for threads
+- current upstream Codex CLI/TUI/app-server behavior plus the Losangelex additions
+
+Not finished yet:
+
+- first-class watcher/trigger system beyond time-based schedules
+- richer obligation lifecycle UI for Hollywood traffic
+- full workflow-engine semantics
+- polished packaging/release flow for non-technical users
 
 ## Quickstart
 
-### Installing and running Codex CLI
+### 1. Clone both repositories
 
-Install globally with your preferred package manager:
-
-```shell
-# Install using npm
-npm install -g @openai/codex
+```bash
+git clone git@github.com:FallSoftCo/hollywood.git
+git clone git@github.com:FallSoftCo/losangelex.git
 ```
 
-```shell
-# Install using Homebrew
-brew install --cask codex
+### 2. Start Hollywood
+
+```bash
+cd hollywood
+python3 -m pip install -e .
+./hollywoodctl install
+./hollywoodctl health
 ```
 
-Then simply run `codex` to get started.
+Direct-run path:
 
-If you are here for the experimental Losangelex + Hollywood multi-agent stack,
-start with the [Experimental Hollywood Quickstart](./docs/experimental-hollywood-quickstart.md).
-The repo also ships a bundled launcher at [`scripts/losangelex`](./scripts/losangelex):
-run it from any working directory to start `losangelex` with Hollywood auto-attach,
-directory-derived room defaults, and the same full-access mode used by the TUI's
-`Full Access` preset.
+```bash
+cd hollywood
+./hollywood serve
+```
 
-### Experimental Hollywood Demo
+Default URL:
 
-This is the latest public demo clip of two Losangelex sessions coordinating
-through Hollywood while working in parallel.
+```text
+http://127.0.0.1:8765
+```
+
+### 3. Build Losangelex
+
+```bash
+cd ../losangelex/codex-rs
+cargo build
+```
+
+### 4. Run Losangelex
+
+From any project directory:
+
+```bash
+/path/to/losangelex/scripts/losangelex
+```
+
+Or put that launcher on your `PATH` and run:
+
+```bash
+losangelex
+```
+
+The bundled launcher currently does the opinionated local-dev setup for you:
+
+- app-server/TUI path
+- full access by default
+- no approval prompts
+- Hollywood auto-attach
+- room defaults derived from the current workspace
+- first-run workspace setup when no room config exists yet
+
+### 5. Start another session
+
+Open another terminal and run `losangelex` again. The intended workflow is multiple local sessions coordinating through the same Hollywood room while remaining independently runnable Codex threads.
+
+### 6. Learn the stack surface
+
+After bootstrap, the main entry points are:
+
+- `scripts/losangelex` for the opinionated local launcher
+- `codex app-server` for the runtime host
+- `codex schedule ...` for persisted wakeups
+- Hollywood room traffic and attention policy for multi-agent coordination
+
+## Scheduled Tasks
+
+Losangelex ships CLI management for persisted scheduled wakeups:
+
+```sh
+codex schedule add-at \
+  --thread-id <THREAD_ID> \
+  --title "daily summary" \
+  --prompt "Summarize the repo status and report back." \
+  --at 2026-04-08T13:00:00Z
+
+codex schedule add-every \
+  --thread-id <THREAD_ID> \
+  --title "deploy check" \
+  --prompt "Check whether the deploy is finished and summarize the result." \
+  --every 15m
+
+codex schedule list
+codex schedule runs
+codex schedule run-now <TASK_ID>
+codex schedule remove <TASK_ID>
+```
+
+Current limitation:
+
+- schedules are durable, but they only fire while an app-server process is running
+
+This is the first workflow-oriented primitive in the repo. The next likely direction is broader deferred continuations and watcher-triggered wakeups rather than stopping at cron-like time scheduling.
+
+## Demo
+
+Latest public demo clip of two Losangelex sessions coordinating through Hollywood:
 
 <p align="center">
   <a href="https://rjuniyer.com/semantic-clips/2026-03-20/3dfd439c-02ec-4f4a-bd7f-0a2d4600bfb8-laptop-trial_highlight-landscape.mp4">
@@ -57,35 +279,48 @@ through Hollywood while working in parallel.
   </video>
 </p>
 
-<details>
-<summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
+## Relationship to Upstream Codex
 
-Each GitHub Release contains many executables, but in practice, you likely want one of these:
+Losangelex is not a clean-room rewrite. It is an upstream-based fork.
 
-- macOS
-  - Apple Silicon/arm64: `codex-aarch64-apple-darwin.tar.gz`
-  - x86_64 (older Mac hardware): `codex-x86_64-apple-darwin.tar.gz`
-- Linux
-  - x86_64: `codex-x86_64-unknown-linux-musl.tar.gz`
-  - arm64: `codex-aarch64-unknown-linux-musl.tar.gz`
+What that means in practice:
 
-Each archive contains a single entry with the platform baked into the name (e.g., `codex-x86_64-unknown-linux-musl`), so you likely want to rename it to `codex` after extracting it.
+- upstream Codex remains the base runtime, CLI, TUI, and app-server architecture
+- Losangelex-specific behavior should be adapted to upstream surfaces when upstream changes
+- if upstream deletes or restructures a subsystem, Losangelex should follow that architecture rather than resurrect old fork-only compatibility layers
 
-</details>
+That approach is already reflected in the current branch history.
 
-### Using Codex with your ChatGPT plan
+For FallSoftCo work, that means:
 
-Run `codex` and select **Sign in with ChatGPT**. We recommend signing into your ChatGPT account to use Codex as part of your Plus, Pro, Business, Edu, or Enterprise plan. [Learn more about what's included in your ChatGPT plan](https://help.openai.com/en/articles/11369540-codex-in-chatgpt).
+- prefer adapting Losangelex behavior to upstream changes
+- avoid reintroducing deleted upstream subsystems just to preserve old fork patches
+- keep new FallSoftCo features isolated, reviewable, and upstream-compatible where possible
 
-You can also use Codex with an API key, but this requires [additional setup](https://developers.openai.com/codex/auth#sign-in-with-an-api-key).
+## Roadmap Direction
+
+The current repo has already crossed from "Hollywood experiment" into "workflow/runtime experiment."
+
+The likely next steps are:
+
+- watcher-triggered wakeups beyond time-based schedules
+- deferred continuations for long-running background conditions
+- richer Hollywood obligation lifecycle visibility
+- a more general workflow engine built on persisted runs and triggers
+
+That direction should still be implemented in an upstream-adaptive way, not by hard-forking old runtime seams.
 
 ## Docs
 
-- [**Codex Documentation**](https://developers.openai.com/codex)
-- [**Experimental Hollywood Quickstart**](./docs/experimental-hollywood-quickstart.md)
-- [**Scheduled Tasks**](./codex-rs/docs/scheduled_tasks.md)
-- [**Contributing**](./docs/contributing.md)
-- [**Installing & building**](./docs/install.md)
-- [**Open source fund**](./docs/open-source-fund.md)
+- [FallSoftCo Hollywood repository](https://github.com/FallSoftCo/hollywood)
+- [Experimental Hollywood Quickstart](./docs/experimental-hollywood-quickstart.md)
+- [FallSoftCo Hollywood-native integration notes](./docs/hollywood-native-integration.md)
+- [Hollywood integration](./codex-rs/docs/hollywood_integration.md)
+- [Scheduled Tasks](./codex-rs/docs/scheduled_tasks.md)
+- [App-server README](./codex-rs/app-server/README.md)
+- [Installing & building](./docs/install.md)
+- [Contributing](./docs/contributing.md)
 
-This repository is licensed under the [Apache-2.0 License](LICENSE).
+## License
+
+This repository remains licensed under the [Apache-2.0 License](LICENSE).
