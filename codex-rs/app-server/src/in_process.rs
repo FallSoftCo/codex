@@ -1022,16 +1022,14 @@ mod tests {
                         "in-process client disconnected before self-authored Hollywood notification"
                     );
                 };
-                match event {
-                    InProcessServerEvent::ServerNotification(
-                        ServerNotification::ThreadHollywoodMessage(notification),
-                    ) => {
-                        if notification.message.body != body {
-                            continue;
-                        }
-                        break notification;
+                if let InProcessServerEvent::ServerNotification(
+                    ServerNotification::ThreadHollywoodMessage(notification),
+                ) = event
+                {
+                    if notification.message.body != body {
+                        continue;
                     }
-                    _ => {}
+                    break notification;
                 }
             }
         })
@@ -1056,10 +1054,9 @@ mod tests {
                 if let InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
                     notification,
                 )) = event
+                    && notification.thread_id == thread_id
                 {
-                    if notification.thread_id == thread_id {
-                        return true;
-                    }
+                    return true;
                 }
             }
         })

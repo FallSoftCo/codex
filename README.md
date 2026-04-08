@@ -107,12 +107,13 @@ See:
 
 ### Testers
 
-Losangelex also includes managed testers: dedicated Codex threads that act like interactive user stand-ins instead of fixed scripted transcripts.
+Losangelex also includes managed testers: supervised tester runs that act like interactive user stand-ins instead of fixed scripted transcripts.
 
 Current shipped pieces:
 
-- persisted tester definitions and lifecycle reports
-- app-server-hosted tester startup
+- persisted tester-run definitions, structured reports, and rollout artifacts
+- app-server-hosted tester-run supervision
+- explicit tester execution classes, including `terminal_full_access`
 - hard tool gating for tester sessions, with `terminal_harness` mapped to concrete runtime access
 - optional controller-thread wakeups through the scheduler
 - CLI management via `codex tester ...`
@@ -288,17 +289,19 @@ codex tester create \
   --background "Technical user who is new to this repo." \
   --starting-knowledge "README only" \
   --constraint "Do not read source code" \
-  --allowed-interface terminal_harness
+  --allowed-interface terminal_harness \
+  --execution-class terminal-full-access
 
 codex tester list
-codex tester reports
-codex tester prompt <TESTER_ID> --prompt "Continue and investigate the latest failure."
-codex tester stop <TESTER_ID>
+codex tester reports --run-id <RUN_ID>
+codex tester artifacts <RUN_ID>
+codex tester prompt <RUN_ID> --prompt "Continue and investigate the latest failure."
+codex tester stop <RUN_ID>
 ```
 
 Current limitation:
 
-- testers are durable, but app-server must be running to start them and emit controller wakeups
+- testers are durable, but app-server must be running to start them, parse structured tester reports, and emit controller wakeups
 
 ## Demo
 

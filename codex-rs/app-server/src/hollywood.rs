@@ -257,18 +257,12 @@ impl HollywoodRuntimeState {
     }
 
     pub(crate) fn set_last_seen_message_id(&mut self, room: &str, message_id: i64) {
-        let state = self
-            .room_states
-            .entry(room.to_string())
-            .or_insert_with(HollywoodRoomState::default);
+        let state = self.room_states.entry(room.to_string()).or_default();
         state.last_seen_message_id = message_id;
     }
 
     pub(crate) fn take_start_from_latest(&mut self, room: &str) -> bool {
-        let state = self
-            .room_states
-            .entry(room.to_string())
-            .or_insert_with(HollywoodRoomState::default);
+        let state = self.room_states.entry(room.to_string()).or_default();
         let value = state.start_from_latest;
         state.start_from_latest = false;
         value
@@ -667,7 +661,7 @@ pub(crate) async fn build_registry_upsert_request(
         session_id: thread_id.to_string(),
         room: config.room.clone(),
         attached: true,
-        cwd: Some(cwd.clone()),
+        cwd: Some(cwd),
         repo_name: repo_name_from_cwd(snapshot.cwd.as_path()),
         attention_mode: hollywood_attention_mode_name(config.attention.mode),
         identities: hollywood_identities(thread_id),

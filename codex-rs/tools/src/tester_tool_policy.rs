@@ -1,7 +1,7 @@
 use codex_protocol::protocol::SessionSource;
 use std::collections::BTreeSet;
 
-const TESTER_SESSION_SOURCE_PREFIX: &str = "tester";
+const LEGACY_TESTER_SESSION_SOURCE_PREFIX: &str = "tester";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TesterToolPolicy {
@@ -14,17 +14,28 @@ impl TesterToolPolicy {
             return None;
         };
         let source = source.trim();
-        if source == TESTER_SESSION_SOURCE_PREFIX {
+        if source == LEGACY_TESTER_SESSION_SOURCE_PREFIX {
             return Some(Self::default());
         }
-        let Some(rest) = source.strip_prefix("tester:") else {
-            return None;
-        };
-        let allowed_interfaces = rest
+        if let Some(rest) = source.strip_prefix("tester:") {
+            let allowed_interfaces = rest
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(std::string::ToString::to_string)
+                .collect();
+            return Some(Self { allowed_interfaces });
+        }
+        let rest = source.strip_prefix("tester_run:")?;
+        let mut parts = rest.splitn(2, ':');
+        let _execution_class = parts.next();
+        let allowed_interfaces = parts
+            .next()
+            .unwrap_or_default()
             .split(',')
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .map(|value| value.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
         Some(Self { allowed_interfaces })
     }

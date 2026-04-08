@@ -5,62 +5,99 @@ use chrono::Utc;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TesterStatus {
-    Pending,
-    Starting,
-    Running,
-    Waiting,
-    Paused,
-    Stopped,
-    Failed,
+pub enum TesterExecutionClass {
+    TerminalFullAccess,
+    TerminalSandboxed,
 }
 
-impl TesterStatus {
+impl TesterExecutionClass {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Pending => "pending",
-            Self::Starting => "starting",
-            Self::Running => "running",
-            Self::Waiting => "waiting",
-            Self::Paused => "paused",
-            Self::Stopped => "stopped",
-            Self::Failed => "failed",
+            Self::TerminalFullAccess => "terminal_full_access",
+            Self::TerminalSandboxed => "terminal_sandboxed",
         }
     }
 
     pub fn parse(value: &str) -> Result<Self> {
         match value {
-            "pending" => Ok(Self::Pending),
-            "starting" => Ok(Self::Starting),
-            "running" => Ok(Self::Running),
-            "waiting" => Ok(Self::Waiting),
-            "paused" => Ok(Self::Paused),
-            "stopped" => Ok(Self::Stopped),
-            "failed" => Ok(Self::Failed),
-            _ => Err(anyhow::anyhow!("invalid tester status: {value}")),
+            "terminal_full_access" => Ok(Self::TerminalFullAccess),
+            "terminal_sandboxed" => Ok(Self::TerminalSandboxed),
+            _ => Err(anyhow::anyhow!("invalid tester execution class: {value}")),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TesterReportKind {
+pub enum TesterRunStatus {
+    Queued,
+    Starting,
+    Running,
+    BlockedEnvironment,
+    BlockedProduct,
+    CompletedSuccess,
+    CompletedFailure,
+    Stopped,
+    Crashed,
+}
+
+impl TesterRunStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Starting => "starting",
+            Self::Running => "running",
+            Self::BlockedEnvironment => "blocked_environment",
+            Self::BlockedProduct => "blocked_product",
+            Self::CompletedSuccess => "completed_success",
+            Self::CompletedFailure => "completed_failure",
+            Self::Stopped => "stopped",
+            Self::Crashed => "crashed",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "starting" => Ok(Self::Starting),
+            "running" => Ok(Self::Running),
+            "blocked_environment" => Ok(Self::BlockedEnvironment),
+            "blocked_product" => Ok(Self::BlockedProduct),
+            "completed_success" => Ok(Self::CompletedSuccess),
+            "completed_failure" => Ok(Self::CompletedFailure),
+            "stopped" => Ok(Self::Stopped),
+            "crashed" => Ok(Self::Crashed),
+            _ => Err(anyhow::anyhow!("invalid tester run status: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TesterRunReportKind {
     Created,
     Started,
     Progress,
-    Waiting,
-    Failed,
+    Observation,
+    BlockedEnvironment,
+    BlockedProduct,
+    CompletedSuccess,
+    CompletedFailure,
     Stopped,
+    Crashed,
 }
 
-impl TesterReportKind {
+impl TesterRunReportKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Created => "created",
             Self::Started => "started",
             Self::Progress => "progress",
-            Self::Waiting => "waiting",
-            Self::Failed => "failed",
+            Self::Observation => "observation",
+            Self::BlockedEnvironment => "blocked_environment",
+            Self::BlockedProduct => "blocked_product",
+            Self::CompletedSuccess => "completed_success",
+            Self::CompletedFailure => "completed_failure",
             Self::Stopped => "stopped",
+            Self::Crashed => "crashed",
         }
     }
 
@@ -69,16 +106,40 @@ impl TesterReportKind {
             "created" => Ok(Self::Created),
             "started" => Ok(Self::Started),
             "progress" => Ok(Self::Progress),
-            "waiting" => Ok(Self::Waiting),
-            "failed" => Ok(Self::Failed),
+            "observation" => Ok(Self::Observation),
+            "blocked_environment" => Ok(Self::BlockedEnvironment),
+            "blocked_product" => Ok(Self::BlockedProduct),
+            "completed_success" => Ok(Self::CompletedSuccess),
+            "completed_failure" => Ok(Self::CompletedFailure),
             "stopped" => Ok(Self::Stopped),
-            _ => Err(anyhow::anyhow!("invalid tester report kind: {value}")),
+            "crashed" => Ok(Self::Crashed),
+            _ => Err(anyhow::anyhow!("invalid tester run report kind: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TesterRunArtifactKind {
+    Rollout,
+}
+
+impl TesterRunArtifactKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Rollout => "rollout",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "rollout" => Ok(Self::Rollout),
+            _ => Err(anyhow::anyhow!("invalid tester run artifact kind: {value}")),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Tester {
+pub struct TesterRun {
     pub id: String,
     pub name: String,
     pub objective: String,
@@ -88,28 +149,41 @@ pub struct Tester {
     pub starting_knowledge: Vec<String>,
     pub constraints: Vec<String>,
     pub allowed_interfaces: Vec<String>,
+    pub execution_class: TesterExecutionClass,
     pub controller_thread_id: Option<String>,
-    pub tester_thread_id: Option<String>,
+    pub runtime_thread_id: Option<String>,
+    pub rollout_path: Option<PathBuf>,
     pub cwd: Option<PathBuf>,
-    pub status: TesterStatus,
+    pub status: TesterRunStatus,
     pub last_observed_thread_status: Option<String>,
     pub last_error: Option<String>,
+    pub last_parsed_rollout_index: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TesterReport {
+pub struct TesterRunReport {
     pub id: String,
-    pub tester_id: String,
-    pub report_kind: TesterReportKind,
+    pub tester_run_id: String,
+    pub report_kind: TesterRunReportKind,
     pub summary: String,
     pub details: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TesterCreateParams {
+pub struct TesterRunArtifact {
+    pub id: String,
+    pub tester_run_id: String,
+    pub artifact_kind: TesterRunArtifactKind,
+    pub label: String,
+    pub path: PathBuf,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TesterRunCreateParams {
     pub id: String,
     pub name: String,
     pub objective: String,
@@ -119,12 +193,13 @@ pub struct TesterCreateParams {
     pub starting_knowledge: Vec<String>,
     pub constraints: Vec<String>,
     pub allowed_interfaces: Vec<String>,
+    pub execution_class: TesterExecutionClass,
     pub controller_thread_id: Option<String>,
     pub cwd: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaimedTester {
+pub struct ClaimedTesterRun {
     pub id: String,
     pub name: String,
     pub objective: String,
@@ -134,12 +209,13 @@ pub struct ClaimedTester {
     pub starting_knowledge: Vec<String>,
     pub constraints: Vec<String>,
     pub allowed_interfaces: Vec<String>,
+    pub execution_class: TesterExecutionClass,
     pub controller_thread_id: Option<String>,
     pub cwd: Option<PathBuf>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub(crate) struct TesterRow {
+pub(crate) struct TesterRunRow {
     pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) objective: String,
@@ -149,20 +225,23 @@ pub(crate) struct TesterRow {
     pub(crate) starting_knowledge_json: String,
     pub(crate) constraints_json: String,
     pub(crate) allowed_interfaces_json: String,
+    pub(crate) execution_class: String,
     pub(crate) controller_thread_id: Option<String>,
-    pub(crate) tester_thread_id: Option<String>,
+    pub(crate) runtime_thread_id: Option<String>,
+    pub(crate) rollout_path: Option<String>,
     pub(crate) cwd: Option<String>,
     pub(crate) status: String,
     pub(crate) last_observed_thread_status: Option<String>,
     pub(crate) last_error: Option<String>,
+    pub(crate) last_parsed_rollout_index: i64,
     pub(crate) created_at: i64,
     pub(crate) updated_at: i64,
 }
 
-impl TryFrom<TesterRow> for Tester {
+impl TryFrom<TesterRunRow> for TesterRun {
     type Error = anyhow::Error;
 
-    fn try_from(value: TesterRow) -> Result<Self, Self::Error> {
+    fn try_from(value: TesterRunRow) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
             name: value.name,
@@ -173,12 +252,15 @@ impl TryFrom<TesterRow> for Tester {
             starting_knowledge: parse_string_vec(value.starting_knowledge_json)?,
             constraints: parse_string_vec(value.constraints_json)?,
             allowed_interfaces: parse_string_vec(value.allowed_interfaces_json)?,
+            execution_class: TesterExecutionClass::parse(value.execution_class.as_str())?,
             controller_thread_id: value.controller_thread_id,
-            tester_thread_id: value.tester_thread_id,
+            runtime_thread_id: value.runtime_thread_id,
+            rollout_path: value.rollout_path.map(PathBuf::from),
             cwd: value.cwd.map(PathBuf::from),
-            status: TesterStatus::parse(value.status.as_str())?,
+            status: TesterRunStatus::parse(value.status.as_str())?,
             last_observed_thread_status: value.last_observed_thread_status,
             last_error: value.last_error,
+            last_parsed_rollout_index: value.last_parsed_rollout_index,
             created_at: epoch_seconds_to_datetime(value.created_at)?,
             updated_at: epoch_seconds_to_datetime(value.updated_at)?,
         })
@@ -186,25 +268,50 @@ impl TryFrom<TesterRow> for Tester {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub(crate) struct TesterReportRow {
+pub(crate) struct TesterRunReportRow {
     pub(crate) id: String,
-    pub(crate) tester_id: String,
+    pub(crate) tester_run_id: String,
     pub(crate) report_kind: String,
     pub(crate) summary: String,
     pub(crate) details: Option<String>,
     pub(crate) created_at: i64,
 }
 
-impl TryFrom<TesterReportRow> for TesterReport {
+impl TryFrom<TesterRunReportRow> for TesterRunReport {
     type Error = anyhow::Error;
 
-    fn try_from(value: TesterReportRow) -> Result<Self, Self::Error> {
+    fn try_from(value: TesterRunReportRow) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
-            tester_id: value.tester_id,
-            report_kind: TesterReportKind::parse(value.report_kind.as_str())?,
+            tester_run_id: value.tester_run_id,
+            report_kind: TesterRunReportKind::parse(value.report_kind.as_str())?,
             summary: value.summary,
             details: value.details,
+            created_at: epoch_seconds_to_datetime(value.created_at)?,
+        })
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub(crate) struct TesterRunArtifactRow {
+    pub(crate) id: String,
+    pub(crate) tester_run_id: String,
+    pub(crate) artifact_kind: String,
+    pub(crate) label: String,
+    pub(crate) path: String,
+    pub(crate) created_at: i64,
+}
+
+impl TryFrom<TesterRunArtifactRow> for TesterRunArtifact {
+    type Error = anyhow::Error;
+
+    fn try_from(value: TesterRunArtifactRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id,
+            tester_run_id: value.tester_run_id,
+            artifact_kind: TesterRunArtifactKind::parse(value.artifact_kind.as_str())?,
+            label: value.label,
+            path: PathBuf::from(value.path),
             created_at: epoch_seconds_to_datetime(value.created_at)?,
         })
     }

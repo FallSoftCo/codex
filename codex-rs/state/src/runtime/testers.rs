@@ -1,18 +1,21 @@
 use super::*;
-use crate::model::ClaimedTester;
-use crate::model::TesterCreateParams;
-use crate::model::TesterReport;
-use crate::model::TesterReportKind;
-use crate::model::TesterReportRow;
-use crate::model::TesterRow;
-use crate::model::TesterStatus;
+use crate::model::ClaimedTesterRun;
+use crate::model::TesterRunArtifact;
+use crate::model::TesterRunArtifactKind;
+use crate::model::TesterRunArtifactRow;
+use crate::model::TesterRunCreateParams;
+use crate::model::TesterRunReport;
+use crate::model::TesterRunReportKind;
+use crate::model::TesterRunReportRow;
+use crate::model::TesterRunRow;
+use crate::model::TesterRunStatus;
 
 fn serialize_string_vec(values: &[String]) -> anyhow::Result<String> {
     serde_json::to_string(values).map_err(Into::into)
 }
 
 impl StateRuntime {
-    pub async fn create_tester(&self, params: TesterCreateParams) -> anyhow::Result<()> {
+    pub async fn create_tester_run(&self, params: TesterRunCreateParams) -> anyhow::Result<()> {
         let now = Utc::now().timestamp();
         let starting_knowledge_json = serialize_string_vec(&params.starting_knowledge)?;
         let constraints_json = serialize_string_vec(&params.constraints)?;
@@ -20,7 +23,7 @@ impl StateRuntime {
 
         sqlx::query(
             r#"
-INSERT INTO testers (
+INSERT INTO tester_runs (
     id,
     name,
     objective,
@@ -30,13 +33,18 @@ INSERT INTO testers (
     starting_knowledge_json,
     constraints_json,
     allowed_interfaces_json,
+    execution_class,
     controller_thread_id,
-    tester_thread_id,
+    runtime_thread_id,
+    rollout_path,
     cwd,
     status,
+    last_observed_thread_status,
+    last_error,
+    last_parsed_rollout_index,
     created_at,
     updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, 0, ?, ?)
             "#,
         )
         .bind(&params.id)
@@ -48,6 +56,7 @@ INSERT INTO testers (
         .bind(starting_knowledge_json)
         .bind(constraints_json)
         .bind(allowed_interfaces_json)
+        .bind(params.execution_class.as_str())
         .bind(&params.controller_thread_id)
         .bind(
             params
@@ -55,24 +64,28 @@ INSERT INTO testers (
                 .as_ref()
                 .map(|cwd| cwd.to_string_lossy().into_owned()),
         )
-        .bind(TesterStatus::Pending.as_str())
+        .bind(TesterRunStatus::Queued.as_str())
         .bind(now)
         .bind(now)
         .execute(self.pool.as_ref())
         .await?;
 
-        self.append_tester_report(
+        self.append_tester_run_report(
             &params.id,
-            TesterReportKind::Created,
-            format!("tester {} created", params.name),
-            Some("tester is pending startup"),
+            TesterRunReportKind::Created,
+            format!("tester run {} created", params.name),
+            Some(format!(
+                "execution_class={} allowed_interfaces={}",
+                params.execution_class.as_str(),
+                params.allowed_interfaces.join(",")
+            )),
         )
         .await?;
         Ok(())
     }
 
-    pub async fn list_testers(&self) -> anyhow::Result<Vec<crate::Tester>> {
-        let rows = sqlx::query_as::<_, TesterRow>(
+    pub async fn list_tester_runs(&self) -> anyhow::Result<Vec<crate::TesterRun>> {
+        let rows = sqlx::query_as::<_, TesterRunRow>(
             r#"
 SELECT
     id,
@@ -84,15 +97,18 @@ SELECT
     starting_knowledge_json,
     constraints_json,
     allowed_interfaces_json,
+    execution_class,
     controller_thread_id,
-    tester_thread_id,
+    runtime_thread_id,
+    rollout_path,
     cwd,
     status,
     last_observed_thread_status,
     last_error,
+    last_parsed_rollout_index,
     created_at,
     updated_at
-FROM testers
+FROM tester_runs
 ORDER BY created_at DESC, id DESC
             "#,
         )
@@ -101,8 +117,8 @@ ORDER BY created_at DESC, id DESC
         rows.into_iter().map(TryInto::try_into).collect()
     }
 
-    pub async fn get_tester(&self, id: &str) -> anyhow::Result<Option<crate::Tester>> {
-        let row = sqlx::query_as::<_, TesterRow>(
+    pub async fn get_tester_run(&self, id: &str) -> anyhow::Result<Option<crate::TesterRun>> {
+        let row = sqlx::query_as::<_, TesterRunRow>(
             r#"
 SELECT
     id,
@@ -114,15 +130,18 @@ SELECT
     starting_knowledge_json,
     constraints_json,
     allowed_interfaces_json,
+    execution_class,
     controller_thread_id,
-    tester_thread_id,
+    runtime_thread_id,
+    rollout_path,
     cwd,
     status,
     last_observed_thread_status,
     last_error,
+    last_parsed_rollout_index,
     created_at,
     updated_at
-FROM testers
+FROM tester_runs
 WHERE id = ?
             "#,
         )
@@ -132,14 +151,14 @@ WHERE id = ?
         row.map(TryInto::try_into).transpose()
     }
 
-    pub async fn claim_pending_testers(
+    pub async fn claim_queued_tester_runs(
         &self,
         now: DateTime<Utc>,
         worker_id: &str,
         limit: usize,
         lease_duration: Duration,
-    ) -> anyhow::Result<Vec<ClaimedTester>> {
-        let rows = sqlx::query_as::<_, TesterRow>(
+    ) -> anyhow::Result<Vec<ClaimedTesterRun>> {
+        let rows = sqlx::query_as::<_, TesterRunRow>(
             r#"
 SELECT
     id,
@@ -151,23 +170,26 @@ SELECT
     starting_knowledge_json,
     constraints_json,
     allowed_interfaces_json,
+    execution_class,
     controller_thread_id,
-    tester_thread_id,
+    runtime_thread_id,
+    rollout_path,
     cwd,
     status,
     last_observed_thread_status,
     last_error,
+    last_parsed_rollout_index,
     created_at,
     updated_at
-FROM testers
+FROM tester_runs
 WHERE status = ?
-  AND tester_thread_id IS NULL
+  AND runtime_thread_id IS NULL
   AND (lease_until IS NULL OR lease_until < ?)
 ORDER BY created_at ASC, id ASC
 LIMIT ?
             "#,
         )
-        .bind(TesterStatus::Pending.as_str())
+        .bind(TesterRunStatus::Queued.as_str())
         .bind(now.timestamp())
         .bind(i64::try_from(limit).unwrap_or(i64::MAX))
         .fetch_all(self.pool.as_ref())
@@ -178,23 +200,23 @@ LIMIT ?
         for row in rows {
             let result = sqlx::query(
                 r#"
-UPDATE testers
+UPDATE tester_runs
 SET status = ?,
     lease_owner = ?,
     lease_until = ?,
     updated_at = ?
 WHERE id = ?
   AND status = ?
-  AND tester_thread_id IS NULL
+  AND runtime_thread_id IS NULL
   AND (lease_until IS NULL OR lease_until < ?)
                 "#,
             )
-            .bind(TesterStatus::Starting.as_str())
+            .bind(TesterRunStatus::Starting.as_str())
             .bind(worker_id)
             .bind(lease_until.timestamp())
             .bind(now.timestamp())
             .bind(&row.id)
-            .bind(TesterStatus::Pending.as_str())
+            .bind(TesterRunStatus::Queued.as_str())
             .bind(now.timestamp())
             .execute(self.pool.as_ref())
             .await?;
@@ -202,34 +224,37 @@ WHERE id = ?
                 continue;
             }
 
-            let tester: crate::Tester = row.try_into()?;
-            claimed.push(ClaimedTester {
-                id: tester.id,
-                name: tester.name,
-                objective: tester.objective,
-                background: tester.background,
-                skill_level: tester.skill_level,
-                temperament: tester.temperament,
-                starting_knowledge: tester.starting_knowledge,
-                constraints: tester.constraints,
-                allowed_interfaces: tester.allowed_interfaces,
-                controller_thread_id: tester.controller_thread_id,
-                cwd: tester.cwd,
+            let tester_run: crate::TesterRun = row.try_into()?;
+            claimed.push(ClaimedTesterRun {
+                id: tester_run.id,
+                name: tester_run.name,
+                objective: tester_run.objective,
+                background: tester_run.background,
+                skill_level: tester_run.skill_level,
+                temperament: tester_run.temperament,
+                starting_knowledge: tester_run.starting_knowledge,
+                constraints: tester_run.constraints,
+                allowed_interfaces: tester_run.allowed_interfaces,
+                execution_class: tester_run.execution_class,
+                controller_thread_id: tester_run.controller_thread_id,
+                cwd: tester_run.cwd,
             });
         }
         Ok(claimed)
     }
 
-    pub async fn mark_tester_started(
+    pub async fn mark_tester_run_started(
         &self,
-        tester_id: &str,
-        tester_thread_id: &str,
+        tester_run_id: &str,
+        runtime_thread_id: &str,
+        rollout_path: Option<&Path>,
         now: DateTime<Utc>,
     ) -> anyhow::Result<()> {
         sqlx::query(
             r#"
-UPDATE testers
-SET tester_thread_id = ?,
+UPDATE tester_runs
+SET runtime_thread_id = ?,
+    rollout_path = ?,
     status = ?,
     last_observed_thread_status = ?,
     last_error = NULL,
@@ -239,25 +264,26 @@ SET tester_thread_id = ?,
 WHERE id = ?
             "#,
         )
-        .bind(tester_thread_id)
-        .bind(TesterStatus::Running.as_str())
+        .bind(runtime_thread_id)
+        .bind(rollout_path.map(|path| path.to_string_lossy().into_owned()))
+        .bind(TesterRunStatus::Running.as_str())
         .bind("active")
         .bind(now.timestamp())
-        .bind(tester_id)
+        .bind(tester_run_id)
         .execute(self.pool.as_ref())
         .await?;
         Ok(())
     }
 
-    pub async fn mark_tester_start_failed(
+    pub async fn mark_tester_run_start_failed(
         &self,
-        tester_id: &str,
+        tester_run_id: &str,
         error: &str,
         now: DateTime<Utc>,
     ) -> anyhow::Result<()> {
         sqlx::query(
             r#"
-UPDATE testers
+UPDATE tester_runs
 SET status = ?,
     last_error = ?,
     lease_owner = NULL,
@@ -266,24 +292,24 @@ SET status = ?,
 WHERE id = ?
             "#,
         )
-        .bind(TesterStatus::Failed.as_str())
+        .bind(TesterRunStatus::BlockedEnvironment.as_str())
         .bind(error)
         .bind(now.timestamp())
-        .bind(tester_id)
+        .bind(tester_run_id)
         .execute(self.pool.as_ref())
         .await?;
-        self.append_tester_report(
-            tester_id,
-            TesterReportKind::Failed,
-            "tester failed to start".to_string(),
-            Some(error),
+        self.append_tester_run_report(
+            tester_run_id,
+            TesterRunReportKind::BlockedEnvironment,
+            "tester run failed to start".to_string(),
+            Some(error.to_string()),
         )
         .await?;
         Ok(())
     }
 
-    pub async fn list_monitorable_testers(&self) -> anyhow::Result<Vec<crate::Tester>> {
-        let rows = sqlx::query_as::<_, TesterRow>(
+    pub async fn list_supervised_tester_runs(&self) -> anyhow::Result<Vec<crate::TesterRun>> {
+        let rows = sqlx::query_as::<_, TesterRunRow>(
             r#"
 SELECT
     id,
@@ -295,41 +321,46 @@ SELECT
     starting_knowledge_json,
     constraints_json,
     allowed_interfaces_json,
+    execution_class,
     controller_thread_id,
-    tester_thread_id,
+    runtime_thread_id,
+    rollout_path,
     cwd,
     status,
     last_observed_thread_status,
     last_error,
+    last_parsed_rollout_index,
     created_at,
     updated_at
-FROM testers
-WHERE tester_thread_id IS NOT NULL
+FROM tester_runs
+WHERE runtime_thread_id IS NOT NULL
   AND status IN (?, ?, ?)
 ORDER BY updated_at ASC, id ASC
             "#,
         )
-        .bind(TesterStatus::Running.as_str())
-        .bind(TesterStatus::Waiting.as_str())
-        .bind(TesterStatus::Paused.as_str())
+        .bind(TesterRunStatus::Running.as_str())
+        .bind(TesterRunStatus::Starting.as_str())
+        .bind(TesterRunStatus::BlockedProduct.as_str())
         .fetch_all(self.pool.as_ref())
         .await?;
         rows.into_iter().map(TryInto::try_into).collect()
     }
 
-    pub async fn update_tester_runtime_status(
+    pub async fn update_tester_run_supervisor_state(
         &self,
-        tester_id: &str,
-        status: TesterStatus,
+        tester_run_id: &str,
+        status: TesterRunStatus,
         observed_thread_status: Option<&str>,
         last_error: Option<&str>,
+        last_parsed_rollout_index: i64,
     ) -> anyhow::Result<()> {
         sqlx::query(
             r#"
-UPDATE testers
+UPDATE tester_runs
 SET status = ?,
     last_observed_thread_status = ?,
     last_error = ?,
+    last_parsed_rollout_index = ?,
     updated_at = ?
 WHERE id = ?
             "#,
@@ -337,17 +368,18 @@ WHERE id = ?
         .bind(status.as_str())
         .bind(observed_thread_status)
         .bind(last_error)
+        .bind(last_parsed_rollout_index)
         .bind(Utc::now().timestamp())
-        .bind(tester_id)
+        .bind(tester_run_id)
         .execute(self.pool.as_ref())
         .await?;
         Ok(())
     }
 
-    pub async fn stop_tester(&self, tester_id: &str) -> anyhow::Result<bool> {
+    pub async fn stop_tester_run(&self, tester_run_id: &str) -> anyhow::Result<bool> {
         let result = sqlx::query(
             r#"
-UPDATE testers
+UPDATE tester_runs
 SET status = ?,
     lease_owner = NULL,
     lease_until = NULL,
@@ -356,17 +388,17 @@ WHERE id = ?
   AND status != ?
             "#,
         )
-        .bind(TesterStatus::Stopped.as_str())
+        .bind(TesterRunStatus::Stopped.as_str())
         .bind(Utc::now().timestamp())
-        .bind(tester_id)
-        .bind(TesterStatus::Stopped.as_str())
+        .bind(tester_run_id)
+        .bind(TesterRunStatus::Stopped.as_str())
         .execute(self.pool.as_ref())
         .await?;
         if result.rows_affected() > 0 {
-            self.append_tester_report(
-                tester_id,
-                TesterReportKind::Stopped,
-                "tester stopped".to_string(),
+            self.append_tester_run_report(
+                tester_run_id,
+                TesterRunReportKind::Stopped,
+                "tester run stopped".to_string(),
                 None,
             )
             .await?;
@@ -376,19 +408,19 @@ WHERE id = ?
         }
     }
 
-    pub async fn append_tester_report(
+    pub async fn append_tester_run_report(
         &self,
-        tester_id: &str,
-        report_kind: TesterReportKind,
+        tester_run_id: &str,
+        report_kind: TesterRunReportKind,
         summary: String,
-        details: Option<&str>,
+        details: Option<String>,
     ) -> anyhow::Result<String> {
         let report_id = uuid::Uuid::new_v4().to_string();
         sqlx::query(
             r#"
-INSERT INTO tester_reports (
+INSERT INTO tester_run_reports (
     id,
-    tester_id,
+    tester_run_id,
     report_kind,
     summary,
     details,
@@ -397,7 +429,7 @@ INSERT INTO tester_reports (
             "#,
         )
         .bind(&report_id)
-        .bind(tester_id)
+        .bind(tester_run_id)
         .bind(report_kind.as_str())
         .bind(summary)
         .bind(details)
@@ -407,27 +439,27 @@ INSERT INTO tester_reports (
         Ok(report_id)
     }
 
-    pub async fn list_tester_reports(
+    pub async fn list_tester_run_reports(
         &self,
-        tester_id: Option<&str>,
-    ) -> anyhow::Result<Vec<TesterReport>> {
-        let rows = if let Some(tester_id) = tester_id {
-            sqlx::query_as::<_, TesterReportRow>(
+        tester_run_id: Option<&str>,
+    ) -> anyhow::Result<Vec<TesterRunReport>> {
+        let rows = if let Some(tester_run_id) = tester_run_id {
+            sqlx::query_as::<_, TesterRunReportRow>(
                 r#"
-SELECT id, tester_id, report_kind, summary, details, created_at
-FROM tester_reports
-WHERE tester_id = ?
+SELECT id, tester_run_id, report_kind, summary, details, created_at
+FROM tester_run_reports
+WHERE tester_run_id = ?
 ORDER BY created_at DESC, id DESC
                 "#,
             )
-            .bind(tester_id)
+            .bind(tester_run_id)
             .fetch_all(self.pool.as_ref())
             .await?
         } else {
-            sqlx::query_as::<_, TesterReportRow>(
+            sqlx::query_as::<_, TesterRunReportRow>(
                 r#"
-SELECT id, tester_id, report_kind, summary, details, created_at
-FROM tester_reports
+SELECT id, tester_run_id, report_kind, summary, details, created_at
+FROM tester_run_reports
 ORDER BY created_at DESC, id DESC
                 "#,
             )
@@ -436,14 +468,64 @@ ORDER BY created_at DESC, id DESC
         };
         rows.into_iter().map(TryInto::try_into).collect()
     }
+
+    pub async fn append_tester_run_artifact(
+        &self,
+        tester_run_id: &str,
+        artifact_kind: TesterRunArtifactKind,
+        label: &str,
+        path: &Path,
+    ) -> anyhow::Result<String> {
+        let artifact_id = uuid::Uuid::new_v4().to_string();
+        sqlx::query(
+            r#"
+INSERT INTO tester_run_artifacts (
+    id,
+    tester_run_id,
+    artifact_kind,
+    label,
+    path,
+    created_at
+) VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&artifact_id)
+        .bind(tester_run_id)
+        .bind(artifact_kind.as_str())
+        .bind(label)
+        .bind(path.to_string_lossy().into_owned())
+        .bind(Utc::now().timestamp())
+        .execute(self.pool.as_ref())
+        .await?;
+        Ok(artifact_id)
+    }
+
+    pub async fn list_tester_run_artifacts(
+        &self,
+        tester_run_id: &str,
+    ) -> anyhow::Result<Vec<TesterRunArtifact>> {
+        let rows = sqlx::query_as::<_, TesterRunArtifactRow>(
+            r#"
+SELECT id, tester_run_id, artifact_kind, label, path, created_at
+FROM tester_run_artifacts
+WHERE tester_run_id = ?
+ORDER BY created_at DESC, id DESC
+            "#,
+        )
+        .bind(tester_run_id)
+        .fetch_all(self.pool.as_ref())
+        .await?;
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::StateRuntime;
-    use crate::TesterCreateParams;
-    use crate::TesterReportKind;
-    use crate::TesterStatus;
+    use crate::TesterExecutionClass;
+    use crate::TesterRunCreateParams;
+    use crate::TesterRunReportKind;
+    use crate::TesterRunStatus;
     use crate::runtime::test_support::test_thread_metadata;
     use chrono::Utc;
     use codex_protocol::ThreadId;
@@ -451,7 +533,7 @@ mod tests {
     use std::time::Duration;
 
     #[tokio::test]
-    async fn tester_create_and_claim_round_trip() {
+    async fn tester_run_create_and_claim_round_trip() {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let runtime = StateRuntime::init(tempdir.path().to_path_buf(), "test-provider".to_string())
             .await
@@ -468,42 +550,50 @@ mod tests {
             .expect("upsert controller thread");
 
         runtime
-            .create_tester(TesterCreateParams {
-                id: "tester-1".to_string(),
-                name: "beta".to_string(),
-                objective: "Deploy the app and report friction".to_string(),
+            .create_tester_run(TesterRunCreateParams {
+                id: "tester-run-1".to_string(),
+                name: "intent-check".to_string(),
+                objective: "Evaluate the product from the outside".to_string(),
                 background: Some("New to the repo".to_string()),
                 skill_level: Some("intermediate".to_string()),
                 temperament: Some("persistent".to_string()),
                 starting_knowledge: vec!["README only".to_string()],
                 constraints: vec!["Do not read source code".to_string()],
                 allowed_interfaces: vec!["terminal_harness".to_string()],
+                execution_class: TesterExecutionClass::TerminalFullAccess,
                 controller_thread_id: Some(controller_thread_id.to_string()),
                 cwd: Some(tempdir.path().to_path_buf()),
             })
             .await
-            .expect("create tester");
+            .expect("create tester run");
 
-        let testers = runtime.list_testers().await.expect("list testers");
-        assert_eq!(testers.len(), 1);
-        assert_eq!(testers[0].status, TesterStatus::Pending);
+        let tester_runs = runtime.list_tester_runs().await.expect("list tester runs");
+        assert_eq!(tester_runs.len(), 1);
+        assert_eq!(tester_runs[0].status, TesterRunStatus::Queued);
         assert_eq!(
-            testers[0].starting_knowledge,
+            tester_runs[0].starting_knowledge,
             vec!["README only".to_string()]
         );
 
         let claimed = runtime
-            .claim_pending_testers(Utc::now(), "worker-1", 10, Duration::from_secs(30))
+            .claim_queued_tester_runs(Utc::now(), "worker-1", 10, Duration::from_secs(30))
             .await
-            .expect("claim testers");
+            .expect("claim tester runs");
         assert_eq!(claimed.len(), 1);
-        assert_eq!(claimed[0].objective, "Deploy the app and report friction");
+        assert_eq!(
+            claimed[0].objective,
+            "Evaluate the product from the outside"
+        );
+        assert_eq!(
+            claimed[0].execution_class,
+            TesterExecutionClass::TerminalFullAccess
+        );
 
         let reports = runtime
-            .list_tester_reports(Some("tester-1"))
+            .list_tester_run_reports(Some("tester-run-1"))
             .await
             .expect("list reports");
         assert_eq!(reports.len(), 1);
-        assert_eq!(reports[0].report_kind, TesterReportKind::Created);
+        assert_eq!(reports[0].report_kind, TesterRunReportKind::Created);
     }
 }

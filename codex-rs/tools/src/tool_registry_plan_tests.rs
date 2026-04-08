@@ -159,7 +159,9 @@ fn tester_tool_plan_exposes_only_terminal_harness_basics() {
         available_models: &available_models,
         features: &features,
         web_search_mode: Some(WebSearchMode::Live),
-        session_source: SessionSource::Custom("tester:terminal_harness".to_string()),
+        session_source: SessionSource::Custom(
+            "tester_run:terminal_full_access:terminal_harness".to_string(),
+        ),
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
         windows_sandbox_level: WindowsSandboxLevel::Disabled,
     });

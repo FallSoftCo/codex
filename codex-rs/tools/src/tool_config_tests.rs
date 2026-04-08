@@ -219,15 +219,17 @@ fn tester_session_source_hard_disables_non_terminal_tools() {
         available_models: &available_models,
         features: &features,
         web_search_mode: Some(WebSearchMode::Live),
-        session_source: SessionSource::Custom("tester:terminal_harness".to_string()),
+        session_source: SessionSource::Custom(
+            "tester_run:terminal_full_access:terminal_harness".to_string(),
+        ),
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
         windows_sandbox_level: WindowsSandboxLevel::Disabled,
     });
 
     assert_eq!(tools_config.shell_type, ConfigShellToolType::UnifiedExec);
     assert!(tools_config.tester_tool_policy.is_some());
-    assert!(tools_config.request_permissions_tool_enabled == false);
-    assert!(tools_config.request_user_input_enabled == false);
+    assert!(!tools_config.request_permissions_tool_enabled);
+    assert!(!tools_config.request_user_input_enabled);
     assert!(tools_config.apply_patch_tool_type.is_none());
     assert!(!tools_config.js_repl_enabled);
     assert!(!tools_config.search_tool);
@@ -250,7 +252,9 @@ fn tester_without_terminal_harness_has_no_shell_tools() {
         available_models: &available_models,
         features: &features,
         web_search_mode: Some(WebSearchMode::Live),
-        session_source: SessionSource::Custom("tester:browser".to_string()),
+        session_source: SessionSource::Custom(
+            "tester_run:terminal_full_access:browser".to_string(),
+        ),
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
         windows_sandbox_level: WindowsSandboxLevel::Disabled,
     });

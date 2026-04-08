@@ -372,20 +372,38 @@ struct TesterCommand {
 
 #[derive(Debug, clap::Subcommand)]
 enum TesterSubcommand {
-    /// Create a tester that the app-server will start as a dedicated thread.
+    /// Create a managed tester run that the app-server will supervise.
     Create(TesterCreateCommand),
 
-    /// List testers.
+    /// List tester runs.
     List,
 
-    /// List persisted tester reports.
+    /// List persisted tester run reports.
     Reports(TesterReportsCommand),
 
-    /// Queue a prompt into an existing tester thread.
+    /// List persisted tester run artifacts.
+    Artifacts(TesterArtifactsCommand),
+
+    /// Queue a prompt into an existing tester run thread.
     Prompt(TesterPromptCommand),
 
-    /// Stop a tester from receiving further runtime updates.
+    /// Stop a tester run from receiving further runtime updates.
     Stop(TesterStopCommand),
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum TesterExecutionClassArg {
+    TerminalFullAccess,
+    TerminalSandboxed,
+}
+
+impl From<TesterExecutionClassArg> for codex_state::TesterExecutionClass {
+    fn from(value: TesterExecutionClassArg) -> Self {
+        match value {
+            TesterExecutionClassArg::TerminalFullAccess => Self::TerminalFullAccess,
+            TesterExecutionClassArg::TerminalSandboxed => Self::TerminalSandboxed,
+        }
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -422,6 +440,10 @@ struct TesterCreateCommand {
     #[arg(long = "allowed-interface", value_name = "INTERFACE")]
     allowed_interfaces: Vec<String>,
 
+    /// Execution environment contract for the tester run.
+    #[arg(long, value_enum, default_value_t = TesterExecutionClassArg::TerminalFullAccess)]
+    execution_class: TesterExecutionClassArg,
+
     /// Optional controller thread that should be woken when the tester reports state changes.
     #[arg(long, value_name = "THREAD_ID")]
     controller_thread_id: Option<String>,
@@ -433,16 +455,23 @@ struct TesterCreateCommand {
 
 #[derive(Debug, Parser)]
 struct TesterReportsCommand {
-    /// Optional tester id filter.
-    #[arg(long, value_name = "TESTER_ID")]
-    tester_id: Option<String>,
+    /// Optional tester run id filter.
+    #[arg(long = "run-id", value_name = "RUN_ID")]
+    run_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TesterArtifactsCommand {
+    /// Tester run id.
+    #[arg(value_name = "RUN_ID")]
+    run_id: String,
 }
 
 #[derive(Debug, Parser)]
 struct TesterPromptCommand {
-    /// Tester id.
-    #[arg(value_name = "TESTER_ID")]
-    tester_id: String,
+    /// Tester run id.
+    #[arg(value_name = "RUN_ID")]
+    run_id: String,
 
     /// Prompt to inject into the tester thread immediately.
     #[arg(long, value_name = "PROMPT")]
@@ -451,9 +480,9 @@ struct TesterPromptCommand {
 
 #[derive(Debug, Parser)]
 struct TesterStopCommand {
-    /// Tester id.
-    #[arg(value_name = "TESTER_ID")]
-    tester_id: String,
+    /// Tester run id.
+    #[arg(value_name = "RUN_ID")]
+    run_id: String,
 }
 
 #[derive(Debug, Parser)]
@@ -1490,8 +1519,7 @@ async fn run_schedule_command(
                 })
                 .await?;
             println!(
-                "Scheduled recurring wakeup for thread {thread_id} every {}s starting at {next_run_at}.",
-                interval_seconds
+                "Scheduled recurring wakeup for thread {thread_id} every {interval_seconds}s starting at {next_run_at}."
             );
         }
         ScheduleSubcommand::List(args) => {
@@ -1584,10 +1612,10 @@ async fn run_tester_command(
                 .as_deref()
                 .map(parse_thread_id_arg)
                 .transpose()?;
-            let tester_id = uuid::Uuid::new_v4().to_string();
+            let tester_run_id = uuid::Uuid::new_v4().to_string();
             state_db
-                .create_tester(codex_state::TesterCreateParams {
-                    id: tester_id.clone(),
+                .create_tester_run(codex_state::TesterRunCreateParams {
+                    id: tester_run_id.clone(),
                     name: args.name,
                     objective: args.objective,
                     background: args.background,
@@ -1596,44 +1624,49 @@ async fn run_tester_command(
                     starting_knowledge: args.starting_knowledge,
                     constraints: args.constraints,
                     allowed_interfaces: args.allowed_interfaces,
+                    execution_class: args.execution_class.into(),
                     controller_thread_id: controller_thread_id.map(|id| id.to_string()),
                     cwd: args.cwd,
                 })
                 .await?;
-            println!("Created tester {tester_id}.");
+            println!("Created tester run {tester_run_id}.");
         }
         TesterSubcommand::List => {
-            let testers = state_db.list_testers().await?;
-            if testers.is_empty() {
-                println!("No testers found.");
+            let tester_runs = state_db.list_tester_runs().await?;
+            if tester_runs.is_empty() {
+                println!("No tester runs found.");
             } else {
-                for tester in testers {
+                for tester_run in tester_runs {
                     println!(
-                        "{}\t{}\t{}\t{}\t{}\t{}",
-                        tester.id,
-                        tester.status.as_str(),
-                        tester.tester_thread_id.unwrap_or_else(|| "-".to_string()),
-                        tester
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        tester_run.id,
+                        tester_run.status.as_str(),
+                        tester_run.execution_class.as_str(),
+                        tester_run
+                            .runtime_thread_id
+                            .unwrap_or_else(|| "-".to_string()),
+                        tester_run
                             .controller_thread_id
                             .unwrap_or_else(|| "-".to_string()),
-                        tester.name,
-                        tester.objective
+                        tester_run.name,
+                        tester_run.objective,
+                        tester_run.last_error.unwrap_or_else(|| "-".to_string())
                     );
                 }
             }
         }
         TesterSubcommand::Reports(args) => {
             let reports = state_db
-                .list_tester_reports(args.tester_id.as_deref())
+                .list_tester_run_reports(args.run_id.as_deref())
                 .await?;
             if reports.is_empty() {
-                println!("No tester reports found.");
+                println!("No tester run reports found.");
             } else {
                 for report in reports {
                     println!(
                         "{}\t{}\t{}\t{}\t{}",
                         report.id,
-                        report.tester_id,
+                        report.tester_run_id,
                         report.report_kind.as_str(),
                         report.created_at.to_rfc3339(),
                         report.summary
@@ -1641,20 +1674,39 @@ async fn run_tester_command(
                 }
             }
         }
+        TesterSubcommand::Artifacts(args) => {
+            let artifacts = state_db
+                .list_tester_run_artifacts(args.run_id.as_str())
+                .await?;
+            if artifacts.is_empty() {
+                println!("No tester run artifacts found.");
+            } else {
+                for artifact in artifacts {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}",
+                        artifact.id,
+                        artifact.tester_run_id,
+                        artifact.artifact_kind.as_str(),
+                        artifact.created_at.to_rfc3339(),
+                        artifact.path.display()
+                    );
+                }
+            }
+        }
         TesterSubcommand::Prompt(args) => {
-            let tester = state_db
-                .get_tester(args.tester_id.as_str())
+            let tester_run = state_db
+                .get_tester_run(args.run_id.as_str())
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("tester {} was not found", args.tester_id))?;
-            let tester_thread_id = tester
-                .tester_thread_id
-                .ok_or_else(|| anyhow::anyhow!("tester {} has not started yet", args.tester_id))?;
+                .ok_or_else(|| anyhow::anyhow!("tester run {} was not found", args.run_id))?;
+            let tester_thread_id = tester_run
+                .runtime_thread_id
+                .ok_or_else(|| anyhow::anyhow!("tester run {} has not started yet", args.run_id))?;
             let schedule_id = uuid::Uuid::new_v4().to_string();
             state_db
                 .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
                     id: schedule_id.clone(),
                     thread_id: tester_thread_id.clone(),
-                    title: format!("tester:{} prompt", tester.name),
+                    title: format!("tester:{} prompt", tester_run.name),
                     prompt: args.prompt,
                     kind: codex_state::ScheduledTaskKind::Once,
                     next_run_at: Utc::now(),
@@ -1663,17 +1715,17 @@ async fn run_tester_command(
                 })
                 .await?;
             println!(
-                "Queued prompt for tester {} on thread {} via scheduled task {}.",
-                args.tester_id, tester_thread_id, schedule_id
+                "Queued prompt for tester run {} on thread {} via scheduled task {}.",
+                args.run_id, tester_thread_id, schedule_id
             );
         }
         TesterSubcommand::Stop(args) => {
-            if state_db.stop_tester(args.tester_id.as_str()).await? {
-                println!("Stopped tester {}.", args.tester_id);
+            if state_db.stop_tester_run(args.run_id.as_str()).await? {
+                println!("Stopped tester run {}.", args.run_id);
             } else {
                 println!(
-                    "Tester {} was not found or was already stopped.",
-                    args.tester_id
+                    "Tester run {} was not found or was already stopped.",
+                    args.run_id
                 );
             }
         }
