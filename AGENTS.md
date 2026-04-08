@@ -1,5 +1,14 @@
 # Rust/codex-rs
 
+## Losangelex Remote Policy
+
+- This repo is maintained as a FallSoftCo Losangelex fork of upstream `openai/codex`.
+- For branch work intended to land remotely, push the active Losangelex branch to both GitHub remotes unless the user explicitly says otherwise:
+  - `fallsoftco` -> `git@github.com:FallSoftCo/codex.git`
+  - `fork` -> `git@github.com:aiyer-commits/codex.git`
+- Keep `fallsoftco/hollywood-native-integration-clean` and `fork/hollywood-native-integration-clean` at the same tip.
+- After pushing branch updates, verify both remotes point at the same commit before concluding the task.
+
 In the codex-rs folder where the rust code lives:
 
 - Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`
