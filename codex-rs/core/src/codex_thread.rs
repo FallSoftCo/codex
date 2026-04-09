@@ -193,6 +193,18 @@ impl CodexThread {
         self.rollout_path.clone()
     }
 
+    pub async fn unified_exec_process_observation(
+        &self,
+        process_id: i32,
+    ) -> crate::ProcessObservation {
+        self.codex
+            .session
+            .services
+            .unified_exec_manager
+            .process_observation(process_id)
+            .await
+    }
+
     pub fn state_db(&self) -> Option<StateDbHandle> {
         self.codex.state_db()
     }

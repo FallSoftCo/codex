@@ -47,7 +47,13 @@ pub(crate) fn format_hollywood_message(message: &HollywoodInputMessage) -> Strin
 
 pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) -> Option<String> {
     if message.sender_id == "hollywood-system" {
-        return None;
+        return match message.obligation.as_deref() {
+            Some("attention") => Some(
+                "Internal Hollywood runtime coordination context was attached to this turn. Keep it internal unless it materially changes the task or requires a concrete coordination action."
+                    .to_string(),
+            ),
+            _ => None,
+        };
     }
 
     match message.obligation.as_deref() {
@@ -58,7 +64,7 @@ pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) 
             message.sender_id,
         )),
         Some("attention") => Some(format!(
-            "Hollywood attention update: inspect the attached Hollywood message from `{}` in room `{}` and decide whether it changes your current work or requires a concise follow-up.",
+            "Hollywood attention update: inspect the attached Hollywood message from `{}` in room `{}`. Keep it internal unless it materially changes your work or requires a concrete coordination action; do not send a routine acknowledgment by default.",
             message.sender_id, message.room,
         )),
         _ => None,
@@ -89,5 +95,47 @@ mod tests {
         assert!(instruction.contains("Hollywood coordination obligation"));
         assert!(instruction.contains("direct"));
         assert!(instruction.contains("peer"));
+    }
+
+    #[test]
+    fn attention_instruction_discourages_routine_acknowledgments() {
+        let message = HollywoodInputMessage {
+            message_id: 2,
+            room: "main".to_string(),
+            sender_id: "peer".to_string(),
+            body: "ack".to_string(),
+            mentions: vec![],
+            attention: Some("focused".to_string()),
+            message_kind: Some("direct".to_string()),
+            obligation: Some("attention".to_string()),
+            requires_response: false,
+        };
+
+        let instruction =
+            hollywood_obligation_instruction(&message).expect("instruction should exist");
+
+        assert!(instruction.contains("Keep it internal"));
+        assert!(instruction.contains("do not send a routine acknowledgment"));
+    }
+
+    #[test]
+    fn hollywood_system_attention_stays_internal() {
+        let message = HollywoodInputMessage {
+            message_id: 0,
+            room: "main".to_string(),
+            sender_id: "hollywood-system".to_string(),
+            body: "Autonomous Hollywood follow-up".to_string(),
+            mentions: vec![],
+            attention: Some("focused".to_string()),
+            message_kind: Some("direct".to_string()),
+            obligation: Some("attention".to_string()),
+            requires_response: false,
+        };
+
+        let instruction =
+            hollywood_obligation_instruction(&message).expect("instruction should exist");
+
+        assert!(instruction.contains("Keep it internal"));
+        assert!(instruction.contains("runtime coordination context"));
     }
 }

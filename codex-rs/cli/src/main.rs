@@ -144,6 +144,9 @@ enum Subcommand {
     /// Manage persisted scheduled thread wakeups.
     Schedule(ScheduleCommand),
 
+    /// Manage persisted deferred process-exit watchers.
+    Watcher(WatcherCommand),
+
     /// Manage interactive tester runtimes.
     Tester(TesterCommand),
 
@@ -368,6 +371,75 @@ struct ScheduleRunNowCommand {
 struct TesterCommand {
     #[command(subcommand)]
     subcommand: TesterSubcommand,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherCommand {
+    #[command(subcommand)]
+    subcommand: WatcherSubcommand,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum WatcherSubcommand {
+    /// Create a process-exit watcher tied to an exec_command session id.
+    AddProcessExit(WatcherAddProcessExitCommand),
+
+    /// List persisted watchers.
+    List(WatcherListCommand),
+
+    /// List watcher runs.
+    Runs(WatcherRunsCommand),
+
+    /// Stop a watcher.
+    Remove(WatcherRemoveCommand),
+}
+
+#[derive(Debug, Parser)]
+struct WatcherAddProcessExitCommand {
+    /// Thread/session id to wake when the watcher fires.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: String,
+
+    /// Short human-readable label for the watcher.
+    #[arg(long, value_name = "TITLE")]
+    title: String,
+
+    /// Prompt injected into the thread when the watched process exits.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+
+    /// Running exec_command session id to watch.
+    #[arg(long, value_name = "SESSION_ID")]
+    session_id: i32,
+
+    /// Optional timeout like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    timeout: Option<String>,
+
+    /// Mark the wakeup as requiring a response.
+    #[arg(long, default_value_t = true)]
+    requires_response: bool,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherListCommand {
+    /// Optional thread/session id filter.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherRunsCommand {
+    /// Optional watcher id filter.
+    #[arg(long, value_name = "WATCHER_ID")]
+    watcher_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherRemoveCommand {
+    /// Watcher id.
+    #[arg(value_name = "WATCHER_ID")]
+    watcher_id: String,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -1037,6 +1109,14 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 "schedule",
             )?;
             run_schedule_command(cmd, &root_config_overrides, &interactive).await?;
+        }
+        Some(Subcommand::Watcher(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "watcher",
+            )?;
+            run_watcher_command(cmd, &root_config_overrides, &interactive).await?;
         }
         Some(Subcommand::Tester(cmd)) => {
             reject_remote_mode_for_subcommand(
@@ -1726,6 +1806,103 @@ async fn run_tester_command(
                 println!(
                     "Tester run {} was not found or was already stopped.",
                     args.run_id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_watcher_command(
+    cmd: WatcherCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite_home.clone(), config.model_provider_id.clone()).await?;
+
+    match cmd.subcommand {
+        WatcherSubcommand::AddProcessExit(args) => {
+            let thread_id = parse_thread_id_arg(args.thread_id.as_str())?;
+            let timeout_at = args
+                .timeout
+                .as_deref()
+                .map(parse_schedule_duration)
+                .transpose()?
+                .map(|seconds| {
+                    Utc::now()
+                        + chrono::Duration::from_std(std::time::Duration::from_secs(seconds as u64))
+                            .expect("positive duration")
+                });
+            let watcher_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_watcher(codex_state::WatcherCreateParams {
+                    id: watcher_id.clone(),
+                    thread_id: thread_id.to_string(),
+                    title: args.title,
+                    prompt: args.prompt,
+                    trigger_kind: codex_state::WatcherTriggerKind::ProcessExit,
+                    process_id: Some(args.session_id),
+                    timeout_at,
+                    requires_response: args.requires_response,
+                })
+                .await?;
+            println!("Created watcher {watcher_id}.");
+        }
+        WatcherSubcommand::List(args) => {
+            let thread_id = args
+                .thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let watchers = state_db.list_watchers(thread_id).await?;
+            if watchers.is_empty() {
+                println!("No watchers found.");
+            } else {
+                for watcher in watchers {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        watcher.id,
+                        watcher.status.as_str(),
+                        watcher
+                            .process_id
+                            .map(|value| value.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        watcher.thread_id,
+                        watcher.title,
+                        watcher.last_error.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        WatcherSubcommand::Runs(args) => {
+            let runs = state_db
+                .list_watcher_runs(args.watcher_id.as_deref())
+                .await?;
+            if runs.is_empty() {
+                println!("No watcher runs found.");
+            } else {
+                for run in runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}",
+                        run.id,
+                        run.watcher_id,
+                        run.status.as_str(),
+                        run.started_at.to_rfc3339(),
+                        run.summary.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        WatcherSubcommand::Remove(args) => {
+            if state_db.cancel_watcher(args.watcher_id.as_str()).await? {
+                println!("Stopped watcher {}.", args.watcher_id);
+            } else {
+                println!(
+                    "Watcher {} was not found or was already stopped.",
+                    args.watcher_id
                 );
             }
         }

@@ -39,6 +39,7 @@ pub enum ToolHandlerKind {
     ToolSuggest,
     UnifiedExec,
     ViewImage,
+    Watcher,
     WaitAgentV1,
     WaitAgentV2,
 }

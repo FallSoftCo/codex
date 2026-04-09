@@ -60,6 +60,7 @@ mod schedules;
 mod test_support;
 mod testers;
 mod threads;
+mod watchers;
 
 pub use remote_control::RemoteControlEnrollmentRecord;
 

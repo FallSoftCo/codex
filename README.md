@@ -23,6 +23,7 @@ It keeps the upstream Codex CLI, TUI, and app-server foundation, then layers on:
 - Losangelex launcher defaults for full-access local work
 - workspace-scoped Hollywood bootstrap and room setup
 - persisted scheduled thread wakeups
+- persisted process-exit watchers for deferred continuations
 - managed tester runtimes for interactive user-like evaluation
 - upstream-aligned branch history rather than a permanently drifting fork
 
@@ -37,6 +38,7 @@ The current integration target is current upstream `main`, with Losangelex behav
 - [Current Status](#current-status)
 - [Quickstart](#quickstart)
 - [Scheduled Tasks](#scheduled-tasks)
+- [Watchers](#watchers)
 - [Testers](#testers)
 - [Demo](#demo)
 - [Relationship to Upstream Codex](#relationship-to-upstream-codex)
@@ -169,7 +171,7 @@ Expected to work:
 
 Not finished yet:
 
-- first-class watcher/trigger system beyond time-based schedules
+- broader watcher trigger types beyond process-exit and time-based schedules
 - richer obligation lifecycle UI for Hollywood traffic
 - full workflow-engine semantics
 - polished packaging/release flow for non-technical users
@@ -246,6 +248,7 @@ After bootstrap, the main entry points are:
 - `scripts/losangelex` for the opinionated local launcher
 - `codex app-server` for the runtime host
 - `codex schedule ...` for persisted wakeups
+- `codex watcher ...` for persisted process-exit watchers
 - `codex tester ...` for managed tester runtimes
 - Hollywood room traffic and attention policy for multi-agent coordination
 
@@ -277,6 +280,33 @@ Current limitation:
 - schedules are durable, but they only fire while an app-server process is running
 
 This is the first workflow-oriented primitive in the repo. The next likely direction is broader deferred continuations and watcher-triggered wakeups rather than stopping at cron-like time scheduling.
+
+## Watchers
+
+Losangelex ships CLI management for persisted process-exit watchers:
+
+```sh
+codex watcher add-process-exit \
+  --thread-id <THREAD_ID> \
+  --session-id <EXEC_SESSION_ID> \
+  --title "wait for cargo check" \
+  --prompt "Inspect the finished build and summarize any failures."
+
+codex watcher list
+codex watcher runs
+codex watcher remove <WATCHER_ID>
+```
+
+Current behavior:
+
+- watchers are durable, but app-server must be running to claim them and wake the target thread
+- v1 supports `process_exit` watchers for `exec_command` sessions
+- watcher wake prompts include structured context such as elapsed time, exit status, and the original follow-up prompt
+- `exec_command` and `write_stdin` now nudge the model toward using a watcher instead of blocking on long waits
+
+See:
+
+- [Watchers](./codex-rs/docs/watchers.md)
 
 ## Testers
 
@@ -348,7 +378,7 @@ The current repo has already crossed from "Hollywood experiment" into "workflow/
 
 The likely next steps are:
 
-- watcher-triggered wakeups beyond time-based schedules
+- richer watcher trigger types and deferred continuation patterns
 - deferred continuations for long-running background conditions
 - richer Hollywood obligation lifecycle visibility
 - a more general workflow engine built on persisted runs and triggers
@@ -362,6 +392,7 @@ That direction should still be implemented in an upstream-adaptive way, not by h
 - [FallSoftCo Hollywood-native integration notes](./docs/hollywood-native-integration.md)
 - [Hollywood integration](./codex-rs/docs/hollywood_integration.md)
 - [Scheduled Tasks](./codex-rs/docs/scheduled_tasks.md)
+- [Watchers](./codex-rs/docs/watchers.md)
 - [Testers](./codex-rs/docs/testers.md)
 - [App-server README](./codex-rs/app-server/README.md)
 - [Installing & building](./docs/install.md)

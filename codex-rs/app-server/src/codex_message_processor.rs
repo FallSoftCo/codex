@@ -526,6 +526,9 @@ const SCHEDULED_TASK_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const SCHEDULED_TASK_LEASE_DURATION: Duration = Duration::from_secs(120);
 const SCHEDULED_TASK_BUSY_RETRY_DELAY: Duration = Duration::from_secs(60);
 const SCHEDULED_TASK_CLAIM_LIMIT: usize = 8;
+const WATCHER_POLL_INTERVAL: Duration = Duration::from_secs(10);
+const WATCHER_LEASE_DURATION: Duration = Duration::from_secs(120);
+const WATCHER_CLAIM_LIMIT: usize = 16;
 const TESTER_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const TESTER_LEASE_DURATION: Duration = Duration::from_secs(120);
 const TESTER_CLAIM_LIMIT: usize = 4;
@@ -629,6 +632,7 @@ impl CodexMessageProcessor {
             log_db,
         };
         processor.spawn_scheduled_task_runtime();
+        processor.spawn_watcher_runtime();
         processor.spawn_tester_runtime();
         processor
     }
@@ -802,6 +806,209 @@ impl CodexMessageProcessor {
         Ok(())
     }
 
+    async fn watcher_runtime_loop(context: ScheduledTaskContext, shutdown: CancellationToken) {
+        let mut interval = tokio::time::interval(WATCHER_POLL_INTERVAL);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                _ = interval.tick() => {
+                    if let Err(err) = Self::poll_due_watchers(&context).await {
+                        warn!("watcher poll failed: {err}");
+                    }
+                    if let Err(err) = Self::monitor_running_watchers(&context).await {
+                        warn!("watcher monitor failed: {err}");
+                    }
+                }
+            }
+        }
+    }
+
+    async fn poll_due_watchers(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let worker_id = format!("app-server-watcher-{}", std::process::id());
+        let watchers = state_db
+            .claim_armed_watchers(
+                Utc::now(),
+                worker_id.as_str(),
+                WATCHER_CLAIM_LIMIT,
+                WATCHER_LEASE_DURATION,
+            )
+            .await?;
+        for watcher in watchers {
+            if let Err(err) = Self::evaluate_claimed_watcher(context, &state_db, watcher).await {
+                warn!("watcher evaluation failed: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    async fn evaluate_claimed_watcher(
+        context: &ScheduledTaskContext,
+        state_db: &StateDbHandle,
+        watcher: codex_state::ClaimedWatcher,
+    ) -> anyhow::Result<()> {
+        let now = Utc::now();
+        if let Some(timeout_at) = watcher.timeout_at
+            && now >= timeout_at
+        {
+            state_db
+                .fail_watcher(
+                    &watcher.id,
+                    codex_state::WatcherStatus::BlockedEnvironment,
+                    "watcher timed out before the process exit condition was observed",
+                    now,
+                )
+                .await?;
+            return Ok(());
+        }
+
+        match watcher.trigger_kind {
+            codex_state::WatcherTriggerKind::ProcessExit => {
+                let Some(process_id) = watcher.process_id else {
+                    state_db
+                        .fail_watcher(
+                            &watcher.id,
+                            codex_state::WatcherStatus::BlockedEnvironment,
+                            "process_exit watcher is missing the watched session id",
+                            now,
+                        )
+                        .await?;
+                    return Ok(());
+                };
+                let thread_id = ThreadId::from_string(&watcher.thread_id)?;
+                let thread = match context.thread_manager.get_thread(thread_id).await {
+                    Ok(thread) => thread,
+                    Err(_) => {
+                        state_db
+                            .fail_watcher(
+                                &watcher.id,
+                                codex_state::WatcherStatus::BlockedEnvironment,
+                                "watched thread is not loaded; process-exit watchers require the originating runtime to remain loaded",
+                                now,
+                            )
+                            .await?;
+                        return Ok(());
+                    }
+                };
+
+                match thread.unified_exec_process_observation(process_id).await {
+                    codex_core::ProcessObservation::Running { .. } => {
+                        state_db.release_watcher_claim(&watcher.id).await?;
+                    }
+                    codex_core::ProcessObservation::Unknown => {
+                        state_db
+                            .fail_watcher(
+                                &watcher.id,
+                                codex_state::WatcherStatus::BlockedEnvironment,
+                                "watched process session is unavailable; the runtime was restarted, pruned, or never existed in this host",
+                                now,
+                            )
+                            .await?;
+                    }
+                    codex_core::ProcessObservation::Exited {
+                        exit_code,
+                        failure_message,
+                    } => {
+                        let loaded_status = context
+                            .thread_watch_manager
+                            .loaded_status_for_thread(&watcher.thread_id)
+                            .await;
+                        if matches!(loaded_status, ThreadStatus::Active { .. }) {
+                            state_db.release_watcher_claim(&watcher.id).await?;
+                            return Ok(());
+                        }
+
+                        let thread_state =
+                            context.thread_state_manager.thread_state(thread_id).await;
+                        Self::ensure_listener_task_running_task(
+                            ListenerTaskContext {
+                                thread_manager: Arc::clone(&context.thread_manager),
+                                thread_state_manager: context.thread_state_manager.clone(),
+                                outgoing: Arc::clone(&context.outgoing),
+                                analytics_events_client: context.analytics_events_client.clone(),
+                                general_analytics_enabled: context
+                                    .config
+                                    .features
+                                    .enabled(Feature::GeneralAnalytics),
+                                thread_watch_manager: context.thread_watch_manager.clone(),
+                                fallback_model_provider: context.config.model_provider_id.clone(),
+                                codex_home: context.config.codex_home.clone(),
+                            },
+                            thread_id,
+                            Arc::clone(&thread),
+                            thread_state,
+                            ApiVersion::V2,
+                        )
+                        .await;
+
+                        let turn_id = thread
+                            .submit(Op::UserInput {
+                                items: vec![CoreInputItem::Text {
+                                    text: Self::format_watcher_wake_message(
+                                        &watcher,
+                                        now,
+                                        exit_code,
+                                        failure_message.as_deref(),
+                                    ),
+                                    text_elements: Vec::new(),
+                                }],
+                                final_output_json_schema: None,
+                            })
+                            .await?;
+                        state_db.start_watcher_run(&watcher, &turn_id, now).await?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn monitor_running_watchers(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let runs = state_db.list_running_watcher_runs().await?;
+        for run in runs {
+            match context
+                .thread_watch_manager
+                .loaded_status_for_thread(&run.thread_id)
+                .await
+            {
+                ThreadStatus::Active { .. } => {}
+                ThreadStatus::Idle | ThreadStatus::NotLoaded => {
+                    state_db
+                        .complete_watcher_run(
+                            &run.id,
+                            &run.watcher_id,
+                            codex_state::WatcherRunStatus::Completed,
+                            Utc::now(),
+                            Some(
+                                "watcher wake turn finished; inspect the thread transcript for follow-up output",
+                            ),
+                            None,
+                        )
+                        .await?;
+                }
+                ThreadStatus::SystemError => {
+                    state_db
+                        .complete_watcher_run(
+                            &run.id,
+                            &run.watcher_id,
+                            codex_state::WatcherRunStatus::Failed,
+                            Utc::now(),
+                            Some("thread entered system error state during watcher follow-up"),
+                            Some("thread entered system error state"),
+                        )
+                        .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn spawn_tester_runtime(&self) {
         let context = ScheduledTaskContext {
             auth_manager: Arc::clone(&self.auth_manager),
@@ -819,6 +1026,26 @@ impl CodexMessageProcessor {
         let shutdown = self.scheduler_shutdown.clone();
         self.background_tasks.spawn(async move {
             Self::tester_runtime_loop(context, shutdown).await;
+        });
+    }
+
+    fn spawn_watcher_runtime(&self) {
+        let context = ScheduledTaskContext {
+            auth_manager: Arc::clone(&self.auth_manager),
+            thread_manager: Arc::clone(&self.thread_manager),
+            outgoing: Arc::clone(&self.outgoing),
+            analytics_events_client: self.analytics_events_client.clone(),
+            config: Arc::clone(&self.config),
+            arg0_paths: self.arg0_paths.clone(),
+            cli_overrides: Arc::clone(&self.cli_overrides),
+            runtime_feature_enablement: Arc::clone(&self.runtime_feature_enablement),
+            cloud_requirements: Arc::clone(&self.cloud_requirements),
+            thread_state_manager: self.thread_state_manager.clone(),
+            thread_watch_manager: self.thread_watch_manager.clone(),
+        };
+        let shutdown = self.scheduler_shutdown.clone();
+        self.background_tasks.spawn(async move {
+            Self::watcher_runtime_loop(context, shutdown).await;
         });
     }
 
@@ -1246,6 +1473,54 @@ impl CodexMessageProcessor {
         )
     }
 
+    fn format_watcher_wake_message(
+        watcher: &codex_state::ClaimedWatcher,
+        wake_at: DateTime<Utc>,
+        exit_code: Option<i32>,
+        failure_message: Option<&str>,
+    ) -> String {
+        let created_at = watcher
+            .created_at
+            .to_rfc3339_opts(SecondsFormat::Secs, true);
+        let woke_at = wake_at.to_rfc3339_opts(SecondsFormat::Secs, true);
+        let elapsed =
+            Self::format_elapsed_seconds(wake_at.signed_duration_since(watcher.created_at));
+        let process_id = watcher
+            .process_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let exit_code = exit_code
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let failure_message = failure_message.unwrap_or("-");
+
+        format!(
+            concat!(
+                "<watcher_context>\n",
+                "title: {title}\n",
+                "trigger: process_exit\n",
+                "watched_session_id: {process_id}\n",
+                "created_at: {created_at}\n",
+                "woke_at: {woke_at}\n",
+                "elapsed: {elapsed}\n",
+                "exit_code: {exit_code}\n",
+                "failure_message: {failure_message}\n",
+                "requires_response: {requires_response}\n",
+                "</watcher_context>\n\n",
+                "{prompt}"
+            ),
+            title = watcher.title,
+            process_id = process_id,
+            created_at = created_at,
+            woke_at = woke_at,
+            elapsed = elapsed,
+            exit_code = exit_code,
+            failure_message = failure_message,
+            requires_response = watcher.requires_response,
+            prompt = watcher.prompt,
+        )
+    }
+
     fn format_elapsed_seconds(duration: chrono::Duration) -> String {
         let total_seconds = duration.num_seconds().max(0);
         let hours = total_seconds / 3600;
@@ -1259,6 +1534,35 @@ impl CodexMessageProcessor {
         } else {
             format!("{seconds}s")
         }
+    }
+
+    fn hollywood_input_delivery_metadata(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+    ) -> (&'static str, bool) {
+        use codex_app_server_protocol::HollywoodMessageAttention;
+        use codex_app_server_protocol::HollywoodMessageKind;
+
+        if matches!(message.attention, HollywoodMessageAttention::Broadcast)
+            || matches!(
+                message.notification_message.message_kind,
+                HollywoodMessageKind::Broadcast
+            )
+        {
+            return ("obligation", true);
+        }
+
+        if message.mentioned {
+            return ("obligation", true);
+        }
+
+        if matches!(
+            message.attention,
+            HollywoodMessageAttention::Focused | HollywoodMessageAttention::Broad
+        ) {
+            return ("attention", false);
+        }
+
+        ("ambient", false)
     }
 
     fn tester_execution_overrides(
@@ -9373,6 +9677,8 @@ impl CodexMessageProcessor {
                                     && matches!(status, ThreadStatus::Idle)
                                     && thread_state.lock().await.active_turn_snapshot().is_none());
                             if can_submit_now && !message.self_authored {
+                                let (obligation, requires_response) =
+                                    Self::hollywood_input_delivery_metadata(&message);
                                 {
                                     thread_state
                                         .lock()
@@ -9403,21 +9709,8 @@ impl CodexMessageProcessor {
                                                 codex_app_server_protocol::HollywoodMessageKind::Broadcast => "broadcast",
                                                 codex_app_server_protocol::HollywoodMessageKind::Direct => "direct",
                                             }.to_string()),
-                                            obligation: Some(
-                                                if matches!(message.attention, codex_app_server_protocol::HollywoodMessageAttention::Focused | codex_app_server_protocol::HollywoodMessageAttention::Broadcast) {
-                                                    "obligation"
-                                                } else if message.mentioned {
-                                                    "attention"
-                                                } else {
-                                                    "ambient"
-                                                }
-                                                .to_string()
-                                            ),
-                                            requires_response: matches!(
-                                                message.attention,
-                                                codex_app_server_protocol::HollywoodMessageAttention::Focused
-                                                    | codex_app_server_protocol::HollywoodMessageAttention::Broadcast
-                                            ),
+                                            obligation: Some(obligation.to_string()),
+                                            requires_response,
                                         },
                                     })
                                     .await;
@@ -11910,6 +12203,56 @@ mod tests {
             CodexMessageProcessor::format_elapsed_seconds(chrono::Duration::seconds(3723)),
             "1h 2m 3s"
         );
+    }
+
+    #[test]
+    fn plain_direct_hollywood_message_is_attention_not_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 42,
+                room: "ozzz".to_string(),
+                sender_id: Some("peer".to_string()),
+                recipient_id: Some("self".to_string()),
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                body: "Acknowledged. No further reply needed.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+    }
+
+    #[test]
+    fn mentioned_hollywood_message_remains_an_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 43,
+                room: "ozzz".to_string(),
+                sender_id: Some("peer".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                body: "@sid-agow-sn5o-fb2h-bmes-qkke-5n3q-2a please take this task".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: vec!["sid-agow-sn5o-fb2h-bmes-qkke-5n3q-2a".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+
+        assert_eq!(obligation, "obligation");
+        assert!(requires_response);
     }
 
     #[test]

@@ -254,6 +254,7 @@ fn exec_command_tool_output_formats_truncated_response() {
             "-lc".to_string(),
             "rm -rf /tmp/example.sqlite".to_string(),
         ]),
+        advisory_note: None,
     }
     .to_response_item("call-42", &payload);
 

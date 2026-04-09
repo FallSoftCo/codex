@@ -297,6 +297,7 @@ impl ToolHandler for UnifiedExecHandler {
                         exit_code: None,
                         original_token_count: None,
                         session_command: None,
+                        advisory_note: None,
                     });
                 }
 

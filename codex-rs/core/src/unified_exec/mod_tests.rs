@@ -164,6 +164,7 @@ async fn exec_command_with_tty(
         exit_code,
         original_token_count: Some(approx_token_count(&text)),
         session_command: Some(command),
+        advisory_note: None,
     })
 }
 

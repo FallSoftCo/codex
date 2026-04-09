@@ -18,6 +18,7 @@ use crate::collect_tool_search_app_infos;
 use crate::collect_tool_suggest_entries;
 use crate::create_apply_patch_freeform_tool;
 use crate::create_apply_patch_json_tool;
+use crate::create_cancel_watcher_tool;
 use crate::create_close_agent_tool_v1;
 use crate::create_close_agent_tool_v2;
 use crate::create_code_mode_tool;
@@ -30,6 +31,7 @@ use crate::create_list_agents_tool;
 use crate::create_list_dir_tool;
 use crate::create_list_mcp_resource_templates_tool;
 use crate::create_list_mcp_resources_tool;
+use crate::create_list_watchers_tool;
 use crate::create_local_shell_tool;
 use crate::create_read_mcp_resource_tool;
 use crate::create_report_agent_job_result_tool;
@@ -51,6 +53,7 @@ use crate::create_view_image_tool;
 use crate::create_wait_agent_tool_v1;
 use crate::create_wait_agent_tool_v2;
 use crate::create_wait_tool;
+use crate::create_watch_process_exit_tool;
 use crate::create_web_search_tool;
 use crate::create_write_stdin_tool;
 use crate::dynamic_tool_to_responses_api_tool;
@@ -141,6 +144,26 @@ pub fn build_tool_registry_plan(
                 );
                 plan.register_handler("exec_command", ToolHandlerKind::UnifiedExec);
                 plan.register_handler("write_stdin", ToolHandlerKind::UnifiedExec);
+                if config.tester_tool_policy.is_none() {
+                    plan.push_spec(
+                        create_watch_process_exit_tool(),
+                        /*supports_parallel_tool_calls*/ false,
+                        config.code_mode_enabled,
+                    );
+                    plan.push_spec(
+                        create_list_watchers_tool(),
+                        /*supports_parallel_tool_calls*/ true,
+                        config.code_mode_enabled,
+                    );
+                    plan.push_spec(
+                        create_cancel_watcher_tool(),
+                        /*supports_parallel_tool_calls*/ true,
+                        config.code_mode_enabled,
+                    );
+                    plan.register_handler("watch_process_exit", ToolHandlerKind::Watcher);
+                    plan.register_handler("list_watchers", ToolHandlerKind::Watcher);
+                    plan.register_handler("cancel_watcher", ToolHandlerKind::Watcher);
+                }
             }
             ConfigShellToolType::Disabled => {}
             ConfigShellToolType::ShellCommand => {

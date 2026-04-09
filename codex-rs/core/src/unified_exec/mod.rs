@@ -55,6 +55,7 @@ pub(crate) use process::NoopSpawnLifecycle;
 pub(crate) use process::SpawnLifecycle;
 pub(crate) use process::SpawnLifecycleHandle;
 pub(crate) use process::UnifiedExecProcess;
+pub use process_manager::ProcessObservation;
 
 pub(crate) const MIN_YIELD_TIME_MS: u64 = 250;
 // Minimum yield time for an empty `write_stdin`.
@@ -112,6 +113,7 @@ pub(crate) struct WriteStdinRequest<'a> {
 #[derive(Default)]
 pub(crate) struct ProcessStore {
     processes: HashMap<i32, ProcessEntry>,
+    completed_processes: HashMap<i32, CompletedProcessObservation>,
     reserved_process_ids: HashSet<i32>,
 }
 
@@ -120,6 +122,12 @@ impl ProcessStore {
         self.reserved_process_ids.remove(&process_id);
         self.processes.remove(&process_id)
     }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CompletedProcessObservation {
+    pub(crate) exit_code: Option<i32>,
+    pub(crate) failure_message: Option<String>,
 }
 
 pub(crate) struct UnifiedExecProcessManager {

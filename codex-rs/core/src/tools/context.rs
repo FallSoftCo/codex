@@ -294,6 +294,7 @@ pub struct ExecCommandToolOutput {
     pub exit_code: Option<i32>,
     pub original_token_count: Option<usize>,
     pub session_command: Option<Vec<String>>,
+    pub advisory_note: Option<String>,
 }
 
 impl ToolOutput for ExecCommandToolOutput {
@@ -388,6 +389,10 @@ impl ExecCommandToolOutput {
 
         if let Some(original_token_count) = self.original_token_count {
             sections.push(format!("Original token count: {original_token_count}"));
+        }
+
+        if let Some(advisory_note) = &self.advisory_note {
+            sections.push(format!("Advisory: {advisory_note}"));
         }
 
         sections.push("Output:".to_string());

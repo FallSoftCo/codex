@@ -90,7 +90,7 @@ pub fn create_exec_command_tool(options: CommandToolOptions) -> ToolSpec {
                 windows_destructive_filesystem_guidance()
             )
         } else {
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Prefer `watch_process_exit` over long inline waits when you only need to react after the process finishes."
                 .to_string()
         },
         strict: false,
@@ -101,6 +101,126 @@ pub fn create_exec_command_tool(options: CommandToolOptions) -> ToolSpec {
             additional_properties: Some(false.into()),
         },
         output_schema: Some(unified_exec_output_schema()),
+    })
+}
+
+pub fn create_watch_process_exit_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "session_id".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Identifier of the running exec_command session to watch for exit."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "title".to_string(),
+            JsonSchema::String {
+                description: Some("Short human-readable label for the watcher.".to_string()),
+            },
+        ),
+        (
+            "prompt".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Follow-up prompt injected into the thread after the process exits."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "timeout_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional timeout in seconds. If the process is still unavailable when the timeout expires, the watcher fails."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "thread_id".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional thread/session id to wake. Defaults to the current thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "requires_response".to_string(),
+            JsonSchema::Boolean {
+                description: Some(
+                    "Whether the deferred wake should expect a concrete response.".to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "watch_process_exit".to_string(),
+        description: "Registers a persisted watcher that wakes the thread when an existing exec_command session exits. Prefer this over long inline waiting when no reasoning is needed until the process finishes.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec![
+                "session_id".to_string(),
+                "title".to_string(),
+                "prompt".to_string(),
+            ]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+pub fn create_list_watchers_tool() -> ToolSpec {
+    let properties = BTreeMap::from([(
+        "thread_id".to_string(),
+        JsonSchema::String {
+            description: Some(
+                "Optional thread/session id filter. Defaults to the current thread.".to_string(),
+            ),
+        },
+    )]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "list_watchers".to_string(),
+        description:
+            "List persisted deferred process-exit watchers for the current or specified thread."
+                .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(Vec::new()),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+pub fn create_cancel_watcher_tool() -> ToolSpec {
+    let properties = BTreeMap::from([(
+        "watcher_id".to_string(),
+        JsonSchema::String {
+            description: Some("Watcher id to stop.".to_string()),
+        },
+    )]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "cancel_watcher".to_string(),
+        description: "Stop a persisted watcher so it will no longer wake the thread.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["watcher_id".to_string()]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
     })
 }
 

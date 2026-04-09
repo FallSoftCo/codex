@@ -6,6 +6,7 @@ mod memories;
 mod scheduled_task;
 mod tester;
 mod thread_metadata;
+mod watcher;
 
 pub use agent_job::AgentJob;
 pub use agent_job::AgentJobCreateParams;
@@ -50,6 +51,14 @@ pub use thread_metadata::SortKey;
 pub use thread_metadata::ThreadMetadata;
 pub use thread_metadata::ThreadMetadataBuilder;
 pub use thread_metadata::ThreadsPage;
+pub use watcher::ClaimedWatcher;
+pub use watcher::RunningWatcherRun;
+pub use watcher::Watcher;
+pub use watcher::WatcherCreateParams;
+pub use watcher::WatcherRun;
+pub use watcher::WatcherRunStatus;
+pub use watcher::WatcherStatus;
+pub use watcher::WatcherTriggerKind;
 
 pub(crate) use agent_job::AgentJobItemRow;
 pub(crate) use agent_job::AgentJobRow;
@@ -63,3 +72,5 @@ pub(crate) use tester::TesterRunRow;
 pub(crate) use thread_metadata::ThreadRow;
 pub(crate) use thread_metadata::anchor_from_item;
 pub(crate) use thread_metadata::datetime_to_epoch_seconds;
+pub(crate) use watcher::WatcherRow;
+pub(crate) use watcher::WatcherRunRow;
