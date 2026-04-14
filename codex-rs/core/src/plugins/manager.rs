@@ -1028,6 +1028,15 @@ impl PluginsManager {
         config: &Config,
         auth_manager: Arc<AuthManager>,
     ) {
+        if crate::thread_manager::should_use_test_thread_manager_behavior() {
+            // Integration tests create many short-lived sessions. The curated
+            // repo sync, remote startup sync, and featured-plugin warmers are
+            // session-external startup work that adds significant background
+            // load under full-suite execution without improving product
+            // coverage; plugin-specific tests exercise these paths directly.
+            return;
+        }
+
         if config.features.enabled(Feature::Plugins) {
             self.start_curated_repo_sync();
             start_startup_remote_plugin_sync_once(

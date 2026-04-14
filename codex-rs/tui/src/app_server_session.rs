@@ -69,6 +69,8 @@ use codex_app_server_protocol::TurnSteerResponse;
 #[cfg(test)]
 use codex_core::append_message_history_entry;
 use codex_core::config::Config;
+use codex_core::default_hollywood_observed_rooms;
+use codex_core::default_hollywood_room_for_cwd;
 use codex_core::find_thread_path_by_id_str;
 use codex_core::message_history_metadata;
 use codex_core::read_session_meta_line;
@@ -89,6 +91,8 @@ use codex_protocol::protocol::ReviewRequest;
 use codex_protocol::protocol::ReviewTarget as CoreReviewTarget;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionNetworkProxyRuntime;
+#[cfg(test)]
+use codex_utils_absolute_path::AbsolutePathBuf;
 use color_eyre::eyre::ContextCompat;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
@@ -351,7 +355,7 @@ impl AppServerSession {
             .await
             .wrap_err("thread/start failed during TUI bootstrap")?;
         let started = started_thread_from_start_response(response, config).await?;
-        self.maybe_auto_attach_hollywood(started.session.thread_id)
+        self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
             .await;
         Ok(started)
     }
@@ -393,7 +397,7 @@ impl AppServerSession {
             returned_rollout_path = ?started.session.rollout_path,
             "thread/resume returned session to TUI"
         );
-        self.maybe_auto_attach_hollywood(started.session.thread_id)
+        self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
             .await;
         Ok(started)
     }
@@ -418,7 +422,7 @@ impl AppServerSession {
             .await
             .wrap_err("thread/fork failed during TUI bootstrap")?;
         let started = started_thread_from_fork_response(response, &config).await?;
-        self.maybe_auto_attach_hollywood(started.session.thread_id)
+        self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
             .await;
         Ok(started)
     }
@@ -430,8 +434,8 @@ impl AppServerSession {
         }
     }
 
-    async fn maybe_auto_attach_hollywood(&mut self, thread_id: ThreadId) {
-        let Some(params) = hollywood_auto_attach_params(thread_id) else {
+    async fn maybe_auto_attach_hollywood(&mut self, thread_id: ThreadId, cwd: &std::path::Path) {
+        let Some(params) = hollywood_auto_attach_params(thread_id, cwd) else {
             tracing::debug!(thread_id = %thread_id, "Hollywood auto-attach disabled for thread");
             return;
         };
@@ -974,12 +978,12 @@ fn thread_start_params_from_config(
         config: config_request_overrides_from_config(config),
         ephemeral: Some(config.ephemeral),
         persist_extended_history: true,
-        hollywood: hollywood_auto_attach_options(),
+        hollywood: hollywood_auto_attach_options(config.cwd.as_path()),
         ..ThreadStartParams::default()
     }
 }
 
-fn hollywood_auto_attach_options() -> Option<HollywoodSessionAttachOptions> {
+fn hollywood_auto_attach_options(cwd: &std::path::Path) -> Option<HollywoodSessionAttachOptions> {
     let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
     let has_explicit_config =
         env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
@@ -1001,16 +1005,24 @@ fn hollywood_auto_attach_options() -> Option<HollywoodSessionAttachOptions> {
         _ => codex_app_server_protocol::HollywoodAttentionMode::Focused,
     };
 
-    Some(HollywoodSessionAttachOptions {
-        url: env::var("HOLLYWOOD_URL").ok(),
-        room: env::var("HOLLYWOOD_ROOM").ok(),
-        observed_rooms: env::var("HOLLYWOOD_OBSERVED_ROOMS")
+    let room = env::var("HOLLYWOOD_ROOM")
+        .ok()
+        .unwrap_or_else(|| default_hollywood_room_for_cwd(cwd));
+    let observed_rooms = default_hollywood_observed_rooms(
+        &room,
+        env::var("HOLLYWOOD_OBSERVED_ROOMS")
             .unwrap_or_default()
             .split(',')
             .map(str::trim)
-            .filter(|room| !room.is_empty())
+            .filter(|candidate| !candidate.is_empty())
             .map(ToOwned::to_owned)
             .collect(),
+    );
+
+    Some(HollywoodSessionAttachOptions {
+        url: env::var("HOLLYWOOD_URL").ok(),
+        room: Some(room),
+        observed_rooms,
         wake_rooms: env::var("HOLLYWOOD_WAKE_ROOMS")
             .unwrap_or_default()
             .split(',')
@@ -1028,8 +1040,9 @@ fn hollywood_auto_attach_options() -> Option<HollywoodSessionAttachOptions> {
 
 pub(crate) fn hollywood_auto_attach_params(
     thread_id: ThreadId,
+    cwd: &std::path::Path,
 ) -> Option<ThreadHollywoodAttachParams> {
-    let options = hollywood_auto_attach_options()?;
+    let options = hollywood_auto_attach_options(cwd)?;
     Some(ThreadHollywoodAttachParams {
         thread_id: thread_id.to_string(),
         url: options.url,
@@ -1056,7 +1069,7 @@ fn thread_resume_params_from_config(
         sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()),
         config: config_request_overrides_from_config(&config),
         persist_extended_history: true,
-        hollywood: hollywood_auto_attach_options(),
+        hollywood: hollywood_auto_attach_options(config.cwd.as_path()),
         ..ThreadResumeParams::default()
     }
 }
@@ -1078,7 +1091,7 @@ fn thread_fork_params_from_config(
         config: config_request_overrides_from_config(&config),
         ephemeral: config.ephemeral,
         persist_extended_history: true,
-        hollywood: hollywood_auto_attach_options(),
+        hollywood: hollywood_auto_attach_options(config.cwd.as_path()),
         ..ThreadForkParams::default()
     }
 }
@@ -1405,8 +1418,10 @@ mod tests {
                     source: SessionSource::Cli,
                     agent_nickname: None,
                     agent_role: None,
+                    agent_path: None,
                     model_provider: Some("openai".to_string()),
                     base_instructions: None,
+                    developer_instructions: None,
                     dynamic_tools: None,
                     memory_mode: None,
                     hollywood,
@@ -1513,8 +1528,12 @@ mod tests {
         let _room = EnvGuard::set("HOLLYWOOD_ROOM", Some("main"));
         let _mode = EnvGuard::set("HOLLYWOOD_ATTENTION_MODE", Some("ambient"));
 
-        let params =
-            thread_resume_params_from_config(config.clone(), thread_id, ThreadParamsMode::Remote);
+        let params = thread_resume_params_from_config(
+            config.clone(),
+            thread_id,
+            ThreadParamsMode::Remote,
+            /*remote_cwd_override*/ None,
+        );
 
         let hollywood = params
             .hollywood
@@ -1528,6 +1547,31 @@ mod tests {
                 .mode,
             codex_app_server_protocol::HollywoodAttentionMode::Ambient
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn thread_start_params_default_hollywood_room_to_repo_scope() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let repo_root = temp_dir.path().join("Losangelex Repo");
+        std::fs::create_dir_all(repo_root.join(".git")).expect("create git root");
+        std::fs::create_dir_all(repo_root.join("nested")).expect("create nested path");
+        let mut config = build_config(&temp_dir).await;
+        config.cwd = AbsolutePathBuf::try_from(repo_root.join("nested")).expect("absolute cwd");
+        let _auto_attach = EnvGuard::set("HOLLYWOOD_AUTO_ATTACH", Some("1"));
+        let _room = EnvGuard::set("HOLLYWOOD_ROOM", None);
+
+        let params = thread_start_params_from_config(
+            &config,
+            ThreadParamsMode::Embedded,
+            /*remote_cwd_override*/ None,
+        );
+        let hollywood = params
+            .hollywood
+            .expect("Hollywood options should be present");
+
+        assert_eq!(hollywood.room.as_deref(), Some("repo/losangelex-repo"));
+        assert_eq!(hollywood.observed_rooms, vec!["main".to_string()]);
     }
 
     #[tokio::test]
@@ -1594,6 +1638,7 @@ mod tests {
                 agent_role: None,
                 git_info: None,
                 name: None,
+                hollywood: None,
                 turns: vec![Turn {
                     id: "turn-1".to_string(),
                     items: vec![

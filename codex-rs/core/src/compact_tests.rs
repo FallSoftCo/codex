@@ -80,7 +80,7 @@ fn collect_user_messages_extracts_user_text_only() {
 }
 
 #[test]
-fn collect_user_messages_filters_session_prefix_entries() {
+fn collect_user_messages_filters_contextual_user_fragments() {
     let items = vec![
         ResponseItem::Message {
             id: None,
@@ -100,7 +100,18 @@ do things
             id: None,
             role: "user".to_string(),
             content: vec![ContentItem::InputText {
-                text: "<ENVIRONMENT_CONTEXT>cwd=/tmp</ENVIRONMENT_CONTEXT>".to_string(),
+                text: crate::contextual_user_message::ENVIRONMENT_CONTEXT_FRAGMENT
+                    .wrap("  <cwd>/tmp</cwd>".to_string()),
+            }],
+            end_turn: None,
+            phase: None,
+        },
+        ResponseItem::Message {
+            id: None,
+            role: "user".to_string(),
+            content: vec![ContentItem::InputText {
+                text: crate::contextual_user_message::HOLLYWOOD_MESSAGE_FRAGMENT
+                    .wrap("{".to_string()),
             }],
             end_turn: None,
             phase: None,

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -37,6 +38,7 @@ use crate::render_skills_section;
 use crate::rollout::session_index;
 use crate::session_prefix::format_subagent_notification_message;
 use crate::skills_load_input_from_config;
+use crate::startup_capabilities::StartupCapabilities;
 use crate::stream_events_utils::HandleOutputCtx;
 use crate::stream_events_utils::handle_non_tool_response_item;
 use crate::stream_events_utils::handle_output_item_done;
@@ -145,7 +147,7 @@ use codex_utils_stream_parser::strip_citations;
 use futures::future::BoxFuture;
 use futures::future::Shared;
 use futures::prelude::*;
-use futures::stream::FuturesOrdered;
+use futures::stream::FuturesUnordered;
 use rmcp::model::ListResourceTemplatesResult;
 use rmcp::model::ListResourcesResult;
 use rmcp::model::PaginatedRequestParams;
@@ -285,7 +287,7 @@ use crate::network_policy_decision::execpolicy_network_rule_amendment;
 use crate::plugins::PluginsManager;
 use crate::plugins::build_plugin_injections;
 use crate::plugins::render_plugins_section;
-use crate::project_doc::get_user_instructions;
+use crate::project_doc::get_user_instructions_with_capabilities;
 use crate::resolve_skill_dependencies_for_turn;
 use crate::rollout::RolloutRecorder;
 use crate::rollout::RolloutRecorderParams;
@@ -309,7 +311,6 @@ use crate::tasks::SessionTaskContext;
 use crate::tools::ToolRouter;
 use crate::tools::context::SharedTurnDiffTracker;
 use crate::tools::js_repl::JsReplHandle;
-use crate::tools::js_repl::resolve_compatible_node;
 use crate::tools::network_approval::NetworkApprovalService;
 use crate::tools::network_approval::build_blocked_request_observer;
 use crate::tools::network_approval::build_network_policy_decider;
@@ -427,6 +428,7 @@ pub(crate) struct CodexSpawnArgs {
     pub(crate) dynamic_tools: Vec<DynamicToolSpec>,
     pub(crate) persist_extended_history: bool,
     pub(crate) metrics_service_name: Option<String>,
+    pub(crate) conversation_id_override: Option<ThreadId>,
     pub(crate) inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
     pub(crate) inherited_exec_policy: Option<Arc<ExecPolicyManager>>,
     pub(crate) user_shell_override: Option<shell::Shell>,
@@ -481,6 +483,7 @@ impl Codex {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
+            conversation_id_override,
             inherited_shell_snapshot,
             user_shell_override,
             inherited_exec_policy,
@@ -509,39 +512,21 @@ impl Codex {
             let _ = config.features.disable(Feature::Collab);
         }
 
-        if config.features.enabled(Feature::JsRepl)
-            && let Err(err) = resolve_compatible_node(config.js_repl_node_path.as_deref()).await
-        {
-            let _ = config.features.disable(Feature::JsRepl);
-            let _ = config.features.disable(Feature::JsReplToolsOnly);
-            let message = if config.features.enabled(Feature::JsRepl) {
-                format!(
-                    "`js_repl` remains enabled because enterprise requirements pin it on, but the configured Node runtime is unavailable or incompatible. {err}"
-                )
-            } else {
-                format!(
-                    "Disabled `js_repl` for this session because the configured Node runtime is unavailable or incompatible. {err}"
-                )
-            };
+        let startup_capabilities = StartupCapabilities::detect(&config).await;
+        for message in &startup_capabilities.startup_warnings {
             warn!("{message}");
-            config.startup_warnings.push(message);
+            config.startup_warnings.push(message.clone());
         }
-        if config.features.enabled(Feature::CodeMode)
-            && let Err(err) = resolve_compatible_node(config.js_repl_node_path.as_deref()).await
-        {
-            let message = format!(
-                "Disabled `exec` for this session because the configured Node runtime is unavailable or incompatible. {err}"
-            );
-            warn!("{message}");
-            let _ = config.features.disable(Feature::CodeMode);
-            config.startup_warnings.push(message);
-        }
-
         let environment = environment_manager
             .current()
             .await
             .map_err(|err| CodexErr::Fatal(format!("failed to create environment: {err}")))?;
-        let user_instructions = get_user_instructions(&config, environment.as_deref()).await;
+        let user_instructions = get_user_instructions_with_capabilities(
+            &config,
+            environment.as_deref(),
+            Some(&startup_capabilities),
+        )
+        .await;
 
         let exec_policy = if crate::guardian::is_guardian_reviewer_source(&session_source) {
             // Guardian review should rely on the built-in shell safety checks,
@@ -689,6 +674,8 @@ impl Codex {
             skills_watcher,
             agent_control,
             environment,
+            startup_capabilities,
+            conversation_id_override,
         )
         .await
         .map_err(|e| {
@@ -844,6 +831,7 @@ pub(crate) struct Session {
     idle_pending_input: Mutex<Vec<ResponseInputItem>>, // TODO (jif) merge with mailbox!
     pub(crate) guardian_review_session: GuardianReviewSessionManager,
     pub(crate) services: SessionServices,
+    startup_capabilities: StartupCapabilities,
     js_repl: Arc<JsReplHandle>,
     next_internal_sub_id: AtomicU64,
 }
@@ -898,6 +886,7 @@ pub(crate) struct TurnContext {
     pub(crate) windows_sandbox_level: WindowsSandboxLevel,
     pub(crate) shell_environment_policy: ShellEnvironmentPolicy,
     pub(crate) tools_config: ToolsConfig,
+    pub(crate) startup_capabilities: StartupCapabilities,
     pub(crate) features: ManagedFeatures,
     pub(crate) ghost_snapshot: GhostSnapshotConfig,
     pub(crate) final_output_json_schema: Option<Value>,
@@ -975,6 +964,7 @@ impl TurnContext {
             sandbox_policy: self.sandbox_policy.get(),
             windows_sandbox_level: self.windows_sandbox_level,
         })
+        .with_js_repl_available(self.startup_capabilities.js_repl_available)
         .with_unified_exec_shell_mode(self.tools_config.unified_exec_shell_mode.clone())
         .with_web_search_config(self.tools_config.web_search_config.clone())
         .with_allow_login_shell(self.tools_config.allow_login_shell)
@@ -1016,6 +1006,7 @@ impl TurnContext {
             windows_sandbox_level: self.windows_sandbox_level,
             shell_environment_policy: self.shell_environment_policy.clone(),
             tools_config,
+            startup_capabilities: self.startup_capabilities.clone(),
             features,
             ghost_snapshot: self.ghost_snapshot.clone(),
             final_output_json_schema: self.final_output_json_schema.clone(),
@@ -1433,6 +1424,7 @@ impl Session {
         network: Option<NetworkProxy>,
         environment: Option<Arc<Environment>>,
         sub_id: String,
+        startup_capabilities: StartupCapabilities,
         js_repl: Arc<JsReplHandle>,
         skills_outcome: Arc<SkillLoadOutcome>,
     ) -> TurnContext {
@@ -1457,6 +1449,7 @@ impl Session {
             sandbox_policy: session_configuration.sandbox_policy.get(),
             windows_sandbox_level: session_configuration.windows_sandbox_level,
         })
+        .with_js_repl_available(startup_capabilities.js_repl_available)
         .with_unified_exec_shell_mode_for_session(
             crate::tools::spec::tool_user_shell_type(user_shell),
             shell_zsh_path,
@@ -1510,6 +1503,7 @@ impl Session {
             windows_sandbox_level: session_configuration.windows_sandbox_level,
             shell_environment_policy: per_turn_config.permissions.shell_environment_policy.clone(),
             tools_config,
+            startup_capabilities,
             features: per_turn_config.features.clone(),
             ghost_snapshot: per_turn_config.ghost_snapshot.clone(),
             final_output_json_schema: None,
@@ -1544,6 +1538,8 @@ impl Session {
         skills_watcher: Arc<SkillsWatcher>,
         agent_control: AgentControl,
         environment: Option<Arc<Environment>>,
+        startup_capabilities: StartupCapabilities,
+        conversation_id_override: Option<ThreadId>,
     ) -> anyhow::Result<Arc<Self>> {
         debug!(
             "Configuring session: model={}; provider={:?}",
@@ -1554,7 +1550,7 @@ impl Session {
 
         let (conversation_id, rollout_params) = match &initial_history {
             InitialHistory::New | InitialHistory::Forked(_) => {
-                let conversation_id = ThreadId::default();
+                let conversation_id = conversation_id_override.unwrap_or_default();
                 (
                     conversation_id,
                     RolloutRecorderParams::new(
@@ -2018,6 +2014,7 @@ impl Session {
             idle_pending_input: Mutex::new(Vec::new()),
             guardian_review_session: GuardianReviewSessionManager::default(),
             services,
+            startup_capabilities: startup_capabilities.clone(),
             js_repl,
             next_internal_sub_id: AtomicU64::new(0),
         });
@@ -2622,6 +2619,7 @@ impl Session {
                 .map(StartedNetworkProxy::proxy),
             self.services.environment.clone(),
             sub_id,
+            self.startup_capabilities.clone(),
             Arc::clone(&self.js_repl),
             skills_outcome,
         );
@@ -5739,15 +5737,18 @@ async fn spawn_review_thread(
     sub_id: String,
     resolved: crate::review_prompts::ResolvedReviewRequest,
 ) {
-    let model = config
-        .review_model
+    let review_model = config.review_model.clone();
+    let model = review_model
         .clone()
         .unwrap_or_else(|| parent_turn_context.model_info.slug.clone());
-    let review_model_info = sess
-        .services
-        .models_manager
-        .get_model_info(&model, &config.to_models_manager_config())
-        .await;
+    let review_model_info = if review_model.is_some() {
+        sess.services
+            .models_manager
+            .get_model_info(&model, &config.to_models_manager_config())
+            .await
+    } else {
+        parent_turn_context.model_info.clone()
+    };
     // For reviews, disable web_search and view_image regardless of global settings.
     let mut review_features = sess.features.clone();
     let _ = review_features.disable(Feature::WebSearchRequest);
@@ -5766,6 +5767,7 @@ async fn spawn_review_thread(
         sandbox_policy: parent_turn_context.sandbox_policy.get(),
         windows_sandbox_level: parent_turn_context.windows_sandbox_level,
     })
+    .with_js_repl_available(parent_turn_context.startup_capabilities.js_repl_available)
     .with_unified_exec_shell_mode_for_session(
         crate::tools::spec::tool_user_shell_type(sess.services.user_shell.as_ref()),
         sess.services.shell_zsh_path.as_ref(),
@@ -5834,6 +5836,7 @@ async fn spawn_review_thread(
         session_source,
         environment: parent_turn_context.environment.clone(),
         tools_config,
+        startup_capabilities: parent_turn_context.startup_capabilities.clone(),
         features: parent_turn_context.features.clone(),
         ghost_snapshot: parent_turn_context.ghost_snapshot.clone(),
         current_date: parent_turn_context.current_date.clone(),
@@ -7541,20 +7544,28 @@ async fn handle_assistant_item_done_in_plan_mode(
 }
 
 async fn drain_in_flight(
-    in_flight: &mut FuturesOrdered<BoxFuture<'static, CodexResult<ResponseInputItem>>>,
+    in_flight: &mut FuturesUnordered<JoinHandle<CodexResult<(usize, ResponseInputItem)>>>,
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
 ) -> CodexResult<()> {
+    let mut ordered_results = BTreeMap::new();
     while let Some(res) = in_flight.next().await {
         match res {
-            Ok(response_input) => {
-                sess.record_conversation_items(&turn_context, &[response_input.into()])
-                    .await;
+            Ok(Ok((index, response_input))) => {
+                ordered_results.insert(index, response_input);
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 error_or_panic(format!("in-flight tool future failed during drain: {err}"));
             }
+            Err(err) => {
+                error_or_panic(format!("in-flight tool task failed during drain: {err}"));
+            }
         }
+    }
+
+    for response_input in ordered_results.into_values() {
+        sess.record_conversation_items(&turn_context, &[response_input.into()])
+            .await;
     }
     Ok(())
 }
@@ -7599,8 +7610,9 @@ async fn try_run_sampling_request(
         .instrument(trace_span!("stream_request"))
         .or_cancel(&cancellation_token)
         .await??;
-    let mut in_flight: FuturesOrdered<BoxFuture<'static, CodexResult<ResponseInputItem>>> =
-        FuturesOrdered::new();
+    let mut in_flight: FuturesUnordered<JoinHandle<CodexResult<(usize, ResponseInputItem)>>> =
+        FuturesUnordered::new();
+    let mut next_in_flight_index = 0usize;
     let mut needs_follow_up = false;
     let mut last_agent_message: Option<String> = None;
     let mut active_item: Option<TurnItem> = None;
@@ -7704,7 +7716,13 @@ async fn try_run_sampling_request(
                     .instrument(handle_responses)
                     .await?;
                 if let Some(tool_future) = output_result.tool_future {
-                    in_flight.push_back(tool_future);
+                    let index = next_in_flight_index;
+                    next_in_flight_index += 1;
+                    in_flight.push(tokio::spawn(async move {
+                        tool_future
+                            .await
+                            .map(|response_input| (index, response_input))
+                    }));
                 }
                 if let Some(agent_message) = output_result.last_agent_message {
                     last_agent_message = Some(agent_message);

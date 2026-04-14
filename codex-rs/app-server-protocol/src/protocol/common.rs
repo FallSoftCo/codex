@@ -274,6 +274,11 @@ client_request_definitions! {
         params: v2::ThreadHollywoodAttentionSetParams,
         response: v2::ThreadHollywoodAttentionSetResponse,
     },
+    #[experimental("thread/hollywood/list")]
+    ThreadHollywoodList => "thread/hollywood/list" {
+        params: v2::ThreadHollywoodListParams,
+        response: v2::ThreadHollywoodListResponse,
+    },
     #[experimental("thread/increment_elicitation")]
     /// Increment the thread-local out-of-band elicitation counter.
     ///
@@ -1344,6 +1349,7 @@ mod tests {
                     agent_role: None,
                     git_info: None,
                     name: None,
+                    hollywood: None,
                     turns: Vec::new(),
                 },
                 model: "gpt-5".to_string(),
@@ -1383,6 +1389,7 @@ mod tests {
                         "agentRole": null,
                         "gitInfo": null,
                         "name": null,
+                        "hollywood": null,
                         "turns": []
                     },
                     "model": "gpt-5",

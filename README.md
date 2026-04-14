@@ -234,7 +234,7 @@ The bundled launcher currently does the opinionated local-dev setup for you:
 - full access by default
 - no approval prompts
 - Hollywood auto-attach
-- room defaults derived from the current workspace
+- repo-root-derived `repo/<slug>` room defaults, with `main` observed for discovery
 - first-run workspace setup when no room config exists yet
 
 ### 5. Start another session
@@ -279,11 +279,16 @@ Current limitation:
 
 - schedules are durable, but they only fire while an app-server process is running
 
-This is the first workflow-oriented primitive in the repo. The next likely direction is broader deferred continuations and watcher-triggered wakeups rather than stopping at cron-like time scheduling.
+This is the first workflow-oriented primitive in the repo. The next likely directions are:
+
+- watcher-family extensions for condition-based deferred continuations
+- task watches as a higher-level time-based reevaluation layer above generic schedules
 
 ## Watchers
 
-Losangelex ships CLI management for persisted process-exit watchers:
+Losangelex ships CLI management for persisted watcher-based deferred continuations.
+
+Today the shipped trigger is `process_exit`:
 
 ```sh
 codex watcher add-process-exit \
@@ -300,13 +305,16 @@ codex watcher remove <WATCHER_ID>
 Current behavior:
 
 - watchers are durable, but app-server must be running to claim them and wake the target thread
-- v1 supports `process_exit` watchers for `exec_command` sessions
+- the currently shipped trigger is `process_exit` for `exec_command` sessions
 - watcher wake prompts include structured context such as elapsed time, exit status, and the original follow-up prompt
 - `exec_command` and `write_stdin` now nudge the model toward using a watcher instead of blocking on long waits
+- the next watcher-family extension is agent dependency waiting: resume a thread later when another agent reaches a target state, instead of stretching `wait_agent` into a durable blocking primitive
 
 See:
 
 - [Watchers](./codex-rs/docs/watchers.md)
+- [Agent Dependency Watchers](./codex-rs/docs/agent_dependency_watchers.md)
+- [Periodic Task Watches](./codex-rs/docs/task_watches.md)
 
 ## Testers
 

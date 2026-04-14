@@ -194,6 +194,12 @@ async fn spawn_agent_description_lists_visible_models_and_reasoning_efforts() ->
     );
     assert!(
         description.contains(
+            "If Hollywood coordination is available and the user asks to coordinate with existing agents, discuss with other agents, or ask idle agents, use Hollywood-first coordination with attached peers instead of `spawn_agent`."
+        ),
+        "expected Hollywood-first clarification in spawn_agent description: {description:?}"
+    );
+    assert!(
+        description.contains(
             "Agent-role guidance below only helps choose which agent to use after spawning is already authorized; it never authorizes spawning by itself."
         ),
         "expected agent-role clarification in spawn_agent description: {description:?}"

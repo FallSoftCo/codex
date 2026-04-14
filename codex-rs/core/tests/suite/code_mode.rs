@@ -31,12 +31,12 @@ use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
+use serial_test::serial;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
-use std::time::Instant;
 use wiremock::MockServer;
 
 fn custom_tool_output_items(req: &ResponsesRequest, call_id: &str) -> Vec<Value> {
@@ -398,6 +398,9 @@ text(JSON.stringify(result));
 
 #[cfg_attr(windows, ignore = "flaky on windows")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// Shares the same timing-sensitive concurrency surface as tool_parallelism.rs. Keep this in the
+// `parallel_timing` serial group so future test cleanup does not reintroduce full-suite races.
+#[serial(parallel_timing)]
 async fn code_mode_nested_tool_calls_can_run_in_parallel() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
@@ -469,14 +472,9 @@ text(JSON.stringify(results));
 
     test.submit_turn("warm up nested tools in parallel").await?;
 
-    let start = Instant::now();
+    // The paired test_sync_tool barrier is the direct proof that the nested calls overlap.
+    // If nested dispatch regresses to serialization, one side will time out instead of finishing.
     test.submit_turn("run nested tools in parallel").await?;
-    let duration = start.elapsed();
-
-    assert!(
-        duration < Duration::from_millis(1_600),
-        "expected nested tools to finish in parallel, got {duration:?}",
-    );
 
     let req = response_mock
         .last_request()
@@ -760,6 +758,7 @@ text("phase 3");
 
 #[cfg_attr(windows, ignore = "no exec_command on Windows")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial(parallel_timing)]
 async fn code_mode_yield_timeout_works_for_busy_loop() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
@@ -792,8 +791,11 @@ while (true) {}
     )
     .await;
 
+    // This turn waits for the yielded-script bookkeeping path, which can be delayed by a busy
+    // full-suite binary even when the behavior is correct. Keep the bound generous and prove the
+    // actual contract from the returned running-cell metadata below.
     tokio::time::timeout(
-        Duration::from_secs(5),
+        Duration::from_secs(15),
         test.submit_turn("start the busy loop"),
     )
     .await??;

@@ -4,11 +4,13 @@ This document describes Codex's experimental Hollywood integration for local mul
 
 Hollywood is a local room-based messaging system for agents. In this integration, the app-server can attach a thread to a Hollywood room, classify inbound room traffic by attention level, notify frontends about new messages, and submit focused messages into the active Codex thread as structured contextual input.
 
+See also: [`coordination_control_plane.md`](coordination_control_plane.md) for the proposed next-release coordination/status/user-context design that builds on the current Hollywood transport layer.
+
 ## Scope
 
 What is native today:
 
-- Typed app-server requests for attaching a thread to Hollywood and setting attention mode.
+- Typed app-server requests for attaching a thread to Hollywood, setting attention mode, and listing currently attached Hollywood sessions.
 - Typed app-server notifications for inbound Hollywood messages.
 - Runtime polling and attention classification in the app-server.
 - Structured model-visible context for Hollywood messages and environment attachment metadata.
@@ -29,6 +31,7 @@ The current v2 app-server protocol exposes these thread-scoped requests:
 - `thread/hollywood/attach`
 - `thread/hollywood/detach`
 - `thread/hollywood/attention/set`
+- `thread/hollywood/list`
 
 ### `thread/hollywood/attach`
 
@@ -64,6 +67,27 @@ Parameters:
 - `threadId`
 - `attention`
 
+### `thread/hollywood/list`
+
+List currently loaded threads with active Hollywood attachments.
+
+Parameters:
+
+- `cursor` (optional)
+- `limit` (optional)
+- `rooms` (optional)
+- `statuses` (optional)
+
+This endpoint returns `Thread` objects. Each returned `thread` now also carries a nullable `hollywood` field, and `thread/read` / `thread/list` surface the same field when persisted or live Hollywood state exists.
+
+`thread.hollywood.status` currently reports one of:
+
+- `persisted`
+- `idle`
+- `active`
+- `waiting`
+- `blocked`
+
 ## Notifications
 
 The app-server emits `thread/hollywood/message` notifications to subscribed clients when a Hollywood message is surfaced for a thread.
@@ -83,8 +107,15 @@ Current payload fields:
 - `senderId`
 - `recipientId`
 - `body`
+- `responsePolicy`
 - `createdAt`
 - `mentions`
+
+`responsePolicy` is one of:
+
+- `required`
+- `optional`
+- `none`
 
 `attention` is one of:
 
@@ -126,6 +157,8 @@ The runtime can derive a default Hollywood attachment from environment variables
 
 If auto-attach is enabled:
 
+- when `HOLLYWOOD_ROOM` is unset, Losangelex derives the primary room from the git root as `repo/<slug>`
+- when that derived primary room is not `main`, Losangelex observes `main` by default for discovery/escalation but keeps wake scoped to the primary room unless `HOLLYWOOD_WAKE_ROOMS` overrides it
 - new and forked threads can still bootstrap through the TUI helper
 - resumed threads restore Hollywood server-side from persisted thread/session metadata
 - resumed legacy threads without persisted Hollywood metadata migrate server-side from the current `HOLLYWOOD_*` environment and then persist that config for later resumes
@@ -144,6 +177,7 @@ The current instruction model is:
 - treat Hollywood traffic as context to analyze
 - treat `@mentions` as the normal request-for-attention mechanism
 - use room-wide chatter for shared awareness without assuming every message is actionable
+- if the user asks to coordinate with other existing agents, discuss with other agents, or ask idle agents, prefer Hollywood coordination with attached peers instead of spawning fresh subagents
 - keep autonomous follow-up silent by default when room activity did not change anything user-visible
 - when a user-visible Hollywood follow-up is still warranted, prefer a compact status line over a full no-op explanation
 

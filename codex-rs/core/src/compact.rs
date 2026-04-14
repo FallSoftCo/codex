@@ -8,6 +8,7 @@ use crate::codex::PreviousTurnSettings;
 use crate::codex::Session;
 use crate::codex::TurnContext;
 use crate::codex::get_last_assistant_message_from_turn;
+use crate::contextual_user_message::is_contextual_user_message_content;
 use crate::util::backoff;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_protocol::error::CodexErr;
@@ -255,15 +256,22 @@ pub fn content_items_to_text(content: &[ContentItem]) -> Option<String> {
 pub(crate) fn collect_user_messages(items: &[ResponseItem]) -> Vec<String> {
     items
         .iter()
-        .filter_map(|item| match crate::event_mapping::parse_turn_item(item) {
-            Some(TurnItem::UserMessage(user)) => {
-                if is_summary_message(&user.message()) {
-                    None
-                } else {
-                    Some(user.message())
-                }
+        .filter_map(|item| match item {
+            ResponseItem::Message { role, content, .. }
+                if role == "user" && is_contextual_user_message_content(content) =>
+            {
+                None
             }
-            _ => None,
+            _ => match crate::event_mapping::parse_turn_item(item) {
+                Some(TurnItem::UserMessage(user)) => {
+                    if is_summary_message(&user.message()) {
+                        None
+                    } else {
+                        Some(user.message())
+                    }
+                }
+                _ => None,
+            },
         })
         .collect()
 }

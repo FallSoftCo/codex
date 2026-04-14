@@ -241,6 +241,72 @@ async fn js_repl_is_not_advertised_when_startup_node_is_incompatible() -> Result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn incompatible_startup_node_does_not_disable_code_mode_exec_tools() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    if std::env::var_os("CODEX_JS_REPL_NODE_PATH").is_some() {
+        return Ok(());
+    }
+
+    let server = responses::start_mock_server().await;
+    let temp = tempdir()?;
+    let old_node = write_too_old_node_script(temp.path())?;
+
+    let mut builder = test_codex()
+        .with_model("test-gpt-5.1-codex")
+        .with_config(move |config| {
+            config
+                .features
+                .enable(Feature::JsRepl)
+                .expect("test config should allow feature update");
+            config
+                .features
+                .enable(Feature::CodeMode)
+                .expect("test config should allow feature update");
+            config.js_repl_node_path = Some(old_node);
+        });
+    let test = builder.build(&server).await?;
+    let warning = wait_for_event_match(&test.codex, |event| match event {
+        EventMsg::Warning(ev) if ev.message.contains("Disabled `js_repl` for this session") => {
+            Some(ev.message.clone())
+        }
+        _ => None,
+    })
+    .await;
+    assert!(
+        warning.contains("Node runtime"),
+        "warning should explain the Node compatibility issue: {warning}"
+    );
+
+    let request_mock = responses::mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("msg-1", "done"),
+            ev_completed("resp-1"),
+        ]),
+    )
+    .await;
+
+    test.submit_turn("hello").await?;
+
+    let body = request_mock.single_request().body_json();
+    let tools = tool_names(&body);
+    assert!(
+        tools.iter().any(|tool| tool == "exec"),
+        "code mode exec tool should remain available when js_repl startup validation fails: {tools:?}"
+    );
+    assert!(
+        tools.iter().any(|tool| tool == "wait"),
+        "code mode wait tool should remain available when js_repl startup validation fails: {tools:?}"
+    );
+    assert!(
+        !tools.iter().any(|tool| tool == "js_repl"),
+        "js_repl should still be omitted when startup validation fails: {tools:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn js_repl_persists_top_level_destructured_bindings_and_supports_tla() -> Result<()> {
     skip_if_no_network!(Ok(()));
 

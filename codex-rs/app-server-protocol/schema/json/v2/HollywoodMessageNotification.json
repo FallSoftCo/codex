@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "HollywoodMessage": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "messageKind": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodMessageKind"
+            }
+          ],
+          "default": "ambient"
+        },
+        "recipientId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responsePolicy": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodResponsePolicy"
+            }
+          ],
+          "default": "optional"
+        },
+        "room": {
+          "type": "string"
+        },
+        "senderId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "body",
+        "createdAt",
+        "id",
+        "mentions",
+        "room"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessageAttention": {
+      "enum": [
+        "focused",
+        "broadcast",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageKind": {
+      "enum": [
+        "ambient",
+        "broadcast",
+        "direct"
+      ],
+      "type": "string"
+    },
+    "HollywoodResponsePolicy": {
+      "enum": [
+        "required",
+        "optional",
+        "none"
+      ],
+      "type": "string"
+    }
+  },
+  "properties": {
+    "attention": {
+      "$ref": "#/definitions/HollywoodMessageAttention"
+    },
+    "mentioned": {
+      "type": "boolean"
+    },
+    "message": {
+      "$ref": "#/definitions/HollywoodMessage"
+    },
+    "selfAuthored": {
+      "type": "boolean"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "attention",
+    "mentioned",
+    "message",
+    "selfAuthored",
+    "threadId"
+  ],
+  "title": "HollywoodMessageNotification",
+  "type": "object"
+}

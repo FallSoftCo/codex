@@ -51,3 +51,18 @@ fn default_mode_instructions_use_plain_text_questions_when_feature_disabled() {
         default_instructions.contains("ask the user directly with a concise plain-text question")
     );
 }
+
+#[test]
+fn default_mode_instructions_prefer_hollywood_for_existing_agent_coordination() {
+    let default_instructions = default_preset(CollaborationModesConfig::default())
+        .developer_instructions
+        .expect("default preset should include instructions")
+        .expect("default instructions should be set");
+
+    assert!(default_instructions.contains(
+        "prefer Hollywood coordination with the already attached peers instead of spawning new subagents"
+    ));
+    assert!(default_instructions.contains(
+        "Use `spawn_agent` only when the user explicitly asks for subagents, delegation, or parallel new workers"
+    ));
+}

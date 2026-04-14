@@ -90,6 +90,7 @@ where
 fn run_realtime_conversation_test_in_subprocess(
     test_name: &str,
     openai_api_key: Option<&str>,
+    realtime_api_key: Option<&str>,
 ) -> Result<()> {
     let mut command = Command::new(std::env::current_exe()?);
     command
@@ -102,6 +103,14 @@ fn run_realtime_conversation_test_in_subprocess(
         }
         None => {
             command.env_remove(OPENAI_API_KEY_ENV_VAR);
+        }
+    }
+    match realtime_api_key {
+        Some(realtime_api_key) => {
+            command.env("CODEX_REALTIME_API_KEY", realtime_api_key);
+        }
+        None => {
+            command.env_remove("CODEX_REALTIME_API_KEY");
         }
     }
     let output = command.output()?;
@@ -300,6 +309,7 @@ async fn conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth() -> 
         return run_realtime_conversation_test_in_subprocess(
             "suite::realtime_conversation::conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth",
             Some("env-realtime-key"),
+            /*realtime_api_key*/ None,
         );
     }
 
@@ -366,6 +376,13 @@ async fn conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth() -> 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial(realtime_api_key_env)]
 async fn conversation_start_prefers_dedicated_realtime_env_var_with_chatgpt_auth() -> Result<()> {
+    if std::env::var_os(REALTIME_CONVERSATION_TEST_SUBPROCESS_ENV_VAR).is_none() {
+        return run_realtime_conversation_test_in_subprocess(
+            "suite::realtime_conversation::conversation_start_prefers_dedicated_realtime_env_var_with_chatgpt_auth",
+            Some("openai-env-key"),
+            Some("dedicated-realtime-key"),
+        );
+    }
     skip_if_no_network!(Ok(()));
 
     let _openai_env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "openai-env-key");
@@ -426,6 +443,13 @@ async fn conversation_start_prefers_dedicated_realtime_env_var_with_chatgpt_auth
 #[serial(realtime_api_key_env)]
 async fn conversation_start_with_missing_dedicated_realtime_env_var_emits_actionable_error()
 -> Result<()> {
+    if std::env::var_os(REALTIME_CONVERSATION_TEST_SUBPROCESS_ENV_VAR).is_none() {
+        return run_realtime_conversation_test_in_subprocess(
+            "suite::realtime_conversation::conversation_start_with_missing_dedicated_realtime_env_var_emits_actionable_error",
+            Some(""),
+            Some(""),
+        );
+    }
     skip_if_no_network!(Ok(()));
 
     let _openai_env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "");
@@ -590,6 +614,7 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
         return run_realtime_conversation_test_in_subprocess(
             "suite::realtime_conversation::conversation_start_preflight_failure_emits_realtime_error_only",
             /*openai_api_key*/ None,
+            /*realtime_api_key*/ None,
         );
     }
 
@@ -1304,32 +1329,36 @@ async fn conversation_mirrors_assistant_message_text_to_realtime_handoff() -> Re
     })
     .await;
 
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while tokio::time::Instant::now() < deadline {
-        let connections = realtime_server.connections();
-        if connections.len() == 1 && connections[0].len() >= 2 {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    // Wait for the specific append request instead of polling for a fixed connection length.
+    // Full-suite scheduling can delay websocket writes enough that counting requests races even
+    // when the runtime behavior is correct.
+    let handoff_append_request = wait_for_matching_websocket_request(
+        &realtime_server,
+        "realtime handoff append request",
+        |request| {
+            request.body_json()["type"].as_str() == Some("conversation.handoff.append")
+                && request.body_json()["handoff_id"].as_str() == Some("handoff_1")
+        },
+    )
+    .await;
 
     let realtime_connections = realtime_server.connections();
     assert_eq!(realtime_connections.len(), 1);
-    assert_eq!(realtime_connections[0].len(), 2);
+    assert!(realtime_connections[0].len() >= 2);
     assert_eq!(
         realtime_connections[0][0].body_json()["type"].as_str(),
         Some("session.update")
     );
     assert_eq!(
-        realtime_connections[0][1].body_json()["type"].as_str(),
+        handoff_append_request.body_json()["type"].as_str(),
         Some("conversation.handoff.append")
     );
     assert_eq!(
-        realtime_connections[0][1].body_json()["handoff_id"].as_str(),
+        handoff_append_request.body_json()["handoff_id"].as_str(),
         Some("handoff_1")
     );
     assert_eq!(
-        realtime_connections[0][1].body_json()["output_text"].as_str(),
+        handoff_append_request.body_json()["output_text"].as_str(),
         Some("\"Agent Final Message\":\n\nassistant says hi")
     );
 

@@ -807,6 +807,7 @@ mod tests {
             source,
             git_info: None,
             name: None,
+            hollywood: None,
             turns: Vec::new(),
         }
     }

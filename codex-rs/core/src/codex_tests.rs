@@ -2631,6 +2631,8 @@ async fn session_new_fails_when_zsh_fork_enabled_without_zsh_path() {
                 .await
                 .expect("create environment"),
         )),
+        crate::startup_capabilities::StartupCapabilities::default(),
+        /*conversation_id_override*/ None,
     )
     .await;
 
@@ -2812,6 +2814,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         /*network*/ None,
         Some(environment),
         "turn_id".to_string(),
+        crate::startup_capabilities::StartupCapabilities::default(),
         Arc::clone(&js_repl),
         skills_outcome,
     );
@@ -2833,6 +2836,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         idle_pending_input: Mutex::new(Vec::new()),
         guardian_review_session: crate::guardian::GuardianReviewSessionManager::default(),
         services,
+        startup_capabilities: crate::startup_capabilities::StartupCapabilities::default(),
         js_repl,
         next_internal_sub_id: AtomicU64::new(0),
     };
@@ -3655,6 +3659,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
         /*network*/ None,
         Some(environment),
         "turn_id".to_string(),
+        crate::startup_capabilities::StartupCapabilities::default(),
         Arc::clone(&js_repl),
         skills_outcome,
     ));
@@ -3676,6 +3681,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
         idle_pending_input: Mutex::new(Vec::new()),
         guardian_review_session: crate::guardian::GuardianReviewSessionManager::default(),
         services,
+        startup_capabilities: crate::startup_capabilities::StartupCapabilities::default(),
         js_repl,
         next_internal_sub_id: AtomicU64::new(0),
     });

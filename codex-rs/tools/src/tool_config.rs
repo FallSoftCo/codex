@@ -256,6 +256,14 @@ impl ToolsConfig {
         }
     }
 
+    pub fn with_js_repl_available(mut self, js_repl_available: bool) -> Self {
+        if !js_repl_available {
+            self.js_repl_enabled = false;
+            self.js_repl_tools_only = false;
+        }
+        self
+    }
+
     pub fn with_agent_type_description(mut self, agent_type_description: String) -> Self {
         self.agent_type_description = agent_type_description;
         self

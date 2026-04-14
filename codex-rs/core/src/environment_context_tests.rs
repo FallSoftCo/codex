@@ -1,3 +1,4 @@
+use crate::hollywood::HollywoodEnvironmentContext;
 use crate::shell::ShellType;
 
 use super::*;
@@ -157,6 +158,59 @@ fn serialize_full_access_environment_context() {
 }
 
 #[test]
+fn serialize_environment_context_with_hollywood_compatibility_block() {
+    let context = EnvironmentContext::new(
+        Some(test_path_buf("/repo")),
+        fake_shell(),
+        Some("2026-02-26".to_string()),
+        Some("America/Los_Angeles".to_string()),
+        None,
+        None,
+        Some(HollywoodEnvironmentContext {
+            semantic: crate::hollywood::HollywoodSemanticContext {
+                attached: true,
+                url: "http://127.0.0.1:8765".to_string(),
+                room: "repo/losangelex".to_string(),
+                observed_rooms: vec!["main".to_string()],
+                wake_rooms: vec!["repo/losangelex".to_string()],
+                attention_mode: "focused".to_string(),
+                identities: vec!["sid-agent".to_string()],
+            },
+            runtime: crate::hollywood::HollywoodRuntimeContext {
+                tools: vec!["hollywood_read".to_string(), "hollywood_send".to_string()],
+                startup_protocol: vec!["announce_presence".to_string()],
+                broadcast_guidance: vec!["Use @mentions.".to_string()],
+            },
+        }),
+    );
+
+    let expected = format!(
+        r#"<environment_context>
+  <cwd>{}</cwd>
+  <shell>bash</shell>
+  <current_date>2026-02-26</current_date>
+  <timezone>America/Los_Angeles</timezone>
+  <hollywood>
+    <attached>true</attached>
+    <url>http://127.0.0.1:8765</url>
+    <room>repo/losangelex</room>
+    <attention_mode>focused</attention_mode>
+    <identities>
+      <identity>sid-agent</identity>
+    </identities>
+    <tools>
+      <tool>hollywood_read</tool>
+      <tool>hollywood_send</tool>
+    </tools>
+  </hollywood>
+</environment_context>"#,
+        test_path_buf("/repo").display()
+    );
+
+    assert_eq!(context.serialize_to_xml(), expected);
+}
+
+#[test]
 fn equals_except_shell_compares_cwd() {
     let context1 = EnvironmentContext::new(
         Some(PathBuf::from("/repo")),
@@ -281,6 +335,60 @@ fn serialize_environment_context_with_subagents() {
     - agent-1: atlas
     - agent-2
   </subagents>
+</environment_context>"#,
+        test_path_buf("/repo").display()
+    );
+
+    assert_eq!(context.serialize_to_xml(), expected);
+}
+
+#[test]
+fn serialize_environment_context_with_hollywood_semantic_and_runtime_lanes() {
+    let context = EnvironmentContext::new(
+        Some(test_path_buf("/repo")),
+        fake_shell(),
+        Some("2026-02-26".to_string()),
+        Some("America/Los_Angeles".to_string()),
+        None,
+        None,
+        Some(HollywoodEnvironmentContext {
+            semantic: crate::hollywood::HollywoodSemanticContext {
+                attached: true,
+                url: "http://127.0.0.1:8765".to_string(),
+                room: "repo/losangelex".to_string(),
+                observed_rooms: vec!["main".to_string()],
+                wake_rooms: vec!["repo/losangelex".to_string()],
+                attention_mode: "focused".to_string(),
+                identities: vec!["thread-1".to_string(), "sid-example".to_string()],
+            },
+            runtime: crate::hollywood::HollywoodRuntimeContext {
+                tools: vec!["hollywood_send".to_string(), "hollywood_read".to_string()],
+                startup_protocol: vec!["announce_presence".to_string()],
+                broadcast_guidance: vec!["Use @mentions".to_string()],
+            },
+        }),
+    );
+
+    let expected = format!(
+        r#"<environment_context>
+  <cwd>{}</cwd>
+  <shell>bash</shell>
+  <current_date>2026-02-26</current_date>
+  <timezone>America/Los_Angeles</timezone>
+  <hollywood>
+    <attached>true</attached>
+    <url>http://127.0.0.1:8765</url>
+    <room>repo/losangelex</room>
+    <attention_mode>focused</attention_mode>
+    <identities>
+      <identity>thread-1</identity>
+      <identity>sid-example</identity>
+    </identities>
+    <tools>
+      <tool>hollywood_send</tool>
+      <tool>hollywood_read</tool>
+    </tools>
+  </hollywood>
 </environment_context>"#,
         test_path_buf("/repo").display()
     );

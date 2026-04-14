@@ -987,6 +987,84 @@
       ],
       "type": "object"
     },
+    "HollywoodAttentionMode": {
+      "enum": [
+        "focused",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodAttentionSettings": {
+      "properties": {
+        "includeAtAll": {
+          "default": true,
+          "type": "boolean"
+        },
+        "includeAtRoom": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/definitions/HollywoodAttentionMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionAttachOptions": {
+      "properties": {
+        "attention": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodAttentionSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedRooms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "room": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wakeRooms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "HollywoodSessionStatus": {
+      "enum": [
+        "persisted",
+        "idle",
+        "active",
+        "waiting",
+        "blocked"
+      ],
+      "type": "string"
+    },
     "ImageDetail": {
       "enum": [
         "auto",

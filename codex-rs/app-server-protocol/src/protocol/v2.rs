@@ -2963,15 +2963,15 @@ pub struct ThreadHollywoodAttachParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct HollywoodSessionAttachOptions {
-    #[ts(optional = nullable)]
+    #[ts(type = "string | null")]
     pub url: Option<String>,
-    #[ts(optional = nullable)]
+    #[ts(type = "string | null")]
     pub room: Option<String>,
     #[serde(default)]
     pub observed_rooms: Vec<String>,
     #[serde(default)]
     pub wake_rooms: Vec<String>,
-    #[ts(optional = nullable)]
+    #[ts(type = "HollywoodAttentionSettings | null")]
     pub attention: Option<HollywoodAttentionSettings>,
 }
 
@@ -3004,6 +3004,57 @@ pub struct ThreadHollywoodAttentionSetParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadHollywoodAttentionSetResponse {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodSessionStatus {
+    Persisted,
+    Idle,
+    Active,
+    Waiting,
+    Blocked,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct HollywoodSessionState {
+    pub attached: bool,
+    pub url: String,
+    pub primary_room: String,
+    pub observed_rooms: Vec<String>,
+    pub wake_rooms: Vec<String>,
+    pub attention: HollywoodAttentionSettings,
+    pub identities: Vec<String>,
+    #[ts(type = "string | null")]
+    pub session_kind: Option<String>,
+    #[ts(type = "string | null")]
+    pub resumed_from: Option<String>,
+    pub status: HollywoodSessionStatus,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodListParams {
+    #[ts(optional = nullable)]
+    pub cursor: Option<String>,
+    #[ts(optional = nullable)]
+    pub limit: Option<u32>,
+    #[ts(optional = nullable)]
+    pub rooms: Option<Vec<String>>,
+    #[ts(optional = nullable)]
+    pub statuses: Option<Vec<HollywoodSessionStatus>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadHollywoodListResponse {
+    pub data: Vec<Thread>,
+    pub next_cursor: Option<String>,
+}
 
 /// Parameters for `thread/increment_elicitation`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -3780,6 +3831,9 @@ pub struct Thread {
     pub git_info: Option<GitInfo>,
     /// Optional user-facing thread title.
     pub name: Option<String>,
+    /// Structured Hollywood attachment/status when the thread is or was configured for room
+    /// coordination.
+    pub hollywood: Option<HollywoodSessionState>,
     /// Only populated on `thread/resume`, `thread/rollback`, `thread/fork`, and `thread/read`
     /// (when `includeTurns` is true) responses.
     /// For all other responses and notifications returning a Thread,
@@ -4125,20 +4179,32 @@ pub enum HollywoodMessageKind {
     Direct,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodResponsePolicy {
+    Required,
+    #[default]
+    Optional,
+    None,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct HollywoodMessage {
     pub id: i64,
     pub room: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[serde(default)]
+    #[ts(type = "string | null")]
     pub sender_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[serde(default)]
+    #[ts(type = "string | null")]
     pub recipient_id: Option<String>,
     #[serde(default)]
     pub message_kind: HollywoodMessageKind,
+    #[serde(default)]
+    pub response_policy: HollywoodResponsePolicy,
     pub body: String,
     pub created_at: String,
     pub mentions: Vec<String>,

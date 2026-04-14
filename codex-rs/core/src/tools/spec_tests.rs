@@ -286,6 +286,16 @@ fn assert_default_model_tools(
     } else {
         vec![shell_tool]
     };
+    expected.extend([
+        "watch_process_exit",
+        "watch_agent_completion",
+        "list_watchers",
+        "cancel_watcher",
+        "watch_task_periodically",
+        "list_task_watches",
+        "update_task_watch",
+        "cancel_task_watch",
+    ]);
     expected.extend(expected_tail);
     assert_model_tools(model_slug, features, web_search_mode, &expected);
 }
@@ -340,13 +350,12 @@ fn test_build_specs_gpt51_codex_default() {
 fn test_build_specs_gpt5_codex_unified_exec_web_search() {
     let mut features = Features::with_defaults();
     features.enable(Feature::UnifiedExec);
-    assert_model_tools(
+    assert_default_model_tools(
         "gpt-5-codex",
         &features,
         Some(WebSearchMode::Live),
+        "shell_command",
         &[
-            "exec_command",
-            "write_stdin",
             "update_plan",
             "request_user_input",
             "apply_patch",
@@ -365,13 +374,12 @@ fn test_build_specs_gpt5_codex_unified_exec_web_search() {
 fn test_build_specs_gpt51_codex_unified_exec_web_search() {
     let mut features = Features::with_defaults();
     features.enable(Feature::UnifiedExec);
-    assert_model_tools(
+    assert_default_model_tools(
         "gpt-5.1-codex",
         &features,
         Some(WebSearchMode::Live),
+        "shell_command",
         &[
-            "exec_command",
-            "write_stdin",
             "update_plan",
             "request_user_input",
             "apply_patch",
@@ -481,13 +489,12 @@ fn test_gpt_5_1_defaults() {
 fn test_gpt_5_1_codex_max_unified_exec_web_search() {
     let mut features = Features::with_defaults();
     features.enable(Feature::UnifiedExec);
-    assert_model_tools(
+    assert_default_model_tools(
         "gpt-5.1-codex-max",
         &features,
         Some(WebSearchMode::Live),
+        "shell_command",
         &[
-            "exec_command",
-            "write_stdin",
             "update_plan",
             "request_user_input",
             "apply_patch",

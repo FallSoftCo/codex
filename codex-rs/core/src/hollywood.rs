@@ -1,14 +1,21 @@
+use codex_git_utils::resolve_root_git_project_for_trust;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::HollywoodSessionMeta;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::env;
+use std::path::Path;
+use std::sync::LazyLock;
+use std::sync::RwLock;
 use uuid::Uuid;
 
 const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
+
+static HOLLYWOOD_SESSION_CONFIG_OVERRIDE: LazyLock<RwLock<Option<Option<HollywoodSessionConfig>>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub(crate) struct HollywoodSessionConfig {
@@ -20,7 +27,7 @@ pub(crate) struct HollywoodSessionConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct HollywoodEnvironmentContext {
+pub(crate) struct HollywoodSemanticContext {
     pub(crate) attached: bool,
     pub(crate) url: String,
     pub(crate) room: String,
@@ -28,13 +35,31 @@ pub(crate) struct HollywoodEnvironmentContext {
     pub(crate) wake_rooms: Vec<String>,
     pub(crate) attention_mode: String,
     pub(crate) identities: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct HollywoodRuntimeContext {
     pub(crate) tools: Vec<String>,
     pub(crate) startup_protocol: Vec<String>,
     pub(crate) broadcast_guidance: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct HollywoodEnvironmentContext {
+    pub(crate) semantic: HollywoodSemanticContext,
+    pub(crate) runtime: HollywoodRuntimeContext,
+}
+
 impl HollywoodSessionConfig {
     pub(crate) fn from_env() -> Option<Self> {
+        if let Some(override_config) = HOLLYWOOD_SESSION_CONFIG_OVERRIDE
+            .read()
+            .expect("hollywood override lock poisoned")
+            .clone()
+        {
+            return override_config;
+        }
+
         let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
         let has_explicit_config =
             env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
@@ -46,9 +71,18 @@ impl HollywoodSessionConfig {
             return None;
         }
 
-        let room =
-            env::var("HOLLYWOOD_ROOM").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_ROOM.to_string());
-        let observed_rooms = parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok());
+        let room = env::var("HOLLYWOOD_ROOM")
+            .ok()
+            .or_else(|| {
+                env::current_dir()
+                    .ok()
+                    .map(|cwd| default_hollywood_room_for_cwd(cwd.as_path()))
+            })
+            .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string());
+        let observed_rooms = default_hollywood_observed_rooms(
+            &room,
+            parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok()),
+        );
         let wake_rooms = parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok());
         Some(Self {
             url: env::var("HOLLYWOOD_URL").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_URL.to_string()),
@@ -60,6 +94,44 @@ impl HollywoodSessionConfig {
                 .to_ascii_lowercase(),
         })
     }
+}
+
+pub(crate) fn disable_hollywood_from_env_for_tests() {
+    *HOLLYWOOD_SESSION_CONFIG_OVERRIDE
+        .write()
+        .expect("hollywood override lock poisoned") = Some(None);
+}
+
+pub fn default_hollywood_room_for_cwd(cwd: &Path) -> String {
+    resolve_root_git_project_for_trust(cwd)
+        .and_then(|repo_root| {
+            repo_root
+                .file_name()
+                .map(|value| value.to_string_lossy().into_owned())
+        })
+        .map(|repo_name| format!("repo/{}", hollywood_room_slug(&repo_name)))
+        .filter(|room| room != "repo/")
+        .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string())
+}
+
+pub fn default_hollywood_observed_rooms(
+    primary_room: &str,
+    observed_rooms: Vec<String>,
+) -> Vec<String> {
+    let mut rooms = Vec::new();
+    let mut seen = HashSet::new();
+
+    for room in observed_rooms {
+        if !room.is_empty() && seen.insert(room.clone()) {
+            rooms.push(room);
+        }
+    }
+
+    if primary_room != DEFAULT_HOLLYWOOD_ROOM && seen.insert(DEFAULT_HOLLYWOOD_ROOM.to_string()) {
+        rooms.push(DEFAULT_HOLLYWOOD_ROOM.to_string());
+    }
+
+    rooms
 }
 
 impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
@@ -78,15 +150,29 @@ impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
 
 pub(crate) fn environment_context(thread_id: ThreadId) -> Option<HollywoodEnvironmentContext> {
     let config = HollywoodSessionConfig::from_env()?;
-    let wake_rooms = effective_wake_rooms(&config);
     Some(HollywoodEnvironmentContext {
+        semantic: semantic_context(&config, thread_id),
+        runtime: runtime_context(),
+    })
+}
+
+fn semantic_context(
+    config: &HollywoodSessionConfig,
+    thread_id: ThreadId,
+) -> HollywoodSemanticContext {
+    HollywoodSemanticContext {
         attached: true,
-        url: config.url,
-        room: config.room,
-        observed_rooms: config.observed_rooms,
-        wake_rooms,
-        attention_mode: config.attention_mode,
+        url: config.url.clone(),
+        room: config.room.clone(),
+        observed_rooms: config.observed_rooms.clone(),
+        wake_rooms: effective_wake_rooms(config),
+        attention_mode: config.attention_mode.clone(),
         identities: identities(thread_id),
+    }
+}
+
+fn runtime_context() -> HollywoodRuntimeContext {
+    HollywoodRuntimeContext {
         tools: vec![
             "hollywood_status".to_string(),
             "hollywood_read".to_string(),
@@ -100,12 +186,14 @@ pub(crate) fn environment_context(thread_id: ThreadId) -> Option<HollywoodEnviro
             "read_recent_room_context".to_string(),
             "ask_user_for_tasking_when_unassigned".to_string(),
             "relay_assigned_scope_to_room".to_string(),
+            "use_hollywood_first_for_peer_coordination".to_string(),
         ],
         broadcast_guidance: vec![
             "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
             "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
+            "When the user asks you to coordinate with other existing agents, prefer Hollywood coordination with attached peers before spawning new subagents.".to_string(),
         ],
-    })
+    }
 }
 
 fn parse_room_list(value: Option<String>) -> Vec<String> {
@@ -116,6 +204,24 @@ fn parse_room_list(value: Option<String>) -> Vec<String> {
         .filter(|room| !room.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+fn hollywood_room_slug(value: &str) -> String {
+    let mut slug = String::new();
+    let mut last_was_separator = false;
+
+    for ch in value.chars() {
+        let lower = ch.to_ascii_lowercase();
+        if lower.is_ascii_alphanumeric() {
+            slug.push(lower);
+            last_was_separator = false;
+        } else if !last_was_separator && !slug.is_empty() {
+            slug.push('-');
+            last_was_separator = true;
+        }
+    }
+
+    slug.trim_matches('-').to_string()
 }
 
 fn effective_wake_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
@@ -244,6 +350,7 @@ fn session_id_to_alias(session_id: Uuid) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn canonicalize_agent_identity_accepts_uuid_and_alias() {
@@ -269,6 +376,70 @@ mod tests {
         assert_eq!(
             mentions,
             vec!["019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string()]
+        );
+    }
+
+    #[test]
+    fn default_hollywood_room_for_cwd_uses_repo_slug() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let repo_root = temp_dir.path().join("Los Angeles Lex");
+        fs::create_dir_all(repo_root.join(".git")).expect("create git root");
+        fs::create_dir_all(repo_root.join("nested/worktree")).expect("create nested path");
+
+        assert_eq!(
+            default_hollywood_room_for_cwd(repo_root.join("nested/worktree").as_path()),
+            "repo/los-angeles-lex"
+        );
+    }
+
+    #[test]
+    fn default_hollywood_observed_rooms_adds_main_for_repo_rooms() {
+        assert_eq!(
+            default_hollywood_observed_rooms("repo/losangelex", vec!["repo/other".to_string()]),
+            vec!["repo/other".to_string(), "main".to_string()]
+        );
+    }
+
+    #[test]
+    fn default_hollywood_observed_rooms_keeps_main_deduplicated() {
+        assert_eq!(
+            default_hollywood_observed_rooms("main", vec!["main".to_string()]),
+            vec!["main".to_string()]
+        );
+    }
+
+    #[test]
+    fn environment_context_splits_semantic_and_runtime_lanes() {
+        let config = HollywoodSessionConfig {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: vec![],
+            attention_mode: "focused".to_string(),
+        };
+        let thread_id = ThreadId::default();
+
+        let context = HollywoodEnvironmentContext {
+            semantic: semantic_context(&config, thread_id),
+            runtime: runtime_context(),
+        };
+
+        assert_eq!(context.semantic.room, "repo/losangelex");
+        assert_eq!(
+            context.semantic.wake_rooms,
+            vec!["repo/losangelex".to_string()]
+        );
+        assert!(
+            context
+                .runtime
+                .tools
+                .contains(&"hollywood_send".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"use_hollywood_first_for_peer_coordination".to_string())
         );
     }
 }

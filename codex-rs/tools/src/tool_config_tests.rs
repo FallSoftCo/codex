@@ -261,3 +261,27 @@ fn tester_without_terminal_harness_has_no_shell_tools() {
 
     assert_eq!(tools_config.shell_type, ConfigShellToolType::Disabled);
 }
+
+#[test]
+fn js_repl_capability_override_does_not_disable_unrelated_tools() {
+    let model_info = model_info();
+    let mut features = Features::with_defaults();
+    features.enable(Feature::CodeMode);
+    features.enable(Feature::JsRepl);
+
+    let available_models = Vec::new();
+    let tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        web_search_mode: Some(WebSearchMode::Live),
+        session_source: SessionSource::Cli,
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    })
+    .with_js_repl_available(false);
+
+    assert!(tools_config.code_mode_enabled);
+    assert!(!tools_config.js_repl_enabled);
+    assert!(!tools_config.js_repl_tools_only);
+}

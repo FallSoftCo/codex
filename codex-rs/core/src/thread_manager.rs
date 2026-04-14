@@ -54,7 +54,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::runtime::Handle;
-use tokio::runtime::RuntimeFlavor;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 use tracing::warn;
@@ -74,7 +73,7 @@ pub(crate) fn set_thread_manager_test_mode_for_tests(enabled: bool) {
     FORCE_TEST_THREAD_MANAGER_BEHAVIOR.store(enabled, Ordering::Relaxed);
 }
 
-fn should_use_test_thread_manager_behavior() -> bool {
+pub(crate) fn should_use_test_thread_manager_behavior() -> bool {
     FORCE_TEST_THREAD_MANAGER_BEHAVIOR.load(Ordering::Relaxed)
 }
 
@@ -89,13 +88,13 @@ impl Drop for TempCodexHomeGuard {
 }
 
 fn build_skills_watcher(skills_manager: Arc<SkillsManager>) -> Arc<SkillsWatcher> {
-    if should_use_test_thread_manager_behavior()
-        && let Ok(handle) = Handle::try_current()
-        && handle.runtime_flavor() == RuntimeFlavor::CurrentThread
-    {
-        // The real watcher spins background tasks that can starve the
-        // current-thread test runtime and cause event waits to time out.
-        warn!("using noop skills watcher under current-thread test runtime");
+    if should_use_test_thread_manager_behavior() {
+        // Integration tests create many short-lived sessions. Reusing the real
+        // watcher under test mode adds substantial file-watcher churn and can
+        // starve unrelated timing-sensitive tests without increasing product
+        // confidence. Tests that need reload semantics already tolerate the
+        // watcher being unavailable and clear caches explicitly.
+        warn!("using noop skills watcher under thread-manager test mode");
         return Arc::new(SkillsWatcher::noop());
     }
 
@@ -472,6 +471,7 @@ impl ThreadManager {
             dynamic_tools,
             persist_extended_history,
             /*metrics_service_name*/ None,
+            /*conversation_id_override*/ None,
             /*parent_trace*/ None,
         ))
         .await
@@ -483,6 +483,7 @@ impl ThreadManager {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
+        conversation_id_override: Option<ThreadId>,
         parent_trace: Option<W3cTraceContext>,
     ) -> CodexResult<NewThread> {
         Box::pin(self.state.spawn_thread(
@@ -493,6 +494,7 @@ impl ThreadManager {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
+            conversation_id_override,
             parent_trace,
             /*user_shell_override*/ None,
         ))
@@ -505,6 +507,7 @@ impl ThreadManager {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
+        conversation_id_override: Option<ThreadId>,
         parent_trace: Option<W3cTraceContext>,
         session_source: SessionSource,
     ) -> CodexResult<NewThread> {
@@ -517,6 +520,7 @@ impl ThreadManager {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
+            conversation_id_override,
             /*inherited_shell_snapshot*/ None,
             /*inherited_exec_policy*/ None,
             parent_trace,
@@ -551,6 +555,26 @@ impl ThreadManager {
         persist_extended_history: bool,
         parent_trace: Option<W3cTraceContext>,
     ) -> CodexResult<NewThread> {
+        self.resume_thread_with_history_and_id(
+            config,
+            initial_history,
+            auth_manager,
+            persist_extended_history,
+            parent_trace,
+            /*conversation_id_override*/ None,
+        )
+        .await
+    }
+
+    pub async fn resume_thread_with_history_and_id(
+        &self,
+        config: Config,
+        initial_history: InitialHistory,
+        auth_manager: Arc<AuthManager>,
+        persist_extended_history: bool,
+        parent_trace: Option<W3cTraceContext>,
+        conversation_id_override: Option<ThreadId>,
+    ) -> CodexResult<NewThread> {
         Box::pin(self.state.spawn_thread(
             config,
             initial_history,
@@ -559,6 +583,7 @@ impl ThreadManager {
             Vec::new(),
             persist_extended_history,
             /*metrics_service_name*/ None,
+            conversation_id_override,
             parent_trace,
             /*user_shell_override*/ None,
         ))
@@ -578,6 +603,7 @@ impl ThreadManager {
             Vec::new(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
+            /*conversation_id_override*/ None,
             /*parent_trace*/ None,
             /*user_shell_override*/ Some(user_shell_override),
         ))
@@ -600,6 +626,7 @@ impl ThreadManager {
             Vec::new(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
+            /*conversation_id_override*/ None,
             /*parent_trace*/ None,
             /*user_shell_override*/ Some(user_shell_override),
         ))
@@ -707,6 +734,7 @@ impl ThreadManager {
             Vec::new(),
             persist_extended_history,
             /*metrics_service_name*/ None,
+            /*conversation_id_override*/ None,
             parent_trace,
             /*user_shell_override*/ None,
         ))
@@ -806,6 +834,7 @@ impl ThreadManagerState {
             Vec::new(),
             persist_extended_history,
             metrics_service_name,
+            /*conversation_id_override*/ None,
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
@@ -833,6 +862,7 @@ impl ThreadManagerState {
             Vec::new(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
+            /*conversation_id_override*/ None,
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
@@ -861,6 +891,7 @@ impl ThreadManagerState {
             Vec::new(),
             persist_extended_history,
             /*metrics_service_name*/ None,
+            /*conversation_id_override*/ None,
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
@@ -880,6 +911,7 @@ impl ThreadManagerState {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
+        conversation_id_override: Option<ThreadId>,
         parent_trace: Option<W3cTraceContext>,
         user_shell_override: Option<crate::shell::Shell>,
     ) -> CodexResult<NewThread> {
@@ -892,6 +924,7 @@ impl ThreadManagerState {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
+            conversation_id_override,
             /*inherited_shell_snapshot*/ None,
             /*inherited_exec_policy*/ None,
             parent_trace,
@@ -911,6 +944,7 @@ impl ThreadManagerState {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
+        conversation_id_override: Option<ThreadId>,
         inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
         inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
         parent_trace: Option<W3cTraceContext>,
@@ -938,6 +972,7 @@ impl ThreadManagerState {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
+            conversation_id_override,
             inherited_shell_snapshot,
             inherited_exec_policy,
             user_shell_override,

@@ -7604,7 +7604,7 @@ mod tests {
 
         assert_eq!(
             err.to_string(),
-            format!("Agent thread {thread_id} is not yet available for replay or live attach.")
+            format!("thread/read failed during TUI session lookup")
         );
         assert!(!app.thread_event_channels.contains_key(&thread_id));
         Ok(())
@@ -8669,6 +8669,7 @@ guardian_approval = true
                     agent_role: Some("explorer".to_string()),
                     git_info: None,
                     name: Some("agent thread".to_string()),
+                    hollywood: None,
                     turns: Vec::new(),
                 },
             }),
@@ -8750,6 +8751,7 @@ guardian_approval = true
                     agent_role: Some("explorer".to_string()),
                     git_info: None,
                     name: Some("agent thread".to_string()),
+                    hollywood: None,
                     turns: Vec::new(),
                 },
             }),
@@ -10728,6 +10730,7 @@ guardian_approval = true
                     agent_role: None,
                     git_info: None,
                     name: None,
+                    hollywood: None,
                     turns: Vec::new(),
                 },
             },

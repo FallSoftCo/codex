@@ -102,6 +102,7 @@ struct PreparedProcessHandles {
     cancellation_token: CancellationToken,
     pause_state: Option<watch::Receiver<bool>>,
     command: Vec<String>,
+    call_id: String,
     process_id: i32,
     tty: bool,
 }
@@ -362,6 +363,22 @@ impl UnifiedExecProcessManager {
         Ok(response)
     }
 
+    pub(crate) async fn terminal_interaction_call_id(
+        &self,
+        process_id: i32,
+    ) -> Result<String, UnifiedExecError> {
+        if let Ok(handles) = self.prepare_process_handles(process_id).await {
+            return Ok(handles.call_id);
+        }
+
+        let store = self.process_store.lock().await;
+        store
+            .completed_processes
+            .get(&process_id)
+            .map(|observation| observation.call_id.clone())
+            .ok_or(UnifiedExecError::UnknownProcessId { process_id })
+    }
+
     pub(crate) async fn write_stdin(
         &self,
         request: WriteStdinRequest<'_>,
@@ -503,6 +520,7 @@ impl UnifiedExecProcessManager {
                 store.completed_processes.insert(
                     process_id,
                     CompletedProcessObservation {
+                        call_id: entry.call_id.clone(),
                         exit_code,
                         failure_message: failure_message.clone(),
                     },
@@ -558,6 +576,7 @@ impl UnifiedExecProcessManager {
             cancellation_token,
             pause_state,
             command: entry.command.clone(),
+            call_id: entry.call_id.clone(),
             process_id: entry.process_id,
             tty: entry.tty,
         })

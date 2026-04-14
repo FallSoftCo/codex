@@ -78,6 +78,7 @@ pub(crate) const MAX_EXEC_OUTPUT_DELTAS_PER_CALL: usize = 10_000;
 // That would cause the `read_capped` tasks to block on `read()`
 // indefinitely, effectively hanging the whole agent.
 pub const IO_DRAIN_TIMEOUT_MS: u64 = 2_000; // 2 s should be plenty for local pipes
+const TIMED_OUT_IO_DRAIN_TIMEOUT_MS: u64 = 250; // Timed-out commands should shed pipe readers quickly
 
 #[derive(Debug)]
 pub struct ExecParams {
@@ -1079,9 +1080,18 @@ async fn consume_output(
 
     let mut stdout_handle = stdout_handle;
     let mut stderr_handle = stderr_handle;
+    let drain_timeout = if timed_out {
+        Duration::from_millis(TIMED_OUT_IO_DRAIN_TIMEOUT_MS)
+    } else {
+        capture_policy.io_drain_timeout()
+    };
 
-    let stdout = await_output(&mut stdout_handle, capture_policy.io_drain_timeout()).await?;
-    let stderr = await_output(&mut stderr_handle, capture_policy.io_drain_timeout()).await?;
+    let (stdout, stderr) = tokio::join!(
+        await_output(&mut stdout_handle, drain_timeout),
+        await_output(&mut stderr_handle, drain_timeout),
+    );
+    let stdout = stdout?;
+    let stderr = stderr?;
     let aggregated_output = aggregate_output(&stdout, &stderr, retained_bytes_cap);
 
     Ok(RawExecToolCallOutput {

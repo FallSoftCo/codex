@@ -126,6 +126,7 @@ impl ProcessStore {
 
 #[derive(Clone, Debug)]
 pub(crate) struct CompletedProcessObservation {
+    pub(crate) call_id: String,
     pub(crate) exit_code: Option<i32>,
     pub(crate) failure_message: Option<String>,
 }

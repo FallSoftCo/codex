@@ -331,7 +331,23 @@ impl ToolHandler for UnifiedExecHandler {
             }
             "write_stdin" => {
                 let args: WriteStdinArgs = parse_arguments(&arguments)?;
-                let response = manager
+                let interaction_call_id = manager
+                    .terminal_interaction_call_id(args.session_id)
+                    .await
+                    .map_err(|err| {
+                        FunctionCallError::RespondToModel(format!("write_stdin failed: {err}"))
+                    })?;
+
+                let interaction = TerminalInteractionEvent {
+                    call_id: interaction_call_id,
+                    process_id: args.session_id.to_string(),
+                    stdin: args.chars.clone(),
+                };
+                session
+                    .send_event(turn.as_ref(), EventMsg::TerminalInteraction(interaction))
+                    .await;
+
+                manager
                     .write_stdin(WriteStdinRequest {
                         process_id: args.session_id,
                         input: &args.chars,
@@ -341,18 +357,7 @@ impl ToolHandler for UnifiedExecHandler {
                     .await
                     .map_err(|err| {
                         FunctionCallError::RespondToModel(format!("write_stdin failed: {err}"))
-                    })?;
-
-                let interaction = TerminalInteractionEvent {
-                    call_id: response.event_call_id.clone(),
-                    process_id: args.session_id.to_string(),
-                    stdin: args.chars.clone(),
-                };
-                session
-                    .send_event(turn.as_ref(), EventMsg::TerminalInteraction(interaction))
-                    .await;
-
-                response
+                    })?
             }
             other => {
                 return Err(FunctionCallError::RespondToModel(format!(

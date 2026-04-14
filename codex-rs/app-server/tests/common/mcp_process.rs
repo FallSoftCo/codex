@@ -61,6 +61,8 @@ use codex_app_server_protocol::SkillsListParams;
 use codex_app_server_protocol::ThreadArchiveParams;
 use codex_app_server_protocol::ThreadCompactStartParams;
 use codex_app_server_protocol::ThreadForkParams;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
+use codex_app_server_protocol::ThreadHollywoodListParams;
 use codex_app_server_protocol::ThreadListParams;
 use codex_app_server_protocol::ThreadLoadedListParams;
 use codex_app_server_protocol::ThreadMetadataUpdateParams;
@@ -133,8 +135,18 @@ impl McpProcess {
         cmd.stderr(Stdio::piped());
         cmd.current_dir(codex_home);
         cmd.env("CODEX_HOME", codex_home);
-        cmd.env("RUST_LOG", "info");
+        cmd.env("RUST_LOG", "warn");
         cmd.env_remove(CODEX_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR);
+        for key in [
+            "HOLLYWOOD_ATTENTION_MODE",
+            "HOLLYWOOD_AUTO_ATTACH",
+            "HOLLYWOOD_OBSERVED_ROOMS",
+            "HOLLYWOOD_ROOM",
+            "HOLLYWOOD_URL",
+            "HOLLYWOOD_WAKE_ROOMS",
+        ] {
+            cmd.env_remove(key);
+        }
         cmd.args(args);
 
         for (k, v) in env_overrides {
@@ -162,15 +174,14 @@ impl McpProcess {
             .ok_or_else(|| anyhow::format_err!("mcp should have stdout fd"))?;
         let stdout = BufReader::new(stdout);
 
-        // Forward child's stderr to our stderr so failures are visible even
-        // when stdout/stderr are captured by the test harness.
+        // Drain child stderr to avoid pipe backpressure without re-emitting every
+        // line through the test harness, which adds contention under suite-wide
+        // parallel execution.
         if let Some(stderr) = process.stderr.take() {
             let mut stderr_reader = BufReader::new(stderr).lines();
-            tokio::spawn(async move {
-                while let Ok(Some(line)) = stderr_reader.next_line().await {
-                    eprintln!("[mcp stderr] {line}");
-                }
-            });
+            tokio::spawn(
+                async move { while let Ok(Some(_line)) = stderr_reader.next_line().await {} },
+            );
         }
         Ok(Self {
             next_request_id: AtomicI64::new(0),
@@ -438,6 +449,24 @@ impl McpProcess {
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("thread/loaded/list", params).await
+    }
+
+    /// Send a `thread/hollywood/attach` JSON-RPC request.
+    pub async fn send_thread_hollywood_attach_request(
+        &mut self,
+        params: ThreadHollywoodAttachParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("thread/hollywood/attach", params).await
+    }
+
+    /// Send a `thread/hollywood/list` JSON-RPC request.
+    pub async fn send_thread_hollywood_list_request(
+        &mut self,
+        params: ThreadHollywoodListParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("thread/hollywood/list", params).await
     }
 
     /// Send a `thread/read` JSON-RPC request.
@@ -1018,7 +1047,6 @@ impl McpProcess {
     }
 
     async fn send_jsonrpc_message(&mut self, message: JSONRPCMessage) -> anyhow::Result<()> {
-        eprintln!("writing message to stdin: {message:?}");
         let Some(stdin) = self.stdin.as_mut() else {
             anyhow::bail!("mcp stdin closed");
         };
@@ -1033,13 +1061,10 @@ impl McpProcess {
         let mut line = String::new();
         self.stdout.read_line(&mut line).await?;
         let message = serde_json::from_str::<JSONRPCMessage>(&line)?;
-        eprintln!("read message from stdout: {message:?}");
         Ok(message)
     }
 
     pub async fn read_stream_until_request_message(&mut self) -> anyhow::Result<ServerRequest> {
-        eprintln!("in read_stream_until_request_message()");
-
         let message = self
             .read_stream_until_message(|message| matches!(message, JSONRPCMessage::Request(_)))
             .await?;
@@ -1056,8 +1081,6 @@ impl McpProcess {
         &mut self,
         request_id: RequestId,
     ) -> anyhow::Result<JSONRPCResponse> {
-        eprintln!("in read_stream_until_response_message({request_id:?})");
-
         let message = self
             .read_stream_until_message(|message| {
                 Self::message_request_id(message) == Some(&request_id)
@@ -1090,8 +1113,6 @@ impl McpProcess {
         &mut self,
         method: &str,
     ) -> anyhow::Result<JSONRPCNotification> {
-        eprintln!("in read_stream_until_notification_message({method})");
-
         let message = self
             .read_stream_until_message(|message| {
                 matches!(
@@ -1109,14 +1130,12 @@ impl McpProcess {
 
     pub async fn read_stream_until_matching_notification<F>(
         &mut self,
-        description: &str,
+        _description: &str,
         predicate: F,
     ) -> anyhow::Result<JSONRPCNotification>
     where
         F: Fn(&JSONRPCNotification) -> bool,
     {
-        eprintln!("in read_stream_until_matching_notification({description})");
-
         let message = self
             .read_stream_until_message(|message| {
                 matches!(

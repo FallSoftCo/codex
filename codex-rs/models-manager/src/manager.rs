@@ -432,32 +432,33 @@ impl ModelsManager {
     async fn fetch_and_update_models(&self) -> CoreResult<()> {
         let _timer =
             codex_otel::start_global_timer("codex.remote_models.fetch_update.duration_ms", &[]);
-        let auth = self.auth_manager.auth().await;
-        let auth_mode = auth.as_ref().map(CodexAuth::auth_mode);
-        let api_provider = self.provider.to_api_provider(auth_mode)?;
-        let api_auth = auth_provider_from_auth(auth.clone(), &self.provider)?;
-        let auth_env = collect_auth_env_telemetry(
-            &self.provider,
-            self.auth_manager.codex_api_key_env_enabled(),
-        );
-        let transport = ReqwestTransport::new(build_reqwest_client());
-        let request_telemetry: Arc<dyn RequestTelemetry> = Arc::new(ModelsRequestTelemetry {
-            auth_mode: auth_mode.map(|mode| TelemetryAuthMode::from(mode).to_string()),
-            auth_header_attached: api_auth.auth_header_attached(),
-            auth_header_name: api_auth.auth_header_name(),
-            auth_env,
-        });
-        let client = ModelsClient::new(transport, api_provider, api_auth)
-            .with_telemetry(Some(request_telemetry));
-
         let client_version = crate::client_version_to_whole();
-        let (models, etag) = timeout(
-            MODELS_REFRESH_TIMEOUT,
-            client.list_models(&client_version, HeaderMap::new()),
-        )
+        let (models, etag) = timeout(MODELS_REFRESH_TIMEOUT, async {
+            let auth = self.auth_manager.auth().await;
+            let auth_mode = auth.as_ref().map(CodexAuth::auth_mode);
+            let api_provider = self.provider.to_api_provider(auth_mode)?;
+            let api_auth = auth_provider_from_auth(auth.clone(), &self.provider)?;
+            let auth_env = collect_auth_env_telemetry(
+                &self.provider,
+                self.auth_manager.codex_api_key_env_enabled(),
+            );
+            let transport = ReqwestTransport::new(build_reqwest_client());
+            let request_telemetry: Arc<dyn RequestTelemetry> = Arc::new(ModelsRequestTelemetry {
+                auth_mode: auth_mode.map(|mode| TelemetryAuthMode::from(mode).to_string()),
+                auth_header_attached: api_auth.auth_header_attached(),
+                auth_header_name: api_auth.auth_header_name(),
+                auth_env,
+            });
+            let client = ModelsClient::new(transport, api_provider, api_auth)
+                .with_telemetry(Some(request_telemetry));
+
+            client
+                .list_models(&client_version, HeaderMap::new())
+                .await
+                .map_err(map_api_error)
+        })
         .await
-        .map_err(|_| CodexErr::Timeout)?
-        .map_err(map_api_error)?;
+        .map_err(|_| CodexErr::Timeout)??;
 
         self.apply_remote_models(models.clone()).await;
         *self.etag.write().await = etag.clone();

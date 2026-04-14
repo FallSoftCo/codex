@@ -42,7 +42,7 @@ pub(crate) fn tool_user_shell_type(user_shell: &Shell) -> ToolUserShellType {
 fn create_hollywood_status_tool() -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_status".to_string(),
-        description: "Check whether Hollywood is configured and reachable for this session. Use this when you need to know whether you can coordinate with other agents through the local Hollywood room."
+        description: "Check whether Hollywood is configured and reachable for this session. Use this when you need to know whether you can coordinate with other existing attached agents through the local Hollywood room before considering `spawn_agent`."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -132,10 +132,19 @@ fn create_hollywood_send_tool() -> ToolSpec {
                 ),
             },
         ),
+        (
+            "response_policy".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional reply contract for the message: `required`, `optional`, or `none`. Use `none` for acknowledgements or informational updates that should not trigger a reply."
+                        .to_string(),
+                ),
+            },
+        ),
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
-        description: "Send a message to Hollywood as this agent. Use this to coordinate with other agents through the local Hollywood room."
+        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks for peer coordination rather than new delegated workers."
             .to_string(),
         strict: false,
         defer_loading: None,

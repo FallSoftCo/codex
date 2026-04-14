@@ -20,6 +20,7 @@ use crate::config_loader::ConfigLayerStackOrdering;
 use crate::config_loader::default_project_root_markers;
 use crate::config_loader::merge_toml_values;
 use crate::config_loader::project_root_markers_from_config;
+use crate::startup_capabilities::StartupCapabilities;
 use codex_app_server_protocol::ConfigLayerSource;
 use codex_exec_server::Environment;
 use codex_exec_server::ExecutorFileSystem;
@@ -42,8 +43,13 @@ pub const LOCAL_PROJECT_DOC_FILENAME: &str = "AGENTS.override.md";
 /// be concatenated with the following separator.
 const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
 
-fn render_js_repl_instructions(config: &Config) -> Option<String> {
-    if !config.features.enabled(Feature::JsRepl) {
+fn render_js_repl_instructions(
+    config: &Config,
+    startup_capabilities: Option<&StartupCapabilities>,
+) -> Option<String> {
+    if !config.features.enabled(Feature::JsRepl)
+        || startup_capabilities.is_some_and(|capabilities| !capabilities.js_repl_available)
+    {
         return None;
     }
 
@@ -78,17 +84,19 @@ fn render_js_repl_instructions(config: &Config) -> Option<String> {
 
 /// Combines `Config::instructions` and `AGENTS.md` (if present) into a single
 /// string of instructions.
-pub(crate) async fn get_user_instructions(
+pub(crate) async fn get_user_instructions_with_capabilities(
     config: &Config,
     environment: Option<&Environment>,
+    startup_capabilities: Option<&StartupCapabilities>,
 ) -> Option<String> {
     let fs = environment?.get_filesystem();
-    get_user_instructions_with_fs(config, fs.as_ref()).await
+    get_user_instructions_with_fs_and_capabilities(config, fs.as_ref(), startup_capabilities).await
 }
 
-pub(crate) async fn get_user_instructions_with_fs(
+pub(crate) async fn get_user_instructions_with_fs_and_capabilities(
     config: &Config,
     fs: &dyn ExecutorFileSystem,
+    startup_capabilities: Option<&StartupCapabilities>,
 ) -> Option<String> {
     let project_docs = read_project_docs_with_fs(config, fs).await;
 
@@ -111,7 +119,7 @@ pub(crate) async fn get_user_instructions_with_fs(
         }
     };
 
-    if let Some(js_repl_section) = render_js_repl_instructions(config) {
+    if let Some(js_repl_section) = render_js_repl_instructions(config, startup_capabilities) {
         if !output.is_empty() {
             output.push_str("\n\n");
         }

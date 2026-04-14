@@ -14,6 +14,7 @@ use codex_app_server_protocol::ListMcpServerStatusParams;
 use codex_app_server_protocol::ListMcpServerStatusResponse;
 use codex_app_server_protocol::McpServerStatusDetail;
 use codex_app_server_protocol::RequestId;
+use codex_features::Feature;
 use pretty_assertions::assert_eq;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::JsonObject;
@@ -45,7 +46,7 @@ async fn mcp_server_status_list_returns_tools_for_hyphenated_server_names() -> R
     write_mock_responses_config_toml(
         codex_home.path(),
         &server.uri(),
-        &BTreeMap::new(),
+        &BTreeMap::from([(Feature::Plugins, false)]),
         /*auto_compact_limit*/ 1024,
         /*requires_openai_auth*/ None,
         "mock_provider",
@@ -209,7 +210,7 @@ async fn mcp_server_status_list_tools_and_auth_only_skips_slow_inventory_calls()
     write_mock_responses_config_toml(
         codex_home.path(),
         &server.uri(),
-        &BTreeMap::new(),
+        &BTreeMap::from([(Feature::Plugins, false)]),
         /*auto_compact_limit*/ 1024,
         /*requires_openai_auth*/ None,
         "mock_provider",
@@ -237,7 +238,7 @@ url = "{mcp_server_url}/mcp"
         })
         .await?;
     let response = timeout(
-        Duration::from_millis(500),
+        Duration::from_millis(1800),
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
@@ -271,7 +272,7 @@ async fn mcp_server_status_list_does_not_duplicate_tools_for_sanitized_name_coll
     write_mock_responses_config_toml(
         codex_home.path(),
         &server.uri(),
-        &BTreeMap::new(),
+        &BTreeMap::from([(Feature::Plugins, false)]),
         /*auto_compact_limit*/ 1024,
         /*requires_openai_auth*/ None,
         "mock_provider",

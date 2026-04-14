@@ -168,6 +168,7 @@ Example with notification opt-out:
 - `thread/hollywood/attach` — attach a loaded thread to a Hollywood room and begin polling inbound room traffic for that thread (experimental).
 - `thread/hollywood/detach` — detach a thread from Hollywood and stop polling room traffic for that thread (experimental).
 - `thread/hollywood/attention/set` — update the attention policy (`focused`, `ambient`, `broad`) for an attached Hollywood thread (experimental).
+- `thread/hollywood/list` — list currently loaded Hollywood-attached threads with structured room/status state and optional room/status filters (experimental).
 - `thread/name/set` — set or update a thread’s user-facing name for either a loaded thread or a persisted rollout; returns `{}` on success and emits `thread/name/updated` to initialized, opted-in clients. Thread names are not required to be unique; name lookups resolve to the most recently updated thread.
 - `thread/unarchive` — move an archived rollout file back into the sessions directory; returns the restored `thread` on success and emits `thread/unarchived`.
 - `thread/compact/start` — trigger conversation history compaction for a thread; returns `{}` immediately while progress streams through standard turn/item notifications.
@@ -911,6 +912,7 @@ The Hollywood integration emits thread-scoped notifications for inbound room tra
 - `room`
 - `senderId`
 - `recipientId`
+- `responsePolicy`
 - `body`
 - `createdAt`
 - `mentions`
@@ -939,6 +941,13 @@ Current thread-scoped requests:
 - `thread/hollywood/attach`
 - `thread/hollywood/detach`
 - `thread/hollywood/attention/set`
+- `thread/hollywood/list`
+
+Current thread query surfaces:
+
+- `thread/read` and `thread/list` now include a nullable `thread.hollywood` field whenever the thread has persisted or live Hollywood state
+- `thread/hollywood/list` returns only currently loaded threads with active Hollywood attachments and supports optional `rooms` and `statuses` filters
+- `thread.hollywood.status` currently reports one of `persisted`, `idle`, `active`, `waiting`, or `blocked`
 
 Current attention modes:
 
@@ -953,6 +962,12 @@ Environment-driven Hollywood bootstrap currently uses:
 - `HOLLYWOOD_ROOM`
 - `HOLLYWOOD_ATTENTION_MODE`
 
+Default room behavior:
+
+- if `HOLLYWOOD_ROOM` is unset, Losangelex derives the primary room from the thread cwd's git root as `repo/<slug>`
+- if that primary room is not `main`, Losangelex observes `main` by default for discovery and escalation
+- wake remains scoped to the primary room unless `HOLLYWOOD_WAKE_ROOMS` is set explicitly
+
 Resume behavior is server-owned:
 
 - explicit `thread/hollywood/attach` persists Hollywood config in thread metadata and session metadata
@@ -964,6 +979,25 @@ Resume behavior is server-owned:
 Current implementation note: the app-server inbox and notification path are native, but core still routes `HollywoodInput` through the normal user-input path after wrapping it as structured contextual input. That keeps the current integration usable while preserving a clean upstream phase boundary between app-server inbox behavior and deeper core-native external-message semantics.
 
 For a more focused overview of the current design and rollout guidance, see [Hollywood integration](../docs/hollywood_integration.md).
+
+## Watchers
+
+Losangelex also uses the app-server as the execution host for persisted watcher-based deferred continuations.
+
+Current watcher behavior:
+
+- the shipped trigger today is `process_exit`: wake a thread when an `exec_command` session exits
+- watcher definitions and watcher runs are persisted in the shared SQLite state
+- the app-server claims due watchers, evaluates trigger conditions, and injects the configured follow-up prompt back into the target thread
+
+Design direction:
+
+- `wait_agent` remains a short-lived blocking/inspection tool for the current turn
+- durable "resume me when another agent finishes" behavior belongs to the watcher family instead
+- the planned first extension is `agent_completion`, backed by the same claim/run/wake machinery rather than a second workflow engine
+- periodic task reevaluation belongs to the time-based continuation side instead; `task_watch` should layer task-specific policy on top of the scheduled-task runtime rather than expand the watcher trigger family
+
+See [Watchers](../docs/watchers.md), [Agent Dependency Watchers](../docs/agent_dependency_watchers.md), and [Periodic Task Watches](../docs/task_watches.md).
 
 ### Windows sandbox setup events
 

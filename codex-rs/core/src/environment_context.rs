@@ -1,6 +1,7 @@
 use crate::codex::TurnContext;
 use crate::contextual_user_message::ENVIRONMENT_CONTEXT_FRAGMENT;
 use crate::hollywood::HollywoodEnvironmentContext;
+use crate::hollywood::HollywoodSemanticContext;
 use crate::shell::Shell;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::TurnContextItem;
@@ -171,6 +172,32 @@ impl EnvironmentContext {
     }
 }
 
+fn append_hollywood_context_lines(
+    lines: &mut Vec<String>,
+    semantic: HollywoodSemanticContext,
+    tools: Vec<String>,
+) {
+    lines.push("  <hollywood>".to_string());
+    lines.push(format!("    <attached>{}</attached>", semantic.attached));
+    lines.push(format!("    <url>{}</url>", semantic.url));
+    lines.push(format!("    <room>{}</room>", semantic.room));
+    lines.push(format!(
+        "    <attention_mode>{}</attention_mode>",
+        semantic.attention_mode
+    ));
+    lines.push("    <identities>".to_string());
+    for identity in semantic.identities {
+        lines.push(format!("      <identity>{identity}</identity>"));
+    }
+    lines.push("    </identities>".to_string());
+    lines.push("    <tools>".to_string());
+    for tool in tools {
+        lines.push(format!("      <tool>{tool}</tool>"));
+    }
+    lines.push("    </tools>".to_string());
+    lines.push("  </hollywood>".to_string());
+}
+
 impl EnvironmentContext {
     /// Serializes the environment context to XML. Libraries like `quick-xml`
     /// require custom macros to handle Enums with newtypes, so we just do it
@@ -218,25 +245,8 @@ impl EnvironmentContext {
             lines.push("  </subagents>".to_string());
         }
         if let Some(hollywood) = self.hollywood {
-            lines.push("  <hollywood>".to_string());
-            lines.push(format!("    <attached>{}</attached>", hollywood.attached));
-            lines.push(format!("    <url>{}</url>", hollywood.url));
-            lines.push(format!("    <room>{}</room>", hollywood.room));
-            lines.push(format!(
-                "    <attention_mode>{}</attention_mode>",
-                hollywood.attention_mode
-            ));
-            lines.push("    <identities>".to_string());
-            for identity in hollywood.identities {
-                lines.push(format!("      <identity>{identity}</identity>"));
-            }
-            lines.push("    </identities>".to_string());
-            lines.push("    <tools>".to_string());
-            for tool in hollywood.tools {
-                lines.push(format!("      <tool>{tool}</tool>"));
-            }
-            lines.push("    </tools>".to_string());
-            lines.push("  </hollywood>".to_string());
+            let HollywoodEnvironmentContext { semantic, runtime } = hollywood;
+            append_hollywood_context_lines(&mut lines, semantic, runtime.tools);
         }
         ENVIRONMENT_CONTEXT_FRAGMENT.wrap(lines.join("\n"))
     }

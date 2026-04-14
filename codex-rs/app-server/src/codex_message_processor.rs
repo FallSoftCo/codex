@@ -9,12 +9,14 @@ use crate::error_code::INVALID_REQUEST_ERROR_CODE;
 use crate::fuzzy_file_search::FuzzyFileSearchSession;
 use crate::fuzzy_file_search::run_fuzzy_file_search;
 use crate::fuzzy_file_search::start_fuzzy_file_search_session;
-use crate::hollywood::DEFAULT_HOLLYWOOD_ROOM;
 use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
 use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
 use crate::hollywood::HollywoodConfig;
 use crate::hollywood::build_registry_upsert_request;
 use crate::hollywood::format_hollywood_context_message;
+use crate::hollywood::hollywood_session_state_from_persisted;
+use crate::hollywood::hollywood_session_state_from_runtime;
+use crate::hollywood::hollywood_session_status_from_thread_status;
 use crate::hollywood::poll_messages as poll_hollywood_messages;
 use crate::hollywood::prime_from_latest as prime_hollywood_from_latest;
 use crate::hollywood::startup_handshake_message;
@@ -144,6 +146,8 @@ use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
 use codex_app_server_protocol::ThreadHollywoodAttentionSetResponse;
 use codex_app_server_protocol::ThreadHollywoodDetachParams;
 use codex_app_server_protocol::ThreadHollywoodDetachResponse;
+use codex_app_server_protocol::ThreadHollywoodListParams;
+use codex_app_server_protocol::ThreadHollywoodListResponse;
 use codex_app_server_protocol::ThreadIncrementElicitationParams;
 use codex_app_server_protocol::ThreadIncrementElicitationResponse;
 use codex_app_server_protocol::ThreadItem;
@@ -223,6 +227,8 @@ use codex_core::config_loader::CloudRequirementsLoadErrorCode;
 use codex_core::config_loader::CloudRequirementsLoader;
 use codex_core::config_loader::LoaderOverrides;
 use codex_core::config_loader::load_config_layers_state;
+use codex_core::default_hollywood_observed_rooms;
+use codex_core::default_hollywood_room_for_cwd;
 use codex_core::exec::ExecCapturePolicy;
 use codex_core::exec::ExecExpiration;
 use codex_core::exec::ExecParams;
@@ -290,6 +296,7 @@ use codex_protocol::protocol::ConversationTextParams;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::GitInfo as CoreGitInfo;
 use codex_protocol::protocol::HollywoodInputMessage as CoreHollywoodInputMessage;
+use codex_protocol::protocol::HollywoodSessionMeta;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::McpAuthStatus as CoreMcpAuthStatus;
 use codex_protocol::protocol::McpServerRefreshConfig;
@@ -526,6 +533,10 @@ const SCHEDULED_TASK_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const SCHEDULED_TASK_LEASE_DURATION: Duration = Duration::from_secs(120);
 const SCHEDULED_TASK_BUSY_RETRY_DELAY: Duration = Duration::from_secs(60);
 const SCHEDULED_TASK_CLAIM_LIMIT: usize = 8;
+const TASK_WATCH_POLL_INTERVAL: Duration = Duration::from_secs(10);
+const TASK_WATCH_LEASE_DURATION: Duration = Duration::from_secs(120);
+const TASK_WATCH_BUSY_RETRY_DELAY: Duration = Duration::from_secs(60);
+const TASK_WATCH_CLAIM_LIMIT: usize = 8;
 const WATCHER_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const WATCHER_LEASE_DURATION: Duration = Duration::from_secs(120);
 const WATCHER_CLAIM_LIMIT: usize = 16;
@@ -632,6 +643,7 @@ impl CodexMessageProcessor {
             log_db,
         };
         processor.spawn_scheduled_task_runtime();
+        processor.spawn_task_watch_runtime();
         processor.spawn_watcher_runtime();
         processor.spawn_tester_runtime();
         processor
@@ -806,6 +818,185 @@ impl CodexMessageProcessor {
         Ok(())
     }
 
+    fn spawn_task_watch_runtime(&self) {
+        let context = ScheduledTaskContext {
+            auth_manager: Arc::clone(&self.auth_manager),
+            thread_manager: Arc::clone(&self.thread_manager),
+            outgoing: Arc::clone(&self.outgoing),
+            analytics_events_client: self.analytics_events_client.clone(),
+            config: Arc::clone(&self.config),
+            arg0_paths: self.arg0_paths.clone(),
+            cli_overrides: Arc::clone(&self.cli_overrides),
+            runtime_feature_enablement: Arc::clone(&self.runtime_feature_enablement),
+            cloud_requirements: Arc::clone(&self.cloud_requirements),
+            thread_state_manager: self.thread_state_manager.clone(),
+            thread_watch_manager: self.thread_watch_manager.clone(),
+        };
+        let shutdown = self.scheduler_shutdown.clone();
+        self.background_tasks.spawn(async move {
+            Self::task_watch_runtime_loop(context, shutdown).await;
+        });
+    }
+
+    async fn task_watch_runtime_loop(context: ScheduledTaskContext, shutdown: CancellationToken) {
+        let mut interval = tokio::time::interval(TASK_WATCH_POLL_INTERVAL);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                _ = interval.tick() => {
+                    if let Err(err) = Self::poll_due_task_watches(&context).await {
+                        warn!("task watch poll failed: {err}");
+                    }
+                    if let Err(err) = Self::monitor_running_task_watches(&context).await {
+                        warn!("task watch monitor failed: {err}");
+                    }
+                }
+            }
+        }
+    }
+
+    async fn poll_due_task_watches(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let worker_id = format!("app-server-task-watch-{}", std::process::id());
+        let task_watches = state_db
+            .claim_due_task_watches(
+                Utc::now(),
+                worker_id.as_str(),
+                TASK_WATCH_CLAIM_LIMIT,
+                TASK_WATCH_LEASE_DURATION,
+            )
+            .await?;
+        for task_watch in task_watches {
+            if let Err(err) = Self::execute_claimed_task_watch(context, &state_db, task_watch).await
+            {
+                warn!("task watch execution failed: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    async fn execute_claimed_task_watch(
+        context: &ScheduledTaskContext,
+        state_db: &StateDbHandle,
+        task_watch: codex_state::ClaimedTaskWatch,
+    ) -> anyhow::Result<()> {
+        let thread_id = ThreadId::from_string(&task_watch.thread_id)?;
+        let thread = match Self::load_scheduled_task_thread(context, thread_id).await {
+            Ok(thread) => thread,
+            Err(err) => {
+                state_db
+                    .fail_task_watch(
+                        &task_watch.id,
+                        codex_state::TaskWatchStatus::BlockedEnvironment,
+                        &format!("task watch thread is unavailable: {err}"),
+                        Utc::now(),
+                    )
+                    .await?;
+                return Ok(());
+            }
+        };
+        let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+        Self::ensure_listener_task_running_task(
+            ListenerTaskContext {
+                thread_manager: Arc::clone(&context.thread_manager),
+                thread_state_manager: context.thread_state_manager.clone(),
+                outgoing: Arc::clone(&context.outgoing),
+                analytics_events_client: context.analytics_events_client.clone(),
+                general_analytics_enabled: context
+                    .config
+                    .features
+                    .enabled(Feature::GeneralAnalytics),
+                thread_watch_manager: context.thread_watch_manager.clone(),
+                fallback_model_provider: context.config.model_provider_id.clone(),
+                codex_home: context.config.codex_home.clone(),
+            },
+            thread_id,
+            Arc::clone(&thread),
+            thread_state,
+            ApiVersion::V2,
+        )
+        .await;
+
+        let status = context
+            .thread_watch_manager
+            .loaded_status_for_thread(&task_watch.thread_id)
+            .await;
+        if matches!(status, ThreadStatus::Active { .. }) {
+            let retry_at = Utc::now() + chrono::Duration::from_std(TASK_WATCH_BUSY_RETRY_DELAY)?;
+            state_db
+                .record_task_watch_start_failure(
+                    &task_watch,
+                    Utc::now(),
+                    retry_at,
+                    "thread is already active; rescheduling",
+                )
+                .await?;
+            return Ok(());
+        }
+
+        let wake_at = Utc::now();
+        let turn_id = thread
+            .submit(Op::UserInput {
+                items: vec![CoreInputItem::Text {
+                    text: Self::format_task_watch_wake_message(&task_watch, wake_at),
+                    text_elements: Vec::new(),
+                }],
+                final_output_json_schema: None,
+            })
+            .await?;
+
+        state_db
+            .start_task_watch_run(&task_watch, &turn_id, wake_at)
+            .await?;
+        Ok(())
+    }
+
+    async fn monitor_running_task_watches(context: &ScheduledTaskContext) -> anyhow::Result<()> {
+        let Some(state_db) = get_state_db(context.config.as_ref()).await else {
+            return Ok(());
+        };
+        let runs = state_db.list_running_task_watch_runs().await?;
+        for run in runs {
+            match context
+                .thread_watch_manager
+                .loaded_status_for_thread(&run.thread_id)
+                .await
+            {
+                ThreadStatus::Active { .. } => {}
+                ThreadStatus::Idle | ThreadStatus::NotLoaded => {
+                    state_db
+                        .complete_task_watch_run(
+                            &run.id,
+                            &run.task_watch_id,
+                            codex_state::TaskWatchRunStatus::Completed,
+                            Utc::now(),
+                            Some(
+                                "task watch wake turn finished; inspect the thread transcript for follow-up output",
+                            ),
+                            None,
+                        )
+                        .await?;
+                }
+                ThreadStatus::SystemError => {
+                    state_db
+                        .complete_task_watch_run(
+                            &run.id,
+                            &run.task_watch_id,
+                            codex_state::TaskWatchRunStatus::Failed,
+                            Utc::now(),
+                            Some("thread entered system error state during task watch follow-up"),
+                            Some("thread entered system error state"),
+                        )
+                        .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn watcher_runtime_loop(context: ScheduledTaskContext, shutdown: CancellationToken) {
         let mut interval = tokio::time::interval(WATCHER_POLL_INTERVAL);
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -879,14 +1070,14 @@ impl CodexMessageProcessor {
                     return Ok(());
                 };
                 let thread_id = ThreadId::from_string(&watcher.thread_id)?;
-                let thread = match context.thread_manager.get_thread(thread_id).await {
+                let thread = match Self::load_scheduled_task_thread(context, thread_id).await {
                     Ok(thread) => thread,
-                    Err(_) => {
+                    Err(err) => {
                         state_db
                             .fail_watcher(
                                 &watcher.id,
                                 codex_state::WatcherStatus::BlockedEnvironment,
-                                "watched thread is not loaded; process-exit watchers require the originating runtime to remain loaded",
+                                &format!("watcher thread is unavailable: {err}"),
                                 now,
                             )
                             .await?;
@@ -912,57 +1103,183 @@ impl CodexMessageProcessor {
                         exit_code,
                         failure_message,
                     } => {
-                        let loaded_status = context
-                            .thread_watch_manager
-                            .loaded_status_for_thread(&watcher.thread_id)
-                            .await;
-                        if matches!(loaded_status, ThreadStatus::Active { .. }) {
-                            state_db.release_watcher_claim(&watcher.id).await?;
-                            return Ok(());
-                        }
-
-                        let thread_state =
-                            context.thread_state_manager.thread_state(thread_id).await;
-                        Self::ensure_listener_task_running_task(
-                            ListenerTaskContext {
-                                thread_manager: Arc::clone(&context.thread_manager),
-                                thread_state_manager: context.thread_state_manager.clone(),
-                                outgoing: Arc::clone(&context.outgoing),
-                                analytics_events_client: context.analytics_events_client.clone(),
-                                general_analytics_enabled: context
-                                    .config
-                                    .features
-                                    .enabled(Feature::GeneralAnalytics),
-                                thread_watch_manager: context.thread_watch_manager.clone(),
-                                fallback_model_provider: context.config.model_provider_id.clone(),
-                                codex_home: context.config.codex_home.clone(),
-                            },
+                        let wake_message = Self::format_watcher_wake_message(
+                            &watcher,
+                            now,
+                            exit_code,
+                            failure_message.as_deref(),
+                        );
+                        Self::deliver_watcher_wake(
+                            context,
+                            state_db,
+                            &watcher,
                             thread_id,
-                            Arc::clone(&thread),
-                            thread_state,
-                            ApiVersion::V2,
+                            &thread,
+                            wake_message,
+                            now,
                         )
-                        .await;
-
-                        let turn_id = thread
-                            .submit(Op::UserInput {
-                                items: vec![CoreInputItem::Text {
-                                    text: Self::format_watcher_wake_message(
-                                        &watcher,
-                                        now,
-                                        exit_code,
-                                        failure_message.as_deref(),
-                                    ),
-                                    text_elements: Vec::new(),
-                                }],
-                                final_output_json_schema: None,
-                            })
-                            .await?;
-                        state_db.start_watcher_run(&watcher, &turn_id, now).await?;
+                        .await?;
                     }
                 }
             }
+            codex_state::WatcherTriggerKind::AgentCompletion => {
+                let Some(target_thread_id) = watcher
+                    .target_thread_id
+                    .as_deref()
+                    .map(ThreadId::from_string)
+                    .transpose()?
+                else {
+                    state_db
+                        .fail_watcher(
+                            &watcher.id,
+                            codex_state::WatcherStatus::BlockedEnvironment,
+                            "agent_completion watcher is missing the target thread id",
+                            now,
+                        )
+                        .await?;
+                    return Ok(());
+                };
+                let Some(condition) = watcher.agent_completion_condition else {
+                    state_db
+                        .fail_watcher(
+                            &watcher.id,
+                            codex_state::WatcherStatus::BlockedEnvironment,
+                            "agent_completion watcher is missing the completion condition",
+                            now,
+                        )
+                        .await?;
+                    return Ok(());
+                };
+
+                let status = match context.thread_manager.get_thread(target_thread_id).await {
+                    Ok(target_thread) => target_thread.agent_status().await,
+                    Err(_) => AgentStatus::NotFound,
+                };
+                if !agent_completion_condition_satisfied(condition, &status) {
+                    if matches!(
+                        status,
+                        AgentStatus::PendingInit | AgentStatus::Running | AgentStatus::Interrupted
+                    ) {
+                        state_db.release_watcher_claim(&watcher.id).await?;
+                        return Ok(());
+                    }
+                    let error = format!(
+                        "target agent {target_thread_id} reached final status `{}` which does not satisfy `{}`",
+                        agent_status_label(&status),
+                        condition.as_str()
+                    );
+                    state_db
+                        .fail_watcher(
+                            &watcher.id,
+                            codex_state::WatcherStatus::BlockedEnvironment,
+                            error.as_str(),
+                            now,
+                        )
+                        .await?;
+                    return Ok(());
+                }
+
+                let thread_id = ThreadId::from_string(&watcher.thread_id)?;
+                let thread = match Self::load_scheduled_task_thread(context, thread_id).await {
+                    Ok(thread) => thread,
+                    Err(err) => {
+                        state_db
+                            .fail_watcher(
+                                &watcher.id,
+                                codex_state::WatcherStatus::BlockedEnvironment,
+                                &format!("watcher thread is unavailable: {err}"),
+                                now,
+                            )
+                            .await?;
+                        return Ok(());
+                    }
+                };
+
+                let wake_message = Self::format_agent_completion_watcher_wake_message(
+                    &watcher,
+                    now,
+                    target_thread_id,
+                    &status,
+                    condition,
+                );
+                Self::deliver_watcher_wake(
+                    context,
+                    state_db,
+                    &watcher,
+                    thread_id,
+                    &thread,
+                    wake_message,
+                    now,
+                )
+                .await?;
+            }
         }
+        Ok(())
+    }
+
+    async fn deliver_watcher_wake(
+        context: &ScheduledTaskContext,
+        state_db: &StateDbHandle,
+        watcher: &codex_state::ClaimedWatcher,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        wake_message: String,
+        wake_at: DateTime<Utc>,
+    ) -> anyhow::Result<()> {
+        let loaded_status = context
+            .thread_watch_manager
+            .loaded_status_for_thread(&watcher.thread_id)
+            .await;
+        if matches!(loaded_status, ThreadStatus::Active { .. }) {
+            thread.inject_user_message_without_turn(wake_message).await;
+            let run_id = state_db.start_watcher_run(watcher, None, wake_at).await?;
+            state_db
+                .complete_watcher_run(
+                    &run_id,
+                    &watcher.id,
+                    codex_state::WatcherRunStatus::Completed,
+                    wake_at,
+                    Some("watcher wake was appended to an already-active thread"),
+                    None,
+                )
+                .await?;
+            return Ok(());
+        }
+
+        let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+        Self::ensure_listener_task_running_task(
+            ListenerTaskContext {
+                thread_manager: Arc::clone(&context.thread_manager),
+                thread_state_manager: context.thread_state_manager.clone(),
+                outgoing: Arc::clone(&context.outgoing),
+                analytics_events_client: context.analytics_events_client.clone(),
+                general_analytics_enabled: context
+                    .config
+                    .features
+                    .enabled(Feature::GeneralAnalytics),
+                thread_watch_manager: context.thread_watch_manager.clone(),
+                fallback_model_provider: context.config.model_provider_id.clone(),
+                codex_home: context.config.codex_home.clone(),
+            },
+            thread_id,
+            Arc::clone(thread),
+            thread_state,
+            ApiVersion::V2,
+        )
+        .await;
+
+        let turn_id = thread
+            .submit(Op::UserInput {
+                items: vec![CoreInputItem::Text {
+                    text: wake_message,
+                    text_elements: Vec::new(),
+                }],
+                final_output_json_schema: None,
+            })
+            .await?;
+        state_db
+            .start_watcher_run(watcher, Some(&turn_id), wake_at)
+            .await?;
         Ok(())
     }
 
@@ -1137,7 +1454,8 @@ impl CodexMessageProcessor {
                 Vec::new(),
                 true,
                 Some("tester".to_string()),
-                None,
+                /*conversation_id_override*/ None,
+                /*parent_trace*/ None,
                 tester_session_source,
             )
             .await
@@ -1473,6 +1791,50 @@ impl CodexMessageProcessor {
         )
     }
 
+    fn format_task_watch_wake_message(
+        task_watch: &codex_state::ClaimedTaskWatch,
+        wake_at: DateTime<Utc>,
+    ) -> String {
+        let scheduled_for = task_watch
+            .scheduled_for
+            .to_rfc3339_opts(SecondsFormat::Secs, true);
+        let woke_at = wake_at.to_rfc3339_opts(SecondsFormat::Secs, true);
+        let elapsed =
+            Self::format_elapsed_seconds(wake_at.signed_duration_since(task_watch.scheduled_for));
+
+        format!(
+            concat!(
+                "<task_watch_context>\n",
+                "title: {title}\n",
+                "objective: {objective}\n",
+                "task_watch_id: {task_watch_id}\n",
+                "scheduled_for: {scheduled_for}\n",
+                "woke_at: {woke_at}\n",
+                "elapsed: {elapsed}\n",
+                "check_count: {check_count}\n",
+                "cadence_seconds: {cadence_seconds}\n",
+                "max_checks: {max_checks}\n",
+                "requires_response: {requires_response}\n",
+                "</task_watch_context>\n\n",
+                "{prompt}"
+            ),
+            title = task_watch.title,
+            objective = task_watch.objective,
+            task_watch_id = task_watch.id,
+            scheduled_for = scheduled_for,
+            woke_at = woke_at,
+            elapsed = elapsed,
+            check_count = task_watch.check_count,
+            cadence_seconds = task_watch.cadence_seconds,
+            max_checks = task_watch
+                .max_checks
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            requires_response = task_watch.requires_response,
+            prompt = task_watch.prompt,
+        )
+    }
+
     fn format_watcher_wake_message(
         watcher: &codex_state::ClaimedWatcher,
         wake_at: DateTime<Utc>,
@@ -1521,6 +1883,47 @@ impl CodexMessageProcessor {
         )
     }
 
+    fn format_agent_completion_watcher_wake_message(
+        watcher: &codex_state::ClaimedWatcher,
+        wake_at: DateTime<Utc>,
+        target_thread_id: ThreadId,
+        status: &AgentStatus,
+        condition: codex_state::WatcherAgentCompletionCondition,
+    ) -> String {
+        let created_at = watcher
+            .created_at
+            .to_rfc3339_opts(SecondsFormat::Secs, true);
+        let woke_at = wake_at.to_rfc3339_opts(SecondsFormat::Secs, true);
+        let elapsed =
+            Self::format_elapsed_seconds(wake_at.signed_duration_since(watcher.created_at));
+
+        format!(
+            concat!(
+                "<watcher_context>\n",
+                "title: {title}\n",
+                "trigger: agent_completion\n",
+                "target_thread_id: {target_thread_id}\n",
+                "condition: {condition}\n",
+                "target_status: {target_status}\n",
+                "created_at: {created_at}\n",
+                "woke_at: {woke_at}\n",
+                "elapsed: {elapsed}\n",
+                "requires_response: {requires_response}\n",
+                "</watcher_context>\n\n",
+                "{prompt}"
+            ),
+            title = watcher.title,
+            target_thread_id = target_thread_id,
+            condition = condition.as_str(),
+            target_status = agent_status_label(status),
+            created_at = created_at,
+            woke_at = woke_at,
+            elapsed = elapsed,
+            requires_response = watcher.requires_response,
+            prompt = watcher.prompt,
+        )
+    }
+
     fn format_elapsed_seconds(duration: chrono::Duration) -> String {
         let total_seconds = duration.num_seconds().max(0);
         let hours = total_seconds / 3600;
@@ -1540,15 +1943,16 @@ impl CodexMessageProcessor {
         message: &crate::hollywood::HollywoodClassifiedMessage,
     ) -> (&'static str, bool) {
         use codex_app_server_protocol::HollywoodMessageAttention;
-        use codex_app_server_protocol::HollywoodMessageKind;
+        use codex_app_server_protocol::HollywoodResponsePolicy;
 
-        if matches!(message.attention, HollywoodMessageAttention::Broadcast)
-            || matches!(
-                message.notification_message.message_kind,
-                HollywoodMessageKind::Broadcast
-            )
-        {
-            return ("obligation", true);
+        match message.notification_message.response_policy {
+            HollywoodResponsePolicy::Required => return ("obligation", true),
+            HollywoodResponsePolicy::None => return ("attention", false),
+            HollywoodResponsePolicy::Optional => {}
+        }
+
+        if Self::hollywood_message_is_ack_only(message) {
+            return ("attention", false);
         }
 
         if message.mentioned {
@@ -1563,6 +1967,86 @@ impl CodexMessageProcessor {
         }
 
         ("ambient", false)
+    }
+
+    fn hollywood_message_needs_wake(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+    ) -> bool {
+        use codex_app_server_protocol::HollywoodResponsePolicy;
+
+        match message.notification_message.response_policy {
+            HollywoodResponsePolicy::Required => true,
+            HollywoodResponsePolicy::None => false,
+            HollywoodResponsePolicy::Optional => !Self::hollywood_message_is_ack_only(message),
+        }
+    }
+
+    fn hollywood_message_is_ack_only(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+    ) -> bool {
+        let body = message.notification_message.body.trim();
+        if body.is_empty() {
+            return false;
+        }
+
+        let mut normalized_words = Vec::new();
+        for token in body.split_whitespace() {
+            if token.starts_with('@') {
+                continue;
+            }
+            let normalized = token
+                .trim_matches(|ch: char| !ch.is_ascii_alphanumeric())
+                .to_ascii_lowercase();
+            if !normalized.is_empty() {
+                normalized_words.push(normalized);
+            }
+        }
+
+        if normalized_words.is_empty() {
+            return false;
+        }
+
+        let normalized_body = normalized_words.join(" ");
+        let first_word = normalized_words
+            .first()
+            .map(String::as_str)
+            .unwrap_or_default();
+        let acknowledgement_openers = [
+            "acknowledged",
+            "received",
+            "noted",
+            "confirmed",
+            "understood",
+            "matched",
+            "agreed",
+        ];
+        let acknowledgement_phrases = [
+            "no action needed",
+            "no further action",
+            "no further reply needed",
+            "no open items",
+            "no open coordination items",
+            "thread closed",
+            "closing this thread",
+            "leave this thread idle",
+            "ending responses",
+            "stay quiet unless",
+            "stay available for new work",
+        ];
+        let request_markers = [
+            "please", "need", "question", "task", "blocker", "assign", "handoff", "join", "claim",
+            "inspect", "check", "help",
+        ];
+
+        acknowledgement_openers.contains(&first_word)
+            && !body.contains('?')
+            && !request_markers
+                .iter()
+                .any(|marker| normalized_body.contains(marker))
+            && (normalized_words.len() <= 12
+                || acknowledgement_phrases
+                    .iter()
+                    .any(|phrase| normalized_body.contains(phrase)))
     }
 
     fn tester_execution_overrides(
@@ -1968,6 +2452,10 @@ impl CodexMessageProcessor {
             }
             ClientRequest::ThreadHollywoodAttentionSet { request_id, params } => {
                 self.thread_hollywood_attention_set(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadHollywoodList { request_id, params } => {
+                self.thread_hollywood_list(to_connection_request_id(request_id), params)
                     .await;
             }
             ClientRequest::ThreadResume { request_id, params } => {
@@ -3582,6 +4070,7 @@ impl CodexMessageProcessor {
                 core_dynamic_tools,
                 persist_extended_history,
                 service_name,
+                /*conversation_id_override*/ None,
                 request_trace,
             )
             .instrument(tracing::info_span!(
@@ -3665,7 +4154,6 @@ impl CodexMessageProcessor {
                         .await,
                     /*has_in_progress_turn*/ false,
                 );
-
                 let response = ThreadStartResponse {
                     thread: thread.clone(),
                     model: config_snapshot.model,
@@ -4192,16 +4680,43 @@ impl CodexMessageProcessor {
             }
 
             let config_snapshot = thread.config_snapshot().await;
-            let model_provider = config_snapshot.model_provider_id.clone();
+            let rollout_summary = read_summary_from_rollout(
+                rollout_path.as_path(),
+                config_snapshot.model_provider_id.as_str(),
+            )
+            .await
+            .ok();
+            let model_provider = rollout_summary
+                .as_ref()
+                .map(|summary| summary.model_provider.clone())
+                .unwrap_or_else(|| config_snapshot.model_provider_id.clone());
+            let created_at = rollout_summary
+                .as_ref()
+                .and_then(|summary| parse_datetime(summary.timestamp.as_deref()))
+                .unwrap_or_else(Utc::now);
             let mut builder = ThreadMetadataBuilder::new(
                 thread_uuid,
                 rollout_path,
-                Utc::now(),
-                config_snapshot.session_source.clone(),
+                created_at,
+                rollout_summary
+                    .as_ref()
+                    .map(|summary| summary.source.clone())
+                    .unwrap_or_else(|| config_snapshot.session_source.clone()),
             );
+            builder.updated_at = rollout_summary
+                .as_ref()
+                .and_then(|summary| parse_datetime(summary.updated_at.as_deref()));
             builder.model_provider = Some(model_provider.clone());
-            builder.cwd = config_snapshot.cwd.clone();
-            builder.cli_version = Some(env!("CARGO_PKG_VERSION").to_string());
+            builder.cwd = rollout_summary
+                .as_ref()
+                .map(|summary| summary.cwd.clone())
+                .unwrap_or_else(|| config_snapshot.cwd.clone());
+            builder.cli_version = Some(
+                rollout_summary
+                    .as_ref()
+                    .map(|summary| summary.cli_version.clone())
+                    .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
+            );
             builder.sandbox_policy = config_snapshot.sandbox_policy.clone();
             builder.approval_mode = config_snapshot.approval_policy;
             let metadata = builder.build(model_provider.as_str());
@@ -4707,17 +5222,25 @@ impl CodexMessageProcessor {
             .thread_watch_manager
             .loaded_statuses_for_threads(status_ids)
             .await;
+        let hollywood_state_db_ctx = get_state_db(&self.config).await;
 
-        let data = threads
-            .into_iter()
-            .map(|(conversation_id, mut thread)| {
-                thread.name = names.get(&conversation_id).cloned();
-                if let Some(status) = statuses.get(&thread.id) {
-                    thread.status = status.clone();
-                }
-                thread
-            })
-            .collect();
+        let mut data = Vec::with_capacity(threads.len());
+        for (conversation_id, mut thread) in threads {
+            thread.name = names.get(&conversation_id).cloned();
+            let loaded_status = statuses.get(&thread.id).cloned();
+            if let Some(status) = loaded_status.as_ref() {
+                thread.status = status.clone();
+            }
+            self.attach_thread_hollywood_state_from_sources(
+                conversation_id,
+                &mut thread,
+                None,
+                loaded_status.as_ref(),
+                hollywood_state_db_ctx.as_ref(),
+            )
+            .await;
+            data.push(thread);
+        }
         let response = ThreadListResponse { data, next_cursor };
         self.outgoing.send_response(request_id, response).await;
     }
@@ -4779,6 +5302,151 @@ impl CodexMessageProcessor {
             next_cursor,
         };
         self.outgoing.send_response(request_id, response).await;
+    }
+
+    async fn thread_hollywood_list(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadHollywoodListParams,
+    ) {
+        let ThreadHollywoodListParams {
+            cursor,
+            limit,
+            rooms,
+            statuses,
+        } = params;
+        let mut thread_ids = self
+            .thread_manager
+            .list_thread_ids()
+            .await
+            .into_iter()
+            .map(|thread_id| thread_id.to_string())
+            .collect::<Vec<_>>();
+
+        if thread_ids.is_empty() {
+            self.outgoing
+                .send_response(
+                    request_id,
+                    ThreadHollywoodListResponse {
+                        data: Vec::new(),
+                        next_cursor: None,
+                    },
+                )
+                .await;
+            return;
+        }
+
+        thread_ids.sort();
+        let total = thread_ids.len();
+        let start = match cursor {
+            Some(cursor) => match ThreadId::from_string(&cursor) {
+                Ok(cursor_id) => match thread_ids.binary_search(&cursor_id.to_string()) {
+                    Ok(idx) => idx + 1,
+                    Err(idx) => idx,
+                },
+                Err(_) => {
+                    self.send_invalid_request_error(
+                        request_id,
+                        format!("invalid cursor: {cursor}"),
+                    )
+                    .await;
+                    return;
+                }
+            },
+            None => 0,
+        };
+
+        let effective_limit = limit.unwrap_or(total as u32).max(1) as usize;
+        let thread_id_set = thread_ids[start..]
+            .iter()
+            .filter_map(|thread_id| ThreadId::from_string(thread_id).ok())
+            .collect::<HashSet<_>>();
+        let names = match find_thread_names_by_ids(&self.config.codex_home, &thread_id_set).await {
+            Ok(names) => names,
+            Err(err) => {
+                warn!("Failed to read thread names: {err}");
+                HashMap::new()
+            }
+        };
+        let statuses_by_thread = self
+            .thread_watch_manager
+            .loaded_statuses_for_threads(thread_ids[start..].to_vec())
+            .await;
+
+        let mut data = Vec::new();
+        let mut scan_index = start;
+        while scan_index < total && data.len() < effective_limit {
+            let thread_id_str = &thread_ids[scan_index];
+            scan_index += 1;
+            let Ok(thread_id) = ThreadId::from_string(thread_id_str) else {
+                continue;
+            };
+            let Ok(loaded_thread) = self.thread_manager.get_thread(thread_id).await else {
+                continue;
+            };
+            let config_snapshot = loaded_thread.config_snapshot().await;
+            let mut thread = build_thread_from_snapshot(
+                thread_id,
+                &config_snapshot,
+                loaded_thread.rollout_path(),
+            );
+            thread.name = names.get(&thread_id).cloned();
+            let status = statuses_by_thread
+                .get(thread_id_str)
+                .cloned()
+                .unwrap_or(ThreadStatus::NotLoaded);
+            thread.status = status.clone();
+            self.attach_thread_hollywood_state_from_sources(
+                thread_id,
+                &mut thread,
+                Some(&loaded_thread),
+                Some(&status),
+                None,
+            )
+            .await;
+            if !thread
+                .hollywood
+                .as_ref()
+                .is_some_and(|hollywood| hollywood.attached)
+            {
+                continue;
+            }
+            let matches_filters = thread.hollywood.as_ref().is_some_and(|hollywood| {
+                let status_matches = statuses
+                    .as_deref()
+                    .is_none_or(|statuses| statuses.contains(&hollywood.status));
+                let room_matches = rooms.as_deref().is_none_or(|rooms| {
+                    rooms.iter().any(|room| {
+                        room == &hollywood.primary_room
+                            || hollywood
+                                .observed_rooms
+                                .iter()
+                                .any(|candidate| candidate == room)
+                            || hollywood
+                                .wake_rooms
+                                .iter()
+                                .any(|candidate| candidate == room)
+                    })
+                });
+                status_matches && room_matches
+            });
+            if !matches_filters {
+                continue;
+            }
+            data.push(thread);
+        }
+
+        let next_cursor = if scan_index < total {
+            Some(thread_ids[scan_index - 1].clone())
+        } else {
+            None
+        };
+        self.outgoing
+            .send_response(
+                request_id,
+                ThreadHollywoodListResponse { data, next_cursor },
+            )
+            .await;
     }
 
     async fn thread_read(&mut self, request_id: ConnectionRequestId, params: ThreadReadParams) {
@@ -4931,6 +5599,15 @@ impl CodexMessageProcessor {
             thread_status,
             has_live_in_progress_turn,
         );
+        let hollywood_status = thread.status.clone();
+        self.attach_thread_hollywood_state_from_sources(
+            thread_uuid,
+            &mut thread,
+            loaded_thread.as_ref(),
+            Some(&hollywood_status),
+            None,
+        )
+        .await;
         let response = ThreadReadResponse { thread };
         self.outgoing.send_response(request_id, response).await;
     }
@@ -4988,12 +5665,6 @@ impl CodexMessageProcessor {
     }
 
     async fn thread_resume(&mut self, request_id: ConnectionRequestId, params: ThreadResumeParams) {
-        if let Some(rollout_path) = self.legacy_resume_rollout_path(&params).await {
-            self.resume_legacy_thread_via_native_migration(request_id, params, rollout_path)
-                .await;
-            return;
-        }
-
         if let Ok(thread_id) = ThreadId::from_string(&params.thread_id)
             && self
                 .pending_thread_unloads
@@ -5015,6 +5686,12 @@ impl CodexMessageProcessor {
             .resume_running_thread(request_id.clone(), &params)
             .await
         {
+            return;
+        }
+
+        if let Some(rollout_path) = self.legacy_resume_rollout_path(&params).await {
+            self.resume_legacy_thread_via_native_migration(request_id, params, rollout_path)
+                .await;
             return;
         }
 
@@ -5182,7 +5859,6 @@ impl CodexMessageProcessor {
                     thread_status,
                     /*has_live_in_progress_turn*/ false,
                 );
-
                 let response = ThreadResumeResponse {
                     thread,
                     model: session_configured.model,
@@ -5222,10 +5898,10 @@ impl CodexMessageProcessor {
             return None;
         }
 
+        let thread_id = ThreadId::from_string(&params.thread_id).ok()?;
         let rollout_path = if let Some(path) = params.path.as_ref() {
             path.clone()
         } else {
-            let thread_id = ThreadId::from_string(&params.thread_id).ok()?;
             match find_thread_path_by_id_str(&self.config.codex_home, &thread_id.to_string()).await
             {
                 Ok(Some(path)) => path,
@@ -5234,7 +5910,18 @@ impl CodexMessageProcessor {
         };
 
         let meta_line = read_session_meta_line(rollout_path.as_path()).await.ok()?;
-        meta_line.meta.hollywood.is_none().then_some(rollout_path)
+        if meta_line.meta.hollywood.is_some() {
+            return None;
+        }
+
+        if let Some(state_db_ctx) = get_state_db(&self.config).await
+            && let Ok(Some(metadata)) = state_db_ctx.get_thread(thread_id).await
+            && metadata.hollywood.is_some()
+        {
+            return None;
+        }
+
+        Some(rollout_path)
     }
 
     async fn resume_legacy_thread_via_native_migration(
@@ -5328,15 +6015,14 @@ impl CodexMessageProcessor {
                     return;
                 }
             };
-            let fork_items = rollout_history.get_rollout_items();
-            let response_history = InitialHistory::Forked(fork_items.clone());
+            let response_history = rollout_history.clone();
             let fallback_model_provider = config.model_provider_id.clone();
 
             match self
                 .thread_manager
                 .resume_thread_with_history(
                     config,
-                    InitialHistory::Forked(fork_items),
+                    rollout_history,
                     self.auth_manager.clone(),
                     persist_extended_history,
                     self.request_trace_context(&request_id).await,
@@ -5348,7 +6034,7 @@ impl CodexMessageProcessor {
                     thread,
                     session_configured,
                 }) => {
-                    let Some(new_rollout_path) = session_configured.rollout_path.as_ref() else {
+                    let Some(_new_rollout_path) = session_configured.rollout_path.as_ref() else {
                         self.send_internal_error(
                             request_id,
                             format!("rollout path missing for migrated thread {thread_id}"),
@@ -5383,7 +6069,7 @@ impl CodexMessageProcessor {
                             thread_id,
                             thread.as_ref(),
                             &response_history,
-                            new_rollout_path.as_path(),
+                            rollout_path.as_path(),
                             fallback_model_provider.as_str(),
                             Some(&persisted_metadata),
                         )
@@ -5420,6 +6106,15 @@ impl CodexMessageProcessor {
                         sandbox: session_configured.sandbox_policy.into(),
                         reasoning_effort: session_configured.reasoning_effort,
                     };
+                    if self.config.features.enabled(Feature::GeneralAnalytics) {
+                        self.analytics_events_client.track_response(
+                            request_id.connection_id.0,
+                            ClientResponse::ThreadResume {
+                                request_id: request_id.request_id.clone(),
+                                response: response.clone(),
+                            },
+                        );
+                    }
                     self.outgoing.send_response(request_id, response).await;
                 }
                 Err(err) => {
@@ -5467,15 +6162,14 @@ impl CodexMessageProcessor {
                 return;
             }
         };
-        let fork_items = rollout_history.get_rollout_items();
-        let response_history = InitialHistory::Forked(fork_items.clone());
+        let response_history = rollout_history.clone();
         let fallback_model_provider = config.model_provider_id.clone();
 
         match self
             .thread_manager
             .resume_thread_with_history(
                 config,
-                InitialHistory::Forked(fork_items),
+                rollout_history,
                 self.auth_manager.clone(),
                 persist_extended_history,
                 self.request_trace_context(&request_id).await,
@@ -5487,7 +6181,7 @@ impl CodexMessageProcessor {
                 thread,
                 session_configured,
             }) => {
-                let Some(new_rollout_path) = session_configured.rollout_path.as_ref() else {
+                let Some(_new_rollout_path) = session_configured.rollout_path.as_ref() else {
                     self.send_internal_error(
                         request_id,
                         format!("rollout path missing for migrated thread {thread_id}"),
@@ -5522,7 +6216,7 @@ impl CodexMessageProcessor {
                         thread_id,
                         thread.as_ref(),
                         &response_history,
-                        new_rollout_path.as_path(),
+                        rollout_path.as_path(),
                         fallback_model_provider.as_str(),
                         /*persisted_resume_metadata*/ None,
                     )
@@ -5547,7 +6241,6 @@ impl CodexMessageProcessor {
                     thread_status,
                     /*has_live_in_progress_turn*/ false,
                 );
-
                 let response = ThreadResumeResponse {
                     thread,
                     model: session_configured.model,
@@ -5559,6 +6252,15 @@ impl CodexMessageProcessor {
                     sandbox: session_configured.sandbox_policy.into(),
                     reasoning_effort: session_configured.reasoning_effort,
                 };
+                if self.config.features.enabled(Feature::GeneralAnalytics) {
+                    self.analytics_events_client.track_response(
+                        request_id.connection_id.0,
+                        ClientResponse::ThreadResume {
+                            request_id: request_id.request_id.clone(),
+                            response: response.clone(),
+                        },
+                    );
+                }
                 self.outgoing.send_response(request_id, response).await;
             }
             Err(err) => {
@@ -5868,14 +6570,25 @@ impl CodexMessageProcessor {
                 .await
             }
             InitialHistory::Forked(items) => {
-                let config_snapshot = thread.config_snapshot().await;
-                let mut thread = build_thread_from_snapshot(
-                    thread_id,
-                    &config_snapshot,
-                    Some(rollout_path.into()),
-                );
-                thread.preview = preview_from_rollout_items(items);
-                Ok(thread)
+                if rollout_path.exists() {
+                    load_thread_summary_for_rollout(
+                        &self.config,
+                        thread_id,
+                        rollout_path,
+                        fallback_provider,
+                        persisted_resume_metadata,
+                    )
+                    .await
+                } else {
+                    let config_snapshot = thread.config_snapshot().await;
+                    let mut thread = build_thread_from_snapshot(
+                        thread_id,
+                        &config_snapshot,
+                        Some(rollout_path.into()),
+                    );
+                    thread.preview = preview_from_rollout_items(items);
+                    Ok(thread)
+                }
             }
             InitialHistory::New => Err(format!(
                 "failed to build resume response for thread {thread_id}: initial history missing"
@@ -6184,7 +6897,6 @@ impl CodexMessageProcessor {
                 .await,
             /*has_in_progress_turn*/ false,
         );
-
         let response = ThreadForkResponse {
             thread: thread.clone(),
             model: session_configured.model,
@@ -7213,14 +7925,15 @@ impl CodexMessageProcessor {
                 return;
             }
         };
+        let config_snapshot = thread.config_snapshot().await;
+        let default_room = default_hollywood_room_for_cwd(config_snapshot.cwd.as_path());
+        let room = params.room.unwrap_or(default_room);
         let hollywood_config = HollywoodConfig {
             url: params
                 .url
                 .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
-            room: params
-                .room
-                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
-            observed_rooms: params.observed_rooms,
+            room: room.clone(),
+            observed_rooms: default_hollywood_observed_rooms(&room, params.observed_rooms),
             wake_rooms: params.wake_rooms,
             attention: params.attention.unwrap_or_default(),
         };
@@ -7313,6 +8026,80 @@ impl CodexMessageProcessor {
             .await;
     }
 
+    async fn persisted_hollywood_metadata(
+        &self,
+        thread_id: ThreadId,
+        loaded_thread: Option<&Arc<CodexThread>>,
+        state_db_ctx: Option<&StateDbHandle>,
+    ) -> Option<HollywoodSessionMeta> {
+        if let Some(thread) = loaded_thread
+            && let Some(state_db_ctx) = thread.state_db()
+            && let Ok(Some(metadata)) = state_db_ctx.get_thread(thread_id).await
+        {
+            return metadata.hollywood;
+        }
+
+        let state_db_ctx = match state_db_ctx {
+            Some(state_db_ctx) => Some(state_db_ctx.clone()),
+            None => get_state_db(&self.config).await,
+        }?;
+        state_db_ctx
+            .get_thread(thread_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|metadata| metadata.hollywood)
+    }
+
+    async fn compute_thread_hollywood_state(
+        &self,
+        thread_id: ThreadId,
+        persisted: Option<&HollywoodSessionMeta>,
+        loaded_status: Option<&ThreadStatus>,
+    ) -> Option<codex_app_server_protocol::HollywoodSessionState> {
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        let thread_state = thread_state.lock().await;
+        if let Some(config) = thread_state.hollywood.config() {
+            let status = loaded_status
+                .map(hollywood_session_status_from_thread_status)
+                .unwrap_or(codex_app_server_protocol::HollywoodSessionStatus::Idle);
+            return Some(hollywood_session_state_from_runtime(
+                thread_id,
+                &config,
+                &thread_state.hollywood,
+                status,
+            ));
+        }
+        persisted.and_then(|value| hollywood_session_state_from_persisted(thread_id, value))
+    }
+
+    async fn attach_thread_hollywood_state(
+        &self,
+        thread_id: ThreadId,
+        thread: &mut Thread,
+        persisted: Option<&HollywoodSessionMeta>,
+        loaded_status: Option<&ThreadStatus>,
+    ) {
+        thread.hollywood = self
+            .compute_thread_hollywood_state(thread_id, persisted, loaded_status)
+            .await;
+    }
+
+    async fn attach_thread_hollywood_state_from_sources(
+        &self,
+        thread_id: ThreadId,
+        thread: &mut Thread,
+        loaded_thread: Option<&Arc<CodexThread>>,
+        loaded_status: Option<&ThreadStatus>,
+        state_db_ctx: Option<&StateDbHandle>,
+    ) {
+        let persisted = self
+            .persisted_hollywood_metadata(thread_id, loaded_thread, state_db_ctx)
+            .await;
+        self.attach_thread_hollywood_state(thread_id, thread, persisted.as_ref(), loaded_status)
+            .await;
+    }
+
     async fn attach_hollywood_runtime(
         &self,
         thread_id: ThreadId,
@@ -7350,12 +8137,14 @@ impl CodexMessageProcessor {
             source,
             "Hollywood attached for thread"
         );
-        thread
-            .inject_user_message_without_turn(format_hollywood_context_message(
-                thread_id,
-                &hollywood_config,
-            ))
-            .await;
+        if source == "explicit_attach" {
+            thread
+                .inject_user_message_without_turn(format_hollywood_context_message(
+                    thread_id,
+                    &hollywood_config,
+                ))
+                .await;
+        }
         Self::log_listener_attach_result(
             self.ensure_conversation_listener(
                 thread_id,
@@ -7483,7 +8272,7 @@ impl CodexMessageProcessor {
 
         if restore_source == "legacy_resume_migration"
             && let Err(err) = self
-                .persist_thread_hollywood_metadata(thread_id, Some(thread), Some(&hollywood_config))
+                .persist_thread_hollywood_metadata(thread_id, None, Some(&hollywood_config))
                 .await
         {
             warn!(
@@ -9655,11 +10444,12 @@ impl CodexMessageProcessor {
                         );
                         let mut submitted_focused_input = false;
                         for message in merged_messages {
+                            let wakeworthy_message = Self::hollywood_message_needs_wake(&message);
                             let actionable_attention = matches!(
                                 message.attention,
                                 codex_app_server_protocol::HollywoodMessageAttention::Focused
                                     | codex_app_server_protocol::HollywoodMessageAttention::Broadcast
-                            );
+                            ) && wakeworthy_message;
                             let track_room_activity = actionable_attention && !message.self_authored;
                             if track_room_activity {
                                 thread_state
@@ -9676,7 +10466,7 @@ impl CodexMessageProcessor {
                                 || (message_is_broadcast
                                     && matches!(status, ThreadStatus::Idle)
                                     && thread_state.lock().await.active_turn_snapshot().is_none());
-                            if can_submit_now && !message.self_authored {
+                            if can_submit_now && !message.self_authored && wakeworthy_message {
                                 let (obligation, requires_response) =
                                     Self::hollywood_input_delivery_metadata(&message);
                                 {
@@ -10240,6 +11030,37 @@ impl CodexMessageProcessor {
                 warn!("failed to resolve rollout path for thread_id={conversation_id}: {err}");
                 None
             })
+    }
+}
+
+fn agent_completion_condition_satisfied(
+    condition: codex_state::WatcherAgentCompletionCondition,
+    status: &AgentStatus,
+) -> bool {
+    match condition {
+        codex_state::WatcherAgentCompletionCondition::Final => matches!(
+            status,
+            AgentStatus::Completed(_)
+                | AgentStatus::Errored(_)
+                | AgentStatus::Shutdown
+                | AgentStatus::NotFound
+        ),
+        codex_state::WatcherAgentCompletionCondition::Completed
+        | codex_state::WatcherAgentCompletionCondition::Successful => {
+            matches!(status, AgentStatus::Completed(_))
+        }
+    }
+}
+
+fn agent_status_label(status: &AgentStatus) -> &'static str {
+    match status {
+        AgentStatus::PendingInit => "pending_init",
+        AgentStatus::Running => "running",
+        AgentStatus::Interrupted => "interrupted",
+        AgentStatus::Completed(_) => "completed",
+        AgentStatus::Errored(_) => "errored",
+        AgentStatus::Shutdown => "shutdown",
+        AgentStatus::NotFound => "not_found",
     }
 }
 
@@ -11384,6 +12205,7 @@ fn build_thread_from_snapshot(
         source: config_snapshot.session_source.clone().into(),
         git_info: None,
         name: None,
+        hollywood: None,
         turns: Vec::new(),
     }
 }
@@ -11427,6 +12249,7 @@ pub(crate) fn summary_to_thread(summary: ConversationSummary) -> Thread {
         source: source.into(),
         git_info,
         name: None,
+        hollywood: None,
         turns: Vec::new(),
     }
 }
@@ -11469,6 +12292,30 @@ mod tests {
             defer_loading: false,
         }];
         validate_dynamic_tools(&tools).expect("valid schema");
+    }
+
+    #[test]
+    fn agent_completion_condition_final_accepts_not_found() {
+        assert!(agent_completion_condition_satisfied(
+            codex_state::WatcherAgentCompletionCondition::Final,
+            &AgentStatus::NotFound,
+        ));
+    }
+
+    #[test]
+    fn agent_completion_condition_completed_rejects_error() {
+        assert!(!agent_completion_condition_satisfied(
+            codex_state::WatcherAgentCompletionCondition::Completed,
+            &AgentStatus::Errored("boom".to_string()),
+        ));
+    }
+
+    #[test]
+    fn agent_completion_condition_successful_accepts_completed() {
+        assert!(agent_completion_condition_satisfied(
+            codex_state::WatcherAgentCompletionCondition::Successful,
+            &AgentStatus::Completed(Some("done".to_string())),
+        ));
     }
 
     #[test]
@@ -12214,6 +13061,7 @@ mod tests {
                 sender_id: Some("peer".to_string()),
                 recipient_id: Some("self".to_string()),
                 message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
                 body: "Acknowledged. No further reply needed.".to_string(),
                 created_at: "2026-04-09T00:00:00Z".to_string(),
                 mentions: Vec::new(),
@@ -12231,7 +13079,7 @@ mod tests {
     }
 
     #[test]
-    fn mentioned_hollywood_message_remains_an_obligation() {
+    fn mentioned_acknowledgement_hollywood_message_is_ack_only() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
                 id: 43,
@@ -12239,6 +13087,38 @@ mod tests {
                 sender_id: Some("peer".to_string()),
                 recipient_id: None,
                 message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "@sid-agow-sn5o-fb2h-bmes-qkke-5n3q-2a Acknowledged. No open items on my side either."
+                    .to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: vec!["sid-agow-sn5o-fb2h-bmes-qkke-5n3q-2a".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+
+        assert!(CodexMessageProcessor::hollywood_message_is_ack_only(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+    }
+
+    #[test]
+    fn mentioned_hollywood_message_remains_an_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 44,
+                room: "ozzz".to_string(),
+                sender_id: Some("peer".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
                 body: "@sid-agow-sn5o-fb2h-bmes-qkke-5n3q-2a please take this task".to_string(),
                 created_at: "2026-04-09T00:00:00Z".to_string(),
                 mentions: vec!["sid-agow-sn5o-fb2h-bmes-qkke-5n3q-2a".to_string()],
@@ -12251,6 +13131,64 @@ mod tests {
         let (obligation, requires_response) =
             CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
 
+        assert!(!CodexMessageProcessor::hollywood_message_is_ack_only(
+            &message
+        ));
+        assert_eq!(obligation, "obligation");
+        assert!(requires_response);
+    }
+
+    #[test]
+    fn broadcast_hollywood_status_message_is_attention_not_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 45,
+                room: "ozzz".to_string(),
+                sender_id: Some("peer".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "Assigned to investigate the acknowledgement loop.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+    }
+
+    #[test]
+    fn explicit_required_response_policy_forces_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 46,
+                room: "ozzz".to_string(),
+                sender_id: Some("peer".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Required,
+                body: "Status update body without a mention.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Ambient,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+
+        assert!(CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
         assert_eq!(obligation, "obligation");
         assert!(requires_response);
     }

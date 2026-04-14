@@ -683,6 +683,7 @@ fn spawn_agent_tool_description(
         r#"
         Only use `spawn_agent` if and only if the user explicitly asks for sub-agents, delegation, or parallel agent work.
         Requests for depth, thoroughness, research, investigation, or detailed codebase analysis do not count as permission to spawn.
+        If Hollywood coordination is available and the user asks to coordinate with existing agents, discuss with other agents, or ask idle agents, use Hollywood-first coordination with attached peers instead of `spawn_agent`.
         {agent_role_guidance}
         Spawn a sub-agent for a well-scoped task. {return_value_description} This spawn_agent tool provides you access to smaller but more efficient sub-agents. A mini model can solve many tasks faster than the main model. You should follow the rules and guidelines below to use this tool.
 

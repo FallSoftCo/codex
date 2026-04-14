@@ -41,6 +41,10 @@ pub fn set_deterministic_process_ids(enabled: bool) {
     unified_exec::set_deterministic_process_ids_for_tests(enabled);
 }
 
+pub fn disable_hollywood_from_env_for_tests() {
+    crate::hollywood::disable_hollywood_from_env_for_tests();
+}
+
 pub fn auth_manager_from_auth(auth: CodexAuth) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing(auth)
 }

@@ -428,6 +428,103 @@
       },
       "type": "object"
     },
+    "HollywoodAttentionMode": {
+      "enum": [
+        "focused",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodAttentionSettings": {
+      "properties": {
+        "includeAtAll": {
+          "default": true,
+          "type": "boolean"
+        },
+        "includeAtRoom": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/definitions/HollywoodAttentionMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionState": {
+      "properties": {
+        "attached": {
+          "type": "boolean"
+        },
+        "attention": {
+          "$ref": "#/definitions/HollywoodAttentionSettings"
+        },
+        "identities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "observedRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "primaryRoom": {
+          "type": "string"
+        },
+        "resumedFrom": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionKind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/HollywoodSessionStatus"
+        },
+        "url": {
+          "type": "string"
+        },
+        "wakeRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "attached",
+        "attention",
+        "identities",
+        "observedRooms",
+        "primaryRoom",
+        "status",
+        "url",
+        "wakeRooms"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionStatus": {
+      "enum": [
+        "persisted",
+        "idle",
+        "active",
+        "waiting",
+        "blocked"
+      ],
+      "type": "string"
+    },
     "HookPromptFragment": {
       "properties": {
         "hookRunId": {
@@ -818,6 +915,17 @@
             }
           ],
           "description": "Optional Git metadata captured when the thread was created."
+        },
+        "hollywood": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Structured Hollywood attachment/status when the thread is or was configured for room coordination."
         },
         "id": {
           "type": "string"

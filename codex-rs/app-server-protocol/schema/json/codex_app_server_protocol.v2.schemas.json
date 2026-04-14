@@ -5067,6 +5067,259 @@
       ],
       "type": "string"
     },
+    "HollywoodAttentionMode": {
+      "enum": [
+        "focused",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodAttentionSettings": {
+      "properties": {
+        "includeAtAll": {
+          "default": true,
+          "type": "boolean"
+        },
+        "includeAtRoom": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/definitions/HollywoodAttentionMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessage": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "messageKind": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodMessageKind"
+            }
+          ],
+          "default": "ambient"
+        },
+        "recipientId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responsePolicy": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodResponsePolicy"
+            }
+          ],
+          "default": "optional"
+        },
+        "room": {
+          "type": "string"
+        },
+        "senderId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "body",
+        "createdAt",
+        "id",
+        "mentions",
+        "room"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessageAttention": {
+      "enum": [
+        "focused",
+        "broadcast",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageKind": {
+      "enum": [
+        "ambient",
+        "broadcast",
+        "direct"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attention": {
+          "$ref": "#/definitions/HollywoodMessageAttention"
+        },
+        "mentioned": {
+          "type": "boolean"
+        },
+        "message": {
+          "$ref": "#/definitions/HollywoodMessage"
+        },
+        "selfAuthored": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attention",
+        "mentioned",
+        "message",
+        "selfAuthored",
+        "threadId"
+      ],
+      "title": "HollywoodMessageNotification",
+      "type": "object"
+    },
+    "HollywoodResponsePolicy": {
+      "enum": [
+        "required",
+        "optional",
+        "none"
+      ],
+      "type": "string"
+    },
+    "HollywoodSessionAttachOptions": {
+      "properties": {
+        "attention": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodAttentionSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedRooms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "room": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wakeRooms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "HollywoodSessionState": {
+      "properties": {
+        "attached": {
+          "type": "boolean"
+        },
+        "attention": {
+          "$ref": "#/definitions/HollywoodAttentionSettings"
+        },
+        "identities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "observedRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "primaryRoom": {
+          "type": "string"
+        },
+        "resumedFrom": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionKind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/HollywoodSessionStatus"
+        },
+        "url": {
+          "type": "string"
+        },
+        "wakeRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "attached",
+        "attention",
+        "identities",
+        "observedRooms",
+        "primaryRoom",
+        "status",
+        "url",
+        "wakeRooms"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionStatus": {
+      "enum": [
+        "persisted",
+        "idle",
+        "active",
+        "waiting",
+        "blocked"
+      ],
+      "type": "string"
+    },
     "HookCompletedNotification": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -9477,6 +9730,26 @@
           "type": "object"
         },
         {
+          "properties": {
+            "method": {
+              "enum": [
+                "thread/hollywood/message"
+              ],
+              "title": "Thread/hollywood/messageNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/HollywoodMessageNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Thread/hollywood/messageNotification",
+          "type": "object"
+        },
+        {
           "description": "Notifies the user of world-writable directories on Windows, which cannot be protected by the sandbox.",
           "properties": {
             "method": {
@@ -10195,6 +10468,17 @@
             }
           ],
           "description": "Optional Git metadata captured when the thread was created."
+        },
+        "hollywood": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Structured Hollywood attachment/status when the thread is or was configured for room coordination."
         },
         "id": {
           "type": "string"

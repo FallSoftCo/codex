@@ -21,23 +21,13 @@ slugify_room() {
 
 default_primary_room() {
   local cwd="$1"
-  local base
-  base="$(basename "$cwd")"
-  case "$cwd" in
-    "$HOME"|"$HOME/"|"/")
-      printf 'main\n'
-      return
-      ;;
-  esac
+  local git_root=""
+  if git_root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)"; then
+    printf 'repo/%s\n' "$(slugify_room "$(basename "$git_root")")"
+    return
+  fi
 
-  case "$base" in
-    Development|Downloads|Desktop|Documents|src|code|workspace)
-      printf 'main\n'
-      ;;
-    *)
-      slugify_room "$base"
-      ;;
-  esac
+  printf 'main\n'
 }
 
 load_persisted_workspace_setup() {
@@ -82,7 +72,7 @@ if [[ "$primary_room" != "main" ]]; then
     observed_rooms="main"
   fi
   if [[ -z "$wake_rooms" ]]; then
-    wake_rooms="${primary_room},main"
+    wake_rooms="${primary_room}"
   fi
 else
   if [[ -z "$wake_rooms" ]]; then

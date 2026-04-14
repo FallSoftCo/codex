@@ -127,6 +127,16 @@ export type { GuardianApprovalReviewAction } from "./GuardianApprovalReviewActio
 export type { GuardianApprovalReviewStatus } from "./GuardianApprovalReviewStatus";
 export type { GuardianCommandSource } from "./GuardianCommandSource";
 export type { GuardianRiskLevel } from "./GuardianRiskLevel";
+export type { HollywoodAttentionMode } from "./HollywoodAttentionMode";
+export type { HollywoodAttentionSettings } from "./HollywoodAttentionSettings";
+export type { HollywoodMessage } from "./HollywoodMessage";
+export type { HollywoodMessageAttention } from "./HollywoodMessageAttention";
+export type { HollywoodMessageKind } from "./HollywoodMessageKind";
+export type { HollywoodMessageNotification } from "./HollywoodMessageNotification";
+export type { HollywoodResponsePolicy } from "./HollywoodResponsePolicy";
+export type { HollywoodSessionAttachOptions } from "./HollywoodSessionAttachOptions";
+export type { HollywoodSessionState } from "./HollywoodSessionState";
+export type { HollywoodSessionStatus } from "./HollywoodSessionStatus";
 export type { HookCompletedNotification } from "./HookCompletedNotification";
 export type { HookEventName } from "./HookEventName";
 export type { HookExecutionMode } from "./HookExecutionMode";

@@ -36,6 +36,7 @@ struct HollywoodSendArgs {
     room: Option<String>,
     to: Option<String>,
     broadcast: Option<bool>,
+    response_policy: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +93,7 @@ struct HollywoodSendResult {
     sender_id: String,
     recipient_id: Option<String>,
     message_kind: String,
+    response_policy: Option<String>,
     text: String,
     ok: bool,
 }
@@ -268,6 +270,7 @@ impl ToolHandler for HollywoodSendHandler {
         let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
         let recipient_id = args.to.as_deref().and_then(canonicalize_agent_identity);
         let text = args.text.clone();
+        let response_policy = args.response_policy.clone();
         let message_kind = if args.broadcast.unwrap_or(false) {
             "broadcast".to_string()
         } else if recipient_id.is_some() {
@@ -283,6 +286,7 @@ impl ToolHandler for HollywoodSendHandler {
                 "sender_id": sender_id,
                 "recipient_id": recipient_id,
                 "message_kind": message_kind,
+                "response_policy": response_policy,
                 "body": text,
             }))
             .send()
@@ -306,6 +310,7 @@ impl ToolHandler for HollywoodSendHandler {
             sender_id,
             recipient_id,
             message_kind,
+            response_policy,
             text,
             ok: true,
         };
@@ -622,6 +627,7 @@ mod tests {
             room: None,
             to: to.map(ToOwned::to_owned),
             broadcast: None,
+            response_policy: None,
         }
     }
 

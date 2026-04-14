@@ -176,6 +176,87 @@ pub fn create_watch_process_exit_tool() -> ToolSpec {
     })
 }
 
+pub fn create_watch_agent_completion_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "target".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Identifier of the target agent/thread whose completion should wake the waiting thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "title".to_string(),
+            JsonSchema::String {
+                description: Some("Short human-readable label for the watcher.".to_string()),
+            },
+        ),
+        (
+            "prompt".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Follow-up prompt injected into the thread after the target agent satisfies the condition."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "condition".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "timeout_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "thread_id".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional thread/session id to wake. Defaults to the current thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "requires_response".to_string(),
+            JsonSchema::Boolean {
+                description: Some(
+                    "Whether the deferred wake should expect a concrete response.".to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "watch_agent_completion".to_string(),
+        description: "Registers a persisted watcher that wakes the thread when another agent reaches a target completion state. Prefer this over stretching `wait_agent` into a long-lived blocking wait.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec![
+                "target".to_string(),
+                "title".to_string(),
+                "prompt".to_string(),
+            ]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
 pub fn create_list_watchers_tool() -> ToolSpec {
     let properties = BTreeMap::from([(
         "thread_id".to_string(),
@@ -218,6 +299,215 @@ pub fn create_cancel_watcher_tool() -> ToolSpec {
         parameters: JsonSchema::Object {
             properties,
             required: Some(vec!["watcher_id".to_string()]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+pub fn create_watch_task_periodically_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "title".to_string(),
+            JsonSchema::String {
+                description: Some("Short human-readable label for the task watch.".to_string()),
+            },
+        ),
+        (
+            "objective".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Human-readable objective the agent should periodically reevaluate."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "prompt".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Follow-up prompt injected into the thread each time the task watch becomes due."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "check_every_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Recurring interval in seconds between reevaluation checks.".to_string(),
+                ),
+            },
+        ),
+        (
+            "initial_delay_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional delay in seconds before the first check. Defaults to one full interval."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "thread_id".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional thread/session id to wake. Defaults to the current thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "max_checks".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional cap on how many checks may run before the task watch auto-stops."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "requires_response".to_string(),
+            JsonSchema::Boolean {
+                description: Some(
+                    "Whether the deferred wake should expect a concrete response.".to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "watch_task_periodically".to_string(),
+        description: "Registers a persisted task watch that periodically wakes the thread to reevaluate a concrete task. Use this for time-based \"check on this later\" work."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec![
+                "title".to_string(),
+                "objective".to_string(),
+                "prompt".to_string(),
+                "check_every_seconds".to_string(),
+            ]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+pub fn create_list_task_watches_tool() -> ToolSpec {
+    let properties = BTreeMap::from([(
+        "thread_id".to_string(),
+        JsonSchema::String {
+            description: Some(
+                "Optional thread/session id filter. Defaults to the current thread.".to_string(),
+            ),
+        },
+    )]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "list_task_watches".to_string(),
+        description: "List persisted periodic task watches for the current or specified thread."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(Vec::new()),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+pub fn create_update_task_watch_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "task_watch_id".to_string(),
+            JsonSchema::String {
+                description: Some("Task watch id to update.".to_string()),
+            },
+        ),
+        (
+            "action".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Update action: `continue`, `backoff`, `snooze`, `complete`, or `stop`."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "check_every_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional new recurring cadence in seconds. Useful for `continue` or `backoff`."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "delay_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional one-off delay in seconds before the next check. Useful for `snooze`."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "max_checks".to_string(),
+            JsonSchema::Number {
+                description: Some("Optional new max-check cap.".to_string()),
+            },
+        ),
+        (
+            "decision".to_string(),
+            JsonSchema::String {
+                description: Some("Optional short persisted decision label.".to_string()),
+            },
+        ),
+        (
+            "observation".to_string(),
+            JsonSchema::String {
+                description: Some("Optional short persisted observation summary.".to_string()),
+            },
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "update_task_watch".to_string(),
+        description: "Updates an existing task watch in place: continue, back off, snooze, complete, or stop it."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["task_watch_id".to_string(), "action".to_string()]),
+            additional_properties: Some(false.into()),
+        },
+        output_schema: None,
+    })
+}
+
+pub fn create_cancel_task_watch_tool() -> ToolSpec {
+    let properties = BTreeMap::from([(
+        "task_watch_id".to_string(),
+        JsonSchema::String {
+            description: Some("Task watch id to stop.".to_string()),
+        },
+    )]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "cancel_task_watch".to_string(),
+        description: "Stops a persisted task watch so it will no longer wake the thread."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["task_watch_id".to_string()]),
             additional_properties: Some(false.into()),
         },
         output_schema: None,

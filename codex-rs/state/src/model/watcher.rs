@@ -5,19 +5,50 @@ use chrono::Utc;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum WatcherTriggerKind {
     ProcessExit,
+    AgentCompletion,
 }
 
 impl WatcherTriggerKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ProcessExit => "process_exit",
+            Self::AgentCompletion => "agent_completion",
         }
     }
 
     pub fn parse(value: &str) -> Result<Self> {
         match value {
             "process_exit" => Ok(Self::ProcessExit),
+            "agent_completion" => Ok(Self::AgentCompletion),
             _ => Err(anyhow::anyhow!("invalid watcher trigger kind: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum WatcherAgentCompletionCondition {
+    Final,
+    Completed,
+    Successful,
+}
+
+impl WatcherAgentCompletionCondition {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Final => "final",
+            Self::Completed => "completed",
+            Self::Successful => "successful",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "final" => Ok(Self::Final),
+            "completed" => Ok(Self::Completed),
+            "successful" => Ok(Self::Successful),
+            _ => Err(anyhow::anyhow!(
+                "invalid agent completion condition: {value}"
+            )),
         }
     }
 }
@@ -85,6 +116,8 @@ pub struct Watcher {
     pub prompt: String,
     pub trigger_kind: WatcherTriggerKind,
     pub process_id: Option<i32>,
+    pub target_thread_id: Option<String>,
+    pub agent_completion_condition: Option<WatcherAgentCompletionCondition>,
     pub timeout_at: Option<DateTime<Utc>>,
     pub requires_response: bool,
     pub status: WatcherStatus,
@@ -117,6 +150,8 @@ pub struct WatcherCreateParams {
     pub prompt: String,
     pub trigger_kind: WatcherTriggerKind,
     pub process_id: Option<i32>,
+    pub target_thread_id: Option<String>,
+    pub agent_completion_condition: Option<WatcherAgentCompletionCondition>,
     pub timeout_at: Option<DateTime<Utc>>,
     pub requires_response: bool,
 }
@@ -129,6 +164,8 @@ pub struct ClaimedWatcher {
     pub prompt: String,
     pub trigger_kind: WatcherTriggerKind,
     pub process_id: Option<i32>,
+    pub target_thread_id: Option<String>,
+    pub agent_completion_condition: Option<WatcherAgentCompletionCondition>,
     pub timeout_at: Option<DateTime<Utc>>,
     pub requires_response: bool,
     pub created_at: DateTime<Utc>,
@@ -151,6 +188,8 @@ pub(crate) struct WatcherRow {
     pub(crate) prompt: String,
     pub(crate) trigger_kind: String,
     pub(crate) process_id: Option<i32>,
+    pub(crate) target_thread_id: Option<String>,
+    pub(crate) completion_condition: Option<String>,
     pub(crate) timeout_at: Option<i64>,
     pub(crate) requires_response: i64,
     pub(crate) status: String,
@@ -172,6 +211,12 @@ impl TryFrom<WatcherRow> for Watcher {
             prompt: value.prompt,
             trigger_kind: WatcherTriggerKind::parse(value.trigger_kind.as_str())?,
             process_id: value.process_id,
+            target_thread_id: value.target_thread_id,
+            agent_completion_condition: value
+                .completion_condition
+                .as_deref()
+                .map(WatcherAgentCompletionCondition::parse)
+                .transpose()?,
             timeout_at: value
                 .timeout_at
                 .map(epoch_seconds_to_datetime)

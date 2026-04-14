@@ -21,12 +21,14 @@ INSERT INTO watchers (
     prompt,
     trigger_kind,
     process_id,
+    target_thread_id,
+    completion_condition,
     timeout_at,
     requires_response,
     status,
     created_at,
     updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(params.id)
@@ -35,6 +37,12 @@ INSERT INTO watchers (
         .bind(params.prompt)
         .bind(params.trigger_kind.as_str())
         .bind(params.process_id)
+        .bind(params.target_thread_id)
+        .bind(
+            params
+                .agent_completion_condition
+                .map(crate::WatcherAgentCompletionCondition::as_str),
+        )
         .bind(params.timeout_at.map(|value| value.timestamp()))
         .bind(i64::from(params.requires_response))
         .bind(WatcherStatus::Armed.as_str())
@@ -59,6 +67,8 @@ SELECT
     prompt,
     trigger_kind,
     process_id,
+    target_thread_id,
+    completion_condition,
     timeout_at,
     requires_response,
     status,
@@ -85,6 +95,8 @@ SELECT
     prompt,
     trigger_kind,
     process_id,
+    target_thread_id,
+    completion_condition,
     timeout_at,
     requires_response,
     status,
@@ -140,6 +152,8 @@ SELECT
     prompt,
     trigger_kind,
     process_id,
+    target_thread_id,
+    completion_condition,
     timeout_at,
     requires_response,
     status,
@@ -191,6 +205,12 @@ WHERE id = ?
                 prompt: row.prompt,
                 trigger_kind: WatcherTriggerKind::parse(row.trigger_kind.as_str())?,
                 process_id: row.process_id,
+                target_thread_id: row.target_thread_id,
+                agent_completion_condition: row
+                    .completion_condition
+                    .as_deref()
+                    .map(crate::WatcherAgentCompletionCondition::parse)
+                    .transpose()?,
                 timeout_at: row.timeout_at.map(epoch_seconds_to_datetime).transpose()?,
                 requires_response: row.requires_response != 0,
                 created_at: epoch_seconds_to_datetime(row.created_at)?,
@@ -219,7 +239,7 @@ WHERE id = ?
     pub async fn start_watcher_run(
         &self,
         watcher: &ClaimedWatcher,
-        turn_id: &str,
+        turn_id: Option<&str>,
         trigger_fired_at: DateTime<Utc>,
     ) -> anyhow::Result<String> {
         let run_id = uuid::Uuid::new_v4().to_string();
@@ -459,6 +479,8 @@ mod tests {
             prompt: "Inspect the completed build and summarize failures.".to_string(),
             trigger_kind: WatcherTriggerKind::ProcessExit,
             process_id: Some(1234),
+            target_thread_id: None,
+            agent_completion_condition: None,
             timeout_at: None,
             requires_response: true,
         })
@@ -473,7 +495,7 @@ mod tests {
         assert_eq!(claimed[0].process_id, Some(1234));
 
         let run_id = db
-            .start_watcher_run(&claimed[0], "turn-1", Utc::now())
+            .start_watcher_run(&claimed[0], Some("turn-1"), Utc::now())
             .await
             .expect("start watcher run");
         assert!(!run_id.is_empty());
@@ -482,5 +504,81 @@ mod tests {
         assert_eq!(watchers.len(), 1);
         assert_eq!(watchers[0].status, WatcherStatus::Triggered);
         assert_eq!(watchers[0].last_run_turn_id.as_deref(), Some("turn-1"));
+    }
+
+    #[tokio::test]
+    async fn agent_completion_watcher_persists_target_and_condition() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(tempdir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init");
+
+        db.create_watcher(WatcherCreateParams {
+            id: "watch-2".to_string(),
+            thread_id: "thread-1".to_string(),
+            title: "wait for reviewer".to_string(),
+            prompt: "Inspect the reviewer result.".to_string(),
+            trigger_kind: WatcherTriggerKind::AgentCompletion,
+            process_id: None,
+            target_thread_id: Some("thread-2".to_string()),
+            agent_completion_condition: Some(crate::WatcherAgentCompletionCondition::Completed),
+            timeout_at: None,
+            requires_response: true,
+        })
+        .await
+        .expect("create watcher");
+
+        let watchers = db.list_watchers(None).await.expect("list watchers");
+        assert_eq!(watchers.len(), 1);
+        assert_eq!(
+            watchers[0].trigger_kind,
+            WatcherTriggerKind::AgentCompletion
+        );
+        assert_eq!(watchers[0].target_thread_id.as_deref(), Some("thread-2"));
+        assert_eq!(
+            watchers[0].agent_completion_condition,
+            Some(crate::WatcherAgentCompletionCondition::Completed)
+        );
+    }
+
+    #[tokio::test]
+    async fn watcher_run_can_be_recorded_without_turn_id() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(tempdir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init");
+
+        db.create_watcher(WatcherCreateParams {
+            id: "watch-3".to_string(),
+            thread_id: "thread-1".to_string(),
+            title: "wait for build".to_string(),
+            prompt: "Summarize the build result.".to_string(),
+            trigger_kind: WatcherTriggerKind::ProcessExit,
+            process_id: Some(42),
+            target_thread_id: None,
+            agent_completion_condition: None,
+            timeout_at: None,
+            requires_response: true,
+        })
+        .await
+        .expect("create watcher");
+
+        let claimed = db
+            .claim_armed_watchers(Utc::now(), "worker-1", 10, Duration::from_secs(30))
+            .await
+            .expect("claim");
+        let run_id = db
+            .start_watcher_run(&claimed[0], None, Utc::now())
+            .await
+            .expect("start watcher run");
+
+        let runs = db
+            .list_watcher_runs(Some("watch-3"))
+            .await
+            .expect("list watcher runs");
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, run_id);
+        assert_eq!(runs[0].turn_id, None);
+        assert_eq!(runs[0].status, WatcherRunStatus::Running);
     }
 }

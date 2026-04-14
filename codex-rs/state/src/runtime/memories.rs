@@ -182,7 +182,12 @@ SELECT
     archived_at,
     git_sha,
     git_branch,
-    git_origin_url
+    git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room
 FROM threads
 LEFT JOIN stage1_outputs
     ON stage1_outputs.thread_id = threads.id

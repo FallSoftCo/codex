@@ -94,6 +94,12 @@ fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n")
 }
 
+fn hollywood_tools_expected() -> bool {
+    // Core integration tests disable inherited Hollywood auto-attach so prompt-shape
+    // assertions remain deterministic under concurrent `cargo test` runs.
+    false
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
@@ -169,7 +175,18 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
     let mut expected_tools_names = if cfg!(windows) {
         vec!["shell_command"]
     } else {
-        vec!["exec_command", "write_stdin"]
+        vec![
+            "exec_command",
+            "write_stdin",
+            "watch_process_exit",
+            "watch_agent_completion",
+            "list_watchers",
+            "cancel_watcher",
+            "watch_task_periodically",
+            "list_task_watches",
+            "update_task_watch",
+            "cancel_task_watch",
+        ]
     };
     expected_tools_names.extend([
         "update_plan",
@@ -183,6 +200,16 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
         "wait_agent",
         "close_agent",
     ]);
+    if hollywood_tools_expected() {
+        expected_tools_names.extend([
+            "hollywood_status",
+            "hollywood_read",
+            "hollywood_send",
+            "hollywood_team_up",
+            "hollywood_team_status",
+            "hollywood_team_member_update",
+        ]);
+    }
     let body0 = req1.single_request().body_json();
 
     let expected_instructions = if expected_tools_names.contains(&"apply_patch") {

@@ -144,6 +144,9 @@ enum Subcommand {
     /// Manage persisted scheduled thread wakeups.
     Schedule(ScheduleCommand),
 
+    /// Manage periodic task watches.
+    TaskWatch(TaskWatchCommand),
+
     /// Manage persisted deferred process-exit watchers.
     Watcher(WatcherCommand),
 
@@ -275,6 +278,12 @@ struct ScheduleCommand {
     subcommand: ScheduleSubcommand,
 }
 
+#[derive(Debug, Parser)]
+struct TaskWatchCommand {
+    #[command(subcommand)]
+    subcommand: TaskWatchSubcommand,
+}
+
 #[derive(Debug, clap::Subcommand)]
 enum ScheduleSubcommand {
     /// Schedule a one-shot wakeup for a thread at a specific UTC timestamp.
@@ -296,6 +305,27 @@ enum ScheduleSubcommand {
     RunNow(ScheduleRunNowCommand),
 }
 
+#[derive(Debug, clap::Subcommand)]
+enum TaskWatchSubcommand {
+    /// Create a periodic task watch for a thread.
+    Add(TaskWatchAddCommand),
+
+    /// List task watches.
+    List(TaskWatchListCommand),
+
+    /// List task watch runs.
+    Runs(TaskWatchRunsCommand),
+
+    /// Update a task watch in place.
+    Update(TaskWatchUpdateCommand),
+
+    /// Stop a task watch.
+    Stop(TaskWatchStopCommand),
+
+    /// Trigger a task watch immediately.
+    RunNow(TaskWatchRunNowCommand),
+}
+
 #[derive(Debug, Args)]
 struct ScheduleTaskBaseArgs {
     /// Thread/session id to wake when the schedule fires.
@@ -307,6 +337,29 @@ struct ScheduleTaskBaseArgs {
     title: String,
 
     /// Prompt injected into the thread when the schedule fires.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+
+    /// Mark the wakeup as requiring a response.
+    #[arg(long, default_value_t = true)]
+    requires_response: bool,
+}
+
+#[derive(Debug, Args)]
+struct TaskWatchBaseArgs {
+    /// Thread/session id to wake when the task watch fires.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: String,
+
+    /// Short human-readable label for the task watch.
+    #[arg(long, value_name = "TITLE")]
+    title: String,
+
+    /// Human-readable objective the agent is periodically reevaluating.
+    #[arg(long, value_name = "OBJECTIVE")]
+    objective: String,
+
+    /// Prompt injected into the thread when the task watch fires.
     #[arg(long, value_name = "PROMPT")]
     prompt: String,
 
@@ -340,7 +393,32 @@ struct ScheduleAddEveryCommand {
 }
 
 #[derive(Debug, Parser)]
+struct TaskWatchAddCommand {
+    #[command(flatten)]
+    task_watch: TaskWatchBaseArgs,
+
+    /// Fixed interval like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    every: String,
+
+    /// Optional UTC timestamp in RFC3339 format for the first check.
+    #[arg(long, value_name = "RFC3339_UTC")]
+    start_at: Option<String>,
+
+    /// Optional cap on how many checks the watch may run before auto-stopping.
+    #[arg(long, value_name = "COUNT")]
+    max_checks: Option<i64>,
+}
+
+#[derive(Debug, Parser)]
 struct ScheduleListCommand {
+    /// Optional thread/session id filter.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchListCommand {
     /// Optional thread/session id filter.
     #[arg(long, value_name = "THREAD_ID")]
     thread_id: Option<String>,
@@ -351,6 +429,13 @@ struct ScheduleRunsCommand {
     /// Optional scheduled task id filter.
     #[arg(long, value_name = "TASK_ID")]
     task_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchRunsCommand {
+    /// Optional task watch id filter.
+    #[arg(long, value_name = "TASK_WATCH_ID")]
+    task_watch_id: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -365,6 +450,60 @@ struct ScheduleRunNowCommand {
     /// Scheduled task id.
     #[arg(value_name = "TASK_ID")]
     task_id: String,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum TaskWatchUpdateActionArg {
+    Continue,
+    Backoff,
+    Snooze,
+    Complete,
+    Stop,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchUpdateCommand {
+    /// Task watch id.
+    #[arg(value_name = "TASK_WATCH_ID")]
+    task_watch_id: String,
+
+    /// How this update should affect the task watch.
+    #[arg(long, value_enum)]
+    action: TaskWatchUpdateActionArg,
+
+    /// Optional new recurring cadence like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    every: Option<String>,
+
+    /// Optional one-off delay like 30s, 5m, 1h, or 1d before the next check.
+    #[arg(long, value_name = "DURATION")]
+    delay: Option<String>,
+
+    /// Optional updated maximum check cap.
+    #[arg(long, value_name = "COUNT")]
+    max_checks: Option<i64>,
+
+    /// Optional short decision label to persist on the task watch.
+    #[arg(long, value_name = "TEXT")]
+    decision: Option<String>,
+
+    /// Optional short observation summary to persist on the task watch.
+    #[arg(long, value_name = "TEXT")]
+    observation: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchStopCommand {
+    /// Task watch id.
+    #[arg(value_name = "TASK_WATCH_ID")]
+    task_watch_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchRunNowCommand {
+    /// Task watch id.
+    #[arg(value_name = "TASK_WATCH_ID")]
+    task_watch_id: String,
 }
 
 #[derive(Debug, Parser)]
@@ -1110,6 +1249,14 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             )?;
             run_schedule_command(cmd, &root_config_overrides, &interactive).await?;
         }
+        Some(Subcommand::TaskWatch(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "task-watch",
+            )?;
+            run_task_watch_command(cmd, &root_config_overrides, &interactive).await?;
+        }
         Some(Subcommand::Watcher(cmd)) => {
             reject_remote_mode_for_subcommand(
                 root_remote.as_deref(),
@@ -1814,6 +1961,171 @@ async fn run_tester_command(
     Ok(())
 }
 
+async fn run_task_watch_command(
+    cmd: TaskWatchCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite_home.clone(), config.model_provider_id.clone()).await?;
+
+    match cmd.subcommand {
+        TaskWatchSubcommand::Add(args) => {
+            let thread_id = parse_thread_id_arg(args.task_watch.thread_id.as_str())?;
+            let cadence_seconds = parse_schedule_duration(args.every.as_str())?;
+            let next_check_at = match args.start_at.as_deref() {
+                Some(value) => parse_utc_timestamp(value)?,
+                None => Utc::now() + chrono::Duration::seconds(cadence_seconds),
+            };
+            let task_watch_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_task_watch(codex_state::TaskWatchCreateParams {
+                    id: task_watch_id.clone(),
+                    thread_id: thread_id.to_string(),
+                    title: args.task_watch.title,
+                    objective: args.task_watch.objective,
+                    prompt: args.task_watch.prompt,
+                    cadence_seconds,
+                    next_check_at,
+                    max_checks: args.max_checks,
+                    requires_response: args.task_watch.requires_response,
+                })
+                .await?;
+            println!(
+                "Created task watch {task_watch_id} for thread {thread_id} every {cadence_seconds}s starting at {next_check_at}."
+            );
+        }
+        TaskWatchSubcommand::List(args) => {
+            let thread_id = args
+                .thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let task_watches = state_db.list_task_watches(thread_id).await?;
+            if task_watches.is_empty() {
+                println!("No task watches found.");
+            } else {
+                for task_watch in task_watches {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        task_watch.id,
+                        task_watch.thread_id,
+                        task_watch.status.as_str(),
+                        task_watch.next_check_at.to_rfc3339(),
+                        task_watch.cadence_seconds,
+                        task_watch.title,
+                        task_watch.last_decision.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        TaskWatchSubcommand::Runs(args) => {
+            let runs = state_db
+                .list_task_watch_runs(args.task_watch_id.as_deref())
+                .await?;
+            if runs.is_empty() {
+                println!("No task watch runs found.");
+            } else {
+                for run in runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        run.id,
+                        run.task_watch_id,
+                        run.status.as_str(),
+                        run.started_at.to_rfc3339(),
+                        run.turn_id.unwrap_or_else(|| "-".to_string()),
+                        run.summary
+                            .unwrap_or_else(|| run.error.unwrap_or_else(|| "-".to_string()))
+                    );
+                }
+            }
+        }
+        TaskWatchSubcommand::Update(args) => {
+            let cadence_seconds = args
+                .every
+                .as_deref()
+                .map(parse_schedule_duration)
+                .transpose()?;
+            let delay_seconds = args
+                .delay
+                .as_deref()
+                .map(parse_schedule_duration)
+                .transpose()?;
+            let next_check_at =
+                delay_seconds.map(|seconds| Utc::now() + chrono::Duration::seconds(seconds));
+            let status = match args.action {
+                TaskWatchUpdateActionArg::Continue
+                | TaskWatchUpdateActionArg::Backoff
+                | TaskWatchUpdateActionArg::Snooze => None,
+                TaskWatchUpdateActionArg::Complete => Some(codex_state::TaskWatchStatus::Completed),
+                TaskWatchUpdateActionArg::Stop => Some(codex_state::TaskWatchStatus::Stopped),
+            };
+            let accepted = state_db
+                .update_task_watch(codex_state::TaskWatchUpdateParams {
+                    id: args.task_watch_id.clone(),
+                    cadence_seconds,
+                    next_check_at,
+                    max_checks: args.max_checks,
+                    last_decision: Some(
+                        args.decision
+                            .unwrap_or_else(|| format!("{:?}", args.action).to_ascii_lowercase()),
+                    ),
+                    last_observation: args.observation,
+                    status,
+                })
+                .await?;
+            if accepted {
+                println!("Updated task watch {}.", args.task_watch_id);
+            } else {
+                println!(
+                    "Task watch {} was not found or was already stopped.",
+                    args.task_watch_id
+                );
+            }
+        }
+        TaskWatchSubcommand::Stop(args) => {
+            if state_db
+                .cancel_task_watch(
+                    args.task_watch_id.as_str(),
+                    codex_state::TaskWatchStatus::Stopped,
+                )
+                .await?
+            {
+                println!("Stopped task watch {}.", args.task_watch_id);
+            } else {
+                println!(
+                    "Task watch {} was not found or was already stopped.",
+                    args.task_watch_id
+                );
+            }
+        }
+        TaskWatchSubcommand::RunNow(args) => {
+            let accepted = state_db
+                .update_task_watch(codex_state::TaskWatchUpdateParams {
+                    id: args.task_watch_id.clone(),
+                    cadence_seconds: None,
+                    next_check_at: Some(Utc::now()),
+                    max_checks: None,
+                    last_decision: Some("run_now".to_string()),
+                    last_observation: None,
+                    status: None,
+                })
+                .await?;
+            if accepted {
+                println!("Task watch {} is now due.", args.task_watch_id);
+            } else {
+                println!(
+                    "Task watch {} was not found or was already stopped.",
+                    args.task_watch_id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn run_watcher_command(
     cmd: WatcherCommand,
     root_config_overrides: &CliConfigOverrides,
@@ -1845,6 +2157,8 @@ async fn run_watcher_command(
                     prompt: args.prompt,
                     trigger_kind: codex_state::WatcherTriggerKind::ProcessExit,
                     process_id: Some(args.session_id),
+                    target_thread_id: None,
+                    agent_completion_condition: None,
                     timeout_at,
                     requires_response: args.requires_response,
                 })

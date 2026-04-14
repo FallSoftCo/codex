@@ -126,6 +126,7 @@ mod tests {
             agent_role: None,
             git_info: None,
             name: None,
+            hollywood: None,
             turns: Vec::new(),
         }
     }

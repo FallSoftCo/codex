@@ -45,4 +45,6 @@ Design scope for this v1:
 - wake payload: prompt plus `requires_response`
 - reporting: persisted run record plus normal thread history
 
-This is intended as the first step toward broader deferred continuations and watcher-based wakeups rather than the final workflow engine shape.
+This is intended as the first step toward broader time-based deferred continuations rather than the final workflow engine shape.
+
+For the next time-based continuation layer above generic schedules, see [Periodic Task Watches](./task_watches.md).

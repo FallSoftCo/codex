@@ -12,12 +12,14 @@ mod paths;
 mod runtime;
 
 pub use model::ClaimedScheduledTask;
+pub use model::ClaimedTaskWatch;
 pub use model::LogEntry;
 pub use model::LogQuery;
 pub use model::LogRow;
 pub use model::Phase2InputSelection;
 pub use model::Phase2JobClaimOutcome;
 pub use model::RunningScheduledTaskRun;
+pub use model::RunningTaskWatchRun;
 /// Preferred entrypoint: owns configuration and metrics.
 pub use runtime::StateRuntime;
 
@@ -53,6 +55,12 @@ pub use model::Stage1JobClaimOutcome;
 pub use model::Stage1Output;
 pub use model::Stage1OutputRef;
 pub use model::Stage1StartupClaimParams;
+pub use model::TaskWatch;
+pub use model::TaskWatchCreateParams;
+pub use model::TaskWatchRun;
+pub use model::TaskWatchRunStatus;
+pub use model::TaskWatchStatus;
+pub use model::TaskWatchUpdateParams;
 pub use model::TesterExecutionClass;
 pub use model::TesterRun;
 pub use model::TesterRunArtifact;
@@ -65,6 +73,7 @@ pub use model::ThreadMetadata;
 pub use model::ThreadMetadataBuilder;
 pub use model::ThreadsPage;
 pub use model::Watcher;
+pub use model::WatcherAgentCompletionCondition;
 pub use model::WatcherCreateParams;
 pub use model::WatcherRun;
 pub use model::WatcherRunStatus;
@@ -82,7 +91,7 @@ pub const SQLITE_HOME_ENV: &str = "CODEX_SQLITE_HOME";
 pub const LOGS_DB_FILENAME: &str = "logs";
 pub const LOGS_DB_VERSION: u32 = 2;
 pub const STATE_DB_FILENAME: &str = "state";
-pub const STATE_DB_VERSION: u32 = 5;
+pub const STATE_DB_VERSION: u32 = 7;
 
 /// Errors encountered during DB operations. Tags: [stage]
 pub const DB_ERROR_METRIC: &str = "codex.db.error";

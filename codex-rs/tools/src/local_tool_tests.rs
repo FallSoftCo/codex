@@ -114,12 +114,11 @@ fn exec_command_tool_matches_expected_spec() {
 
     let description = if cfg!(windows) {
         format!(
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction.{}",
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Prefer `watch_process_exit` over long inline waits when you only need to react after the process finishes.{}",
             windows_shell_safety_description()
         )
     } else {
-        "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
-            .to_string()
+        "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Prefer `watch_process_exit` over long inline waits when you only need to react after the process finishes.".to_string()
     };
 
     let mut properties = BTreeMap::from([
@@ -253,6 +252,189 @@ fn write_stdin_tool_matches_expected_spec() {
                 additional_properties: Some(false.into()),
             },
             output_schema: Some(unified_exec_output_schema()),
+        })
+    );
+}
+
+#[test]
+fn watch_agent_completion_tool_matches_expected_spec() {
+    let tool = create_watch_agent_completion_tool();
+
+    let properties = BTreeMap::from([
+        (
+            "target".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Identifier of the target agent/thread whose completion should wake the waiting thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "title".to_string(),
+            JsonSchema::String {
+                description: Some("Short human-readable label for the watcher.".to_string()),
+            },
+        ),
+        (
+            "prompt".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Follow-up prompt injected into the thread after the target agent satisfies the condition."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "condition".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "timeout_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "thread_id".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional thread/session id to wake. Defaults to the current thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "requires_response".to_string(),
+            JsonSchema::Boolean {
+                description: Some(
+                    "Whether the deferred wake should expect a concrete response.".to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    assert_eq!(
+        tool,
+        ToolSpec::Function(ResponsesApiTool {
+            name: "watch_agent_completion".to_string(),
+            description: "Registers a persisted watcher that wakes the thread when another agent reaches a target completion state. Prefer this over stretching `wait_agent` into a long-lived blocking wait.".to_string(),
+            strict: false,
+            defer_loading: None,
+            parameters: JsonSchema::Object {
+                properties,
+                required: Some(vec![
+                    "target".to_string(),
+                    "title".to_string(),
+                    "prompt".to_string(),
+                ]),
+                additional_properties: Some(false.into()),
+            },
+            output_schema: None,
+        })
+    );
+}
+
+#[test]
+fn watch_task_periodically_tool_matches_expected_spec() {
+    let tool = create_watch_task_periodically_tool();
+
+    let properties = BTreeMap::from([
+        (
+            "title".to_string(),
+            JsonSchema::String {
+                description: Some("Short human-readable label for the task watch.".to_string()),
+            },
+        ),
+        (
+            "objective".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Human-readable objective the agent should periodically reevaluate."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "prompt".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Follow-up prompt injected into the thread each time the task watch becomes due."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "check_every_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Recurring interval in seconds between reevaluation checks.".to_string(),
+                ),
+            },
+        ),
+        (
+            "initial_delay_seconds".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional delay in seconds before the first check. Defaults to one full interval."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "thread_id".to_string(),
+            JsonSchema::String {
+                description: Some(
+                    "Optional thread/session id to wake. Defaults to the current thread."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "max_checks".to_string(),
+            JsonSchema::Number {
+                description: Some(
+                    "Optional cap on how many checks may run before the task watch auto-stops."
+                        .to_string(),
+                ),
+            },
+        ),
+        (
+            "requires_response".to_string(),
+            JsonSchema::Boolean {
+                description: Some(
+                    "Whether the deferred wake should expect a concrete response.".to_string(),
+                ),
+            },
+        ),
+    ]);
+
+    assert_eq!(
+        tool,
+        ToolSpec::Function(ResponsesApiTool {
+            name: "watch_task_periodically".to_string(),
+            description: "Registers a persisted task watch that periodically wakes the thread to reevaluate a concrete task. Use this for time-based \"check on this later\" work.".to_string(),
+            strict: false,
+            defer_loading: None,
+            parameters: JsonSchema::Object {
+                properties,
+                required: Some(vec![
+                    "title".to_string(),
+                    "objective".to_string(),
+                    "prompt".to_string(),
+                    "check_every_seconds".to_string(),
+                ]),
+                additional_properties: Some(false.into()),
+            },
+            output_schema: None,
         })
     );
 }

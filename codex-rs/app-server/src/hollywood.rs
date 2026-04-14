@@ -3,9 +3,14 @@ use codex_app_server_protocol::HollywoodAttentionSettings;
 use codex_app_server_protocol::HollywoodMessage;
 use codex_app_server_protocol::HollywoodMessageAttention;
 use codex_app_server_protocol::HollywoodMessageKind;
+use codex_app_server_protocol::HollywoodResponsePolicy;
 use codex_app_server_protocol::HollywoodSessionAttachOptions;
+use codex_app_server_protocol::HollywoodSessionState;
+use codex_app_server_protocol::HollywoodSessionStatus;
 use codex_app_server_protocol::ThreadStatus;
 use codex_core::CodexThread;
+use codex_core::default_hollywood_observed_rooms;
+use codex_core::default_hollywood_room_for_cwd;
 use codex_core::parse_agent_mentions;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::HollywoodSessionMeta;
@@ -63,12 +68,22 @@ impl HollywoodConfig {
             _ => HollywoodAttentionMode::Focused,
         };
 
-        let room =
-            env::var("HOLLYWOOD_ROOM").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_ROOM.to_string());
+        let room = env::var("HOLLYWOOD_ROOM")
+            .ok()
+            .or_else(|| {
+                env::current_dir()
+                    .ok()
+                    .map(|cwd| default_hollywood_room_for_cwd(cwd.as_path()))
+            })
+            .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string());
+        let observed_rooms = default_hollywood_observed_rooms(
+            &room,
+            parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok()),
+        );
         Some(Self {
             url: env::var("HOLLYWOOD_URL").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_URL.to_string()),
             room,
-            observed_rooms: parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok()),
+            observed_rooms,
             wake_rooms: parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok()),
             attention: HollywoodAttentionSettings {
                 mode,
@@ -121,16 +136,17 @@ impl TryFrom<&HollywoodSessionMeta> for HollywoodConfig {
 
 impl From<&HollywoodSessionAttachOptions> for HollywoodConfig {
     fn from(value: &HollywoodSessionAttachOptions) -> Self {
+        let room = value
+            .room
+            .clone()
+            .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string());
         Self {
             url: value
                 .url
                 .clone()
                 .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
-            room: value
-                .room
-                .clone()
-                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string()),
-            observed_rooms: value.observed_rooms.clone(),
+            room: room.clone(),
+            observed_rooms: default_hollywood_observed_rooms(&room, value.observed_rooms.clone()),
             wake_rooms: value.wake_rooms.clone(),
             attention: value.attention.clone().unwrap_or_default(),
         }
@@ -374,6 +390,8 @@ struct HollywoodApiMessage {
     recipient_id: Option<String>,
     #[serde(default)]
     message_kind: HollywoodMessageKind,
+    #[serde(default)]
+    response_policy: HollywoodResponsePolicy,
     body: String,
     created_at: String,
 }
@@ -596,6 +614,7 @@ fn classify_message(
             sender_id: message.sender_id,
             recipient_id: message.recipient_id,
             message_kind: message.message_kind,
+            response_policy: message.response_policy,
             body: message.body,
             created_at: message.created_at,
             mentions,
@@ -623,6 +642,68 @@ fn parse_room_list(value: Option<String>) -> Vec<String> {
         .filter(|room| !room.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+pub(crate) fn hollywood_session_status_from_thread_status(
+    status: &ThreadStatus,
+) -> HollywoodSessionStatus {
+    match status {
+        ThreadStatus::NotLoaded | ThreadStatus::Idle => HollywoodSessionStatus::Idle,
+        ThreadStatus::SystemError => HollywoodSessionStatus::Blocked,
+        ThreadStatus::Active { active_flags } => {
+            if active_flags.iter().any(|flag| {
+                matches!(
+                    flag,
+                    codex_app_server_protocol::ThreadActiveFlag::WaitingOnApproval
+                        | codex_app_server_protocol::ThreadActiveFlag::WaitingOnUserInput
+                )
+            }) {
+                HollywoodSessionStatus::Waiting
+            } else {
+                HollywoodSessionStatus::Active
+            }
+        }
+    }
+}
+
+pub(crate) fn hollywood_session_state_from_runtime(
+    thread_id: ThreadId,
+    config: &HollywoodConfig,
+    runtime_state: &HollywoodRuntimeState,
+    status: HollywoodSessionStatus,
+) -> HollywoodSessionState {
+    HollywoodSessionState {
+        attached: true,
+        url: config.url.clone(),
+        primary_room: config.room.clone(),
+        observed_rooms: config.observed_rooms.clone(),
+        wake_rooms: config.effective_wake_rooms().into_iter().collect(),
+        attention: config.attention.clone(),
+        identities: hollywood_identities(thread_id),
+        session_kind: runtime_state.registry_session_kind().map(ToOwned::to_owned),
+        resumed_from: runtime_state.registry_resumed_from().map(ToOwned::to_owned),
+        status,
+    }
+}
+
+pub(crate) fn hollywood_session_state_from_persisted(
+    thread_id: ThreadId,
+    persisted: &HollywoodSessionMeta,
+) -> Option<HollywoodSessionState> {
+    let config = HollywoodConfig::try_from(persisted).ok()?;
+    let wake_rooms = config.effective_wake_rooms().into_iter().collect();
+    Some(HollywoodSessionState {
+        attached: false,
+        url: config.url,
+        primary_room: config.room,
+        observed_rooms: config.observed_rooms,
+        wake_rooms,
+        attention: config.attention,
+        identities: hollywood_identities(thread_id),
+        session_kind: None,
+        resumed_from: None,
+        status: HollywoodSessionStatus::Persisted,
+    })
 }
 
 pub(crate) fn thread_status_name(status: &ThreadStatus) -> String {
@@ -790,6 +871,7 @@ mod tests {
             sender_id: sender_id.map(ToOwned::to_owned),
             recipient_id: None,
             message_kind: HollywoodMessageKind::Ambient,
+            response_policy: HollywoodResponsePolicy::Optional,
             body: body.to_string(),
             created_at: "2026-03-19T20:00:00Z".to_string(),
         }
@@ -998,10 +1080,24 @@ mod tests {
         let config = HollywoodConfig::from_env().expect("Hollywood config should load");
 
         assert_eq!(config.url, DEFAULT_HOLLYWOOD_URL);
-        assert_eq!(config.room, DEFAULT_HOLLYWOOD_ROOM);
+        assert_eq!(config.room, "repo/losangelex");
+        assert_eq!(config.observed_rooms, vec!["main".to_string()]);
         assert_eq!(config.attention.mode, HollywoodAttentionMode::Ambient);
         assert!(config.attention.include_at_all);
         assert!(config.attention.include_at_room);
+    }
+
+    #[test]
+    fn attach_options_default_main_observation_for_repo_room() {
+        let config = HollywoodConfig::from(&HollywoodSessionAttachOptions {
+            url: None,
+            room: Some("repo/losangelex".to_string()),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention: None,
+        });
+
+        assert_eq!(config.observed_rooms, vec!["main".to_string()]);
     }
 
     #[test]

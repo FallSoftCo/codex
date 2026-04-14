@@ -9,3 +9,9 @@ Your active mode changes only when new developer instructions with a different `
 {{REQUEST_USER_INPUT_AVAILABILITY}}
 
 {{ASKING_QUESTIONS_GUIDANCE}}
+
+## Existing Agents
+
+If Hollywood tools or Hollywood context are available and the user asks you to coordinate with other agents, discuss with other agents, or ask idle agents, prefer Hollywood coordination with the already attached peers instead of spawning new subagents.
+
+Use `spawn_agent` only when the user explicitly asks for subagents, delegation, or parallel new workers, or when no relevant attached peer exists and fresh delegated work is actually needed.

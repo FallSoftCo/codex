@@ -16,7 +16,6 @@ use crate::tools::js_repl::JS_REPL_PRAGMA_PREFIX;
 use crate::tools::js_repl::JsReplArgs;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
-use codex_features::Feature;
 use codex_protocol::exec_output::ExecToolCallOutput;
 use codex_protocol::exec_output::StreamOutput;
 use codex_protocol::models::FunctionCallOutputContentItem;
@@ -115,9 +114,9 @@ impl ToolHandler for JsReplHandler {
             ..
         } = invocation;
 
-        if !session.features().enabled(Feature::JsRepl) {
+        if !turn.tools_config.js_repl_enabled {
             return Err(FunctionCallError::RespondToModel(
-                "js_repl is disabled by feature flag".to_string(),
+                "js_repl is unavailable in this session".to_string(),
             ));
         }
 
@@ -188,9 +187,9 @@ impl ToolHandler for JsReplResetHandler {
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        if !invocation.session.features().enabled(Feature::JsRepl) {
+        if !invocation.turn.tools_config.js_repl_enabled {
             return Err(FunctionCallError::RespondToModel(
-                "js_repl is disabled by feature flag".to_string(),
+                "js_repl is unavailable in this session".to_string(),
             ));
         }
         let manager = invocation.turn.js_repl.manager().await?;

@@ -18,6 +18,7 @@ use crate::collect_tool_search_app_infos;
 use crate::collect_tool_suggest_entries;
 use crate::create_apply_patch_freeform_tool;
 use crate::create_apply_patch_json_tool;
+use crate::create_cancel_task_watch_tool;
 use crate::create_cancel_watcher_tool;
 use crate::create_close_agent_tool_v1;
 use crate::create_close_agent_tool_v2;
@@ -31,6 +32,7 @@ use crate::create_list_agents_tool;
 use crate::create_list_dir_tool;
 use crate::create_list_mcp_resource_templates_tool;
 use crate::create_list_mcp_resources_tool;
+use crate::create_list_task_watches_tool;
 use crate::create_list_watchers_tool;
 use crate::create_local_shell_tool;
 use crate::create_read_mcp_resource_tool;
@@ -49,11 +51,14 @@ use crate::create_test_sync_tool;
 use crate::create_tool_search_tool;
 use crate::create_tool_suggest_tool;
 use crate::create_update_plan_tool;
+use crate::create_update_task_watch_tool;
 use crate::create_view_image_tool;
 use crate::create_wait_agent_tool_v1;
 use crate::create_wait_agent_tool_v2;
 use crate::create_wait_tool;
+use crate::create_watch_agent_completion_tool;
 use crate::create_watch_process_exit_tool;
+use crate::create_watch_task_periodically_tool;
 use crate::create_web_search_tool;
 use crate::create_write_stdin_tool;
 use crate::dynamic_tool_to_responses_api_tool;
@@ -151,6 +156,11 @@ pub fn build_tool_registry_plan(
                         config.code_mode_enabled,
                     );
                     plan.push_spec(
+                        create_watch_agent_completion_tool(),
+                        /*supports_parallel_tool_calls*/ false,
+                        config.code_mode_enabled,
+                    );
+                    plan.push_spec(
                         create_list_watchers_tool(),
                         /*supports_parallel_tool_calls*/ true,
                         config.code_mode_enabled,
@@ -160,9 +170,34 @@ pub fn build_tool_registry_plan(
                         /*supports_parallel_tool_calls*/ true,
                         config.code_mode_enabled,
                     );
+                    plan.push_spec(
+                        create_watch_task_periodically_tool(),
+                        /*supports_parallel_tool_calls*/ false,
+                        config.code_mode_enabled,
+                    );
+                    plan.push_spec(
+                        create_list_task_watches_tool(),
+                        /*supports_parallel_tool_calls*/ true,
+                        config.code_mode_enabled,
+                    );
+                    plan.push_spec(
+                        create_update_task_watch_tool(),
+                        /*supports_parallel_tool_calls*/ false,
+                        config.code_mode_enabled,
+                    );
+                    plan.push_spec(
+                        create_cancel_task_watch_tool(),
+                        /*supports_parallel_tool_calls*/ true,
+                        config.code_mode_enabled,
+                    );
                     plan.register_handler("watch_process_exit", ToolHandlerKind::Watcher);
+                    plan.register_handler("watch_agent_completion", ToolHandlerKind::Watcher);
                     plan.register_handler("list_watchers", ToolHandlerKind::Watcher);
                     plan.register_handler("cancel_watcher", ToolHandlerKind::Watcher);
+                    plan.register_handler("watch_task_periodically", ToolHandlerKind::Watcher);
+                    plan.register_handler("list_task_watches", ToolHandlerKind::Watcher);
+                    plan.register_handler("update_task_watch", ToolHandlerKind::Watcher);
+                    plan.register_handler("cancel_task_watch", ToolHandlerKind::Watcher);
                 }
             }
             ConfigShellToolType::Disabled => {}
