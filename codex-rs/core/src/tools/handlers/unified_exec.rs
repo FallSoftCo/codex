@@ -30,6 +30,7 @@ use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::TerminalInteractionEvent;
 use codex_shell_command::is_safe_command::is_known_safe_command;
 use codex_tools::UnifiedExecShellMode;
+use codex_utils_absolute_path::AbsolutePathBuf;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -121,7 +122,9 @@ impl ToolHandler for UnifiedExecHandler {
     }
 
     fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
-        if invocation.tool_name != "exec_command" {
+        if invocation.tool_name.namespace.is_some()
+            || invocation.tool_name.name.as_str() != "exec_command"
+        {
             return None;
         }
 
@@ -176,15 +179,29 @@ impl ToolHandler for UnifiedExecHandler {
             }
         };
 
+        let Some(environment) = turn.environment.as_ref() else {
+            return Err(FunctionCallError::RespondToModel(
+                "unified exec is unavailable in this session".to_string(),
+            ));
+        };
+        let fs = environment.get_filesystem();
+
         let manager: &UnifiedExecProcessManager = &session.services.unified_exec_manager;
         let context = UnifiedExecContext::new(session.clone(), turn.clone(), call_id.clone());
 
-        let response = match tool_name.as_str() {
+        let response = match tool_name.name.as_str() {
             "exec_command" => {
-                let cwd = resolve_workdir_base_path(&arguments, context.turn.cwd.as_path())?;
-                let args: ExecCommandArgs =
-                    parse_arguments_with_base_path(&arguments, cwd.as_path())?;
-                let workdir = context.turn.resolve_path(args.workdir.clone());
+                let cwd = resolve_workdir_base_path(&arguments, &context.turn.cwd)?;
+                let args: ExecCommandArgs = parse_arguments_with_base_path(&arguments, &cwd)?;
+                let workdir = args.workdir.as_deref().map_or_else(
+                    || context.turn.cwd.clone(),
+                    |dir| {
+                        AbsolutePathBuf::resolve_path_against_base(
+                            std::path::Path::new(dir),
+                            &context.turn.cwd,
+                        )
+                    },
+                );
                 maybe_emit_implicit_skill_invocation(
                     session.as_ref(),
                     context.turn.as_ref(),
@@ -247,7 +264,12 @@ impl ToolHandler for UnifiedExecHandler {
 
                 let workdir = workdir.filter(|value| !value.is_empty());
 
-                let workdir = workdir.map(|dir| context.turn.resolve_path(Some(dir)));
+                let workdir = workdir.map(|dir| {
+                    AbsolutePathBuf::resolve_path_against_base(
+                        std::path::Path::new(&dir),
+                        &context.turn.cwd,
+                    )
+                });
                 let cwd = workdir.clone().unwrap_or(cwd);
                 let normalized_additional_permissions = match implicit_granted_permissions(
                     sandbox_permissions,
@@ -277,12 +299,13 @@ impl ToolHandler for UnifiedExecHandler {
                 if let Some(output) = intercept_apply_patch(
                     &command,
                     &cwd,
+                    fs.as_ref(),
                     Some(yield_time_ms),
                     context.session.clone(),
                     context.turn.clone(),
                     Some(&tracker),
                     &context.call_id,
-                    tool_name.as_str(),
+                    &tool_name.name,
                 )
                 .await?
                 {

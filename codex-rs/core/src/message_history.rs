@@ -61,9 +61,7 @@ pub struct HistoryEntry {
 }
 
 fn history_filepath(config: &Config) -> PathBuf {
-    let mut path = config.codex_home.clone();
-    path.push(HISTORY_FILENAME);
-    path
+    config.codex_home.join(HISTORY_FILENAME)
 }
 
 /// Append a `text` entry associated with `conversation_id` to the history file.

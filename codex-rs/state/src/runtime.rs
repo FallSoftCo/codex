@@ -143,6 +143,17 @@ impl StateRuntime {
     pub fn codex_home(&self) -> &Path {
         self.codex_home.as_path()
     }
+
+    /// Re-run state migrations against an already-open runtime.
+    ///
+    /// This lets long-lived processes lazily adopt newer continuation tables
+    /// like watchers/task watches after a binary upgrade without requiring an
+    /// immediate full process restart.
+    pub async fn ensure_state_schema_current(&self) -> anyhow::Result<()> {
+        let migrator = runtime_state_migrator();
+        migrator.run(self.pool.as_ref()).await?;
+        Ok(())
+    }
 }
 
 fn base_sqlite_options(path: &Path) -> SqliteConnectOptions {

@@ -21,6 +21,7 @@ use core_test_support::TempDirExt;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 fn set_danger_full_access(turn: &mut crate::codex::TurnContext) {
@@ -29,6 +30,25 @@ fn set_danger_full_access(turn: &mut crate::codex::TurnContext) {
         .expect("test setup should allow updating sandbox policy");
     turn.file_system_sandbox_policy = FileSystemSandboxPolicy::from(turn.sandbox_policy.get());
     turn.network_sandbox_policy = NetworkSandboxPolicy::from(turn.sandbox_policy.get());
+}
+
+fn js_repl_test_node_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let nvm_dir = std::env::var_os("NVM_DIR").map(PathBuf::from);
+    let candidates = [
+        std::env::var_os("CODEX_JS_REPL_NODE_PATH").map(PathBuf::from),
+        home.as_ref()
+            .map(|home| home.join(".nvm/versions/node/v22.22.0/bin/node")),
+        nvm_dir
+            .as_ref()
+            .map(|nvm| nvm.join("versions/node/v22.22.0/bin/node")),
+    ];
+
+    candidates.into_iter().flatten().find(|path| path.exists())
+}
+
+fn js_repl_node_path(preferred: Option<PathBuf>) -> Option<PathBuf> {
+    js_repl_test_node_path().or(preferred)
 }
 
 #[test]
@@ -209,7 +229,7 @@ async fn wait_for_exec_tool_calls_map_drains_inflight_calls_without_hanging() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reset_waits_for_exec_lock_before_clearing_exec_tool_calls() {
-    let manager = JsReplManager::new(/*node_path*/ None, Vec::new())
+    let manager = JsReplManager::new(js_repl_test_node_path(), Vec::new())
         .await
         .expect("manager should initialize");
     let permit = manager
@@ -436,7 +456,7 @@ fn summarize_tool_call_error_marks_error_payload() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reset_clears_inflight_exec_tool_calls_without_waiting() {
-    let manager = JsReplManager::new(/*node_path*/ None, Vec::new())
+    let manager = JsReplManager::new(js_repl_test_node_path(), Vec::new())
         .await
         .expect("manager should initialize");
     let exec_id = Uuid::new_v4().to_string();
@@ -469,7 +489,7 @@ async fn reset_clears_inflight_exec_tool_calls_without_waiting() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reset_aborts_inflight_exec_tool_tasks() {
-    let manager = JsReplManager::new(/*node_path*/ None, Vec::new())
+    let manager = JsReplManager::new(js_repl_test_node_path(), Vec::new())
         .await
         .expect("manager should initialize");
     let exec_id = Uuid::new_v4().to_string();
@@ -630,7 +650,7 @@ async fn interrupt_turn_exec_clears_matching_submitted_exec() -> anyhow::Result<
         return Ok(());
     }
 
-    let manager = JsReplManager::new(/*node_path*/ None, Vec::new())
+    let manager = JsReplManager::new(js_repl_test_node_path(), Vec::new())
         .await
         .expect("manager should initialize");
     let (_session, turn) = make_session_and_context().await;
@@ -676,7 +696,7 @@ async fn interrupt_turn_exec_resets_matching_pending_kernel_start() -> anyhow::R
         return Ok(());
     }
 
-    let manager = JsReplManager::new(/*node_path*/ None, Vec::new())
+    let manager = JsReplManager::new(js_repl_test_node_path(), Vec::new())
         .await
         .expect("manager should initialize");
     let (_session, turn) = make_session_and_context().await;
@@ -720,7 +740,7 @@ async fn interrupt_turn_exec_does_not_reset_reused_kernel_before_submit() -> any
         return Ok(());
     }
 
-    let manager = JsReplManager::new(/*node_path*/ None, Vec::new())
+    let manager = JsReplManager::new(js_repl_test_node_path(), Vec::new())
         .await
         .expect("manager should initialize");
     let (_session, turn) = make_session_and_context().await;
@@ -2114,7 +2134,7 @@ async fn js_repl_prefers_env_node_module_dirs_over_config() -> anyhow::Result<()
     );
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         vec![config_base.path().to_path_buf()],
     ));
 
@@ -2158,7 +2178,7 @@ async fn js_repl_resolves_from_first_config_dir() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         vec![
             first_base.path().to_path_buf(),
             second_base.path().to_path_buf(),
@@ -2202,7 +2222,7 @@ async fn js_repl_falls_back_to_cwd_node_modules() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         vec![config_base.path().to_path_buf()],
     ));
 
@@ -2243,7 +2263,7 @@ async fn js_repl_accepts_node_modules_dir_entries() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         vec![base_dir.path().join("node_modules")],
     ));
 
@@ -2297,7 +2317,7 @@ async fn js_repl_supports_relative_file_imports() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2344,7 +2364,7 @@ async fn js_repl_supports_absolute_file_imports() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2398,7 +2418,7 @@ async fn js_repl_imported_local_files_can_access_repl_globals() -> anyhow::Resul
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2442,7 +2462,7 @@ async fn js_repl_reimports_local_files_after_edit() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2498,7 +2518,7 @@ async fn js_repl_reimports_local_files_after_fixing_failure() -> anyhow::Result<
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2576,7 +2596,7 @@ async fn js_repl_local_files_expose_node_like_import_meta() -> anyhow::Result<()
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2661,7 +2681,7 @@ async fn js_repl_local_files_reject_static_bare_imports() -> anyhow::Result<()> 
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2706,7 +2726,7 @@ async fn js_repl_rejects_unsupported_file_specifiers() -> anyhow::Result<()> {
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2808,7 +2828,7 @@ async fn js_repl_blocks_sensitive_builtin_imports_from_local_files() -> anyhow::
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 
@@ -2858,7 +2878,7 @@ async fn js_repl_local_files_do_not_escape_node_module_search_roots() -> anyhow:
         .remove("CODEX_JS_REPL_NODE_MODULE_DIRS");
     turn.cwd = cwd_dir.abs();
     turn.js_repl = Arc::new(JsReplHandle::with_node_path(
-        turn.config.js_repl_node_path.clone(),
+        js_repl_node_path(turn.config.js_repl_node_path.clone()),
         Vec::new(),
     ));
 

@@ -40,10 +40,12 @@ use supports_color::Stream;
 mod app_cmd;
 #[cfg(target_os = "macos")]
 mod desktop_app;
+mod marketplace_cmd;
 mod mcp_cmd;
 #[cfg(not(windows))]
 mod wsl_paths;
 
+use crate::marketplace_cmd::MarketplaceCli;
 use crate::mcp_cmd::McpCli;
 
 use codex_core::config::Config;
@@ -108,6 +110,9 @@ enum Subcommand {
     /// Manage external MCP servers for Codex.
     Mcp(McpCli),
 
+    /// Manage plugin marketplaces for Codex.
+    Marketplace(MarketplaceCli),
+
     /// Start Codex as an MCP server (stdio).
     McpServer,
 
@@ -164,6 +169,9 @@ enum Subcommand {
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
     StdioToUds(StdioToUdsCommand),
+
+    /// [EXPERIMENTAL] Run the standalone exec-server service.
+    ExecServer(ExecServerCommand),
 
     /// Inspect feature flags.
     Features(FeaturesCli),
@@ -815,6 +823,17 @@ struct AppServerCommand {
     auth: codex_app_server::AppServerWebsocketAuthArgs,
 }
 
+#[derive(Debug, Parser)]
+struct ExecServerCommand {
+    /// Transport endpoint URL. Supported values: `ws://IP:PORT` (default).
+    #[arg(
+        long = "listen",
+        value_name = "URL",
+        default_value = "ws://127.0.0.1:0"
+    )]
+    listen: String,
+}
+
 #[derive(Debug, clap::Subcommand)]
 #[allow(clippy::enum_variant_names)]
 enum AppServerSubcommand {
@@ -1128,6 +1147,18 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             // Propagate any root-level config overrides (e.g. `-c key=value`).
             prepend_config_flags(&mut mcp_cli.config_overrides, root_config_overrides.clone());
             mcp_cli.run().await?;
+        }
+        Some(Subcommand::Marketplace(mut marketplace_cli)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "marketplace",
+            )?;
+            prepend_config_flags(
+                &mut marketplace_cli.config_overrides,
+                root_config_overrides.clone(),
+            );
+            marketplace_cli.run().await?;
         }
         Some(Subcommand::AppServer(app_server_cli)) => {
             let AppServerCommand {
@@ -1465,6 +1496,14 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
         }
+        Some(Subcommand::ExecServer(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "exec-server",
+            )?;
+            run_exec_server_command(cmd, &arg0_paths).await?;
+        }
         Some(Subcommand::Features(FeaturesCli { sub })) => match sub {
             FeaturesSubcommand::List => {
                 reject_remote_mode_for_subcommand(
@@ -1533,6 +1572,23 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+async fn run_exec_server_command(
+    cmd: ExecServerCommand,
+    arg0_paths: &Arg0DispatchPaths,
+) -> anyhow::Result<()> {
+    let codex_self_exe = arg0_paths
+        .codex_self_exe
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Codex executable path is not configured"))?;
+    let runtime_paths = codex_exec_server::ExecServerRuntimePaths::new(
+        codex_self_exe,
+        arg0_paths.codex_linux_sandbox_exe.clone(),
+    )?;
+    codex_exec_server::run_main(&cmd.listen, runtime_paths)
+        .await
+        .map_err(anyhow::Error::from_boxed)
 }
 
 async fn enable_feature_in_config(interactive: &TuiCli, feature: &str) -> anyhow::Result<()> {
@@ -1828,6 +1884,7 @@ async fn run_tester_command(
     let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
     let state_db =
         StateRuntime::init(config.sqlite_home.clone(), config.model_provider_id.clone()).await?;
+    state_db.ensure_state_schema_current().await?;
 
     match cmd.subcommand {
         TesterSubcommand::Create(args) => {
@@ -1969,6 +2026,7 @@ async fn run_task_watch_command(
     let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
     let state_db =
         StateRuntime::init(config.sqlite_home.clone(), config.model_provider_id.clone()).await?;
+    state_db.ensure_state_schema_current().await?;
 
     match cmd.subcommand {
         TaskWatchSubcommand::Add(args) => {

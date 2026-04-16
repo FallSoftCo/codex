@@ -101,12 +101,37 @@ use core_test_support::tracing::install_test_tracing;
 use core_test_support::wait_for_event;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry::trace::TraceId;
+use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use codex_protocol::mcp::CallToolResult as McpCallToolResult;
+
+fn filter_enabled_codex_apps_mcp_tools_for_tests(
+    mcp_tools: &HashMap<String, ToolInfo>,
+    connectors: &[connectors::AppInfo],
+    config: &Config,
+) -> HashMap<String, ToolInfo> {
+    let allowed: HashSet<&str> = connectors
+        .iter()
+        .map(|connector| connector.id.as_str())
+        .collect();
+
+    mcp_tools
+        .iter()
+        .filter(|(_, tool)| {
+            tool.server_name == CODEX_APPS_MCP_SERVER_NAME
+                && tool.connector_id.as_deref().is_some_and(|connector_id| {
+                    allowed.contains(connector_id)
+                        && connectors::codex_app_tool_is_enabled(config, tool)
+                })
+        })
+        .map(|(name, tool)| (name.clone(), tool.clone()))
+        .collect()
+}
+use codex_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use rmcp::model::JsonObject;
 use rmcp::model::Tool;
@@ -305,7 +330,8 @@ fn test_tool_runtime(session: Arc<Session>, turn_context: Arc<TurnContext>) -> T
         &turn_context.tools_config,
         crate::tools::router::ToolRouterParams {
             mcp_tools: None,
-            app_tools: None,
+            deferred_mcp_tools: None,
+            parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
             dynamic_tools: turn_context.dynamic_tools.as_slice(),
         },
@@ -411,8 +437,9 @@ fn make_mcp_tool(
 
     ToolInfo {
         server_name: server_name.to_string(),
-        tool_name: tool_name.to_string(),
-        tool_namespace,
+        callable_name: tool_name.to_string(),
+        callable_namespace: tool_namespace,
+        server_instructions: None,
         tool: Tool {
             name: tool_name.to_string().into(),
             title: None,
@@ -783,7 +810,7 @@ fn non_app_mcp_tools_remain_visible_without_search_selection() {
         &HashMap::new(),
     );
     let config = test_config();
-    selected_mcp_tools.extend(filter_codex_apps_mcp_tools(
+    selected_mcp_tools.extend(filter_enabled_codex_apps_mcp_tools_for_tests(
         &mcp_tools,
         &connectors,
         &config,
@@ -832,7 +859,7 @@ fn search_tool_selection_keeps_codex_apps_tools_without_mentions() {
         &HashMap::new(),
     );
     let config = test_config();
-    selected_mcp_tools.extend(filter_codex_apps_mcp_tools(
+    selected_mcp_tools.extend(filter_enabled_codex_apps_mcp_tools_for_tests(
         &mcp_tools,
         &connectors,
         &config,
@@ -884,7 +911,7 @@ fn apps_mentions_add_codex_apps_tools_to_search_selected_set() {
         &HashMap::new(),
     );
     let config = test_config();
-    selected_mcp_tools.extend(filter_codex_apps_mcp_tools(
+    selected_mcp_tools.extend(filter_enabled_codex_apps_mcp_tools_for_tests(
         &mcp_tools,
         &connectors,
         &config,
@@ -1197,13 +1224,14 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
                 text_elements: Vec::new(),
             }],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         })
         .await?;
     wait_for_event(&initial.codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
     // Forking reads the persisted rollout JSONL, so force the completed source turn to disk
     // before snapshotting from it.
     initial.codex.ensure_rollout_materialized().await;
-    initial.codex.flush_rollout().await;
+    let _ = initial.codex.flush_rollout().await;
 
     let mut fork_config = initial.config.clone();
     fork_config.permissions.approval_policy =
@@ -1252,6 +1280,7 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
                 text_elements: Vec::new(),
             }],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         })
         .await?;
     wait_for_event(&forked.thread, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
@@ -2229,8 +2258,7 @@ async fn attach_rollout_recorder(session: &Arc<Session>) -> PathBuf {
             ThreadId::default(),
             /*forked_from_id*/ None,
             SessionSource::Exec,
-            Some(BaseInstructions::default()),
-            /*developer_instructions*/ None,
+            BaseInstructions::default(),
             Vec::new(),
             EventPersistenceMode::Limited,
         ),
@@ -2607,7 +2635,8 @@ async fn session_new_fails_when_zsh_fork_enabled_without_zsh_path() {
     let plugins_manager = Arc::new(PluginsManager::new(config.codex_home.clone()));
     let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
     let skills_manager = Arc::new(SkillsManager::new(
-        config.codex_home.clone(),
+        AbsolutePathBuf::from_absolute_path(config.codex_home.clone())
+            .expect("codex_home must be absolute"),
         /*bundled_skills_enabled*/ true,
     ));
     let result = Session::new(
@@ -2724,7 +2753,8 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let plugins_manager = Arc::new(PluginsManager::new(config.codex_home.clone()));
     let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
     let skills_manager = Arc::new(SkillsManager::new(
-        config.codex_home.clone(),
+        AbsolutePathBuf::from_absolute_path(config.codex_home.clone())
+            .expect("codex_home must be absolute"),
         /*bundled_skills_enabled*/ true,
     ));
     let network_approval = Arc::new(NetworkApprovalService::default());
@@ -2738,6 +2768,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let services = SessionServices {
         mcp_connection_manager: Arc::new(RwLock::new(McpConnectionManager::new_uninitialized(
             &config.permissions.approval_policy,
+            &config.permissions.sandbox_policy,
         ))),
         mcp_startup_cancellation_token: Mutex::new(CancellationToken::new()),
         unified_exec_manager: UnifiedExecProcessManager::new(
@@ -2763,6 +2794,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         session_telemetry: session_telemetry.clone(),
         models_manager: Arc::clone(&models_manager),
         tool_approvals: Mutex::new(ApprovalStore::default()),
+        guardian_rejections: Mutex::new(HashMap::new()),
         skills_manager,
         plugins_manager,
         mcp_manager,
@@ -2794,7 +2826,8 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
 
     let plugin_outcome = services
         .plugins_manager
-        .plugins_for_config(&per_turn_config);
+        .plugins_for_config(&per_turn_config)
+        .await;
     let effective_skill_roots = plugin_outcome.effective_skill_roots();
     let skills_input =
         crate::skills_load_input_from_config(&per_turn_config, effective_skill_roots);
@@ -3155,6 +3188,7 @@ fn op_kind_distinguishes_turn_ops() {
         Op::UserInput {
             items: vec![],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         }
         .kind(),
         "user_input"
@@ -3569,7 +3603,8 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
     let plugins_manager = Arc::new(PluginsManager::new(config.codex_home.clone()));
     let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
     let skills_manager = Arc::new(SkillsManager::new(
-        config.codex_home.clone(),
+        AbsolutePathBuf::from_absolute_path(config.codex_home.clone())
+            .expect("codex_home must be absolute"),
         /*bundled_skills_enabled*/ true,
     ));
     let network_approval = Arc::new(NetworkApprovalService::default());
@@ -3583,6 +3618,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
     let services = SessionServices {
         mcp_connection_manager: Arc::new(RwLock::new(McpConnectionManager::new_uninitialized(
             &config.permissions.approval_policy,
+            &config.permissions.sandbox_policy,
         ))),
         mcp_startup_cancellation_token: Mutex::new(CancellationToken::new()),
         unified_exec_manager: UnifiedExecProcessManager::new(
@@ -3608,6 +3644,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
         session_telemetry: session_telemetry.clone(),
         models_manager: Arc::clone(&models_manager),
         tool_approvals: Mutex::new(ApprovalStore::default()),
+        guardian_rejections: Mutex::new(HashMap::new()),
         skills_manager,
         plugins_manager,
         mcp_manager,
@@ -3639,7 +3676,8 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
 
     let plugin_outcome = services
         .plugins_manager
-        .plugins_for_config(&per_turn_config);
+        .plugins_for_config(&per_turn_config)
+        .await;
     let effective_skill_roots = plugin_outcome.effective_skill_roots();
     let skills_input =
         crate::skills_load_input_from_config(&per_turn_config, effective_skill_roots);
@@ -4280,8 +4318,7 @@ async fn record_context_updates_and_set_reference_context_item_persists_baseline
             ThreadId::default(),
             /*forked_from_id*/ None,
             SessionSource::Exec,
-            Some(BaseInstructions::default()),
-            /*developer_instructions*/ None,
+            BaseInstructions::default(),
             Vec::new(),
             EventPersistenceMode::Limited,
         ),
@@ -4378,8 +4415,7 @@ async fn record_context_updates_and_set_reference_context_item_persists_full_rei
             ThreadId::default(),
             /*forked_from_id*/ None,
             SessionSource::Exec,
-            Some(BaseInstructions::default()),
-            /*developer_instructions*/ None,
+            BaseInstructions::default(),
             Vec::new(),
             EventPersistenceMode::Limited,
         ),
@@ -5183,13 +5219,9 @@ async fn fatal_tool_error_stops_turn_and_reports_error() {
     let router = ToolRouter::from_config(
         &turn_context.tools_config,
         crate::tools::router::ToolRouterParams {
-            mcp_tools: Some(
-                tools
-                    .into_iter()
-                    .map(|(name, tool)| (name, tool.tool))
-                    .collect(),
-            ),
-            app_tools,
+            mcp_tools: Some(tools.clone()),
+            deferred_mcp_tools: app_tools,
+            parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
             dynamic_tools: turn_context.dynamic_tools.as_slice(),
         },
@@ -5428,7 +5460,7 @@ async fn rejects_escalated_permissions_when_policy_not_on_request() {
                 "echo hi".to_string(),
             ]
         },
-        cwd: turn_context.cwd.to_path_buf(),
+        cwd: turn_context.cwd.clone(),
         expiration: timeout_ms.into(),
         capture_policy: ExecCapturePolicy::ShellTool,
         env: HashMap::new(),
@@ -5455,8 +5487,7 @@ async fn rejects_escalated_permissions_when_policy_not_on_request() {
             turn: Arc::clone(&turn_context),
             tracker: Arc::clone(&turn_diff_tracker),
             call_id,
-            tool_name: tool_name.to_string(),
-            tool_namespace: None,
+            tool_name: tool_name.into(),
             payload: ToolPayload::Function {
                 arguments: serde_json::json!({
                     "command": params.command.clone(),
@@ -5534,8 +5565,7 @@ async fn unified_exec_rejects_escalated_permissions_when_policy_not_on_request()
             turn: Arc::clone(&turn_context),
             tracker: Arc::clone(&tracker),
             call_id: "exec-call".to_string(),
-            tool_name: "exec_command".to_string(),
-            tool_namespace: None,
+            tool_name: "exec_command".into(),
             payload: ToolPayload::Function {
                 arguments: serde_json::json!({
                     "cmd": "echo hi",

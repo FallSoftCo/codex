@@ -26,7 +26,9 @@ use crate::config::ManagedFeatures;
 use crate::connectors;
 use crate::contextual_user_message::is_contextual_user_message_content;
 use crate::exec_policy::ExecPolicyManager;
+use crate::find_thread_name_by_id;
 use crate::installation_id::resolve_installation_id;
+use crate::mcp_tool_exposure::build_mcp_tool_exposure;
 use crate::parse_turn_item;
 use crate::path_utils::normalize_for_native_workdir;
 use crate::realtime_conversation::RealtimeConversationManager;
@@ -35,7 +37,6 @@ use crate::realtime_conversation::handle_close as handle_realtime_conversation_c
 use crate::realtime_conversation::handle_start as handle_realtime_conversation_start;
 use crate::realtime_conversation::handle_text as handle_realtime_conversation_text;
 use crate::render_skills_section;
-use crate::rollout::session_index;
 use crate::session_prefix::format_subagent_notification_message;
 use crate::skills_load_input_from_config;
 use crate::startup_capabilities::StartupCapabilities;
@@ -53,6 +54,8 @@ use chrono::Local;
 use chrono::Utc;
 use codex_analytics::AnalyticsEventsClient;
 use codex_analytics::AppInvocation;
+use codex_analytics::CompactionPhase;
+use codex_analytics::CompactionReason;
 use codex_analytics::InvocationType;
 use codex_analytics::SubAgentThreadStartedInput;
 use codex_analytics::build_track_events_context;
@@ -61,6 +64,7 @@ use codex_app_server_protocol::McpServerElicitationRequestParams;
 use codex_config::types::OAuthCredentialsStoreMode;
 use codex_exec_server::Environment;
 use codex_exec_server::EnvironmentManager;
+use codex_exec_server::FileSystemSandboxContext;
 use codex_features::FEATURES;
 use codex_features::Feature;
 use codex_features::unstable_features_warning_event;
@@ -74,11 +78,12 @@ use codex_login::AuthManager;
 use codex_login::CodexAuth;
 use codex_login::auth_env_telemetry::collect_auth_env_telemetry;
 use codex_login::default_client::originator;
+#[cfg(test)]
+use codex_mcp::CODEX_APPS_MCP_SERVER_NAME;
 use codex_mcp::McpConnectionManager;
 use codex_mcp::SandboxState;
 use codex_mcp::ToolInfo as McpToolInfo;
 use codex_mcp::codex_apps_tools_cache_key;
-use codex_mcp::filter_non_codex_apps_mcp_tools_only;
 #[cfg(test)]
 use codex_models_manager::collaboration_mode_presets::CollaborationModesConfig;
 use codex_models_manager::manager::ModelsManager;
@@ -326,7 +331,6 @@ use crate::util::backoff;
 use crate::windows_sandbox::WindowsSandboxLevelExt;
 use codex_async_utils::OrCancelExt;
 use codex_git_utils::get_git_repo_root;
-use codex_mcp::CODEX_APPS_MCP_SERVER_NAME;
 use codex_mcp::compute_auth_statuses;
 use codex_mcp::with_codex_apps_mcp;
 use codex_otel::SessionTelemetry;
@@ -439,8 +443,6 @@ pub(crate) const INITIAL_SUBMIT_ID: &str = "";
 pub(crate) const SUBMISSION_CHANNEL_CAPACITY: usize = 512;
 const CYBER_VERIFY_URL: &str = "https://chatgpt.com/cyber";
 const CYBER_SAFETY_URL: &str = "https://developers.openai.com/codex/concepts/cyber-safety";
-const DIRECT_APP_TOOL_EXPOSURE_THRESHOLD: usize = 100;
-
 impl Codex {
     /// Spawn a new [`Codex`] and initialize the session.
     pub(crate) async fn spawn(args: CodexSpawnArgs) -> CodexResult<CodexSpawnOk> {
@@ -492,7 +494,7 @@ impl Codex {
         let (tx_sub, rx_sub) = async_channel::bounded(SUBMISSION_CHANNEL_CAPACITY);
         let (tx_event, rx_event) = async_channel::unbounded();
 
-        let plugin_outcome = plugins_manager.plugins_for_config(&config);
+        let plugin_outcome = plugins_manager.plugins_for_config(&config).await;
         let effective_skill_roots = plugin_outcome.effective_skill_roots();
         let skills_input = skills_load_input_from_config(&config, effective_skill_roots);
         let loaded_skills = skills_manager.skills_for_config(&skills_input);
@@ -571,9 +573,7 @@ impl Codex {
             Some(base_instructions) => base_instructions,
             None => conversation_history
                 .get_base_instructions()
-                .map(|base_instructions| {
-                    base_instructions.map(|base_instructions| base_instructions.text)
-                })
+                .map(|base_instructions| Some(base_instructions.text))
                 .unwrap_or_else(|| Some(model_info.get_model_instructions(config.personality))),
         };
 
@@ -583,7 +583,7 @@ impl Codex {
             let thread_id = match &conversation_history {
                 InitialHistory::Resumed(resumed) => Some(resumed.conversation_id),
                 InitialHistory::Forked(_) => conversation_history.forked_from_id(),
-                InitialHistory::New => None,
+                InitialHistory::New | InitialHistory::Cleared => None,
             };
             match thread_id {
                 Some(thread_id) => {
@@ -604,10 +604,7 @@ impl Codex {
             dynamic_tools
         };
 
-        let developer_instructions_override = config
-            .developer_instructions_override
-            .clone()
-            .or_else(|| conversation_history.get_developer_instructions());
+        let developer_instructions_override = config.developer_instructions_override.clone();
         let developer_instructions = developer_instructions_override
             .clone()
             .unwrap_or_else(|| config.developer_instructions.clone());
@@ -959,6 +956,7 @@ impl TurnContext {
                 .list_models(RefreshStrategy::OnlineIfUncached)
                 .await,
             features: &features,
+            image_generation_tool_auth_allowed: true,
             web_search_mode: self.tools_config.web_search_mode,
             session_source: self.session_source.clone(),
             sandbox_policy: self.sandbox_policy.get(),
@@ -1026,6 +1024,19 @@ impl TurnContext {
         path.as_ref()
             .map(PathBuf::from)
             .map_or_else(|| self.cwd.to_path_buf(), |p| self.cwd.as_path().join(p))
+    }
+
+    pub(crate) fn file_system_sandbox_context(
+        &self,
+        additional_permissions: Option<PermissionProfile>,
+    ) -> FileSystemSandboxContext {
+        FileSystemSandboxContext {
+            sandbox_policy: self.sandbox_policy.get().clone(),
+            windows_sandbox_level: self.windows_sandbox_level,
+            windows_sandbox_private_desktop: false,
+            use_legacy_landlock: false,
+            additional_permissions,
+        }
     }
 
     pub(crate) fn compact_prompt(&self) -> &str {
@@ -1166,6 +1177,8 @@ impl SessionConfiguration {
             cwd: self.cwd.to_path_buf(),
             ephemeral: self.original_config_do_not_use.ephemeral,
             reasoning_effort: self.collaboration_mode.reasoning_effort(),
+            reasoning_summary: self.original_config_do_not_use.model_reasoning_summary,
+            collaboration_mode: self.collaboration_mode.mode,
             personality: self.personality,
             session_source: self.session_source.clone(),
         }
@@ -1444,6 +1457,7 @@ impl Session {
             model_info: &model_info,
             available_models: &models_manager.try_list_models().unwrap_or_default(),
             features: &per_turn_config.features,
+            image_generation_tool_auth_allowed: true,
             web_search_mode: Some(per_turn_config.web_search_mode.value()),
             session_source: session_source.clone(),
             sandbox_policy: session_configuration.sandbox_policy.get(),
@@ -1549,7 +1563,7 @@ impl Session {
         let forked_from_id = initial_history.forked_from_id();
 
         let (conversation_id, rollout_params) = match &initial_history {
-            InitialHistory::New | InitialHistory::Forked(_) => {
+            InitialHistory::New | InitialHistory::Cleared | InitialHistory::Forked(_) => {
                 let conversation_id = conversation_id_override.unwrap_or_default();
                 (
                     conversation_id,
@@ -1557,13 +1571,12 @@ impl Session {
                         conversation_id,
                         forked_from_id,
                         session_source,
-                        session_configuration
-                            .base_instructions
-                            .clone()
-                            .map(|text| BaseInstructions { text }),
-                        session_configuration
-                            .developer_instructions_override
-                            .clone(),
+                        BaseInstructions {
+                            text: session_configuration
+                                .base_instructions
+                                .clone()
+                                .unwrap_or_default(),
+                        },
                         session_configuration.dynamic_tools.clone(),
                         if session_configuration.persist_extended_history {
                             EventPersistenceMode::Extended
@@ -1594,14 +1607,14 @@ impl Session {
                     .count(),
             )
             .unwrap_or(u64::MAX),
-            InitialHistory::New | InitialHistory::Forked(_) => 0,
+            InitialHistory::New | InitialHistory::Cleared | InitialHistory::Forked(_) => 0,
         };
         let state_builder = match &initial_history {
             InitialHistory::Resumed(resumed) => metadata::builder_from_items(
                 resumed.history.as_slice(),
                 resumed.rollout_path.as_path(),
             ),
-            InitialHistory::New | InitialHistory::Forked(_) => None,
+            InitialHistory::New | InitialHistory::Cleared | InitialHistory::Forked(_) => None,
         };
 
         // Kick off independent async setup tasks in parallel to reduce startup latency.
@@ -1651,7 +1664,9 @@ impl Session {
         let mcp_manager_for_mcp = Arc::clone(&mcp_manager);
         let auth_and_mcp_fut = async move {
             let auth = auth_manager_clone.auth().await;
-            let mcp_servers = mcp_manager_for_mcp.effective_servers(&config_for_mcp, auth.as_ref());
+            let mcp_servers = mcp_manager_for_mcp
+                .effective_servers(&config_for_mcp, auth.as_ref())
+                .await;
             let auth_statuses = compute_auth_statuses(
                 mcp_servers.iter(),
                 config_for_mcp.mcp_oauth_credentials_store_mode,
@@ -1840,20 +1855,19 @@ impl Session {
             default_shell.shell_snapshot = rx;
             tx
         };
-        let thread_name =
-            match session_index::find_thread_name_by_id(&config.codex_home, &conversation_id)
-                .instrument(info_span!(
-                    "session_init.thread_name_lookup",
-                    otel.name = "session_init.thread_name_lookup",
-                ))
-                .await
-            {
-                Ok(name) => name,
-                Err(err) => {
-                    warn!("Failed to read session index for thread name: {err}");
-                    None
-                }
-            };
+        let thread_name = match find_thread_name_by_id(&config.codex_home, &conversation_id)
+            .instrument(info_span!(
+                "session_init.thread_name_lookup",
+                otel.name = "session_init.thread_name_lookup",
+            ))
+            .await
+        {
+            Ok(name) => name,
+            Err(err) => {
+                warn!("Failed to read session index for thread name: {err}");
+                None
+            }
+        };
         session_configuration.thread_name = thread_name.clone();
         let state = SessionState::new(session_configuration.clone());
         let managed_network_requirements_enabled = config.managed_network_requirements_enabled();
@@ -1941,6 +1955,7 @@ impl Session {
             // setup is straightforward enough and performs well.
             mcp_connection_manager: Arc::new(RwLock::new(McpConnectionManager::new_uninitialized(
                 &config.permissions.approval_policy,
+                &config.permissions.sandbox_policy,
             ))),
             mcp_startup_cancellation_token: Mutex::new(CancellationToken::new()),
             unified_exec_manager: UnifiedExecProcessManager::new(
@@ -1963,6 +1978,7 @@ impl Session {
             session_telemetry,
             models_manager: Arc::clone(&models_manager),
             tool_approvals: Mutex::new(ApprovalStore::default()),
+            guardian_rejections: Mutex::new(HashMap::new()),
             skills_manager,
             plugins_manager: Arc::clone(&plugins_manager),
             mcp_manager: Arc::clone(&mcp_manager),
@@ -2069,7 +2085,7 @@ impl Session {
         required_mcp_servers.sort();
         let enabled_mcp_server_count = mcp_servers.values().filter(|server| server.enabled).count();
         let required_mcp_server_count = required_mcp_servers.len();
-        let tool_plugin_provenance = mcp_manager.tool_plugin_provenance(config.as_ref());
+        let tool_plugin_provenance = mcp_manager.tool_plugin_provenance(config.as_ref()).await;
         {
             let mut cancel_guard = sess.services.mcp_startup_cancellation_token.lock().await;
             cancel_guard.cancel();
@@ -2134,7 +2150,7 @@ impl Session {
         }
         let session_start_source = match &initial_history {
             InitialHistory::Resumed(_) => codex_hooks::SessionStartSource::Resume,
-            InitialHistory::New | InitialHistory::Forked(_) => {
+            InitialHistory::New | InitialHistory::Cleared | InitialHistory::Forked(_) => {
                 codex_hooks::SessionStartSource::Startup
             }
         };
@@ -2237,16 +2253,18 @@ impl Session {
     }
 
     pub(crate) async fn route_realtime_text_input(self: &Arc<Self>, text: String) {
-        handlers::user_input_or_turn(
+        handlers::user_input_or_turn_inner(
             self,
             self.next_internal_sub_id(),
             Op::UserInput {
+                responsesapi_client_metadata: None,
                 items: vec![UserInput::Text {
                     text,
                     text_elements: Vec::new(),
                 }],
                 final_output_json_schema: None,
             },
+            /*mirror_user_text_to_realtime*/ None,
         )
         .await;
     }
@@ -2314,7 +2332,7 @@ impl Session {
             )
         };
         match conversation_history {
-            InitialHistory::New => {
+            InitialHistory::New | InitialHistory::Cleared => {
                 // Defer initial context insertion until the first real turn starts so
                 // turn/start overrides can be merged before we write model-visible context.
                 self.set_previous_turn_settings(/*previous_turn_settings*/ None)
@@ -2593,7 +2611,8 @@ impl Session {
         let plugin_outcome = self
             .services
             .plugins_manager
-            .plugins_for_config(&per_turn_config);
+            .plugins_for_config(&per_turn_config)
+            .await;
         let effective_skill_roots = plugin_outcome.effective_skill_roots();
         let skills_input = skills_load_input_from_config(&per_turn_config, effective_skill_roots);
         let skills_outcome = Arc::new(
@@ -3790,7 +3809,8 @@ impl Session {
         let loaded_plugins = self
             .services
             .plugins_manager
-            .plugins_for_config(&turn_context.config);
+            .plugins_for_config(&turn_context.config)
+            .await;
         if let Some(plugin_section) = render_plugins_section(loaded_plugins.capability_summaries())
         {
             developer_sections.push(plugin_section);
@@ -4166,6 +4186,24 @@ impl Session {
         Ok(active_turn_id.clone())
     }
 
+    pub(crate) async fn set_active_turn_responsesapi_client_metadata(
+        &self,
+        responsesapi_client_metadata: HashMap<String, String>,
+    ) {
+        let turn_context = {
+            let active = self.active_turn.lock().await;
+            active
+                .as_ref()
+                .and_then(|active_turn| active_turn.tasks.first())
+                .map(|(_, task)| Arc::clone(&task.turn_context))
+        };
+        if let Some(turn_context) = turn_context {
+            turn_context
+                .turn_metadata_state
+                .set_responsesapi_client_metadata(responsesapi_client_metadata);
+        }
+    }
+
     /// Returns the input if there was no task running to inject into.
     pub async fn inject_response_items(
         &self,
@@ -4394,8 +4432,9 @@ impl Session {
             .mcp_connection_manager
             .read()
             .await
-            .parse_tool_name(tool_name)
+            .resolve_tool_info(tool_name, /*namespace*/ None)
             .await
+            .map(|tool| (tool.server_name, tool.tool.name.to_string()))
     }
 
     pub async fn interrupt_task(self: &Arc<Self>) {
@@ -4410,6 +4449,19 @@ impl Session {
 
     pub(crate) fn hooks(&self) -> &Hooks {
         &self.services.hooks
+    }
+
+    pub(crate) async fn resolve_mcp_tool_info(
+        &self,
+        name: &str,
+        namespace: Option<&str>,
+    ) -> Option<McpToolInfo> {
+        self.services
+            .mcp_connection_manager
+            .read()
+            .await
+            .resolve_tool_info(name, namespace)
+            .await
     }
 
     pub(crate) fn user_shell(&self) -> Arc<shell::Shell> {
@@ -4444,11 +4496,14 @@ impl Session {
     ) {
         let auth = self.services.auth_manager.auth().await;
         let config = self.get_config().await;
-        let mcp_config = config.to_mcp_config(self.services.plugins_manager.as_ref());
+        let mcp_config = config
+            .to_mcp_config(self.services.plugins_manager.as_ref())
+            .await;
         let tool_plugin_provenance = self
             .services
             .mcp_manager
-            .tool_plugin_provenance(config.as_ref());
+            .tool_plugin_provenance(config.as_ref())
+            .await;
         let mcp_servers = with_codex_apps_mcp(mcp_servers, auth.as_ref(), &mcp_config);
         let auth_statuses = compute_auth_statuses(mcp_servers.iter(), store_mode).await;
         let sandbox_state = SandboxState {
@@ -4579,6 +4634,7 @@ pub(crate) fn emit_subagent_session_started(
         model: thread_config.model,
         ephemeral: thread_config.ephemeral,
         subagent_source,
+        parent_thread_id: None,
         created_at,
     });
 }
@@ -4847,7 +4903,6 @@ mod handlers {
 
     use crate::review_prompts::resolve_review_request;
     use crate::rollout::RolloutRecorder;
-    use crate::rollout::session_index;
     use crate::session_prefix::format_hollywood_message;
     use crate::session_prefix::hollywood_obligation_instruction;
     use crate::tasks::CompactTask;
@@ -4981,7 +5036,22 @@ mod handlers {
     }
 
     pub async fn user_input_or_turn(sess: &Arc<Session>, sub_id: String, op: Op) {
-        let (items, updates) = match op {
+        user_input_or_turn_inner(
+            sess,
+            sub_id,
+            op,
+            /*mirror_user_text_to_realtime*/ Some(()),
+        )
+        .await;
+    }
+
+    pub(super) async fn user_input_or_turn_inner(
+        sess: &Arc<Session>,
+        sub_id: String,
+        op: Op,
+        mirror_user_text_to_realtime: Option<()>,
+    ) {
+        let (items, updates, responsesapi_client_metadata) = match op {
             Op::UserTurn {
                 cwd,
                 approval_policy,
@@ -5022,9 +5092,11 @@ mod handlers {
                         app_server_client_name: None,
                         app_server_client_version: None,
                     },
+                    None,
                 )
             }
             Op::UserInput {
+                responsesapi_client_metadata,
                 items,
                 final_output_json_schema,
             } => (
@@ -5033,6 +5105,7 @@ mod handlers {
                     final_output_json_schema: Some(final_output_json_schema),
                     ..Default::default()
                 },
+                responsesapi_client_metadata,
             ),
             _ => unreachable!(),
         };
@@ -5041,23 +5114,68 @@ mod handlers {
             // new_turn_with_sub_id already emits the error event.
             return;
         };
+        if let Some(responsesapi_client_metadata) = responsesapi_client_metadata {
+            current_context
+                .turn_metadata_state
+                .set_responsesapi_client_metadata(responsesapi_client_metadata);
+        }
         sess.maybe_emit_unknown_model_warning_for_turn(current_context.as_ref())
             .await;
-        match sess
+        let accepted_items = match sess
             .steer_input(items.clone(), /*expected_turn_id*/ None)
             .await
         {
-            Ok(_) => current_context.session_telemetry.user_prompt(&items),
+            Ok(_) => {
+                current_context.session_telemetry.user_prompt(&items);
+                Some(items)
+            }
             Err(SteerInputError::NoActiveTurn(items)) => {
+                let active_turn_placeholder = {
+                    let active_turn = sess.active_turn.lock().await;
+                    active_turn
+                        .as_ref()
+                        .is_some_and(|active_turn| active_turn.tasks.is_empty())
+                };
+                if active_turn_placeholder {
+                    for _ in 0..5 {
+                        tokio::task::yield_now().await;
+                        match sess
+                            .steer_input(items.clone(), /*expected_turn_id*/ None)
+                            .await
+                        {
+                            Ok(_) => {
+                                current_context.session_telemetry.user_prompt(&items);
+                                let accepted_items = Some(items);
+                                if let (Some(items), Some(())) =
+                                    (accepted_items, mirror_user_text_to_realtime)
+                                {
+                                    self::mirror_user_text_to_realtime(sess, &items).await;
+                                }
+                                return;
+                            }
+                            Err(SteerInputError::NoActiveTurn(_)) => continue,
+                            Err(err) => {
+                                sess.send_event_raw(Event {
+                                    id: sub_id,
+                                    msg: EventMsg::Error(err.to_error_event()),
+                                })
+                                .await;
+                                return;
+                            }
+                        }
+                    }
+                }
                 current_context.session_telemetry.user_prompt(&items);
                 sess.refresh_mcp_servers_if_requested(&current_context)
                     .await;
+                let accepted_items = items.clone();
                 sess.spawn_task(
                     Arc::clone(&current_context),
                     items,
                     crate::tasks::RegularTask::new(),
                 )
                 .await;
+                Some(accepted_items)
             }
             Err(err) => {
                 sess.send_event_raw(Event {
@@ -5065,7 +5183,36 @@ mod handlers {
                     msg: EventMsg::Error(err.to_error_event()),
                 })
                 .await;
+                None
             }
+        };
+        if let (Some(items), Some(())) = (accepted_items, mirror_user_text_to_realtime) {
+            self::mirror_user_text_to_realtime(sess, &items).await;
+        }
+    }
+
+    async fn mirror_user_text_to_realtime(sess: &Arc<Session>, items: &[UserInput]) {
+        let text = codex_protocol::items::UserMessageItem::new(items).message();
+        if text.is_empty() {
+            return;
+        }
+        let text = if sess.conversation.is_running_v2().await {
+            crate::realtime_conversation::prefix_realtime_v2_text(
+                text,
+                crate::realtime_conversation::REALTIME_USER_TEXT_PREFIX,
+            )
+        } else {
+            text
+        };
+        let text = crate::realtime_context::truncate_realtime_text_to_token_budget(
+            &text,
+            crate::realtime_context::REALTIME_TURN_TOKEN_BUDGET,
+        );
+        if text.is_empty() || sess.conversation.running_state().await.is_none() {
+            return;
+        }
+        if let Err(err) = sess.conversation.text_in(text).await {
+            tracing::debug!("failed to mirror user text to realtime conversation: {err}");
         }
     }
 
@@ -5291,7 +5438,8 @@ mod handlers {
         let mcp_servers = sess
             .services
             .mcp_manager
-            .effective_servers(config, auth.as_ref());
+            .effective_servers(config, auth.as_ref())
+            .await;
         let snapshot = collect_mcp_snapshot_from_manager(
             &mcp_connection_manager,
             compute_auth_statuses(mcp_servers.iter(), config.mcp_oauth_credentials_store_mode)
@@ -5334,7 +5482,11 @@ mod handlers {
                         cwd: cwd_for_entry.clone(),
                         skills: Vec::new(),
                         errors: super::errors_to_info(&[SkillError {
-                            path: cwd_for_entry,
+                            path: AbsolutePathBuf::relative_to_current_dir(&cwd_for_entry)
+                                .unwrap_or_else(|_| {
+                                    AbsolutePathBuf::from_absolute_path(&codex_home)
+                                        .expect("codex_home must be absolute")
+                                }),
                             message,
                         }]),
                     });
@@ -5343,7 +5495,7 @@ mod handlers {
             };
             let config_layer_stack = match load_config_layers_state(
                 &codex_home,
-                Some(cwd_abs),
+                Some(cwd_abs.clone()),
                 empty_cli_overrides,
                 LoaderOverrides::default(),
                 CloudRequirementsLoader::default(),
@@ -5358,19 +5510,25 @@ mod handlers {
                         cwd: cwd_for_entry.clone(),
                         skills: Vec::new(),
                         errors: super::errors_to_info(&[SkillError {
-                            path: cwd_for_entry,
+                            path: AbsolutePathBuf::relative_to_current_dir(&cwd_for_entry)
+                                .unwrap_or_else(|_| {
+                                    AbsolutePathBuf::from_absolute_path(&codex_home)
+                                        .expect("codex_home must be absolute")
+                                }),
                             message,
                         }]),
                     });
                     continue;
                 }
             };
-            let effective_skill_roots = plugins_manager.effective_skill_roots_for_layer_stack(
-                &config_layer_stack,
-                config.features.enabled(Feature::Plugins),
-            );
+            let effective_skill_roots = plugins_manager
+                .effective_skill_roots_for_layer_stack(
+                    &config_layer_stack,
+                    config.features.enabled(Feature::Plugins),
+                )
+                .await;
             let skills_input = crate::SkillsLoadInput::new(
-                cwd.clone(),
+                cwd_abs.clone(),
                 effective_skill_roots,
                 config_layer_stack,
                 config.bundled_skills_enabled(),
@@ -5379,7 +5537,8 @@ mod handlers {
                 .skills_for_cwd(&skills_input, force_reload)
                 .await;
             let errors = super::errors_to_info(&outcome.errors);
-            let skills_metadata = super::skills_to_info(&outcome.skills, &outcome.disabled_paths);
+            let skills_metadata =
+                crate::codex::skills_to_info(&outcome.skills, &outcome.disabled_paths);
             skills.push(SkillsListEntry {
                 cwd,
                 skills: skills_metadata,
@@ -5617,7 +5776,7 @@ mod handlers {
 
         let codex_home = sess.codex_home().await;
         if let Err(e) =
-            session_index::append_thread_name(&codex_home, sess.conversation_id, &name).await
+            codex_rollout::append_thread_name(&codex_home, sess.conversation_id, &name).await
         {
             let event = Event {
                 id: sub_id,
@@ -5762,6 +5921,7 @@ async fn spawn_review_thread(
             .list_models(RefreshStrategy::OnlineIfUncached)
             .await,
         features: &review_features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(review_web_search_mode),
         session_source: parent_turn_context.session_source.clone(),
         sandbox_policy: parent_turn_context.sandbox_policy.get(),
@@ -5891,7 +6051,7 @@ async fn spawn_review_thread(
 
 fn skills_to_info(
     skills: &[SkillMetadata],
-    disabled_paths: &HashSet<PathBuf>,
+    disabled_paths: &std::collections::HashSet<AbsolutePathBuf>,
 ) -> Vec<ProtocolSkillMetadata> {
     skills
         .iter()
@@ -5937,7 +6097,7 @@ fn errors_to_info(errors: &[SkillError]) -> Vec<SkillErrorInfo> {
     errors
         .iter()
         .map(|err| SkillErrorInfo {
-            path: err.path.clone(),
+            path: err.path.to_path_buf(),
             message: err.message.clone(),
         })
         .collect()
@@ -5994,7 +6154,8 @@ pub(crate) async fn run_turn(
     let loaded_plugins = sess
         .services
         .plugins_manager
-        .plugins_for_config(&turn_context.config);
+        .plugins_for_config(&turn_context.config)
+        .await;
     // Structured plugin:// mentions are resolved from the current session's
     // enabled plugins, then converted into turn-scoped guidance below.
     let mentioned_plugins =
@@ -6196,6 +6357,11 @@ pub(crate) async fn run_turn(
     // one instance across retries within this turn.
     let mut client_session =
         prewarmed_client_session.unwrap_or_else(|| sess.services.model_client.new_session());
+    // Pending input is drained into history before building the next model request.
+    // However, we defer that drain until after sampling in two cases:
+    // 1. At the start of a turn, so the fresh user prompt in `input` gets sampled first.
+    // 2. After auto-compact, when model/tool continuation needs to resume before any steer.
+    let mut can_drain_pending_input = input.is_empty();
 
     loop {
         if run_pending_session_start_hooks(&sess, &turn_context).await {
@@ -6205,7 +6371,11 @@ pub(crate) async fn run_turn(
         // Note that pending_input would be something like a message the user
         // submitted through the UI while the model was running. Though the UI
         // may support this, the model might not.
-        let pending_input = sess.get_pending_input().await;
+        let pending_input = if can_drain_pending_input {
+            sess.get_pending_input().await
+        } else {
+            Vec::new()
+        };
 
         let mut blocked_pending_input = false;
         let mut blocked_pending_input_contexts = Vec::new();
@@ -6279,9 +6449,12 @@ pub(crate) async fn run_turn(
         {
             Ok(sampling_request_output) => {
                 let SamplingRequestResult {
-                    needs_follow_up,
+                    needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
                 } = sampling_request_output;
+                can_drain_pending_input = true;
+                let has_pending_input = sess.has_pending_input().await;
+                let needs_follow_up = model_needs_follow_up || has_pending_input;
                 let total_usage_tokens = sess.get_total_token_usage().await;
                 let token_limit_reached = total_usage_tokens >= auto_compact_limit;
 
@@ -6311,6 +6484,7 @@ pub(crate) async fn run_turn(
                         return None;
                     }
                     client_session.reset_websocket_session();
+                    can_drain_pending_input = !model_needs_follow_up;
                     continue;
                 }
 
@@ -6547,6 +6721,8 @@ async fn run_auto_compact(
             Arc::clone(sess),
             Arc::clone(turn_context),
             initial_context_injection,
+            CompactionReason::ContextLimit,
+            CompactionPhase::PreTurn,
         )
         .await?;
     } else {
@@ -6554,6 +6730,8 @@ async fn run_auto_compact(
             Arc::clone(sess),
             Arc::clone(turn_context),
             initial_context_injection,
+            CompactionReason::ContextLimit,
+            CompactionPhase::PreTurn,
         )
         .await?;
     }
@@ -6687,35 +6865,6 @@ fn connector_inserted_in_messages(
     connector_count == 1 && skill_count == 0 && mention_names_lower.contains(&mention_slug)
 }
 
-fn filter_codex_apps_mcp_tools(
-    mcp_tools: &HashMap<String, McpToolInfo>,
-    connectors: &[connectors::AppInfo],
-    config: &Config,
-) -> HashMap<String, McpToolInfo> {
-    let allowed: HashSet<&str> = connectors
-        .iter()
-        .map(|connector| connector.id.as_str())
-        .collect();
-
-    mcp_tools
-        .iter()
-        .filter(|(_, tool)| {
-            if tool.server_name != CODEX_APPS_MCP_SERVER_NAME {
-                return false;
-            }
-            let Some(connector_id) = codex_apps_connector_id(tool) else {
-                return false;
-            };
-            allowed.contains(connector_id) && connectors::codex_app_tool_is_enabled(config, tool)
-        })
-        .map(|(name, tool)| (name.clone(), tool.clone()))
-        .collect()
-}
-
-fn codex_apps_connector_id(tool: &McpToolInfo) -> Option<&str> {
-    tool.connector_id.as_deref()
-}
-
 pub(crate) fn build_prompt(
     input: Vec<ResponseItem>,
     router: &ToolRouter,
@@ -6742,7 +6891,7 @@ pub(crate) fn build_prompt(
         input,
         tools,
         parallel_tool_calls: turn_context.model_info.supports_parallel_tool_calls,
-        base_instructions,
+        base_instructions: base_instructions.unwrap_or_default(),
         personality: turn_context.personality,
         output_schema: turn_context.final_output_json_schema.clone(),
     }
@@ -6910,7 +7059,8 @@ pub(crate) async fn built_tools(
     let loaded_plugins = sess
         .services
         .plugins_manager
-        .plugins_for_config(&turn_context.config);
+        .plugins_for_config(&turn_context.config)
+        .await;
 
     let mut effective_explicitly_enabled_connectors = explicitly_enabled_connectors.clone();
     effective_explicitly_enabled_connectors.extend(sess.get_connector_selection().await);
@@ -6963,57 +7113,46 @@ pub(crate) async fn built_tools(
         None
     };
 
-    let app_tools = connectors.as_ref().map(|connectors| {
-        filter_codex_apps_mcp_tools(&mcp_tools, connectors, &turn_context.config)
-    });
-
-    if let Some(connectors) = connectors.as_ref() {
+    let explicitly_enabled_connectors = if let Some(connectors) = connectors.as_ref() {
         let skill_name_counts_lower = skills_outcome.map_or_else(HashMap::new, |outcome| {
             build_skill_name_counts(&outcome.skills, &outcome.disabled_paths).1
         });
 
-        let explicitly_enabled = filter_connectors_for_input(
+        filter_connectors_for_input(
             connectors,
             input,
             &effective_explicitly_enabled_connectors,
             &skill_name_counts_lower,
-        );
-
-        let mut selected_mcp_tools = filter_non_codex_apps_mcp_tools_only(&mcp_tools);
-        selected_mcp_tools.extend(filter_codex_apps_mcp_tools(
-            &mcp_tools,
-            explicitly_enabled.as_ref(),
-            &turn_context.config,
-        ));
-
-        mcp_tools = selected_mcp_tools;
-    }
-
-    // Expose app tools directly when tool_search is disabled, or when tool_search
-    // is enabled but the accessible app tool set stays below the direct-exposure threshold.
-    let expose_app_tools_directly = !turn_context.tools_config.search_tool
-        || app_tools
-            .as_ref()
-            .is_some_and(|tools| tools.len() < DIRECT_APP_TOOL_EXPOSURE_THRESHOLD);
-    if expose_app_tools_directly && let Some(app_tools) = app_tools.as_ref() {
-        mcp_tools.extend(app_tools.clone());
-    }
-    let app_tools = if expose_app_tools_directly {
-        None
+        )
     } else {
-        app_tools
+        Vec::new()
     };
+    let tool_exposure = build_mcp_tool_exposure(
+        &mcp_tools,
+        connectors.as_deref(),
+        &explicitly_enabled_connectors,
+        &turn_context.config,
+        &turn_context.tools_config,
+    );
+    mcp_tools = tool_exposure.direct_tools;
+    let parallel_mcp_server_names = turn_context
+        .config
+        .mcp_servers
+        .get()
+        .iter()
+        .filter_map(|(server_name, server_config)| {
+            server_config
+                .supports_parallel_tool_calls
+                .then_some(server_name.clone())
+        })
+        .collect();
 
     Ok(Arc::new(ToolRouter::from_config(
         &turn_context.tools_config,
         ToolRouterParams {
-            mcp_tools: has_mcp_servers.then(|| {
-                mcp_tools
-                    .into_iter()
-                    .map(|(name, tool)| (name, tool.tool))
-                    .collect()
-            }),
-            app_tools,
+            mcp_tools: has_mcp_servers.then_some(mcp_tools),
+            deferred_mcp_tools: tool_exposure.deferred_tools,
+            parallel_mcp_server_names,
             discoverable_tools,
             dynamic_tools: turn_context.dynamic_tools.as_slice(),
         },
@@ -7279,7 +7418,9 @@ fn realtime_text_for_event(msg: &EventMsg) -> Option<String> {
         | EventMsg::CollabCloseBegin(_)
         | EventMsg::CollabCloseEnd(_)
         | EventMsg::CollabResumeBegin(_)
-        | EventMsg::CollabResumeEnd(_) => None,
+        | EventMsg::CollabResumeEnd(_)
+        | EventMsg::RealtimeConversationSdp(_)
+        | EventMsg::RealtimeConversationListVoicesResponse(_) => None,
     }
 }
 

@@ -42,6 +42,7 @@ use url::Url;
 
 use self::realtime::PendingSteerCompareKey;
 use crate::app_command::AppCommand;
+use crate::app_event::RateLimitRefreshOrigin;
 use crate::app_event::RealtimeAudioDeviceKind;
 use crate::app_server_approval_conversions::network_approval_context_to_core;
 use crate::app_server_session::ThreadSessionState;
@@ -52,6 +53,7 @@ use crate::bottom_pane::StatusLinePreviewData;
 use crate::bottom_pane::StatusLineSetupView;
 use crate::bottom_pane::TerminalTitleItem;
 use crate::bottom_pane::TerminalTitleSetupView;
+use crate::clipboard_copy;
 use crate::mention_codec::LinkedMention;
 use crate::mention_codec::encode_history_mentions;
 use crate::model_catalog::ModelCatalog;
@@ -101,7 +103,6 @@ use codex_core::config::Constrained;
 use codex_core::config::ConstraintResult;
 use codex_core::config_loader::ConfigLayerStackOrdering;
 use codex_core::find_thread_name_by_id;
-use codex_core::plugins::PluginsManager;
 use codex_core::skills::model::SkillMetadata;
 #[cfg(target_os = "windows")]
 use codex_core::windows_sandbox::WindowsSandboxLevelExt;
@@ -316,7 +317,6 @@ use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::custom_prompt_view::CustomPromptView;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::clipboard_paste::paste_image_to_temp_png;
-use crate::clipboard_text;
 use crate::collaboration_modes;
 use crate::diff_render::display_path_for;
 use crate::exec_cell::CommandOutput;
@@ -775,6 +775,10 @@ pub(crate) struct ChatWidget {
     stream_controller: Option<StreamController>,
     // Stream lifecycle controller for proposed plan output.
     plan_stream_controller: Option<PlanStreamController>,
+    last_agent_markdown: Option<String>,
+    saw_copy_source_this_turn: bool,
+    // Keeps ownership of clipboard contents alive on backends that require it.
+    clipboard_lease: Option<clipboard_copy::ClipboardLease>,
     // Latest completed user-visible Codex output that `/copy` should place on the clipboard.
     last_copyable_output: Option<String>,
     // Latest agent message observed during the active turn. App-server turn completion
@@ -785,12 +789,13 @@ pub(crate) struct ChatWidget {
     pending_collab_spawn_requests: HashMap<String, multi_agents::SpawnRequestSummary>,
     suppressed_exec_calls: HashSet<String>,
     skills_all: Vec<ProtocolSkillMetadata>,
-    skills_initial_state: Option<HashMap<PathBuf, bool>>,
+    skills_initial_state: Option<HashMap<AbsolutePathBuf, bool>>,
     last_unified_wait: Option<UnifiedExecWaitState>,
     unified_exec_wait_streak: Option<UnifiedExecWaitStreak>,
     turn_sleep_inhibitor: SleepInhibitor,
     task_complete_pending: bool,
     unified_exec_processes: Vec<UnifiedExecProcessSummary>,
+    active_hook_cell: Option<crate::history_cell::HookCell>,
     /// Tracks whether codex-core currently considers an agent turn to be in progress.
     ///
     /// This is kept separate from `mcp_startup_status` so that MCP startup progress (or completion)
@@ -841,6 +846,7 @@ pub(crate) struct ChatWidget {
     pending_status_indicator_restore: bool,
     suppress_queue_autosend: bool,
     thread_id: Option<ThreadId>,
+    last_turn_id: Option<String>,
     thread_name: Option<String>,
     forked_from: Option<ThreadId>,
     frame_requester: FrameRequester,
@@ -923,6 +929,7 @@ pub(crate) struct ChatWidget {
     current_rollout_path: Option<PathBuf>,
     // Current working directory (if known)
     current_cwd: Option<PathBuf>,
+    instruction_source_paths: Vec<PathBuf>,
     // Runtime network proxy bind addresses from SessionConfigured.
     session_network_proxy: Option<codex_protocol::protocol::SessionNetworkProxyRuntime>,
     // Shared latch so we only warn once about invalid status-line item IDs.
@@ -2090,7 +2097,16 @@ impl ChatWidget {
 
     fn on_thread_name_updated(&mut self, event: codex_protocol::protocol::ThreadNameUpdatedEvent) {
         if self.thread_id == Some(event.thread_id) {
+            let previous_name = self.thread_name.clone();
             self.thread_name = event.thread_name;
+            self.refresh_status_line();
+            if let Some(name) = self.thread_name.clone()
+                && !name.trim().is_empty()
+                && previous_name.as_deref() != Some(name.as_str())
+            {
+                let cell = Self::rename_confirmation_cell(&name, self.thread_id);
+                self.add_boxed_history(Box::new(cell));
+            }
             self.refresh_terminal_title();
             self.request_redraw();
         }
@@ -2115,6 +2131,7 @@ impl ChatWidget {
     ) {
         let view = crate::bottom_pane::FeedbackNoteView::new(
             category,
+            self.last_turn_id.clone(),
             self.app_event_tx.clone(),
             include_logs,
         );
@@ -2126,6 +2143,44 @@ impl ChatWidget {
         let view = crate::bottom_pane::AppLinkView::new(params, self.app_event_tx.clone());
         self.bottom_pane.show_view(Box::new(view));
         self.request_redraw();
+    }
+
+    fn maybe_defer_user_message_for_realtime(
+        &mut self,
+        user_message: UserMessage,
+    ) -> Option<UserMessage> {
+        Some(user_message)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn last_agent_markdown_text(&self) -> Option<&str> {
+        self.last_agent_markdown
+            .as_deref()
+            .or(self.last_copyable_output.as_deref())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn copy_last_agent_markdown_with(
+        &mut self,
+        copy: impl FnOnce(&str) -> Result<Option<clipboard_copy::ClipboardLease>, String>,
+    ) {
+        let Some(markdown) = self.last_agent_markdown_text() else {
+            self.add_info_message("No agent response to copy.".to_string(), /*hint*/ None);
+            return;
+        };
+
+        match copy(markdown) {
+            Ok(lease) => {
+                self.clipboard_lease = lease;
+                self.add_info_message(
+                    "Copied last message to clipboard.".to_string(),
+                    /*hint*/ None,
+                );
+            }
+            Err(err) => {
+                self.add_error_message(format!("Copy failed: {err}"));
+            }
+        }
     }
 
     pub(crate) fn open_feedback_consent(&mut self, category: crate::app_event::FeedbackCategory) {
@@ -2155,6 +2210,13 @@ impl ChatWidget {
     }
 
     fn on_agent_message(&mut self, message: String) {
+        if !message.trim().is_empty() {
+            if self.agent_turn_running {
+                self.pending_turn_copyable_output = Some(message.clone());
+            } else {
+                self.last_copyable_output = Some(message.clone());
+            }
+        }
         self.finalize_completed_assistant_message(Some(&message));
     }
 
@@ -2199,6 +2261,7 @@ impl ChatWidget {
         };
         if !plan_text.trim().is_empty() {
             self.last_copyable_output = Some(plan_text.clone());
+            self.pending_turn_copyable_output = Some(plan_text.clone());
         }
         // Plan commit ticks can hide the status row; remember whether we streamed plan output so
         // completion can restore it once stream queues are idle.
@@ -3943,33 +4006,41 @@ impl ChatWidget {
     }
 
     fn on_hook_started(&mut self, event: codex_protocol::protocol::HookStartedEvent) {
-        let label = hook_event_label(event.run.event_name);
-        let mut message = format!("Running {label} hook");
-        if let Some(status_message) = event.run.status_message
-            && !status_message.is_empty()
-        {
-            message.push_str(": ");
-            message.push_str(&status_message);
+        if let Some(cell) = self.active_hook_cell.as_mut() {
+            cell.start_run(event.run);
+        } else {
+            self.active_hook_cell = Some(crate::history_cell::new_active_hook_cell(
+                event.run,
+                self.config.animations,
+            ));
         }
-        self.add_to_history(history_cell::new_info_event(message, /*hint*/ None));
+        self.bump_active_cell_revision();
         self.request_redraw();
     }
 
     fn on_hook_completed(&mut self, event: codex_protocol::protocol::HookCompletedEvent) {
-        let status = format!("{:?}", event.run.status).to_lowercase();
-        let header = format!("{} hook ({status})", hook_event_label(event.run.event_name));
-        let mut lines: Vec<ratatui::text::Line<'static>> = vec![header.into()];
-        for entry in event.run.entries {
-            let prefix = match entry.kind {
-                codex_protocol::protocol::HookOutputEntryKind::Warning => "warning: ",
-                codex_protocol::protocol::HookOutputEntryKind::Stop => "stop: ",
-                codex_protocol::protocol::HookOutputEntryKind::Feedback => "feedback: ",
-                codex_protocol::protocol::HookOutputEntryKind::Context => "hook context: ",
-                codex_protocol::protocol::HookOutputEntryKind::Error => "error: ",
-            };
-            lines.push(format!("  {prefix}{}", entry.text).into());
+        let completed_in_place = self
+            .active_hook_cell
+            .as_mut()
+            .is_some_and(|cell| cell.complete_run(event.run.clone()));
+        if !completed_in_place {
+            self.active_hook_cell = Some(crate::history_cell::new_completed_hook_cell(
+                event.run,
+                self.config.animations,
+            ));
         }
-        self.add_to_history(PlainHistoryCell::new(lines));
+        let (completed, clear_active_cell) = if let Some(cell) = self.active_hook_cell.as_mut() {
+            (cell.take_completed_persistent_runs(), cell.is_empty())
+        } else {
+            (None, false)
+        };
+        if let Some(completed) = completed {
+            self.add_to_history(completed);
+        }
+        if clear_active_cell {
+            self.active_hook_cell = None;
+        }
+        self.bump_active_cell_revision();
         self.request_redraw();
     }
 
@@ -4021,6 +4092,26 @@ impl ChatWidget {
 
     pub(crate) fn pre_draw_tick(&mut self) {
         self.bottom_pane.pre_draw_tick();
+        let (hook_changed, completed, clear_active_cell) =
+            if let Some(cell) = self.active_hook_cell.as_mut() {
+                let changed = cell.advance_time(Instant::now());
+                let completed = changed
+                    .then(|| cell.take_completed_persistent_runs())
+                    .flatten();
+                (changed, completed, changed && cell.is_empty())
+            } else {
+                (false, None, false)
+            };
+        if let Some(completed) = completed {
+            self.add_to_history(completed);
+        }
+        if clear_active_cell {
+            self.active_hook_cell = None;
+        }
+        if hook_changed {
+            self.bump_active_cell_revision();
+            self.request_redraw();
+        }
         if self.should_animate_terminal_title_spinner() {
             self.refresh_terminal_title();
         }
@@ -4401,10 +4492,29 @@ impl ChatWidget {
 
     pub(crate) fn handle_request_user_input_now(&mut self, ev: RequestUserInputEvent) {
         self.flush_answer_stream_with_separator();
-        self.notify(Notification::UserInputRequested {
-            question_count: ev.questions.len(),
-            summary: Notification::user_input_request_summary(&ev.questions),
-        });
+        if ev.questions.len() == 1 {
+            let question = &ev.questions[0];
+            let title = if question.header.trim().is_empty() {
+                question.question.trim()
+            } else {
+                question.header.trim()
+            };
+            if !title.is_empty() && question.id == "reasoning_scope" {
+                self.notify(Notification::PlanModePrompt {
+                    title: title.to_string(),
+                });
+            } else {
+                self.notify(Notification::UserInputRequested {
+                    question_count: ev.questions.len(),
+                    summary: Notification::user_input_request_summary(&ev.questions),
+                });
+            }
+        } else {
+            self.notify(Notification::UserInputRequested {
+                question_count: ev.questions.len(),
+                summary: Notification::user_input_request_summary(&ev.questions),
+            });
+        }
         self.bottom_pane.push_user_input_request(ev);
         self.request_redraw();
     }
@@ -4636,6 +4746,9 @@ impl ChatWidget {
             adaptive_chunking: AdaptiveChunkingPolicy::default(),
             stream_controller: None,
             plan_stream_controller: None,
+            last_agent_markdown: None,
+            saw_copy_source_this_turn: false,
+            clipboard_lease: None,
             last_copyable_output: None,
             running_commands: HashMap::new(),
             collab_agent_metadata: HashMap::new(),
@@ -4646,6 +4759,7 @@ impl ChatWidget {
             turn_sleep_inhibitor: SleepInhibitor::new(prevent_idle_sleep),
             task_complete_pending: false,
             unified_exec_processes: Vec::new(),
+            active_hook_cell: None,
             agent_turn_running: false,
             mcp_startup_status: None,
             pending_turn_copyable_output: None,
@@ -4672,6 +4786,7 @@ impl ChatWidget {
             pending_status_indicator_restore: false,
             suppress_queue_autosend: false,
             thread_id: None,
+            last_turn_id: None,
             thread_name: None,
             forked_from: None,
             queued_user_messages: VecDeque::new(),
@@ -4701,6 +4816,7 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             current_cwd,
+            instruction_source_paths: Vec::new(),
             session_network_proxy: None,
             status_line_invalid_items_warned,
             terminal_title_invalid_items_warned,
@@ -4777,6 +4893,15 @@ impl ChatWidget {
                 self.bottom_pane.clear_quit_shortcut_hint();
                 self.quit_shortcut_expires_at = None;
                 self.quit_shortcut_key = None;
+            }
+            KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            } if modifiers.contains(KeyModifiers::CONTROL) && c.eq_ignore_ascii_case(&'o') => {
+                self.dispatch_command(SlashCommand::Copy);
+                return;
             }
             KeyEvent {
                 code: KeyCode::Char(c),
@@ -4917,9 +5042,11 @@ impl ChatWidget {
                 }
                 InputResult::Command(cmd) => {
                     self.dispatch_command(cmd);
+                    self.bottom_pane.record_pending_slash_command_history();
                 }
                 InputResult::CommandWithArgs(cmd, args, text_elements) => {
                     self.dispatch_command_with_args(cmd, args, text_elements);
+                    self.bottom_pane.record_pending_slash_command_history();
                 }
                 InputResult::None => {}
             },
@@ -5213,17 +5340,17 @@ impl ChatWidget {
             SlashCommand::Copy => {
                 let Some(text) = self.last_copyable_output.as_deref() else {
                     self.add_info_message(
-                        "`/copy` is unavailable before the first Codex output or right after a rollback."
-                            .to_string(),
+                        "No agent response to copy.".to_string(),
                         /*hint*/ None,
                     );
                     return;
                 };
 
-                let copy_result = clipboard_text::copy_text_to_clipboard(text);
+                let copy_result = clipboard_copy::copy_to_clipboard(text);
 
                 match copy_result {
-                    Ok(()) => {
+                    Ok(lease) => {
+                        self.clipboard_lease = lease;
                         let hint = self.agent_turn_running.then_some(
                             "Current turn is still running; copied the latest completed output (not the in-progress response)."
                                 .to_string(),
@@ -5250,8 +5377,9 @@ impl ChatWidget {
                     self.next_status_refresh_request_id =
                         self.next_status_refresh_request_id.wrapping_add(1);
                     self.add_status_output(/*refreshing_rate_limits*/ true, Some(request_id));
-                    self.app_event_tx
-                        .send(AppEvent::RefreshRateLimits { request_id });
+                    self.app_event_tx.send(AppEvent::RefreshRateLimits {
+                        origin: RateLimitRefreshOrigin::StatusCommand { request_id },
+                    });
                 } else {
                     self.add_status_output(
                         /*refreshing_rate_limits*/ false, /*request_id*/ None,
@@ -5365,7 +5493,18 @@ impl ChatWidget {
                     self.dispatch_command(cmd);
                     return;
                 }
-                match trimmed.to_ascii_lowercase().as_str() {
+                let prepared_args = if self.bottom_pane.composer_text().is_empty() {
+                    args
+                } else {
+                    let Some((prepared_args, _prepared_elements)) = self
+                        .bottom_pane
+                        .prepare_inline_args_submission(/*record_history*/ false)
+                    else {
+                        return;
+                    };
+                    prepared_args
+                };
+                match prepared_args.trim().to_ascii_lowercase().as_str() {
                     "on" => self.set_service_tier_selection(Some(ServiceTier::Fast)),
                     "off" => self.set_service_tier_selection(/*service_tier*/ None),
                     "status" => {
@@ -5384,6 +5523,7 @@ impl ChatWidget {
                         self.add_error_message("Usage: /fast [on|off|status]".to_string());
                     }
                 }
+                self.bottom_pane.drain_pending_submission_state();
             }
             SlashCommand::Rename if !trimmed.is_empty() => {
                 self.session_telemetry
@@ -5448,6 +5588,17 @@ impl ChatWidget {
                     },
                     user_facing_hint: None,
                 }));
+                self.bottom_pane.drain_pending_submission_state();
+            }
+            SlashCommand::Resume if !trimmed.is_empty() => {
+                let Some((prepared_args, _prepared_elements)) = self
+                    .bottom_pane
+                    .prepare_inline_args_submission(/*record_history*/ false)
+                else {
+                    return;
+                };
+                self.app_event_tx
+                    .send(AppEvent::ResumeSessionByIdOrName(prepared_args));
                 self.bottom_pane.drain_pending_submission_state();
             }
             SlashCommand::SandboxReadRoot if !trimmed.is_empty() => {
@@ -5632,7 +5783,7 @@ impl ChatWidget {
             .map(|binding| binding.mention.clone())
             .collect();
         let mut skill_names_lower: HashSet<String> = HashSet::new();
-        let mut selected_skill_paths: HashSet<PathBuf> = HashSet::new();
+        let mut selected_skill_paths: HashSet<AbsolutePathBuf> = HashSet::new();
         let mut selected_plugin_ids: HashSet<String> = HashSet::new();
 
         if let Some(skills) = self.bottom_pane.skills() {
@@ -5654,7 +5805,7 @@ impl ChatWidget {
                 {
                     items.push(UserInput::Skill {
                         name: skill.name.clone(),
-                        path: skill.path_to_skills_md.clone(),
+                        path: skill.path_to_skills_md.as_path().to_path_buf(),
                     });
                 }
             }
@@ -5668,7 +5819,7 @@ impl ChatWidget {
                 }
                 items.push(UserInput::Skill {
                     name: skill.name.clone(),
-                    path: skill.path_to_skills_md.clone(),
+                    path: skill.path_to_skills_md.as_path().to_path_buf(),
                 });
             }
         }
@@ -6316,9 +6467,10 @@ impl ChatWidget {
                     }
                 }
             }
-            ServerNotification::TurnStarted(_) => {
+            ServerNotification::TurnStarted(notification) => {
                 self.last_non_retry_error = None;
                 if !matches!(replay_kind, Some(ReplayKind::ResumeInitialMessages)) {
+                    self.last_turn_id = Some(notification.turn.id);
                     self.on_task_started();
                 }
             }
@@ -6430,7 +6582,7 @@ impl ChatWidget {
             }
             ServerNotification::ItemGuardianApprovalReviewStarted(notification) => {
                 self.on_guardian_review_notification(
-                    notification.target_item_id,
+                    notification.review_id,
                     notification.turn_id,
                     notification.review,
                     notification.action,
@@ -6438,7 +6590,7 @@ impl ChatWidget {
             }
             ServerNotification::ItemGuardianApprovalReviewCompleted(notification) => {
                 self.on_guardian_review_notification(
-                    notification.target_item_id,
+                    notification.review_id,
                     notification.turn_id,
                     notification.review,
                     notification.action,
@@ -6470,6 +6622,44 @@ impl ChatWidget {
                     );
                 }
             }
+            ServerNotification::ThreadRealtimeTranscriptDelta(notification) => {
+                if !from_replay {
+                    let payload = match notification.role.as_str() {
+                        "user" => codex_protocol::protocol::RealtimeEvent::InputTranscriptDelta(
+                            codex_protocol::protocol::RealtimeTranscriptDelta {
+                                delta: notification.delta,
+                            },
+                        ),
+                        _ => codex_protocol::protocol::RealtimeEvent::OutputTranscriptDelta(
+                            codex_protocol::protocol::RealtimeTranscriptDelta {
+                                delta: notification.delta,
+                            },
+                        ),
+                    };
+                    self.on_realtime_conversation_realtime(
+                        codex_protocol::protocol::RealtimeConversationRealtimeEvent { payload },
+                    );
+                }
+            }
+            ServerNotification::ThreadRealtimeTranscriptDone(notification) => {
+                if !from_replay {
+                    let payload = match notification.role.as_str() {
+                        "user" => codex_protocol::protocol::RealtimeEvent::InputTranscriptDone(
+                            codex_protocol::protocol::RealtimeTranscriptDone {
+                                text: notification.text,
+                            },
+                        ),
+                        _ => codex_protocol::protocol::RealtimeEvent::OutputTranscriptDone(
+                            codex_protocol::protocol::RealtimeTranscriptDone {
+                                text: notification.text,
+                            },
+                        ),
+                    };
+                    self.on_realtime_conversation_realtime(
+                        codex_protocol::protocol::RealtimeConversationRealtimeEvent { payload },
+                    );
+                }
+            }
             ServerNotification::ThreadRealtimeOutputAudioDelta(notification) => {
                 if !from_replay {
                     self.on_realtime_conversation_realtime(
@@ -6479,6 +6669,11 @@ impl ChatWidget {
                             ),
                         },
                     );
+                }
+            }
+            ServerNotification::ThreadRealtimeSdp(notification) => {
+                if !from_replay {
+                    self.on_realtime_conversation_sdp(notification.sdp);
                 }
             }
             ServerNotification::ThreadRealtimeError(notification) => {
@@ -6518,7 +6713,6 @@ impl ChatWidget {
             | ServerNotification::ContextCompacted(_)
             | ServerNotification::FuzzyFileSearchSessionUpdated(_)
             | ServerNotification::FuzzyFileSearchSessionCompleted(_)
-            | ServerNotification::ThreadRealtimeTranscriptUpdated(_)
             | ServerNotification::WindowsWorldWritableWarning(_)
             | ServerNotification::WindowsSandboxSetupCompleted(_)
             | ServerNotification::AccountLoginCompleted(_) => {}
@@ -6716,6 +6910,7 @@ impl ChatWidget {
     ) {
         self.on_guardian_assessment(GuardianAssessmentEvent {
             id,
+            target_item_id: None,
             turn_id,
             status: match review.status {
                 codex_app_server_protocol::GuardianApprovalReviewStatus::InProgress => {
@@ -6730,8 +6925,10 @@ impl ChatWidget {
                 codex_app_server_protocol::GuardianApprovalReviewStatus::Aborted => {
                     GuardianAssessmentStatus::Aborted
                 }
+                codex_app_server_protocol::GuardianApprovalReviewStatus::TimedOut => {
+                    GuardianAssessmentStatus::Aborted
+                }
             },
-            risk_score: review.risk_score,
             risk_level: review.risk_level.map(|risk_level| match risk_level {
                 codex_app_server_protocol::GuardianRiskLevel::Low => {
                     codex_protocol::protocol::GuardianRiskLevel::Low
@@ -6742,8 +6939,28 @@ impl ChatWidget {
                 codex_app_server_protocol::GuardianRiskLevel::High => {
                     codex_protocol::protocol::GuardianRiskLevel::High
                 }
+                codex_app_server_protocol::GuardianRiskLevel::Critical => {
+                    codex_protocol::protocol::GuardianRiskLevel::High
+                }
             }),
+            user_authorization: review.user_authorization.map(
+                |authorization| match authorization {
+                    codex_app_server_protocol::GuardianUserAuthorization::Unknown => {
+                        codex_protocol::protocol::GuardianUserAuthorization::Unknown
+                    }
+                    codex_app_server_protocol::GuardianUserAuthorization::Low => {
+                        codex_protocol::protocol::GuardianUserAuthorization::Low
+                    }
+                    codex_app_server_protocol::GuardianUserAuthorization::Medium => {
+                        codex_protocol::protocol::GuardianUserAuthorization::Medium
+                    }
+                    codex_app_server_protocol::GuardianUserAuthorization::High => {
+                        codex_protocol::protocol::GuardianUserAuthorization::High
+                    }
+                },
+            ),
             rationale: review.rationale,
+            decision_source: None,
             action: action.into(),
         });
     }
@@ -6815,9 +7032,14 @@ impl ChatWidget {
         match msg {
             EventMsg::SessionConfigured(e) => self.on_session_configured(e),
             EventMsg::ThreadNameUpdated(e) => self.on_thread_name_updated(e),
-            EventMsg::AgentMessage(AgentMessageEvent { .. })
+            EventMsg::AgentMessage(AgentMessageEvent { message, .. })
                 if matches!(replay_kind, Some(ReplayKind::ThreadSnapshot))
-                    && !self.is_review_mode => {}
+                    && !self.is_review_mode =>
+            {
+                if !message.trim().is_empty() {
+                    self.last_copyable_output = Some(message);
+                }
+            }
             EventMsg::AgentMessage(AgentMessageEvent { message, .. })
                 if from_replay || self.is_review_mode =>
             {
@@ -6843,6 +7065,7 @@ impl ChatWidget {
             EventMsg::AgentReasoningSectionBreak(_) => self.on_reasoning_section_break(),
             EventMsg::TurnStarted(event) => {
                 if !is_resume_initial_replay {
+                    self.last_turn_id = Some(event.turn_id);
                     self.apply_turn_started_context_window(event.model_context_window);
                     self.on_task_started();
                 }
@@ -7021,6 +7244,12 @@ impl ChatWidget {
                     self.on_realtime_conversation_started(ev);
                 }
             }
+            EventMsg::RealtimeConversationSdp(ev) => {
+                if !from_replay {
+                    self.on_realtime_conversation_sdp(ev.sdp);
+                }
+            }
+            EventMsg::RealtimeConversationListVoicesResponse(_) => {}
             EventMsg::RealtimeConversationRealtime(ev) => {
                 if !from_replay {
                     self.on_realtime_conversation_realtime(ev);
@@ -7317,8 +7546,19 @@ impl ChatWidget {
         );
         let agents_summary_handle = handle.clone();
         tokio::spawn(async move {
-            let agents_summary = match crate::status::discover_agents_summary(&config).await {
-                Ok(summary) => summary,
+            let agents_summary = match codex_core::discover_project_doc_paths(
+                &config,
+                codex_exec_server::LOCAL_FS.as_ref(),
+            )
+            .await
+            {
+                Ok(paths) => {
+                    let paths: Vec<PathBuf> = paths
+                        .iter()
+                        .map(|path| path.as_path().to_path_buf())
+                        .collect();
+                    crate::status::compose_agents_summary(&config, &paths)
+                }
                 Err(err) => {
                     tracing::warn!(error = %err, "failed to discover project docs for /status");
                     "<none>".to_string()
@@ -10561,11 +10801,14 @@ impl ChatWidget {
             return;
         }
 
-        let plugins = PluginsManager::new(self.config.codex_home.clone())
-            .plugins_for_config(&self.config)
-            .capability_summaries()
-            .to_vec();
-        self.bottom_pane.set_plugin_mentions(Some(plugins));
+        self.app_event_tx.send(AppEvent::RefreshPluginMentions);
+    }
+
+    pub(crate) fn on_plugin_mentions_loaded(
+        &mut self,
+        plugins: Option<Vec<codex_core::plugins::PluginCapabilitySummary>>,
+    ) {
+        self.bottom_pane.set_plugin_mentions(plugins);
     }
 
     pub(crate) fn sync_plugin_mentions_config(&mut self, config: &Config) {
@@ -10759,11 +11002,18 @@ impl ChatWidget {
     /// providing an appropriate animation tick), the overlay will keep showing a stale tail while
     /// the main viewport updates.
     pub(crate) fn active_cell_transcript_key(&self) -> Option<ActiveCellTranscriptKey> {
-        let cell = self.active_cell.as_ref()?;
+        let hook_visible = self
+            .active_hook_cell
+            .as_ref()
+            .is_some_and(crate::history_cell::HookCell::should_render);
+        let cell = self.active_cell.as_ref();
+        if cell.is_none() && !hook_visible {
+            return None;
+        }
         Some(ActiveCellTranscriptKey {
             revision: self.active_cell_revision,
-            is_stream_continuation: cell.is_stream_continuation(),
-            animation_tick: cell.transcript_animation_tick(),
+            is_stream_continuation: cell.is_some_and(|cell| cell.is_stream_continuation()),
+            animation_tick: cell.and_then(|cell| cell.transcript_animation_tick()),
         })
     }
 
@@ -10774,8 +11024,22 @@ impl ChatWidget {
     /// should pass the same width the overlay uses; using a different width will cause wrapping
     /// mismatches between the main viewport and the transcript overlay.
     pub(crate) fn active_cell_transcript_lines(&self, width: u16) -> Option<Vec<Line<'static>>> {
-        let cell = self.active_cell.as_ref()?;
-        let lines = cell.transcript_lines(width);
+        let mut lines = self
+            .active_cell
+            .as_ref()
+            .map(|cell| cell.transcript_lines(width))
+            .unwrap_or_default();
+        if let Some(cell) = self.active_hook_cell.as_ref()
+            && cell.should_render()
+        {
+            let hook_lines = cell.transcript_lines(width);
+            if !hook_lines.is_empty() {
+                if !lines.is_empty() {
+                    lines.push(Line::default());
+                }
+                lines.extend(hook_lines);
+            }
+        }
         (!lines.is_empty()).then_some(lines)
     }
 
@@ -10795,14 +11059,25 @@ impl ChatWidget {
     }
 
     fn as_renderable(&self) -> RenderableItem<'_> {
-        let active_cell_renderable = match &self.active_cell {
-            Some(cell) => RenderableItem::Borrowed(cell).inset(Insets::tlbr(
-                /*top*/ 1, /*left*/ 0, /*bottom*/ 0, /*right*/ 0,
-            )),
-            None => RenderableItem::Owned(Box::new(())),
-        };
         let mut flex = FlexRenderable::new();
-        flex.push(/*flex*/ 1, active_cell_renderable);
+        if let Some(cell) = &self.active_cell {
+            flex.push(
+                /*flex*/ 1,
+                RenderableItem::Borrowed(cell).inset(Insets::tlbr(
+                    /*top*/ 1, /*left*/ 0, /*bottom*/ 0, /*right*/ 0,
+                )),
+            );
+        }
+        if let Some(cell) = &self.active_hook_cell
+            && cell.should_render()
+        {
+            flex.push(
+                /*flex*/ 0,
+                RenderableItem::Borrowed(cell).inset(Insets::tlbr(
+                    /*top*/ 1, /*left*/ 0, /*bottom*/ 0, /*right*/ 0,
+                )),
+            );
+        }
         flex.push(
             /*flex*/ 0,
             RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(

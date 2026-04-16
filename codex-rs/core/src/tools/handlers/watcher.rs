@@ -132,7 +132,10 @@ impl ToolHandler for WatcherHandler {
         };
 
         let db = required_state_db(&session)?;
-        match tool_name.as_str() {
+        db.ensure_state_schema_current()
+            .await
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+        match tool_name.name.as_str() {
             "watch_process_exit" => {
                 let args: WatchProcessExitArgs = parse_arguments(&arguments)?;
                 let thread_id = resolve_thread_id(args.thread_id.as_deref(), &session)?;

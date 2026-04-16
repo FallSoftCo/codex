@@ -85,6 +85,7 @@ fn shell_zsh_fork_prefers_shell_command_over_unified_exec() {
         model_info: &model_info,
         available_models: &available_models,
         features: &features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Live),
         session_source: SessionSource::Cli,
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
@@ -142,6 +143,7 @@ fn subagents_keep_request_user_input_mode_config_and_agent_jobs_workers_opt_in_b
         model_info: &model_info,
         available_models: &available_models,
         features: &features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Cached),
         session_source: SessionSource::SubAgent(SubAgentSource::Other(
             "agent_job:test".to_string(),
@@ -161,15 +163,17 @@ fn image_generation_requires_feature_and_supported_model() {
     let mut unsupported_model_info = supported_model_info.clone();
     unsupported_model_info.input_modalities = vec![InputModality::Text];
 
-    let default_features = Features::with_defaults();
-    let mut image_generation_features = default_features.clone();
+    let mut image_generation_disabled_features = Features::with_defaults();
+    image_generation_disabled_features.disable(Feature::ImageGeneration);
+    let mut image_generation_features = Features::with_defaults();
     image_generation_features.enable(Feature::ImageGeneration);
 
     let available_models = Vec::new();
     let default_tools_config = ToolsConfig::new(&ToolsConfigParams {
         model_info: &supported_model_info,
         available_models: &available_models,
-        features: &default_features,
+        features: &image_generation_disabled_features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Cached),
         session_source: SessionSource::Cli,
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
@@ -179,6 +183,17 @@ fn image_generation_requires_feature_and_supported_model() {
         model_info: &supported_model_info,
         available_models: &available_models,
         features: &image_generation_features,
+        image_generation_tool_auth_allowed: true,
+        web_search_mode: Some(WebSearchMode::Cached),
+        session_source: SessionSource::Cli,
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+    let auth_disallowed_tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &supported_model_info,
+        available_models: &available_models,
+        features: &image_generation_features,
+        image_generation_tool_auth_allowed: false,
         web_search_mode: Some(WebSearchMode::Cached),
         session_source: SessionSource::Cli,
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
@@ -188,14 +203,15 @@ fn image_generation_requires_feature_and_supported_model() {
         model_info: &unsupported_model_info,
         available_models: &available_models,
         features: &image_generation_features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Cached),
         session_source: SessionSource::Cli,
         sandbox_policy: &SandboxPolicy::DangerFullAccess,
         windows_sandbox_level: WindowsSandboxLevel::Disabled,
     });
-
     assert!(!default_tools_config.image_gen_tool);
     assert!(supported_tools_config.image_gen_tool);
+    assert!(!auth_disallowed_tools_config.image_gen_tool);
     assert!(!unsupported_tools_config.image_gen_tool);
 }
 
@@ -218,6 +234,7 @@ fn tester_session_source_hard_disables_non_terminal_tools() {
         model_info: &model_info,
         available_models: &available_models,
         features: &features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Live),
         session_source: SessionSource::Custom(
             "tester_run:terminal_full_access:terminal_harness".to_string(),
@@ -251,6 +268,7 @@ fn tester_without_terminal_harness_has_no_shell_tools() {
         model_info: &model_info,
         available_models: &available_models,
         features: &features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Live),
         session_source: SessionSource::Custom(
             "tester_run:terminal_full_access:browser".to_string(),
@@ -274,6 +292,7 @@ fn js_repl_capability_override_does_not_disable_unrelated_tools() {
         model_info: &model_info,
         available_models: &available_models,
         features: &features,
+        image_generation_tool_auth_allowed: true,
         web_search_mode: Some(WebSearchMode::Live),
         session_source: SessionSource::Cli,
         sandbox_policy: &SandboxPolicy::DangerFullAccess,

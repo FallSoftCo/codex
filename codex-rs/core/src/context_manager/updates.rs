@@ -175,14 +175,15 @@ pub(crate) fn build_contextual_user_message(text_sections: Vec<String>) -> Optio
 }
 
 fn build_text_message(role: &str, text_sections: Vec<String>) -> Option<ResponseItem> {
-    if text_sections.is_empty() {
-        return None;
-    }
-
     let content = text_sections
         .into_iter()
+        .filter(|text| !text.is_empty())
         .map(|text| ContentItem::InputText { text })
-        .collect();
+        .collect::<Vec<_>>();
+
+    if content.is_empty() {
+        return None;
+    }
 
     Some(ResponseItem::Message {
         id: None,

@@ -108,6 +108,8 @@ pub struct ToolsConfig {
     pub collab_tools: bool,
     pub multi_agent_v2: bool,
     pub hide_spawn_agent_metadata: bool,
+    pub spawn_agent_usage_hint: bool,
+    pub spawn_agent_usage_hint_text: Option<String>,
     pub default_mode_request_user_input: bool,
     pub mcp_tools_enabled: bool,
     pub dynamic_tools_enabled: bool,
@@ -123,6 +125,7 @@ pub struct ToolsConfigParams<'a> {
     pub model_info: &'a ModelInfo,
     pub available_models: &'a [ModelPreset],
     pub features: &'a Features,
+    pub image_generation_tool_auth_allowed: bool,
     pub web_search_mode: Option<WebSearchMode>,
     pub session_source: SessionSource,
     pub sandbox_policy: &'a SandboxPolicy,
@@ -135,6 +138,7 @@ impl ToolsConfig {
             model_info,
             available_models,
             features,
+            image_generation_tool_auth_allowed,
             web_search_mode,
             session_source,
             sandbox_policy,
@@ -148,7 +152,7 @@ impl ToolsConfig {
             include_js_repl && features.enabled(Feature::JsReplToolsOnly);
         let include_collab_tools = features.enabled(Feature::Collab);
         let include_multi_agent_v2 = features.enabled(Feature::MultiAgentV2);
-        let hide_spawn_agent_metadata = features.enabled(Feature::DebugHideSpawnAgentMetadata);
+        let hide_spawn_agent_metadata = false;
         let include_agent_jobs = features.enabled(Feature::SpawnCsv);
         let include_default_mode_request_user_input =
             features.enabled(Feature::DefaultModeRequestUserInput);
@@ -166,6 +170,7 @@ impl ToolsConfig {
             && !tester_mode;
         let include_original_image_detail = can_request_original_image_detail(features, model_info);
         let include_image_gen_tool = !tester_mode
+            && *image_generation_tool_auth_allowed
             && features.enabled(Feature::ImageGeneration)
             && supports_image_generation(model_info);
         let exec_permission_approvals_enabled = features.enabled(Feature::ExecPermissionApprovals);
@@ -244,6 +249,8 @@ impl ToolsConfig {
             collab_tools: include_collab_tools && !tester_mode,
             multi_agent_v2: include_multi_agent_v2,
             hide_spawn_agent_metadata,
+            spawn_agent_usage_hint: true,
+            spawn_agent_usage_hint_text: None,
             default_mode_request_user_input: include_default_mode_request_user_input,
             mcp_tools_enabled: !tester_mode,
             dynamic_tools_enabled: !tester_mode,
@@ -266,6 +273,24 @@ impl ToolsConfig {
 
     pub fn with_agent_type_description(mut self, agent_type_description: String) -> Self {
         self.agent_type_description = agent_type_description;
+        self
+    }
+
+    pub fn with_spawn_agent_usage_hint(mut self, spawn_agent_usage_hint: bool) -> Self {
+        self.spawn_agent_usage_hint = spawn_agent_usage_hint;
+        self
+    }
+
+    pub fn with_spawn_agent_usage_hint_text(
+        mut self,
+        spawn_agent_usage_hint_text: Option<String>,
+    ) -> Self {
+        self.spawn_agent_usage_hint_text = spawn_agent_usage_hint_text;
+        self
+    }
+
+    pub fn with_hide_spawn_agent_metadata(mut self, hide_spawn_agent_metadata: bool) -> Self {
+        self.hide_spawn_agent_metadata = hide_spawn_agent_metadata;
         self
     }
 

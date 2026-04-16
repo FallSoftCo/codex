@@ -88,18 +88,19 @@ impl ToolHandler for ViewImageHandler {
         };
 
         let abs_path =
-            AbsolutePathBuf::try_from(turn.resolve_path(Some(args.path))).map_err(|error| {
-                FunctionCallError::RespondToModel(format!("unable to resolve image path: {error}"))
-            })?;
+            AbsolutePathBuf::resolve_path_against_base(std::path::Path::new(&args.path), &turn.cwd);
         let Some(environment) = turn.environment.as_ref() else {
             return Err(FunctionCallError::RespondToModel(
                 "view_image is unavailable in this session".to_string(),
             ));
         };
+        let sandbox = environment
+            .is_remote()
+            .then(|| turn.file_system_sandbox_context(/*additional_permissions*/ None));
 
         let metadata = environment
             .get_filesystem()
-            .get_metadata(&abs_path)
+            .get_metadata(&abs_path, sandbox.as_ref())
             .await
             .map_err(|error| {
                 FunctionCallError::RespondToModel(format!(
@@ -116,7 +117,7 @@ impl ToolHandler for ViewImageHandler {
         }
         let file_bytes = environment
             .get_filesystem()
-            .read_file(&abs_path)
+            .read_file(&abs_path, sandbox.as_ref())
             .await
             .map_err(|error| {
                 FunctionCallError::RespondToModel(format!(

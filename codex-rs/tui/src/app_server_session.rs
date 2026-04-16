@@ -45,6 +45,7 @@ use codex_app_server_protocol::ThreadRealtimeAppendTextParams;
 use codex_app_server_protocol::ThreadRealtimeAppendTextResponse;
 use codex_app_server_protocol::ThreadRealtimeStartParams;
 use codex_app_server_protocol::ThreadRealtimeStartResponse;
+use codex_app_server_protocol::ThreadRealtimeStartTransport;
 use codex_app_server_protocol::ThreadRealtimeStopParams;
 use codex_app_server_protocol::ThreadRealtimeStopResponse;
 use codex_app_server_protocol::ThreadResumeParams;
@@ -83,6 +84,7 @@ use codex_protocol::openai_models::ReasoningEffortPreset;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::ConversationAudioParams;
 use codex_protocol::protocol::ConversationStartParams;
+use codex_protocol::protocol::ConversationStartTransport;
 use codex_protocol::protocol::ConversationTextParams;
 use codex_protocol::protocol::CreditsSnapshot;
 use codex_protocol::protocol::RateLimitSnapshot;
@@ -213,16 +215,22 @@ impl AppServerSession {
         matches!(self.client, AppServerClient::Remote(_))
     }
 
-    pub(crate) async fn bootstrap(&mut self, config: &Config) -> Result<AppServerBootstrap> {
-        let account_request_id = self.next_request_id();
-        let account: GetAccountResponse = self
-            .client
+    pub(crate) async fn read_account(&mut self) -> Result<GetAccountResponse> {
+        let request_id = self.next_request_id();
+        self.client
             .request_typed(ClientRequest::GetAccount {
-                request_id: account_request_id,
+                request_id,
                 params: GetAccountParams {
                     refresh_token: false,
                 },
             })
+            .await
+            .wrap_err("account/read failed in TUI")
+    }
+
+    pub(crate) async fn bootstrap(&mut self, config: &Config) -> Result<AppServerBootstrap> {
+        let account = self
+            .read_account()
             .await
             .wrap_err("account/read failed during TUI bootstrap")?;
         let model_request_id = self.next_request_id();
@@ -544,6 +552,7 @@ impl AppServerSession {
                 params: TurnStartParams {
                     thread_id: thread_id.to_string(),
                     input: items.into_iter().map(Into::into).collect(),
+                    responsesapi_client_metadata: None,
                     cwd: Some(cwd),
                     approval_policy: Some(approval_policy.into()),
                     approvals_reviewer: Some(approvals_reviewer.into()),
@@ -594,6 +603,7 @@ impl AppServerSession {
                 params: TurnSteerParams {
                     thread_id: thread_id.to_string(),
                     input: items.into_iter().map(Into::into).collect(),
+                    responsesapi_client_metadata: None,
                     expected_turn_id: turn_id,
                 },
             })
@@ -766,8 +776,18 @@ impl AppServerSession {
                 request_id,
                 params: ThreadRealtimeStartParams {
                     thread_id: thread_id.to_string(),
+                    output_modality: params.output_modality,
                     prompt: params.prompt,
                     session_id: params.session_id,
+                    transport: params.transport.map(|transport| match transport {
+                        ConversationStartTransport::Websocket => {
+                            ThreadRealtimeStartTransport::Websocket
+                        }
+                        ConversationStartTransport::Webrtc { sdp } => {
+                            ThreadRealtimeStartTransport::Webrtc { sdp }
+                        }
+                    }),
+                    voice: params.voice,
                 },
             })
             .await
@@ -928,6 +948,7 @@ fn model_preset_from_api_model(model: ApiModel) -> ModelPreset {
         // `model/list` already returns models filtered for the active client/auth context.
         supported_in_api: true,
         input_modalities: model.input_modalities,
+        additional_speed_tiers: model.additional_speed_tiers,
     }
 }
 
@@ -1421,7 +1442,6 @@ mod tests {
                     agent_path: None,
                     model_provider: Some("openai".to_string()),
                     base_instructions: None,
-                    developer_instructions: None,
                     dynamic_tools: None,
                     memory_mode: None,
                     hollywood,
@@ -1529,7 +1549,7 @@ mod tests {
         let _mode = EnvGuard::set("HOLLYWOOD_ATTENTION_MODE", Some("ambient"));
 
         let params = thread_resume_params_from_config(
-            config.clone(),
+            config,
             thread_id,
             ThreadParamsMode::Remote,
             /*remote_cwd_override*/ None,
@@ -1667,6 +1687,7 @@ mod tests {
             model_provider: "openai".to_string(),
             service_tier: None,
             cwd: PathBuf::from("/tmp/project"),
+            instruction_sources: Vec::new(),
             approval_policy: codex_protocol::protocol::AskForApproval::Never.into(),
             approvals_reviewer: codex_app_server_protocol::ApprovalsReviewer::User,
             sandbox: codex_protocol::protocol::SandboxPolicy::new_read_only_policy().into(),

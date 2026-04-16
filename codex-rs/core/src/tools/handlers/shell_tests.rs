@@ -113,7 +113,7 @@ async fn shell_command_handler_to_exec_params_uses_session_shell_and_turn_contex
 
     // ExecParams cannot derive Eq due to the CancellationToken field, so we manually compare the fields.
     assert_eq!(exec_params.command, expected_command);
-    assert_eq!(exec_params.cwd, expected_cwd);
+    assert_eq!(exec_params.cwd.to_path_buf(), expected_cwd);
     assert_eq!(exec_params.env, expected_env);
     assert_eq!(exec_params.network, turn_context.network);
     assert_eq!(exec_params.expiration.timeout_ms(), timeout_ms);
@@ -225,8 +225,7 @@ async fn shell_pre_tool_use_payload_uses_joined_command() {
             turn: turn.into(),
             tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
             call_id: "call-41".to_string(),
-            tool_name: "shell".to_string(),
-            tool_namespace: None,
+            tool_name: codex_tools::ToolName::plain("shell"),
             payload,
         }),
         Some(crate::tools::registry::PreToolUsePayload {
@@ -251,8 +250,7 @@ async fn shell_command_pre_tool_use_payload_uses_raw_command() {
             turn: turn.into(),
             tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
             call_id: "call-42".to_string(),
-            tool_name: "shell_command".to_string(),
-            tool_namespace: None,
+            tool_name: codex_tools::ToolName::plain("shell_command"),
             payload,
         }),
         Some(crate::tools::registry::PreToolUsePayload {

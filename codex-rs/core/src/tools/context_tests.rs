@@ -147,11 +147,7 @@ fn tool_search_payloads_roundtrip_as_tool_search_outputs() {
                 description: String::new(),
                 strict: false,
                 defer_loading: Some(true),
-                parameters: codex_tools::JsonSchema::Object {
-                    properties: Default::default(),
-                    required: None,
-                    additional_properties: None,
-                },
+                parameters: codex_tools::JsonSchema::object(Default::default(), None, None),
                 output_schema: None,
             },
         )],
@@ -268,13 +264,12 @@ fn exec_command_tool_output_formats_truncated_response() {
                 .expect("exec output should serialize as text");
             assert_regex_match(
                 r#"(?sx)
-                    ^Command:\ /bin/zsh\ -lc\ 'rm\ -rf\ /tmp/example\.sqlite'
-                    \nChunk\ ID:\ abc123
+                    ^Chunk\ ID:\ abc123
                     \nWall\ time:\ \d+\.\d{4}\ seconds
                     \nProcess\ exited\ with\ code\ 0
                     \nOriginal\ token\ count:\ 10
                     \nOutput:
-                    \n.*tokens\ truncated.*
+                    \n(?:Total\ output\ lines:\ 1\n\n)? .*tokens\ truncated.*
                     $"#,
                 &text,
             );

@@ -11,14 +11,13 @@ use crate::tools::handlers::multi_agents_common::DEFAULT_WAIT_TIMEOUT_MS;
 use crate::tools::handlers::multi_agents_common::MAX_WAIT_TIMEOUT_MS;
 use crate::tools::handlers::multi_agents_common::MIN_WAIT_TIMEOUT_MS;
 use crate::tools::registry::ToolRegistryBuilder;
-use codex_mcp::CODEX_APPS_MCP_SERVER_NAME;
 use codex_mcp::ToolInfo;
 use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_tools::DiscoverableTool;
 use codex_tools::JsonSchema;
 use codex_tools::ResponsesApiTool;
 use codex_tools::ToolHandlerKind;
-use codex_tools::ToolRegistryPlanAppTool;
+use codex_tools::ToolRegistryPlanDeferredTool;
 use codex_tools::ToolRegistryPlanParams;
 use codex_tools::ToolSpec;
 use codex_tools::ToolUserShellType;
@@ -46,11 +45,11 @@ fn create_hollywood_status_tool() -> ToolSpec {
             .to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::Object {
-            properties: BTreeMap::new(),
-            required: Some(Vec::new()),
-            additional_properties: Some(false.into()),
-        },
+        parameters: JsonSchema::object(
+            BTreeMap::new(),
+            Some(Vec::new()),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -59,30 +58,24 @@ fn create_hollywood_read_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "room".to_string(),
-            JsonSchema::String {
-                description: Some(
-                    "Optional room to read from. Defaults to the configured Hollywood room."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::string(Some(
+                "Optional room to read from. Defaults to the configured Hollywood room."
+                    .to_string(),
+            )),
         ),
         (
             "after_id".to_string(),
-            JsonSchema::Number {
-                description: Some(
-                    "Optional message id cursor. When provided, only newer messages are returned."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::number(Some(
+                "Optional message id cursor. When provided, only newer messages are returned."
+                    .to_string(),
+            )),
         ),
         (
             "limit".to_string(),
-            JsonSchema::Number {
-                description: Some(
-                    "Optional maximum number of messages to return. Defaults to 20, max 100."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::number(Some(
+                "Optional maximum number of messages to return. Defaults to 20, max 100."
+                    .to_string(),
+            )),
         ),
     ]);
     ToolSpec::Function(ResponsesApiTool {
@@ -91,11 +84,7 @@ fn create_hollywood_read_tool() -> ToolSpec {
             .to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(Vec::new()),
-            additional_properties: Some(false.into()),
-        },
+        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
         output_schema: None,
     })
 }
@@ -104,42 +93,37 @@ fn create_hollywood_send_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "text".to_string(),
-            JsonSchema::String {
-                description: Some("Message body to send to Hollywood. Use @mentions when you need another agent's attention.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Message body to send to Hollywood. Use @mentions when you need another agent's attention."
+                    .to_string(),
+            )),
         ),
         (
             "room".to_string(),
-            JsonSchema::String {
-                description: Some("Optional room override. Defaults to the configured Hollywood room.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Optional room override. Defaults to the configured Hollywood room.".to_string(),
+            )),
         ),
         (
             "to".to_string(),
-            JsonSchema::String {
-                description: Some(
-                    "Optional direct recipient session id or alias. When omitted, the message goes to the room."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::string(Some(
+                "Optional direct recipient session id or alias. When omitted, the message goes to the room."
+                    .to_string(),
+            )),
         ),
         (
             "broadcast".to_string(),
-            JsonSchema::Boolean {
-                description: Some(
-                    "When true, mark this as an explicit room-wide broadcast that should wake idle attached agents."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::boolean(Some(
+                "When true, mark this as an explicit room-wide broadcast that should wake idle attached agents."
+                    .to_string(),
+            )),
         ),
         (
             "response_policy".to_string(),
-            JsonSchema::String {
-                description: Some(
-                    "Optional reply contract for the message: `required`, `optional`, or `none`. Use `none` for acknowledgements or informational updates that should not trigger a reply."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::string(Some(
+                "Optional reply contract for the message: `required`, `optional`, or `none`. Use `none` for acknowledgements or informational updates that should not trigger a reply."
+                    .to_string(),
+            )),
         ),
     ]);
     ToolSpec::Function(ResponsesApiTool {
@@ -148,11 +132,11 @@ fn create_hollywood_send_tool() -> ToolSpec {
             .to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::Object {
+        parameters: JsonSchema::object(
             properties,
-            required: Some(vec!["text".to_string()]),
-            additional_properties: Some(false.into()),
-        },
+            Some(vec!["text".to_string()]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -161,40 +145,30 @@ fn create_hollywood_team_up_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "purpose".to_string(),
-            JsonSchema::String {
-                description: Some("Shared purpose for the team.".to_string()),
-            },
+            JsonSchema::string(Some("Shared purpose for the team.".to_string())),
         ),
         (
             "targets".to_string(),
-            JsonSchema::Array {
-                items: Box::new(JsonSchema::String {
-                    description: Some("Target session id or alias.".to_string()),
-                }),
-                description: Some("Sessions to invite onto the team.".to_string()),
-            },
+            JsonSchema::array(
+                JsonSchema::string(Some("Target session id or alias.".to_string())),
+                Some("Sessions to invite onto the team.".to_string()),
+            ),
         ),
         (
             "room".to_string(),
-            JsonSchema::String {
-                description: Some(
-                    "Optional control room for the team record. Defaults to main.".to_string(),
-                ),
-            },
+            JsonSchema::string(Some(
+                "Optional control room for the team record. Defaults to main.".to_string(),
+            )),
         ),
         (
             "task_room".to_string(),
-            JsonSchema::String {
-                description: Some(
-                    "Optional working room members should join after accepting.".to_string(),
-                ),
-            },
+            JsonSchema::string(Some(
+                "Optional working room members should join after accepting.".to_string(),
+            )),
         ),
         (
             "team_id".to_string(),
-            JsonSchema::String {
-                description: Some("Optional explicit team id.".to_string()),
-            },
+            JsonSchema::string(Some("Optional explicit team id.".to_string())),
         ),
     ]);
 
@@ -203,11 +177,11 @@ fn create_hollywood_team_up_tool() -> ToolSpec {
         description: "Create a structured Hollywood team with a leader, purpose, and invited member sessions. Use this when you need to form an explicit working group rather than relying on room chat alone.".to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::Object {
+        parameters: JsonSchema::object(
             properties,
-            required: Some(vec!["purpose".to_string(), "targets".to_string()]),
-            additional_properties: Some(false.into()),
-        },
+            Some(vec!["purpose".to_string(), "targets".to_string()]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -216,18 +190,15 @@ fn create_hollywood_team_status_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "room".to_string(),
-            JsonSchema::String {
-                description: Some(
-                    "Optional room to inspect. Defaults to the configured Hollywood room."
-                        .to_string(),
-                ),
-            },
+            JsonSchema::string(Some(
+                "Optional room to inspect. Defaults to the configured Hollywood room.".to_string(),
+            )),
         ),
         (
             "limit".to_string(),
-            JsonSchema::Number {
-                description: Some("Maximum number of teams to return. Defaults to 20.".to_string()),
-            },
+            JsonSchema::number(Some(
+                "Maximum number of teams to return. Defaults to 20.".to_string(),
+            )),
         ),
     ]);
 
@@ -236,11 +207,7 @@ fn create_hollywood_team_status_tool() -> ToolSpec {
         description: "Inspect structured Hollywood teams and member state for a room. Use this to understand invites, leaders, roles, and which sessions have joined or acknowledged.".to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(Vec::new()),
-            additional_properties: Some(false.into()),
-        },
+        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
         output_schema: None,
     })
 }
@@ -249,45 +216,41 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "team_id".to_string(),
-            JsonSchema::String {
-                description: Some("Team id to update.".to_string()),
-            },
+            JsonSchema::string(Some("Team id to update.".to_string())),
         ),
         (
             "session_id".to_string(),
-            JsonSchema::String {
-                description: Some("Optional session id or alias to update. Defaults to this session.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Optional session id or alias to update. Defaults to this session.".to_string(),
+            )),
         ),
         (
             "role".to_string(),
-            JsonSchema::String {
-                description: Some("Optional updated role, for example leader, member, reviewer, observer.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Optional updated role, for example leader, member, reviewer, observer.".to_string(),
+            )),
         ),
         (
             "state".to_string(),
-            JsonSchema::String {
-                description: Some("Optional updated team state, for example pending, accepted, joined, active, declined, deferred, timed_out.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Optional updated team state, for example pending, accepted, joined, active, declined, deferred, timed_out.".to_string(),
+            )),
         ),
         (
             "joined_room".to_string(),
-            JsonSchema::String {
-                description: Some("Optional joined working room for this member.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Optional joined working room for this member.".to_string(),
+            )),
         ),
         (
             "task".to_string(),
-            JsonSchema::String {
-                description: Some("Optional current task summary for this member.".to_string()),
-            },
+            JsonSchema::string(Some("Optional current task summary for this member.".to_string())),
         ),
         (
             "scope".to_string(),
-            JsonSchema::String {
-                description: Some("Optional scope or ownership summary for this member.".to_string()),
-            },
+            JsonSchema::string(Some(
+                "Optional scope or ownership summary for this member.".to_string(),
+            )),
         ),
     ]);
 
@@ -296,11 +259,11 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
         description: "Update structured team-member state in Hollywood. Use this to accept or decline invites, mark joined/active state, and record claimed scope.".to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::Object {
+        parameters: JsonSchema::object(
             properties,
-            required: Some(vec!["team_id".to_string()]),
-            additional_properties: Some(false.into()),
-        },
+            Some(vec!["team_id".to_string()]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -348,9 +311,9 @@ pub(crate) fn build_specs_with_discoverable_tools(
     let app_tool_sources = app_tools.as_ref().map(|app_tools| {
         app_tools
             .values()
-            .map(|tool| ToolRegistryPlanAppTool {
-                tool_name: tool.tool_name.as_str(),
-                tool_namespace: tool.tool_namespace.as_str(),
+            .map(|tool| ToolRegistryPlanDeferredTool {
+                tool_name: tool.callable_name.as_str(),
+                tool_namespace: tool.callable_namespace.as_str(),
                 server_name: tool.server_name.as_str(),
                 connector_name: tool.connector_name.as_deref(),
                 connector_description: tool.connector_description.as_deref(),
@@ -363,7 +326,8 @@ pub(crate) fn build_specs_with_discoverable_tools(
         config,
         ToolRegistryPlanParams {
             mcp_tools: mcp_tools.as_ref(),
-            app_tools: app_tool_sources.as_deref(),
+            deferred_mcp_tools: app_tool_sources.as_deref(),
+            tool_namespaces: None,
             discoverable_tools: discoverable_tools.as_deref(),
             dynamic_tools,
             default_agent_type_description: &default_agent_type_description,
@@ -372,7 +336,6 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 min_timeout_ms: MIN_WAIT_TIMEOUT_MS,
                 max_timeout_ms: MAX_WAIT_TIMEOUT_MS,
             },
-            codex_apps_mcp_server_name: CODEX_APPS_MCP_SERVER_NAME,
         },
     );
     let shell_handler = Arc::new(ShellHandler);

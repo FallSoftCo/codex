@@ -39,6 +39,7 @@ use codex_config::types::SandboxWorkspaceWrite;
 use codex_config::types::SkillsConfig;
 use codex_config::types::ToolSuggestDiscoverableType;
 use codex_config::types::Tui;
+use codex_config::types::TuiNotificationSettings;
 use codex_features::Feature;
 use codex_features::FeaturesToml;
 use codex_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
@@ -79,6 +80,7 @@ fn stdio_mcp(command: &str) -> McpServerConfig {
         },
         enabled: true,
         required: false,
+        supports_parallel_tool_calls: false,
         disabled_reason: None,
         startup_timeout_sec: None,
         tool_timeout_sec: None,
@@ -100,6 +102,7 @@ fn http_mcp(url: &str) -> McpServerConfig {
         },
         enabled: true,
         required: false,
+        supports_parallel_tool_calls: false,
         disabled_reason: None,
         startup_timeout_sec: None,
         tool_timeout_sec: None,
@@ -303,8 +306,11 @@ fn config_toml_deserializes_model_availability_nux() {
     assert_eq!(
         cfg.tui.expect("tui config should deserialize"),
         Tui {
-            notifications: Notifications::default(),
-            notification_method: NotificationMethod::default(),
+            notification_settings: TuiNotificationSettings {
+                notifications: Notifications::default(),
+                method: NotificationMethod::default(),
+                ..Default::default()
+            },
             animations: true,
             show_tooltips: true,
             alternate_screen: AltScreenMode::default(),
@@ -1000,8 +1006,11 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
     assert_eq!(
         tui,
         Tui {
-            notifications: Notifications::Enabled(true),
-            notification_method: NotificationMethod::Auto,
+            notification_settings: TuiNotificationSettings {
+                notifications: Notifications::Enabled(true),
+                method: NotificationMethod::Auto,
+                ..Default::default()
+            },
             animations: true,
             show_tooltips: true,
             alternate_screen: AltScreenMode::Auto,
@@ -1746,7 +1755,7 @@ fn feature_table_overrides_legacy_flags() -> std::io::Result<()> {
     let mut entries = BTreeMap::new();
     entries.insert("apply_patch_freeform".to_string(), false);
     let cfg = ConfigToml {
-        features: Some(FeaturesToml { entries }),
+        features: Some(FeaturesToml::from(entries)),
         ..Default::default()
     };
 
@@ -1794,7 +1803,7 @@ fn responses_websocket_features_do_not_change_wire_api() -> std::io::Result<()> 
         let mut entries = BTreeMap::new();
         entries.insert(feature_key.to_string(), true);
         let cfg = ConfigToml {
-            features: Some(FeaturesToml { entries }),
+            features: Some(FeaturesToml::from(entries)),
             ..Default::default()
         };
 
@@ -1903,6 +1912,7 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(3)),
             tool_timeout_sec: Some(Duration::from_secs(5)),
@@ -2091,15 +2101,21 @@ fn to_mcp_config_preserves_apps_feature_from_config() -> std::io::Result<()> {
     )?;
     let plugins_manager = PluginsManager::new(codex_home.path().to_path_buf());
 
-    let mcp_config = config.to_mcp_config(&plugins_manager);
+    let mcp_config = tokio::runtime::Runtime::new()
+        .expect("runtime")
+        .block_on(config.to_mcp_config(&plugins_manager));
     assert!(mcp_config.apps_enabled);
 
     let _ = config.features.disable(Feature::Apps);
-    let mcp_config = config.to_mcp_config(&plugins_manager);
+    let mcp_config = tokio::runtime::Runtime::new()
+        .expect("runtime")
+        .block_on(config.to_mcp_config(&plugins_manager));
     assert!(!mcp_config.apps_enabled);
 
     let _ = config.features.enable(Feature::Apps);
-    let mcp_config = config.to_mcp_config(&plugins_manager);
+    let mcp_config = tokio::runtime::Runtime::new()
+        .expect("runtime")
+        .block_on(config.to_mcp_config(&plugins_manager));
     assert!(mcp_config.apps_enabled);
 
     Ok(())
@@ -2149,6 +2165,7 @@ async fn replace_mcp_servers_serializes_env_sorted() -> anyhow::Result<()> {
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2222,6 +2239,7 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2275,6 +2293,7 @@ async fn replace_mcp_servers_serializes_cwd() -> anyhow::Result<()> {
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2326,6 +2345,7 @@ async fn replace_mcp_servers_streamable_http_serializes_bearer_token() -> anyhow
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(2)),
             tool_timeout_sec: None,
@@ -2393,6 +2413,7 @@ async fn replace_mcp_servers_streamable_http_serializes_custom_headers() -> anyh
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(2)),
             tool_timeout_sec: None,
@@ -2472,6 +2493,7 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(2)),
             tool_timeout_sec: None,
@@ -2504,6 +2526,7 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2571,6 +2594,7 @@ async fn replace_mcp_servers_streamable_http_isolates_headers_between_servers() 
                 },
                 enabled: true,
                 required: false,
+                supports_parallel_tool_calls: false,
                 disabled_reason: None,
                 startup_timeout_sec: Some(Duration::from_secs(2)),
                 tool_timeout_sec: None,
@@ -2593,6 +2617,7 @@ async fn replace_mcp_servers_streamable_http_isolates_headers_between_servers() 
                 },
                 enabled: true,
                 required: false,
+                supports_parallel_tool_calls: false,
                 disabled_reason: None,
                 startup_timeout_sec: None,
                 tool_timeout_sec: None,
@@ -2678,6 +2703,7 @@ async fn replace_mcp_servers_serializes_disabled_flag() -> anyhow::Result<()> {
             },
             enabled: false,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2725,6 +2751,7 @@ async fn replace_mcp_servers_serializes_required_flag() -> anyhow::Result<()> {
             },
             enabled: true,
             required: true,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2772,6 +2799,7 @@ async fn replace_mcp_servers_serializes_tool_filters() -> anyhow::Result<()> {
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -2823,6 +2851,7 @@ async fn replace_mcp_servers_streamable_http_serializes_oauth_resource() -> anyh
             },
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
@@ -3005,14 +3034,14 @@ async fn set_feature_enabled_updates_profile() -> anyhow::Result<()> {
         profile
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&true),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(true),
     );
     assert_eq!(
         parsed
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
         None,
     );
 
@@ -3047,14 +3076,14 @@ async fn set_feature_enabled_persists_default_false_feature_disable_in_profile()
         profile
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&false),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(false),
     );
     assert_eq!(
         parsed
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
         None,
     );
 
@@ -3087,15 +3116,15 @@ async fn set_feature_enabled_profile_disable_overrides_root_enable() -> anyhow::
         parsed
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&true),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(true),
     );
     assert_eq!(
         profile
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&false),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(false),
     );
 
     Ok(())
@@ -3186,7 +3215,7 @@ fn load_config_uses_requirements_guardian_developer_instructions() -> std::io::R
         Vec::new(),
         Default::default(),
         crate::config_loader::ConfigRequirementsToml {
-            guardian_developer_instructions: Some(
+            guardian_policy_config: Some(
                 "  Use the workspace-managed guardian policy.  ".to_string(),
             ),
             ..Default::default()
@@ -3219,7 +3248,7 @@ fn load_config_ignores_empty_requirements_guardian_developer_instructions() -> s
         Vec::new(),
         Default::default(),
         crate::config_loader::ConfigRequirementsToml {
-            guardian_developer_instructions: Some("   ".to_string()),
+            guardian_policy_config: Some("   ".to_string()),
             ..Default::default()
         },
     )
@@ -4986,7 +5015,7 @@ fn test_requirements_web_search_mode_allowlist_does_not_warn_when_unset() -> any
         rules: None,
         enforce_residency: None,
         network: None,
-        guardian_developer_instructions: None,
+        guardian_policy_config: None,
     };
     let requirement_source = crate::config_loader::RequirementSource::Unknown;
     let requirement_source_for_error = requirement_source.clone();
@@ -5607,7 +5636,7 @@ async fn explicit_sandbox_mode_falls_back_when_disallowed_by_requirements() -> s
         rules: None,
         enforce_residency: None,
         network: None,
-        guardian_developer_instructions: None,
+        guardian_policy_config: None,
     };
 
     let config = ConfigBuilder::without_managed_config_for_tests()

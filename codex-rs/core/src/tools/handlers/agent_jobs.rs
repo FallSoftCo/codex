@@ -18,6 +18,7 @@ use codex_protocol::protocol::AgentStatus;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SubAgentSource;
 use codex_protocol::user_input::UserInput;
+use codex_utils_absolute_path::AbsolutePathBuf;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use serde::Deserialize;
@@ -25,7 +26,6 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::watch::Receiver;
@@ -206,7 +206,7 @@ impl ToolHandler for BatchJobHandler {
             }
         };
 
-        match tool_name.as_str() {
+        match tool_name.name.as_str() {
             "spawn_agents_on_csv" => spawn_agents_on_csv::handle(session, turn, arguments).await,
             "report_agent_job_result" => report_agent_job_result::handle(session, arguments).await,
             other => Err(FunctionCallError::RespondToModel(format!(
@@ -237,7 +237,10 @@ mod spawn_agents_on_csv {
         }
 
         let db = required_state_db(&session)?;
-        let input_path = turn.resolve_path(Some(args.csv_path));
+        let input_path = AbsolutePathBuf::resolve_path_against_base(
+            std::path::Path::new(&args.csv_path),
+            &turn.cwd,
+        );
         let input_path_display = input_path.display().to_string();
         let csv_content = tokio::fs::read_to_string(&input_path)
             .await
@@ -309,8 +312,10 @@ mod spawn_agents_on_csv {
 
         let job_id = Uuid::new_v4().to_string();
         let output_csv_path = args.output_csv_path.map_or_else(
-            || default_output_csv_path(input_path.as_path(), job_id.as_str()),
-            |path| turn.resolve_path(Some(path)),
+            || default_output_csv_path(&input_path, job_id.as_str()),
+            |path| {
+                AbsolutePathBuf::resolve_path_against_base(std::path::Path::new(&path), &turn.cwd)
+            },
         );
         let job_suffix = &job_id[..8];
         let job_name = format!("agent-job-{job_suffix}");
@@ -535,7 +540,8 @@ async fn build_runner_options(
     let max_concurrency =
         normalize_concurrency(requested_concurrency, turn.config.agent_max_threads);
     let base_instructions = session.get_base_instructions().await;
-    let spawn_config = build_agent_spawn_config(base_instructions.as_ref(), turn.as_ref())?;
+    let spawn_config =
+        build_agent_spawn_config(&base_instructions.unwrap_or_default(), turn.as_ref())?;
     Ok(JobRunnerOptions {
         max_concurrency,
         spawn_config,
@@ -1089,13 +1095,17 @@ fn is_item_stale(item: &codex_state::AgentJobItem, runtime_timeout: Duration) ->
     }
 }
 
-fn default_output_csv_path(input_csv_path: &Path, job_id: &str) -> PathBuf {
+fn default_output_csv_path(input_csv_path: &AbsolutePathBuf, job_id: &str) -> AbsolutePathBuf {
     let stem = input_csv_path
+        .as_path()
         .file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or("agent_job_output");
     let job_suffix = &job_id[..8];
-    input_csv_path.with_file_name(format!("{stem}.agent-job-{job_suffix}.csv"))
+    let output_dir = input_csv_path
+        .parent()
+        .unwrap_or_else(|| input_csv_path.clone());
+    output_dir.join(format!("{stem}.agent-job-{job_suffix}.csv"))
 }
 
 fn parse_csv(content: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {

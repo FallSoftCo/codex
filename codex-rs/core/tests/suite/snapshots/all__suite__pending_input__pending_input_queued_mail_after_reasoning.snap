@@ -1,5 +1,6 @@
 ---
 source: core/tests/suite/pending_input.rs
+assertion_line: 209
 expression: snapshot
 ---
 Scenario: /responses POST bodies (input only, redacted like other suite snapshots)

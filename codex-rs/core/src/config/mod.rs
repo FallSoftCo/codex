@@ -698,8 +698,11 @@ impl Config {
         }
     }
 
-    pub fn to_mcp_config(&self, plugins_manager: &crate::plugins::PluginsManager) -> McpConfig {
-        let loaded_plugins = plugins_manager.plugins_for_config(self);
+    pub async fn to_mcp_config(
+        &self,
+        plugins_manager: &crate::plugins::PluginsManager,
+    ) -> McpConfig {
+        let loaded_plugins = plugins_manager.plugins_for_config(self).await;
         let mut configured_mcp_servers = self.mcp_servers.get().clone();
         for (name, plugin_server) in loaded_plugins.effective_mcp_servers() {
             configured_mcp_servers.entry(name).or_insert(plugin_server);
@@ -2072,12 +2075,12 @@ impl Config {
             tui_notifications: cfg
                 .tui
                 .as_ref()
-                .map(|t| t.notifications.clone())
+                .map(|t| t.notification_settings.notifications.clone())
                 .unwrap_or_default(),
             tui_notification_method: cfg
                 .tui
                 .as_ref()
-                .map(|t| t.notification_method)
+                .map(|t| t.notification_settings.method)
                 .unwrap_or_default(),
             animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
             show_tooltips: cfg.tui.as_ref().map(|t| t.show_tooltips).unwrap_or(true),
@@ -2208,7 +2211,7 @@ fn guardian_developer_instructions_from_requirements(
     requirements_toml: &ConfigRequirementsToml,
 ) -> Option<String> {
     requirements_toml
-        .guardian_developer_instructions
+        .guardian_policy_config
         .as_deref()
         .and_then(|value| {
             let trimmed = value.trim();
@@ -2242,7 +2245,7 @@ fn toml_uses_deprecated_instructions_file(value: &TomlValue) -> bool {
 /// - If `CODEX_HOME` is not set, this function does not verify that the
 ///   directory exists.
 pub fn find_codex_home() -> std::io::Result<PathBuf> {
-    codex_utils_home_dir::find_codex_home()
+    codex_utils_home_dir::find_codex_home().map(|path| path.to_path_buf())
 }
 
 /// Returns the path to the folder where Codex logs are stored. Does not verify

@@ -67,6 +67,7 @@ fn test_model_info(
         used_fallback_model_metadata: false,
         supports_search_tool: false,
         priority: 1,
+        additional_speed_tiers: Vec::new(),
         upgrade: None,
         base_instructions: "base instructions".to_string(),
         model_messages: None,
@@ -191,12 +192,6 @@ async fn spawn_agent_description_lists_visible_models_and_reasoning_efforts() ->
             "Requests for depth, thoroughness, research, investigation, or detailed codebase analysis do not count as permission to spawn."
         ),
         "expected non-authorization clarification in spawn_agent description: {description:?}"
-    );
-    assert!(
-        description.contains(
-            "If Hollywood coordination is available and the user asks to coordinate with existing agents, discuss with other agents, or ask idle agents, use Hollywood-first coordination with attached peers instead of `spawn_agent`."
-        ),
-        "expected Hollywood-first clarification in spawn_agent description: {description:?}"
     );
     assert!(
         description.contains(

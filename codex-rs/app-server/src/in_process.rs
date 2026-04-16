@@ -117,6 +117,8 @@ pub struct InProcessStartArgs {
     pub cloud_requirements: CloudRequirementsLoader,
     /// Feedback sink used by app-server/core telemetry and logs.
     pub feedback: CodexFeedback,
+    /// Environment manager used by core execution and filesystem operations.
+    pub environment_manager: Arc<EnvironmentManager>,
     /// Startup warnings emitted after initialize succeeds.
     pub config_warnings: Vec<ConfigWarningNotification>,
     /// Session source stamped into thread/session metadata.
@@ -326,7 +328,11 @@ impl InProcessClientHandle {
 /// This function sends `initialize` followed by `initialized` before returning
 /// the handle, so callers receive a ready-to-use runtime. If initialize fails,
 /// the runtime is shut down and an `InvalidData` error is returned.
-pub async fn start(args: InProcessStartArgs) -> IoResult<InProcessClientHandle> {
+pub async fn start(mut args: InProcessStartArgs) -> IoResult<InProcessClientHandle> {
+    if args.arg0_paths.codex_self_exe.is_none() {
+        args.arg0_paths.codex_self_exe = std::env::current_exe().ok();
+    }
+
     let initialize = args.initialize.clone();
     let client = start_uninitialized(args);
 
@@ -388,7 +394,7 @@ fn start_uninitialized(args: InProcessStartArgs) -> InProcessClientHandle {
                 outgoing: Arc::clone(&processor_outgoing),
                 arg0_paths: args.arg0_paths,
                 config: args.config,
-                environment_manager: Arc::new(EnvironmentManager::from_env()),
+                environment_manager: args.environment_manager,
                 cli_overrides: args.cli_overrides,
                 loader_overrides: args.loader_overrides,
                 cloud_requirements: args.cloud_requirements,
@@ -726,6 +732,7 @@ mod tests {
             loader_overrides: LoaderOverrides::default(),
             cloud_requirements: CloudRequirementsLoader::default(),
             feedback: CodexFeedback::new(),
+            environment_manager: Arc::new(EnvironmentManager::new(/*exec_server_url*/ None)),
             config_warnings: Vec::new(),
             session_source,
             enable_codex_api_key_env: false,

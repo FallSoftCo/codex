@@ -18,6 +18,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::path::PathBuf;
 use tempfile::tempdir;
 use wiremock::MockServer;
 
@@ -86,6 +87,21 @@ fn write_too_old_node_script(dir: &Path) -> Result<std::path::PathBuf> {
     }
 }
 
+fn js_repl_test_node_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let nvm_dir = std::env::var_os("NVM_DIR").map(PathBuf::from);
+    let candidates = [
+        std::env::var_os("CODEX_JS_REPL_NODE_PATH").map(PathBuf::from),
+        home.as_ref()
+            .map(|home| home.join(".nvm/versions/node/v22.22.0/bin/node")),
+        nvm_dir
+            .as_ref()
+            .map(|nvm| nvm.join("versions/node/v22.22.0/bin/node")),
+    ];
+
+    candidates.into_iter().flatten().find(|path| path.exists())
+}
+
 async fn run_js_repl_turn(
     server: &MockServer,
     prompt: &str,
@@ -112,6 +128,9 @@ async fn run_js_repl_sequence(
             .features
             .enable(Feature::JsRepl)
             .expect("test config should allow feature update");
+        if let Some(node_path) = js_repl_test_node_path() {
+            config.js_repl_node_path = Some(node_path);
+        }
     });
     let test = builder.build(server).await?;
 

@@ -277,6 +277,12 @@ impl HollywoodRuntimeState {
         state.last_seen_message_id = message_id;
     }
 
+    pub(crate) fn prime_room_from_latest(&mut self, room: &str, message_id: i64) {
+        let state = self.room_states.entry(room.to_string()).or_default();
+        state.last_seen_message_id = message_id;
+        state.start_from_latest = false;
+    }
+
     pub(crate) fn take_start_from_latest(&mut self, room: &str) -> bool {
         let state = self.room_states.entry(room.to_string()).or_default();
         let value = state.start_from_latest;
