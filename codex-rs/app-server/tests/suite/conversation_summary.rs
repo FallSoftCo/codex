@@ -20,6 +20,7 @@ const FILENAME_TS: &str = "2025-01-02T12-00-00";
 const META_RFC3339: &str = "2025-01-02T12:00:00Z";
 const PREVIEW: &str = "Summarize this conversation";
 const MODEL_PROVIDER: &str = "openai";
+const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn expected_summary(conversation_id: ThreadId, path: PathBuf) -> ConversationSummary {
     ConversationSummary {
@@ -30,7 +31,7 @@ fn expected_summary(conversation_id: ThreadId, path: PathBuf) -> ConversationSum
         updated_at: Some(META_RFC3339.to_string()),
         model_provider: MODEL_PROVIDER.to_string(),
         cwd: PathBuf::from("/"),
-        cli_version: "0.0.0".to_string(),
+        cli_version: CLI_VERSION.to_string(),
         source: SessionSource::Cli,
         git_info: None,
     }

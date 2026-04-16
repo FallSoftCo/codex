@@ -2677,7 +2677,7 @@ mod tests {
             status: codex_app_server_protocol::ThreadStatus::Idle,
             path: None,
             cwd: PathBuf::from("/tmp"),
-            cli_version: String::from("0.0.0"),
+            cli_version: env!("CARGO_PKG_VERSION").to_string(),
             source: codex_app_server_protocol::SessionSource::Cli,
             agent_nickname: None,
             agent_role: None,

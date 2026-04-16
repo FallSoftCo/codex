@@ -11,6 +11,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+const TEST_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub fn rollout_path(codex_home: &Path, filename_ts: &str, thread_id: &str) -> PathBuf {
     let year = &filename_ts[0..4];
     let month = &filename_ts[5..7];
@@ -77,7 +79,7 @@ pub fn create_fake_rollout_with_source(
         timestamp: meta_rfc3339.to_string(),
         cwd: PathBuf::from("/"),
         originator: "codex".to_string(),
-        cli_version: "0.0.0".to_string(),
+        cli_version: TEST_CLI_VERSION.to_string(),
         source,
         agent_path: None,
         agent_nickname: None,
@@ -161,7 +163,7 @@ pub fn create_fake_rollout_with_text_elements(
         timestamp: meta_rfc3339.to_string(),
         cwd: PathBuf::from("/"),
         originator: "codex".to_string(),
-        cli_version: "0.0.0".to_string(),
+        cli_version: TEST_CLI_VERSION.to_string(),
         source: SessionSource::Cli,
         agent_path: None,
         agent_nickname: None,

@@ -12737,6 +12737,8 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::TempDir;
 
+    const TEST_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
+
     #[test]
     fn validate_dynamic_tools_rejects_unsupported_input_schema() {
         let tools = vec![ApiDynamicToolSpec {
@@ -13073,7 +13075,7 @@ mod tests {
                 "timestamp": timestamp,
                 "cwd": "/",
                 "originator": "codex",
-                "cli_version": "0.0.0",
+                "cli_version": TEST_CLI_VERSION,
                 "model_provider": "test-provider"
             }),
             json!({
@@ -13114,7 +13116,7 @@ mod tests {
             preview: "Count to 5".to_string(),
             model_provider: "test-provider".to_string(),
             cwd: PathBuf::from("/"),
-            cli_version: "0.0.0".to_string(),
+            cli_version: TEST_CLI_VERSION.to_string(),
             source: SessionSource::VSCode,
             git_info: None,
         };
@@ -13344,7 +13346,7 @@ mod tests {
             "2025-09-05T16:53:12Z".to_string(),
             "test-provider".to_string(),
             PathBuf::from("/"),
-            "0.0.0".to_string(),
+            TEST_CLI_VERSION.to_string(),
             source,
             Some("atlas".to_string()),
             Some("explorer".to_string()),

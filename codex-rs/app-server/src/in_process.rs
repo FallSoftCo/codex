@@ -740,7 +740,7 @@ mod tests {
                 client_info: ClientInfo {
                     name: "codex-in-process-test".to_string(),
                     title: None,
-                    version: "0.0.0".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
                 },
                 capabilities: Some(InitializeCapabilities {
                     experimental_api: true,
