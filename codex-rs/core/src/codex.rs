@@ -7971,8 +7971,6 @@ async fn try_run_sampling_request(
                     .await;
                 should_emit_turn_diff = true;
 
-                needs_follow_up |= sess.has_pending_input().await;
-
                 break Ok(SamplingRequestResult {
                     needs_follow_up,
                     last_agent_message,
