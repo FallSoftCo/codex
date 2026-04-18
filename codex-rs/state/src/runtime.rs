@@ -54,6 +54,7 @@ mod agent_jobs;
 mod backfill;
 mod logs;
 mod memories;
+mod path_claims;
 mod remote_control;
 mod schedules;
 mod task_watches;

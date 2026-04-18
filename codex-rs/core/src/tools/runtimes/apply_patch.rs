@@ -89,11 +89,42 @@ impl ApplyPatchRuntime {
     #[cfg(not(target_os = "windows"))]
     fn resolve_apply_patch_program(codex_self_exe: Option<&PathBuf>) -> Result<PathBuf, ToolError> {
         if let Some(path) = codex_self_exe {
-            return Ok(path.clone());
+            if path.exists() {
+                tracing::debug!(
+                    program = %path.display(),
+                    "apply_patch using configured codex_self_exe"
+                );
+                return Ok(path.clone());
+            }
+
+            tracing::warn!(
+                program = %path.display(),
+                "configured codex_self_exe missing; falling back for apply_patch"
+            );
         }
 
-        std::env::current_exe()
-            .map_err(|e| ToolError::Rejected(format!("failed to determine codex exe: {e}")))
+        #[cfg(target_os = "linux")]
+        if let Some(path) = Self::proc_self_exe_fallback() {
+            tracing::debug!(
+                program = %path.display(),
+                "apply_patch using /proc/self/exe fallback"
+            );
+            return Ok(path);
+        }
+
+        let path = std::env::current_exe()
+            .map_err(|e| ToolError::Rejected(format!("failed to determine codex exe: {e}")))?;
+        tracing::debug!(
+            program = %path.display(),
+            "apply_patch using current_exe fallback"
+        );
+        Ok(path)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn proc_self_exe_fallback() -> Option<PathBuf> {
+        let path = PathBuf::from("/proc/self/exe");
+        path.exists().then_some(path)
     }
 
     fn build_sandbox_command_with_program(req: &ApplyPatchRequest, exe: PathBuf) -> SandboxCommand {

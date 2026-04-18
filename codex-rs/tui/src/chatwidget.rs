@@ -5241,6 +5241,9 @@ impl ChatWidget {
             SlashCommand::Agent | SlashCommand::MultiAgents => {
                 self.app_event_tx.send(AppEvent::OpenAgentPicker);
             }
+            SlashCommand::Away => {
+                self.app_event_tx.send(AppEvent::ShowEmailAwayStatus);
+            }
             SlashCommand::Approvals => {
                 self.open_permissions_popup();
             }
@@ -5521,6 +5524,43 @@ impl ChatWidget {
                     }
                     _ => {
                         self.add_error_message("Usage: /fast [on|off|status]".to_string());
+                    }
+                }
+                self.bottom_pane.drain_pending_submission_state();
+            }
+            SlashCommand::Away => {
+                let prepared_args = if self.bottom_pane.composer_text().is_empty() {
+                    args
+                } else {
+                    let Some((prepared_args, _prepared_elements)) = self
+                        .bottom_pane
+                        .prepare_inline_args_submission(/*record_history*/ false)
+                    else {
+                        return;
+                    };
+                    prepared_args
+                };
+                match prepared_args.trim().to_ascii_lowercase().as_str() {
+                    "" | "status" => {
+                        self.app_event_tx.send(AppEvent::ShowEmailAwayStatus);
+                    }
+                    "on" | "away" => {
+                        self.app_event_tx.send(AppEvent::SetEmailAwayMode {
+                            mode: codex_config::types::EmailAwayModeOverride::Away,
+                        });
+                    }
+                    "off" | "present" => {
+                        self.app_event_tx.send(AppEvent::SetEmailAwayMode {
+                            mode: codex_config::types::EmailAwayModeOverride::Present,
+                        });
+                    }
+                    "auto" => {
+                        self.app_event_tx.send(AppEvent::SetEmailAwayMode {
+                            mode: codex_config::types::EmailAwayModeOverride::Auto,
+                        });
+                    }
+                    _ => {
+                        self.add_error_message("Usage: /away [on|off|auto|status]".to_string());
                     }
                 }
                 self.bottom_pane.drain_pending_submission_state();

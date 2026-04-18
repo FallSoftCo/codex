@@ -705,6 +705,14 @@ mod tests {
     use codex_app_server_protocol::SessionSource as ApiSessionSource;
     use codex_app_server_protocol::ThreadHollywoodAttachParams;
     use codex_app_server_protocol::ThreadHollywoodAttachResponse;
+    use codex_app_server_protocol::ThreadOwnershipClaimParams;
+    use codex_app_server_protocol::ThreadOwnershipClaimResponse;
+    use codex_app_server_protocol::ThreadOwnershipListParams;
+    use codex_app_server_protocol::ThreadOwnershipListResponse;
+    use codex_app_server_protocol::ThreadOwnershipPathKind;
+    use codex_app_server_protocol::ThreadOwnershipPathSpec;
+    use codex_app_server_protocol::ThreadOwnershipReleaseParams;
+    use codex_app_server_protocol::ThreadOwnershipReleaseResponse;
     use codex_app_server_protocol::ThreadStartParams;
     use codex_app_server_protocol::ThreadStartResponse;
     use codex_app_server_protocol::Turn;
@@ -1073,6 +1081,145 @@ mod tests {
             !unexpected_turn_started,
             "self-authored Hollywood room activity should not trigger a new turn",
         );
+
+        client
+            .shutdown()
+            .await
+            .expect("in-process runtime should shutdown cleanly");
+    }
+
+    #[tokio::test]
+    async fn thread_ownership_claims_are_conflict_safe_and_releasable() {
+        let client = start_test_client(SessionSource::Cli).await;
+
+        let response = client
+            .request(ClientRequest::ThreadStart {
+                request_id: RequestId::Integer(40),
+                params: ThreadStartParams {
+                    ephemeral: Some(true),
+                    ..ThreadStartParams::default()
+                },
+            })
+            .await
+            .expect("thread/start A transport should work")
+            .expect("thread/start A should succeed");
+        let thread_a: ThreadStartResponse =
+            serde_json::from_value(response).expect("thread/start A response should parse");
+
+        let response = client
+            .request(ClientRequest::ThreadStart {
+                request_id: RequestId::Integer(41),
+                params: ThreadStartParams {
+                    ephemeral: Some(true),
+                    ..ThreadStartParams::default()
+                },
+            })
+            .await
+            .expect("thread/start B transport should work")
+            .expect("thread/start B should succeed");
+        let thread_b: ThreadStartResponse =
+            serde_json::from_value(response).expect("thread/start B response should parse");
+
+        let response = client
+            .request(ClientRequest::ThreadOwnershipClaim {
+                request_id: RequestId::Integer(42),
+                params: ThreadOwnershipClaimParams {
+                    thread_id: thread_a.thread.id.clone(),
+                    claims: vec![ThreadOwnershipPathSpec {
+                        kind: ThreadOwnershipPathKind::Directory,
+                        path: "src".to_string(),
+                    }],
+                    lease_seconds: None,
+                },
+            })
+            .await
+            .expect("thread/ownership/claim transport should work")
+            .expect("thread/ownership/claim should succeed");
+        let claimed: ThreadOwnershipClaimResponse =
+            serde_json::from_value(response).expect("claim response should parse");
+        assert!(claimed.acquired);
+        assert_eq!(claimed.data.len(), 1);
+        assert_eq!(claimed.conflicts.len(), 0);
+
+        let response = client
+            .request(ClientRequest::ThreadOwnershipClaim {
+                request_id: RequestId::Integer(43),
+                params: ThreadOwnershipClaimParams {
+                    thread_id: thread_b.thread.id.clone(),
+                    claims: vec![ThreadOwnershipPathSpec {
+                        kind: ThreadOwnershipPathKind::File,
+                        path: "src/lib.rs".to_string(),
+                    }],
+                    lease_seconds: None,
+                },
+            })
+            .await
+            .expect("conflicting claim transport should work")
+            .expect("conflicting claim should return a response");
+        let conflicted: ThreadOwnershipClaimResponse =
+            serde_json::from_value(response).expect("conflict response should parse");
+        assert!(!conflicted.acquired);
+        assert_eq!(conflicted.data.len(), 0);
+        assert_eq!(conflicted.conflicts.len(), 1);
+        assert_eq!(
+            conflicted.conflicts[0].blocking_claim.owner_thread_id,
+            thread_a.thread.id
+        );
+
+        let response = client
+            .request(ClientRequest::ThreadOwnershipList {
+                request_id: RequestId::Integer(44),
+                params: ThreadOwnershipListParams {
+                    thread_id: thread_a.thread.id.clone(),
+                    cursor: None,
+                    limit: None,
+                    owner_thread_id: None,
+                },
+            })
+            .await
+            .expect("thread/ownership/list transport should work")
+            .expect("thread/ownership/list should succeed");
+        let listed: ThreadOwnershipListResponse =
+            serde_json::from_value(response).expect("list response should parse");
+        assert_eq!(listed.data.len(), 1);
+        assert_eq!(listed.next_cursor, None);
+
+        let response = client
+            .request(ClientRequest::ThreadOwnershipRelease {
+                request_id: RequestId::Integer(45),
+                params: ThreadOwnershipReleaseParams {
+                    thread_id: thread_a.thread.id.clone(),
+                    claims: vec![ThreadOwnershipPathSpec {
+                        kind: ThreadOwnershipPathKind::Directory,
+                        path: "src".to_string(),
+                    }],
+                },
+            })
+            .await
+            .expect("thread/ownership/release transport should work")
+            .expect("thread/ownership/release should succeed");
+        let released: ThreadOwnershipReleaseResponse =
+            serde_json::from_value(response).expect("release response should parse");
+        assert_eq!(released.released, 1);
+
+        let response = client
+            .request(ClientRequest::ThreadOwnershipClaim {
+                request_id: RequestId::Integer(46),
+                params: ThreadOwnershipClaimParams {
+                    thread_id: thread_b.thread.id,
+                    claims: vec![ThreadOwnershipPathSpec {
+                        kind: ThreadOwnershipPathKind::File,
+                        path: "src/lib.rs".to_string(),
+                    }],
+                    lease_seconds: None,
+                },
+            })
+            .await
+            .expect("post-release claim transport should work")
+            .expect("post-release claim should succeed");
+        let post_release: ThreadOwnershipClaimResponse =
+            serde_json::from_value(response).expect("post-release response should parse");
+        assert!(post_release.acquired);
 
         client
             .shutdown()

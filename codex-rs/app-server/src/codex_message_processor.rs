@@ -170,6 +170,16 @@ use codex_app_server_protocol::ThreadMetadataGitInfoUpdateParams;
 use codex_app_server_protocol::ThreadMetadataUpdateParams;
 use codex_app_server_protocol::ThreadMetadataUpdateResponse;
 use codex_app_server_protocol::ThreadNameUpdatedNotification;
+use codex_app_server_protocol::ThreadOwnershipClaimParams;
+use codex_app_server_protocol::ThreadOwnershipClaimResponse;
+use codex_app_server_protocol::ThreadOwnershipListParams;
+use codex_app_server_protocol::ThreadOwnershipListResponse;
+use codex_app_server_protocol::ThreadOwnershipPathClaim;
+use codex_app_server_protocol::ThreadOwnershipPathClaimConflict;
+use codex_app_server_protocol::ThreadOwnershipPathKind;
+use codex_app_server_protocol::ThreadOwnershipPathSpec;
+use codex_app_server_protocol::ThreadOwnershipReleaseParams;
+use codex_app_server_protocol::ThreadOwnershipReleaseResponse;
 use codex_app_server_protocol::ThreadReadParams;
 use codex_app_server_protocol::ThreadReadResponse;
 use codex_app_server_protocol::ThreadRealtimeAppendAudioParams;
@@ -2476,6 +2486,18 @@ impl CodexMessageProcessor {
             }
             ClientRequest::ThreadHollywoodList { request_id, params } => {
                 self.thread_hollywood_list(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadOwnershipClaim { request_id, params } => {
+                self.thread_ownership_claim(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadOwnershipRelease { request_id, params } => {
+                self.thread_ownership_release(to_connection_request_id(request_id), params)
+                    .await;
+            }
+            ClientRequest::ThreadOwnershipList { request_id, params } => {
+                self.thread_ownership_list(to_connection_request_id(request_id), params)
                     .await;
             }
             ClientRequest::ThreadResume { request_id, params } => {
@@ -5661,6 +5683,254 @@ impl CodexMessageProcessor {
                 ThreadHollywoodListResponse { data, next_cursor },
             )
             .await;
+    }
+
+    async fn thread_ownership_claim(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadOwnershipClaimParams,
+    ) {
+        let (thread_id, thread) = match self.load_thread(&params.thread_id).await {
+            Ok(v) => v,
+            Err(error) => {
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+        let Some(state_db) = self.thread_ownership_state_db(&thread).await else {
+            self.send_internal_error(
+                request_id,
+                "thread ownership state is unavailable for this thread".to_string(),
+            )
+            .await;
+            return;
+        };
+        let lease_seconds = params
+            .lease_seconds
+            .unwrap_or(codex_state::DEFAULT_PATH_CLAIM_LEASE_SECONDS);
+        if lease_seconds <= 0 {
+            self.send_invalid_request_error(
+                request_id,
+                format!("leaseSeconds must be > 0, got {lease_seconds}"),
+            )
+            .await;
+            return;
+        }
+
+        let config_snapshot = thread.config_snapshot().await;
+        let claims = match resolve_thread_ownership_specs(&params.claims, &config_snapshot.cwd) {
+            Ok(claims) => claims,
+            Err(message) => {
+                self.send_invalid_request_error(request_id, message).await;
+                return;
+            }
+        };
+
+        match state_db
+            .claim_path_ownership(
+                thread_id,
+                &claims,
+                Duration::from_secs(u64::try_from(lease_seconds).unwrap_or(u64::MAX)),
+            )
+            .await
+        {
+            Ok(result) => {
+                self.outgoing
+                    .send_response(
+                        request_id,
+                        ThreadOwnershipClaimResponse {
+                            acquired: result.acquired,
+                            data: result
+                                .claims
+                                .into_iter()
+                                .map(thread_ownership_claim_from_state)
+                                .collect(),
+                            conflicts: result
+                                .conflicts
+                                .into_iter()
+                                .map(thread_ownership_conflict_from_state)
+                                .collect(),
+                        },
+                    )
+                    .await;
+            }
+            Err(err) => {
+                self.send_internal_error(
+                    request_id,
+                    format!("failed to claim thread ownership: {err}"),
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn thread_ownership_release(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadOwnershipReleaseParams,
+    ) {
+        let (thread_id, thread) = match self.load_thread(&params.thread_id).await {
+            Ok(v) => v,
+            Err(error) => {
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+        let Some(state_db) = self.thread_ownership_state_db(&thread).await else {
+            self.send_internal_error(
+                request_id,
+                "thread ownership state is unavailable for this thread".to_string(),
+            )
+            .await;
+            return;
+        };
+
+        let config_snapshot = thread.config_snapshot().await;
+        let claims = match resolve_thread_ownership_specs(&params.claims, &config_snapshot.cwd) {
+            Ok(claims) => claims,
+            Err(message) => {
+                self.send_invalid_request_error(request_id, message).await;
+                return;
+            }
+        };
+
+        match state_db.release_path_claims(thread_id, &claims).await {
+            Ok(released) => {
+                self.outgoing
+                    .send_response(
+                        request_id,
+                        ThreadOwnershipReleaseResponse {
+                            released: u32::try_from(released).unwrap_or(u32::MAX),
+                        },
+                    )
+                    .await;
+            }
+            Err(err) => {
+                self.send_internal_error(
+                    request_id,
+                    format!("failed to release thread ownership: {err}"),
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn thread_ownership_list(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadOwnershipListParams,
+    ) {
+        let ThreadOwnershipListParams {
+            thread_id,
+            cursor,
+            limit,
+            owner_thread_id,
+        } = params;
+        let (_, thread) = match self.load_thread(&thread_id).await {
+            Ok(v) => v,
+            Err(error) => {
+                self.outgoing.send_error(request_id, error).await;
+                return;
+            }
+        };
+        let Some(state_db) = self.thread_ownership_state_db(&thread).await else {
+            self.send_internal_error(
+                request_id,
+                "thread ownership state is unavailable for this thread".to_string(),
+            )
+            .await;
+            return;
+        };
+
+        let owner_thread_id = match owner_thread_id {
+            Some(owner_thread_id) => match ThreadId::from_string(&owner_thread_id) {
+                Ok(owner_thread_id) => Some(owner_thread_id),
+                Err(err) => {
+                    self.send_invalid_request_error(
+                        request_id,
+                        format!("invalid ownerThreadId: {err}"),
+                    )
+                    .await;
+                    return;
+                }
+            },
+            None => None,
+        };
+
+        let claims = match state_db.list_path_claims(owner_thread_id).await {
+            Ok(claims) => claims
+                .into_iter()
+                .map(thread_ownership_claim_from_state)
+                .collect::<Vec<_>>(),
+            Err(err) => {
+                self.send_internal_error(
+                    request_id,
+                    format!("failed to list thread ownership claims: {err}"),
+                )
+                .await;
+                return;
+            }
+        };
+
+        if claims.is_empty() {
+            self.outgoing
+                .send_response(
+                    request_id,
+                    ThreadOwnershipListResponse {
+                        data: Vec::new(),
+                        next_cursor: None,
+                    },
+                )
+                .await;
+            return;
+        }
+
+        let start = match cursor {
+            Some(cursor) => match claims.iter().position(|claim| claim.id == cursor) {
+                Some(index) => index + 1,
+                None => {
+                    self.send_invalid_request_error(
+                        request_id,
+                        format!("invalid cursor: {cursor}"),
+                    )
+                    .await;
+                    return;
+                }
+            },
+            None => 0,
+        };
+        let effective_limit = limit.unwrap_or(claims.len() as u32).max(1) as usize;
+        let end = start.saturating_add(effective_limit).min(claims.len());
+        let page = claims[start..end].to_vec();
+        let next_cursor = page
+            .last()
+            .filter(|_| end < claims.len())
+            .map(|claim| claim.id.clone());
+
+        self.outgoing
+            .send_response(
+                request_id,
+                ThreadOwnershipListResponse {
+                    data: page,
+                    next_cursor,
+                },
+            )
+            .await;
+    }
+
+    async fn thread_ownership_state_db(&self, thread: &Arc<CodexThread>) -> Option<StateDbHandle> {
+        if let Some(state_db) = thread.state_db() {
+            return Some(state_db);
+        }
+        if let Some(state_db) = get_state_db(&self.config).await {
+            return Some(state_db);
+        }
+        codex_state::StateRuntime::init(
+            self.config.sqlite_home.clone(),
+            self.config.model_provider_id.clone(),
+        )
+        .await
+        .ok()
     }
 
     async fn thread_read(&mut self, request_id: ConnectionRequestId, params: ThreadReadParams) {
@@ -11544,6 +11814,73 @@ fn normalize_thread_list_cwd_filter(
             message: format!("invalid thread/list cwd filter `{cwd}`: {err}"),
             data: None,
         })
+}
+
+fn resolve_thread_ownership_specs(
+    claims: &[ThreadOwnershipPathSpec],
+    cwd: &Path,
+) -> Result<Vec<codex_state::PathClaimSpec>, String> {
+    if claims.is_empty() {
+        return Err("claims must not be empty".to_string());
+    }
+
+    let cwd = AbsolutePathBuf::from_absolute_path(cwd)
+        .map_err(|err| format!("thread cwd is not absolute: {err}"))?;
+
+    claims
+        .iter()
+        .map(|claim| {
+            if claim.path.trim().is_empty() {
+                return Err("claim paths must not be empty".to_string());
+            }
+            Ok(codex_state::PathClaimSpec {
+                kind: thread_ownership_kind_to_state(claim.kind),
+                path: AbsolutePathBuf::resolve_path_against_base(
+                    Path::new(claim.path.as_str()),
+                    &cwd,
+                )
+                .into_path_buf(),
+            })
+        })
+        .collect()
+}
+
+fn thread_ownership_kind_to_state(kind: ThreadOwnershipPathKind) -> codex_state::PathClaimKind {
+    match kind {
+        ThreadOwnershipPathKind::File => codex_state::PathClaimKind::File,
+        ThreadOwnershipPathKind::Directory => codex_state::PathClaimKind::Directory,
+    }
+}
+
+fn thread_ownership_kind_from_state(kind: codex_state::PathClaimKind) -> ThreadOwnershipPathKind {
+    match kind {
+        codex_state::PathClaimKind::File => ThreadOwnershipPathKind::File,
+        codex_state::PathClaimKind::Directory => ThreadOwnershipPathKind::Directory,
+    }
+}
+
+fn thread_ownership_claim_from_state(claim: codex_state::PathClaim) -> ThreadOwnershipPathClaim {
+    ThreadOwnershipPathClaim {
+        id: claim.id,
+        owner_thread_id: claim.owner_thread_id,
+        kind: thread_ownership_kind_from_state(claim.kind),
+        path: claim.path.display().to_string(),
+        claimed_at: claim.claimed_at.timestamp(),
+        updated_at: claim.updated_at.timestamp(),
+        lease_expires_at: claim.lease_expires_at.timestamp(),
+    }
+}
+
+fn thread_ownership_conflict_from_state(
+    conflict: codex_state::PathClaimConflict,
+) -> ThreadOwnershipPathClaimConflict {
+    ThreadOwnershipPathClaimConflict {
+        requested: ThreadOwnershipPathSpec {
+            kind: thread_ownership_kind_from_state(conflict.requested.kind),
+            path: conflict.requested.path.display().to_string(),
+        },
+        blocking_claim: thread_ownership_claim_from_state(conflict.blocking_claim),
+    }
 }
 
 #[cfg(test)]

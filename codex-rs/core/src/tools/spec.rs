@@ -94,7 +94,7 @@ fn create_hollywood_send_tool() -> ToolSpec {
         (
             "text".to_string(),
             JsonSchema::string(Some(
-                "Message body to send to Hollywood. Use @mentions when you need another agent's attention."
+                "Message body to send to Hollywood. Use @mentions when you need another agent's attention, and make ownership claims concrete with exact files, modules, directories, or narrow globs."
                     .to_string(),
             )),
         ),
@@ -128,7 +128,7 @@ fn create_hollywood_send_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
-        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks for peer coordination rather than new delegated workers."
+        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks for peer coordination rather than new delegated workers. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -249,14 +249,14 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
         (
             "scope".to_string(),
             JsonSchema::string(Some(
-                "Optional scope or ownership summary for this member.".to_string(),
+                "Optional scope or ownership summary for this member. Prefer exact files, modules, directories, or narrow globs over vague area names.".to_string(),
             )),
         ),
     ]);
 
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_team_member_update".to_string(),
-        description: "Update structured team-member state in Hollywood. Use this to accept or decline invites, mark joined/active state, and record claimed scope.".to_string(),
+        description: "Update structured team-member state in Hollywood. Use this to accept or decline invites, mark joined/active state, and record claimed scope with concrete files, modules, directories, or narrow globs.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: JsonSchema::object(

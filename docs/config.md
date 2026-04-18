@@ -50,6 +50,41 @@ Codex can run a notification hook when the agent finishes a turn. See the config
 
 When Codex knows which client started the turn, the legacy notify JSON payload also includes a top-level `client` field. The TUI reports `codex-tui`, and the app server reports the `clientInfo.name` value from `initialize`.
 
+## Email bridge
+
+Losangelex can also use SES-backed email notifications and reply handling for away-from-terminal workflows. Configure it in `~/.codex/config.toml`:
+
+```toml
+[email]
+enabled = true
+developer_email = "arjun@fallsoft.co"
+allowed_reply_senders = ["arjun@fallsoft.co", "arjun58634@gmail.com"]
+subject_prefix = "[Losangelex]"
+notify_on_turn_completed = true
+notify_on_request_user_input = true
+away_after_seconds = 300
+completion_debounce_seconds = 60
+poll_interval_seconds = 30
+delete_processed_inbound = true
+default_away_mode = "auto"
+
+[email.ses]
+region = "us-east-1"
+from_email = "losangelex@fallsoft.co"
+from_name = "Losangelex"
+reply_to_email = "losangelex@fallsoft.co"
+inbox_bucket = "losangelex-email-replies-590183730912"
+inbox_prefix = "inbound/"
+configuration_set = "fallsoftco-vc-access"
+```
+
+The current Losangelex implementation uses SES for outbound mail and an SES receipt rule that writes inbound replies to S3. Replies are accepted only when both of these checks pass:
+
+- the sender email address is allowlisted
+- the email subject includes a valid Losangelex reply token (`[lx:...]`)
+
+Use `/away on`, `/away off`, `/away auto`, or `/away status` in the TUI to control whether email notifications should fire while you are at the terminal.
+
 ## JSON Schema
 
 The generated JSON Schema for `config.toml` lives at `codex-rs/core/config.schema.json`.

@@ -1,11 +1,17 @@
 use super::*;
+use crate::codex::make_session_and_context;
 use codex_apply_patch::MaybeApplyPatchVerified;
 use codex_exec_server::LOCAL_FS;
+use codex_protocol::ThreadId;
 use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::protocol::SandboxPolicy;
+use codex_state::PathClaimKind;
+use codex_state::PathClaimSpec;
+use codex_state::StateRuntime;
 use core_test_support::PathBufExt;
 use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
+use std::time::Duration;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -87,5 +93,69 @@ fn write_permissions_for_paths_keep_dirs_outside_workspace_root() {
     assert_eq!(
         permissions.and_then(|profile| profile.file_system.and_then(|fs| fs.write)),
         Some(vec![expected_outside])
+    );
+}
+
+#[tokio::test]
+async fn claim_patch_ownership_if_available_rejects_overlapping_foreign_claims() {
+    let (mut session, _turn) = make_session_and_context().await;
+    let codex_home = TempDir::new().expect("codex home");
+    let state_db = StateRuntime::init(codex_home.path().to_path_buf(), "test".to_string())
+        .await
+        .expect("state runtime");
+    session.services.state_db = Some(state_db.clone());
+
+    let patch_path = AbsolutePathBuf::from_absolute_path("/repo/src/roleplay-db.ts")
+        .expect("absolute patch path");
+    let blocker = ThreadId::new();
+    state_db
+        .claim_path_ownership(
+            blocker,
+            &[PathClaimSpec {
+                kind: PathClaimKind::Directory,
+                path: std::path::PathBuf::from("/repo/src"),
+            }],
+            Duration::from_secs(30),
+        )
+        .await
+        .expect("blocking claim");
+
+    let err = claim_patch_ownership_if_available(&session, &[patch_path])
+        .await
+        .expect_err("foreign overlapping claim should block apply_patch");
+
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "apply_patch blocked by ownership conflict: thread {blocker} holds a directory claim at `/repo/src` which overlaps `/repo/src/roleplay-db.ts`"
+        )
+    );
+}
+
+#[tokio::test]
+async fn claim_patch_ownership_if_available_claims_exact_files_for_current_thread() {
+    let (mut session, _turn) = make_session_and_context().await;
+    let codex_home = TempDir::new().expect("codex home");
+    let state_db = StateRuntime::init(codex_home.path().to_path_buf(), "test".to_string())
+        .await
+        .expect("state runtime");
+    session.services.state_db = Some(state_db.clone());
+
+    let patch_path = AbsolutePathBuf::from_absolute_path("/repo/src/roleplay-db.ts")
+        .expect("absolute patch path");
+    claim_patch_ownership_if_available(&session, std::slice::from_ref(&patch_path))
+        .await
+        .expect("claim should succeed");
+
+    let claims = state_db
+        .list_path_claims(Some(session.conversation_id))
+        .await
+        .expect("list claims");
+    assert_eq!(claims.len(), 1);
+    assert_eq!(claims[0].kind, PathClaimKind::File);
+    assert_eq!(claims[0].path, patch_path.to_path_buf());
+    assert_eq!(
+        claims[0].owner_thread_id,
+        session.conversation_id.to_string()
     );
 }

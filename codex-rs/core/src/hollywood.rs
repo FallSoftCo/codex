@@ -186,11 +186,16 @@ fn runtime_context() -> HollywoodRuntimeContext {
             "read_recent_room_context".to_string(),
             "ask_user_for_tasking_when_unassigned".to_string(),
             "relay_assigned_scope_to_room".to_string(),
+            "check_existing_scope_claims_before_editing".to_string(),
+            "claim_exact_paths_or_modules_before_editing".to_string(),
+            "avoid_overlapping_edits_until_resolved".to_string(),
             "use_hollywood_first_for_peer_coordination".to_string(),
         ],
         broadcast_guidance: vec![
             "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
             "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
+            "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
+            "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
             "When the user asks you to coordinate with other existing agents, prefer Hollywood coordination with attached peers before spawning new subagents.".to_string(),
         ],
     }
@@ -440,6 +445,12 @@ mod tests {
                 .runtime
                 .startup_protocol
                 .contains(&"use_hollywood_first_for_peer_coordination".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"avoid_overlapping_edits_until_resolved".to_string())
         );
     }
 }

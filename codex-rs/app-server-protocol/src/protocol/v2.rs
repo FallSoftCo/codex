@@ -3094,6 +3094,98 @@ pub struct ThreadHollywoodListResponse {
     pub next_cursor: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum ThreadOwnershipPathKind {
+    File,
+    Directory,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipPathSpec {
+    pub kind: ThreadOwnershipPathKind,
+    pub path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipPathClaim {
+    pub id: String,
+    pub owner_thread_id: String,
+    pub kind: ThreadOwnershipPathKind,
+    pub path: String,
+    pub claimed_at: i64,
+    pub updated_at: i64,
+    pub lease_expires_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipPathClaimConflict {
+    pub requested: ThreadOwnershipPathSpec,
+    pub blocking_claim: ThreadOwnershipPathClaim,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipClaimParams {
+    pub thread_id: String,
+    pub claims: Vec<ThreadOwnershipPathSpec>,
+    #[ts(optional = nullable)]
+    pub lease_seconds: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipClaimResponse {
+    pub acquired: bool,
+    pub data: Vec<ThreadOwnershipPathClaim>,
+    pub conflicts: Vec<ThreadOwnershipPathClaimConflict>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipReleaseParams {
+    pub thread_id: String,
+    pub claims: Vec<ThreadOwnershipPathSpec>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipReleaseResponse {
+    pub released: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipListParams {
+    pub thread_id: String,
+    #[ts(optional = nullable)]
+    pub cursor: Option<String>,
+    #[ts(optional = nullable)]
+    pub limit: Option<u32>,
+    #[ts(optional = nullable)]
+    pub owner_thread_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ThreadOwnershipListResponse {
+    pub data: Vec<ThreadOwnershipPathClaim>,
+    pub next_cursor: Option<String>,
+}
+
 /// Parameters for `thread/increment_elicitation`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]

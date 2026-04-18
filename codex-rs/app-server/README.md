@@ -169,6 +169,9 @@ Example with notification opt-out:
 - `thread/hollywood/detach` — detach a thread from Hollywood and stop polling room traffic for that thread (experimental).
 - `thread/hollywood/attention/set` — update the attention policy (`focused`, `ambient`, `broad`) for an attached Hollywood thread (experimental).
 - `thread/hollywood/list` — list currently loaded Hollywood-attached threads with structured room/status state and optional room/status filters (experimental).
+- `thread/ownership/claim` — atomically claim exact file or directory ownership for a loaded thread with a runtime lease and explicit conflict reporting (experimental).
+- `thread/ownership/release` — release exact file or directory ownership claims previously held by a loaded thread (experimental).
+- `thread/ownership/list` — list active runtime ownership claims with cursor pagination and optional owner filtering (experimental).
 - `thread/name/set` — set or update a thread’s user-facing name for either a loaded thread or a persisted rollout; returns `{}` on success and emits `thread/name/updated` to initialized, opted-in clients. Thread names are not required to be unique; name lookups resolve to the most recently updated thread.
 - `thread/unarchive` — move an archived rollout file back into the sessions directory; returns the restored `thread` on success and emits `thread/unarchived`.
 - `thread/compact/start` — trigger conversation history compaction for a thread; returns `{}` immediately while progress streams through standard turn/item notifications.
@@ -942,6 +945,9 @@ Current thread-scoped requests:
 - `thread/hollywood/detach`
 - `thread/hollywood/attention/set`
 - `thread/hollywood/list`
+- `thread/ownership/claim`
+- `thread/ownership/release`
+- `thread/ownership/list`
 
 Current thread query surfaces:
 
@@ -975,6 +981,8 @@ Resume behavior is server-owned:
 - `thread/hollywood/attention/set` updates the persisted Hollywood attention policy
 - resumed threads restore Hollywood server-side from persisted metadata
 - resumed legacy threads without persisted Hollywood metadata migrate from the current `HOLLYWOOD_*` environment and persist the adopted config
+
+Experimental ownership claims are runtime-scoped rather than durable. They accept exact files or directories, expire automatically unless renewed, and are intended to turn overlapping edit attempts into explicit conflicts instead of late `apply_patch` failures.
 
 Current implementation note: the app-server inbox and notification path are native, but core still routes `HollywoodInput` through the normal user-input path after wrapping it as structured contextual input. That keeps the current integration usable while preserving a clean upstream phase boundary between app-server inbox behavior and deeper core-native external-message semantics.
 

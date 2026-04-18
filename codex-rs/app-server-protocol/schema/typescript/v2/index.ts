@@ -305,6 +305,10 @@ export type { ThreadMetadataGitInfoUpdateParams } from "./ThreadMetadataGitInfoU
 export type { ThreadMetadataUpdateParams } from "./ThreadMetadataUpdateParams";
 export type { ThreadMetadataUpdateResponse } from "./ThreadMetadataUpdateResponse";
 export type { ThreadNameUpdatedNotification } from "./ThreadNameUpdatedNotification";
+export type { ThreadOwnershipPathClaim } from "./ThreadOwnershipPathClaim";
+export type { ThreadOwnershipPathClaimConflict } from "./ThreadOwnershipPathClaimConflict";
+export type { ThreadOwnershipPathKind } from "./ThreadOwnershipPathKind";
+export type { ThreadOwnershipPathSpec } from "./ThreadOwnershipPathSpec";
 export type { ThreadReadParams } from "./ThreadReadParams";
 export type { ThreadReadResponse } from "./ThreadReadResponse";
 export type { ThreadRealtimeAudioChunk } from "./ThreadRealtimeAudioChunk";

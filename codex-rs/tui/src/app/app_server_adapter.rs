@@ -156,6 +156,8 @@ impl App {
         _app_server_client: &AppServerSession,
         notification: ServerNotification,
     ) {
+        self.handle_email_bridge_notification(&notification).await;
+
         match &notification {
             ServerNotification::ServerRequestResolved(notification) => {
                 self.pending_app_server_requests
@@ -222,6 +224,8 @@ impl App {
         app_server_client: &AppServerSession,
         request: ServerRequest,
     ) {
+        self.handle_email_bridge_request(&request).await;
+
         if let Some(unsupported) = self
             .pending_app_server_requests
             .note_server_request(&request)

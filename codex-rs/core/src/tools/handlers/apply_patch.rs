@@ -29,10 +29,15 @@ use codex_protocol::models::PermissionProfile;
 use codex_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
 use codex_sandboxing::policy_transforms::merge_permission_profiles;
 use codex_sandboxing::policy_transforms::normalize_additional_permissions;
+use codex_state::DEFAULT_PATH_CLAIM_LEASE_SECONDS;
+use codex_state::PathClaimConflict;
+use codex_state::PathClaimKind;
+use codex_state::PathClaimSpec;
 use codex_tools::ApplyPatchToolArgs;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct ApplyPatchHandler;
 
@@ -124,6 +129,68 @@ async fn effective_patch_permissions(
     )
 }
 
+async fn claim_patch_ownership_if_available(
+    session: &Session,
+    file_paths: &[AbsolutePathBuf],
+) -> Result<(), FunctionCallError> {
+    if file_paths.is_empty() {
+        return Ok(());
+    }
+    let Some(state_db) = session.state_db() else {
+        return Ok(());
+    };
+
+    let claims = file_paths
+        .iter()
+        .map(|path| PathClaimSpec {
+            kind: PathClaimKind::File,
+            path: path.to_path_buf(),
+        })
+        .collect::<Vec<_>>();
+
+    match state_db
+        .claim_path_ownership(
+            session.conversation_id,
+            &claims,
+            Duration::from_secs(u64::try_from(DEFAULT_PATH_CLAIM_LEASE_SECONDS).unwrap_or(300)),
+        )
+        .await
+    {
+        Ok(result) if result.acquired => Ok(()),
+        Ok(result) => Err(FunctionCallError::RespondToModel(
+            format_patch_ownership_conflict(&result.conflicts),
+        )),
+        Err(err) => {
+            tracing::warn!(
+                thread_id = %session.conversation_id,
+                "failed to enforce apply_patch ownership claims: {err}"
+            );
+            Ok(())
+        }
+    }
+}
+
+fn format_patch_ownership_conflict(conflicts: &[PathClaimConflict]) -> String {
+    let Some(first) = conflicts.first() else {
+        return "apply_patch blocked by ownership conflict".to_string();
+    };
+
+    let blocking_kind = first.blocking_claim.kind.as_str();
+    let requested_path = first.requested.path.display();
+    let blocking_path = first.blocking_claim.path.display();
+    let owner_thread_id = &first.blocking_claim.owner_thread_id;
+    let additional = conflicts
+        .len()
+        .checked_sub(1)
+        .filter(|count| *count > 0)
+        .map(|count| format!(" and {count} more conflicting claim(s)"))
+        .unwrap_or_default();
+
+    format!(
+        "apply_patch blocked by ownership conflict: thread {owner_thread_id} holds a {blocking_kind} claim at `{blocking_path}` which overlaps `{requested_path}`{additional}"
+    )
+}
+
 impl ToolHandler for ApplyPatchHandler {
     type Output = ApplyPatchToolOutput;
 
@@ -190,6 +257,7 @@ impl ToolHandler for ApplyPatchHandler {
             codex_apply_patch::MaybeApplyPatchVerified::Body(changes) => {
                 let (file_paths, effective_additional_permissions, file_system_sandbox_policy) =
                     effective_patch_permissions(session.as_ref(), turn.as_ref(), &changes).await;
+                claim_patch_ownership_if_available(session.as_ref(), &file_paths).await?;
                 match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                     .await
                 {
@@ -301,6 +369,7 @@ pub(crate) async fn intercept_apply_patch(
                 .await;
             let (approval_keys, effective_additional_permissions, file_system_sandbox_policy) =
                 effective_patch_permissions(session.as_ref(), turn.as_ref(), &changes).await;
+            claim_patch_ownership_if_available(session.as_ref(), &approval_keys).await?;
             match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                 .await
             {

@@ -148,11 +148,42 @@ impl AppCommand {
         collaboration_mode: Option<CollaborationMode>,
         personality: Option<Personality>,
     ) -> Self {
+        Self::user_turn_with_approvals_reviewer(
+            items,
+            cwd,
+            approval_policy,
+            /*approvals_reviewer*/ None,
+            sandbox_policy,
+            model,
+            effort,
+            summary,
+            service_tier,
+            final_output_json_schema,
+            collaboration_mode,
+            personality,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn user_turn_with_approvals_reviewer(
+        items: Vec<UserInput>,
+        cwd: PathBuf,
+        approval_policy: AskForApproval,
+        approvals_reviewer: Option<ApprovalsReviewer>,
+        sandbox_policy: SandboxPolicy,
+        model: String,
+        effort: Option<ReasoningEffortConfig>,
+        summary: Option<ReasoningSummaryConfig>,
+        service_tier: Option<Option<ServiceTier>>,
+        final_output_json_schema: Option<Value>,
+        collaboration_mode: Option<CollaborationMode>,
+        personality: Option<Personality>,
+    ) -> Self {
         Self(Op::UserTurn {
             items,
             cwd,
             approval_policy,
-            approvals_reviewer: None,
+            approvals_reviewer,
             sandbox_policy,
             model,
             effort,

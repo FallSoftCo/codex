@@ -162,12 +162,14 @@ use uuid::Uuid;
 mod agent_navigation;
 mod app_server_adapter;
 mod app_server_requests;
+mod email_bridge;
 mod loaded_threads;
 mod pending_interactive_replay;
 
 use self::agent_navigation::AgentNavigationDirection;
 use self::agent_navigation::AgentNavigationState;
 use self::app_server_requests::PendingAppServerRequests;
+use self::email_bridge::EmailBridge;
 use self::loaded_threads::find_loaded_subagent_threads_for_primary;
 use self::pending_interactive_replay::PendingInteractiveReplayState;
 
@@ -1014,6 +1016,7 @@ pub(crate) struct App {
     primary_session_configured: Option<ThreadSessionState>,
     pending_primary_events: VecDeque<ThreadBufferedEvent>,
     pending_app_server_requests: PendingAppServerRequests,
+    email_bridge: Option<EmailBridge>,
 }
 
 #[derive(Default)]
@@ -3815,6 +3818,24 @@ impl App {
             .maybe_prompt_windows_sandbox_enable(should_prompt_windows_sandbox_nux_at_startup);
 
         let file_search = FileSearchManager::new(config.cwd.to_path_buf(), app_event_tx.clone());
+        let mut email_bridge_startup_warning = None;
+        let email_bridge = if let Some(email_config) = config.email.clone() {
+            match EmailBridge::new(
+                email_config,
+                config.codex_home.as_path(),
+                tui.terminal_focused_handle(),
+            )
+            .await
+            {
+                Ok(email_bridge) => Some(email_bridge),
+                Err(err) => {
+                    email_bridge_startup_warning = Some(format!("Email bridge disabled: {err}"));
+                    None
+                }
+            }
+        } else {
+            None
+        };
         #[cfg(not(debug_assertions))]
         let upgrade_version = crate::updates::get_upgrade_version(&config);
 
@@ -3858,10 +3879,14 @@ impl App {
             primary_session_configured: None,
             pending_primary_events: VecDeque::new(),
             pending_app_server_requests: PendingAppServerRequests::default(),
+            email_bridge,
         };
         if let Some(started) = initial_started_thread {
             app.enqueue_primary_thread_session(started.session, started.turns)
                 .await?;
+        }
+        if let Some(warning) = email_bridge_startup_warning {
+            app.chat_widget.add_error_message(warning);
         }
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -3901,6 +3926,14 @@ impl App {
 
         let mut listen_for_app_server_events = true;
         let mut waiting_for_initial_session_configured = wait_for_initial_session_configured;
+        let mut email_poll_interval = app.email_bridge.as_ref().map(|email_bridge| {
+            let mut interval = tokio::time::interval(email_bridge.poll_interval());
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            interval
+        });
+        if let Some(interval) = email_poll_interval.as_mut() {
+            interval.tick().await;
+        }
 
         #[cfg(not(debug_assertions))]
         let pre_loop_exit_reason = if let Some(latest_version) = upgrade_version {
@@ -3975,6 +4008,16 @@ impl App {
                         }
                         AppRunControl::Continue
                     }
+                    _ = async {
+                        if let Some(interval) = email_poll_interval.as_mut() {
+                            interval.tick().await;
+                        }
+                    }, if email_poll_interval.is_some() => {
+                        if let Err(err) = app.handle_email_bridge_tick(&mut app_server).await {
+                            tracing::warn!(error = %err, "email bridge tick failed");
+                        }
+                        AppRunControl::Continue
+                    }
                 };
                 if App::should_stop_waiting_for_initial_session(
                     waiting_for_initial_session_configured,
@@ -4019,6 +4062,12 @@ impl App {
         app_server: &mut AppServerSession,
         event: TuiEvent,
     ) -> Result<AppRunControl> {
+        if matches!(event, TuiEvent::Key(_) | TuiEvent::Paste(_))
+            && let Some(email_bridge) = self.email_bridge.as_mut()
+        {
+            email_bridge.note_local_activity();
+        }
+
         if matches!(event, TuiEvent::Draw) {
             let size = tui.terminal.size()?;
             if size != tui.terminal.last_known_screen_size {
@@ -5421,6 +5470,12 @@ impl App {
             }
             AppEvent::SelectAgentThread(thread_id) => {
                 self.select_agent_thread(tui, app_server, thread_id).await?;
+            }
+            AppEvent::SetEmailAwayMode { mode } => {
+                self.set_email_away_mode(mode).await;
+            }
+            AppEvent::ShowEmailAwayStatus => {
+                self.show_email_away_status();
             }
             AppEvent::OpenSkillsList => {
                 self.chat_widget.open_skills_list();
@@ -9322,6 +9377,7 @@ guardian_approval = true
             primary_session_configured: None,
             pending_primary_events: VecDeque::new(),
             pending_app_server_requests: PendingAppServerRequests::default(),
+            email_bridge: None,
         }
     }
 
@@ -9379,6 +9435,7 @@ guardian_approval = true
                 primary_session_configured: None,
                 pending_primary_events: VecDeque::new(),
                 pending_app_server_requests: PendingAppServerRequests::default(),
+                email_bridge: None,
             },
             rx,
             op_rx,

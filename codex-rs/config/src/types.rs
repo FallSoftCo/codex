@@ -491,6 +491,80 @@ impl fmt::Display for NotificationCondition {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailProvider {
+    #[default]
+    Ses,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailAwayModeOverride {
+    #[default]
+    Auto,
+    Away,
+    Present,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct SesEmailConfigToml {
+    pub region: Option<String>,
+    pub from_email: Option<String>,
+    pub from_name: Option<String>,
+    pub reply_to_email: Option<String>,
+    pub configuration_set: Option<String>,
+    pub inbox_bucket: Option<String>,
+    pub inbox_prefix: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SesEmailConfig {
+    pub region: String,
+    pub from_email: String,
+    pub from_name: String,
+    pub reply_to_email: String,
+    pub configuration_set: Option<String>,
+    pub inbox_bucket: String,
+    pub inbox_prefix: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct EmailConfigToml {
+    pub enabled: Option<bool>,
+    pub provider: Option<EmailProvider>,
+    pub developer_email: Option<String>,
+    pub allowed_reply_senders: Option<Vec<String>>,
+    pub subject_prefix: Option<String>,
+    pub notify_on_turn_completed: Option<bool>,
+    pub notify_on_request_user_input: Option<bool>,
+    pub away_after_seconds: Option<u64>,
+    pub completion_debounce_seconds: Option<u64>,
+    pub poll_interval_seconds: Option<u64>,
+    pub delete_processed_inbound: Option<bool>,
+    pub default_away_mode: Option<EmailAwayModeOverride>,
+    #[serde(default)]
+    pub ses: Option<SesEmailConfigToml>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmailConfig {
+    pub provider: EmailProvider,
+    pub developer_email: String,
+    pub allowed_reply_senders: Vec<String>,
+    pub subject_prefix: String,
+    pub notify_on_turn_completed: bool,
+    pub notify_on_request_user_input: bool,
+    pub away_after_seconds: u64,
+    pub completion_debounce_seconds: u64,
+    pub poll_interval_seconds: u64,
+    pub delete_processed_inbound: bool,
+    pub default_away_mode: EmailAwayModeOverride,
+    pub ses: SesEmailConfig,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct TuiNotificationSettings {

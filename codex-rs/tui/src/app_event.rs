@@ -17,6 +17,7 @@ use codex_app_server_protocol::PluginReadParams;
 use codex_app_server_protocol::PluginReadResponse;
 use codex_app_server_protocol::PluginUninstallResponse;
 use codex_chatgpt::connectors::AppInfo;
+use codex_config::types::EmailAwayModeOverride;
 use codex_file_search::FileMatch;
 use codex_protocol::ThreadId;
 use codex_protocol::openai_models::ModelPreset;
@@ -102,6 +103,12 @@ pub(crate) enum AppEvent {
     OpenAgentPicker,
     /// Switch the active thread to the selected agent.
     SelectAgentThread(ThreadId),
+    /// Set the local email away-mode override.
+    SetEmailAwayMode {
+        mode: EmailAwayModeOverride,
+    },
+    /// Show the current local email away-mode state.
+    ShowEmailAwayStatus,
 
     /// Submit an op to the specified thread, regardless of current focus.
     SubmitThreadOp {

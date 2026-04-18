@@ -10,6 +10,7 @@ use crate::types::AnalyticsConfigToml;
 use crate::types::ApprovalsReviewer;
 use crate::types::AppsConfigToml;
 use crate::types::AuthCredentialsStoreMode;
+use crate::types::EmailConfigToml;
 use crate::types::FeedbackConfigToml;
 use crate::types::History;
 use crate::types::McpServerConfig;
@@ -117,6 +118,10 @@ pub struct ConfigToml {
     /// Optional external command to spawn for end-user notifications.
     #[serde(default)]
     pub notify: Option<Vec<String>>,
+
+    /// Optional SES-backed email bridge for away-from-terminal notifications and replies.
+    #[serde(default)]
+    pub email: Option<EmailConfigToml>,
 
     /// System instructions.
     pub instructions: Option<String>,

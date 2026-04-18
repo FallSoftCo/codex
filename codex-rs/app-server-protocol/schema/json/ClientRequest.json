@@ -2992,6 +2992,28 @@
       ],
       "type": "object"
     },
+    "ThreadOwnershipPathKind": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "ThreadOwnershipPathSpec": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/ThreadOwnershipPathKind"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ],
+      "type": "object"
+    },
     "ThreadReadParams": {
       "properties": {
         "includeTurns": {

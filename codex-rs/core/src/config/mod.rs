@@ -31,6 +31,9 @@ use codex_config::profile_toml::ConfigProfile;
 use codex_config::types::ApprovalsReviewer;
 use codex_config::types::AuthCredentialsStoreMode;
 use codex_config::types::DEFAULT_OTEL_ENVIRONMENT;
+use codex_config::types::EmailAwayModeOverride;
+use codex_config::types::EmailConfig;
+use codex_config::types::EmailProvider;
 use codex_config::types::History;
 use codex_config::types::McpServerConfig;
 use codex_config::types::McpServerDisabledReason;
@@ -295,6 +298,9 @@ pub struct Config {
     ///
     /// If unset the feature is disabled.
     pub notify: Option<Vec<String>>,
+
+    /// Optional SES-backed email bridge used by Losangelex while interactive sessions are away.
+    pub email: Option<EmailConfig>,
 
     /// TUI notifications preference. When set, the TUI will send terminal notifications on
     /// approvals and turn completions when not focused.
@@ -1139,6 +1145,110 @@ fn resolve_tool_suggest_config(config_toml: &ConfigToml) -> ToolSuggestConfig {
     ToolSuggestConfig { discoverables }
 }
 
+fn trimmed_non_empty(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
+}
+
+fn normalize_email_list(values: Option<Vec<String>>) -> Vec<String> {
+    values
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|value| {
+            let trimmed = value.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_ascii_lowercase())
+        })
+        .collect()
+}
+
+fn resolve_email_config(
+    config_toml: &ConfigToml,
+    startup_warnings: &mut Vec<String>,
+) -> Option<EmailConfig> {
+    let email = config_toml.email.as_ref()?;
+    if !email.enabled.unwrap_or(false) {
+        return None;
+    }
+
+    let developer_email = trimmed_non_empty(email.developer_email.clone());
+    let mut allowed_reply_senders = normalize_email_list(email.allowed_reply_senders.clone());
+    if allowed_reply_senders.is_empty()
+        && let Some(developer_email) = developer_email.as_ref()
+    {
+        allowed_reply_senders.push(developer_email.to_ascii_lowercase());
+    }
+
+    let ses = email.ses.clone().unwrap_or_default();
+    let region = trimmed_non_empty(ses.region).unwrap_or_else(|| "us-east-1".to_string());
+    let from_email = trimmed_non_empty(ses.from_email);
+    let reply_to_email = trimmed_non_empty(ses.reply_to_email).or_else(|| from_email.clone());
+    let from_name = trimmed_non_empty(ses.from_name).unwrap_or_else(|| "Losangelex".to_string());
+    let inbox_bucket = trimmed_non_empty(ses.inbox_bucket);
+    let inbox_prefix = trimmed_non_empty(ses.inbox_prefix).unwrap_or_default();
+
+    let missing_fields = [
+        ("developer_email", developer_email.is_none()),
+        ("ses.from_email", from_email.is_none()),
+        ("ses.reply_to_email", reply_to_email.is_none()),
+        ("ses.inbox_bucket", inbox_bucket.is_none()),
+    ]
+    .into_iter()
+    .filter_map(|(field, missing)| missing.then_some(field))
+    .collect::<Vec<_>>();
+
+    if !missing_fields.is_empty() {
+        startup_warnings.push(format!(
+            "email bridge is enabled but missing required fields: {}",
+            missing_fields.join(", ")
+        ));
+        return None;
+    }
+
+    let Some(developer_email) = developer_email else {
+        return None;
+    };
+    let Some(from_email) = from_email else {
+        return None;
+    };
+    let Some(reply_to_email) = reply_to_email else {
+        return None;
+    };
+    let Some(inbox_bucket) = inbox_bucket else {
+        return None;
+    };
+
+    Some(EmailConfig {
+        provider: email.provider.unwrap_or(EmailProvider::Ses),
+        developer_email,
+        allowed_reply_senders,
+        subject_prefix: trimmed_non_empty(email.subject_prefix.clone())
+            .unwrap_or_else(|| "[Losangelex]".to_string()),
+        notify_on_turn_completed: email.notify_on_turn_completed.unwrap_or(true),
+        notify_on_request_user_input: email.notify_on_request_user_input.unwrap_or(true),
+        away_after_seconds: email.away_after_seconds.unwrap_or(300).clamp(0, 86_400),
+        completion_debounce_seconds: email
+            .completion_debounce_seconds
+            .unwrap_or(60)
+            .clamp(0, 3_600),
+        poll_interval_seconds: email.poll_interval_seconds.unwrap_or(30).clamp(5, 3_600),
+        delete_processed_inbound: email.delete_processed_inbound.unwrap_or(true),
+        default_away_mode: email
+            .default_away_mode
+            .unwrap_or(EmailAwayModeOverride::Auto),
+        ses: codex_config::types::SesEmailConfig {
+            region,
+            from_email,
+            from_name,
+            reply_to_email,
+            configuration_set: trimmed_non_empty(ses.configuration_set),
+            inbox_bucket,
+            inbox_prefix,
+        },
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PermissionConfigSyntax {
     Legacy,
@@ -1358,6 +1468,7 @@ impl Config {
 
         let user_instructions = Self::load_instructions(Some(&codex_home));
         let mut startup_warnings = Vec::new();
+        let email = resolve_email_config(&cfg, &mut startup_warnings);
 
         // Destructure ConfigOverrides fully to ensure all overrides are applied.
         let ConfigOverrides {
@@ -1949,6 +2060,7 @@ impl Config {
             approvals_reviewer: constrained_approvals_reviewer.value(),
             enforce_residency: enforce_residency.value,
             notify: cfg.notify,
+            email,
             user_instructions,
             base_instructions,
             personality,

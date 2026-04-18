@@ -5,6 +5,8 @@ use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 #[cfg(not(target_os = "windows"))]
 use std::path::PathBuf;
+#[cfg(not(target_os = "windows"))]
+use tempfile::NamedTempFile;
 
 #[test]
 fn wants_no_sandbox_approval_granular_respects_sandbox_flag() {
@@ -93,7 +95,8 @@ fn build_sandbox_command_prefers_configured_codex_self_exe_for_apply_patch() {
         permissions_preapproved: false,
         timeout_ms: None,
     };
-    let codex_self_exe = PathBuf::from("/tmp/codex");
+    let codex_self_exe_file = NamedTempFile::new().expect("temp codex exe");
+    let codex_self_exe = codex_self_exe_file.path().to_path_buf();
 
     let command = ApplyPatchRuntime::build_sandbox_command(&request, Some(&codex_self_exe))
         .expect("build sandbox command");
@@ -101,7 +104,78 @@ fn build_sandbox_command_prefers_configured_codex_self_exe_for_apply_patch() {
     assert_eq!(command.program, codex_self_exe.into_os_string());
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(not(target_os = "windows"), target_os = "linux"))]
+#[test]
+fn build_sandbox_command_falls_back_to_proc_self_exe_for_apply_patch() {
+    let path = std::env::temp_dir()
+        .join("apply-patch-current-exe-test.txt")
+        .abs();
+    let action = ApplyPatchAction::new_add_for_test(&path, "hello".to_string());
+    let request = ApplyPatchRequest {
+        action,
+        file_paths: vec![path.clone()],
+        changes: HashMap::from([(
+            path.to_path_buf(),
+            FileChange::Add {
+                content: "hello".to_string(),
+            },
+        )]),
+        exec_approval_requirement: ExecApprovalRequirement::NeedsApproval {
+            reason: None,
+            proposed_execpolicy_amendment: None,
+        },
+        additional_permissions: None,
+        permissions_preapproved: false,
+        timeout_ms: None,
+    };
+
+    let command = ApplyPatchRuntime::build_sandbox_command(&request, /*codex_self_exe*/ None)
+        .expect("build sandbox command");
+
+    assert_eq!(
+        command.program,
+        PathBuf::from("/proc/self/exe").into_os_string()
+    );
+}
+
+#[cfg(all(not(target_os = "windows"), target_os = "linux"))]
+#[test]
+fn build_sandbox_command_uses_proc_self_exe_when_configured_codex_self_exe_is_missing() {
+    let path = std::env::temp_dir()
+        .join("apply-patch-current-exe-test.txt")
+        .abs();
+    let action = ApplyPatchAction::new_add_for_test(&path, "hello".to_string());
+    let request = ApplyPatchRequest {
+        action,
+        file_paths: vec![path.clone()],
+        changes: HashMap::from([(
+            path.to_path_buf(),
+            FileChange::Add {
+                content: "hello".to_string(),
+            },
+        )]),
+        exec_approval_requirement: ExecApprovalRequirement::NeedsApproval {
+            reason: None,
+            proposed_execpolicy_amendment: None,
+        },
+        additional_permissions: None,
+        permissions_preapproved: false,
+        timeout_ms: None,
+    };
+    let missing_codex_self_exe = std::env::temp_dir()
+        .join("codex-self-exe-missing")
+        .join("codex");
+
+    let command = ApplyPatchRuntime::build_sandbox_command(&request, Some(&missing_codex_self_exe))
+        .expect("build sandbox command");
+
+    assert_eq!(
+        command.program,
+        PathBuf::from("/proc/self/exe").into_os_string()
+    );
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
 #[test]
 fn build_sandbox_command_falls_back_to_current_exe_for_apply_patch() {
     let path = std::env::temp_dir()

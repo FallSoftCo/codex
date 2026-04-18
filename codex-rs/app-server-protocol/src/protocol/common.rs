@@ -279,6 +279,21 @@ client_request_definitions! {
         params: v2::ThreadHollywoodListParams,
         response: v2::ThreadHollywoodListResponse,
     },
+    #[experimental("thread/ownership/claim")]
+    ThreadOwnershipClaim => "thread/ownership/claim" {
+        params: v2::ThreadOwnershipClaimParams,
+        response: v2::ThreadOwnershipClaimResponse,
+    },
+    #[experimental("thread/ownership/release")]
+    ThreadOwnershipRelease => "thread/ownership/release" {
+        params: v2::ThreadOwnershipReleaseParams,
+        response: v2::ThreadOwnershipReleaseResponse,
+    },
+    #[experimental("thread/ownership/list")]
+    ThreadOwnershipList => "thread/ownership/list" {
+        params: v2::ThreadOwnershipListParams,
+        response: v2::ThreadOwnershipListResponse,
+    },
     #[experimental("thread/increment_elicitation")]
     /// Increment the thread-local out-of-band elicitation counter.
     ///
