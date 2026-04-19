@@ -11,6 +11,7 @@ use crate::model::WatcherTriggerKind;
 
 impl StateRuntime {
     pub async fn create_watcher(&self, params: WatcherCreateParams) -> anyhow::Result<()> {
+        self.ensure_state_schema_current().await?;
         let now = Utc::now().timestamp();
         sqlx::query(
             r#"
@@ -57,6 +58,7 @@ INSERT INTO watchers (
         &self,
         thread_id: Option<ThreadId>,
     ) -> anyhow::Result<Vec<crate::Watcher>> {
+        self.ensure_state_schema_current().await?;
         let rows = if let Some(thread_id) = thread_id {
             sqlx::query_as::<_, WatcherRow>(
                 r#"
@@ -116,6 +118,7 @@ ORDER BY created_at DESC, id DESC
     }
 
     pub async fn cancel_watcher(&self, id: &str) -> anyhow::Result<bool> {
+        self.ensure_state_schema_current().await?;
         let result = sqlx::query(
             r#"
 UPDATE watchers
@@ -143,6 +146,7 @@ WHERE id = ?
         limit: usize,
         lease_duration: Duration,
     ) -> anyhow::Result<Vec<ClaimedWatcher>> {
+        self.ensure_state_schema_current().await?;
         let rows = sqlx::query_as::<_, WatcherRow>(
             r#"
 SELECT
@@ -220,6 +224,7 @@ WHERE id = ?
     }
 
     pub async fn release_watcher_claim(&self, id: &str) -> anyhow::Result<()> {
+        self.ensure_state_schema_current().await?;
         sqlx::query(
             r#"
 UPDATE watchers
@@ -242,6 +247,7 @@ WHERE id = ?
         turn_id: Option<&str>,
         trigger_fired_at: DateTime<Utc>,
     ) -> anyhow::Result<String> {
+        self.ensure_state_schema_current().await?;
         let run_id = uuid::Uuid::new_v4().to_string();
         sqlx::query(
             r#"
@@ -297,6 +303,7 @@ WHERE id = ?
         error: &str,
         now: DateTime<Utc>,
     ) -> anyhow::Result<()> {
+        self.ensure_state_schema_current().await?;
         sqlx::query(
             r#"
 UPDATE watchers
@@ -320,6 +327,7 @@ WHERE id = ?
     }
 
     pub async fn list_running_watcher_runs(&self) -> anyhow::Result<Vec<RunningWatcherRun>> {
+        self.ensure_state_schema_current().await?;
         let rows = sqlx::query_as::<_, WatcherRunRow>(
             r#"
 SELECT
@@ -362,6 +370,7 @@ ORDER BY started_at ASC
         &self,
         watcher_id: Option<&str>,
     ) -> anyhow::Result<Vec<WatcherRun>> {
+        self.ensure_state_schema_current().await?;
         let rows = if let Some(watcher_id) = watcher_id {
             sqlx::query_as::<_, WatcherRunRow>(
                 r#"
@@ -417,6 +426,7 @@ ORDER BY started_at DESC
         summary: Option<&str>,
         error: Option<&str>,
     ) -> anyhow::Result<()> {
+        self.ensure_state_schema_current().await?;
         sqlx::query(
             r#"
 UPDATE watcher_runs
@@ -463,6 +473,7 @@ fn epoch_seconds_to_datetime(value: i64) -> anyhow::Result<DateTime<Utc>> {
 mod tests {
     use super::*;
     use crate::WatcherCreateParams;
+    use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn process_exit_watcher_can_be_claimed_and_started() {
@@ -580,5 +591,29 @@ mod tests {
         assert_eq!(runs[0].id, run_id);
         assert_eq!(runs[0].turn_id, None);
         assert_eq!(runs[0].status, WatcherRunStatus::Running);
+    }
+
+    #[tokio::test]
+    async fn list_watchers_recreates_missing_watcher_schema() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(tempdir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init");
+
+        sqlx::query("DROP TABLE watcher_runs")
+            .execute(db.pool.as_ref())
+            .await
+            .expect("drop watcher_runs");
+        sqlx::query("DROP TABLE watchers")
+            .execute(db.pool.as_ref())
+            .await
+            .expect("drop watchers");
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version IN (30, 31)")
+            .execute(db.pool.as_ref())
+            .await
+            .expect("delete watcher migrations");
+
+        let watchers = db.list_watchers(None).await.expect("list watchers");
+        assert_eq!(watchers, Vec::<crate::Watcher>::new());
     }
 }
