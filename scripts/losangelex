@@ -11,6 +11,11 @@ workspace_setup_file="$migration_dir/workspace-room-setups-v1.json"
 jobsearcher_env="/home/ai/Development/jobsearcher/.env"
 aws_config_file="${AWS_CONFIG_FILE:-$HOME/.aws/config}"
 aws_credentials_file="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
+app_server_mode="${LOSANGELEX_APP_SERVER_MODE:-daemon}"
+app_server_url="${LOSANGELEX_APP_SERVER_URL:-ws://127.0.0.1:46321}"
+app_server_pid_file="$migration_dir/app-server.pid"
+app_server_log_file="$migration_dir/app-server.log"
+app_server_start_timeout_seconds="${LOSANGELEX_APP_SERVER_START_TIMEOUT_SECONDS:-20}"
 
 if [[ -z "${AWS_ACCESS_KEY_ID:-}" && -z "${AWS_PROFILE:-}" && -z "${AWS_DEFAULT_PROFILE:-}" && ! -f "$aws_config_file" && ! -f "$aws_credentials_file" && -f "$jobsearcher_env" ]]; then
   set -a
@@ -58,6 +63,73 @@ print(setup.get("primary_room", "") or "")
 print(",".join(setup.get("observed_rooms", []) or []))
 print(",".join(setup.get("wake_rooms", []) or []))
 PY
+}
+
+app_server_ready() {
+  local websocket_url="$1"
+  python3 - "$websocket_url" <<'PY'
+import sys
+import urllib.error
+import urllib.request
+
+url = sys.argv[1]
+if url.startswith("ws://"):
+    url = "http://" + url[5:]
+elif url.startswith("wss://"):
+    url = "https://" + url[6:]
+else:
+    raise SystemExit(1)
+url = url.rstrip("/") + "/readyz"
+try:
+    with urllib.request.urlopen(url, timeout=1.5) as response:
+        raise SystemExit(0 if response.status == 200 else 1)
+except Exception:
+    raise SystemExit(1)
+PY
+}
+
+start_losangelex_app_server() {
+  local websocket_url="$1"
+  local start_timeout="$2"
+  mkdir -p "$migration_dir"
+
+  if app_server_ready "$websocket_url"; then
+    return 0
+  fi
+
+  if [[ -f "$app_server_pid_file" ]]; then
+    local existing_pid
+    existing_pid="$(<"$app_server_pid_file")"
+    if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+      printf 'losangelex app-server at %s is not ready; existing pid %s is still running\n' \
+        "$websocket_url" "$existing_pid" >&2
+    fi
+  fi
+
+  local command
+  if [[ -x "$binary_path" ]]; then
+    command=("$binary_path" app-server --listen "$websocket_url")
+  else
+    command=(cargo +stable run -p codex-cli --bin codex -- app-server --listen "$websocket_url")
+  fi
+
+  (
+    cd "$repo_root"
+    setsid nohup "${command[@]}" </dev/null >>"$app_server_log_file" 2>&1 &
+    echo $! >"$app_server_pid_file"
+  )
+
+  local deadline=$((SECONDS + start_timeout))
+  while (( SECONDS < deadline )); do
+    if app_server_ready "$websocket_url"; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  printf 'losangelex failed to start local app-server at %s; see %s\n' \
+    "$websocket_url" "$app_server_log_file" >&2
+  return 1
 }
 
 primary_room="${HOLLYWOOD_ROOM:-}"
@@ -185,6 +257,11 @@ JSON
       "losangelex first run: initialized at $codex_home" \
       "Hollywood auto-attach defaults to primary room ${HOLLYWOOD_ROOM} with observed rooms [${HOLLYWOOD_OBSERVED_ROOMS}] and wake rooms [${HOLLYWOOD_WAKE_ROOMS}]" >&2
   fi
+fi
+
+if [[ "$app_server_mode" == "daemon" ]]; then
+  start_losangelex_app_server "$app_server_url" "$app_server_start_timeout_seconds"
+  extra_args+=(--remote "$app_server_url")
 fi
 
 if [[ -x "$binary_path" ]]; then
