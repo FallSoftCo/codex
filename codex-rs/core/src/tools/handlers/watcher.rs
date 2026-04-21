@@ -132,9 +132,6 @@ impl ToolHandler for WatcherHandler {
         };
 
         let db = required_state_db(&session)?;
-        db.ensure_state_schema_current()
-            .await
-            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
         match tool_name.name.as_str() {
             "watch_process_exit" => {
                 let args: WatchProcessExitArgs = parse_arguments(&arguments)?;
@@ -361,7 +358,7 @@ impl ToolHandler for WatcherHandler {
 }
 
 fn required_state_db(
-    session: &Arc<crate::codex::Session>,
+    session: &Arc<crate::session::session::Session>,
 ) -> Result<Arc<codex_state::StateRuntime>, FunctionCallError> {
     session.state_db().ok_or_else(|| {
         FunctionCallError::Fatal("sqlite state db is unavailable for this session".to_string())
@@ -370,7 +367,7 @@ fn required_state_db(
 
 fn resolve_thread_id(
     thread_id: Option<&str>,
-    session: &Arc<crate::codex::Session>,
+    session: &Arc<crate::session::session::Session>,
 ) -> Result<ThreadId, FunctionCallError> {
     match thread_id {
         Some(thread_id) => ThreadId::from_string(thread_id)

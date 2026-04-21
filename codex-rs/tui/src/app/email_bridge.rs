@@ -1011,7 +1011,7 @@ impl App {
                 text,
                 text_elements: Vec::new(),
             }],
-            session.cwd,
+            session.cwd.to_path_buf(),
             session.approval_policy,
             Some(session.approvals_reviewer),
             session.sandbox_policy,

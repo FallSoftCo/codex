@@ -1,13 +1,11 @@
 use crate::agent::AgentStatus;
-use crate::codex::Codex;
-use crate::codex::SteerInputError;
 use crate::config::ConstraintResult;
 use crate::file_watcher::WatchRegistration;
+use crate::session::Codex;
+use crate::session::SteerInputError;
 use codex_features::Feature;
 use codex_protocol::config_types::ApprovalsReviewer;
-use codex_protocol::config_types::ModeKind;
 use codex_protocol::config_types::Personality;
-use codex_protocol::config_types::ReasoningSummary;
 use codex_protocol::config_types::ServiceTier;
 use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result as CodexResult;
@@ -25,8 +23,10 @@ use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::Submission;
 use codex_protocol::protocol::ThreadMemoryMode;
 use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::TokenUsageInfo;
 use codex_protocol::protocol::W3cTraceContext;
 use codex_protocol::user_input::UserInput;
+use codex_utils_absolute_path::AbsolutePathBuf;
 use rmcp::model::ReadResourceRequestParams;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -43,11 +43,9 @@ pub struct ThreadConfigSnapshot {
     pub approval_policy: AskForApproval,
     pub approvals_reviewer: ApprovalsReviewer,
     pub sandbox_policy: SandboxPolicy,
-    pub cwd: PathBuf,
+    pub cwd: AbsolutePathBuf,
     pub ephemeral: bool,
     pub reasoning_effort: Option<ReasoningEffort>,
-    pub reasoning_summary: Option<ReasoningSummary>,
-    pub collaboration_mode: ModeKind,
     pub personality: Option<Personality>,
     pub session_source: SessionSource,
 }
@@ -90,8 +88,7 @@ impl CodexThread {
 
     #[doc(hidden)]
     pub async fn flush_rollout(&self) -> std::io::Result<()> {
-        self.codex.session.flush_rollout().await;
-        Ok(())
+        self.codex.session.flush_rollout().await
     }
 
     pub async fn submit_with_trace(
@@ -104,10 +101,7 @@ impl CodexThread {
 
     /// Persist whether this thread is eligible for future memory generation.
     pub async fn set_thread_memory_mode(&self, mode: ThreadMemoryMode) -> anyhow::Result<()> {
-        self.submit(Op::SetThreadMemoryMode { mode })
-            .await
-            .map(|_| ())
-            .map_err(anyhow::Error::from)
+        self.codex.set_thread_memory_mode(mode).await
     }
 
     pub async fn steer_input(
@@ -116,13 +110,9 @@ impl CodexThread {
         expected_turn_id: Option<&str>,
         responsesapi_client_metadata: Option<HashMap<String, String>>,
     ) -> Result<String, SteerInputError> {
-        if let Some(responsesapi_client_metadata) = responsesapi_client_metadata {
-            self.codex
-                .session
-                .set_active_turn_responsesapi_client_metadata(responsesapi_client_metadata)
-                .await;
-        }
-        self.codex.steer_input(input, expected_turn_id).await
+        self.codex
+            .steer_input(input, expected_turn_id, responsesapi_client_metadata)
+            .await
     }
 
     pub async fn set_app_server_client_info(
@@ -154,6 +144,17 @@ impl CodexThread {
 
     pub(crate) async fn total_token_usage(&self) -> Option<TokenUsage> {
         self.codex.session.total_token_usage().await
+    }
+
+    /// Returns the complete token usage snapshot currently cached for this thread.
+    ///
+    /// This accessor is intentionally narrower than direct session access: it lets
+    /// app-server lifecycle paths replay restored usage after resume or fork without
+    /// exposing broader session mutation authority. A caller that only reads
+    /// `total_token_usage` would drop last-turn usage and make the v2
+    /// `thread/tokenUsage/updated` payload incomplete.
+    pub async fn token_usage_info(&self) -> Option<TokenUsageInfo> {
+        self.codex.session.token_usage_info().await
     }
 
     /// Records a user-role session-prefix message without creating a new user turn boundary.
@@ -231,7 +232,7 @@ impl CodexThread {
             .session
             .record_conversation_items(turn_context.as_ref(), &items)
             .await;
-        self.codex.session.flush_rollout().await;
+        self.codex.session.flush_rollout().await?;
         Ok(())
     }
 

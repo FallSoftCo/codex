@@ -67,20 +67,10 @@ struct StatusRateLimitState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct StatusHistoryHandle {
-    agents_summary: Arc<RwLock<String>>,
     rate_limit_state: Arc<RwLock<StatusRateLimitState>>,
 }
 
 impl StatusHistoryHandle {
-    pub(crate) fn finish_agents_summary_discovery(&self, agents_summary: String) {
-        #[expect(clippy::expect_used)]
-        let mut summary = self
-            .agents_summary
-            .write()
-            .expect("status history agents-summary state poisoned");
-        *summary = agents_summary;
-    }
-
     pub(crate) fn finish_rate_limit_refresh(
         &self,
         rate_limits: &[RateLimitSnapshotDisplay],
@@ -269,7 +259,7 @@ impl StatusHistoryCell {
         ];
         if config.model_provider.wire_api == WireApi::Responses {
             let effort_value = reasoning_effort_override
-                .unwrap_or(None)
+                .unwrap_or(config.model_reasoning_effort)
                 .map(|effort| effort.to_string())
                 .unwrap_or_else(|| "none".to_string());
             config_entries.push(("reasoning effort", effort_value));
@@ -346,7 +336,6 @@ impl StatusHistoryCell {
             refreshing_rate_limits,
         }));
         let agents_summary = Arc::new(RwLock::new(agents_summary));
-        let history_agents_summary = Arc::clone(&agents_summary);
 
         (
             Self {
@@ -364,10 +353,7 @@ impl StatusHistoryCell {
                 agents_summary,
                 rate_limit_state: rate_limit_state.clone(),
             },
-            StatusHistoryHandle {
-                agents_summary: history_agents_summary,
-                rate_limit_state,
-            },
+            StatusHistoryHandle { rate_limit_state },
         )
     }
 

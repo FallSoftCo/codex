@@ -608,7 +608,7 @@ mod tests {
             .execute(db.pool.as_ref())
             .await
             .expect("drop watchers");
-        sqlx::query("DELETE FROM _sqlx_migrations WHERE version IN (30, 31)")
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version IN (32, 33)")
             .execute(db.pool.as_ref())
             .await
             .expect("delete watcher migrations");

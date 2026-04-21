@@ -1,9 +1,5 @@
 use crate::SkillsManager;
 use crate::agent::AgentControl;
-use crate::codex::Codex;
-use crate::codex::CodexSpawnArgs;
-use crate::codex::CodexSpawnOk;
-use crate::codex::INITIAL_SUBMIT_ID;
 use crate::codex_thread::CodexThread;
 use crate::config::Config;
 use crate::file_watcher::FileWatcher;
@@ -11,6 +7,10 @@ use crate::mcp::McpManager;
 use crate::plugins::PluginsManager;
 use crate::rollout::RolloutRecorder;
 use crate::rollout::truncation;
+use crate::session::Codex;
+use crate::session::CodexSpawnArgs;
+use crate::session::CodexSpawnOk;
+use crate::session::INITIAL_SUBMIT_ID;
 use crate::shell_snapshot::ShellSnapshot;
 use crate::skills_watcher::SkillsWatcher;
 use crate::skills_watcher::SkillsWatcherEvent;
@@ -216,6 +216,26 @@ pub(crate) struct ThreadManagerState {
     ops_log: Option<SharedCapturedOps>,
 }
 
+pub fn build_models_manager(
+    config: &Config,
+    auth_manager: Arc<AuthManager>,
+    collaboration_modes_config: CollaborationModesConfig,
+) -> Arc<ModelsManager> {
+    let openai_models_provider = config
+        .model_providers
+        .get(OPENAI_PROVIDER_ID)
+        .cloned()
+        .unwrap_or_else(|| ModelProviderInfo::create_openai_provider(/*base_url*/ None));
+
+    Arc::new(ModelsManager::new_with_provider(
+        config.codex_home.to_path_buf(),
+        auth_manager,
+        config.model_catalog.clone(),
+        collaboration_modes_config,
+        openai_models_provider,
+    ))
+}
+
 impl ThreadManager {
     pub fn new(
         config: &Config,
@@ -226,24 +246,15 @@ impl ThreadManager {
         analytics_events_client: Option<AnalyticsEventsClient>,
     ) -> Self {
         let codex_home = config.codex_home.clone();
-        let skills_codex_home = match AbsolutePathBuf::from_absolute_path_checked(&codex_home) {
-            Ok(codex_home) => codex_home,
-            Err(err) => panic!("config codex_home should be absolute: {err}"),
-        };
         let restriction_product = session_source.restriction_product();
-        let openai_models_provider = config
-            .model_providers
-            .get(OPENAI_PROVIDER_ID)
-            .cloned()
-            .unwrap_or_else(|| ModelProviderInfo::create_openai_provider(/*base_url*/ None));
         let (thread_created_tx, _) = broadcast::channel(THREAD_CREATED_CHANNEL_CAPACITY);
         let plugins_manager = Arc::new(PluginsManager::new_with_restriction_product(
-            codex_home.clone(),
+            codex_home.to_path_buf(),
             restriction_product,
         ));
         let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
         let skills_manager = Arc::new(SkillsManager::new_with_restriction_product(
-            skills_codex_home,
+            codex_home,
             config.bundled_skills_enabled(),
             restriction_product,
         ));
@@ -252,13 +263,11 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: Arc::new(ModelsManager::new_with_provider(
-                    codex_home,
+                models_manager: build_models_manager(
+                    config,
                     auth_manager.clone(),
-                    config.model_catalog.clone(),
                     collaboration_modes_config,
-                    openai_models_provider,
-                )),
+                ),
                 environment_manager,
                 skills_manager,
                 plugins_manager,
@@ -366,6 +375,10 @@ impl ThreadManager {
 
     pub fn mcp_manager(&self) -> Arc<McpManager> {
         self.state.mcp_manager.clone()
+    }
+
+    pub fn environment_manager(&self) -> Arc<EnvironmentManager> {
+        self.state.environment_manager.clone()
     }
 
     pub fn get_models_manager(&self) -> Arc<ModelsManager> {
@@ -486,7 +499,6 @@ impl ThreadManager {
             dynamic_tools,
             persist_extended_history,
             /*metrics_service_name*/ None,
-            /*conversation_id_override*/ None,
             /*parent_trace*/ None,
         ))
         .await
@@ -499,7 +511,6 @@ impl ThreadManager {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
-        conversation_id_override: Option<ThreadId>,
         parent_trace: Option<W3cTraceContext>,
     ) -> CodexResult<NewThread> {
         Box::pin(self.state.spawn_thread(
@@ -510,7 +521,6 @@ impl ThreadManager {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
-            conversation_id_override,
             parent_trace,
             /*user_shell_override*/ None,
         ))
@@ -523,7 +533,6 @@ impl ThreadManager {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
-        conversation_id_override: Option<ThreadId>,
         parent_trace: Option<W3cTraceContext>,
         session_source: SessionSource,
     ) -> CodexResult<NewThread> {
@@ -536,7 +545,6 @@ impl ThreadManager {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
-            conversation_id_override,
             /*inherited_shell_snapshot*/ None,
             /*inherited_exec_policy*/ None,
             parent_trace,
@@ -571,26 +579,6 @@ impl ThreadManager {
         persist_extended_history: bool,
         parent_trace: Option<W3cTraceContext>,
     ) -> CodexResult<NewThread> {
-        self.resume_thread_with_history_and_id(
-            config,
-            initial_history,
-            auth_manager,
-            persist_extended_history,
-            parent_trace,
-            /*conversation_id_override*/ None,
-        )
-        .await
-    }
-
-    pub async fn resume_thread_with_history_and_id(
-        &self,
-        config: Config,
-        initial_history: InitialHistory,
-        auth_manager: Arc<AuthManager>,
-        persist_extended_history: bool,
-        parent_trace: Option<W3cTraceContext>,
-        conversation_id_override: Option<ThreadId>,
-    ) -> CodexResult<NewThread> {
         Box::pin(self.state.spawn_thread(
             config,
             initial_history,
@@ -599,7 +587,6 @@ impl ThreadManager {
             Vec::new(),
             persist_extended_history,
             /*metrics_service_name*/ None,
-            conversation_id_override,
             parent_trace,
             /*user_shell_override*/ None,
         ))
@@ -619,7 +606,6 @@ impl ThreadManager {
             Vec::new(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
-            /*conversation_id_override*/ None,
             /*parent_trace*/ None,
             /*user_shell_override*/ Some(user_shell_override),
         ))
@@ -642,7 +628,6 @@ impl ThreadManager {
             Vec::new(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
-            /*conversation_id_override*/ None,
             /*parent_trace*/ None,
             /*user_shell_override*/ Some(user_shell_override),
         ))
@@ -751,7 +736,6 @@ impl ThreadManager {
             Vec::new(),
             persist_extended_history,
             /*metrics_service_name*/ None,
-            /*conversation_id_override*/ None,
             parent_trace,
             /*user_shell_override*/ None,
         ))
@@ -851,7 +835,6 @@ impl ThreadManagerState {
             Vec::new(),
             persist_extended_history,
             metrics_service_name,
-            /*conversation_id_override*/ None,
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
@@ -879,7 +862,6 @@ impl ThreadManagerState {
             Vec::new(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
-            /*conversation_id_override*/ None,
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
@@ -908,7 +890,6 @@ impl ThreadManagerState {
             Vec::new(),
             persist_extended_history,
             /*metrics_service_name*/ None,
-            /*conversation_id_override*/ None,
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
@@ -928,7 +909,6 @@ impl ThreadManagerState {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
-        conversation_id_override: Option<ThreadId>,
         parent_trace: Option<W3cTraceContext>,
         user_shell_override: Option<crate::shell::Shell>,
     ) -> CodexResult<NewThread> {
@@ -941,7 +921,6 @@ impl ThreadManagerState {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
-            conversation_id_override,
             /*inherited_shell_snapshot*/ None,
             /*inherited_exec_policy*/ None,
             parent_trace,
@@ -961,20 +940,29 @@ impl ThreadManagerState {
         dynamic_tools: Vec<codex_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
-        conversation_id_override: Option<ThreadId>,
         inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
         inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
         parent_trace: Option<W3cTraceContext>,
         user_shell_override: Option<crate::shell::Shell>,
     ) -> CodexResult<NewThread> {
-        let watch_registration = self
-            .skills_watcher
-            .register_config(
-                &config,
-                self.skills_manager.as_ref(),
-                self.plugins_manager.as_ref(),
-            )
-            .await;
+        let environment = self
+            .environment_manager
+            .current()
+            .await
+            .map_err(|err| CodexErr::Fatal(format!("failed to create environment: {err}")))?;
+        let watch_registration = match environment.as_ref() {
+            Some(environment) if !environment.is_remote() => {
+                self.skills_watcher
+                    .register_config(
+                        &config,
+                        self.skills_manager.as_ref(),
+                        self.plugins_manager.as_ref(),
+                        Some(environment.get_filesystem()),
+                    )
+                    .await
+            }
+            Some(_) | None => crate::file_watcher::WatchRegistration::default(),
+        };
         let CodexSpawnOk {
             codex, thread_id, ..
         } = Codex::spawn(CodexSpawnArgs {
@@ -992,11 +980,11 @@ impl ThreadManagerState {
             dynamic_tools,
             persist_extended_history,
             metrics_service_name,
-            conversation_id_override,
             inherited_shell_snapshot,
             inherited_exec_policy,
             user_shell_override,
             parent_trace,
+            analytics_events_client: self.analytics_events_client.clone(),
         })
         .await?;
         self.finalize_thread_spawn(codex, thread_id, watch_registration)

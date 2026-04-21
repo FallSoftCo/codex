@@ -231,9 +231,9 @@ fn watch_agent_completion_tool_matches_expected_spec() {
         (
             "target".to_string(),
             JsonSchema::string(Some(
-                    "Identifier of the target agent/thread whose completion should wake the waiting thread."
-                        .to_string(),
-                )),
+                "Identifier of the target agent/thread whose completion should wake the waiting thread."
+                    .to_string(),
+            )),
         ),
         (
             "title".to_string(),
@@ -242,36 +242,36 @@ fn watch_agent_completion_tool_matches_expected_spec() {
         (
             "prompt".to_string(),
             JsonSchema::string(Some(
-                    "Follow-up prompt injected into the thread after the target agent satisfies the condition."
-                        .to_string(),
-                )),
+                "Follow-up prompt injected into the thread after the target agent satisfies the condition."
+                    .to_string(),
+            )),
         ),
         (
             "condition".to_string(),
             JsonSchema::string(Some(
-                    "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
-                        .to_string(),
-                )),
+                "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
+                    .to_string(),
+            )),
         ),
         (
             "timeout_seconds".to_string(),
             JsonSchema::number(Some(
-                    "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
-                        .to_string(),
-                )),
+                "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
+                    .to_string(),
+            )),
         ),
         (
             "thread_id".to_string(),
             JsonSchema::string(Some(
-                    "Optional thread/session id to wake. Defaults to the current thread."
-                        .to_string(),
-                )),
+                "Optional thread/session id to wake. Defaults to the current thread."
+                    .to_string(),
+            )),
         ),
         (
             "requires_response".to_string(),
             JsonSchema::boolean(Some(
-                    "Whether the deferred wake should expect a concrete response.".to_string(),
-                )),
+                "Whether the deferred wake should expect a concrete response.".to_string(),
+            )),
         ),
     ]);
 
@@ -282,11 +282,15 @@ fn watch_agent_completion_tool_matches_expected_spec() {
             description: "Registers a persisted watcher that wakes the thread when another agent reaches a target completion state. Prefer this over stretching `wait_agent` into a long-lived blocking wait.".to_string(),
             strict: false,
             defer_loading: None,
-            parameters: JsonSchema::object(properties, Some(vec![
+            parameters: JsonSchema::object(
+                properties,
+                Some(vec![
                     "target".to_string(),
                     "title".to_string(),
                     "prompt".to_string(),
-                ]), Some(false.into()),),
+                ]),
+                Some(false.into()),
+            ),
             output_schema: None,
         })
     );
@@ -357,12 +361,16 @@ fn watch_task_periodically_tool_matches_expected_spec() {
             description: "Registers a persisted task watch that periodically wakes the thread to reevaluate a concrete task. Use this for time-based \"check on this later\" work.".to_string(),
             strict: false,
             defer_loading: None,
-            parameters: JsonSchema::object(properties, Some(vec![
+            parameters: JsonSchema::object(
+                properties,
+                Some(vec![
                     "title".to_string(),
                     "objective".to_string(),
                     "prompt".to_string(),
                     "check_every_seconds".to_string(),
-                ]), Some(false.into()),),
+                ]),
+                Some(false.into()),
+            ),
             output_schema: None,
         })
     );

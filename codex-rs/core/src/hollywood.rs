@@ -1,4 +1,4 @@
-use codex_git_utils::resolve_root_git_project_for_trust;
+use codex_git_utils::get_git_repo_root;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::HollywoodSessionMeta;
 use serde::Deserialize;
@@ -103,7 +103,7 @@ pub(crate) fn disable_hollywood_from_env_for_tests() {
 }
 
 pub fn default_hollywood_room_for_cwd(cwd: &Path) -> String {
-    resolve_root_git_project_for_trust(cwd)
+    get_git_repo_root(cwd)
         .and_then(|repo_root| {
             repo_root
                 .file_name()

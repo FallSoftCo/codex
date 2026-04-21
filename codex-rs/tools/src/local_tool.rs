@@ -94,9 +94,8 @@ pub fn create_watch_process_exit_tool() -> ToolSpec {
         (
             "session_id".to_string(),
             JsonSchema::number(Some(
-                    "Identifier of the running exec_command session to watch for exit."
-                        .to_string(),
-                )),
+                "Identifier of the running exec_command session to watch for exit.".to_string(),
+            )),
         ),
         (
             "title".to_string(),
@@ -105,29 +104,28 @@ pub fn create_watch_process_exit_tool() -> ToolSpec {
         (
             "prompt".to_string(),
             JsonSchema::string(Some(
-                    "Follow-up prompt injected into the thread after the process exits."
-                        .to_string(),
-                )),
+                "Follow-up prompt injected into the thread after the process exits.".to_string(),
+            )),
         ),
         (
             "timeout_seconds".to_string(),
             JsonSchema::number(Some(
-                    "Optional timeout in seconds. If the process is still unavailable when the timeout expires, the watcher fails."
-                        .to_string(),
-                )),
+                "Optional timeout in seconds. If the process is still unavailable when the timeout expires, the watcher fails."
+                    .to_string(),
+            )),
         ),
         (
             "thread_id".to_string(),
             JsonSchema::string(Some(
-                    "Optional thread/session id to wake. Defaults to the current thread."
-                        .to_string(),
-                )),
+                "Optional thread/session id to wake. Defaults to the current thread."
+                    .to_string(),
+            )),
         ),
         (
             "requires_response".to_string(),
             JsonSchema::boolean(Some(
-                    "Whether the deferred wake should expect a concrete response.".to_string(),
-                )),
+                "Whether the deferred wake should expect a concrete response.".to_string(),
+            )),
         ),
     ]);
 
@@ -136,11 +134,15 @@ pub fn create_watch_process_exit_tool() -> ToolSpec {
         description: "Registers a persisted watcher that wakes the thread when an existing exec_command session exits. Prefer this over long inline waiting when no reasoning is needed until the process finishes.".to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(vec![
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec![
                 "session_id".to_string(),
                 "title".to_string(),
                 "prompt".to_string(),
-            ]), Some(false.into()),),
+            ]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -150,9 +152,9 @@ pub fn create_watch_agent_completion_tool() -> ToolSpec {
         (
             "target".to_string(),
             JsonSchema::string(Some(
-                    "Identifier of the target agent/thread whose completion should wake the waiting thread."
-                        .to_string(),
-                )),
+                "Identifier of the target agent/thread whose completion should wake the waiting thread."
+                    .to_string(),
+            )),
         ),
         (
             "title".to_string(),
@@ -161,36 +163,36 @@ pub fn create_watch_agent_completion_tool() -> ToolSpec {
         (
             "prompt".to_string(),
             JsonSchema::string(Some(
-                    "Follow-up prompt injected into the thread after the target agent satisfies the condition."
-                        .to_string(),
-                )),
+                "Follow-up prompt injected into the thread after the target agent satisfies the condition."
+                    .to_string(),
+            )),
         ),
         (
             "condition".to_string(),
             JsonSchema::string(Some(
-                    "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
-                        .to_string(),
-                )),
+                "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
+                    .to_string(),
+            )),
         ),
         (
             "timeout_seconds".to_string(),
             JsonSchema::number(Some(
-                    "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
-                        .to_string(),
-                )),
+                "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
+                    .to_string(),
+            )),
         ),
         (
             "thread_id".to_string(),
             JsonSchema::string(Some(
-                    "Optional thread/session id to wake. Defaults to the current thread."
-                        .to_string(),
-                )),
+                "Optional thread/session id to wake. Defaults to the current thread."
+                    .to_string(),
+            )),
         ),
         (
             "requires_response".to_string(),
             JsonSchema::boolean(Some(
-                    "Whether the deferred wake should expect a concrete response.".to_string(),
-                )),
+                "Whether the deferred wake should expect a concrete response.".to_string(),
+            )),
         ),
     ]);
 
@@ -199,11 +201,15 @@ pub fn create_watch_agent_completion_tool() -> ToolSpec {
         description: "Registers a persisted watcher that wakes the thread when another agent reaches a target completion state. Prefer this over stretching `wait_agent` into a long-lived blocking wait.".to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(vec![
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec![
                 "target".to_string(),
                 "title".to_string(),
                 "prompt".to_string(),
-            ]), Some(false.into()),),
+            ]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -309,12 +315,16 @@ pub fn create_watch_task_periodically_tool() -> ToolSpec {
             .to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(vec![
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec![
                 "title".to_string(),
                 "objective".to_string(),
                 "prompt".to_string(),
                 "check_every_seconds".to_string(),
-            ]), Some(false.into()),),
+            ]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }
@@ -387,7 +397,11 @@ pub fn create_update_task_watch_tool() -> ToolSpec {
             .to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(vec!["task_watch_id".to_string(), "action".to_string()]), Some(false.into()),),
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec!["task_watch_id".to_string(), "action".to_string()]),
+            Some(false.into()),
+        ),
         output_schema: None,
     })
 }

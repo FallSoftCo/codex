@@ -1,4 +1,5 @@
 use super::*;
+use codex_config::config_toml::RealtimeTransport;
 use codex_protocol::protocol::ConversationStartParams;
 use codex_protocol::protocol::ConversationStartTransport;
 use codex_protocol::protocol::RealtimeAudioFrame;
@@ -131,7 +132,6 @@ impl ChatWidget {
         }
     }
 
-    #[cfg(test)]
     pub(super) fn pending_steer_compare_key_from_item(
         item: &codex_protocol::items::UserMessageItem,
     ) -> PendingSteerCompareKey {
@@ -216,8 +216,17 @@ impl ChatWidget {
         self.realtime_conversation.requested_close = false;
         self.realtime_conversation.session_id = None;
         self.set_footer_hint_override(Some(Self::realtime_footer_hint_items()));
-        self.realtime_conversation.transport = RealtimeConversationUiTransport::Websocket;
-        self.submit_realtime_conversation_start(/*transport*/ None);
+        match self.config.realtime.transport {
+            RealtimeTransport::Websocket => {
+                self.realtime_conversation.transport = RealtimeConversationUiTransport::Websocket;
+                self.submit_realtime_conversation_start(/*transport*/ None);
+            }
+            RealtimeTransport::WebRtc => {
+                self.realtime_conversation.transport =
+                    RealtimeConversationUiTransport::Webrtc { handle: None };
+                start_realtime_webrtc_offer_task(self.app_event_tx.clone());
+            }
+        }
         self.request_redraw();
     }
 
@@ -231,7 +240,7 @@ impl ChatWidget {
                 prompt: None,
                 session_id: None,
                 transport,
-                voice: None,
+                voice: self.config.realtime.voice,
             },
         ));
     }
@@ -329,6 +338,7 @@ impl ChatWidget {
             RealtimeEvent::ConversationItemAdded(_item) => {}
             RealtimeEvent::ConversationItemDone { .. } => {}
             RealtimeEvent::HandoffRequested(_) => {}
+            RealtimeEvent::NoopRequested(_) => {}
             RealtimeEvent::Error(message) => {
                 self.fail_realtime_conversation(format!("Realtime voice error: {message}"));
             }

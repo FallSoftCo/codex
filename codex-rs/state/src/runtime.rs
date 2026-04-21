@@ -22,7 +22,9 @@ use crate::migrations::runtime_state_migrator;
 use crate::model::AgentJobRow;
 use crate::model::ThreadRow;
 use crate::model::anchor_from_item;
+use crate::model::datetime_to_epoch_millis;
 use crate::model::datetime_to_epoch_seconds;
+use crate::model::epoch_millis_to_datetime;
 use crate::paths::file_modified_time_utc;
 use chrono::DateTime;
 use chrono::Utc;
@@ -47,6 +49,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicI64;
 use std::time::Duration;
 use tracing::warn;
 
@@ -65,6 +68,7 @@ mod threads;
 mod watchers;
 
 pub use remote_control::RemoteControlEnrollmentRecord;
+pub use threads::ThreadFilterOptions;
 
 // "Partition" is the retained-log-content bucket we cap at 10 MiB:
 // - one bucket per non-null thread_id
@@ -81,6 +85,7 @@ pub struct StateRuntime {
     default_provider: String,
     pool: Arc<sqlx::SqlitePool>,
     logs_pool: Arc<sqlx::SqlitePool>,
+    thread_updated_at_millis: Arc<AtomicI64>,
 }
 
 impl StateRuntime {
@@ -125,11 +130,17 @@ impl StateRuntime {
                 return Err(err);
             }
         };
+        let thread_updated_at_millis: Option<i64> =
+            sqlx::query_scalar("SELECT MAX(threads.updated_at_ms) FROM threads")
+                .fetch_one(pool.as_ref())
+                .await?;
+        let thread_updated_at_millis = thread_updated_at_millis.unwrap_or(0);
         let runtime = Arc::new(Self {
             pool,
             logs_pool,
             codex_home,
             default_provider,
+            thread_updated_at_millis: Arc::new(AtomicI64::new(thread_updated_at_millis)),
         });
         if let Err(err) = runtime.run_logs_startup_maintenance().await {
             warn!(
@@ -147,10 +158,11 @@ impl StateRuntime {
 
     /// Re-run state migrations against an already-open runtime.
     ///
-    /// This lets long-lived processes lazily adopt newer continuation tables
-    /// like watchers/task watches after a binary upgrade without requiring an
-    /// immediate full process restart.
+    /// Long-lived processes can call this before touching newer continuation
+    /// tables so upgraded binaries adopt the current state schema without
+    /// forcing an immediate process restart.
     pub async fn ensure_state_schema_current(&self) -> anyhow::Result<()> {
+        reconcile_legacy_state_migration_versions(self.pool.as_ref()).await?;
         let migrator = runtime_state_migrator();
         migrator.run(self.pool.as_ref()).await?;
         Ok(())
@@ -204,15 +216,28 @@ async fn reconcile_legacy_state_migration_versions(pool: &SqlitePool) -> anyhow:
         return Ok(());
     }
 
-    // During the Hollywood replay we accidentally created duplicate migration
-    // version `22`, which made fresh databases fail and left some older local
-    // databases with a different numbering history. Normalize both histories
-    // before sqlx validates checksums so either branch can continue upgrading.
+    // Earlier Losangelex work introduced fork-only migrations before upstream's
+    // newer state migrations landed, then later added more fork-only tables on
+    // top. Normalize older local histories so the current upstream-first
+    // numbering can apply cleanly:
+    // 22 agent_path, 23 drop_logs, 24 remote_control, 25 timestamps,
+    // 26 dynamic_tool_namespaces, 27 hollywood, 28 scheduled_tasks,
+    // 29 testers, 30 tester_runs, 31 tester_runs_drop_runtime_thread_fk,
+    // 32 watchers, 33 agent_completion_watchers, 34 task_watches, 35 path_claims.
     for (from_version, description, to_version) in [
-        (22_i64, "threads agent path", 23_i64),
-        (23_i64, "drop logs", 24_i64),
-        (24_i64, "remote control enrollments", 25_i64),
-        (25_i64, "scheduled tasks", 26_i64),
+        (22_i64, "threads hollywood", 27_i64),
+        (23_i64, "threads agent path", 22_i64),
+        (24_i64, "drop logs", 23_i64),
+        (25_i64, "remote control enrollments", 24_i64),
+        (25_i64, "scheduled tasks", 28_i64),
+        (26_i64, "scheduled tasks", 28_i64),
+        (27_i64, "testers", 29_i64),
+        (28_i64, "tester runs", 30_i64),
+        (29_i64, "tester runs drop runtime thread fk", 31_i64),
+        (30_i64, "watchers", 32_i64),
+        (31_i64, "agent completion watchers", 33_i64),
+        (32_i64, "task watches", 34_i64),
+        (33_i64, "path claims", 35_i64),
     ] {
         sqlx::query(
             r#"
@@ -280,6 +305,7 @@ async fn remove_legacy_db_files(
             return;
         }
     };
+    let mut legacy_paths = Vec::new();
     while let Ok(Some(entry)) = entries.next_entry().await {
         if !entry
             .file_type()
@@ -295,8 +321,23 @@ async fn remove_legacy_db_files(
             continue;
         }
 
-        let legacy_path = entry.path();
-        if let Err(err) = tokio::fs::remove_file(&legacy_path).await {
+        legacy_paths.push(entry.path());
+    }
+
+    // On Windows, SQLite can keep the main database file undeletable until the
+    // matching `-wal` / `-shm` sidecars are removed. Remove the longest
+    // sidecar-style paths first so the main file is attempted last.
+    legacy_paths.sort_by_key(|path| std::cmp::Reverse(path.as_os_str().len()));
+    for legacy_path in legacy_paths {
+        let mut result = tokio::fs::remove_file(&legacy_path).await;
+        for _ in 0..3 {
+            if result.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            result = tokio::fs::remove_file(&legacy_path).await;
+        }
+        if let Err(err) = result {
             warn!(
                 "failed to remove legacy {db_label} db file {}: {err}",
                 legacy_path.display(),

@@ -3,6 +3,7 @@ use crate::events::CodexAppMentionedEventRequest;
 use crate::events::CodexAppServerClientMetadata;
 use crate::events::CodexAppUsedEventRequest;
 use crate::events::CodexCompactionEventRequest;
+use crate::events::CodexHookRunEventRequest;
 use crate::events::CodexPluginEventRequest;
 use crate::events::CodexPluginUsedEventRequest;
 use crate::events::CodexRuntimeMetadata;
@@ -20,19 +21,20 @@ use crate::events::ThreadInitializedEventParams;
 use crate::events::TrackEventRequest;
 use crate::events::codex_app_metadata;
 use crate::events::codex_compaction_event_params;
+use crate::events::codex_hook_run_metadata;
 use crate::events::codex_plugin_metadata;
 use crate::events::codex_plugin_used_metadata;
 use crate::events::plugin_state_event_type;
 use crate::events::subagent_parent_thread_id;
 use crate::events::subagent_source_name;
 use crate::events::subagent_thread_started_event_request;
-use crate::events::thread_source_name;
 use crate::facts::AnalyticsFact;
 use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
 use crate::facts::CodexCompactionEvent;
 use crate::facts::CustomAnalyticsFact;
+use crate::facts::HookRunInput;
 use crate::facts::PluginState;
 use crate::facts::PluginStateChangedInput;
 use crate::facts::PluginUsedInput;
@@ -107,7 +109,7 @@ impl ThreadMetadataState {
             | SessionSource::Unknown => (None, None),
         };
         Self {
-            thread_source: thread_source_name(session_source),
+            thread_source: session_source.thread_source_name(),
             initialization_mode,
             subagent_source,
             parent_thread_id,
@@ -217,6 +219,9 @@ impl AnalyticsReducer {
                 }
                 CustomAnalyticsFact::AppUsed(input) => {
                     self.ingest_app_used(input, out);
+                }
+                CustomAnalyticsFact::HookRun(input) => {
+                    self.ingest_hook_run(input, out);
                 }
                 CustomAnalyticsFact::PluginUsed(input) => {
                     self.ingest_plugin_used(input, out);
@@ -440,6 +445,14 @@ impl AnalyticsReducer {
         out.push(TrackEventRequest::AppUsed(CodexAppUsedEventRequest {
             event_type: "codex_app_used",
             event_params,
+        }));
+    }
+
+    fn ingest_hook_run(&mut self, input: HookRunInput, out: &mut Vec<TrackEventRequest>) {
+        let HookRunInput { tracking, hook } = input;
+        out.push(TrackEventRequest::HookRun(CodexHookRunEventRequest {
+            event_type: "codex_hook_run",
+            event_params: codex_hook_run_metadata(&tracking, hook),
         }));
     }
 
@@ -882,7 +895,7 @@ fn codex_turn_event_params(
         personality,
         is_first_turn,
     } = resolved_config;
-    let token_usage = turn_state.token_usage.clone().unwrap_or_default();
+    let token_usage = turn_state.token_usage.clone();
     CodexTurnEventParams {
         thread_id,
         turn_id,
@@ -920,11 +933,21 @@ fn codex_turn_event_params(
         subagent_tool_call_count: None,
         web_search_count: None,
         image_generation_count: None,
-        input_tokens: Some(token_usage.input_tokens),
-        cached_input_tokens: Some(token_usage.cached_input_tokens),
-        output_tokens: Some(token_usage.output_tokens),
-        reasoning_output_tokens: Some(token_usage.reasoning_output_tokens),
-        total_tokens: Some(token_usage.total_tokens),
+        input_tokens: token_usage
+            .as_ref()
+            .map(|token_usage| token_usage.input_tokens),
+        cached_input_tokens: token_usage
+            .as_ref()
+            .map(|token_usage| token_usage.cached_input_tokens),
+        output_tokens: token_usage
+            .as_ref()
+            .map(|token_usage| token_usage.output_tokens),
+        reasoning_output_tokens: token_usage
+            .as_ref()
+            .map(|token_usage| token_usage.reasoning_output_tokens),
+        total_tokens: token_usage
+            .as_ref()
+            .map(|token_usage| token_usage.total_tokens),
         duration_ms: completed.duration_ms,
         started_at,
         completed_at: Some(completed.completed_at),

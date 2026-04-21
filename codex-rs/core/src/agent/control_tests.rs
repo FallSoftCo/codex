@@ -5,9 +5,9 @@ use crate::agent::agent_status_from_event;
 use crate::config::AgentRoleConfig;
 use crate::config::Config;
 use crate::config::ConfigBuilder;
-use crate::contextual_user_message::SUBAGENT_NOTIFICATION_OPEN_TAG;
+use crate::context::ContextualUserFragment;
+use crate::context::SubagentNotification;
 use assert_matches::assert_matches;
-use chrono::Utc;
 use codex_features::Feature;
 use codex_login::CodexAuth;
 use codex_protocol::AgentPath;
@@ -24,6 +24,9 @@ use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::TurnCompleteEvent;
 use codex_protocol::protocol::TurnStartedEvent;
+use codex_thread_store::ArchiveThreadParams;
+use codex_thread_store::LocalThreadStore;
+use codex_thread_store::ThreadStore;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tokio::time::Duration;
@@ -125,7 +128,7 @@ fn has_subagent_notification(history_items: &[ResponseItem]) -> bool {
         }
         content.iter().any(|content_item| match content_item {
             ContentItem::InputText { text } | ContentItem::OutputText { text } => {
-                text.contains(SUBAGENT_NOTIFICATION_OPEN_TAG)
+                SubagentNotification::matches_text(text)
             }
             ContentItem::InputImage { .. } => false,
         })
@@ -186,7 +189,9 @@ async fn wait_for_subagent_notification(parent_thread: &Arc<CodexThread>) -> boo
             sleep(Duration::from_millis(25)).await;
         }
     };
-    timeout(Duration::from_secs(2), wait).await.is_ok()
+    // CI can take several seconds to schedule the detached completion watcher,
+    // especially on slower Windows runners.
+    timeout(Duration::from_secs(10), wait).await.is_ok()
 }
 
 async fn persist_thread_for_tree_resume(thread: &Arc<CodexThread>, message: &str) {
@@ -194,7 +199,12 @@ async fn persist_thread_for_tree_resume(thread: &Arc<CodexThread>, message: &str
         .inject_user_message_without_turn(message.to_string())
         .await;
     thread.codex.session.ensure_rollout_materialized().await;
-    thread.codex.session.flush_rollout().await;
+    thread
+        .codex
+        .session
+        .flush_rollout()
+        .await
+        .expect("test thread rollout should flush");
 }
 
 async fn wait_for_live_thread_spawn_children(
@@ -624,7 +634,12 @@ async fn spawn_agent_can_fork_parent_thread_history_with_sanitized_items() {
         .session
         .ensure_rollout_materialized()
         .await;
-    parent_thread.codex.session.flush_rollout().await;
+    parent_thread
+        .codex
+        .session
+        .flush_rollout()
+        .await
+        .expect("parent rollout should flush");
 
     let child_thread_id = harness
         .control
@@ -821,7 +836,12 @@ async fn spawn_agent_fork_last_n_turns_keeps_only_recent_turns() {
         .session
         .ensure_rollout_materialized()
         .await;
-    parent_thread.codex.session.flush_rollout().await;
+    parent_thread
+        .codex
+        .session
+        .flush_rollout()
+        .await
+        .expect("parent rollout should flush");
 
     let child_thread_id = harness
         .control
@@ -1643,38 +1663,18 @@ async fn resume_agent_from_rollout_reads_archived_rollout_path() {
         .await
         .expect("child thread should exist");
     persist_thread_for_tree_resume(&child_thread, "persist before archiving").await;
-    let rollout_path = child_thread
-        .rollout_path()
-        .expect("thread should have rollout path");
-    let state_db = child_thread
-        .state_db()
-        .expect("thread should have state db handle");
-
     let _ = harness
         .control
         .shutdown_live_agent(child_thread_id)
         .await
         .expect("child shutdown should succeed");
-
-    let archived_root = harness
-        .config
-        .codex_home
-        .join(crate::ARCHIVED_SESSIONS_SUBDIR);
-    tokio::fs::create_dir_all(&archived_root)
+    let store = LocalThreadStore::new(codex_rollout::RolloutConfig::from_view(&harness.config));
+    store
+        .archive_thread(ArchiveThreadParams {
+            thread_id: child_thread_id,
+        })
         .await
-        .expect("archived root should exist");
-    let archived_rollout_path = archived_root.join(
-        rollout_path
-            .file_name()
-            .expect("rollout file name should be present"),
-    );
-    tokio::fs::rename(&rollout_path, &archived_rollout_path)
-        .await
-        .expect("rollout should move to archived path");
-    state_db
-        .mark_archived(child_thread_id, archived_rollout_path.as_path(), Utc::now())
-        .await
-        .expect("state db archive update should succeed");
+        .expect("child thread should archive");
 
     let resumed_thread_id = harness
         .control

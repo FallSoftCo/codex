@@ -1,8 +1,8 @@
 use crate::agent::AgentStatus;
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::config::Config;
 use crate::function_tool::FunctionCallError;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
@@ -205,7 +205,7 @@ pub(crate) fn build_agent_spawn_config(
     turn: &TurnContext,
 ) -> Result<Config, FunctionCallError> {
     let mut config = build_agent_shared_config(turn)?;
-    config.base_instructions = Some(Some(base_instructions.text.clone()));
+    config.base_instructions = Some(base_instructions.text.clone());
     Ok(config)
 }
 
@@ -224,7 +224,7 @@ fn build_agent_shared_config(turn: &TurnContext) -> Result<Config, FunctionCallE
     let base_config = turn.config.clone();
     let mut config = (*base_config).clone();
     config.model = Some(turn.model_info.slug.clone());
-    config.model_provider = turn.provider.clone();
+    config.model_provider = turn.provider.info().clone();
     config.model_reasoning_effort = turn
         .reasoning_effort
         .or(turn.model_info.default_reasoning_level);

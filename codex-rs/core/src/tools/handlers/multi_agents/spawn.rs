@@ -58,10 +58,8 @@ impl ToolHandler for Handler {
                 .into(),
             )
             .await;
-        let mut config = build_agent_spawn_config(
-            &session.get_base_instructions().await.unwrap_or_default(),
-            turn.as_ref(),
-        )?;
+        let mut config =
+            build_agent_spawn_config(&session.get_base_instructions().await, turn.as_ref())?;
         if args.fork_context {
             reject_full_fork_spawn_overrides(
                 role_name,

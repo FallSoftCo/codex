@@ -1,6 +1,8 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use anyhow::Result;
+use codex_config::types::McpServerConfig;
+use codex_config::types::McpServerTransportConfig;
 use codex_features::Feature;
 use codex_protocol::protocol::EventMsg;
 use core_test_support::responses;
@@ -12,13 +14,15 @@ use core_test_support::responses::ev_custom_tool_call;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::sse;
 use core_test_support::skip_if_no_network;
+use core_test_support::stdio_server_bin;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event_match;
+use std::collections::HashMap;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::path::PathBuf;
+use std::time::Duration;
 use tempfile::tempdir;
 use wiremock::MockServer;
 
@@ -87,21 +91,6 @@ fn write_too_old_node_script(dir: &Path) -> Result<std::path::PathBuf> {
     }
 }
 
-fn js_repl_test_node_path() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let nvm_dir = std::env::var_os("NVM_DIR").map(PathBuf::from);
-    let candidates = [
-        std::env::var_os("CODEX_JS_REPL_NODE_PATH").map(PathBuf::from),
-        home.as_ref()
-            .map(|home| home.join(".nvm/versions/node/v22.22.0/bin/node")),
-        nvm_dir
-            .as_ref()
-            .map(|nvm| nvm.join("versions/node/v22.22.0/bin/node")),
-    ];
-
-    candidates.into_iter().flatten().find(|path| path.exists())
-}
-
 async fn run_js_repl_turn(
     server: &MockServer,
     prompt: &str,
@@ -128,9 +117,6 @@ async fn run_js_repl_sequence(
             .features
             .enable(Feature::JsRepl)
             .expect("test config should allow feature update");
-        if let Some(node_path) = js_repl_test_node_path() {
-            config.js_repl_node_path = Some(node_path);
-        }
     });
     let test = builder.build(server).await?;
 
@@ -675,6 +661,84 @@ async fn js_repl_can_invoke_builtin_tools() -> Result<()> {
         "js_repl call failed unexpectedly: {output}"
     );
     assert!(output.contains("function_call_output"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn js_repl_can_invoke_mcp_tools_by_display_name() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = responses::start_mock_server().await;
+    let rmcp_test_server_bin = stdio_server_bin()?;
+    let mut builder = test_codex().with_config(move |config| {
+        config
+            .features
+            .enable(Feature::JsRepl)
+            .expect("test config should allow feature update");
+
+        let mut servers = config.mcp_servers.get().clone();
+        servers.insert(
+            "rmcp".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::Stdio {
+                    command: rmcp_test_server_bin,
+                    args: Vec::new(),
+                    env: None,
+                    env_vars: Vec::new(),
+                    cwd: None,
+                },
+                experimental_environment: None,
+                enabled: true,
+                required: false,
+                supports_parallel_tool_calls: false,
+                disabled_reason: None,
+                startup_timeout_sec: Some(Duration::from_secs(10)),
+                tool_timeout_sec: None,
+                default_tools_approval_mode: None,
+                enabled_tools: None,
+                disabled_tools: None,
+                scopes: None,
+                oauth_resource: None,
+                tools: HashMap::new(),
+            },
+        );
+        config
+            .mcp_servers
+            .set(servers)
+            .expect("test mcp servers should accept any configuration");
+    });
+    let test = builder.build(&server).await?;
+
+    responses::mount_sse_once(
+        &server,
+        sse(vec![
+            ev_response_created("resp-1"),
+            ev_custom_tool_call(
+                "call-1",
+                "js_repl",
+                r#"
+const result = await codex.tool("mcp__rmcp__echo", { message: "ping" });
+console.log(result.output);
+"#,
+            ),
+            ev_completed("resp-1"),
+        ]),
+    )
+    .await;
+    let final_mock = responses::mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("msg-1", "done"),
+            ev_completed("resp-2"),
+        ]),
+    )
+    .await;
+
+    test.submit_turn("use js_repl to call an MCP tool").await?;
+
+    let req = final_mock.single_request();
+    assert_js_repl_ok(&req, "call-1", "ECHOING: ping");
 
     Ok(())
 }

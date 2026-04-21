@@ -13,19 +13,25 @@ use crate::tools::handlers::multi_agents_common::MIN_WAIT_TIMEOUT_MS;
 use crate::tools::registry::ToolRegistryBuilder;
 use codex_mcp::ToolInfo;
 use codex_protocol::dynamic_tools::DynamicToolSpec;
+use codex_tools::AdditionalProperties;
 use codex_tools::DiscoverableTool;
 use codex_tools::JsonSchema;
 use codex_tools::ResponsesApiTool;
 use codex_tools::ToolHandlerKind;
+use codex_tools::ToolName;
+use codex_tools::ToolNamespace;
 use codex_tools::ToolRegistryPlanDeferredTool;
+use codex_tools::ToolRegistryPlanMcpTool;
 use codex_tools::ToolRegistryPlanParams;
 use codex_tools::ToolSpec;
 use codex_tools::ToolUserShellType;
 use codex_tools::ToolsConfig;
 use codex_tools::WaitAgentTimeoutOptions;
+use codex_tools::augment_tool_spec_for_code_mode;
 use codex_tools::build_tool_registry_plan;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 pub(crate) fn tool_user_shell_type(user_shell: &Shell) -> ToolUserShellType {
@@ -38,6 +44,38 @@ pub(crate) fn tool_user_shell_type(user_shell: &Shell) -> ToolUserShellType {
     }
 }
 
+struct McpToolPlanInputs<'a> {
+    mcp_tools: Vec<ToolRegistryPlanMcpTool<'a>>,
+    tool_namespaces: HashMap<String, ToolNamespace>,
+}
+
+fn map_mcp_tools_for_plan(mcp_tools: &HashMap<String, ToolInfo>) -> McpToolPlanInputs<'_> {
+    McpToolPlanInputs {
+        mcp_tools: mcp_tools
+            .values()
+            .map(|tool| ToolRegistryPlanMcpTool {
+                name: tool.canonical_tool_name(),
+                tool: &tool.tool,
+            })
+            .collect(),
+        tool_namespaces: mcp_tools
+            .values()
+            .map(|tool| {
+                (
+                    tool.callable_namespace.clone(),
+                    ToolNamespace {
+                        name: tool.callable_namespace.clone(),
+                        description: tool
+                            .connector_description
+                            .clone()
+                            .or_else(|| tool.server_instructions.clone()),
+                    },
+                )
+            })
+            .collect(),
+    }
+}
+
 fn create_hollywood_status_tool() -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_status".to_string(),
@@ -45,11 +83,7 @@ fn create_hollywood_status_tool() -> ToolSpec {
             .to_string(),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::object(
-            BTreeMap::new(),
-            Some(Vec::new()),
-            Some(false.into()),
-        ),
+        parameters: JsonSchema::object(BTreeMap::new(), Some(Vec::new()), Some(false.into())),
         output_schema: None,
     })
 }
@@ -227,13 +261,15 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
         (
             "role".to_string(),
             JsonSchema::string(Some(
-                "Optional updated role, for example leader, member, reviewer, observer.".to_string(),
+                "Optional updated role, for example leader, member, reviewer, observer."
+                    .to_string(),
             )),
         ),
         (
             "state".to_string(),
             JsonSchema::string(Some(
-                "Optional updated team state, for example pending, accepted, joined, active, declined, deferred, timed_out.".to_string(),
+                "Optional updated team state, for example pending, accepted, joined, active, declined, deferred, timed_out."
+                    .to_string(),
             )),
         ),
         (
@@ -244,7 +280,9 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
         ),
         (
             "task".to_string(),
-            JsonSchema::string(Some("Optional current task summary for this member.".to_string())),
+            JsonSchema::string(Some(
+                "Optional current task summary for this member.".to_string(),
+            )),
         ),
         (
             "scope".to_string(),
@@ -270,8 +308,9 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
 
 pub(crate) fn build_specs_with_discoverable_tools(
     config: &ToolsConfig,
-    mcp_tools: Option<HashMap<String, rmcp::model::Tool>>,
-    app_tools: Option<HashMap<String, ToolInfo>>,
+    mcp_tools: Option<HashMap<String, ToolInfo>>,
+    deferred_mcp_tools: Option<HashMap<String, ToolInfo>>,
+    unavailable_called_tools: Vec<ToolName>,
     discoverable_tools: Option<Vec<DiscoverableTool>>,
     dynamic_tools: &[DynamicToolSpec],
 ) -> ToolRegistryBuilder {
@@ -292,6 +331,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
     use crate::tools::handlers::TestSyncHandler;
     use crate::tools::handlers::ToolSearchHandler;
     use crate::tools::handlers::ToolSuggestHandler;
+    use crate::tools::handlers::UnavailableToolHandler;
     use crate::tools::handlers::UnifiedExecHandler;
     use crate::tools::handlers::ViewImageHandler;
     use crate::tools::handlers::WatcherHandler;
@@ -306,14 +346,16 @@ pub(crate) fn build_specs_with_discoverable_tools(
     use crate::tools::handlers::multi_agents_v2::SendMessageHandler as SendMessageHandlerV2;
     use crate::tools::handlers::multi_agents_v2::SpawnAgentHandler as SpawnAgentHandlerV2;
     use crate::tools::handlers::multi_agents_v2::WaitAgentHandler as WaitAgentHandlerV2;
+    use crate::tools::handlers::unavailable_tool_message;
+    use crate::tools::tool_search_entry::build_tool_search_entries;
 
     let mut builder = ToolRegistryBuilder::new();
-    let app_tool_sources = app_tools.as_ref().map(|app_tools| {
-        app_tools
+    let mcp_tool_plan_inputs = mcp_tools.as_ref().map(map_mcp_tools_for_plan);
+    let deferred_mcp_tool_sources = deferred_mcp_tools.as_ref().map(|tools| {
+        tools
             .values()
             .map(|tool| ToolRegistryPlanDeferredTool {
-                tool_name: tool.callable_name.as_str(),
-                tool_namespace: tool.callable_namespace.as_str(),
+                name: tool.canonical_tool_name(),
                 server_name: tool.server_name.as_str(),
                 connector_name: tool.connector_name.as_deref(),
                 connector_description: tool.connector_description.as_deref(),
@@ -325,9 +367,13 @@ pub(crate) fn build_specs_with_discoverable_tools(
     let plan = build_tool_registry_plan(
         config,
         ToolRegistryPlanParams {
-            mcp_tools: mcp_tools.as_ref(),
-            deferred_mcp_tools: app_tool_sources.as_deref(),
-            tool_namespaces: None,
+            mcp_tools: mcp_tool_plan_inputs
+                .as_ref()
+                .map(|inputs| inputs.mcp_tools.as_slice()),
+            deferred_mcp_tools: deferred_mcp_tool_sources.as_deref(),
+            tool_namespaces: mcp_tool_plan_inputs
+                .as_ref()
+                .map(|inputs| &inputs.tool_namespaces),
             discoverable_tools: discoverable_tools.as_deref(),
             dynamic_tools,
             default_agent_type_description: &default_agent_type_description,
@@ -351,12 +397,23 @@ pub(crate) fn build_specs_with_discoverable_tools(
     let request_user_input_handler = Arc::new(RequestUserInputHandler {
         default_mode_request_user_input: config.default_mode_request_user_input,
     });
+    let deferred_dynamic_tools = dynamic_tools
+        .iter()
+        .filter(|tool| tool.defer_loading)
+        .cloned()
+        .collect::<Vec<_>>();
     let mut tool_search_handler = None;
     let tool_suggest_handler = Arc::new(ToolSuggestHandler);
     let code_mode_handler = Arc::new(CodeModeExecuteHandler);
     let code_mode_wait_handler = Arc::new(CodeModeWaitHandler);
     let js_repl_handler = Arc::new(JsReplHandler);
     let js_repl_reset_handler = Arc::new(JsReplResetHandler);
+    let unavailable_tool_handler = Arc::new(UnavailableToolHandler);
+    let mut existing_spec_names = plan
+        .specs
+        .iter()
+        .map(|configured_tool| configured_tool.name().to_string())
+        .collect::<HashSet<_>>();
 
     let hollywood_tools_enabled = !cfg!(test)
         && config.hollywood_tools_enabled
@@ -476,9 +533,11 @@ pub(crate) fn build_specs_with_discoverable_tools(
             }
             ToolHandlerKind::ToolSearch => {
                 if tool_search_handler.is_none() {
-                    tool_search_handler = app_tools
-                        .as_ref()
-                        .map(|app_tools| Arc::new(ToolSearchHandler::new(app_tools.clone())));
+                    let entries = build_tool_search_entries(
+                        deferred_mcp_tools.as_ref(),
+                        &deferred_dynamic_tools,
+                    );
+                    tool_search_handler = Some(Arc::new(ToolSearchHandler::new(entries)));
                 }
                 if let Some(tool_search_handler) = tool_search_handler.as_ref() {
                     builder.register_handler(handler.name, tool_search_handler.clone());
@@ -504,7 +563,60 @@ pub(crate) fn build_specs_with_discoverable_tools(
             }
         }
     }
+    if let Some(deferred_mcp_tools) = deferred_mcp_tools.as_ref() {
+        for (name, _) in deferred_mcp_tools.iter().filter(|(name, _)| {
+            !mcp_tools
+                .as_ref()
+                .is_some_and(|tools| tools.contains_key(*name))
+        }) {
+            builder.register_handler(name.clone(), mcp_handler.clone());
+        }
+    }
 
+    for unavailable_tool in unavailable_called_tools {
+        let tool_name = unavailable_tool.display();
+        if existing_spec_names.insert(tool_name.clone()) {
+            let spec = codex_tools::ToolSpec::Function(ResponsesApiTool {
+                name: tool_name.clone(),
+                description: unavailable_tool_message(
+                    &tool_name,
+                    "Calling this placeholder returns an error explaining that the tool is unavailable.",
+                ),
+                strict: false,
+                parameters: JsonSchema::object(
+                    Default::default(),
+                    /*required*/ None,
+                    Some(AdditionalProperties::Boolean(false)),
+                ),
+                output_schema: None,
+                defer_loading: None,
+            });
+            let spec = if config.code_mode_enabled {
+                augment_tool_spec_for_code_mode(spec)
+            } else {
+                spec
+            };
+            builder.push_spec(spec);
+        }
+        builder.register_handler(unavailable_tool, unavailable_tool_handler.clone());
+    }
+    if !cfg!(test)
+        && config.hollywood_tools_enabled
+        && crate::hollywood::HollywoodSessionConfig::from_env().is_some()
+    {
+        for spec in [
+            create_hollywood_status_tool(),
+            create_hollywood_read_tool(),
+            create_hollywood_send_tool(),
+            create_hollywood_team_up_tool(),
+            create_hollywood_team_status_tool(),
+            create_hollywood_team_member_update_tool(),
+        ] {
+            if existing_spec_names.insert(spec.name().to_string()) {
+                builder.push_spec(spec);
+            }
+        }
+    }
     if hollywood_tools_enabled {
         builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
         builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));

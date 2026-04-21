@@ -2,9 +2,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::Prompt;
-use crate::codex::Session;
-use crate::codex::TurnContext;
-use crate::codex::built_tools;
 use crate::compact::CompactionAnalyticsAttempt;
 use crate::compact::InitialContextInjection;
 use crate::compact::compaction_status_from_result;
@@ -13,6 +10,9 @@ use crate::context_manager::ContextManager;
 use crate::context_manager::TotalTokenUsageBreakdown;
 use crate::context_manager::estimate_response_item_model_visible_bytes;
 use crate::context_manager::is_codex_generated_item;
+use crate::session::session::Session;
+use crate::session::turn::built_tools;
+use crate::session::turn_context::TurnContext;
 use codex_analytics::CompactionImplementation;
 use codex_analytics::CompactionPhase;
 use codex_analytics::CompactionReason;
@@ -122,7 +122,7 @@ async fn run_remote_compact_task_inner_impl(
     let deleted_items = trim_function_call_history_to_fit_context_window(
         &mut history,
         turn_context.as_ref(),
-        &base_instructions.clone().unwrap_or_default(),
+        &base_instructions,
     );
     if deleted_items > 0 {
         info!(
@@ -153,7 +153,7 @@ async fn run_remote_compact_task_inner_impl(
         input: prompt_input,
         tools: tool_router.model_visible_specs(),
         parallel_tool_calls: turn_context.model_info.supports_parallel_tool_calls,
-        base_instructions: base_instructions.unwrap_or_default(),
+        base_instructions,
         personality: turn_context.personality,
         output_schema: None,
     };

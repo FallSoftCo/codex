@@ -152,7 +152,6 @@ impl ToolsConfig {
             include_js_repl && features.enabled(Feature::JsReplToolsOnly);
         let include_collab_tools = features.enabled(Feature::Collab);
         let include_multi_agent_v2 = features.enabled(Feature::MultiAgentV2);
-        let hide_spawn_agent_metadata = false;
         let include_agent_jobs = features.enabled(Feature::SpawnCsv);
         let include_default_mode_request_user_input =
             features.enabled(Feature::DefaultModeRequestUserInput);
@@ -168,7 +167,9 @@ impl ToolsConfig {
             && features.enabled(Feature::Apps)
             && features.enabled(Feature::Plugins)
             && !tester_mode;
-        let include_original_image_detail = can_request_original_image_detail(features, model_info);
+        let include_original_image_detail = can_request_original_image_detail(model_info);
+        // API-key auth bypasses Codex backend entitlement/tool normalization, so
+        // callers must confirm ChatGPT auth before exposing the built-in tool.
         let include_image_gen_tool = !tester_mode
             && *image_generation_tool_auth_allowed
             && features.enabled(Feature::ImageGeneration)
@@ -248,7 +249,7 @@ impl ToolsConfig {
             can_request_original_image_detail: include_original_image_detail,
             collab_tools: include_collab_tools && !tester_mode,
             multi_agent_v2: include_multi_agent_v2,
-            hide_spawn_agent_metadata,
+            hide_spawn_agent_metadata: false,
             spawn_agent_usage_hint: true,
             spawn_agent_usage_hint_text: None,
             default_mode_request_user_input: include_default_mode_request_user_input,

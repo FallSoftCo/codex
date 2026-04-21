@@ -1,10 +1,10 @@
 use crate::agent::exceeds_thread_spawn_depth_limit;
 use crate::agent::next_thread_spawn_depth;
 use crate::agent::status::is_final;
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::config::Config;
 use crate::function_tool::FunctionCallError;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
@@ -237,10 +237,7 @@ mod spawn_agents_on_csv {
         }
 
         let db = required_state_db(&session)?;
-        let input_path = AbsolutePathBuf::resolve_path_against_base(
-            std::path::Path::new(&args.csv_path),
-            &turn.cwd,
-        );
+        let input_path = turn.resolve_path(Some(args.csv_path));
         let input_path_display = input_path.display().to_string();
         let csv_content = tokio::fs::read_to_string(&input_path)
             .await
@@ -313,9 +310,7 @@ mod spawn_agents_on_csv {
         let job_id = Uuid::new_v4().to_string();
         let output_csv_path = args.output_csv_path.map_or_else(
             || default_output_csv_path(&input_path, job_id.as_str()),
-            |path| {
-                AbsolutePathBuf::resolve_path_against_base(std::path::Path::new(&path), &turn.cwd)
-            },
+            |path| turn.resolve_path(Some(path)),
         );
         let job_suffix = &job_id[..8];
         let job_name = format!("agent-job-{job_suffix}");
@@ -540,8 +535,7 @@ async fn build_runner_options(
     let max_concurrency =
         normalize_concurrency(requested_concurrency, turn.config.agent_max_threads);
     let base_instructions = session.get_base_instructions().await;
-    let spawn_config =
-        build_agent_spawn_config(&base_instructions.unwrap_or_default(), turn.as_ref())?;
+    let spawn_config = build_agent_spawn_config(&base_instructions, turn.as_ref())?;
     Ok(JobRunnerOptions {
         max_concurrency,
         spawn_config,

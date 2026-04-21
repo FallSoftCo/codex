@@ -26,7 +26,6 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::path::Path;
-use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -37,6 +36,7 @@ use tokio::io::AsyncReadExt;
 
 use crate::config::Config;
 use codex_config::types::HistoryPersistence;
+use codex_utils_absolute_path::AbsolutePathBuf;
 
 use codex_protocol::ThreadId;
 #[cfg(unix)]
@@ -60,7 +60,7 @@ pub struct HistoryEntry {
     pub text: String,
 }
 
-fn history_filepath(config: &Config) -> PathBuf {
+fn history_filepath(config: &Config) -> AbsolutePathBuf {
     config.codex_home.join(HISTORY_FILENAME)
 }
 
