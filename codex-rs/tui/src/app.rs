@@ -184,6 +184,7 @@ pub(crate) mod app_server_requests;
 mod background_requests;
 mod config_persistence;
 mod email_bridge;
+mod email_bridge_format;
 mod event_dispatch;
 mod history_ui;
 mod input;

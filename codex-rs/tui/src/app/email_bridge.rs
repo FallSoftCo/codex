@@ -33,6 +33,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use sha2::Sha256;
 
+use super::email_bridge_format::EmailThreadSnapshot;
+use super::email_bridge_format::format_completion_email;
+use super::email_bridge_format::format_reply_rejected_email;
+use super::email_bridge_format::format_request_user_input_email;
+use super::email_bridge_format::format_status_email;
 use crate::app_command::AppCommand;
 use crate::app_server_session::AppServerSession;
 use crate::app_server_session::ThreadSessionState;
@@ -47,13 +52,6 @@ const MAX_TRACKED_TOKENS: usize = 256;
 pub(super) struct EmailThreadContext {
     pub(super) thread_id: ThreadId,
     pub(super) thread_label: String,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct EmailStatusSnapshot {
-    pub(super) thread_id: ThreadId,
-    pub(super) thread_label: String,
-    pub(super) active_turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -73,16 +71,9 @@ pub(super) enum EmailReplyCommand {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct EmailRequestPrompt {
-    pub(super) thread_id: ThreadId,
-    pub(super) thread_label: String,
-    pub(super) prompt: String,
-}
-
-#[derive(Debug, Clone)]
 struct PendingCompletionEmail {
     token: String,
-    thread: EmailThreadContext,
+    snapshot: EmailThreadSnapshot,
     queued_at: Instant,
 }
 
@@ -221,18 +212,22 @@ impl EmailBridge {
 
     pub(super) async fn queue_turn_completed(
         &mut self,
-        thread: EmailThreadContext,
+        snapshot: EmailThreadSnapshot,
     ) -> Result<(), String> {
         if !self.config.notify_on_turn_completed || !self.is_away() {
             return Ok(());
         }
 
+        let thread = EmailThreadContext {
+            thread_id: snapshot.thread_id,
+            thread_label: snapshot.thread_label.clone(),
+        };
         let token = self.issue_token(&thread)?;
         self.pending_completion_emails.insert(
             thread.thread_id,
             PendingCompletionEmail {
                 token,
-                thread,
+                snapshot,
                 queued_at: Instant::now(),
             },
         );
@@ -257,24 +252,10 @@ impl EmailBridge {
 
         for thread_id in ready {
             if let Some(pending) = self.pending_completion_emails.remove(&thread_id) {
-                let subject = format!(
-                    "{} {} completed work [lx:{}]",
-                    self.config.subject_prefix, pending.thread.thread_label, pending.token
-                );
-                let body = format!(
-                    concat!(
-                        "{} completed a turn and is idle.\n\n",
-                        "Thread: {}\n",
-                        "Thread ID: {}\n",
-                        "Reply token: {}\n\n",
-                        "Reply with plain text to continue this thread.\n",
-                        "Reply with `status` for a status email.\n",
-                        "Reply with `stop` to interrupt the active turn.\n"
-                    ),
-                    pending.thread.thread_label,
-                    pending.thread.thread_label,
-                    pending.thread.thread_id,
-                    pending.token,
+                let (subject, body) = format_completion_email(
+                    &pending.snapshot,
+                    self.config.subject_prefix.as_str(),
+                    pending.token.as_str(),
                 );
                 self.send_email(subject, body).await?;
             }
@@ -285,83 +266,56 @@ impl EmailBridge {
 
     pub(super) async fn send_request_user_input_email(
         &mut self,
-        prompt: EmailRequestPrompt,
+        snapshot: EmailThreadSnapshot,
+        prompt: String,
     ) -> Result<(), String> {
         if !self.config.notify_on_request_user_input || !self.is_away() {
             return Ok(());
         }
 
         let token = self.issue_token(&EmailThreadContext {
-            thread_id: prompt.thread_id,
-            thread_label: prompt.thread_label.clone(),
+            thread_id: snapshot.thread_id,
+            thread_label: snapshot.thread_label.clone(),
         })?;
-        let subject = format!(
-            "{} {} needs attention [lx:{}]",
-            self.config.subject_prefix, prompt.thread_label, token
-        );
-        let body = format!(
-            concat!(
-                "{} is waiting on structured input.\n\n",
-                "{}\n\n",
-                "Reply token: {}\n\n",
-                "Email replies do not resolve structured prompts yet.\n",
-                "Open Losangelex to answer this request directly.\n"
-            ),
-            prompt.thread_label, prompt.prompt, token
+        let (subject, body) = format_request_user_input_email(
+            &snapshot,
+            self.config.subject_prefix.as_str(),
+            token.as_str(),
+            prompt.as_str(),
         );
         self.send_email(subject, body).await
     }
 
     pub(super) async fn send_reply_rejected_email(
         &mut self,
-        thread: EmailThreadContext,
+        snapshot: EmailThreadSnapshot,
         reason: &str,
     ) -> Result<(), String> {
-        let token = self.issue_token(&thread)?;
-        let subject = format!(
-            "{} {} reply rejected [lx:{}]",
-            self.config.subject_prefix, thread.thread_label, token
-        );
-        let body = format!(
-            concat!(
-                "Losangelex could not apply your email command for {}.\n\n",
-                "Reason: {}\n",
-                "Thread ID: {}\n",
-                "Reply token: {}\n\n",
-                "Open Losangelex locally to inspect the thread, or reply again with updated instructions.\n"
-            ),
-            thread.thread_label, reason, thread.thread_id, token
+        let token = self.issue_token(&EmailThreadContext {
+            thread_id: snapshot.thread_id,
+            thread_label: snapshot.thread_label.clone(),
+        })?;
+        let (subject, body) = format_reply_rejected_email(
+            &snapshot,
+            self.config.subject_prefix.as_str(),
+            token.as_str(),
+            reason,
         );
         self.send_email(subject, body).await
     }
 
     pub(super) async fn send_status_email(
         &mut self,
-        status: EmailStatusSnapshot,
+        snapshot: EmailThreadSnapshot,
     ) -> Result<(), String> {
         let token = self.issue_token(&EmailThreadContext {
-            thread_id: status.thread_id,
-            thread_label: status.thread_label.clone(),
+            thread_id: snapshot.thread_id,
+            thread_label: snapshot.thread_label.clone(),
         })?;
-        let status_text = if let Some(turn_id) = status.active_turn_id.as_deref() {
-            format!("active (turn {turn_id})")
-        } else {
-            "idle".to_string()
-        };
-        let subject = format!(
-            "{} {} status [lx:{}]",
-            self.config.subject_prefix, status.thread_label, token
-        );
-        let body = format!(
-            concat!(
-                "Thread: {}\n",
-                "Thread ID: {}\n",
-                "Status: {}\n",
-                "Reply token: {}\n\n",
-                "Reply with plain text to continue this thread.\n",
-                "Reply with `stop` to interrupt the active turn.\n"
-            ),
-            status.thread_label, status.thread_id, status_text, token
+        let (subject, body) = format_status_email(
+            &snapshot,
+            self.config.subject_prefix.as_str(),
+            token.as_str(),
         );
         self.send_email(subject, body).await
     }
@@ -775,14 +729,11 @@ impl App {
             );
             return;
         };
-        let thread = EmailThreadContext {
-            thread_id,
-            thread_label: self.thread_label(thread_id),
-        };
+        let snapshot = self.email_thread_snapshot(thread_id).await;
         let Some(email_bridge) = self.email_bridge.as_mut() else {
             return;
         };
-        if let Err(err) = email_bridge.queue_turn_completed(thread).await {
+        if let Err(err) = email_bridge.queue_turn_completed(snapshot).await {
             tracing::warn!(error = %err, "failed to queue turn completion email");
         }
     }
@@ -798,15 +749,15 @@ impl App {
             );
             return;
         };
-        let prompt = EmailRequestPrompt {
-            thread_id,
-            thread_label: self.thread_label(thread_id),
-            prompt: format_request_user_input_prompt(params),
-        };
+        let snapshot = self.email_thread_snapshot(thread_id).await;
+        let prompt = format_request_user_input_prompt(params);
         let Some(email_bridge) = self.email_bridge.as_mut() else {
             return;
         };
-        if let Err(err) = email_bridge.send_request_user_input_email(prompt).await {
+        if let Err(err) = email_bridge
+            .send_request_user_input_email(snapshot, prompt)
+            .await
+        {
             tracing::warn!(error = %err, "failed to send request_user_input email");
         }
     }
@@ -915,6 +866,35 @@ impl App {
         );
     }
 
+    async fn email_thread_snapshot(&self, thread_id: ThreadId) -> EmailThreadSnapshot {
+        let thread_label = self.thread_label(thread_id);
+        let mut session = if self.primary_thread_id == Some(thread_id) {
+            self.primary_session_configured.clone()
+        } else {
+            None
+        };
+        let mut turns = Vec::new();
+        let mut buffered_events = Vec::new();
+        let mut active_turn_id = None;
+
+        if let Some(channel) = self.thread_event_channels.get(&thread_id) {
+            let store = channel.store.lock().await;
+            session = session.or(store.session.clone());
+            turns = store.turns.clone();
+            buffered_events = store.buffer.iter().cloned().collect();
+            active_turn_id = store.active_turn_id().map(ToOwned::to_owned);
+        }
+
+        EmailThreadSnapshot::from_state(
+            thread_id,
+            thread_label,
+            session,
+            turns.as_slice(),
+            buffered_events.as_slice(),
+            active_turn_id,
+        )
+    }
+
     async fn execute_email_reply_action(
         &mut self,
         app_server: &mut AppServerSession,
@@ -926,15 +906,12 @@ impl App {
             token = action.token,
             "processing inbound email reply"
         );
-        let thread = EmailThreadContext {
-            thread_id: action.thread_id,
-            thread_label: action.thread_label.clone(),
-        };
+        let snapshot = self.email_thread_snapshot(action.thread_id).await;
         match action.command {
             EmailReplyCommand::Continue { text } => {
                 let Some(op) = self.email_reply_user_turn(action.thread_id, text).await else {
                     self.reject_email_reply(
-                        thread,
+                        snapshot,
                         "This thread is not loaded in the current Losangelex session.".to_string(),
                     )
                     .await;
@@ -955,7 +932,7 @@ impl App {
                     }
                     Err(err) => {
                         self.reject_email_reply(
-                            thread,
+                            self.email_thread_snapshot(action.thread_id).await,
                             format!("Failed to submit the email reply: {err}"),
                         )
                         .await;
@@ -977,25 +954,20 @@ impl App {
                 }
                 Err(err) => {
                     self.reject_email_reply(
-                        thread,
+                        self.email_thread_snapshot(action.thread_id).await,
                         format!("Failed to interrupt the thread: {err}"),
                     )
                     .await;
                 }
             },
             EmailReplyCommand::Status => {
-                let snapshot = EmailStatusSnapshot {
-                    thread_id: action.thread_id,
-                    thread_label: action.thread_label.clone(),
-                    active_turn_id: self.active_turn_id_for_thread(action.thread_id).await,
-                };
                 let Some(email_bridge) = self.email_bridge.as_mut() else {
                     return;
                 };
                 let status_result = email_bridge.send_status_email(snapshot).await;
                 if let Err(err) = status_result {
                     self.reject_email_reply(
-                        thread,
+                        self.email_thread_snapshot(action.thread_id).await,
                         format!("Failed to send the status email: {err}"),
                     )
                     .await;
@@ -1037,17 +1009,17 @@ impl App {
         store.session.clone()
     }
 
-    async fn reject_email_reply(&mut self, thread: EmailThreadContext, reason: String) {
+    async fn reject_email_reply(&mut self, snapshot: EmailThreadSnapshot, reason: String) {
         if let Some(email_bridge) = self.email_bridge.as_mut()
             && let Err(err) = email_bridge
-                .send_reply_rejected_email(thread.clone(), reason.as_str())
+                .send_reply_rejected_email(snapshot.clone(), reason.as_str())
                 .await
         {
             tracing::warn!(error = %err, "failed to send email reply rejection notice");
         }
         self.chat_widget.add_error_message(format!(
             "Email reply for {} was rejected: {}",
-            thread.thread_label, reason
+            snapshot.thread_label, reason
         ));
     }
 }
