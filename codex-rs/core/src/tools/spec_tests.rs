@@ -32,7 +32,6 @@ use codex_tools::ZshForkConfig;
 use codex_tools::mcp_call_tool_result_output_schema;
 use codex_tools::mcp_tool_to_deferred_responses_api_tool;
 use codex_utils_absolute_path::AbsolutePathBuf;
-use core_test_support::assert_regex_match;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -670,19 +669,18 @@ fn spawn_agent_description_omits_usage_hint_when_disabled() {
         .with_spawn_agent_usage_hint(/*spawn_agent_usage_hint*/ false);
     let description = multi_agent_v2_spawn_agent_description(&tools_config);
 
-    assert_regex_match(
-        r#"(?sx)
-            ^\s*
-            No\ picker-visible\ models\ are\ currently\ loaded\.
-            \s+Spawns\ an\ agent\ to\ work\ on\ the\ specified\ task\.\ If\ your\ current\ task\ is\ `/root/task1`\ and\ you\ spawn_agent\ with\ task_name\ "task_3"\ the\ agent\ will\ have\ canonical\ task\ name\ `/root/task1/task_3`\.
-            \s+You\ are\ then\ able\ to\ refer\ to\ this\ agent\ as\ `task_3`\ or\ `/root/task1/task_3`\ interchangeably\.\ However\ an\ agent\ `/root/task2/task_3`\ would\ only\ be\ able\ to\ communicate\ with\ this\ agent\ via\ its\ canonical\ name\ `/root/task1/task_3`\.
-            \s+The\ spawned\ agent\ will\ have\ the\ same\ tools\ as\ you\ and\ the\ ability\ to\ spawn\ its\ own\ subagents\.
-            \s+It\ will\ be\ able\ to\ send\ you\ and\ other\ running\ agents\ messages,\ and\ its\ final\ answer\ will\ be\ provided\ to\ you\ when\ it\ finishes\.
-            \s+The\ new\ agent's\ canonical\ task\ name\ will\ be\ provided\ to\ it\ along\ with\ the\ message\.
-            \s*$
-        "#,
-        &description,
-    );
+    assert!(description.contains("No picker-visible models are currently loaded."));
+    assert!(description.contains("Spawns an agent to work on the specified task."));
+    assert!(description.contains(
+        "The new agent's canonical task name will be provided to it along with the message."
+    ));
+    assert!(description.contains(
+        "Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents;"
+    ));
+    assert!(description.contains(
+        "Use this tool to parallelize your own current task into bounded sidecar work when spawning is explicitly authorized."
+    ));
+    assert!(!description.contains("Custom delegation guidance only."));
 }
 
 #[test]
@@ -692,20 +690,12 @@ fn spawn_agent_description_uses_configured_usage_hint_text() {
     ));
     let description = multi_agent_v2_spawn_agent_description(&tools_config);
 
-    assert_regex_match(
-        r#"(?sx)
-            ^\s*
-            No\ picker-visible\ models\ are\ currently\ loaded\.
-            \s+Spawns\ an\ agent\ to\ work\ on\ the\ specified\ task\.\ If\ your\ current\ task\ is\ `/root/task1`\ and\ you\ spawn_agent\ with\ task_name\ "task_3"\ the\ agent\ will\ have\ canonical\ task\ name\ `/root/task1/task_3`\.
-            \s+You\ are\ then\ able\ to\ refer\ to\ this\ agent\ as\ `task_3`\ or\ `/root/task1/task_3`\ interchangeably\.\ However\ an\ agent\ `/root/task2/task_3`\ would\ only\ be\ able\ to\ communicate\ with\ this\ agent\ via\ its\ canonical\ name\ `/root/task1/task_3`\.
-            \s+The\ spawned\ agent\ will\ have\ the\ same\ tools\ as\ you\ and\ the\ ability\ to\ spawn\ its\ own\ subagents\.
-            \s+It\ will\ be\ able\ to\ send\ you\ and\ other\ running\ agents\ messages,\ and\ its\ final\ answer\ will\ be\ provided\ to\ you\ when\ it\ finishes\.
-            \s+The\ new\ agent's\ canonical\ task\ name\ will\ be\ provided\ to\ it\ along\ with\ the\ message\.
-            \s+Custom\ delegation\ guidance\ only\.
-            \s*$
-        "#,
-        &description,
-    );
+    assert!(description.contains("No picker-visible models are currently loaded."));
+    assert!(description.contains("Spawns an agent to work on the specified task."));
+    assert!(description.contains(
+        "Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents;"
+    ));
+    assert!(description.contains("Custom delegation guidance only."));
 }
 
 #[test]

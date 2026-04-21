@@ -190,13 +190,14 @@ fn runtime_context() -> HollywoodRuntimeContext {
             "claim_exact_paths_or_modules_before_editing".to_string(),
             "avoid_overlapping_edits_until_resolved".to_string(),
             "use_hollywood_first_for_peer_coordination".to_string(),
+            "reserve_subagents_for_parallelizing_owned_work".to_string(),
         ],
         broadcast_guidance: vec![
             "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
             "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
             "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
             "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
-            "When the user asks you to coordinate with other existing agents, prefer Hollywood coordination with attached peers before spawning new subagents.".to_string(),
+            "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first. Reserve new subagents for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
         ],
     }
 }
@@ -445,6 +446,12 @@ mod tests {
                 .runtime
                 .startup_protocol
                 .contains(&"use_hollywood_first_for_peer_coordination".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"reserve_subagents_for_parallelizing_owned_work".to_string())
         );
         assert!(
             context

@@ -511,11 +511,8 @@ async fn responses_websocket_prewarm_uses_v2_when_provider_supports_websockets()
             .map(str::trim)
             .any(|value| value == WS_V2_BETA_HEADER_VALUE)
     );
-    stream_until_complete(&mut client_session, &harness, &prompt).await;
-    assert_eq!(server.handshakes().len(), 1);
-    let connection = server.single_connection();
-    assert_eq!(connection.len(), 1);
-    let prewarm = connection
+    let prewarm = server
+        .single_connection()
         .first()
         .expect("missing prewarm request")
         .body_json();

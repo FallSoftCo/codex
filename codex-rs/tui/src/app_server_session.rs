@@ -119,6 +119,7 @@ pub(crate) struct AppServerBootstrap {
 pub(crate) struct AppServerSession {
     client: AppServerClient,
     next_request_id: i64,
+    known_remote_threads: HashMap<ThreadId, RemoteThreadResumeContext>,
     remote_cwd_override: Option<PathBuf>,
 }
 
@@ -145,6 +146,23 @@ pub(crate) struct ThreadSessionState {
 enum ThreadParamsMode {
     Embedded,
     Remote,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RemoteThreadResumeContext {
+    cwd: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RemoteThreadRecoveryFailure {
+    pub(crate) thread_id: ThreadId,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct RemoteThreadRecoveryOutcome {
+    pub(crate) recovered: Vec<ThreadId>,
+    pub(crate) failed: Vec<RemoteThreadRecoveryFailure>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,6 +216,7 @@ impl AppServerSession {
         Self {
             client,
             next_request_id: 1,
+            known_remote_threads: HashMap::new(),
             remote_cwd_override: None,
         }
     }
@@ -363,6 +382,7 @@ impl AppServerSession {
             .await
             .wrap_err("thread/start failed during TUI bootstrap")?;
         let started = started_thread_from_start_response(response, config).await?;
+        self.remember_thread_session(&started.session);
         self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
             .await;
         Ok(started)
@@ -399,6 +419,7 @@ impl AppServerSession {
             .await
             .wrap_err("thread/resume failed during TUI bootstrap")?;
         let started = started_thread_from_resume_response(response, &config).await?;
+        self.remember_thread_session(&started.session);
         tracing::info!(
             requested_thread_id = %thread_id,
             returned_thread_id = %started.session.thread_id,
@@ -430,6 +451,7 @@ impl AppServerSession {
             .await
             .wrap_err("thread/fork failed during TUI bootstrap")?;
         let started = started_thread_from_fork_response(response, &config).await?;
+        self.remember_thread_session(&started.session);
         self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
             .await;
         Ok(started)
@@ -525,7 +547,57 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/read failed during TUI session lookup")?;
+        self.remember_thread_from_api_thread(&response.thread);
         Ok(response.thread)
+    }
+
+    pub(crate) async fn recover_remote_threads<I>(
+        &mut self,
+        thread_ids: I,
+    ) -> RemoteThreadRecoveryOutcome
+    where
+        I: IntoIterator<Item = ThreadId>,
+    {
+        if !self.is_remote() {
+            return RemoteThreadRecoveryOutcome::default();
+        }
+
+        let mut outcome = RemoteThreadRecoveryOutcome::default();
+        let mut attempted = std::collections::HashSet::new();
+        for thread_id in thread_ids {
+            if !attempted.insert(thread_id) {
+                continue;
+            }
+            let Some(context) = self.known_remote_threads.get(&thread_id).cloned() else {
+                continue;
+            };
+            let request_id = self.next_request_id();
+            let result: std::result::Result<ThreadResumeResponse, TypedRequestError> = self
+                .client
+                .request_typed(ClientRequest::ThreadResume {
+                    request_id,
+                    params: ThreadResumeParams {
+                        thread_id: thread_id.to_string(),
+                        cwd: Some(context.cwd.to_string_lossy().to_string()),
+                        hollywood: hollywood_auto_attach_options(context.cwd.as_path()),
+                        persist_extended_history: true,
+                        ..ThreadResumeParams::default()
+                    },
+                })
+                .await;
+            match result {
+                Ok(response) => {
+                    self.remember_thread_from_api_thread(&response.thread);
+                    outcome.recovered.push(thread_id);
+                }
+                Err(err) => outcome.failed.push(RemoteThreadRecoveryFailure {
+                    thread_id,
+                    message: err.to_string(),
+                }),
+            }
+        }
+
+        outcome
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -872,6 +944,33 @@ impl AppServerSession {
 
     pub(crate) fn request_handle(&self) -> AppServerRequestHandle {
         self.client.request_handle()
+    }
+
+    fn remember_thread_session(&mut self, session: &ThreadSessionState) {
+        if !self.is_remote() {
+            return;
+        }
+        self.known_remote_threads.insert(
+            session.thread_id,
+            RemoteThreadResumeContext {
+                cwd: session.cwd.clone(),
+            },
+        );
+    }
+
+    fn remember_thread_from_api_thread(&mut self, thread: &Thread) {
+        if !self.is_remote() {
+            return;
+        }
+        let Ok(thread_id) = ThreadId::from_string(&thread.id) else {
+            return;
+        };
+        self.known_remote_threads.insert(
+            thread_id,
+            RemoteThreadResumeContext {
+                cwd: thread.cwd.clone(),
+            },
+        );
     }
 
     fn next_request_id(&mut self) -> RequestId {

@@ -155,6 +155,7 @@ pub enum AppServerEvent {
     Lagged { skipped: usize },
     ServerNotification(ServerNotification),
     ServerRequest(ServerRequest),
+    Reconnected { message: String },
     Disconnected { message: String },
 }
 
@@ -938,6 +939,11 @@ pub(crate) fn request_method_name(request: &ClientRequest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::Path;
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
+
     use codex_app_server_protocol::AccountUpdatedNotification;
     use codex_app_server_protocol::ConfigRequirementsReadResponse;
     use codex_app_server_protocol::GetAccountResponse;
@@ -1160,6 +1166,7 @@ mod tests {
     fn test_remote_connect_args(websocket_url: String) -> RemoteAppServerConnectArgs {
         RemoteAppServerConnectArgs {
             websocket_url,
+            rollover_state_file: None,
             auth_token: None,
             client_name: "codex-app-server-client-test".to_string(),
             client_version: "0.0.0-test".to_string(),
@@ -1167,6 +1174,32 @@ mod tests {
             opt_out_notification_methods: Vec::new(),
             channel_capacity: 8,
         }
+    }
+
+    fn write_rollover_state_file(path: &Path, websocket_url: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("rollover state dir should exist");
+        }
+        fs::write(
+            path,
+            serde_json::json!({
+                "schema_version": 1,
+                "websocket_url": websocket_url,
+            })
+            .to_string(),
+        )
+        .expect("rollover state file should be written");
+    }
+
+    fn test_rollover_state_file_path() -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "codex-app-server-client-rollover-{}-{nonce}.json",
+            std::process::id()
+        ))
     }
 
     #[tokio::test]
@@ -1604,6 +1637,7 @@ mod tests {
         .await;
         let mut client = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
             websocket_url,
+            rollover_state_file: None,
             auth_token: None,
             client_name: "codex-app-server-client-test".to_string(),
             client_version: "0.0.0-test".to_string(),
@@ -1844,10 +1878,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remote_disconnect_surfaces_as_event() {
+    async fn remote_invalid_json_surfaces_as_disconnected_event() {
         let websocket_url = start_test_remote_server(|mut websocket| async move {
             expect_remote_initialize(&mut websocket).await;
-            websocket.close(None).await.expect("close should succeed");
+            websocket
+                .send(Message::Text("{not-json".into()))
+                .await
+                .expect("write should succeed");
         })
         .await;
         let mut client = RemoteAppServerClient::connect(test_remote_connect_args(websocket_url))
@@ -1859,6 +1896,87 @@ mod tests {
             .await
             .expect("disconnect event should arrive");
         assert!(matches!(event, AppServerEvent::Disconnected { .. }));
+    }
+
+    #[tokio::test]
+    async fn remote_reconnect_uses_rollover_state_file_after_disconnect() {
+        let rollover_state_file = test_rollover_state_file_path();
+        let (close_first_server_tx, close_first_server_rx) = tokio::sync::oneshot::channel();
+        let websocket_url_a = start_test_remote_server(|mut websocket| async move {
+            expect_remote_initialize(&mut websocket).await;
+            close_first_server_rx
+                .await
+                .expect("first server close signal should arrive");
+            websocket.close(None).await.expect("close should succeed");
+        })
+        .await;
+        write_rollover_state_file(&rollover_state_file, &websocket_url_a);
+
+        let mut client = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
+            rollover_state_file: Some(rollover_state_file.clone()),
+            ..test_remote_connect_args(websocket_url_a)
+        })
+        .await
+        .expect("remote client should connect");
+
+        let websocket_url_b = start_test_remote_server(|mut websocket| async move {
+            expect_remote_initialize(&mut websocket).await;
+            let JSONRPCMessage::Request(request) = read_websocket_message(&mut websocket).await
+            else {
+                panic!("expected account/read request");
+            };
+            assert_eq!(request.method, "account/read");
+            write_websocket_message(
+                &mut websocket,
+                JSONRPCMessage::Response(JSONRPCResponse {
+                    id: request.id,
+                    result: serde_json::to_value(GetAccountResponse {
+                        account: None,
+                        requires_openai_auth: false,
+                    })
+                    .expect("response should serialize"),
+                }),
+            )
+            .await;
+        })
+        .await;
+        write_rollover_state_file(&rollover_state_file, &websocket_url_b);
+        close_first_server_tx
+            .send(())
+            .expect("first server close signal should send");
+
+        let reconnect_event = timeout(Duration::from_secs(5), async {
+            loop {
+                match client.next_event().await {
+                    Some(AppServerEvent::Reconnected { message }) => break message,
+                    Some(_) => continue,
+                    None => panic!("event stream should stay open"),
+                }
+            }
+        })
+        .await
+        .expect("reconnect event should arrive before timeout");
+        assert!(reconnect_event.contains(&websocket_url_b));
+
+        let response: GetAccountResponse = client
+            .request_typed(ClientRequest::GetAccount {
+                request_id: RequestId::Integer(1),
+                params: codex_app_server_protocol::GetAccountParams {
+                    refresh_token: false,
+                },
+            })
+            .await
+            .expect("request should succeed after reconnect");
+        assert_eq!(
+            response,
+            GetAccountResponse {
+                account: None,
+                requires_openai_auth: false,
+            }
+        );
+
+        let _ = fs::remove_file(&rollover_state_file);
+        client.shutdown().await.expect("shutdown should complete");
     }
 
     #[test]

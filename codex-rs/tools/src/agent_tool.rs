@@ -592,7 +592,7 @@ fn spawn_agent_tool_description(
     let tool_description = format!(
         r#"
         {agent_role_guidance}
-        Spawn a sub-agent for a well-scoped task. {return_value_description}"#
+        Spawn a sub-agent for a well-scoped task. Use this to parallelize your own current task into bounded sidecar work, not as the default way to satisfy requests to work with existing teammates or peers. {return_value_description}"#
     );
 
     if !include_usage_hint {
@@ -617,6 +617,7 @@ This spawn_agent tool provides you access to smaller but more efficient sub-agen
 
 Only use `spawn_agent` if and only if the user explicitly asks for sub-agents, delegation, or parallel agent work.
 Requests for depth, thoroughness, research, investigation, or detailed codebase analysis do not count as permission to spawn.
+If the user asks you to work with teammates, peers, or other existing agents, do not satisfy that by spawning a fresh subagent by default. Coordinate with the existing attached Losangelex/Hollywood agents first, and reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar subtasks.
 {agent_role_usage_hint}
 
 ### When to delegate vs. do the subtask yourself
@@ -664,7 +665,8 @@ fn spawn_agent_tool_description_v2(
 You are then able to refer to this agent as `task_3` or `/root/task1/task_3` interchangeably. However an agent `/root/task2/task_3` would only be able to communicate with this agent via its canonical name `/root/task1/task_3`.
 The spawned agent will have the same tools as you and the ability to spawn its own subagents.
 It will be able to send you and other running agents messages, and its final answer will be provided to you when it finishes.
-The new agent's canonical task name will be provided to it along with the message."#
+The new agent's canonical task name will be provided to it along with the message.
+Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents; prefer the already attached Losangelex/Hollywood agents for that. Use this tool to parallelize your own current task into bounded sidecar work when spawning is explicitly authorized."#
     );
 
     if !include_usage_hint {

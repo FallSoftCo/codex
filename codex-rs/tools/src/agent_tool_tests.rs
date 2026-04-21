@@ -72,6 +72,8 @@ fn spawn_agent_tool_v2_requires_task_name_and_lists_visible_models() {
         properties.get("agent_type"),
         Some(&JsonSchema::string(Some("role help".to_string())))
     );
+    assert!(description.contains("prefer the already attached Losangelex/Hollywood agents"));
+    assert!(description.contains("parallelize your own current task into bounded sidecar work"));
     assert_eq!(
         parameters.required.as_ref(),
         Some(&vec!["task_name".to_string(), "message".to_string()])

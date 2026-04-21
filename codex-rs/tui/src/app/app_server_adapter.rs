@@ -123,7 +123,7 @@ impl App {
 
     pub(super) async fn handle_app_server_event(
         &mut self,
-        app_server_client: &AppServerSession,
+        app_server_client: &mut AppServerSession,
         event: AppServerEvent,
     ) {
         match event {
@@ -143,12 +143,58 @@ impl App {
                 self.handle_server_request_event(app_server_client, request)
                     .await;
             }
+            AppServerEvent::Reconnected { message } => {
+                tracing::info!("app-server event stream reconnected: {message}");
+                self.handle_app_server_reconnected(app_server_client, message)
+                    .await;
+            }
             AppServerEvent::Disconnected { message } => {
                 tracing::warn!("app-server event stream disconnected: {message}");
                 self.chat_widget.add_error_message(message.clone());
                 self.app_event_tx.send(AppEvent::FatalExitRequest(message));
             }
         }
+    }
+
+    async fn handle_app_server_reconnected(
+        &mut self,
+        app_server_client: &mut AppServerSession,
+        message: String,
+    ) {
+        let mut thread_ids = Vec::new();
+        if let Some(primary_thread_id) = self.primary_thread_id {
+            thread_ids.push(primary_thread_id);
+        }
+        thread_ids.extend(
+            self.agent_navigation
+                .ordered_threads()
+                .iter()
+                .map(|(thread_id, _entry)| *thread_id),
+        );
+
+        let outcome = app_server_client.recover_remote_threads(thread_ids).await;
+        let _ = self
+            .backfill_loaded_subagent_threads(app_server_client)
+            .await;
+
+        if outcome.failed.is_empty() {
+            let summary = if outcome.recovered.is_empty() {
+                message
+            } else {
+                format!("{message}; recovered {} thread(s)", outcome.recovered.len())
+            };
+            self.chat_widget.add_info_message(summary, /*hint*/ None);
+            return;
+        }
+
+        tracing::warn!(
+            failed_threads = outcome.failed.len(),
+            "failed to recover one or more remote threads after reconnect"
+        );
+        self.chat_widget.add_error_message(format!(
+            "{message}; failed to recover {} thread(s). Check logs for details.",
+            outcome.failed.len()
+        ));
     }
 
     async fn handle_server_notification_event(

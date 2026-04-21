@@ -527,6 +527,7 @@ pub(crate) async fn run_onboarding_app(
                             return Err(color_eyre::eyre::eyre!(message));
                         }
                         AppServerEvent::Lagged { .. }
+                        | AppServerEvent::Reconnected { .. }
                         | AppServerEvent::ServerRequest(_) => {}
                     }
                 }

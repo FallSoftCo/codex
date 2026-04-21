@@ -22,6 +22,8 @@ use crate::hollywood::prime_from_latest as prime_hollywood_from_latest;
 use crate::hollywood::startup_handshake_message;
 use crate::hollywood::thread_status_name as hollywood_thread_status_name;
 use crate::hollywood::upsert_registry as upsert_hollywood_registry;
+use crate::hollywood_rollover::RollingDeployAssessment;
+use crate::hollywood_rollover::assess_rolling_deploy;
 use crate::models::supported_models;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
@@ -11028,6 +11030,28 @@ impl CodexMessageProcessor {
                                 && state.hollywood.should_start_startup_turn()
                         };
                         if should_start_startup_turn {
+                            let startup_assessment = if let Some(state_db) = conversation.state_db()
+                            {
+                                let current_cwd = conversation.config_snapshot().await.cwd;
+                                assess_rolling_deploy(
+                                    &state_db,
+                                    &thread_state_manager,
+                                    &thread_watch_manager,
+                                    conversation_id,
+                                    current_cwd.as_path(),
+                                    &config,
+                                    env!("CARGO_PKG_VERSION"),
+                                )
+                                .await
+                            } else {
+                                RollingDeployAssessment::default()
+                            };
+                            let mut startup_message =
+                                startup_handshake_message(conversation_id, &config);
+                            if let Some(notice) = startup_assessment.startup_notice.as_ref() {
+                                startup_message.push_str("\n\n");
+                                startup_message.push_str(notice);
+                            }
                             {
                                 let mut state = thread_state.lock().await;
                                 state.hollywood.clear_startup_turn_pending();
@@ -11039,7 +11063,7 @@ impl CodexMessageProcessor {
                                         message_id: 0,
                                         room: config.room.clone(),
                                         sender_id: "hollywood-system".to_string(),
-                                        body: startup_handshake_message(conversation_id, &config),
+                                        body: startup_message,
                                         mentions: Vec::new(),
                                         attention: Some("focused".to_string()),
                                         message_kind: Some("direct".to_string()),
@@ -11048,14 +11072,60 @@ impl CodexMessageProcessor {
                                     },
                                 })
                                 .await;
-                            if let Err(err) = submit_result {
-                                let mut state = thread_state.lock().await;
-                                state.hollywood.mark_startup_turn_pending();
-                                state.hollywood.clear_autonomous_turn_pending();
-                                tracing::debug!(
-                                    conversation_id = %conversation_id,
-                                    "failed to submit Hollywood startup handshake to core: {err}"
-                                );
+                            match submit_result {
+                                Ok(_) => {
+                                    for peer_notice in startup_assessment.peer_notices {
+                                        let Ok(peer_thread) =
+                                            thread_manager.get_thread(peer_notice.thread_id).await
+                                        else {
+                                            continue;
+                                        };
+                                        let peer_thread_state = thread_state_manager
+                                            .thread_state(peer_notice.thread_id)
+                                            .await;
+                                        {
+                                            let mut peer_thread_state =
+                                                peer_thread_state.lock().await;
+                                            peer_thread_state.hollywood.mark_autonomous_turn_pending();
+                                        }
+                                        let submit_result = peer_thread
+                                            .submit(Op::HollywoodInput {
+                                                message: CoreHollywoodInputMessage {
+                                                    message_id: 0,
+                                                    room: config.room.clone(),
+                                                    sender_id: "hollywood-system".to_string(),
+                                                    body: peer_notice.body,
+                                                    mentions: Vec::new(),
+                                                    attention: Some("focused".to_string()),
+                                                    message_kind: Some("direct".to_string()),
+                                                    obligation: Some("attention".to_string()),
+                                                    requires_response: true,
+                                                },
+                                            })
+                                            .await;
+                                        if let Err(err) = submit_result {
+                                            let mut peer_thread_state =
+                                                peer_thread_state.lock().await;
+                                            peer_thread_state
+                                                .hollywood
+                                                .clear_autonomous_turn_pending();
+                                            tracing::debug!(
+                                                conversation_id = %conversation_id,
+                                                peer_thread_id = %peer_notice.thread_id,
+                                                "failed to submit rolling deploy handoff notice to peer: {err}"
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    let mut state = thread_state.lock().await;
+                                    state.hollywood.mark_startup_turn_pending();
+                                    state.hollywood.clear_autonomous_turn_pending();
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        "failed to submit Hollywood startup handshake to core: {err}"
+                                    );
+                                }
                             }
                         }
 

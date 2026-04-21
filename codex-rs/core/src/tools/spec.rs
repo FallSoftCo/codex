@@ -41,7 +41,7 @@ pub(crate) fn tool_user_shell_type(user_shell: &Shell) -> ToolUserShellType {
 fn create_hollywood_status_tool() -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_status".to_string(),
-        description: "Check whether Hollywood is configured and reachable for this session. Use this when you need to know whether you can coordinate with other existing attached agents through the local Hollywood room before considering `spawn_agent`."
+        description: "Check whether Hollywood is configured and reachable for this session. Use this first when the user asks you to work with teammates, peers, or other existing agents so you can coordinate with existing attached Losangelex agents before considering `spawn_agent`."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -80,7 +80,7 @@ fn create_hollywood_read_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_read".to_string(),
-        description: "Read messages from the configured Hollywood room. Use this when you need explicit room context beyond the ambient runtime stream."
+        description: "Read messages from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream before you consider new subagents."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -128,7 +128,7 @@ fn create_hollywood_send_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
-        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks for peer coordination rather than new delegated workers. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap."
+        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks you to work with teammates, peers, or other existing agents. Reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar tasks. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -174,7 +174,7 @@ fn create_hollywood_team_up_tool() -> ToolSpec {
 
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_team_up".to_string(),
-        description: "Create a structured Hollywood team with a leader, purpose, and invited member sessions. Use this when you need to form an explicit working group rather than relying on room chat alone.".to_string(),
+        description: "Create a structured Hollywood team with a leader, purpose, and invited member sessions. Use this when you need to form an explicit working group from existing attached Losangelex agents rather than spawning fresh subagents.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: JsonSchema::object(
@@ -358,7 +358,27 @@ pub(crate) fn build_specs_with_discoverable_tools(
     let js_repl_handler = Arc::new(JsReplHandler);
     let js_repl_reset_handler = Arc::new(JsReplResetHandler);
 
+    let hollywood_tools_enabled = !cfg!(test)
+        && config.hollywood_tools_enabled
+        && crate::hollywood::HollywoodSessionConfig::from_env().is_some();
+    let mut hollywood_specs_inserted = false;
+
     for spec in plan.specs {
+        if hollywood_tools_enabled
+            && !hollywood_specs_inserted
+            && matches!(
+                spec.name(),
+                "spawn_agent" | "send_input" | "send_message" | "followup_task"
+            )
+        {
+            builder.push_spec(create_hollywood_status_tool());
+            builder.push_spec(create_hollywood_read_tool());
+            builder.push_spec(create_hollywood_send_tool());
+            builder.push_spec(create_hollywood_team_up_tool());
+            builder.push_spec(create_hollywood_team_status_tool());
+            builder.push_spec(create_hollywood_team_member_update_tool());
+            hollywood_specs_inserted = true;
+        }
         if spec.supports_parallel_tool_calls {
             builder.push_spec_with_parallel_support(
                 spec.spec, /*supports_parallel_tool_calls*/ true,
@@ -366,6 +386,15 @@ pub(crate) fn build_specs_with_discoverable_tools(
         } else {
             builder.push_spec(spec.spec);
         }
+    }
+
+    if hollywood_tools_enabled && !hollywood_specs_inserted {
+        builder.push_spec(create_hollywood_status_tool());
+        builder.push_spec(create_hollywood_read_tool());
+        builder.push_spec(create_hollywood_send_tool());
+        builder.push_spec(create_hollywood_team_up_tool());
+        builder.push_spec(create_hollywood_team_status_tool());
+        builder.push_spec(create_hollywood_team_member_update_tool());
     }
 
     for handler in plan.handlers {
@@ -476,16 +505,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         }
     }
 
-    if !cfg!(test)
-        && config.hollywood_tools_enabled
-        && crate::hollywood::HollywoodSessionConfig::from_env().is_some()
-    {
-        builder.push_spec(create_hollywood_status_tool());
-        builder.push_spec(create_hollywood_read_tool());
-        builder.push_spec(create_hollywood_send_tool());
-        builder.push_spec(create_hollywood_team_up_tool());
-        builder.push_spec(create_hollywood_team_status_tool());
-        builder.push_spec(create_hollywood_team_member_update_tool());
+    if hollywood_tools_enabled {
         builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
         builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));
         builder.register_handler("hollywood_send", Arc::new(HollywoodSendHandler));

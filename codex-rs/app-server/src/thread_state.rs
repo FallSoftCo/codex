@@ -224,6 +224,10 @@ impl ThreadStateManager {
         state.threads.entry(thread_id).or_default().state.clone()
     }
 
+    pub(crate) async fn thread_ids(&self) -> Vec<ThreadId> {
+        self.state.lock().await.threads.keys().copied().collect()
+    }
+
     pub(crate) async fn remove_thread_state(&self, thread_id: ThreadId) {
         let thread_state = {
             let mut state = self.state.lock().await;

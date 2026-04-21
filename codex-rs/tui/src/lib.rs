@@ -346,8 +346,11 @@ async fn connect_remote_app_server(
     websocket_url: String,
     auth_token: Option<String>,
 ) -> color_eyre::Result<AppServerClient> {
+    let rollover_state_file =
+        std::env::var_os("LOSANGELEX_APP_SERVER_STATE_FILE").map(PathBuf::from);
     let app_server = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
         websocket_url,
+        rollover_state_file,
         auth_token,
         client_name: "codex-tui".to_string(),
         client_version: env!("CARGO_PKG_VERSION").to_string(),

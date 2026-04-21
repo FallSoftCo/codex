@@ -1,3 +1,6 @@
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,6 +25,8 @@ pub struct HollywoodSendHandler;
 pub struct HollywoodTeamUpHandler;
 pub struct HollywoodTeamStatusHandler;
 pub struct HollywoodTeamMemberUpdateHandler;
+
+const HOLLYWOOD_REGISTRY_STALE_AFTER: Duration = Duration::seconds(90);
 
 #[derive(Deserialize)]
 struct HollywoodReadArgs {
@@ -128,6 +133,8 @@ struct HollywoodRegistryEntry {
     session_id: String,
     attached: bool,
     identities: Vec<String>,
+    updated_at: Option<String>,
+    last_heartbeat_at: Option<String>,
 }
 impl ToolHandler for HollywoodStatusHandler {
     type Output = FunctionToolOutput;
@@ -592,7 +599,14 @@ async fn fetch_registry_entries(
         .json::<HollywoodRegistryListResponse>()
         .await
         .map_err(|err| format!("Hollywood registry response parse failed: {err}"))
-        .map(|response| response.entries)
+        .map(|response| {
+            let now = Utc::now();
+            response
+                .entries
+                .into_iter()
+                .filter(|entry| registry_entry_is_fresh(entry, &now))
+                .collect()
+        })
 }
 
 fn all_targets_present(target_identities: &[String], entries: &[HollywoodRegistryEntry]) -> bool {
@@ -603,6 +617,23 @@ fn all_targets_present(target_identities: &[String], entries: &[HollywoodRegistr
                     || entry.identities.iter().any(|identity| identity == target))
         })
     })
+}
+
+fn registry_entry_is_fresh(entry: &HollywoodRegistryEntry, now: &DateTime<Utc>) -> bool {
+    let cutoff = *now - HOLLYWOOD_REGISTRY_STALE_AFTER;
+    let heartbeat_at = entry
+        .last_heartbeat_at
+        .as_deref()
+        .or(entry.updated_at.as_deref());
+    heartbeat_at
+        .and_then(parse_registry_timestamp)
+        .is_some_and(|heartbeat_at| heartbeat_at >= cutoff)
+}
+
+fn parse_registry_timestamp(value: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|parsed| parsed.with_timezone(&Utc))
 }
 
 fn parse_function_args<T>(payload: &ToolPayload) -> Result<T, FunctionCallError>
@@ -651,11 +682,15 @@ mod tests {
                 session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
                 attached: true,
                 identities: vec!["sid-agor-cp2j-755r-fcup-xtau-5phv-we".to_string()],
+                updated_at: None,
+                last_heartbeat_at: Some(Utc::now().to_rfc3339()),
             },
             HollywoodRegistryEntry {
                 session_id: "019d0000-0000-7000-8000-000000000000".to_string(),
                 attached: false,
                 identities: vec![],
+                updated_at: None,
+                last_heartbeat_at: Some(Utc::now().to_rfc3339()),
             },
         ];
 
@@ -667,5 +702,27 @@ mod tests {
             &["019d0000-0000-7000-8000-000000000000".to_string()],
             &entries
         ));
+    }
+
+    #[test]
+    fn registry_entry_freshness_ignores_stale_attached_entries() {
+        let now = Utc::now();
+        let fresh = HollywoodRegistryEntry {
+            session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+            attached: true,
+            identities: vec!["sid-fresh".to_string()],
+            updated_at: None,
+            last_heartbeat_at: Some((now - Duration::seconds(15)).to_rfc3339()),
+        };
+        let stale = HollywoodRegistryEntry {
+            session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+            attached: true,
+            identities: vec!["sid-stale".to_string()],
+            updated_at: None,
+            last_heartbeat_at: Some((now - Duration::minutes(10)).to_rfc3339()),
+        };
+
+        assert!(registry_entry_is_fresh(&fresh, &now));
+        assert!(!registry_entry_is_fresh(&stale, &now));
     }
 }
