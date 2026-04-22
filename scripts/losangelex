@@ -17,6 +17,8 @@ app_server_base_port="${LOSANGELEX_APP_SERVER_BASE_PORT:-46321}"
 app_server_state_file="$migration_dir/current-app-server.json"
 app_server_generations_dir="$migration_dir/app-servers"
 app_server_start_timeout_seconds="${LOSANGELEX_APP_SERVER_START_TIMEOUT_SECONDS:-20}"
+restart_handoff_file="$migration_dir/restart-handoff.json"
+restart_exit_code="${LOSANGELEX_CLIENT_RESTART_EXIT_CODE:-85}"
 
 if [[ -z "${AWS_ACCESS_KEY_ID:-}" && -z "${AWS_PROFILE:-}" && -z "${AWS_DEFAULT_PROFILE:-}" && -f "$losangelex_email_env" ]]; then
   set -a
@@ -156,6 +158,22 @@ write_app_server_state() {
   "websocket_url": "$websocket_url",
   "pid_file": "$pid_file",
   "log_file": "$log_file"
+}
+
+read_restart_handoff_thread_id() {
+  local file="$1"
+  python3 - "$file" <<'PY'
+import json, sys
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+value = data.get("thread_id")
+if isinstance(value, str) and value:
+    print(value)
+PY
 }
 JSON
 }
@@ -307,6 +325,7 @@ export HOLLYWOOD_WAKE_ROOMS="$wake_rooms"
 export HOLLYWOOD_ATTENTION_MODE="${HOLLYWOOD_ATTENTION_MODE:-focused}"
 export LOSANGELEX_CLIENT_NAME="${LOSANGELEX_CLIENT_NAME:-losangelex-tui}"
 export LOSANGELEX_PRODUCT_NAME="${LOSANGELEX_PRODUCT_NAME:-losangelex}"
+export LOSANGELEX_RESTART_HANDOFF_FILE="$restart_handoff_file"
 
 extra_args=()
 has_explicit_cwd=0
@@ -404,9 +423,30 @@ if [[ "$app_server_mode" == "daemon" ]]; then
   extra_args+=(--remote "$app_server_url")
 fi
 
-if [[ -x "$binary_path" ]]; then
-  exec "$binary_path" --enable tui_app_server "${extra_args[@]}" "$@"
-fi
+run_args=("$@")
+while true; do
+  rm -f "$restart_handoff_file"
+  set +e
+  if [[ -x "$binary_path" ]]; then
+    "$binary_path" --enable tui_app_server "${extra_args[@]}" "${run_args[@]}"
+    exit_code=$?
+  else
+    (
+      cd "$repo_root"
+      cargo +stable run -p codex-cli --bin codex -- --enable tui_app_server "${extra_args[@]}" "${run_args[@]}"
+    )
+    exit_code=$?
+  fi
+  set -e
 
-cd "$repo_root"
-exec cargo +stable run -p codex-cli --bin codex -- --enable tui_app_server "${extra_args[@]}" "$@"
+  if [[ "$exit_code" == "$restart_exit_code" ]]; then
+    restart_thread_id="$(read_restart_handoff_thread_id "$restart_handoff_file")"
+    if [[ -n "$restart_thread_id" ]]; then
+      rm -f "$restart_handoff_file"
+      run_args=(resume "$restart_thread_id")
+      continue
+    fi
+  fi
+
+  exit "$exit_code"
+done

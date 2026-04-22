@@ -182,6 +182,7 @@ fn event_msg_persistence_mode(ev: &EventMsg) -> Option<EventPersistenceMode> {
         | EventMsg::CollabWaitingBegin(_)
         | EventMsg::CollabCloseBegin(_)
         | EventMsg::CollabResumeBegin(_)
+        | EventMsg::ClientRestartRequested(_)
         | EventMsg::ImageGenerationBegin(_) => None,
     }
 }

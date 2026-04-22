@@ -1551,6 +1551,9 @@ pub enum EventMsg {
 
     RequestUserInput(RequestUserInputEvent),
 
+    /// Request that the interactive client restart and resume this thread.
+    ClientRestartRequested(ClientRestartRequestedEvent),
+
     DynamicToolCallRequest(DynamicToolCallRequest),
 
     DynamicToolCallResponse(DynamicToolCallResponseEvent),
@@ -2093,6 +2096,13 @@ impl ErrorEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct WarningEvent {
     pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct ClientRestartRequestedEvent {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "string | null", optional)]
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]

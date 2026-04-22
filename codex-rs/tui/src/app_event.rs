@@ -31,6 +31,7 @@ use codex_protocol::protocol::RateLimitSnapshot;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use codex_utils_approval_presets::ApprovalPreset;
 
+use crate::app::ClientRestartRequest;
 use crate::bottom_pane::ApprovalRequest;
 use crate::bottom_pane::StatusLineItem;
 use crate::bottom_pane::TerminalTitleItem;
@@ -164,6 +165,10 @@ pub(crate) enum AppEvent {
     /// escape hatch that skips shutdown and may drop in-flight work (e.g.,
     /// background tasks, rollout flush, or child process cleanup).
     Exit(ExitMode),
+
+    /// Restart the interactive client and resume the requested thread when the
+    /// launcher supports automatic handoff.
+    RestartClient(ClientRestartRequest),
 
     /// Request app-server account logout, then exit after it succeeds.
     Logout,

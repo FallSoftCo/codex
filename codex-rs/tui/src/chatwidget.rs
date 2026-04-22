@@ -6675,6 +6675,7 @@ impl ChatWidget {
             | ServerNotification::FuzzyFileSearchSessionCompleted(_)
             | ServerNotification::ThreadRealtimeTranscriptDelta(_)
             | ServerNotification::ThreadRealtimeTranscriptDone(_)
+            | ServerNotification::ClientRestartRequested(_)
             | ServerNotification::WindowsWorldWritableWarning(_)
             | ServerNotification::WindowsSandboxSetupCompleted(_)
             | ServerNotification::AccountLoginCompleted(_) => {}
@@ -7115,6 +7116,7 @@ impl ChatWidget {
             EventMsg::RequestUserInput(ev) => {
                 self.on_request_user_input(ev);
             }
+            EventMsg::ClientRestartRequested(_) => {}
             EventMsg::RequestPermissions(ev) => {
                 self.on_request_permissions(ev);
             }

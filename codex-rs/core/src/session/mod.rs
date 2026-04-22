@@ -97,6 +97,7 @@ use codex_protocol::models::format_allow_prefixes;
 use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::permissions::NetworkSandboxPolicy;
+use codex_protocol::protocol::ClientRestartRequestedEvent;
 use codex_protocol::protocol::FileChange;
 use codex_protocol::protocol::HasLegacyEvent;
 use codex_protocol::protocol::InterAgentCommunication;
@@ -2133,6 +2134,11 @@ impl Session {
         });
         self.send_event(turn_context, event).await;
         rx_response.await.ok()
+    }
+
+    pub async fn request_client_restart(&self, turn_context: &TurnContext, reason: Option<String>) {
+        let event = EventMsg::ClientRestartRequested(ClientRestartRequestedEvent { reason });
+        self.send_event(turn_context, event).await;
     }
 
     #[expect(

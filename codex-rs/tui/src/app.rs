@@ -327,11 +327,18 @@ fn guardian_approvals_mode() -> GuardianApprovalsMode {
 /// perceived typing speed for non-backlogged output.
 const COMMIT_ANIMATION_TICK: Duration = tui::TARGET_FRAME_INTERVAL;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientRestartRequest {
+    pub thread_id: ThreadId,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppExitInfo {
     pub token_usage: TokenUsage,
     pub thread_id: Option<ThreadId>,
     pub thread_name: Option<String>,
+    pub restart_request: Option<ClientRestartRequest>,
     pub update_action: Option<UpdateAction>,
     pub exit_reason: ExitReason,
 }
@@ -342,6 +349,7 @@ impl AppExitInfo {
             token_usage: TokenUsage::default(),
             thread_id: None,
             thread_name: None,
+            restart_request: None,
             update_action: None,
             exit_reason: ExitReason::Fatal(message.into()),
         }
@@ -536,6 +544,7 @@ pub(crate) struct App {
     remote_app_server_auth_token: Option<String>,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
+    pub(crate) pending_restart_request: Option<ClientRestartRequest>,
 
     /// Tracks the thread we intentionally shut down while exiting the app.
     ///
@@ -695,6 +704,7 @@ impl App {
                     token_usage: TokenUsage::default(),
                     thread_id: None,
                     thread_name: None,
+                    restart_request: None,
                     update_action: None,
                     exit_reason: ExitReason::UserRequested,
                 });
@@ -927,6 +937,7 @@ impl App {
             remote_app_server_url,
             remote_app_server_auth_token,
             pending_update_action: None,
+            pending_restart_request: None,
             pending_shutdown_exit_thread_id: None,
             windows_sandbox: WindowsSandboxState::default(),
             thread_event_channels: HashMap::new(),
@@ -1110,15 +1121,29 @@ impl App {
                 return Err(err);
             }
         };
-        let resumable_thread = resumable_thread(
-            app.chat_widget.thread_id(),
-            app.chat_widget.thread_name(),
-            app.chat_widget.rollout_path().as_deref(),
+        let restart_request = app.pending_restart_request.clone();
+        let resumable_thread = restart_request.as_ref().map_or_else(
+            || {
+                resumable_thread(
+                    app.chat_widget.thread_id(),
+                    app.chat_widget.thread_name(),
+                    app.chat_widget.rollout_path().as_deref(),
+                )
+            },
+            |request| {
+                Some(ResumableThread {
+                    thread_id: request.thread_id,
+                    thread_name: (app.chat_widget.thread_id() == Some(request.thread_id))
+                        .then(|| app.chat_widget.thread_name())
+                        .flatten(),
+                })
+            },
         );
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             thread_id: resumable_thread.as_ref().map(|thread| thread.thread_id),
             thread_name: resumable_thread.and_then(|thread| thread.thread_name),
+            restart_request,
             update_action: app.pending_update_action,
             exit_reason,
         })

@@ -274,6 +274,23 @@ fn create_list_coordination_tasks_tool() -> ToolSpec {
     })
 }
 
+fn create_restart_client_tool() -> ToolSpec {
+    let properties = BTreeMap::from([(
+        "reason".to_string(),
+        JsonSchema::string(Some(
+            "Optional concise reason for the restart request, for example `rolling deploy`, `latest build available`, or `resume on new client generation`.".to_string(),
+        )),
+    )]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "restart_client".to_string(),
+        description: "Request that the current Losangelex client exit and auto-resume this root thread through the launcher when available. Use this when the user explicitly asks you to restart onto a newer build or roll forward to the current client generation. This restarts the interactive client only; it does not create a new thread or subagent.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
+        output_schema: None,
+    })
+}
+
 fn create_hollywood_read_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
@@ -512,6 +529,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
     use crate::tools::handlers::PlanHandler;
     use crate::tools::handlers::RequestPermissionsHandler;
     use crate::tools::handlers::RequestUserInputHandler;
+    use crate::tools::handlers::RestartClientHandler;
     use crate::tools::handlers::ShellCommandHandler;
     use crate::tools::handlers::ShellHandler;
     use crate::tools::handlers::TestSyncHandler;
@@ -611,6 +629,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         if !coordination_specs_inserted && matches!(spec.name(), "update_plan" | "spawn_agent") {
             builder.push_spec(create_coordination_act_tool());
             builder.push_spec(create_list_coordination_tasks_tool());
+            builder.push_spec(create_restart_client_tool());
             coordination_specs_inserted = true;
         }
         if hollywood_tools_enabled
@@ -640,6 +659,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
     if !coordination_specs_inserted {
         builder.push_spec(create_coordination_act_tool());
         builder.push_spec(create_list_coordination_tasks_tool());
+        builder.push_spec(create_restart_client_tool());
     }
 
     if hollywood_tools_enabled && !hollywood_specs_inserted {
@@ -816,6 +836,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
     }
     builder.register_handler("coordination_act", Arc::new(CoordinationHandler));
     builder.register_handler("list_coordination_tasks", Arc::new(CoordinationHandler));
+    builder.register_handler("restart_client", Arc::new(RestartClientHandler));
     if hollywood_tools_enabled {
         builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
         builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));

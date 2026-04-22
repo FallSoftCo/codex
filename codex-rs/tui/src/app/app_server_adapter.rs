@@ -12,6 +12,7 @@ should shrink and eventually disappear.
 */
 
 use super::App;
+use crate::app::ClientRestartRequest;
 use crate::app_command::AppCommand;
 use crate::app_event::AppEvent;
 use crate::app_server_session::AppServerSession;
@@ -250,6 +251,21 @@ impl App {
                 self.fetch_plugins_list(app_server_client, cwd);
                 return;
             }
+            ServerNotification::ClientRestartRequested(notification) => {
+                let Ok(thread_id) = ThreadId::from_string(&notification.thread_id) else {
+                    tracing::warn!(
+                        thread_id = notification.thread_id,
+                        "ignoring client restart request with invalid thread_id"
+                    );
+                    return;
+                };
+                self.app_event_tx
+                    .send(AppEvent::RestartClient(ClientRestartRequest {
+                        thread_id,
+                        reason: notification.reason.clone(),
+                    }));
+                return;
+            }
             _ => {}
         }
 
@@ -475,6 +491,9 @@ fn server_notification_thread_target(
             Some(notification.thread_id.as_str())
         }
         ServerNotification::Warning(notification) => notification.thread_id.as_deref(),
+        ServerNotification::ClientRestartRequested(notification) => {
+            Some(notification.thread_id.as_str())
+        }
         ServerNotification::ThreadHollywoodMessage(notification) => {
             Some(notification.thread_id.as_str())
         }

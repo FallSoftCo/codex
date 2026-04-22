@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "reason": {
+      "description": "Optional concise reason for the restart request.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "threadId": {
+      "description": "Thread that requested the client restart.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "threadId"
+  ],
+  "title": "ClientRestartRequestedNotification",
+  "type": "object"
+}

@@ -15,6 +15,7 @@ use crate::legacy_core::windows_sandbox::WindowsSandboxLevelExt;
 use additional_dirs::add_dir_warning_message;
 use app::App;
 pub use app::AppExitInfo;
+pub use app::ClientRestartRequest;
 pub use app::ExitReason;
 use app_server_session::AppServerSession;
 use codex_app_server_client::AppServerClient;
@@ -1060,6 +1061,7 @@ async fn run_ratatui_app(
                         token_usage: codex_protocol::protocol::TokenUsage::default(),
                         thread_id: None,
                         thread_name: None,
+                        restart_request: None,
                         update_action: Some(action),
                         exit_reason: ExitReason::UserRequested,
                     });
@@ -1137,6 +1139,7 @@ async fn run_ratatui_app(
                 token_usage: codex_protocol::protocol::TokenUsage::default(),
                 thread_id: None,
                 thread_name: None,
+                restart_request: None,
                 update_action: None,
                 exit_reason: ExitReason::UserRequested,
             });
@@ -1181,6 +1184,7 @@ async fn run_ratatui_app(
             token_usage: codex_protocol::protocol::TokenUsage::default(),
             thread_id: None,
             thread_name: None,
+            restart_request: None,
             update_action: None,
             exit_reason: ExitReason::Fatal(format!(
                 "No saved session found with ID {id_str}. Run `codex {action}` without an ID to choose from existing sessions."
@@ -1242,6 +1246,7 @@ async fn run_ratatui_app(
                         token_usage: codex_protocol::protocol::TokenUsage::default(),
                         thread_id: None,
                         thread_name: None,
+                        restart_request: None,
                         update_action: None,
                         exit_reason: ExitReason::UserRequested,
                     });
@@ -1303,6 +1308,7 @@ async fn run_ratatui_app(
                     token_usage: codex_protocol::protocol::TokenUsage::default(),
                     thread_id: None,
                     thread_name: None,
+                    restart_request: None,
                     update_action: None,
                     exit_reason: ExitReason::UserRequested,
                 });
@@ -1348,6 +1354,7 @@ async fn run_ratatui_app(
                             token_usage: codex_protocol::protocol::TokenUsage::default(),
                             thread_id: None,
                             thread_name: None,
+                            restart_request: None,
                             update_action: None,
                             exit_reason: ExitReason::UserRequested,
                         });

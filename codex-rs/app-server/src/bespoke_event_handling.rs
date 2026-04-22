@@ -18,6 +18,7 @@ use codex_app_server_protocol::AdditionalPermissionProfile as V2AdditionalPermis
 use codex_app_server_protocol::AgentMessageDeltaNotification;
 use codex_app_server_protocol::ApplyPatchApprovalParams;
 use codex_app_server_protocol::ApplyPatchApprovalResponse;
+use codex_app_server_protocol::ClientRestartRequestedNotification;
 use codex_app_server_protocol::CodexErrorInfo as V2CodexErrorInfo;
 use codex_app_server_protocol::CollabAgentState as V2CollabAgentStatus;
 use codex_app_server_protocol::CollabAgentTool;
@@ -283,6 +284,18 @@ pub(crate) async fn apply_bespoke_event_handling(
                 }
                 outgoing
                     .send_server_notification(ServerNotification::Warning(notification))
+                    .await;
+            }
+        }
+        EventMsg::ClientRestartRequested(event) => {
+            if let ApiVersion::V2 = api_version {
+                outgoing
+                    .send_server_notification(ServerNotification::ClientRestartRequested(
+                        ClientRestartRequestedNotification {
+                            thread_id: conversation_id.to_string(),
+                            reason: event.reason,
+                        },
+                    ))
                     .await;
             }
         }
@@ -3485,6 +3498,71 @@ mod tests {
             rx.try_recv().is_err(),
             "completion should not emit after the pending item is cleared"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn client_restart_requested_emits_restart_notification() -> Result<()> {
+        let codex_home = TempDir::new()?;
+        let config = load_default_config_for_test(&codex_home).await;
+        let thread_manager = Arc::new(
+            codex_core::test_support::thread_manager_with_models_provider_and_home(
+                CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+                config.model_provider.clone(),
+                config.codex_home.to_path_buf(),
+                Arc::new(codex_exec_server::EnvironmentManager::new(
+                    /*exec_server_url*/ None,
+                )),
+            ),
+        );
+        let codex_core::NewThread {
+            thread_id: conversation_id,
+            thread: conversation,
+            ..
+        } = thread_manager.start_thread(config).await?;
+        let thread_state = new_thread_state();
+        let thread_watch_manager = ThreadWatchManager::new();
+        let (tx, mut rx) = mpsc::channel(CHANNEL_CAPACITY);
+        let outgoing = Arc::new(OutgoingMessageSender::new(tx));
+        let outgoing = ThreadScopedOutgoingMessageSender::new(
+            outgoing,
+            vec![ConnectionId(1)],
+            conversation_id,
+        );
+
+        apply_bespoke_event_handling(
+            Event {
+                id: "turn-1".to_string(),
+                msg: EventMsg::ClientRestartRequested(
+                    codex_protocol::protocol::ClientRestartRequestedEvent {
+                        reason: Some("rolling deploy".to_string()),
+                    },
+                ),
+            },
+            conversation_id,
+            conversation,
+            thread_manager,
+            /*analytics_events_client*/ None,
+            outgoing,
+            thread_state,
+            thread_watch_manager,
+            ApiVersion::V2,
+            "test-provider".to_string(),
+            codex_home.path(),
+        )
+        .await;
+
+        let msg = recv_broadcast_message(&mut rx).await?;
+        match msg {
+            OutgoingMessage::AppServerNotification(ServerNotification::ClientRestartRequested(
+                payload,
+            )) => {
+                assert_eq!(payload.thread_id, conversation_id.to_string());
+                assert_eq!(payload.reason.as_deref(), Some("rolling deploy"));
+            }
+            other => bail!("unexpected message: {other:?}"),
+        }
+        assert!(rx.try_recv().is_err(), "no extra messages expected");
         Ok(())
     }
 

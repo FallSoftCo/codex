@@ -3234,6 +3234,45 @@ async fn side_thread_ignores_global_mcp_startup_notifications() {
 }
 
 #[tokio::test]
+async fn client_restart_notification_emits_restart_app_event() {
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    while app_event_rx.try_recv().is_ok() {}
+    let mut app_server = crate::start_embedded_app_server_for_picker(app.chat_widget.config_ref())
+        .await
+        .expect("embedded app server");
+    let thread_id = ThreadId::new();
+
+    app.handle_app_server_event(
+        &mut app_server,
+        codex_app_server_client::AppServerEvent::ServerNotification(
+            ServerNotification::ClientRestartRequested(
+                codex_app_server_protocol::ClientRestartRequestedNotification {
+                    thread_id: thread_id.to_string(),
+                    reason: Some("rolling deploy".to_string()),
+                },
+            ),
+        ),
+    )
+    .await;
+
+    let app_event = app_event_rx
+        .try_recv()
+        .expect("restart app event should be queued");
+    match app_event {
+        AppEvent::RestartClient(request) => {
+            assert_eq!(
+                request,
+                ClientRestartRequest {
+                    thread_id,
+                    reason: Some("rolling deploy".to_string()),
+                }
+            );
+        }
+        other => panic!("unexpected app event: {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn side_restore_user_message_puts_inline_question_back_in_composer() {
     let mut app = make_test_app().await;
     let user_message = crate::chatwidget::UserMessage::from("side question");
@@ -3629,6 +3668,7 @@ async fn make_test_app() -> App {
         remote_app_server_url: None,
         remote_app_server_auth_token: None,
         pending_update_action: None,
+        pending_restart_request: None,
         pending_shutdown_exit_thread_id: None,
         windows_sandbox: WindowsSandboxState::default(),
         thread_event_channels: HashMap::new(),
@@ -3687,6 +3727,7 @@ async fn make_test_app_with_channels() -> (
             remote_app_server_url: None,
             remote_app_server_auth_token: None,
             pending_update_action: None,
+            pending_restart_request: None,
             pending_shutdown_exit_thread_id: None,
             windows_sandbox: WindowsSandboxState::default(),
             thread_event_channels: HashMap::new(),

@@ -193,6 +193,7 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
     expected_tools_names.extend([
         "coordination_act",
         "list_coordination_tasks",
+        "restart_client",
         "update_plan",
         "request_user_input",
         "apply_patch",

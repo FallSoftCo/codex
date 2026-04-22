@@ -232,6 +232,12 @@ impl App {
             AppEvent::Exit(mode) => {
                 return Ok(self.handle_exit_mode(app_server, mode).await);
             }
+            AppEvent::RestartClient(request) => {
+                self.pending_restart_request = Some(request);
+                return Ok(self
+                    .handle_exit_mode(app_server, ExitMode::ShutdownFirst)
+                    .await);
+            }
             AppEvent::Logout => match app_server.logout_account().await {
                 Ok(()) => {
                     return Ok(self

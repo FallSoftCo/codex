@@ -42,6 +42,7 @@ pub(super) async fn make_test_app() -> App {
         remote_app_server_url: None,
         remote_app_server_auth_token: None,
         pending_update_action: None,
+        pending_restart_request: None,
         pending_shutdown_exit_thread_id: None,
         windows_sandbox: WindowsSandboxState::default(),
         thread_event_channels: HashMap::new(),
