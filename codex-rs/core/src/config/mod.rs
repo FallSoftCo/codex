@@ -1380,7 +1380,7 @@ fn resolve_email_config(
         delete_processed_inbound: email.delete_processed_inbound.unwrap_or(true),
         default_away_mode: email
             .default_away_mode
-            .unwrap_or(EmailAwayModeOverride::Auto),
+            .unwrap_or(EmailAwayModeOverride::Present),
         ses: codex_config::types::SesEmailConfig {
             region,
             from_email,

@@ -82,6 +82,8 @@ struct PersistedEmailBridgeState {
     secret_base64: String,
     manual_mode: EmailAwayModeOverride,
     #[serde(default)]
+    manual_mode_explicitly_set: bool,
+    #[serde(default)]
     issued_tokens: Vec<PersistedIssuedToken>,
     #[serde(default)]
     processed_object_keys: Vec<String>,
@@ -93,7 +95,8 @@ impl Default for PersistedEmailBridgeState {
         rand::rng().fill_bytes(&mut secret);
         Self {
             secret_base64: BASE64_STANDARD.encode(secret),
-            manual_mode: EmailAwayModeOverride::Auto,
+            manual_mode: EmailAwayModeOverride::Present,
+            manual_mode_explicitly_set: false,
             issued_tokens: Vec::new(),
             processed_object_keys: Vec::new(),
         }
@@ -153,12 +156,13 @@ impl EmailBridge {
         let state_path = state_dir.join("email-bridge-v1.json");
         let state_existed = state_path.exists();
         let mut state = load_persisted_state(state_path.as_path())?;
-        if !state_existed {
+        let should_sync_default_mode = !state_existed || !state.manual_mode_explicitly_set;
+        if should_sync_default_mode {
             state.manual_mode = config.default_away_mode;
         }
         let issued_tokens = rebuild_issued_tokens(&state);
 
-        Ok(Self {
+        let bridge = Self {
             config,
             ses_client,
             s3_client,
@@ -168,7 +172,11 @@ impl EmailBridge {
             issued_tokens,
             pending_completion_emails: HashMap::new(),
             last_local_activity: Instant::now(),
-        })
+        };
+        if should_sync_default_mode {
+            bridge.persist_state()?;
+        }
+        Ok(bridge)
     }
 
     pub(super) fn poll_interval(&self) -> Duration {
@@ -187,6 +195,7 @@ impl EmailBridge {
         mode: EmailAwayModeOverride,
     ) -> Result<(), String> {
         self.state.manual_mode = mode;
+        self.state.manual_mode_explicitly_set = true;
         if !self.is_away() {
             self.pending_completion_emails.clear();
         }
@@ -1028,6 +1037,7 @@ impl App {
 mod tests {
     use super::EmailAwayModeOverride;
     use super::EmailReplyCommand;
+    use super::PersistedEmailBridgeState;
     use super::email_away_mode_label;
     use super::format_request_user_input_prompt;
     use super::normalize_reply_body;
@@ -1083,6 +1093,29 @@ mod tests {
             email_away_mode_label(EmailAwayModeOverride::Present),
             "present"
         );
+    }
+
+    #[test]
+    fn email_bridge_state_defaults_to_present_and_not_explicit() {
+        let state = PersistedEmailBridgeState::default();
+        assert_eq!(state.manual_mode, EmailAwayModeOverride::Present);
+        assert!(!state.manual_mode_explicitly_set);
+    }
+
+    #[test]
+    fn persisted_email_bridge_state_backfills_explicit_flag_for_old_files() {
+        let state: PersistedEmailBridgeState = serde_json::from_str(
+            r#"{
+                "secret_base64":"c2VjcmV0",
+                "manual_mode":"auto",
+                "issued_tokens":[],
+                "processed_object_keys":[]
+            }"#,
+        )
+        .expect("deserialize legacy email bridge state");
+
+        assert_eq!(state.manual_mode, EmailAwayModeOverride::Auto);
+        assert!(!state.manual_mode_explicitly_set);
     }
 
     #[test]

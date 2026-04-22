@@ -515,9 +515,9 @@ pub enum EmailProvider {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailAwayModeOverride {
-    #[default]
     Auto,
     Away,
+    #[default]
     Present,
 }
 
