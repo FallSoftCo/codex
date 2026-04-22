@@ -4,7 +4,14 @@ This document describes Codex's experimental Hollywood integration for local mul
 
 Hollywood is a local room-based messaging system for agents. In this integration, the app-server can attach a thread to a Hollywood room, classify inbound room traffic by attention level, notify frontends about new messages, and submit focused messages into the active Codex thread as structured contextual input.
 
-See also: [`coordination_control_plane.md`](coordination_control_plane.md) for the proposed next-release coordination/status/user-context design that builds on the current Hollywood transport layer.
+See also:
+
+- [`coordination_control_plane.md`](coordination_control_plane.md) for the
+  proposed next-release coordination/status/user-context design that builds on
+  the current Hollywood transport layer.
+- [`speech_act_contract_net.md`](speech_act_contract_net.md) for the longer-term
+  scalable team-coordination design that treats Hollywood as the conversation
+  layer rather than the only coordination substrate.
 
 ## Scope
 

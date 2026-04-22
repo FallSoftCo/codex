@@ -1,5 +1,6 @@
 use crate::shell::Shell;
 use crate::shell::ShellType;
+use crate::tools::handlers::CoordinationHandler;
 use crate::tools::handlers::HollywoodReadHandler;
 use crate::tools::handlers::HollywoodSendHandler;
 use crate::tools::handlers::HollywoodStatusHandler;
@@ -88,6 +89,191 @@ fn create_hollywood_status_tool() -> ToolSpec {
     })
 }
 
+fn create_coordination_act_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "action".to_string(),
+            JsonSchema::string(Some(
+                "Coordination act to record: `open_task`, `accept`, `done`, `handoff`, or `yield`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "task_id".to_string(),
+            JsonSchema::string(Some(
+                "Existing coordination task id for actions other than `open_task`.".to_string(),
+            )),
+        ),
+        (
+            "title".to_string(),
+            JsonSchema::string(Some(
+                "Task summary for `open_task`. Keep it short and concrete.".to_string(),
+            )),
+        ),
+        (
+            "details".to_string(),
+            JsonSchema::string(Some(
+                "Optional longer task details or handoff notes.".to_string(),
+            )),
+        ),
+        (
+            "kind".to_string(),
+            JsonSchema::string(Some(
+                "Optional task kind for `open_task`: `general`, `implementation`, `review`, `investigation`, `qa`, or `handoff`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "owner".to_string(),
+            JsonSchema::string(Some(
+                "Optional target agent thread id or alias. Use this for directed awards or handoffs."
+                    .to_string(),
+            )),
+        ),
+        (
+            "team_id".to_string(),
+            JsonSchema::string(Some(
+                "Optional coordination team id to associate with the task.".to_string(),
+            )),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood room associated with the task.".to_string(),
+            )),
+        ),
+        (
+            "capability".to_string(),
+            JsonSchema::string(Some(
+                "Optional requested capability or specialty for the task.".to_string(),
+            )),
+        ),
+        (
+            "depends_on".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Blocking coordination task id.".to_string())),
+                Some("Optional dependency task ids that must be done before this task becomes actionable.".to_string()),
+            ),
+        ),
+        (
+            "summary".to_string(),
+            JsonSchema::string(Some(
+                "Optional concise act summary for the durable act log.".to_string(),
+            )),
+        ),
+        (
+            "notify_room".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, also post a concise Hollywood room summary for visibility. Defaults to true."
+                    .to_string(),
+            )),
+        ),
+        (
+            "claim_paths".to_string(),
+            JsonSchema::array(
+                JsonSchema::object(
+                    BTreeMap::from([
+                        (
+                            "kind".to_string(),
+                            JsonSchema::string(Some("`file` or `directory`.".to_string())),
+                        ),
+                        (
+                            "path".to_string(),
+                            JsonSchema::string(Some(
+                                "Absolute path or path relative to the current cwd.".to_string(),
+                            )),
+                        ),
+                    ]),
+                    Some(vec!["kind".to_string(), "path".to_string()]),
+                    Some(false.into()),
+                ),
+                Some("Optional ownership claims to acquire while accepting the task.".to_string()),
+            ),
+        ),
+        (
+            "release_paths".to_string(),
+            JsonSchema::array(
+                JsonSchema::object(
+                    BTreeMap::from([
+                        (
+                            "kind".to_string(),
+                            JsonSchema::string(Some("`file` or `directory`.".to_string())),
+                        ),
+                        (
+                            "path".to_string(),
+                            JsonSchema::string(Some(
+                                "Absolute path or path relative to the current cwd.".to_string(),
+                            )),
+                        ),
+                    ]),
+                    Some(vec!["kind".to_string(), "path".to_string()]),
+                    Some(false.into()),
+                ),
+                Some("Optional ownership claims to release while finishing, handing off, or yielding the task.".to_string()),
+            ),
+        ),
+        (
+            "lease_seconds".to_string(),
+            JsonSchema::number(Some(
+                "Optional active-lease duration for `accept`. Defaults to a long development-friendly lease."
+                    .to_string(),
+            )),
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "coordination_act".to_string(),
+        description: "Record a durable team-work commitment. Use this when your natural-language coordination becomes an actual assignment, acceptance, completion, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec!["action".to_string()]),
+            Some(false.into()),
+        ),
+        output_schema: None,
+    })
+}
+
+fn create_list_coordination_tasks_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "owner".to_string(),
+            JsonSchema::string(Some(
+                "Optional owner agent thread id or alias filter.".to_string(),
+            )),
+        ),
+        (
+            "creator".to_string(),
+            JsonSchema::string(Some(
+                "Optional creator agent thread id or alias filter.".to_string(),
+            )),
+        ),
+        (
+            "statuses".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Task status filter.".to_string())),
+                Some("Optional task statuses to include.".to_string()),
+            ),
+        ),
+        (
+            "include_history".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, include durable coordination acts alongside the task list.".to_string(),
+            )),
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "list_coordination_tasks".to_string(),
+        description: "Inspect durable Losangelex coordination tasks and, optionally, their act history. Use this to recover state after idle gaps, restarts, or rolling deploys instead of inferring coordination truth from room scrollback alone."
+            .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
+        output_schema: None,
+    })
+}
+
 fn create_hollywood_read_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
@@ -162,7 +348,7 @@ fn create_hollywood_send_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
-        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks you to work with teammates, peers, or other existing agents. Reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar tasks. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap."
+        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks you to work with teammates, peers, or other existing agents. Reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar tasks. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap. When the conversation becomes a real assignment, acceptance, handoff, dependency, or completion, pair the room update with `coordination_act` so the commitment is durable."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -419,8 +605,14 @@ pub(crate) fn build_specs_with_discoverable_tools(
         && config.hollywood_tools_enabled
         && crate::hollywood::HollywoodSessionConfig::from_env().is_some();
     let mut hollywood_specs_inserted = false;
+    let mut coordination_specs_inserted = false;
 
     for spec in plan.specs {
+        if !coordination_specs_inserted && matches!(spec.name(), "update_plan" | "spawn_agent") {
+            builder.push_spec(create_coordination_act_tool());
+            builder.push_spec(create_list_coordination_tasks_tool());
+            coordination_specs_inserted = true;
+        }
         if hollywood_tools_enabled
             && !hollywood_specs_inserted
             && matches!(
@@ -443,6 +635,11 @@ pub(crate) fn build_specs_with_discoverable_tools(
         } else {
             builder.push_spec(spec.spec);
         }
+    }
+
+    if !coordination_specs_inserted {
+        builder.push_spec(create_coordination_act_tool());
+        builder.push_spec(create_list_coordination_tasks_tool());
     }
 
     if hollywood_tools_enabled && !hollywood_specs_inserted {
@@ -617,6 +814,8 @@ pub(crate) fn build_specs_with_discoverable_tools(
             }
         }
     }
+    builder.register_handler("coordination_act", Arc::new(CoordinationHandler));
+    builder.register_handler("list_coordination_tasks", Arc::new(CoordinationHandler));
     if hollywood_tools_enabled {
         builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
         builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));

@@ -55,6 +55,7 @@ use tracing::warn;
 
 mod agent_jobs;
 mod backfill;
+mod coordination;
 mod logs;
 mod memories;
 mod path_claims;
@@ -223,7 +224,8 @@ async fn reconcile_legacy_state_migration_versions(pool: &SqlitePool) -> anyhow:
     // 22 agent_path, 23 drop_logs, 24 remote_control, 25 timestamps,
     // 26 dynamic_tool_namespaces, 27 hollywood, 28 scheduled_tasks,
     // 29 testers, 30 tester_runs, 31 tester_runs_drop_runtime_thread_fk,
-    // 32 watchers, 33 agent_completion_watchers, 34 task_watches, 35 path_claims.
+    // 32 watchers, 33 agent_completion_watchers, 34 task_watches, 35 path_claims,
+    // 36 coordination tasks.
     for (from_version, description, to_version) in [
         (22_i64, "threads hollywood", 27_i64),
         (23_i64, "threads agent path", 22_i64),

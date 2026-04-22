@@ -408,6 +408,8 @@ async fn assert_default_model_tools(
         "list_task_watches",
         "update_task_watch",
         "cancel_task_watch",
+        "coordination_act",
+        "list_coordination_tasks",
     ]);
     expected.extend(expected_tail);
     assert_model_tools(model_slug, features, web_search_mode, &expected).await;

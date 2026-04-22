@@ -1,5 +1,9 @@
 # Coordination Control Plane [proposal]
 
+See also:
+[`speech_act_contract_net.md`](./speech_act_contract_net.md) for the scalable
+task/lease/contract-layer design that builds on this control-plane foundation.
+
 This document proposes the next-release Losangelex design for:
 
 - role-driven multi-agent coordination

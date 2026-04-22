@@ -1,5 +1,6 @@
 pub(crate) mod agent_jobs;
 pub(crate) mod apply_patch;
+mod coordination;
 mod dynamic;
 mod hollywood;
 mod js_repl;
@@ -38,6 +39,7 @@ pub(crate) use crate::tools::code_mode::CodeModeWaitHandler;
 pub use apply_patch::ApplyPatchHandler;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::protocol::AskForApproval;
+pub use coordination::CoordinationHandler;
 pub use dynamic::DynamicToolHandler;
 pub use hollywood::HollywoodReadHandler;
 pub use hollywood::HollywoodSendHandler;

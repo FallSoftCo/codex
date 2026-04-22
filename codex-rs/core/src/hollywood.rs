@@ -198,6 +198,7 @@ fn runtime_context() -> HollywoodRuntimeContext {
             "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
             "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
             "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first. Reserve new subagents for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
+            "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so Losangelex can survive idle gaps, restart, and rolling deploy.".to_string(),
         ],
     }
 }
