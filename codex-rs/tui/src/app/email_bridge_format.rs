@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-const MAX_MESSAGE_CHARS: usize = 500;
+const MAX_MESSAGE_SUMMARY_CHARS: usize = 500;
 const MAX_ACTIVITY_LINES: usize = 6;
 const MAX_ACTIVITY_CHARS: usize = 180;
 const MAX_COMMAND_CHARS: usize = 120;
@@ -59,6 +59,7 @@ pub(super) struct EmailThreadSnapshot {
     pub(super) latest_completed_turn_id: Option<String>,
     pub(super) recent_user_message: Option<String>,
     pub(super) recent_agent_message: Option<String>,
+    pub(super) recent_agent_email_body: Option<String>,
     pub(super) current_activity: Vec<String>,
     pub(super) latest_completed_activity: Vec<String>,
 }
@@ -68,6 +69,13 @@ struct BufferedThreadItem {
     turn_id: String,
     item: ThreadItem,
     completed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecentMessageKind {
+    UserSummary,
+    AgentSummary,
+    AgentEmailBody,
 }
 
 impl EmailThreadSnapshot {
@@ -82,9 +90,11 @@ impl EmailThreadSnapshot {
         let buffered_items = buffered_thread_items(buffered_events);
         let latest_completed_turn_id = latest_completed_turn_id(buffered_events, turns);
         let recent_user_message =
-            recent_message_text(&buffered_items, turns, /*agent_message*/ false);
+            recent_message_text(&buffered_items, turns, RecentMessageKind::UserSummary);
         let recent_agent_message =
-            recent_message_text(&buffered_items, turns, /*agent_message*/ true);
+            recent_message_text(&buffered_items, turns, RecentMessageKind::AgentSummary);
+        let recent_agent_email_body =
+            recent_message_text(&buffered_items, turns, RecentMessageKind::AgentEmailBody);
         let current_activity = active_turn_id
             .as_deref()
             .map(|turn_id| {
@@ -116,6 +126,7 @@ impl EmailThreadSnapshot {
             latest_completed_turn_id,
             recent_user_message,
             recent_agent_message,
+            recent_agent_email_body,
             current_activity,
             latest_completed_activity,
         }
@@ -133,20 +144,12 @@ pub(super) fn format_completion_email(
         subject_context(snapshot),
         token
     );
-    let mut lines = header_lines(
-        snapshot,
-        "idle",
-        snapshot.latest_completed_turn_id.as_deref(),
-    );
+    let mut lines = Vec::new();
+    push_completion_message(&mut lines, snapshot.recent_agent_email_body.as_deref());
     push_message_section(
         &mut lines,
         "Recent user request",
         snapshot.recent_user_message.as_deref(),
-    );
-    push_message_section(
-        &mut lines,
-        "Latest agent response",
-        snapshot.recent_agent_message.as_deref(),
     );
     push_list_section(
         &mut lines,
@@ -155,6 +158,12 @@ pub(super) fn format_completion_email(
             .latest_completed_activity
             .iter()
             .map(String::as_str),
+    );
+    push_context_section(
+        &mut lines,
+        snapshot,
+        "idle",
+        snapshot.latest_completed_turn_id.as_deref(),
     );
     push_reply_instructions(&mut lines, token);
     (subject, lines.join("\n"))
@@ -302,6 +311,16 @@ fn header_lines(
     status: &str,
     focus_turn_id: Option<&str>,
 ) -> Vec<String> {
+    let mut lines = context_lines(snapshot, status, focus_turn_id);
+    lines.push(String::new());
+    lines
+}
+
+fn context_lines(
+    snapshot: &EmailThreadSnapshot,
+    status: &str,
+    focus_turn_id: Option<&str>,
+) -> Vec<String> {
     let mut lines = vec![
         format!("Thread: {}", snapshot.thread_label),
         format!("Thread ID: {}", snapshot.thread_id),
@@ -345,8 +364,26 @@ fn header_lines(
             lines.push(format!("Rollout path: {}", rollout_path.display()));
         }
     }
-    lines.push(String::new());
     lines
+}
+
+fn push_completion_message(lines: &mut Vec<String>, message: Option<&str>) {
+    if let Some(message) = message.filter(|message| !message.trim().is_empty()) {
+        lines.extend(message.lines().map(ToOwned::to_owned));
+    } else {
+        lines.push("Losangelex completed work without a final assistant message.".to_string());
+    }
+    lines.push(String::new());
+}
+
+fn push_context_section(
+    lines: &mut Vec<String>,
+    snapshot: &EmailThreadSnapshot,
+    status: &str,
+    focus_turn_id: Option<&str>,
+) {
+    let context = context_lines(snapshot, status, focus_turn_id);
+    push_list_section(lines, "Thread context", context.iter().map(String::as_str));
 }
 
 fn push_reply_instructions(lines: &mut Vec<String>, token: &str) {
@@ -368,7 +405,7 @@ fn push_message_section(lines: &mut Vec<String>, title: &str, message: Option<&s
         return;
     };
     lines.push(format!("{title}:"));
-    lines.push(truncate_text(message, MAX_MESSAGE_CHARS));
+    lines.push(truncate_text(message, MAX_MESSAGE_SUMMARY_CHARS));
     lines.push(String::new());
 }
 
@@ -508,30 +545,33 @@ fn activity_for_turn(
 fn recent_message_text(
     buffered_items: &[BufferedThreadItem],
     turns: &[Turn],
-    agent_message: bool,
+    kind: RecentMessageKind,
 ) -> Option<String> {
     buffered_items
         .iter()
         .rev()
-        .find_map(|buffered| message_text_from_item(&buffered.item, agent_message))
+        .find_map(|buffered| message_text_from_item(&buffered.item, kind))
         .or_else(|| {
             turns
                 .iter()
                 .rev()
                 .flat_map(|turn| turn.items.iter().rev())
-                .find_map(|item| message_text_from_item(item, agent_message))
+                .find_map(|item| message_text_from_item(item, kind))
         })
-        .map(|text| truncate_text(text.as_str(), MAX_MESSAGE_CHARS))
 }
 
-fn message_text_from_item(item: &ThreadItem, agent_message: bool) -> Option<String> {
+fn message_text_from_item(item: &ThreadItem, kind: RecentMessageKind) -> Option<String> {
     match item {
-        ThreadItem::UserMessage { content, .. } if !agent_message => {
+        ThreadItem::UserMessage { content, .. } if kind == RecentMessageKind::UserSummary => {
             let text = summarize_user_inputs(content);
             (!text.is_empty()).then_some(text)
         }
-        ThreadItem::AgentMessage { text, .. } if agent_message => {
-            let text = sanitize_multiline_text(text);
+        ThreadItem::AgentMessage { text, .. } if kind == RecentMessageKind::AgentSummary => {
+            let text = truncate_text(text, MAX_MESSAGE_SUMMARY_CHARS);
+            (!text.is_empty()).then_some(text)
+        }
+        ThreadItem::AgentMessage { text, .. } if kind == RecentMessageKind::AgentEmailBody => {
+            let text = sanitize_email_body_text(text);
             (!text.is_empty()).then_some(text)
         }
         ThreadItem::UserMessage { .. }
@@ -736,7 +776,7 @@ fn summarize_user_inputs(content: &[AppServerUserInput]) -> String {
             AppServerUserInput::Mention { name, .. } => parts.push(format!("[mention: {name}]")),
         }
     }
-    truncate_text(parts.join(" ").as_str(), MAX_MESSAGE_CHARS)
+    truncate_text(parts.join(" ").as_str(), MAX_MESSAGE_SUMMARY_CHARS)
 }
 
 fn truncate_code(text: &str, max_chars: usize) -> String {
@@ -754,6 +794,32 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
         .take(max_chars.saturating_sub(1))
         .collect::<String>()
         + "…"
+}
+
+fn sanitize_email_body_text(text: &str) -> String {
+    let mut lines = text.lines().map(str::trim_end).collect::<Vec<_>>();
+    while lines.first().is_some_and(|line| line.trim().is_empty()) {
+        lines.remove(0);
+    }
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+
+    let mut sanitized = Vec::new();
+    let mut previous_blank = false;
+    for line in lines {
+        let is_blank = line.trim().is_empty();
+        if is_blank {
+            if !previous_blank {
+                sanitized.push(String::new());
+            }
+        } else {
+            sanitized.push(line.to_string());
+        }
+        previous_blank = is_blank;
+    }
+
+    sanitized.join("\n")
 }
 
 fn sanitize_multiline_text(text: &str) -> String {
@@ -894,7 +960,7 @@ mod tests {
     }
 
     #[test]
-    fn completion_email_includes_context_and_activity() {
+    fn completion_email_uses_full_agent_message_body() {
         let turn_id = "turn-1";
         let events = vec![
             ThreadBufferedEvent::Notification(ServerNotification::ItemCompleted(
@@ -959,7 +1025,7 @@ mod tests {
                     turn_id: turn_id.to_string(),
                     item: ThreadItem::AgentMessage {
                         id: "agent-1".to_string(),
-                        text: "Updated the email bridge to include recent user, agent, and activity context.".to_string(),
+                        text: "Release sync complete.\n\nI adapted the email bridge so completion notices send the final assistant message first.\nThe context and activity details are still included below for reply routing.".to_string(),
                         phase: None,
                         memory_citation: None,
                     },
@@ -987,16 +1053,20 @@ mod tests {
             subject,
             "[Losangelex] ozzz / Release agent completed work [lx:abc123]"
         );
-        assert!(body.contains("Working directory: /home/ai/Development/ozzz"));
-        assert!(body.contains("Model: gpt-5.4 (openai)"));
+        assert!(body.starts_with("Release sync complete.\n\nI adapted the email bridge"));
         assert!(body.contains("Recent user request:"));
-        assert!(body.contains("Latest agent response:"));
+        assert!(!body.contains("Latest agent response:"));
         assert!(
             body.contains(
                 "- Command `cargo test -p codex-tui` in codex-rs (completed, exit 0, 2.4s)"
             )
         );
-        assert!(body.contains("- File changes (completed): updated tui/src/app/email_bridge.rs, added tui/src/app/email_bridge_format.rs"));
+        assert!(body.contains(
+            "- File changes (completed): updated tui/src/app/email_bridge.rs, added tui/src/app/email_bridge_format.rs"
+        ));
+        assert!(body.contains("Thread context:"));
+        assert!(body.contains("- Working directory: /home/ai/Development/ozzz"));
+        assert!(body.contains("- Model: gpt-5.4 (openai)"));
     }
 
     #[test]
