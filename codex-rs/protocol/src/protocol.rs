@@ -451,9 +451,11 @@ pub enum Op {
         responsesapi_client_metadata: Option<HashMap<String, String>>,
     },
 
-    /// External room traffic delivered into the normal turn-input path.
+    /// External room traffic delivered into the collaboration context for the
+    /// current or next regular turn.
     ///
-    /// This is contextual input for reasoning, not a task directive.
+    /// This is contextual coordination input for reasoning, not direct user
+    /// task input.
     HollywoodInput { message: HollywoodInputMessage },
 
     /// Similar to [`Op::UserInput`], but contains additional context required

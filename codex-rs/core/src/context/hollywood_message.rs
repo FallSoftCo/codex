@@ -24,7 +24,7 @@ impl HollywoodMessage {
 }
 
 impl ContextualUserFragment for HollywoodMessage {
-    const ROLE: &'static str = "user";
+    const ROLE: &'static str = "developer";
     const START_MARKER: &'static str = "<hollywood_message>";
     const END_MARKER: &'static str = "</hollywood_message>";
 

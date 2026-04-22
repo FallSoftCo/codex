@@ -5,6 +5,7 @@ use codex_protocol::AgentPath;
 use codex_protocol::items::TurnItem;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::InterAgentCommunication;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SandboxPolicy;
@@ -318,6 +319,59 @@ async fn injected_user_input_triggers_follow_up_request_with_deltas() {
     assert!(second_texts.iter().any(|text| text == "second prompt"));
 
     server.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hollywood_input_is_submitted_as_developer_context() {
+    let (server, _completions) =
+        start_streaming_sse_server(vec![response_completed_chunks("resp-1")]).await;
+    let codex = build_codex(&server).await;
+
+    codex
+        .submit(Op::HollywoodInput {
+            message: HollywoodInputMessage {
+                message_id: 42,
+                room: "repo/ozzz".to_string(),
+                sender_id: "peer-agent".to_string(),
+                body: "Can you take over the SES bridge verification?".to_string(),
+                mentions: vec!["@release".to_string()],
+                attention: Some("focused".to_string()),
+                message_kind: Some("direct".to_string()),
+                obligation: Some("obligation".to_string()),
+                requires_response: true,
+            },
+        })
+        .await
+        .unwrap_or_else(|err| panic!("submit Hollywood input: {err}"));
+
+    wait_for_turn_complete(&codex).await;
+
+    let requests = server.requests().await;
+    assert_eq!(requests.len(), 1);
+    let body: Value =
+        from_slice(&requests[0]).unwrap_or_else(|err| panic!("parse request body: {err}"));
+
+    let developer_texts = message_input_texts(&body, "developer");
+    assert!(
+        developer_texts
+            .iter()
+            .any(|text| text.contains("Hollywood coordination obligation")),
+        "expected Hollywood obligation instructions in developer input: {developer_texts:#?}"
+    );
+    assert!(
+        developer_texts
+            .iter()
+            .any(|text| text.contains("<hollywood_message>")),
+        "expected Hollywood message marker in developer input: {developer_texts:#?}"
+    );
+
+    let user_texts = message_input_texts(&body, "user");
+    assert!(
+        !user_texts
+            .iter()
+            .any(|text| text.contains("<hollywood_message>")),
+        "Hollywood context should not be injected as user input: {user_texts:#?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

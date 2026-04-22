@@ -1,3 +1,5 @@
+use codex_protocol::models::ContentItem;
+use codex_protocol::models::ResponseInputItem;
 use codex_protocol::protocol::AgentStatus;
 use codex_protocol::protocol::HollywoodInputMessage;
 
@@ -5,8 +7,8 @@ use crate::context::ContextualUserFragment;
 use crate::context::HollywoodMessage;
 use crate::context::SubagentNotification;
 
-// Helpers for model-visible session state markers that are stored in user-role
-// messages but are not user intent.
+// Helpers for model-visible session state markers that are injected as
+// contextual messages rather than user task input.
 
 // TODO(jif) unify with structured schema
 pub(crate) fn format_subagent_notification_message(
@@ -28,6 +30,25 @@ pub(crate) fn format_subagent_context_line(
 
 pub(crate) fn format_hollywood_message(message: &HollywoodInputMessage) -> String {
     HollywoodMessage::new(message).render()
+}
+
+pub(crate) fn hollywood_response_input_items(
+    message: &HollywoodInputMessage,
+) -> Vec<ResponseInputItem> {
+    let mut items = Vec::new();
+    if let Some(instruction) = hollywood_obligation_instruction(message) {
+        items.push(ResponseInputItem::Message {
+            role: "developer".to_string(),
+            content: vec![ContentItem::InputText { text: instruction }],
+        });
+    }
+    items.push(ResponseInputItem::Message {
+        role: HollywoodMessage::ROLE.to_string(),
+        content: vec![ContentItem::InputText {
+            text: format_hollywood_message(message),
+        }],
+    });
+    items
 }
 
 pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) -> Option<String> {

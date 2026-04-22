@@ -1080,18 +1080,9 @@ impl Session {
         self: &Arc<Self>,
         message: codex_protocol::protocol::HollywoodInputMessage,
     ) -> CodexResult<()> {
-        let wrapped = crate::session_prefix::format_hollywood_message(&message);
-        let input: ResponseInputItem = vec![UserInput::Text {
-            text: wrapped,
-            text_elements: Vec::new(),
-        }]
-        .into();
-        if self
-            .inject_response_items(vec![input.clone()])
-            .await
-            .is_err()
-        {
-            self.idle_pending_input.lock().await.push(input);
+        let items = crate::session_prefix::hollywood_response_input_items(&message);
+        if let Err(items) = self.inject_response_items(items).await {
+            self.queue_response_items_for_next_turn(items).await;
         }
         Ok(())
     }
@@ -3127,8 +3118,6 @@ impl Session {
         }
     }
 
-    /// Queue response items to be injected into the next active turn created for this session.
-    #[cfg(test)]
     pub(crate) async fn queue_response_items_for_next_turn(&self, items: Vec<ResponseInputItem>) {
         if items.is_empty() {
             return;

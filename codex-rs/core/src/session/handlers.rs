@@ -29,8 +29,7 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 use crate::review_prompts::resolve_review_request;
 use crate::rollout::RolloutRecorder;
 use crate::rollout::read_session_meta_line;
-use crate::session_prefix::format_hollywood_message;
-use crate::session_prefix::hollywood_obligation_instruction;
+use crate::session_prefix::hollywood_response_input_items;
 use crate::tasks::CompactTask;
 use crate::tasks::UndoTask;
 use crate::tasks::UserShellCommandMode;
@@ -38,9 +37,6 @@ use crate::tasks::UserShellCommandTask;
 use crate::tasks::execute_user_shell_command;
 use codex_mcp::collect_mcp_snapshot_from_manager;
 use codex_mcp::compute_auth_statuses;
-use codex_protocol::models::ContentItem;
-use codex_protocol::models::ResponseInputItem;
-use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
@@ -119,55 +115,13 @@ pub async fn hollywood_input(sess: &Arc<Session>, sub_id: String, message: Holly
     if message.requires_response || matches!(message.obligation.as_deref(), Some("obligation")) {
         sess.add_hollywood_obligation(&message).await;
     }
-    let wrapped = format_hollywood_message(&message);
-    let mut contextual_items = Vec::new();
-    if let Some(instruction) = hollywood_obligation_instruction(&message) {
-        contextual_items.push(ResponseInputItem::Message {
-            role: "developer".to_string(),
-            content: vec![ContentItem::InputText { text: instruction }],
-        });
-    }
-    contextual_items.push(ResponseInputItem::Message {
-        role: "user".to_string(),
-        content: vec![ContentItem::InputText {
-            text: wrapped.clone(),
-        }],
-    });
-
-    if sess.inject_response_items(contextual_items).await.is_ok() {
-        return;
-    }
-
-    let Ok(current_context) = sess
-        .new_turn_with_sub_id(sub_id, SessionSettingsUpdate::default())
-        .await
-    else {
-        return;
-    };
-    sess.maybe_emit_unknown_model_warning_for_turn(current_context.as_ref())
-        .await;
-
-    if let Some(instruction) = hollywood_obligation_instruction(&message) {
-        let developer_item = ResponseItem::Message {
-            id: None,
-            role: "developer".to_string(),
-            content: vec![ContentItem::InputText { text: instruction }],
-            end_turn: None,
-            phase: None,
-        };
-        sess.record_conversation_items(current_context.as_ref(), &[developer_item])
+    let contextual_items = hollywood_response_input_items(&message);
+    if let Err(contextual_items) = sess.inject_response_items(contextual_items).await {
+        sess.queue_response_items_for_next_turn(contextual_items)
+            .await;
+        sess.maybe_start_turn_for_pending_work_with_sub_id(sub_id)
             .await;
     }
-
-    sess.spawn_task(
-        Arc::clone(&current_context),
-        vec![UserInput::Text {
-            text: wrapped,
-            text_elements: Vec::new(),
-        }],
-        crate::tasks::RegularTask::new(),
-    )
-    .await;
 }
 
 pub async fn user_input_or_turn(sess: &Arc<Session>, sub_id: String, op: Op) {
