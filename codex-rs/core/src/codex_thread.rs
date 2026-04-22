@@ -45,6 +45,7 @@ pub struct ThreadConfigSnapshot {
     pub sandbox_policy: SandboxPolicy,
     pub cwd: AbsolutePathBuf,
     pub ephemeral: bool,
+    pub thread_name: Option<String>,
     pub reasoning_effort: Option<ReasoningEffort>,
     pub personality: Option<Personality>,
     pub session_source: SessionSource,

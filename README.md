@@ -83,6 +83,7 @@ Current shipped pieces:
 - attention classification in the app-server
 - persisted Hollywood resume metadata
 - model-visible Hollywood context
+- launch-time agent naming via `losangelex name <NAME>` / `--agent-name <NAME>`, with a durable Hollywood coordination identity derived from that name
 - bundled launcher support for automatic Hollywood bootstrap
 
 See:
@@ -228,6 +229,23 @@ Or put that launcher on your `PATH` and run:
 losangelex
 ```
 
+To give the session a durable assistant identity for coordination, launch it as:
+
+```bash
+losangelex name Scout
+```
+
+or:
+
+```bash
+losangelex --agent-name Scout
+```
+
+That name is not just a thread title. Losangelex derives a Hollywood-safe
+coordination identity from it, exposes that identity to the model, and keeps it
+with the thread across resume/fork/compaction while still preserving the
+underlying UUID and `sid-...` aliases.
+
 The bundled launcher currently does the opinionated local-dev setup for you:
 
 - app-server/TUI path
@@ -239,7 +257,17 @@ The bundled launcher currently does the opinionated local-dev setup for you:
 
 ### 5. Start another session
 
-Open another terminal and run `losangelex` again. The intended workflow is multiple local sessions coordinating through the same Hollywood room while remaining independently runnable Codex threads.
+Open another terminal and run `losangelex` again, typically with a different
+name:
+
+```bash
+losangelex name Analyst
+```
+
+The intended workflow is multiple local sessions coordinating through the same
+Hollywood room while remaining independently runnable Codex threads. Human names
+such as `Scout` and `Analyst` remain additive identities for coordination; they
+do not replace the thread UUID or `sid-...` alias.
 
 ### 6. Learn the stack surface
 

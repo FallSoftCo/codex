@@ -113,6 +113,8 @@ fn serialize_environment_context_with_hollywood_compatibility_block() {
                 observed_rooms: vec!["main".to_string()],
                 wake_rooms: vec!["repo/losangelex".to_string()],
                 attention_mode: "focused".to_string(),
+                agent_name: Some("Scout Agent".to_string()),
+                coordination_identity: Some("scout-agent".to_string()),
                 identities: vec!["sid-agent".to_string()],
             },
             runtime: crate::hollywood::HollywoodRuntimeContext {
@@ -134,6 +136,8 @@ fn serialize_environment_context_with_hollywood_compatibility_block() {
     <url>http://127.0.0.1:8765</url>
     <room>repo/losangelex</room>
     <attention_mode>focused</attention_mode>
+    <agent_name>Scout Agent</agent_name>
+    <coordination_identity>scout-agent</coordination_identity>
     <identities>
       <identity>sid-agent</identity>
     </identities>
@@ -266,6 +270,8 @@ fn serialize_environment_context_with_hollywood() {
                 observed_rooms: Vec::new(),
                 wake_rooms: Vec::new(),
                 attention_mode: "focused".to_string(),
+                agent_name: Some("Scout".to_string()),
+                coordination_identity: Some("scout".to_string()),
                 identities: vec!["sid-abcd".to_string(), "thread-1".to_string()],
             },
             runtime: crate::hollywood::HollywoodRuntimeContext {
@@ -287,6 +293,8 @@ fn serialize_environment_context_with_hollywood() {
     <url>http://127.0.0.1:8765</url>
     <room>main</room>
     <attention_mode>focused</attention_mode>
+    <agent_name>Scout</agent_name>
+    <coordination_identity>scout</coordination_identity>
     <identities>
       <identity>sid-abcd</identity>
       <identity>thread-1</identity>
@@ -320,6 +328,8 @@ fn serialize_environment_context_with_hollywood_semantic_and_runtime_lanes() {
                 observed_rooms: vec!["main".to_string()],
                 wake_rooms: vec!["repo/losangelex".to_string()],
                 attention_mode: "focused".to_string(),
+                agent_name: Some("Release Agent".to_string()),
+                coordination_identity: Some("release-agent".to_string()),
                 identities: vec!["thread-1".to_string(), "sid-example".to_string()],
             },
             runtime: crate::hollywood::HollywoodRuntimeContext {
@@ -341,6 +351,8 @@ fn serialize_environment_context_with_hollywood_semantic_and_runtime_lanes() {
     <url>http://127.0.0.1:8765</url>
     <room>repo/losangelex</room>
     <attention_mode>focused</attention_mode>
+    <agent_name>Release Agent</agent_name>
+    <coordination_identity>release-agent</coordination_identity>
     <identities>
       <identity>thread-1</identity>
       <identity>sid-example</identity>

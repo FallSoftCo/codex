@@ -811,6 +811,11 @@ async fn thread_title_from_state_db(
 }
 
 impl Session {
+    pub(crate) async fn thread_name(&self) -> Option<String> {
+        let state = self.state.lock().await;
+        state.session_configuration.thread_name.clone()
+    }
+
     pub(crate) async fn app_server_client_metadata(&self) -> AppServerClientMetadata {
         let state = self.state.lock().await;
         AppServerClientMetadata {
@@ -2627,6 +2632,7 @@ impl Session {
             );
         }
         if turn_context.config.include_environment_context {
+            let thread_name = self.thread_name().await;
             let subagents = self
                 .services
                 .agent_control
@@ -2635,7 +2641,11 @@ impl Session {
             contextual_user_sections.push(
                 crate::context::EnvironmentContext::from_turn_context(turn_context, shell.as_ref())
                     .with_subagents(subagents)
-                    .with_hollywood(crate::hollywood::environment_context(self.conversation_id))
+                    .with_hollywood(crate::hollywood::environment_context(
+                        self.conversation_id,
+                        thread_name.as_deref(),
+                        self.state_db().is_some(),
+                    ))
                     .render(),
             );
         }

@@ -34,6 +34,8 @@ pub(crate) struct HollywoodSemanticContext {
     pub(crate) observed_rooms: Vec<String>,
     pub(crate) wake_rooms: Vec<String>,
     pub(crate) attention_mode: String,
+    pub(crate) agent_name: Option<String>,
+    pub(crate) coordination_identity: Option<String>,
     pub(crate) identities: Vec<String>,
 }
 
@@ -148,18 +150,27 @@ impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
     }
 }
 
-pub(crate) fn environment_context(thread_id: ThreadId) -> Option<HollywoodEnvironmentContext> {
+pub(crate) fn environment_context(
+    thread_id: ThreadId,
+    thread_name: Option<&str>,
+    state_db_available: bool,
+) -> Option<HollywoodEnvironmentContext> {
     let config = HollywoodSessionConfig::from_env()?;
     Some(HollywoodEnvironmentContext {
-        semantic: semantic_context(&config, thread_id),
-        runtime: runtime_context(),
+        semantic: semantic_context(&config, thread_id, thread_name),
+        runtime: runtime_context(state_db_available),
     })
 }
 
 fn semantic_context(
     config: &HollywoodSessionConfig,
     thread_id: ThreadId,
+    thread_name: Option<&str>,
 ) -> HollywoodSemanticContext {
+    let agent_name = crate::util::normalize_thread_name(thread_name.unwrap_or_default());
+    let coordination_identity = agent_name
+        .as_deref()
+        .and_then(coordination_identity_from_thread_name);
     HollywoodSemanticContext {
         attached: true,
         url: config.url.clone(),
@@ -167,11 +178,21 @@ fn semantic_context(
         observed_rooms: config.observed_rooms.clone(),
         wake_rooms: effective_wake_rooms(config),
         attention_mode: config.attention_mode.clone(),
-        identities: identities(thread_id),
+        agent_name,
+        coordination_identity,
+        identities: identities(thread_id, thread_name),
     }
 }
 
-fn runtime_context() -> HollywoodRuntimeContext {
+fn durable_coordination_guidance(state_db_available: bool) -> String {
+    if state_db_available {
+        "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so Losangelex can survive idle gaps, restart, and rolling deploy.".to_string()
+    } else {
+        "This session does not currently expose durable coordination tools, so do not call `coordination_act`; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns.".to_string()
+    }
+}
+
+fn runtime_context(state_db_available: bool) -> HollywoodRuntimeContext {
     HollywoodRuntimeContext {
         tools: vec![
             "hollywood_status".to_string(),
@@ -198,7 +219,7 @@ fn runtime_context() -> HollywoodRuntimeContext {
             "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
             "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
             "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first. Reserve new subagents for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
-            "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so Losangelex can survive idle gaps, restart, and rolling deploy.".to_string(),
+            durable_coordination_guidance(state_db_available),
         ],
     }
 }
@@ -239,17 +260,35 @@ fn effective_wake_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
     }
 }
 
-pub(crate) fn identities(thread_id: ThreadId) -> Vec<String> {
+pub(crate) fn identities(thread_id: ThreadId, thread_name: Option<&str>) -> Vec<String> {
     let raw = thread_id.to_string();
     let mut values = vec![normalize_identity(&raw)];
+    let mut seen = HashSet::from([values[0].clone()]);
     if let Ok(uuid) = Uuid::parse_str(&raw) {
-        values.push(session_id_to_alias(uuid));
+        let alias = session_id_to_alias(uuid);
+        if seen.insert(alias.clone()) {
+            values.push(alias);
+        }
+    }
+    if let Some(named_identity) = thread_name.and_then(coordination_identity_from_thread_name)
+        && seen.insert(named_identity.clone())
+    {
+        values.push(named_identity);
     }
     values
 }
 
 pub fn normalize_identity(value: &str) -> String {
     value.trim().trim_start_matches('@').to_ascii_lowercase()
+}
+
+pub fn coordination_identity_from_thread_name(name: &str) -> Option<String> {
+    let normalized = hollywood_room_slug(name);
+    if normalized.is_empty() || matches!(normalized.as_str(), "all" | "room") {
+        None
+    } else {
+        Some(normalized)
+    }
 }
 
 pub fn parse_agent_mentions(body: &str) -> Vec<String> {
@@ -275,7 +314,7 @@ pub fn parse_agent_mentions(body: &str) -> Vec<String> {
         if idx <= start {
             continue;
         }
-        if let Some(identity) = canonicalize_agent_identity(&body[start..idx])
+        if let Some(identity) = canonicalize_hollywood_identity(&body[start..idx])
             && seen.insert(identity.clone())
         {
             mentions.push(identity);
@@ -293,6 +332,18 @@ pub fn canonicalize_agent_identity(value: &str) -> Option<String> {
         return Some(uuid.to_string());
     }
     alias_to_session_id(&normalized)
+}
+
+pub fn canonicalize_hollywood_identity(value: &str) -> Option<String> {
+    let normalized = normalize_identity(value);
+    if normalized.is_empty() || matches!(normalized.as_str(), "all" | "room") {
+        return None;
+    }
+    if let Some(session_id) = canonicalize_agent_identity(&normalized) {
+        Some(session_id)
+    } else {
+        Some(normalized)
+    }
 }
 
 fn alias_to_session_id(alias: &str) -> Option<String> {
@@ -375,14 +426,28 @@ mod tests {
     }
 
     #[test]
-    fn parse_agent_mentions_keeps_only_real_agent_identities() {
+    fn coordination_identity_from_thread_name_slugifies_and_rejects_reserved_values() {
+        assert_eq!(
+            coordination_identity_from_thread_name("Scout Agent"),
+            Some("scout-agent".to_string())
+        );
+        assert_eq!(coordination_identity_from_thread_name(" @room "), None);
+        assert_eq!(coordination_identity_from_thread_name("room"), None);
+        assert_eq!(coordination_identity_from_thread_name("   "), None);
+    }
+
+    #[test]
+    fn parse_agent_mentions_keeps_named_and_session_identities() {
         let mentions = parse_agent_mentions(
-            "@all ping @room @sid-agor-cp2j-755r-fcup-xtau-5phv-we and @not-an-agent",
+            "@all ping @room @sid-agor-cp2j-755r-fcup-xtau-5phv-we and @scout-agent",
         );
 
         assert_eq!(
             mentions,
-            vec!["019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string()]
+            vec![
+                "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+                "scout-agent".to_string(),
+            ]
         );
     }
 
@@ -427,14 +492,25 @@ mod tests {
         let thread_id = ThreadId::default();
 
         let context = HollywoodEnvironmentContext {
-            semantic: semantic_context(&config, thread_id),
-            runtime: runtime_context(),
+            semantic: semantic_context(&config, thread_id, Some("Scout Agent")),
+            runtime: runtime_context(/*state_db_available*/ true),
         };
 
         assert_eq!(context.semantic.room, "repo/losangelex");
+        assert_eq!(context.semantic.agent_name.as_deref(), Some("Scout Agent"));
+        assert_eq!(
+            context.semantic.coordination_identity.as_deref(),
+            Some("scout-agent")
+        );
         assert_eq!(
             context.semantic.wake_rooms,
             vec!["repo/losangelex".to_string()]
+        );
+        assert!(
+            context
+                .semantic
+                .identities
+                .contains(&"scout-agent".to_string())
         );
         assert!(
             context

@@ -8927,6 +8927,7 @@ impl CodexMessageProcessor {
     async fn compute_thread_hollywood_state(
         &self,
         thread_id: ThreadId,
+        thread_name: Option<&str>,
         persisted: Option<&HollywoodSessionMeta>,
         loaded_status: Option<&ThreadStatus>,
     ) -> Option<codex_app_server_protocol::HollywoodSessionState> {
@@ -8938,12 +8939,14 @@ impl CodexMessageProcessor {
                 .unwrap_or(codex_app_server_protocol::HollywoodSessionStatus::Idle);
             return Some(hollywood_session_state_from_runtime(
                 thread_id,
+                thread_name,
                 &config,
                 &thread_state.hollywood,
                 status,
             ));
         }
-        persisted.and_then(|value| hollywood_session_state_from_persisted(thread_id, value))
+        persisted
+            .and_then(|value| hollywood_session_state_from_persisted(thread_id, thread_name, value))
     }
 
     async fn attach_thread_hollywood_state(
@@ -8954,7 +8957,12 @@ impl CodexMessageProcessor {
         loaded_status: Option<&ThreadStatus>,
     ) {
         thread.hollywood = self
-            .compute_thread_hollywood_state(thread_id, persisted, loaded_status)
+            .compute_thread_hollywood_state(
+                thread_id,
+                thread.name.as_deref(),
+                persisted,
+                loaded_status,
+            )
             .await;
     }
 
@@ -9011,10 +9019,13 @@ impl CodexMessageProcessor {
             "Hollywood attached for thread"
         );
         if source == "explicit_attach" {
+            let thread_name = thread.config_snapshot().await.thread_name;
             thread
                 .inject_user_message_without_turn(format_hollywood_context_message(
                     thread_id,
+                    thread_name.as_deref(),
                     &hollywood_config,
+                    thread.state_db().is_some(),
                 ))
                 .await;
         }
@@ -11447,6 +11458,8 @@ impl CodexMessageProcessor {
                         let status = thread_watch_manager
                             .loaded_status_for_thread(&conversation_id.to_string())
                             .await;
+                        let thread_config_snapshot = conversation.config_snapshot().await;
+                        let thread_name = thread_config_snapshot.thread_name.clone();
                         let now = Instant::now();
                         let maybe_registry_sync = {
                             let state = thread_state.lock().await;
@@ -11500,13 +11513,13 @@ impl CodexMessageProcessor {
                         if should_start_startup_turn {
                             let startup_assessment = if let Some(state_db) = conversation.state_db()
                             {
-                                let current_cwd = conversation.config_snapshot().await.cwd;
                                 assess_rolling_deploy(
                                     &state_db,
                                     &thread_state_manager,
                                     &thread_watch_manager,
                                     conversation_id,
-                                    current_cwd.as_path(),
+                                    thread_config_snapshot.cwd.as_path(),
+                                    thread_name.as_deref(),
                                     &config,
                                     env!("CARGO_PKG_VERSION"),
                                 )
@@ -11514,8 +11527,12 @@ impl CodexMessageProcessor {
                             } else {
                                 RollingDeployAssessment::default()
                             };
-                            let mut startup_message =
-                                startup_handshake_message(conversation_id, &config);
+                            let mut startup_message = startup_handshake_message(
+                                conversation_id,
+                                thread_name.as_deref(),
+                                &config,
+                                conversation.state_db().is_some(),
+                            );
                             if let Some(notice) = startup_assessment.startup_notice.as_ref() {
                                 startup_message.push_str("\n\n");
                                 startup_message.push_str(notice);
@@ -11609,6 +11626,7 @@ impl CodexMessageProcessor {
                                 &room,
                                 after_id,
                                 conversation_id,
+                                thread_name.as_deref(),
                             )
                             .await
                             {
@@ -14396,6 +14414,7 @@ mod tests {
             sandbox_policy: codex_protocol::protocol::SandboxPolicy::DangerFullAccess,
             cwd: test_path_buf("/tmp").abs(),
             ephemeral: false,
+            thread_name: None,
             reasoning_effort: None,
             personality: None,
             session_source: SessionSource::Cli,

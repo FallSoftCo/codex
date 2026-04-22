@@ -1321,6 +1321,7 @@ pub(crate) async fn built_tools(
             unavailable_called_tools,
             parallel_mcp_server_names,
             discoverable_tools,
+            state_db_available: sess.state_db().is_some(),
             dynamic_tools: turn_context.dynamic_tools.as_slice(),
         },
     )))

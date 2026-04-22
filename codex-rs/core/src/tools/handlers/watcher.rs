@@ -361,7 +361,9 @@ fn required_state_db(
     session: &Arc<crate::session::session::Session>,
 ) -> Result<Arc<codex_state::StateRuntime>, FunctionCallError> {
     session.state_db().ok_or_else(|| {
-        FunctionCallError::Fatal("sqlite state db is unavailable for this session".to_string())
+        FunctionCallError::RespondToModel(
+            "watch tools are unavailable for this session because the sqlite state db could not be initialized".to_string(),
+        )
     })
 }
 

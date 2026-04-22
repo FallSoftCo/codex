@@ -1397,6 +1397,7 @@ async fn run_ratatui_app(
 
     let Cli {
         prompt,
+        agent_name,
         shared,
         no_alt_screen,
         ..
@@ -1438,6 +1439,7 @@ async fn run_ratatui_app(
         overrides.clone(),
         active_profile,
         prompt,
+        agent_name,
         images,
         session_selection,
         feedback,

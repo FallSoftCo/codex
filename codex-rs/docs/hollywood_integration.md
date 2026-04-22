@@ -170,6 +170,33 @@ If auto-attach is enabled:
 - resumed threads restore Hollywood server-side from persisted thread/session metadata
 - resumed legacy threads without persisted Hollywood metadata migrate server-side from the current `HOLLYWOOD_*` environment and then persist that config for later resumes
 
+## Agent identities
+
+Losangelex can also attach an additive human identity to a thread at launch
+time:
+
+- `codex --agent-name Scout`
+- `codex name Scout`
+- `losangelex name Scout`
+
+This is not just cosmetic UI metadata. When a thread has a name:
+
+- the runtime derives a Hollywood-safe coordination identity from that name
+- the model receives both the human name and the derived coordination identity
+- Hollywood mention parsing and targeting accept that coordination identity in
+  addition to the UUID and `sid-...` alias
+- the identity stays with the thread across resume/fork/compaction because it is
+  persisted as part of thread/session state
+
+The derived coordination identity is additive, not replacing:
+
+- the raw thread UUID
+- the deterministic `sid-...` alias
+
+For example, a thread launched as `losangelex name Scout Agent` keeps its normal
+session identifiers but also gains the coordination identity `@scout-agent` for
+Hollywood-aware instructions and peer coordination.
+
 ## Model-visible context
 
 When Hollywood is attached, Codex can receive two structured context blocks:
@@ -178,6 +205,15 @@ When Hollywood is attached, Codex can receive two structured context blocks:
 - `<hollywood_message>...</hollywood_message>`
 
 These are contextual inputs for reasoning, not direct user commands.
+
+Within `<hollywood_context>`, the environment block can now include:
+
+- `<agent_name>...</agent_name>`
+- `<coordination_identity>...</coordination_identity>`
+- `<identities>...</identities>`
+
+That lets the model see both the additive human identity and the stable machine
+identities that other agents may use to route work or mention the thread.
 
 The current instruction model is:
 

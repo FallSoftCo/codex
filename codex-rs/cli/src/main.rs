@@ -33,6 +33,7 @@ use codex_tui::ExitReason;
 use codex_tui::UpdateAction;
 use codex_utils_cli::CliConfigOverrides;
 use owo_colors::OwoColorize;
+use std::ffi::OsString;
 use std::fs;
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -87,7 +88,8 @@ use codex_terminal_detection::TerminalName;
     // `codex-x86_64-unknown-linux-musl`, but the help output should always use
     // the generic `codex` command name that users run.
     bin_name = "codex",
-    override_usage = "codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]"
+    override_usage = "codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]",
+    after_long_help = "Interactive shorthand:\n  codex name <NAME> [PROMPT]\n  codex resume name <NAME> [SESSION_ID]\n  codex fork name <NAME> [SESSION_ID]\nThese are aliases for --agent-name <NAME> on interactive start/resume/fork."
 )]
 struct MultitoolCli {
     #[clap(flatten)]
@@ -1160,6 +1162,135 @@ fn main() -> anyhow::Result<()> {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NameShorthandContext {
+    Root,
+    Resume,
+    Fork,
+    Other,
+}
+
+fn parse_multitool_cli_from<I, T>(args: I) -> Result<MultitoolCli, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString>,
+{
+    MultitoolCli::try_parse_from(rewrite_name_shorthand_args(args))
+}
+
+fn rewrite_name_shorthand_args<I, T>(args: I) -> Vec<OsString>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString>,
+{
+    let mut args: Vec<OsString> = args.into_iter().map(Into::into).collect();
+    if args.len() < 2 {
+        return args;
+    }
+
+    let mut context = NameShorthandContext::Root;
+    let mut positional_seen = false;
+    let mut awaiting_option_value = false;
+    let mut passthrough_positionals = false;
+
+    for i in 1..args.len() {
+        let token = args[i].to_string_lossy();
+
+        if awaiting_option_value {
+            awaiting_option_value = false;
+            continue;
+        }
+
+        if passthrough_positionals {
+            positional_seen = true;
+            continue;
+        }
+
+        if token == "--" {
+            passthrough_positionals = true;
+            continue;
+        }
+
+        if let Some(expects_value) = option_expects_value(&token) {
+            awaiting_option_value = expects_value;
+            continue;
+        }
+
+        if token.starts_with('-') {
+            continue;
+        }
+
+        if !positional_seen
+            && matches!(
+                context,
+                NameShorthandContext::Root
+                    | NameShorthandContext::Resume
+                    | NameShorthandContext::Fork
+            )
+            && token == "name"
+        {
+            args[i] = OsString::from("--agent-name");
+            awaiting_option_value = true;
+            continue;
+        }
+
+        match context {
+            NameShorthandContext::Root if token == "resume" => {
+                context = NameShorthandContext::Resume;
+                positional_seen = false;
+            }
+            NameShorthandContext::Root if token == "fork" => {
+                context = NameShorthandContext::Fork;
+                positional_seen = false;
+            }
+            NameShorthandContext::Root => {
+                context = NameShorthandContext::Other;
+                positional_seen = true;
+            }
+            _ => {
+                positional_seen = true;
+            }
+        }
+    }
+
+    args
+}
+
+fn option_expects_value(token: &str) -> Option<bool> {
+    if token.starts_with("--") {
+        let (name, has_inline_value) = token
+            .split_once('=')
+            .map(|(name, _)| (name, true))
+            .unwrap_or((token, false));
+        let expects_value = matches!(
+            name,
+            "--config"
+                | "--enable"
+                | "--disable"
+                | "--remote"
+                | "--remote-auth-token-env"
+                | "--agent-name"
+                | "--thread-name"
+                | "--image"
+                | "--model"
+                | "--local-provider"
+                | "--profile"
+                | "--sandbox"
+                | "--cd"
+                | "--add-dir"
+                | "--ask-for-approval"
+        );
+        return Some(expects_value && !has_inline_value);
+    }
+
+    if token.starts_with('-') && token.len() == 2 {
+        let expects_value = matches!(token, "-c" | "-i" | "-m" | "-p" | "-s" | "-C" | "-a");
+        return Some(expects_value);
+    }
+
+    None
+}
+
 async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     let MultitoolCli {
         config_overrides: mut root_config_overrides,
@@ -1167,7 +1298,7 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
         remote,
         mut interactive,
         subcommand,
-    } = MultitoolCli::parse();
+    } = parse_multitool_cli_from(std::env::args_os()).unwrap_or_else(|err| err.exit());
 
     // Fold --enable/--disable into config overrides so they flow to all subcommands.
     let toggle_overrides = feature_toggles.to_overrides()?;
@@ -2652,6 +2783,7 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
         approval_policy,
         web_search,
         prompt,
+        agent_name,
         config_overrides,
         ..
     } = subcommand_cli;
@@ -2667,6 +2799,9 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     if let Some(prompt) = prompt {
         // Normalize CRLF/CR to LF so CLI-provided text can't leak `\r` into TUI state.
         interactive.prompt = Some(prompt.replace("\r\n", "\n").replace('\r', "\n"));
+    }
+    if let Some(agent_name) = agent_name {
+        interactive.agent_name = Some(agent_name);
     }
 
     interactive
@@ -3067,6 +3202,8 @@ mod tests {
                 "codex",
                 "resume",
                 "sid",
+                "--agent-name",
+                "Scout",
                 "--oss",
                 "--full-auto",
                 "--search",
@@ -3087,6 +3224,7 @@ mod tests {
         );
 
         assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
+        assert_eq!(interactive.agent_name.as_deref(), Some("Scout"));
         assert!(interactive.oss);
         assert_eq!(interactive.config_profile.as_deref(), Some("my-profile"));
         assert_matches!(
@@ -3165,6 +3303,113 @@ mod tests {
         let interactive = finalize_fork_from_args(["codex", "fork", "--all"].as_ref());
         assert!(interactive.fork_picker);
         assert!(interactive.fork_show_all);
+    }
+
+    #[test]
+    fn resume_subcommand_agent_name_overrides_root_agent_name() {
+        let interactive = finalize_resume_from_args(
+            [
+                "codex",
+                "--agent-name",
+                "Root",
+                "resume",
+                "--agent-name",
+                "Resume",
+            ]
+            .as_ref(),
+        );
+
+        assert_eq!(interactive.agent_name.as_deref(), Some("Resume"));
+    }
+
+    #[test]
+    fn root_name_shorthand_sets_agent_name() {
+        let cli = parse_multitool_cli_from(["codex", "name", "Scout", "fix bug"]).expect("parse");
+
+        assert_eq!(cli.interactive.agent_name.as_deref(), Some("Scout"));
+        assert_eq!(cli.interactive.prompt.as_deref(), Some("fix bug"));
+        assert!(cli.subcommand.is_none());
+    }
+
+    #[test]
+    fn root_name_shorthand_survives_injected_root_options() {
+        let cli = parse_multitool_cli_from([
+            "codex",
+            "--enable",
+            "tui_app_server",
+            "--cd",
+            "/tmp",
+            "--ask-for-approval",
+            "never",
+            "--remote",
+            "ws://127.0.0.1:46324",
+            "name",
+            "Scout",
+        ])
+        .expect("parse");
+
+        assert_eq!(cli.interactive.agent_name.as_deref(), Some("Scout"));
+        assert_eq!(
+            cli.interactive.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp"))
+        );
+        assert_eq!(cli.remote.remote.as_deref(), Some("ws://127.0.0.1:46324"));
+        assert!(cli.subcommand.is_none());
+    }
+
+    #[test]
+    fn resume_name_shorthand_sets_agent_name() {
+        let cli = parse_multitool_cli_from(["codex", "resume", "name", "Scout", "--last"])
+            .expect("parse");
+
+        let Some(Subcommand::Resume(ResumeCommand {
+            session_id,
+            last,
+            config_overrides,
+            ..
+        })) = cli.subcommand
+        else {
+            panic!("expected resume subcommand");
+        };
+
+        assert_eq!(session_id, None);
+        assert!(last);
+        assert_eq!(config_overrides.agent_name.as_deref(), Some("Scout"));
+    }
+
+    #[test]
+    fn fork_name_shorthand_sets_agent_name() {
+        let cli =
+            parse_multitool_cli_from(["codex", "fork", "name", "Scout", "--all"]).expect("parse");
+
+        let Some(Subcommand::Fork(ForkCommand {
+            session_id,
+            all,
+            config_overrides,
+            ..
+        })) = cli.subcommand
+        else {
+            panic!("expected fork subcommand");
+        };
+
+        assert_eq!(session_id, None);
+        assert!(all);
+        assert_eq!(config_overrides.agent_name.as_deref(), Some("Scout"));
+    }
+
+    #[test]
+    fn prompt_word_name_after_positional_is_not_rewritten() {
+        let rewritten = rewrite_name_shorthand_args(["codex", "fix", "name", "handling"]);
+
+        assert_eq!(
+            rewritten,
+            vec![
+                OsString::from("codex"),
+                OsString::from("fix"),
+                OsString::from("name"),
+                OsString::from("handling"),
+            ]
+        );
     }
 
     #[test]

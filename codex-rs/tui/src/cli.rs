@@ -12,6 +12,10 @@ pub struct Cli {
     #[arg(value_name = "PROMPT", value_hint = clap::ValueHint::Other)]
     pub prompt: Option<String>,
 
+    /// Optional name to apply to the started, resumed, or forked agent thread.
+    #[arg(long = "agent-name", alias = "thread-name", value_name = "NAME")]
+    pub agent_name: Option<String>,
+
     // Internal controls set by the top-level `codex resume` subcommand.
     // These are not exposed as user flags on the base `codex` command.
     #[clap(skip)]

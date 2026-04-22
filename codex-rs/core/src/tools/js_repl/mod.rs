@@ -1605,6 +1605,7 @@ impl JsReplManager {
                 // `ToolCallRuntime`'s parallel scheduling lock.
                 parallel_mcp_server_names: std::collections::HashSet::new(),
                 discoverable_tools: None,
+                state_db_available: exec.session.state_db().is_some(),
                 dynamic_tools: exec.turn.dynamic_tools.as_slice(),
             },
         );

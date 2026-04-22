@@ -159,6 +159,8 @@ write_app_server_state() {
   "pid_file": "$pid_file",
   "log_file": "$log_file"
 }
+JSON
+}
 
 read_restart_handoff_thread_id() {
   local file="$1"
@@ -174,8 +176,6 @@ value = data.get("thread_id")
 if isinstance(value, str) and value:
     print(value)
 PY
-}
-JSON
 }
 
 find_free_loopback_port() {

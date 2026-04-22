@@ -199,6 +199,14 @@ fn append_hollywood_context_lines(
         "    <attention_mode>{}</attention_mode>",
         semantic.attention_mode
     ));
+    if let Some(agent_name) = semantic.agent_name {
+        lines.push(format!("    <agent_name>{agent_name}</agent_name>"));
+    }
+    if let Some(coordination_identity) = semantic.coordination_identity {
+        lines.push(format!(
+            "    <coordination_identity>{coordination_identity}</coordination_identity>"
+        ));
+    }
     lines.push("    <identities>".to_string());
     for identity in semantic.identities {
         lines.push(format!("      <identity>{identity}</identity>"));

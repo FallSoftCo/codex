@@ -120,6 +120,7 @@ pub use codex_model_provider_info::WireApi;
 pub use codex_model_provider_info::built_in_model_providers;
 pub use codex_model_provider_info::create_oss_provider_with_base_url;
 pub use codex_protocol::config_types::ModelProviderAuthInfo;
+pub use hollywood::coordination_identity_from_thread_name;
 pub use hollywood::default_hollywood_observed_rooms;
 pub use hollywood::default_hollywood_room_for_cwd;
 pub use hollywood::parse_agent_mentions;

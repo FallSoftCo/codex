@@ -80,6 +80,7 @@ pub(crate) async fn assess_rolling_deploy(
     thread_watch_manager: &ThreadWatchManager,
     current_thread_id: ThreadId,
     current_cwd: &Path,
+    current_thread_name: Option<&str>,
     config: &HollywoodConfig,
     current_cli_version: &str,
 ) -> RollingDeployAssessment {
@@ -119,7 +120,7 @@ pub(crate) async fn assess_rolling_deploy(
             cli_version: current_cli_version.to_string(),
             room: config.room.clone(),
             cwd: current_cwd.to_path_buf(),
-            identities: hollywood_identities(current_thread_id),
+            identities: hollywood_identities(current_thread_id, current_thread_name),
         },
         peers,
     )
@@ -174,7 +175,10 @@ async fn collect_local_peers(
             room: hollywood.room.clone(),
             cwd: metadata.cwd,
             status,
-            identities: hollywood_identities(peer_thread_id),
+            identities: hollywood_identities(
+                peer_thread_id,
+                (!metadata.title.trim().is_empty()).then_some(metadata.title.as_str()),
+            ),
         });
     }
 

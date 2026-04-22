@@ -101,6 +101,7 @@ impl SessionConfiguration {
             sandbox_policy: self.sandbox_policy.get().clone(),
             cwd: self.cwd.clone(),
             ephemeral: self.original_config_do_not_use.ephemeral,
+            thread_name: self.thread_name.clone(),
             reasoning_effort: self.collaboration_mode.reasoning_effort(),
             personality: self.personality,
             session_source: self.session_source.clone(),

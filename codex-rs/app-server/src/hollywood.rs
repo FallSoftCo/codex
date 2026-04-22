@@ -9,6 +9,7 @@ use codex_app_server_protocol::HollywoodSessionState;
 use codex_app_server_protocol::HollywoodSessionStatus;
 use codex_app_server_protocol::ThreadStatus;
 use codex_core::CodexThread;
+use codex_core::coordination_identity_from_thread_name;
 use codex_core::default_hollywood_observed_rooms;
 use codex_core::default_hollywood_room_for_cwd;
 use codex_core::parse_agent_mentions;
@@ -436,11 +437,12 @@ pub(crate) async fn poll_messages(
     room: &str,
     after_id: i64,
     thread_id: ThreadId,
+    thread_name: Option<&str>,
 ) -> Result<HollywoodPollResult, String> {
     let mut room_config = config.clone();
     room_config.room = room.to_string();
     let response = fetch_messages(client, &room_config, after_id, HOLLYWOOD_PAGE_LIMIT).await?;
-    let identities = hollywood_identities(thread_id);
+    let identities = hollywood_identities(thread_id, thread_name);
     let room_can_wake = config.effective_wake_rooms().contains(room);
     let messages = response
         .messages
@@ -472,10 +474,32 @@ pub(crate) async fn upsert_registry(
     Ok(())
 }
 
+fn durable_coordination_guidance(state_db_available: bool) -> &'static str {
+    if state_db_available {
+        "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with coordination_act so Losangelex can survive idle gaps, restart, and rolling deploy."
+    } else {
+        "This session does not currently expose durable coordination tools, so do not call coordination_act; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
+    }
+}
+
+fn durable_coordination_handshake_guidance(state_db_available: bool) -> &'static str {
+    if state_db_available {
+        "When a room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so the coordination survives idle gaps, restart, and rolling deploy."
+    } else {
+        "This session does not currently expose durable coordination tools, so do not call `coordination_act`; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
+    }
+}
+
 pub(crate) fn format_hollywood_context_message(
     thread_id: ThreadId,
+    thread_name: Option<&str>,
     config: &HollywoodConfig,
+    state_db_available: bool,
 ) -> String {
+    let agent_name = normalized_thread_name(thread_name);
+    let coordination_identity = agent_name
+        .as_deref()
+        .and_then(coordination_identity_from_thread_name);
     let wake_rooms = config
         .effective_wake_rooms()
         .into_iter()
@@ -490,7 +514,9 @@ pub(crate) fn format_hollywood_context_message(
         "attention_mode": config.attention.mode,
         "include_at_all": config.attention.include_at_all,
         "include_at_room": config.attention.include_at_room,
-        "identities": hollywood_identities(thread_id),
+        "agent_name": agent_name,
+        "coordination_identity": coordination_identity,
+        "identities": hollywood_identities(thread_id, thread_name),
         "startup_protocol": {
             "announce_presence": true,
             "read_recent_room_context": true,
@@ -507,7 +533,7 @@ pub(crate) fn format_hollywood_context_message(
             "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.",
             "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.",
             "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first and reserve new subagents for parallelizing your own currently owned work into bounded sidecar tasks.",
-            "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with coordination_act so Losangelex can survive idle gaps, restart, and rolling deploy.",
+            durable_coordination_guidance(state_db_available),
             "When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update so other agents and the user-facing session can converge on the same conclusion.",
             "If autonomous Hollywood follow-up finds no new state to report, prefer no user-facing follow-up at all; if one is needed, keep it to a compact status tag rather than a full explanation.",
         ],
@@ -516,8 +542,24 @@ pub(crate) fn format_hollywood_context_message(
     format!("{HOLLYWOOD_CONTEXT_OPEN_TAG}\n{payload_json}\n{HOLLYWOOD_CONTEXT_CLOSE_TAG}")
 }
 
-pub(crate) fn startup_handshake_message(thread_id: ThreadId, config: &HollywoodConfig) -> String {
-    let identities = hollywood_identities(thread_id).join(", ");
+pub(crate) fn startup_handshake_message(
+    thread_id: ThreadId,
+    thread_name: Option<&str>,
+    config: &HollywoodConfig,
+    state_db_available: bool,
+) -> String {
+    let identities = hollywood_identities(thread_id, thread_name).join(", ");
+    let name_guidance = match normalized_thread_name(thread_name) {
+        Some(agent_name) => match coordination_identity_from_thread_name(&agent_name) {
+            Some(coordination_identity) => format!(
+                " Your launch-time assistant name is `{agent_name}` and your additive Hollywood coordination alias is `@{coordination_identity}`; treat that name as part of your teamwork identity and respond when peers use it."
+            ),
+            None => format!(
+                " Your launch-time assistant name is `{agent_name}`; treat it as part of your teamwork identity."
+            ),
+        },
+        None => String::new(),
+    };
     let observed = if config.observed_rooms.is_empty() {
         String::new()
     } else {
@@ -527,8 +569,12 @@ pub(crate) fn startup_handshake_message(thread_id: ThreadId, config: &HollywoodC
         )
     };
     format!(
-        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{} Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself and check for existing scope claims. If you do not yet have a concrete user-assigned task, ask the user what they want you to work on. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with the already attached Hollywood sessions first and reserve new subagents for parallelizing your own currently owned work into bounded sidecar subtasks. When a room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so the coordination survives idle gaps, restart, and rolling deploy. When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
-        config.room, identities, observed
+        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself and check for existing scope claims. If you do not yet have a concrete user-assigned task, ask the user what they want you to work on. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with the already attached Hollywood sessions first and reserve new subagents for parallelizing your own currently owned work into bounded sidecar subtasks. {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        config.room,
+        identities,
+        observed,
+        name_guidance,
+        durable_coordination_handshake_guidance(state_db_available),
     )
 }
 
@@ -632,13 +678,26 @@ fn classify_message(
     })
 }
 
-pub(crate) fn hollywood_identities(thread_id: ThreadId) -> Vec<String> {
+pub(crate) fn hollywood_identities(thread_id: ThreadId, thread_name: Option<&str>) -> Vec<String> {
     let raw = thread_id.to_string();
     let mut identities = vec![normalize_identity(&raw)];
+    let mut seen = HashSet::from([identities[0].clone()]);
     if let Ok(uuid) = Uuid::parse_str(&raw) {
-        identities.push(session_id_to_alias(uuid));
+        let alias = session_id_to_alias(uuid);
+        if seen.insert(alias.clone()) {
+            identities.push(alias);
+        }
+    }
+    if let Some(named_identity) = thread_name.and_then(coordination_identity_from_thread_name)
+        && seen.insert(named_identity.clone())
+    {
+        identities.push(named_identity);
     }
     identities
+}
+
+fn normalized_thread_name(thread_name: Option<&str>) -> Option<String> {
+    thread_name.and_then(codex_core::util::normalize_thread_name)
 }
 
 fn parse_room_list(value: Option<String>) -> Vec<String> {
@@ -675,6 +734,7 @@ pub(crate) fn hollywood_session_status_from_thread_status(
 
 pub(crate) fn hollywood_session_state_from_runtime(
     thread_id: ThreadId,
+    thread_name: Option<&str>,
     config: &HollywoodConfig,
     runtime_state: &HollywoodRuntimeState,
     status: HollywoodSessionStatus,
@@ -686,7 +746,7 @@ pub(crate) fn hollywood_session_state_from_runtime(
         observed_rooms: config.observed_rooms.clone(),
         wake_rooms: config.effective_wake_rooms().into_iter().collect(),
         attention: config.attention.clone(),
-        identities: hollywood_identities(thread_id),
+        identities: hollywood_identities(thread_id, thread_name),
         session_kind: runtime_state.registry_session_kind().map(ToOwned::to_owned),
         resumed_from: runtime_state.registry_resumed_from().map(ToOwned::to_owned),
         status,
@@ -695,6 +755,7 @@ pub(crate) fn hollywood_session_state_from_runtime(
 
 pub(crate) fn hollywood_session_state_from_persisted(
     thread_id: ThreadId,
+    thread_name: Option<&str>,
     persisted: &HollywoodSessionMeta,
 ) -> Option<HollywoodSessionState> {
     let config = HollywoodConfig::try_from(persisted).ok()?;
@@ -706,7 +767,7 @@ pub(crate) fn hollywood_session_state_from_persisted(
         observed_rooms: config.observed_rooms,
         wake_rooms,
         attention: config.attention,
-        identities: hollywood_identities(thread_id),
+        identities: hollywood_identities(thread_id, thread_name),
         session_kind: None,
         resumed_from: None,
         status: HollywoodSessionStatus::Persisted,
@@ -752,7 +813,7 @@ pub(crate) async fn build_registry_upsert_request(
         cwd: Some(cwd),
         repo_name: repo_name_from_cwd(snapshot.cwd.as_path()),
         attention_mode: hollywood_attention_mode_name(config.attention.mode),
-        identities: hollywood_identities(thread_id),
+        identities: hollywood_identities(thread_id, snapshot.thread_name.as_deref()),
         session_kind: runtime_state
             .registry_session_kind()
             .unwrap_or("attached")
@@ -891,6 +952,12 @@ mod tests {
         ]
     }
 
+    fn named_identities() -> Vec<String> {
+        let mut identities = identities();
+        identities.push("scout-agent".to_string());
+        identities
+    }
+
     #[test]
     fn focused_mode_keeps_direct_mentions() {
         let message = sample_message("ping @sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le", Some("peer"));
@@ -907,6 +974,25 @@ mod tests {
         assert_eq!(
             classified.notification_message.mentions,
             vec!["019d0798-12d8-76c3-a812-6e323637aa59".to_string()]
+        );
+    }
+
+    #[test]
+    fn focused_mode_keeps_named_mentions() {
+        let message = sample_message("ping @scout-agent", Some("peer"));
+        let classified = classify_message(
+            message,
+            &named_identities(),
+            &HollywoodAttentionSettings::default(),
+            true,
+        )
+        .expect("named mention should pass focused filter");
+
+        assert!(classified.mentioned);
+        assert_eq!(classified.attention, HollywoodMessageAttention::Focused);
+        assert_eq!(
+            classified.notification_message.mentions,
+            vec!["scout-agent".to_string()]
         );
     }
 
@@ -1073,6 +1159,21 @@ mod tests {
         assert_eq!(
             session_id_to_alias(uuid),
             "sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le"
+        );
+    }
+
+    #[test]
+    fn hollywood_identities_append_named_identity_after_session_aliases() {
+        let thread_id =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
+
+        assert_eq!(
+            hollywood_identities(thread_id, Some("Scout Agent")),
+            vec![
+                "019d0798-12d8-76c3-a812-6e323637aa59".to_string(),
+                "sid-agoq-pgas-3b3m-hkas-nyzd-mn5k-le".to_string(),
+                "scout-agent".to_string(),
+            ]
         );
     }
 

@@ -104,6 +104,25 @@ cd /path/to/your/project
 losangelex
 ```
 
+To launch a session with a durable coordination identity, use:
+
+```bash
+cd /path/to/your/project
+losangelex name Scout
+```
+
+or:
+
+```bash
+cd /path/to/your/project
+losangelex --agent-name Scout
+```
+
+That name is carried into Hollywood-aware runtime guidance and mention handling.
+Losangelex derives a Hollywood-safe coordination identity from it, while still
+keeping the underlying UUID and `sid-...` aliases available for exact routing.
+The identity stays with the thread across resume/fork/compaction.
+
 What the bundled launcher does by default:
 
 - forces the app-server TUI path
@@ -127,7 +146,11 @@ require manual environment exports.
 ### 5. Start a Second Session
 
 Open a second terminal in another working directory or the same one and run
-`losangelex` again.
+`losangelex` again, usually with a distinct name:
+
+```bash
+losangelex name Analyst
+```
 
 That gives you two sessions attached to the same room.
 

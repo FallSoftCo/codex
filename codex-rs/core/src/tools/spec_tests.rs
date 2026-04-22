@@ -290,6 +290,7 @@ fn build_specs_with_unavailable_tools(
         deferred_mcp_tools,
         unavailable_called_tools,
         /*discoverable_tools*/ None,
+        /*state_db_available*/ true,
         dynamic_tools,
     )
 }
@@ -376,6 +377,7 @@ async fn assert_model_tools(
             unavailable_called_tools: Vec::new(),
             parallel_mcp_server_names: std::collections::HashSet::new(),
             discoverable_tools: None,
+            state_db_available: true,
             dynamic_tools: &[],
         },
     );
@@ -414,6 +416,61 @@ async fn assert_default_model_tools(
     ]);
     expected.extend(expected_tail);
     assert_model_tools(model_slug, features, web_search_mode, &expected).await;
+}
+
+#[tokio::test]
+async fn state_db_unavailable_hides_state_backed_tools() {
+    let model_info = model_info_from_models_json("gpt-5.4").await;
+    let features = Features::with_defaults();
+    let available_models = Vec::new();
+    let tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        image_generation_tool_auth_allowed: true,
+        web_search_mode: Some(WebSearchMode::Cached),
+        session_source: SessionSource::Cli,
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+    let router = ToolRouter::from_config(
+        &tools_config,
+        ToolRouterParams {
+            mcp_tools: None,
+            deferred_mcp_tools: None,
+            unavailable_called_tools: Vec::new(),
+            parallel_mcp_server_names: std::collections::HashSet::new(),
+            discoverable_tools: None,
+            state_db_available: false,
+            dynamic_tools: &[],
+        },
+    );
+    let model_visible_specs = router.model_visible_specs();
+    let tool_names = model_visible_specs
+        .iter()
+        .map(ToolSpec::name)
+        .collect::<Vec<_>>();
+
+    for forbidden in [
+        "watch_process_exit",
+        "watch_agent_completion",
+        "list_watchers",
+        "cancel_watcher",
+        "watch_task_periodically",
+        "list_task_watches",
+        "update_task_watch",
+        "cancel_task_watch",
+        "coordination_act",
+        "list_coordination_tasks",
+        "spawn_agents_on_csv",
+        "report_agent_job_result",
+    ] {
+        assert!(
+            !tool_names.contains(&forbidden),
+            "expected {forbidden} to be hidden without a state db"
+        );
+    }
+    assert!(tool_names.contains(&"restart_client"));
 }
 
 #[tokio::test]
@@ -813,6 +870,7 @@ async fn tool_suggest_requires_apps_and_plugins_features() {
             /*deferred_mcp_tools*/ None,
             Vec::new(),
             discoverable_tools.clone(),
+            /*state_db_available*/ true,
             &[],
         )
         .build();

@@ -326,7 +326,15 @@ fn create_hollywood_read_tool() -> ToolSpec {
     })
 }
 
-fn create_hollywood_send_tool() -> ToolSpec {
+fn durable_coordination_tool_text(state_db_available: bool) -> &'static str {
+    if state_db_available {
+        "When the conversation becomes a real assignment, acceptance, handoff, dependency, or completion, pair the room update with `coordination_act` so the commitment is durable."
+    } else {
+        "This session does not currently expose durable coordination tools, so do not rely on `coordination_act`; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
+    }
+}
+
+fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "text".to_string(),
@@ -365,8 +373,10 @@ fn create_hollywood_send_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
-        description: "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks you to work with teammates, peers, or other existing agents. Reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar tasks. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap. When the conversation becomes a real assignment, acceptance, handoff, dependency, or completion, pair the room update with `coordination_act` so the commitment is durable."
-            .to_string(),
+        description: format!(
+            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks you to work with teammates, peers, or other existing agents. Reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar tasks. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap. {}",
+            durable_coordination_tool_text(state_db_available)
+        ),
         strict: false,
         defer_loading: None,
         parameters: JsonSchema::object(
@@ -509,12 +519,29 @@ fn create_hollywood_team_member_update_tool() -> ToolSpec {
     })
 }
 
+fn is_state_backed_tool_name(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "watch_process_exit"
+            | "watch_agent_completion"
+            | "list_watchers"
+            | "cancel_watcher"
+            | "watch_task_periodically"
+            | "list_task_watches"
+            | "update_task_watch"
+            | "cancel_task_watch"
+            | "spawn_agents_on_csv"
+            | "report_agent_job_result"
+    )
+}
+
 pub(crate) fn build_specs_with_discoverable_tools(
     config: &ToolsConfig,
     mcp_tools: Option<HashMap<String, ToolInfo>>,
     deferred_mcp_tools: Option<HashMap<String, ToolInfo>>,
     unavailable_called_tools: Vec<ToolName>,
     discoverable_tools: Option<Vec<DiscoverableTool>>,
+    state_db_available: bool,
     dynamic_tools: &[DynamicToolSpec],
 ) -> ToolRegistryBuilder {
     use crate::tools::handlers::ApplyPatchHandler;
@@ -624,12 +651,22 @@ pub(crate) fn build_specs_with_discoverable_tools(
         && crate::hollywood::HollywoodSessionConfig::from_env().is_some();
     let mut hollywood_specs_inserted = false;
     let mut coordination_specs_inserted = false;
+    let mut restart_client_inserted = false;
 
     for spec in plan.specs {
-        if !coordination_specs_inserted && matches!(spec.name(), "update_plan" | "spawn_agent") {
+        if !state_db_available && is_state_backed_tool_name(spec.name()) {
+            continue;
+        }
+        if !restart_client_inserted && matches!(spec.name(), "update_plan" | "spawn_agent") {
+            builder.push_spec(create_restart_client_tool());
+            restart_client_inserted = true;
+        }
+        if state_db_available
+            && !coordination_specs_inserted
+            && matches!(spec.name(), "update_plan" | "spawn_agent")
+        {
             builder.push_spec(create_coordination_act_tool());
             builder.push_spec(create_list_coordination_tasks_tool());
-            builder.push_spec(create_restart_client_tool());
             coordination_specs_inserted = true;
         }
         if hollywood_tools_enabled
@@ -641,7 +678,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         {
             builder.push_spec(create_hollywood_status_tool());
             builder.push_spec(create_hollywood_read_tool());
-            builder.push_spec(create_hollywood_send_tool());
+            builder.push_spec(create_hollywood_send_tool(state_db_available));
             builder.push_spec(create_hollywood_team_up_tool());
             builder.push_spec(create_hollywood_team_status_tool());
             builder.push_spec(create_hollywood_team_member_update_tool());
@@ -656,22 +693,33 @@ pub(crate) fn build_specs_with_discoverable_tools(
         }
     }
 
-    if !coordination_specs_inserted {
+    if !restart_client_inserted {
+        builder.push_spec(create_restart_client_tool());
+    }
+
+    if state_db_available && !coordination_specs_inserted {
         builder.push_spec(create_coordination_act_tool());
         builder.push_spec(create_list_coordination_tasks_tool());
-        builder.push_spec(create_restart_client_tool());
     }
 
     if hollywood_tools_enabled && !hollywood_specs_inserted {
         builder.push_spec(create_hollywood_status_tool());
         builder.push_spec(create_hollywood_read_tool());
-        builder.push_spec(create_hollywood_send_tool());
+        builder.push_spec(create_hollywood_send_tool(state_db_available));
         builder.push_spec(create_hollywood_team_up_tool());
         builder.push_spec(create_hollywood_team_status_tool());
         builder.push_spec(create_hollywood_team_member_update_tool());
     }
 
     for handler in plan.handlers {
+        if !state_db_available
+            && matches!(
+                handler.kind,
+                ToolHandlerKind::AgentJobs | ToolHandlerKind::Watcher
+            )
+        {
+            continue;
+        }
         match handler.kind {
             ToolHandlerKind::AgentJobs => {
                 builder.register_handler(handler.name, Arc::new(BatchJobHandler));
@@ -824,7 +872,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         for spec in [
             create_hollywood_status_tool(),
             create_hollywood_read_tool(),
-            create_hollywood_send_tool(),
+            create_hollywood_send_tool(state_db_available),
             create_hollywood_team_up_tool(),
             create_hollywood_team_status_tool(),
             create_hollywood_team_member_update_tool(),
@@ -834,8 +882,10 @@ pub(crate) fn build_specs_with_discoverable_tools(
             }
         }
     }
-    builder.register_handler("coordination_act", Arc::new(CoordinationHandler));
-    builder.register_handler("list_coordination_tasks", Arc::new(CoordinationHandler));
+    if state_db_available {
+        builder.register_handler("coordination_act", Arc::new(CoordinationHandler));
+        builder.register_handler("list_coordination_tasks", Arc::new(CoordinationHandler));
+    }
     builder.register_handler("restart_client", Arc::new(RestartClientHandler));
     if hollywood_tools_enabled {
         builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));

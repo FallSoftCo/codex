@@ -655,6 +655,7 @@ impl App {
         harness_overrides: ConfigOverrides,
         active_profile: Option<String>,
         initial_prompt: Option<String>,
+        requested_thread_name: Option<String>,
         initial_images: Vec<PathBuf>,
         session_selection: SessionSelection,
         feedback: codex_feedback::CodexFeedback,
@@ -734,6 +735,15 @@ impl App {
         if let Some(updated_model) = config.model.clone() {
             model = updated_model;
         }
+        let requested_thread_name = requested_thread_name
+            .map(|name| {
+                crate::legacy_core::util::normalize_thread_name(&name).ok_or_else(|| {
+                    color_eyre::eyre::eyre!(
+                        "`--agent-name` must contain at least one non-whitespace character"
+                    )
+                })
+            })
+            .transpose()?;
         let model_catalog = Arc::new(ModelCatalog::new(
             available_models.clone(),
             CollaborationModesConfig {
@@ -777,6 +787,12 @@ impl App {
         let (mut chat_widget, initial_started_thread) = match session_selection {
             SessionSelection::StartFresh | SessionSelection::Exit => {
                 let started = app_server.start_thread(&config).await?;
+                let started = maybe_apply_requested_thread_name(
+                    &mut app_server,
+                    started,
+                    requested_thread_name.as_deref(),
+                )
+                .await?;
                 let startup_tooltip_override =
                     prepare_startup_tooltip_override(&mut config, &available_models, is_first_run)
                         .await;
@@ -814,6 +830,12 @@ impl App {
                         let target_label = target_session.display_label();
                         format!("Failed to resume session from {target_label}")
                     })?;
+                let resumed = maybe_apply_requested_thread_name(
+                    &mut app_server,
+                    resumed,
+                    requested_thread_name.as_deref(),
+                )
+                .await?;
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -853,6 +875,12 @@ impl App {
                         let target_label = target_session.display_label();
                         format!("Failed to fork session from {target_label}")
                     })?;
+                let forked = maybe_apply_requested_thread_name(
+                    &mut app_server,
+                    forked,
+                    requested_thread_name.as_deref(),
+                )
+                .await?;
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -1216,6 +1244,20 @@ impl App {
         }
         Ok(AppRunControl::Continue)
     }
+}
+
+async fn maybe_apply_requested_thread_name(
+    app_server: &mut AppServerSession,
+    mut started: AppServerStartedThread,
+    requested_thread_name: Option<&str>,
+) -> Result<AppServerStartedThread> {
+    if let Some(name) = requested_thread_name {
+        app_server
+            .thread_set_name(started.session.thread_id, name.to_string())
+            .await?;
+        started.session.thread_name = Some(name.to_string());
+    }
+    Ok(started)
 }
 
 impl Drop for App {

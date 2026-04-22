@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use crate::function_tool::FunctionCallError;
 use crate::hollywood::HollywoodSessionConfig;
 use crate::hollywood::canonicalize_agent_identity;
+use crate::hollywood::canonicalize_hollywood_identity;
 use crate::hollywood::identities as hollywood_identities;
 use crate::hollywood::parse_agent_mentions;
 use crate::tools::context::FunctionToolOutput;
@@ -145,7 +146,9 @@ impl ToolHandler for HollywoodStatusHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let config = HollywoodSessionConfig::from_env();
-        let identities = hollywood_identities(invocation.session.conversation_id);
+        let thread_name = invocation.session.thread_name().await;
+        let identities =
+            hollywood_identities(invocation.session.conversation_id, thread_name.as_deref());
         let result = if let Some(config) = config {
             let health_url = format!("{}/hollywood/v1/health", config.url.trim_end_matches('/'));
             match Client::new().get(health_url).send().await {
@@ -235,11 +238,15 @@ impl ToolHandler for HollywoodReadHandler {
             .map_err(|err| {
                 FunctionCallError::RespondToModel(format!("Hollywood response parse failed: {err}"))
             })?;
+        let thread_name = invocation.session.thread_name().await;
 
         let result = HollywoodReadResult {
             url: config.url,
             room,
-            identities: hollywood_identities(invocation.session.conversation_id),
+            identities: hollywood_identities(
+                invocation.session.conversation_id,
+                thread_name.as_deref(),
+            ),
             messages: response,
         };
 
@@ -275,7 +282,7 @@ impl ToolHandler for HollywoodSendHandler {
         };
         let sender_id = invocation.session.conversation_id.to_string();
         let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
-        let recipient_id = args.to.as_deref().and_then(canonicalize_agent_identity);
+        let recipient_id = args.to.as_deref().and_then(canonicalize_hollywood_identity);
         let text = args.text.clone();
         let response_policy = args.response_policy.clone();
         let message_kind = if args.broadcast.unwrap_or(false) {
@@ -537,7 +544,7 @@ fn resolve_target_identities(args: &HollywoodSendArgs) -> Vec<String> {
     let mut identities = Vec::new();
     let mut seen = HashSet::new();
 
-    if let Some(recipient) = args.to.as_deref().and_then(canonicalize_agent_identity) {
+    if let Some(recipient) = args.to.as_deref().and_then(canonicalize_hollywood_identity) {
         seen.insert(recipient.clone());
         identities.push(recipient);
     }
@@ -663,15 +670,18 @@ mod tests {
     }
 
     #[test]
-    fn resolve_target_identities_canonicalizes_direct_recipient_and_mentions() {
+    fn resolve_target_identities_keeps_named_and_session_id_mentions() {
         let args = send_args(
-            "ping @sid-agor-cp2j-755r-fcup-xtau-5phv-we and @not-real",
-            Some("sid-agor-cp2j-755r-fcup-xtau-5phv-we"),
+            "ping @sid-agor-cp2j-755r-fcup-xtau-5phv-we and @scout-agent",
+            Some("scout-agent"),
         );
 
         assert_eq!(
             resolve_target_identities(&args),
-            vec!["019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string()]
+            vec![
+                "scout-agent".to_string(),
+                "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+            ]
         );
     }
 
