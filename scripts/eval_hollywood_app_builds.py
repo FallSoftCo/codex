@@ -147,6 +147,61 @@ POLICY_PROMPTS = {
             "team moves on. Do not call the app done until Ray confirms the test gate and Tony confirms integration."
         ),
     },
+    "org_layered": {
+        "tony": (
+            "You are the governance layer. Maintain the shared work graph, keep the highest-value ready lanes explicit, "
+            "assign exact scope, and reassign immediately when facts change. Avoid coding unless integration is blocked "
+            "or the execution layer has no ready lane."
+        ),
+        "ray": (
+            "You are the compliance layer. Keep the test signal fresh, convert failures into exact follow-up lanes, "
+            "challenge ambiguous completion claims, and explicitly stand the team down once the app is green and no "
+            "owned lane remains unresolved."
+        ),
+        "shared": (
+            "Operate as a layered organization. Tony owns governance and lane allocation, James and Chris are the main "
+            "execution layer, and Ray owns compliance and closure. Treat the room as a blackboard of state changes: "
+            "post exact scope, status transitions, blockers, and handoffs, not open-ended discussion. Keep at most one "
+            "active lane per agent and pull the next ready lane as soon as your current lane is done or blocked."
+        ),
+    },
+    "gpgp_blackboard": {
+        "tony": (
+            "Seed the initial goal tree, expose the highest-worth ready lanes, and keep integration constraints visible, "
+            "but do not micromanage every move once the shared constraints are clear."
+        ),
+        "ray": (
+            "Continuously translate test and verification results into shared scheduling constraints. Publish only exact "
+            "deltas that change what should be worked on next, and explicitly retract stale or redundant follow-up work."
+        ),
+        "shared": (
+            "Use a GPGP/blackboard style. Treat coordination as posting and consuming shared scheduling constraints "
+            "rather than chatting. Before starting work, read the current board state, then post one concise commitment "
+            "with exact file scope, expected outcome, and any dependency it relies on. If another agent has posted an "
+            "equivalent commitment, retract one of the redundant commitments and move to the next ready lane. Communicate "
+            "only on state transitions, blockers, retractions, or materially new evidence. Prefer small exact commitments "
+            "and opportunistic pull from the highest-priority ready work."
+        ),
+    },
+    "quiescence_token": {
+        "tony": (
+            "Coordinate exact lanes as the lead, but once Ray initiates a quiescence round you must stop opening new work "
+            "unless Ray cancels the round because there is still unresolved exact scope or a failing test."
+        ),
+        "ray": (
+            "You own distributed termination detection for this run. When the app appears green or nearly green, start an "
+            "explicit quiescence round: require each teammate to reply with either `IDLE-ACK` or `STILL-OWN <exact-scope>`. "
+            "Do not declare done until the latest test pass still holds and every other agent has acknowledged idle with no "
+            "unresolved owned lane. If any agent reports unresolved scope or a new failing test appears, cancel the round, "
+            "publish the exact delta, and restart the round only after the fix lands."
+        ),
+        "shared": (
+            "Use leader coordination for execution, but use an explicit quiescence protocol for shutdown. When Ray starts a "
+            "quiescence round, stop exploratory work and answer precisely with either `IDLE-ACK` or `STILL-OWN <exact-scope>`. "
+            "After `IDLE-ACK`, stay silent unless materially new work appears. Avoid casual completion chatter; the room should "
+            "converge on one explicit quiescence decision."
+        ),
+    },
 }
 
 
