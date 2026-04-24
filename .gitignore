@@ -92,3 +92,12 @@ CHANGELOG.ignore.md
 __pycache__/
 *.pyc
 
+# generated evaluation workspaces
+tmp/app_build_eval/*/
+!tmp/app_build_eval/*/results.json
+!tmp/app_build_eval/*/REPORT.md
+
+# local Codex artifacts in nested tool workspaces
+codex-rs/exec-server/.codex
+codex-rs/exec/.codex
+codex-rs/linux-sandbox/.codex

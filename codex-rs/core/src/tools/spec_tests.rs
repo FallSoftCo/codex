@@ -291,6 +291,7 @@ fn build_specs_with_unavailable_tools(
         unavailable_called_tools,
         /*discoverable_tools*/ None,
         /*state_db_available*/ true,
+        /*hollywood_tools_available*/ false,
         dynamic_tools,
     )
 }
@@ -378,6 +379,7 @@ async fn assert_model_tools(
             parallel_mcp_server_names: std::collections::HashSet::new(),
             discoverable_tools: None,
             state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: &[],
         },
     );
@@ -442,6 +444,7 @@ async fn state_db_unavailable_hides_state_backed_tools() {
             parallel_mcp_server_names: std::collections::HashSet::new(),
             discoverable_tools: None,
             state_db_available: false,
+            hollywood_tools_available: false,
             dynamic_tools: &[],
         },
     );
@@ -871,6 +874,7 @@ async fn tool_suggest_requires_apps_and_plugins_features() {
             Vec::new(),
             discoverable_tools.clone(),
             /*state_db_available*/ true,
+            /*hollywood_tools_available*/ false,
             &[],
         )
         .build();
@@ -880,6 +884,52 @@ async fn tool_suggest_requires_apps_and_plugins_features() {
                 .iter()
                 .any(|tool| tool.name() == TOOL_SUGGEST_TOOL_NAME),
             "tool_suggest should be absent when {disabled_feature:?} is disabled"
+        );
+    }
+}
+
+#[tokio::test]
+async fn live_hollywood_sessions_expose_hollywood_tools_without_env() {
+    let model_info = model_info_from_models_json("gpt-5.4").await;
+    let features = Features::with_defaults();
+    let available_models = Vec::new();
+    let tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        image_generation_tool_auth_allowed: true,
+        web_search_mode: Some(WebSearchMode::Cached),
+        session_source: SessionSource::Cli,
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+    let (tools, _) = build_specs_with_discoverable_tools(
+        &tools_config,
+        /*mcp_tools*/ None,
+        /*deferred_mcp_tools*/ None,
+        Vec::new(),
+        /*discoverable_tools*/ None,
+        /*state_db_available*/ true,
+        /*hollywood_tools_available*/ true,
+        &[],
+    )
+    .build();
+    let tool_names = tools
+        .iter()
+        .map(codex_tools::ConfiguredToolSpec::name)
+        .collect::<Vec<_>>();
+
+    for expected in [
+        "hollywood_status",
+        "hollywood_read",
+        "hollywood_send",
+        "hollywood_team_up",
+        "hollywood_team_status",
+        "hollywood_team_member_update",
+    ] {
+        assert!(
+            tool_names.contains(&expected),
+            "expected {expected} to be exposed for live attached Hollywood sessions"
         );
     }
 }

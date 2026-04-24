@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Habit Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Daily Tracking</p>
+          <h1>Habit Dashboard</h1>
+          <p class="subtitle">Track recurring habits, see progress, and export a quick summary.</p>
+        </div>
+        <button id="exportButton" type="button">Export Summary</button>
+      </header>
+
+      <section class="summary-grid" aria-label="Habit summary">
+        <article class="summary-card">
+          <span>Total Habits</span>
+          <strong id="summaryTotal">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Completed Today</span>
+          <strong id="summaryCompleted">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Completion Rate</span>
+          <strong id="summaryRate">0%</strong>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Add Habit</h2>
+        <form id="habitForm" class="habit-form">
+          <label>
+            Habit name
+            <input id="habitName" name="habitName" type="text" required />
+          </label>
+          <label>
+            Category
+            <input id="habitCategory" name="habitCategory" type="text" required />
+          </label>
+          <label>
+            Target days
+            <input id="habitTarget" name="habitTarget" type="number" min="1" max="7" required />
+          </label>
+          <button type="submit">Add Habit</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="filters">
+          <label>
+            Category
+            <select id="filterCategory">
+              <option value="all">All categories</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="filterStatus">
+              <option value="all">All statuses</option>
+              <option value="completed">Completed today</option>
+              <option value="pending">Pending today</option>
+            </select>
+          </label>
+        </div>
+        <p id="emptyState" class="empty-state">No habits yet. Add one to get started.</p>
+        <div id="habitList" class="habit-list" aria-live="polite"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Export Output</h2>
+        <pre id="exportOutput" class="export-output">{}</pre>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
+

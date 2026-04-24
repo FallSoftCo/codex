@@ -150,15 +150,16 @@ impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
     }
 }
 
-pub(crate) fn environment_context(
+pub(crate) fn environment_context_from_config(
+    config: Option<&HollywoodSessionConfig>,
     thread_id: ThreadId,
     thread_name: Option<&str>,
     state_db_available: bool,
 ) -> Option<HollywoodEnvironmentContext> {
-    let config = HollywoodSessionConfig::from_env()?;
+    let config = config?;
     Some(HollywoodEnvironmentContext {
-        semantic: semantic_context(&config, thread_id, thread_name),
-        runtime: runtime_context(state_db_available),
+        semantic: semantic_context(config, thread_id, thread_name),
+        runtime: runtime_context(config, state_db_available),
     })
 }
 
@@ -192,7 +193,24 @@ fn durable_coordination_guidance(state_db_available: bool) -> String {
     }
 }
 
-fn runtime_context(state_db_available: bool) -> HollywoodRuntimeContext {
+fn runtime_context(
+    config: &HollywoodSessionConfig,
+    state_db_available: bool,
+) -> HollywoodRuntimeContext {
+    let mut startup_protocol = Vec::new();
+    if config.attention_mode != "focused" {
+        startup_protocol.push("announce_presence".to_string());
+    }
+    startup_protocol.extend([
+        "read_recent_room_context".to_string(),
+        "ask_user_for_tasking_when_unassigned".to_string(),
+        "relay_assigned_scope_to_room".to_string(),
+        "check_existing_scope_claims_before_editing".to_string(),
+        "claim_exact_paths_or_modules_before_editing".to_string(),
+        "avoid_overlapping_edits_until_resolved".to_string(),
+        "use_hollywood_first_for_peer_coordination".to_string(),
+        "reserve_subagents_for_parallelizing_owned_work".to_string(),
+    ]);
     HollywoodRuntimeContext {
         tools: vec![
             "hollywood_status".to_string(),
@@ -202,17 +220,7 @@ fn runtime_context(state_db_available: bool) -> HollywoodRuntimeContext {
             "hollywood_team_status".to_string(),
             "hollywood_team_member_update".to_string(),
         ],
-        startup_protocol: vec![
-            "announce_presence".to_string(),
-            "read_recent_room_context".to_string(),
-            "ask_user_for_tasking_when_unassigned".to_string(),
-            "relay_assigned_scope_to_room".to_string(),
-            "check_existing_scope_claims_before_editing".to_string(),
-            "claim_exact_paths_or_modules_before_editing".to_string(),
-            "avoid_overlapping_edits_until_resolved".to_string(),
-            "use_hollywood_first_for_peer_coordination".to_string(),
-            "reserve_subagents_for_parallelizing_owned_work".to_string(),
-        ],
+        startup_protocol,
         broadcast_guidance: vec![
             "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
             "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
@@ -289,6 +297,22 @@ pub fn coordination_identity_from_thread_name(name: &str) -> Option<String> {
     } else {
         Some(normalized)
     }
+}
+
+pub fn live_identity_matches_target(value: &str, target: &str) -> bool {
+    let normalized_value = normalize_identity(value);
+    let normalized_target = normalize_identity(target);
+    if normalized_value == normalized_target {
+        return true;
+    }
+    normalized_value
+        .strip_prefix(&format!("{normalized_target}-"))
+        .is_some_and(is_generated_runtime_identity_suffix)
+}
+
+fn is_generated_runtime_identity_suffix(value: &str) -> bool {
+    let len = value.len();
+    (4..=16).contains(&len) && value.chars().all(|ch| ch.is_ascii_hexdigit())
 }
 
 pub fn parse_agent_mentions(body: &str) -> Vec<String> {
@@ -452,6 +476,14 @@ mod tests {
     }
 
     #[test]
+    fn live_identity_matches_target_accepts_exact_and_generated_runtime_suffixes() {
+        assert!(live_identity_matches_target("james", "james"));
+        assert!(live_identity_matches_target("james-7c45ba", "james"));
+        assert!(!live_identity_matches_target("james-proof", "james"));
+        assert!(!live_identity_matches_target("jameson-7c45ba", "james"));
+    }
+
+    #[test]
     fn default_hollywood_room_for_cwd_uses_repo_slug() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let repo_root = temp_dir.path().join("Los Angeles Lex");
@@ -493,7 +525,7 @@ mod tests {
 
         let context = HollywoodEnvironmentContext {
             semantic: semantic_context(&config, thread_id, Some("Scout Agent")),
-            runtime: runtime_context(/*state_db_available*/ true),
+            runtime: runtime_context(&config, /*state_db_available*/ true),
         };
 
         assert_eq!(context.semantic.room, "repo/losangelex");
@@ -519,6 +551,12 @@ mod tests {
                 .contains(&"hollywood_send".to_string())
         );
         assert!(
+            !context
+                .runtime
+                .startup_protocol
+                .contains(&"announce_presence".to_string())
+        );
+        assert!(
             context
                 .runtime
                 .startup_protocol
@@ -535,6 +573,25 @@ mod tests {
                 .runtime
                 .startup_protocol
                 .contains(&"avoid_overlapping_edits_until_resolved".to_string())
+        );
+    }
+
+    #[test]
+    fn ambient_environment_context_keeps_presence_startup_protocol() {
+        let config = HollywoodSessionConfig {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: vec![],
+            attention_mode: "ambient".to_string(),
+        };
+
+        let context = runtime_context(&config, /*state_db_available*/ true);
+
+        assert!(
+            context
+                .startup_protocol
+                .contains(&"announce_presence".to_string())
         );
     }
 }

@@ -7,12 +7,18 @@ use crate::tools::registry::ToolHandler;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use chrono::Utc;
 use codex_protocol::ThreadId;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::SessionSource;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 fn invocation(
     session: Arc<Session>,
@@ -43,7 +49,7 @@ async fn make_session_with_state_db() -> (
         .await
         .expect("sqlite state db should be available for coordination tests");
     session.services.state_db = Some(Arc::clone(&state_db));
-    let metadata = codex_state::ThreadMetadataBuilder::new(
+    let mut metadata = codex_state::ThreadMetadataBuilder::new(
         session.conversation_id,
         turn.config
             .codex_home
@@ -53,6 +59,7 @@ async fn make_session_with_state_db() -> (
         SessionSource::Exec,
     )
     .build(turn.config.model_provider_id.as_str());
+    metadata.cwd = turn.config.cwd.to_path_buf();
     state_db
         .upsert_thread(&metadata)
         .await
@@ -69,7 +76,7 @@ async fn insert_thread_metadata(
     turn: &TurnContext,
     thread_id: ThreadId,
 ) {
-    let metadata = codex_state::ThreadMetadataBuilder::new(
+    let mut metadata = codex_state::ThreadMetadataBuilder::new(
         thread_id,
         turn.config
             .codex_home
@@ -79,10 +86,78 @@ async fn insert_thread_metadata(
         SessionSource::Exec,
     )
     .build(turn.config.model_provider_id.as_str());
+    metadata.cwd = turn.config.cwd.to_path_buf();
     state_db
         .upsert_thread(&metadata)
         .await
         .expect("thread metadata should be persisted");
+}
+
+async fn insert_named_thread_metadata(
+    state_db: &Arc<codex_state::StateRuntime>,
+    turn: &TurnContext,
+    thread_id: ThreadId,
+    title: &str,
+) {
+    let mut metadata = codex_state::ThreadMetadataBuilder::new(
+        thread_id,
+        turn.config
+            .codex_home
+            .as_path()
+            .join(format!("{thread_id}.jsonl")),
+        Utc::now(),
+        SessionSource::Exec,
+    )
+    .build(turn.config.model_provider_id.as_str());
+    metadata.cwd = turn.config.cwd.to_path_buf();
+    metadata.title = title.to_string();
+    metadata.first_user_message = Some(format!("named thread {title}"));
+    state_db
+        .upsert_thread(&metadata)
+        .await
+        .expect("named thread metadata should be persisted");
+}
+
+async fn insert_fresh_named_thread_metadata_without_history(
+    state_db: &Arc<codex_state::StateRuntime>,
+    turn: &TurnContext,
+    thread_id: ThreadId,
+    title: &str,
+) {
+    let mut metadata = codex_state::ThreadMetadataBuilder::new(
+        thread_id,
+        turn.config
+            .codex_home
+            .as_path()
+            .join(format!("{thread_id}.jsonl")),
+        Utc::now(),
+        SessionSource::Exec,
+    )
+    .build(turn.config.model_provider_id.as_str());
+    metadata.cwd = turn.config.cwd.to_path_buf();
+    metadata.title = title.to_string();
+    metadata.first_user_message = None;
+    state_db
+        .upsert_thread(&metadata)
+        .await
+        .expect("fresh named thread metadata should be persisted");
+}
+
+async fn rename_thread_metadata(
+    state_db: &Arc<codex_state::StateRuntime>,
+    thread_id: ThreadId,
+    title: &str,
+) {
+    let mut metadata = state_db
+        .get_thread(thread_id)
+        .await
+        .expect("thread lookup should succeed")
+        .expect("thread metadata should exist");
+    metadata.title = title.to_string();
+    state_db
+        .upsert_thread(&metadata)
+        .await
+        .expect("renamed thread metadata should be persisted");
 }
 
 #[tokio::test]
@@ -126,11 +201,267 @@ async fn open_task_for_peer_persists_assigned_wake() {
         "coordination:assigned:Review patch"
     );
     assert!(scheduled_tasks[0].prompt.contains("reason: assigned"));
+    assert!(scheduled_tasks[0].prompt.contains("<coordination_brief>"));
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("call `coordination_act` `done` with a concise concrete result summary")
+    );
     assert!(scheduled_tasks[0].prompt.contains("Review patch"));
     assert!(
         scheduled_tasks[0]
             .prompt
             .contains("Inspect the new patch and report regressions.")
+    );
+}
+
+#[tokio::test]
+async fn assigned_room_scoped_qa_wake_mentions_hollywood_read_and_done() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    let owner_thread_id_str = owner_thread_id.to_string();
+    insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
+
+    CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Verify durable award summary appears in Hollywood",
+                "details": "Verify whether the Hollywood room showed the durable summary text for this award and report the observed wording.",
+                "kind": "qa",
+                "room": "repo/losangelex",
+                "owner": owner_thread_id_str,
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+
+    let scheduled_tasks = state_db
+        .list_scheduled_tasks(Some(owner_thread_id))
+        .await
+        .expect("scheduled task query should succeed");
+    assert_eq!(scheduled_tasks.len(), 1);
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("use `hollywood_read` instead of shell commands")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("if the room message is absent, that absence is still a valid result")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("do not shell out to Hollywood HTTP endpoints or ad hoc scripts")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("for verification or QA tasks, gather the requested evidence, then call `coordination_act` `done` with the observed result")
+    );
+}
+
+#[tokio::test]
+async fn direct_awarded_implementation_wake_includes_reserved_scope_guidance() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    let owner_thread_id_str = owner_thread_id.to_string();
+    insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "details": "Update the protocol shape and keep ownership narrow.",
+                "kind": "implementation",
+                "owner": owner_thread_id_str,
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": "src/protocol.rs"
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("direct implementation award should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(result["task"]["status"], "awarded");
+
+    let scheduled_tasks = state_db
+        .list_scheduled_tasks(Some(owner_thread_id))
+        .await
+        .expect("scheduled task query should succeed");
+    assert_eq!(scheduled_tasks.len(), 1);
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("Reserved implementation scope:")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("- file `src/protocol.rs`")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("reuse the exact reserved `claim_paths` listed in the task details")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("When you accept this task, reuse the same `claim_paths`.")
+    );
+}
+
+#[tokio::test]
+async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_default() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let (mut owner_session, owner_turn) = make_session_and_context().await;
+    owner_session.services.state_db = Some(Arc::clone(&state_db));
+    let owner_session = Arc::new(owner_session);
+    let owner_turn = Arc::new(owner_turn);
+    insert_thread_metadata(
+        &state_db,
+        owner_turn.as_ref(),
+        owner_session.conversation_id,
+    )
+    .await;
+    let reserved_path = turn.config.cwd.join("src/protocol.rs");
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "details": "Update the protocol shape and keep ownership narrow.",
+                "kind": "implementation",
+                "owner": owner_session.conversation_id.to_string(),
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": reserved_path.to_string_lossy()
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("direct implementation award should succeed");
+    let result = parse_result(output);
+    let task_id = result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let accept_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&owner_session),
+            Arc::clone(&owner_turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "summary": "Taking the reserved protocol scope now.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("accept should reuse reserved claim_paths");
+    let accept_result = parse_result(accept_output);
+    assert_eq!(accept_result["task"]["status"], "active");
+    assert_eq!(
+        accept_result["ownership"]["claims"][0]["path"],
+        json!(reserved_path.to_string_lossy().to_string())
+    );
+
+    let owner_claims = state_db
+        .list_path_claims(Some(owner_session.conversation_id))
+        .await
+        .expect("owner claims should list cleanly");
+    assert_eq!(owner_claims.len(), 1);
+    assert_eq!(owner_claims[0].path, reserved_path.to_path_buf());
+}
+
+#[tokio::test]
+async fn accept_clears_pending_assigned_wake_for_owner() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let (mut owner_session, owner_turn) = make_session_and_context().await;
+    owner_session.services.state_db = Some(Arc::clone(&state_db));
+    let owner_session = Arc::new(owner_session);
+    let owner_turn = Arc::new(owner_turn);
+    insert_thread_metadata(
+        &state_db,
+        owner_turn.as_ref(),
+        owner_session.conversation_id,
+    )
+    .await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Review patch",
+                "details": "Inspect the new patch and report regressions.",
+                "kind": "review",
+                "owner": owner_session.conversation_id.to_string(),
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let result = parse_result(output);
+    let task_id = result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    assert_eq!(
+        state_db
+            .list_scheduled_tasks(Some(owner_session.conversation_id))
+            .await
+            .expect("scheduled task query should succeed")
+            .len(),
+        1
+    );
+
+    CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&owner_session),
+            Arc::clone(&owner_turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "summary": "Taking the review task now.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("accept should succeed");
+
+    assert_eq!(
+        state_db
+            .list_scheduled_tasks(Some(owner_session.conversation_id))
+            .await
+            .expect("scheduled task query should succeed")
+            .len(),
+        0
     );
 }
 
@@ -224,4 +555,1027 @@ async fn done_unblocks_awarded_dependency_and_persists_wake() {
     assert_eq!(scheduled_tasks[0].title, "coordination:unblocked:Adapt TUI");
     assert!(scheduled_tasks[0].prompt.contains("reason: unblocked"));
     assert!(scheduled_tasks[0].prompt.contains("Adapt TUI"));
+}
+
+#[tokio::test]
+async fn open_task_named_owner_resolves_thread_title() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Validate operator replay",
+                "details": "Check the control path after startup settles.",
+                "owner": "tony",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task with named owner should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["task"]["owner_thread_id"],
+        json!(owner_thread_id.to_string())
+    );
+    assert_eq!(
+        result["woken_threads"],
+        json!([owner_thread_id.to_string()])
+    );
+}
+
+#[tokio::test]
+async fn handoff_named_owner_resolves_thread_title() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Coordinate handoff",
+                "details": "Start unassigned so the creator can reassign it.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let handoff_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "handoff",
+                "task_id": task_id,
+                "owner": "tony",
+                "summary": "Reassigning the task to Tony for follow-through",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("handoff with named owner should succeed");
+
+    let handoff_result = parse_result(handoff_output);
+    assert_eq!(
+        handoff_result["task"]["owner_thread_id"],
+        json!(owner_thread_id.to_string())
+    );
+    assert_eq!(
+        handoff_result["woken_threads"],
+        json!([owner_thread_id.to_string()])
+    );
+}
+
+#[tokio::test]
+async fn handoff_requires_meaningful_summary() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Coordinate handoff",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "handoff",
+                "task_id": task_id,
+                "owner": ThreadId::new().to_string(),
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("handoff without summary should return recoverable output");
+    let result = parse_result(output);
+
+    assert_eq!(result["ok"], json!(false));
+    assert_eq!(
+        result["error"],
+        json!("coordination_act handoff requires a concise non-empty summary")
+    );
+}
+
+#[tokio::test]
+async fn yield_rejects_placeholder_summary() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Inspect room summary",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "yield",
+                "task_id": task_id,
+                "summary": "placeholder",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("placeholder yield should return recoverable output");
+    let result = parse_result(output);
+
+    assert_eq!(result["ok"], json!(false));
+    assert_eq!(
+        result["error"],
+        json!("coordination_act yield requires a concrete summary, not placeholder text")
+    );
+}
+
+#[tokio::test]
+async fn accept_rejects_noop_summary() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Inspect room summary",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "summary": "noop",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("noop accept should return recoverable output");
+    let result = parse_result(output);
+
+    assert_eq!(result["ok"], json!(false));
+    assert_eq!(
+        result["error"],
+        json!("coordination_act accept requires a concrete summary, not placeholder text")
+    );
+}
+
+#[tokio::test]
+async fn implementation_accept_requires_exact_claim_paths() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "kind": "implementation",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "summary": "Taking protocol ownership now.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("implementation accept should return a recoverable failure output");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    assert!(
+        result["error"]
+            .as_str()
+            .expect("error string should exist")
+            .contains("requires exact ownership claims")
+    );
+    assert_eq!(result["task"]["status"], "open");
+}
+
+#[tokio::test]
+async fn implementation_accept_rejects_conflicting_claim_paths() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let blocker = ThreadId::new();
+    insert_thread_metadata(&state_db, turn.as_ref(), blocker).await;
+    let claimed_path = turn.config.cwd.join("src/lib.rs");
+
+    state_db
+        .claim_path_ownership(
+            blocker,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: claimed_path.to_path_buf(),
+            }],
+            std::time::Duration::from_secs(600),
+        )
+        .await
+        .expect("blocker claim should succeed");
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "kind": "implementation",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "summary": "Taking protocol ownership now.",
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": claimed_path.to_string_lossy()
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("conflicting claim should return a recoverable failure output");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    let message = result["error"]
+        .as_str()
+        .expect("error string should exist")
+        .to_string();
+    assert!(message.contains("cannot become active because thread"));
+    assert!(message.contains(blocker.to_string().as_str()));
+    assert_eq!(result["task"]["status"], "open");
+
+    let task = state_db
+        .get_coordination_task(&task_id)
+        .await
+        .expect("get task should succeed")
+        .expect("task should exist");
+    assert_eq!(task.status, codex_state::CoordinationTaskStatus::Open);
+    assert_eq!(task.owner_thread_id, None);
+    assert_eq!(
+        state_db
+            .list_path_claims(Some(session.conversation_id))
+            .await
+            .expect("list claims should succeed"),
+        Vec::<codex_state::PathClaim>::new()
+    );
+}
+
+#[tokio::test]
+async fn implementation_open_task_requires_claim_paths_for_direct_owner() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "kind": "implementation",
+                "owner": "tony",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("direct implementation award should return a recoverable failure output");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    assert!(
+        result["error"]
+            .as_str()
+            .expect("error string should exist")
+            .contains("requires exact claim_paths")
+    );
+
+    let tasks = state_db
+        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+            owner_thread_id: None,
+            creator_thread_id: None,
+            room: None,
+            statuses: Vec::new(),
+        })
+        .await
+        .expect("list tasks should succeed");
+    assert!(
+        tasks.is_empty(),
+        "direct award should not create a task on failure"
+    );
+}
+
+#[tokio::test]
+async fn implementation_open_task_rejects_conflicting_reserved_claim_paths() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    let blocker = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
+    insert_thread_metadata(&state_db, turn.as_ref(), blocker).await;
+    let claimed_path = turn.config.cwd.join("src/lib.rs");
+
+    state_db
+        .claim_path_ownership(
+            blocker,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: claimed_path.to_path_buf(),
+            }],
+            std::time::Duration::from_secs(600),
+        )
+        .await
+        .expect("blocker claim should succeed");
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "kind": "implementation",
+                "owner": "tony",
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": claimed_path.to_string_lossy()
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("conflicting reserved claim should return a recoverable failure output");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    let message = result["error"]
+        .as_str()
+        .expect("error string should exist")
+        .to_string();
+    assert!(message.contains("cannot be awarded because thread"));
+    assert!(message.contains(blocker.to_string().as_str()));
+
+    let tasks = state_db
+        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+            owner_thread_id: None,
+            creator_thread_id: None,
+            room: None,
+            statuses: Vec::new(),
+        })
+        .await
+        .expect("list tasks should succeed");
+    assert!(
+        tasks.is_empty(),
+        "conflicting direct award should not persist a task"
+    );
+    assert_eq!(
+        state_db
+            .list_path_claims(Some(owner_thread_id))
+            .await
+            .expect("owner claims should list cleanly"),
+        Vec::<codex_state::PathClaim>::new()
+    );
+}
+
+#[tokio::test]
+async fn missing_task_id_returns_recoverable_output() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "done",
+                "summary": "finished",
+            }),
+        ))
+        .await
+        .expect("missing task id should return recoverable output");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    assert_eq!(result["ok"], false);
+    assert_eq!(result["error"], "coordination_act requires `task_id`");
+}
+
+#[tokio::test]
+async fn unknown_task_returns_recoverable_output() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "done",
+                "task_id": "self-pending-placeholder",
+                "summary": "finished",
+            }),
+        ))
+        .await
+        .expect("unknown task should return recoverable output");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    assert_eq!(result["ok"], false);
+    assert_eq!(
+        result["error"],
+        "coordination task self-pending-placeholder was not found"
+    );
+}
+
+#[tokio::test]
+async fn list_coordination_tasks_accepts_named_owner_and_status_alias() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let owner_thread_id = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Review semantic wake patch",
+                "details": "Inspect the room-trigger changes.",
+                "owner": "tony",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let list_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({
+                "owner": "tony",
+                "statuses": ["accepted"],
+            }),
+        ))
+        .await
+        .expect("named owner + alias status should list tasks");
+
+    let list_result = parse_result(list_output);
+    assert_eq!(list_result["tasks"].as_array().map(Vec::len), Some(1));
+    assert_eq!(list_result["tasks"][0]["id"], json!(task_id));
+    assert_eq!(list_result["tasks"][0]["status"], json!("awarded"));
+}
+
+#[tokio::test]
+async fn list_coordination_tasks_accepts_todo_status_alias_for_open() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Queue follow-up validation",
+                "details": "Leave this unassigned so it stays open.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let list_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({
+                "statuses": ["todo"],
+            }),
+        ))
+        .await
+        .expect("todo alias should list open tasks");
+
+    let list_result = parse_result(list_output);
+    assert_eq!(list_result["tasks"].as_array().map(Vec::len), Some(1));
+    assert_eq!(list_result["tasks"][0]["id"], json!(task_id));
+    assert_eq!(list_result["tasks"][0]["status"], json!("open"));
+}
+
+#[tokio::test]
+async fn list_coordination_tasks_accepts_proposed_status_alias_for_open() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Draft the next lane split",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+
+    let list_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({
+                "statuses": ["proposed"],
+            }),
+        ))
+        .await
+        .expect("proposed alias should list tasks");
+    let list_result = parse_result(list_output);
+
+    assert_eq!(list_result["tasks"][0]["status"], json!("open"));
+}
+
+#[tokio::test]
+async fn open_task_named_owner_resolves_fresh_named_thread_without_history() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+
+    let stale_owner_thread_id = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), stale_owner_thread_id, "james").await;
+
+    let fresh_owner_thread_id = ThreadId::new();
+    insert_fresh_named_thread_metadata_without_history(
+        &state_db,
+        turn.as_ref(),
+        fresh_owner_thread_id,
+        "james",
+    )
+    .await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Assign latest james thread",
+                "details": "This should resolve to the freshest named james thread even before it has first-user history.",
+                "owner": "james",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task with fresh named owner should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["task"]["owner_thread_id"],
+        json!(fresh_owner_thread_id.to_string())
+    );
+}
+
+#[tokio::test]
+async fn open_task_named_owner_resolves_current_thread_title() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    rename_thread_metadata(&state_db, session.conversation_id, "tony").await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Hold operator lane and wait",
+                "details": "Self-owned operator lane.",
+                "owner": "tony",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task with current thread title should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["task"]["owner_thread_id"],
+        json!(session.conversation_id.to_string())
+    );
+}
+
+#[tokio::test]
+async fn open_task_named_owner_resolves_live_hollywood_identity_in_current_room() {
+    let server = MockServer::start().await;
+    let owner_thread_id = ThreadId::new();
+    let now = Utc::now().to_rfc3339();
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/registry"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "entries": [{
+                "session_id": owner_thread_id.to_string(),
+                "attached": true,
+                "identities": [owner_thread_id.to_string(), "james"],
+                "updated_at": now,
+                "last_heartbeat_at": now,
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+    insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Assign live james",
+                "details": "Resolve james from the current room's live Hollywood registry entry.",
+                "owner": "james",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task with live Hollywood owner should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["task"]["owner_thread_id"],
+        json!(owner_thread_id.to_string())
+    );
+}
+
+#[tokio::test]
+async fn open_task_named_owner_resolves_generated_runtime_suffix_identity_in_current_room() {
+    let server = MockServer::start().await;
+    let owner_thread_id = ThreadId::new();
+    let now = Utc::now().to_rfc3339();
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/registry"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "entries": [{
+                "session_id": owner_thread_id.to_string(),
+                "attached": true,
+                "identities": [owner_thread_id.to_string(), "james-7c45ba"],
+                "updated_at": now,
+                "last_heartbeat_at": now,
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+    insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Assign generated runtime james",
+                "details": "Resolve james from a generated runtime identity in the current room.",
+                "owner": "james",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task with generated runtime owner should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["task"]["owner_thread_id"],
+        json!(owner_thread_id.to_string())
+    );
+}
+
+#[tokio::test]
+async fn open_task_named_owner_in_hollywood_mode_requires_live_room_match() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/registry"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "entries": []
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+    let stale_named_thread = ThreadId::new();
+    insert_named_thread_metadata(&state_db, turn.as_ref(), stale_named_thread, "james").await;
+
+    let error = match CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Reject stale james fallback",
+                "details": "Do not silently fall back to a non-live named thread in Hollywood mode.",
+                "owner": "james",
+                "notify_room": false,
+            }),
+        ))
+        .await
+    {
+        Ok(_) => panic!("open_task should reject a non-live Hollywood named owner"),
+        Err(error) => error,
+    };
+
+    assert_eq!(
+        error.to_string(),
+        "unknown live Hollywood agent `james` in room `repo/current-room`"
+    );
+}
+
+#[tokio::test]
+async fn open_task_notifies_room_using_live_session_hollywood_config() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/hollywood/v1/messages"))
+        .respond_with(ResponseTemplate::new(201))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+    session
+        .add_hollywood_obligation(&HollywoodInputMessage {
+            message_id: 7,
+            room: "repo/losangelex".to_string(),
+            sender_id: "tony".to_string(),
+            body: "Need a coordination update.".to_string(),
+            mentions: Vec::new(),
+            attention: Some("focused".to_string()),
+            message_kind: Some("direct".to_string()),
+            obligation: Some("obligation".to_string()),
+            synthetic_brief: None,
+            requires_response: true,
+        })
+        .await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Broadcast durable lane",
+                "details": "Prove notify_room uses the live attached session config.",
+                "notify_room": true,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(result["room_notified"], json!(true));
+
+    let requests = server
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    assert_eq!(requests.len(), 1);
+    let body: Value =
+        serde_json::from_slice(&requests[0].body).expect("room notify body should be json");
+    assert_eq!(body["room"], json!("repo/losangelex"));
+    assert_eq!(
+        body["sender_id"],
+        json!(session.conversation_id.to_string())
+    );
+    assert_eq!(body["message_kind"], json!("broadcast"));
+
+    let unresolved = session
+        .resolve_hollywood_obligations_for_turn(&turn.sub_id)
+        .await;
+    assert!(
+        unresolved.is_empty(),
+        "successful room send should resolve same-room obligations"
+    );
+}
+
+#[tokio::test]
+async fn list_coordination_tasks_defaults_to_attached_room_scope() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-current".to_string(),
+            creator_thread_id: session.conversation_id,
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/current-room".to_string()),
+            kind: codex_state::CoordinationTaskKind::Qa,
+            summary: "Current room task".to_string(),
+            details: "Should be visible by default.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-current".to_string(),
+            act_summary: Some("opened current room task".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("current room task should be created");
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-other".to_string(),
+            creator_thread_id: session.conversation_id,
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/other-room".to_string()),
+            kind: codex_state::CoordinationTaskKind::Qa,
+            summary: "Other room task".to_string(),
+            details: "Should be hidden by default.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-other".to_string(),
+            act_summary: Some("opened other room task".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("other room task should be created");
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({
+                "statuses": ["open"],
+            }),
+        ))
+        .await
+        .expect("list_coordination_tasks should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(result["tasks"].as_array().map(Vec::len), Some(1));
+    assert_eq!(result["tasks"][0]["id"], json!("task-current"));
+    assert_eq!(result["tasks"][0]["room"], json!("repo/current-room"));
 }

@@ -827,6 +827,37 @@ impl Session {
         }
     }
 
+    pub(crate) async fn hollywood_session_config(
+        &self,
+    ) -> Option<crate::hollywood::HollywoodSessionConfig> {
+        let state = self.state.lock().await;
+        state
+            .hollywood_session_config()
+            .or_else(crate::hollywood::HollywoodSessionConfig::from_env)
+    }
+
+    pub(crate) async fn set_hollywood_session_config(
+        &self,
+        config: Option<crate::hollywood::HollywoodSessionConfig>,
+    ) {
+        let mut state = self.state.lock().await;
+        state.set_hollywood_session_config(config);
+    }
+
+    pub(crate) async fn set_hollywood_session_meta(
+        &self,
+        meta: Option<codex_protocol::protocol::HollywoodSessionMeta>,
+    ) {
+        let config = meta.map(|value| crate::hollywood::HollywoodSessionConfig {
+            url: value.url,
+            room: value.room,
+            observed_rooms: value.observed_rooms,
+            wake_rooms: value.wake_rooms,
+            attention_mode: value.attention_mode,
+        });
+        self.set_hollywood_session_config(config).await;
+    }
+
     fn managed_network_proxy_active_for_sandbox_policy(sandbox_policy: &SandboxPolicy) -> bool {
         !matches!(sandbox_policy, SandboxPolicy::DangerFullAccess)
     }
@@ -2633,6 +2664,7 @@ impl Session {
         }
         if turn_context.config.include_environment_context {
             let thread_name = self.thread_name().await;
+            let hollywood_config = self.hollywood_session_config().await;
             let subagents = self
                 .services
                 .agent_control
@@ -2641,7 +2673,8 @@ impl Session {
             contextual_user_sections.push(
                 crate::context::EnvironmentContext::from_turn_context(turn_context, shell.as_ref())
                     .with_subagents(subagents)
-                    .with_hollywood(crate::hollywood::environment_context(
+                    .with_hollywood(crate::hollywood::environment_context_from_config(
+                        hollywood_config.as_ref(),
                         self.conversation_id,
                         thread_name.as_deref(),
                         self.state_db().is_some(),

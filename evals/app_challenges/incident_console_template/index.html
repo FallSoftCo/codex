@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Incident Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Ops Desk</p>
+          <h1>Incident Console</h1>
+          <p class="subtitle">Track open incidents, filter severity, and export a quick incident snapshot.</p>
+        </div>
+        <button id="exportButton" type="button">Export Summary</button>
+      </header>
+
+      <section class="summary-grid" aria-label="Incident summary">
+        <article class="summary-card">
+          <span>Total Incidents</span>
+          <strong id="summaryTotal">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Open Incidents</span>
+          <strong id="summaryOpen">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>High Severity Open</span>
+          <strong id="summaryHighOpen">0</strong>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Add Incident</h2>
+        <form id="incidentForm" class="data-form">
+          <label>
+            Title
+            <input id="incidentTitle" name="incidentTitle" type="text" required />
+          </label>
+          <label>
+            Severity
+            <select id="incidentSeverity" name="incidentSeverity">
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <label>
+            Owner
+            <input id="incidentOwner" name="incidentOwner" type="text" required />
+          </label>
+          <button type="submit">Add Incident</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="filters">
+          <label>
+            Severity
+            <select id="filterSeverity">
+              <option value="all">All severities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="filterStatus">
+              <option value="all">All statuses</option>
+              <option value="open">Open</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </label>
+        </div>
+        <p id="emptyState" class="empty-state">No incidents yet. Add one to get started.</p>
+        <div id="incidentList" class="card-list" aria-live="polite"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Export Output</h2>
+        <pre id="exportOutput" class="export-output">{}</pre>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
+

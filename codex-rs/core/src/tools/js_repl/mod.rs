@@ -1595,6 +1595,7 @@ impl JsReplManager {
             .await
             .list_all_tools()
             .await;
+        let hollywood_tools_available = exec.session.hollywood_session_config().await.is_some();
         let router = ToolRouter::from_config(
             &exec.turn.tools_config,
             crate::tools::router::ToolRouterParams {
@@ -1606,6 +1607,7 @@ impl JsReplManager {
                 parallel_mcp_server_names: std::collections::HashSet::new(),
                 discoverable_tools: None,
                 state_db_available: exec.session.state_db().is_some(),
+                hollywood_tools_available,
                 dynamic_tools: exec.turn.dynamic_tools.as_slice(),
             },
         );

@@ -589,6 +589,7 @@ impl Session {
                 attention: Some("focused".to_string()),
                 message_kind: Some("direct".to_string()),
                 obligation: Some("obligation".to_string()),
+                synthetic_brief: None,
                 requires_response: true,
             };
             if let Err(err) = self.submit_hollywood_followup(message).await {

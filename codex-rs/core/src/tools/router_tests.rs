@@ -42,6 +42,7 @@ async fn js_repl_tools_only_blocks_direct_tool_calls() -> anyhow::Result<()> {
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
             state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn.dynamic_tools.as_slice(),
         },
     );
@@ -102,6 +103,7 @@ async fn js_repl_tools_only_allows_js_repl_source_calls() -> anyhow::Result<()> 
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
             state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn.dynamic_tools.as_slice(),
         },
     );
@@ -151,6 +153,7 @@ async fn js_repl_tools_only_blocks_namespaced_js_repl_tool() -> anyhow::Result<(
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
             state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn.dynamic_tools.as_slice(),
         },
     );
@@ -208,6 +211,7 @@ async fn parallel_support_does_not_match_namespaced_local_tool_names() -> anyhow
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
             state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn.dynamic_tools.as_slice(),
         },
     );
@@ -282,6 +286,7 @@ async fn mcp_parallel_support_uses_exact_payload_server() -> anyhow::Result<()> 
             parallel_mcp_server_names: HashSet::from(["echo".to_string()]),
             discoverable_tools: None,
             state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn.dynamic_tools.as_slice(),
         },
     );

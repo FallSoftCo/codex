@@ -265,6 +265,13 @@ impl CodexThread {
         self.codex.thread_config_snapshot().await
     }
 
+    pub async fn set_hollywood_session_meta(
+        &self,
+        meta: Option<codex_protocol::protocol::HollywoodSessionMeta>,
+    ) {
+        self.codex.session.set_hollywood_session_meta(meta).await;
+    }
+
     pub async fn read_mcp_resource(
         &self,
         server: &str,

@@ -1,3 +1,4 @@
+use crate::model::PathClaimSpec;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
@@ -150,6 +151,8 @@ pub struct CoordinationTaskCreateParams {
     pub id: String,
     pub creator_thread_id: ThreadId,
     pub owner_thread_id: Option<ThreadId>,
+    pub reserved_path_claims: Vec<PathClaimSpec>,
+    pub claim_lease_seconds: i64,
     pub team_id: Option<String>,
     pub room: Option<String>,
     pub kind: CoordinationTaskKind,
@@ -173,6 +176,7 @@ pub struct CoordinationTaskTransitionOutcome {
 pub struct CoordinationTaskListFilter {
     pub owner_thread_id: Option<ThreadId>,
     pub creator_thread_id: Option<ThreadId>,
+    pub room: Option<String>,
     pub statuses: Vec<CoordinationTaskStatus>,
 }
 
@@ -180,6 +184,7 @@ pub struct CoordinationTaskListFilter {
 pub struct CoordinationTaskAcceptParams {
     pub task_id: String,
     pub actor_thread_id: ThreadId,
+    pub path_claims: Vec<PathClaimSpec>,
     pub lease_seconds: i64,
     pub act_id: String,
     pub act_summary: Option<String>,

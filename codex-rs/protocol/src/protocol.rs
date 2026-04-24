@@ -390,6 +390,22 @@ pub struct ConversationTextParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct HollywoodSyntheticBrief {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wake_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub facts: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggested_actions: Vec<String>,
+    #[serde(default)]
+    pub stay_silent_if_no_actionable_delta: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 pub struct HollywoodInputMessage {
     pub message_id: i64,
     pub room: String,
@@ -403,6 +419,8 @@ pub struct HollywoodInputMessage {
     pub message_kind: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub obligation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synthetic_brief: Option<HollywoodSyntheticBrief>,
     #[serde(default)]
     pub requires_response: bool,
 }

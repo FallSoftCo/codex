@@ -357,6 +357,10 @@ impl ToolHandler for UnifiedExecHandler {
                             advisory_note: None,
                         }
                     }
+                    Err(
+                        err @ (UnifiedExecError::CreateProcess { .. }
+                        | UnifiedExecError::ProcessFailed { .. }),
+                    ) => recoverable_exec_command_output(session_command, max_output_tokens, err),
                     Err(err) => {
                         return Err(FunctionCallError::RespondToModel(format!(
                             "exec_command failed for `{command_for_display}`: {err:?}"
@@ -366,12 +370,27 @@ impl ToolHandler for UnifiedExecHandler {
             }
             "write_stdin" => {
                 let args: WriteStdinArgs = parse_arguments(&arguments)?;
-                let interaction_call_id = manager
+                let interaction_call_id = match manager
                     .terminal_interaction_call_id(args.session_id)
                     .await
-                    .map_err(|err| {
-                        FunctionCallError::RespondToModel(format!("write_stdin failed: {err}"))
-                    })?;
+                {
+                    Ok(call_id) => call_id,
+                    Err(
+                        err @ (UnifiedExecError::UnknownProcessId { .. }
+                        | UnifiedExecError::StdinClosed),
+                    ) => {
+                        return Ok(recoverable_write_stdin_output(
+                            args.session_id,
+                            args.max_output_tokens,
+                            err,
+                        ));
+                    }
+                    Err(err) => {
+                        return Err(FunctionCallError::RespondToModel(format!(
+                            "write_stdin failed: {err}"
+                        )));
+                    }
+                };
 
                 let interaction = TerminalInteractionEvent {
                     call_id: interaction_call_id,
@@ -382,7 +401,7 @@ impl ToolHandler for UnifiedExecHandler {
                     .send_event(turn.as_ref(), EventMsg::TerminalInteraction(interaction))
                     .await;
 
-                manager
+                match manager
                     .write_stdin(WriteStdinRequest {
                         process_id: args.session_id,
                         input: &args.chars,
@@ -390,9 +409,24 @@ impl ToolHandler for UnifiedExecHandler {
                         max_output_tokens: args.max_output_tokens,
                     })
                     .await
-                    .map_err(|err| {
-                        FunctionCallError::RespondToModel(format!("write_stdin failed: {err}"))
-                    })?
+                {
+                    Ok(response) => response,
+                    Err(
+                        err @ (UnifiedExecError::UnknownProcessId { .. }
+                        | UnifiedExecError::StdinClosed),
+                    ) => {
+                        return Ok(recoverable_write_stdin_output(
+                            args.session_id,
+                            args.max_output_tokens,
+                            err,
+                        ));
+                    }
+                    Err(err) => {
+                        return Err(FunctionCallError::RespondToModel(format!(
+                            "write_stdin failed: {err}"
+                        )));
+                    }
+                }
             }
             other => {
                 return Err(FunctionCallError::RespondToModel(format!(
@@ -411,6 +445,76 @@ fn emit_unified_exec_tty_metric(session_telemetry: &SessionTelemetry, tty: bool)
         /*inc*/ 1,
         &[("tty", if tty { "true" } else { "false" })],
     );
+}
+
+fn recoverable_write_stdin_output(
+    session_id: i32,
+    max_output_tokens: Option<usize>,
+    err: UnifiedExecError,
+) -> ExecCommandToolOutput {
+    let advisory_note = match err {
+        UnifiedExecError::UnknownProcessId { .. } => Some(
+            "The interactive session no longer exists. Start a new `exec_command` with `tty=true` before sending more stdin."
+                .to_string(),
+        ),
+        UnifiedExecError::StdinClosed => Some(
+            "This interactive session no longer accepts stdin. Start a new `exec_command` with `tty=true` if you need more input."
+                .to_string(),
+        ),
+        _ => None,
+    };
+
+    ExecCommandToolOutput {
+        event_call_id: String::new(),
+        chunk_id: generate_chunk_id(),
+        wall_time: std::time::Duration::ZERO,
+        raw_output: format!("write_stdin failed: {err}").into_bytes(),
+        max_output_tokens,
+        process_id: None,
+        exit_code: None,
+        original_token_count: None,
+        session_command: Some(vec![format!("session:{session_id}")]),
+        advisory_note,
+    }
+}
+
+fn recoverable_exec_command_output(
+    session_command: Vec<String>,
+    max_output_tokens: Option<usize>,
+    err: UnifiedExecError,
+) -> ExecCommandToolOutput {
+    let advisory_note = match &err {
+        UnifiedExecError::CreateProcess { message }
+            if message.contains("No such file or directory") =>
+        {
+            Some(
+                "The requested shell or executable could not be started. Retry without an explicit `shell`, or use a shell path that exists on this machine."
+                    .to_string(),
+            )
+        }
+        UnifiedExecError::CreateProcess { .. } => Some(
+            "The command could not be started. Check the shell path, workdir, and executable, then try again."
+                .to_string(),
+        ),
+        UnifiedExecError::ProcessFailed { .. } => Some(
+            "The interactive process exited before it became usable. Inspect the output and rerun the command if needed."
+                .to_string(),
+        ),
+        _ => None,
+    };
+
+    ExecCommandToolOutput {
+        event_call_id: String::new(),
+        chunk_id: generate_chunk_id(),
+        wall_time: std::time::Duration::ZERO,
+        raw_output: err.to_string().into_bytes(),
+        max_output_tokens,
+        process_id: None,
+        exit_code: None,
+        original_token_count: None,
+        session_command: Some(session_command),
+        advisory_note,
+    }
 }
 
 pub(crate) fn get_command(

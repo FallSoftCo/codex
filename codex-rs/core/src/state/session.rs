@@ -1,5 +1,6 @@
 //! Session-wide mutable state.
 
+use crate::hollywood::HollywoodSessionConfig;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::HollywoodInputMessage;
@@ -37,6 +38,7 @@ pub(crate) struct SessionState {
     pub(crate) pending_session_start_source: Option<codex_hooks::SessionStartSource>,
     granted_permissions: Option<PermissionProfile>,
     next_turn_is_first: bool,
+    hollywood_session_config: Option<HollywoodSessionConfig>,
     outstanding_hollywood_obligations: Vec<HollywoodObligation>,
     hollywood_send_rooms_by_turn: HashMap<String, HashSet<String>>,
 }
@@ -68,6 +70,7 @@ impl SessionState {
             pending_session_start_source: None,
             granted_permissions: None,
             next_turn_is_first: true,
+            hollywood_session_config: None,
             outstanding_hollywood_obligations: Vec::new(),
             hollywood_send_rooms_by_turn: HashMap::new(),
         }
@@ -254,6 +257,14 @@ impl SessionState {
 
     pub(crate) fn granted_permissions(&self) -> Option<PermissionProfile> {
         self.granted_permissions.clone()
+    }
+
+    pub(crate) fn hollywood_session_config(&self) -> Option<HollywoodSessionConfig> {
+        self.hollywood_session_config.clone()
+    }
+
+    pub(crate) fn set_hollywood_session_config(&mut self, config: Option<HollywoodSessionConfig>) {
+        self.hollywood_session_config = config;
     }
 
     pub(crate) fn add_hollywood_obligation(&mut self, message: &HollywoodInputMessage) {

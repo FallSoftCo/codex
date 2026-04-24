@@ -19,96 +19,22 @@ impl StateRuntime {
     ) -> anyhow::Result<PathClaimAcquireResult> {
         self.ensure_state_schema_current().await?;
 
-        let claims = dedupe_claim_specs(claims)?;
-        if claims.is_empty() {
-            return Ok(PathClaimAcquireResult {
-                acquired: true,
-                claims: Vec::new(),
-                conflicts: Vec::new(),
-            });
-        }
-
         let owner_thread_id = owner_thread_id.to_string();
         let now = Utc::now().timestamp();
         let lease_seconds = i64::try_from(lease_duration.as_secs()).unwrap_or(i64::MAX);
         let lease_expires_at = now.saturating_add(lease_seconds.max(0));
 
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
-        delete_expired_path_claims(&mut tx, now).await?;
-
-        let existing_claims =
-            load_active_path_claims(&mut tx, /*owner_thread_id*/ None, now).await?;
-        let conflicts = collect_path_claim_conflicts(&claims, &owner_thread_id, &existing_claims);
-        if !conflicts.is_empty() {
-            tx.commit().await?;
-            return Ok(PathClaimAcquireResult {
-                acquired: false,
-                claims: Vec::new(),
-                conflicts,
-            });
-        }
-
-        let mut acquired_claims = Vec::with_capacity(claims.len());
-        for claim in claims {
-            let existing = existing_claims.iter().find(|existing| {
-                existing.owner_thread_id == owner_thread_id
-                    && existing.kind == claim.kind
-                    && existing.path == claim.path
-            });
-            let id = existing
-                .map(|existing| existing.id.clone())
-                .unwrap_or_else(|| Uuid::new_v4().to_string());
-            let claimed_at = existing
-                .map(|existing| existing.claimed_at.timestamp())
-                .unwrap_or(now);
-            sqlx::query(
-                r#"
-INSERT INTO path_claims (
-    id,
-    owner_thread_id,
-    claim_kind,
-    path,
-    claimed_at,
-    updated_at,
-    lease_expires_at
-) VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(claim_kind, path) DO UPDATE SET
-    updated_at = excluded.updated_at,
-    lease_expires_at = excluded.lease_expires_at
-WHERE path_claims.owner_thread_id = excluded.owner_thread_id
-                "#,
-            )
-            .bind(id.as_str())
-            .bind(owner_thread_id.as_str())
-            .bind(claim.kind.as_str())
-            .bind(claim.path.to_string_lossy().as_ref())
-            .bind(claimed_at)
-            .bind(now)
-            .bind(lease_expires_at)
-            .execute(&mut *tx)
-            .await?;
-
-            acquired_claims.push(crate::PathClaim {
-                id,
-                owner_thread_id: owner_thread_id.clone(),
-                kind: claim.kind,
-                path: claim.path.clone(),
-                claimed_at: DateTime::from_timestamp(claimed_at, 0)
-                    .ok_or_else(|| anyhow::anyhow!("invalid claimed_at timestamp"))?,
-                updated_at: DateTime::from_timestamp(now, 0)
-                    .ok_or_else(|| anyhow::anyhow!("invalid updated_at timestamp"))?,
-                lease_expires_at: DateTime::from_timestamp(lease_expires_at, 0)
-                    .ok_or_else(|| anyhow::anyhow!("invalid lease_expires_at timestamp"))?,
-            });
-        }
-
+        let result = try_claim_path_ownership_in_tx(
+            &mut tx,
+            owner_thread_id.as_str(),
+            claims,
+            now,
+            lease_expires_at,
+        )
+        .await?;
         tx.commit().await?;
-
-        Ok(PathClaimAcquireResult {
-            acquired: true,
-            claims: acquired_claims,
-            conflicts: Vec::new(),
-        })
+        Ok(result)
     }
 
     pub async fn release_path_claims(
@@ -169,6 +95,95 @@ WHERE owner_thread_id = ?
     }
 }
 
+pub(crate) async fn try_claim_path_ownership_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    owner_thread_id: &str,
+    claims: &[PathClaimSpec],
+    now: i64,
+    lease_expires_at: i64,
+) -> anyhow::Result<PathClaimAcquireResult> {
+    let claims = dedupe_claim_specs(claims)?;
+    if claims.is_empty() {
+        return Ok(PathClaimAcquireResult {
+            acquired: true,
+            claims: Vec::new(),
+            conflicts: Vec::new(),
+        });
+    }
+
+    delete_expired_path_claims(tx, now).await?;
+
+    let existing_claims = load_active_path_claims(tx, /*owner_thread_id*/ None, now).await?;
+    let conflicts = collect_path_claim_conflicts(&claims, owner_thread_id, &existing_claims);
+    if !conflicts.is_empty() {
+        return Ok(PathClaimAcquireResult {
+            acquired: false,
+            claims: Vec::new(),
+            conflicts,
+        });
+    }
+
+    let mut acquired_claims = Vec::with_capacity(claims.len());
+    for claim in claims {
+        let existing = existing_claims.iter().find(|existing| {
+            existing.owner_thread_id == owner_thread_id
+                && existing.kind == claim.kind
+                && existing.path == claim.path
+        });
+        let id = existing
+            .map(|existing| existing.id.clone())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let claimed_at = existing
+            .map(|existing| existing.claimed_at.timestamp())
+            .unwrap_or(now);
+        sqlx::query(
+            r#"
+INSERT INTO path_claims (
+    id,
+    owner_thread_id,
+    claim_kind,
+    path,
+    claimed_at,
+    updated_at,
+    lease_expires_at
+) VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(claim_kind, path) DO UPDATE SET
+    updated_at = excluded.updated_at,
+    lease_expires_at = excluded.lease_expires_at
+WHERE path_claims.owner_thread_id = excluded.owner_thread_id
+            "#,
+        )
+        .bind(id.as_str())
+        .bind(owner_thread_id)
+        .bind(claim.kind.as_str())
+        .bind(claim.path.to_string_lossy().as_ref())
+        .bind(claimed_at)
+        .bind(now)
+        .bind(lease_expires_at)
+        .execute(&mut **tx)
+        .await?;
+
+        acquired_claims.push(crate::PathClaim {
+            id,
+            owner_thread_id: owner_thread_id.to_string(),
+            kind: claim.kind,
+            path: claim.path.clone(),
+            claimed_at: DateTime::from_timestamp(claimed_at, 0)
+                .ok_or_else(|| anyhow::anyhow!("invalid claimed_at timestamp"))?,
+            updated_at: DateTime::from_timestamp(now, 0)
+                .ok_or_else(|| anyhow::anyhow!("invalid updated_at timestamp"))?,
+            lease_expires_at: DateTime::from_timestamp(lease_expires_at, 0)
+                .ok_or_else(|| anyhow::anyhow!("invalid lease_expires_at timestamp"))?,
+        });
+    }
+
+    Ok(PathClaimAcquireResult {
+        acquired: true,
+        claims: acquired_claims,
+        conflicts: Vec::new(),
+    })
+}
+
 fn dedupe_claim_specs(claims: &[PathClaimSpec]) -> anyhow::Result<Vec<PathClaimSpec>> {
     let mut seen = BTreeSet::new();
     let mut deduped = Vec::new();
@@ -190,7 +205,7 @@ fn dedupe_claim_specs(claims: &[PathClaimSpec]) -> anyhow::Result<Vec<PathClaimS
     Ok(deduped)
 }
 
-async fn delete_expired_path_claims(
+pub(crate) async fn delete_expired_path_claims(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     now: i64,
 ) -> anyhow::Result<()> {
@@ -201,7 +216,7 @@ async fn delete_expired_path_claims(
     Ok(())
 }
 
-async fn load_active_path_claims(
+pub(crate) async fn load_active_path_claims(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     owner_thread_id: Option<String>,
     now: i64,
@@ -250,7 +265,7 @@ ORDER BY path ASC, claim_kind ASC, owner_thread_id ASC, id ASC
     rows.into_iter().map(TryInto::try_into).collect()
 }
 
-fn collect_path_claim_conflicts(
+pub(crate) fn collect_path_claim_conflicts(
     requested: &[PathClaimSpec],
     owner_thread_id: &str,
     active_claims: &[crate::PathClaim],

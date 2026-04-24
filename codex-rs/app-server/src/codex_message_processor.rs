@@ -12,6 +12,7 @@ use crate::fuzzy_file_search::run_fuzzy_file_search;
 use crate::fuzzy_file_search::start_fuzzy_file_search_session;
 use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
 use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
+use crate::hollywood::HOLLYWOOD_ROOM_CONTRACT_VERSION;
 use crate::hollywood::HollywoodConfig;
 use crate::hollywood::build_registry_upsert_request;
 use crate::hollywood::format_hollywood_context_message;
@@ -20,6 +21,7 @@ use crate::hollywood::hollywood_session_state_from_runtime;
 use crate::hollywood::hollywood_session_status_from_thread_status;
 use crate::hollywood::poll_messages as poll_hollywood_messages;
 use crate::hollywood::prime_from_latest as prime_hollywood_from_latest;
+use crate::hollywood::startup_announces_presence;
 use crate::hollywood::startup_handshake_message;
 use crate::hollywood::thread_status_name as hollywood_thread_status_name;
 use crate::hollywood::upsert_registry as upsert_hollywood_registry;
@@ -342,6 +344,7 @@ use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::GitInfo as CoreGitInfo;
 use codex_protocol::protocol::HollywoodInputMessage as CoreHollywoodInputMessage;
 use codex_protocol::protocol::HollywoodSessionMeta;
+use codex_protocol::protocol::HollywoodSyntheticBrief as CoreHollywoodSyntheticBrief;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::McpAuthStatus as CoreMcpAuthStatus;
 use codex_protocol::protocol::McpServerRefreshConfig;
@@ -436,6 +439,55 @@ struct ThreadListFilters {
     archived: bool,
     cwd: Option<PathBuf>,
     search_term: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HollywoodSemanticKind {
+    Ack,
+    Presence,
+    Progress,
+    DirectRequest,
+    Assignment,
+    ScopeUpdate,
+    ReviewRequest,
+    Handoff,
+    Blocker,
+    Unblock,
+    Completion,
+    IdleDirective,
+    Ambient,
+}
+
+impl HollywoodSemanticKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Ack => "ack",
+            Self::Presence => "presence",
+            Self::Progress => "progress",
+            Self::DirectRequest => "direct_request",
+            Self::Assignment => "assignment",
+            Self::ScopeUpdate => "scope_update",
+            Self::ReviewRequest => "review_request",
+            Self::Handoff => "handoff",
+            Self::Blocker => "blocker",
+            Self::Unblock => "unblock",
+            Self::Completion => "completion",
+            Self::IdleDirective => "idle_directive",
+            Self::Ambient => "ambient",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct HollywoodSemanticAssessment {
+    kind: HollywoodSemanticKind,
+    wakeworthy: bool,
+    requires_response: bool,
+    wake_reason: &'static str,
+    summary: String,
+    facts: Vec<String>,
+    suggested_actions: Vec<String>,
+    stay_silent_if_no_actionable_delta: bool,
 }
 
 // Duration before a browser ChatGPT login attempt is abandoned.
@@ -557,6 +609,11 @@ struct ScheduledTaskContext {
     pending_thread_unloads: Arc<Mutex<HashSet<ThreadId>>>,
     thread_state_manager: ThreadStateManager,
     thread_watch_manager: ThreadWatchManager,
+}
+
+enum ScheduledTaskThreadLoad {
+    Loaded(Arc<CodexThread>),
+    PendingInProgressTurn,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -889,8 +946,27 @@ impl CodexMessageProcessor {
         state_db: &StateDbHandle,
         task: codex_state::ClaimedScheduledTask,
     ) -> anyhow::Result<()> {
+        if Self::coordination_scheduled_wake_is_obsolete(state_db, &task).await? {
+            let _deleted = state_db.delete_scheduled_task(&task.id).await?;
+            return Ok(());
+        }
         let thread_id = ThreadId::from_string(&task.thread_id)?;
-        let thread = Self::load_scheduled_task_thread(context, thread_id).await?;
+        let Some(thread) = (match Self::load_scheduled_task_thread(context, thread_id).await? {
+            ScheduledTaskThreadLoad::Loaded(thread) => Some(thread),
+            ScheduledTaskThreadLoad::PendingInProgressTurn => None,
+        }) else {
+            let retry_at =
+                Utc::now() + chrono::Duration::from_std(SCHEDULED_TASK_BUSY_RETRY_DELAY)?;
+            state_db
+                .record_scheduled_task_start_failure(
+                    &task,
+                    Utc::now(),
+                    retry_at,
+                    "thread rollout still has an unfinished turn; refusing duplicate resume",
+                )
+                .await?;
+            return Ok(());
+        };
         let thread_state = context.thread_state_manager.thread_state(thread_id).await;
         let _ = Self::ensure_listener_task_running_task(
             ListenerTaskContext {
@@ -914,10 +990,8 @@ impl CodexMessageProcessor {
         )
         .await;
 
-        let status = context
-            .thread_watch_manager
-            .loaded_status_for_thread(&task.thread_id)
-            .await;
+        let status =
+            Self::resolve_background_thread_status(context, &task.thread_id, Some(&thread)).await;
         if matches!(status, ThreadStatus::Active { .. }) {
             let retry_at =
                 Utc::now() + chrono::Duration::from_std(SCHEDULED_TASK_BUSY_RETRY_DELAY)?;
@@ -956,11 +1030,7 @@ impl CodexMessageProcessor {
         };
         let runs = state_db.list_running_scheduled_task_runs().await?;
         for run in runs {
-            match context
-                .thread_watch_manager
-                .loaded_status_for_thread(&run.thread_id)
-                .await
-            {
+            match Self::resolve_background_thread_status(context, &run.thread_id, None).await {
                 ThreadStatus::Active { .. } => {}
                 ThreadStatus::Idle | ThreadStatus::NotLoaded => {
                     state_db
@@ -1059,7 +1129,20 @@ impl CodexMessageProcessor {
     ) -> anyhow::Result<()> {
         let thread_id = ThreadId::from_string(&task_watch.thread_id)?;
         let thread = match Self::load_scheduled_task_thread(context, thread_id).await {
-            Ok(thread) => thread,
+            Ok(ScheduledTaskThreadLoad::Loaded(thread)) => thread,
+            Ok(ScheduledTaskThreadLoad::PendingInProgressTurn) => {
+                let retry_at =
+                    Utc::now() + chrono::Duration::from_std(TASK_WATCH_BUSY_RETRY_DELAY)?;
+                state_db
+                    .record_task_watch_start_failure(
+                        &task_watch,
+                        Utc::now(),
+                        retry_at,
+                        "thread rollout still has an unfinished turn; refusing duplicate resume",
+                    )
+                    .await?;
+                return Ok(());
+            }
             Err(err) => {
                 state_db
                     .fail_task_watch(
@@ -1095,10 +1178,9 @@ impl CodexMessageProcessor {
         )
         .await;
 
-        let status = context
-            .thread_watch_manager
-            .loaded_status_for_thread(&task_watch.thread_id)
-            .await;
+        let status =
+            Self::resolve_background_thread_status(context, &task_watch.thread_id, Some(&thread))
+                .await;
         if matches!(status, ThreadStatus::Active { .. }) {
             let retry_at = Utc::now() + chrono::Duration::from_std(TASK_WATCH_BUSY_RETRY_DELAY)?;
             state_db
@@ -1136,11 +1218,7 @@ impl CodexMessageProcessor {
         };
         let runs = state_db.list_running_task_watch_runs().await?;
         for run in runs {
-            match context
-                .thread_watch_manager
-                .loaded_status_for_thread(&run.thread_id)
-                .await
-            {
+            match Self::resolve_background_thread_status(context, &run.thread_id, None).await {
                 ThreadStatus::Active { .. } => {}
                 ThreadStatus::Idle | ThreadStatus::NotLoaded => {
                     state_db
@@ -1247,7 +1325,11 @@ impl CodexMessageProcessor {
                 };
                 let thread_id = ThreadId::from_string(&watcher.thread_id)?;
                 let thread = match Self::load_scheduled_task_thread(context, thread_id).await {
-                    Ok(thread) => thread,
+                    Ok(ScheduledTaskThreadLoad::Loaded(thread)) => thread,
+                    Ok(ScheduledTaskThreadLoad::PendingInProgressTurn) => {
+                        state_db.release_watcher_claim(&watcher.id).await?;
+                        return Ok(());
+                    }
                     Err(err) => {
                         state_db
                             .fail_watcher(
@@ -1357,7 +1439,11 @@ impl CodexMessageProcessor {
 
                 let thread_id = ThreadId::from_string(&watcher.thread_id)?;
                 let thread = match Self::load_scheduled_task_thread(context, thread_id).await {
-                    Ok(thread) => thread,
+                    Ok(ScheduledTaskThreadLoad::Loaded(thread)) => thread,
+                    Ok(ScheduledTaskThreadLoad::PendingInProgressTurn) => {
+                        state_db.release_watcher_claim(&watcher.id).await?;
+                        return Ok(());
+                    }
                     Err(err) => {
                         state_db
                             .fail_watcher(
@@ -1402,11 +1488,9 @@ impl CodexMessageProcessor {
         wake_message: String,
         wake_at: DateTime<Utc>,
     ) -> anyhow::Result<()> {
-        let loaded_status = context
-            .thread_watch_manager
-            .loaded_status_for_thread(&watcher.thread_id)
-            .await;
-        if matches!(loaded_status, ThreadStatus::Active { .. }) {
+        let status =
+            Self::resolve_background_thread_status(context, &watcher.thread_id, Some(thread)).await;
+        if matches!(status, ThreadStatus::Active { .. }) {
             thread.inject_user_message_without_turn(wake_message).await;
             let run_id = state_db.start_watcher_run(watcher, None, wake_at).await?;
             state_db
@@ -1467,11 +1551,7 @@ impl CodexMessageProcessor {
         };
         let runs = state_db.list_running_watcher_runs().await?;
         for run in runs {
-            match context
-                .thread_watch_manager
-                .loaded_status_for_thread(&run.thread_id)
-                .await
-            {
+            match Self::resolve_background_thread_status(context, &run.thread_id, None).await {
                 ThreadStatus::Active { .. } => {}
                 ThreadStatus::Idle | ThreadStatus::NotLoaded => {
                     state_db
@@ -1866,18 +1946,48 @@ impl CodexMessageProcessor {
         Ok(())
     }
 
+    async fn resolve_background_thread_status(
+        context: &ScheduledTaskContext,
+        thread_id: &str,
+        loaded_thread: Option<&Arc<CodexThread>>,
+    ) -> ThreadStatus {
+        let loaded_status = context
+            .thread_watch_manager
+            .loaded_status_for_thread(thread_id)
+            .await;
+        let live_agent_status = if let Some(thread) = loaded_thread {
+            Some(thread.agent_status().await)
+        } else if let Ok(thread_id) = ThreadId::from_string(thread_id) {
+            match context.thread_manager.get_thread(thread_id).await {
+                Ok(thread) => Some(thread.agent_status().await),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        merge_background_thread_status(loaded_status, live_agent_status.as_ref())
+    }
+
     async fn load_scheduled_task_thread(
         context: &ScheduledTaskContext,
         thread_id: ThreadId,
-    ) -> anyhow::Result<Arc<CodexThread>> {
+    ) -> anyhow::Result<ScheduledTaskThreadLoad> {
         if let Ok(thread) = context.thread_manager.get_thread(thread_id).await {
-            return Ok(thread);
+            return Ok(ScheduledTaskThreadLoad::Loaded(thread));
         }
 
         let rollout_path =
             find_thread_path_by_id_str(&context.config.codex_home, &thread_id.to_string())
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("no rollout found for thread {thread_id}"))?;
+        if rollout_has_in_progress_turns(rollout_path.as_path()).await? {
+            warn!(
+                thread_id = %thread_id,
+                "refusing background resume because rollout still contains an unfinished turn"
+            );
+            return Ok(ScheduledTaskThreadLoad::PendingInProgressTurn);
+        }
         let thread_history = RolloutRecorder::get_rollout_history(&rollout_path).await?;
         let history_cwd = thread_history.session_cwd();
         let Some(state_db_ctx) = get_state_db(context.config.as_ref()).await else {
@@ -1916,7 +2026,7 @@ impl CodexMessageProcessor {
                 None,
             )
             .await?;
-        Ok(new_thread.thread)
+        Ok(ScheduledTaskThreadLoad::Loaded(new_thread.thread))
     }
 
     fn format_scheduled_task_wake_message(
@@ -2104,45 +2214,607 @@ impl CodexMessageProcessor {
         }
     }
 
+    async fn coordination_scheduled_wake_is_obsolete(
+        state_db: &StateDbHandle,
+        task: &codex_state::ClaimedScheduledTask,
+    ) -> anyhow::Result<bool> {
+        let Some(reason) = Self::coordination_scheduled_wake_reason(task.title.as_str()) else {
+            return Ok(false);
+        };
+        let Some(task_id) = Self::extract_tagged_context_line(task.prompt.as_str(), "task_id")
+        else {
+            return Ok(false);
+        };
+        let Some(coordination_task) = state_db.get_coordination_task(&task_id).await? else {
+            return Ok(true);
+        };
+
+        let still_actionable = match reason {
+            "assigned" | "unblocked" => {
+                matches!(
+                    coordination_task.status,
+                    codex_state::CoordinationTaskStatus::Awarded
+                ) && coordination_task.owner_thread_id.as_deref() == Some(task.thread_id.as_str())
+            }
+            _ => true,
+        };
+        Ok(!still_actionable)
+    }
+
+    fn coordination_scheduled_wake_reason(title: &str) -> Option<&str> {
+        let remainder = title.strip_prefix("coordination:")?;
+        let (reason, _summary) = remainder.split_once(':')?;
+        Some(reason)
+    }
+
+    fn extract_tagged_context_line(prompt: &str, key: &str) -> Option<String> {
+        let prefix = format!("{key}: ");
+        prompt.lines().find_map(|line| {
+            line.strip_prefix(&prefix)
+                .map(|value| value.trim().to_string())
+        })
+    }
+
+    fn hollywood_message_semantic_assessment(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+    ) -> HollywoodSemanticAssessment {
+        use codex_app_server_protocol::HollywoodMessageKind;
+        use codex_app_server_protocol::HollywoodResponsePolicy;
+
+        let sender = message
+            .notification_message
+            .sender_id
+            .as_deref()
+            .unwrap_or("unknown");
+        let room = message.notification_message.room.as_str();
+        let normalized_body = Self::normalize_hollywood_body(&message.notification_message.body);
+        let idle_directive = Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "stay idle",
+                "stays idle",
+                "remain idle",
+                "remaining idle",
+                "stay unassigned",
+                "remain unassigned",
+                "no lane",
+                "no clean lane",
+                "no lane for you",
+                "no lane at present",
+                "no scope claimed",
+                "scope remains unclaimed",
+                "scope stays unclaimed",
+                "unless a narrow lane appears",
+                "unless a lane opens",
+                "exact scope if that changes",
+            ],
+        );
+        let unclaimed_scope_note = Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "no path claimed",
+                "no paths claimed",
+                "no scope claimed",
+                "scope remains unclaimed",
+                "scope stays unclaimed",
+            ],
+        );
+        let request_cue = Self::hollywood_message_has_request_cue(
+            &normalized_body,
+            &message.notification_message.body,
+        );
+        let delivery_direct = message.notification_message.recipient_id.is_some()
+            || message.notification_message.message_kind == HollywoodMessageKind::Direct;
+        let directish = delivery_direct || (message.mentioned && request_cue);
+
+        let kind = if Self::hollywood_message_is_ack_only(message) {
+            HollywoodSemanticKind::Ack
+        } else if Self::hollywood_message_is_settled_status_update(
+            &normalized_body,
+            message,
+            request_cue,
+        ) {
+            HollywoodSemanticKind::Progress
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &["online", "available", "checking in", "here and available"],
+        ) && Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "unassigned",
+                "currently unassigned",
+                "currently available",
+                "no paths claimed yet",
+                "no path claimed yet",
+            ],
+        ) {
+            HollywoodSemanticKind::Presence
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "review request",
+                "please review",
+                "can you review",
+                "needs review",
+                "review this",
+            ],
+        ) {
+            HollywoodSemanticKind::ReviewRequest
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "handoff",
+                "hand off",
+                "take over",
+                "passing to",
+                "your turn",
+            ],
+        ) {
+            HollywoodSemanticKind::Handoff
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "unblocked",
+                "unblock",
+                "lane open",
+                "ready now",
+                "clear now",
+                "free now",
+            ],
+        ) {
+            HollywoodSemanticKind::Unblock
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "blocked",
+                "waiting on",
+                "need help",
+                "dependency",
+                "stuck on",
+            ],
+        ) {
+            HollywoodSemanticKind::Blocker
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &["done", "completed", "complete", "finished", "landed"],
+        ) {
+            HollywoodSemanticKind::Completion
+        } else if !directish
+            && Self::hollywood_body_contains_any(
+                &normalized_body,
+                &[
+                    "assigned read only scope",
+                    "taking a read only proof slice",
+                    "taking a read only discovery slice",
+                    "taking a read only scope",
+                ],
+            )
+        {
+            HollywoodSemanticKind::Progress
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "assigned",
+                "please take",
+                "take this",
+                "claim this",
+                "can you take",
+                "take the task",
+            ],
+        ) {
+            HollywoodSemanticKind::Assignment
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                " owns ",
+                " owner ",
+                "claimed",
+                "claiming",
+                "ownership",
+                "taking ownership",
+                "releasing",
+                "released",
+                "yielding",
+                "yielded",
+            ],
+        ) && !unclaimed_scope_note
+        {
+            HollywoodSemanticKind::ScopeUpdate
+        } else if idle_directive {
+            HollywoodSemanticKind::IdleDirective
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &[
+                "still",
+                "working on",
+                "investigating",
+                "looking into",
+                "continuing",
+                "no change",
+                "read only",
+                "read-only",
+                "no edits",
+                "proof slice",
+                "discovery slice",
+                "evidence only",
+                "verifying",
+                "tracing",
+                "checking",
+            ],
+        ) {
+            HollywoodSemanticKind::Progress
+        } else if Self::hollywood_body_contains_any(
+            &normalized_body,
+            &["online", "available", "checking in", "here and available"],
+        ) {
+            HollywoodSemanticKind::Presence
+        } else if directish {
+            HollywoodSemanticKind::DirectRequest
+        } else {
+            HollywoodSemanticKind::Ambient
+        };
+
+        let requires_response = matches!(
+            message.notification_message.response_policy,
+            HollywoodResponsePolicy::Required
+        ) || ((delivery_direct || message.mentioned)
+            && matches!(
+                kind,
+                HollywoodSemanticKind::DirectRequest
+                    | HollywoodSemanticKind::Assignment
+                    | HollywoodSemanticKind::ReviewRequest
+                    | HollywoodSemanticKind::Handoff
+            ));
+
+        let wakeworthy = requires_response
+            || matches!(
+                kind,
+                HollywoodSemanticKind::DirectRequest
+                    | HollywoodSemanticKind::Assignment
+                    | HollywoodSemanticKind::ScopeUpdate
+                    | HollywoodSemanticKind::ReviewRequest
+                    | HollywoodSemanticKind::Handoff
+                    | HollywoodSemanticKind::Blocker
+                    | HollywoodSemanticKind::Unblock
+            );
+        let wake_reason = if requires_response {
+            "direct_obligation"
+        } else if wakeworthy {
+            "semantic_delta"
+        } else {
+            "ambient_update"
+        };
+
+        let summary = match kind {
+            HollywoodSemanticKind::Ack => {
+                format!("`{sender}` sent an acknowledgment in `{room}` with no new action.")
+            }
+            HollywoodSemanticKind::Presence => {
+                format!("`{sender}` posted a presence update in `{room}`.")
+            }
+            HollywoodSemanticKind::Progress => {
+                format!("`{sender}` posted a progress update in `{room}`.")
+            }
+            HollywoodSemanticKind::DirectRequest => {
+                format!("`{sender}` directly asked for a concrete response in `{room}`.")
+            }
+            HollywoodSemanticKind::Assignment => {
+                format!("`{sender}` offered or assigned work in `{room}`.")
+            }
+            HollywoodSemanticKind::ScopeUpdate => {
+                format!("`{sender}` updated ownership or scope in `{room}`.")
+            }
+            HollywoodSemanticKind::ReviewRequest => {
+                format!("`{sender}` requested review coordination in `{room}`.")
+            }
+            HollywoodSemanticKind::Handoff => {
+                format!("`{sender}` proposed a handoff in `{room}`.")
+            }
+            HollywoodSemanticKind::Blocker => {
+                format!("`{sender}` reported a blocker in `{room}`.")
+            }
+            HollywoodSemanticKind::Unblock => {
+                format!("`{sender}` reported that a dependency or lane is unblocked in `{room}`.")
+            }
+            HollywoodSemanticKind::Completion => {
+                format!("`{sender}` reported a completion update in `{room}`.")
+            }
+            HollywoodSemanticKind::IdleDirective => {
+                format!("`{sender}` clarified that no concrete lane is available in `{room}`.")
+            }
+            HollywoodSemanticKind::Ambient => {
+                format!("`{sender}` posted ambient room chatter in `{room}`.")
+            }
+        };
+
+        let mut facts = vec![format!("sender `{sender}` in room `{room}`")];
+        if message.mentioned {
+            facts.push("you were directly mentioned".to_string());
+        }
+        match message.notification_message.message_kind {
+            HollywoodMessageKind::Broadcast => {
+                facts.push("message was an explicit broadcast".to_string())
+            }
+            HollywoodMessageKind::Direct => {
+                facts.push("message was delivered as direct".to_string())
+            }
+            HollywoodMessageKind::Ambient => {}
+        }
+        if requires_response {
+            facts.push("the sender expects an explicit response or decision".to_string());
+        } else if wakeworthy {
+            facts.push(
+                "this is a coordination delta; reply only if it materially changes your owned work"
+                    .to_string(),
+            );
+        }
+
+        let suggested_actions = match kind {
+            HollywoodSemanticKind::DirectRequest => vec![
+                "reply directly or ask for clarification if you will engage".to_string(),
+                "claim exact scope before editing".to_string(),
+            ],
+            HollywoodSemanticKind::Assignment => vec![
+                "accept only if you can actually take the work".to_string(),
+                "claim exact scope before editing".to_string(),
+                "if the lane is unclear, ask for a narrower handoff".to_string(),
+            ],
+            HollywoodSemanticKind::ScopeUpdate => vec![
+                "check whether this changes your available lane or overlaps your owned paths"
+                    .to_string(),
+                "stay silent if there is still no clean lane".to_string(),
+            ],
+            HollywoodSemanticKind::ReviewRequest => vec![
+                "reply only if you are taking the review".to_string(),
+                "keep ownership narrow while reviewing".to_string(),
+            ],
+            HollywoodSemanticKind::Handoff => vec![
+                "confirm only if you are taking the handoff".to_string(),
+                "claim the exact replacement scope before editing".to_string(),
+            ],
+            HollywoodSemanticKind::Blocker => vec![
+                "check whether your work is blocked or whether you can materially help unblock"
+                    .to_string(),
+                "avoid routine acknowledgments".to_string(),
+            ],
+            HollywoodSemanticKind::Unblock => vec![
+                "resume blocked work if this clears your dependency".to_string(),
+                "stay silent if nothing on your side changes".to_string(),
+            ],
+            HollywoodSemanticKind::Completion => vec![
+                "update your plan only if this unblocks or supersedes your work".to_string(),
+                "stay silent if it does not affect your lane".to_string(),
+            ],
+            HollywoodSemanticKind::IdleDirective => vec![
+                "stay silent unless a concrete lane or explicit request appears".to_string(),
+                "do not send a routine idle acknowledgment".to_string(),
+            ],
+            HollywoodSemanticKind::Ack
+            | HollywoodSemanticKind::Presence
+            | HollywoodSemanticKind::Progress
+            | HollywoodSemanticKind::Ambient => {
+                vec!["keep this internal unless it materially changes your work".to_string()]
+            }
+        };
+
+        HollywoodSemanticAssessment {
+            kind,
+            wakeworthy,
+            requires_response,
+            wake_reason,
+            summary,
+            facts,
+            suggested_actions,
+            stay_silent_if_no_actionable_delta: !requires_response,
+        }
+    }
+
+    fn normalize_hollywood_body(body: &str) -> String {
+        let mut normalized = String::with_capacity(body.len() + 2);
+        normalized.push(' ');
+        let mut last_was_space = true;
+        for ch in body.chars() {
+            if ch.is_ascii_alphanumeric() {
+                normalized.push(ch.to_ascii_lowercase());
+                last_was_space = false;
+            } else {
+                if !last_was_space {
+                    normalized.push(' ');
+                    last_was_space = true;
+                }
+            }
+        }
+        if !last_was_space {
+            normalized.push(' ');
+        }
+        normalized
+    }
+
+    fn hollywood_body_contains_any(body: &str, needles: &[&str]) -> bool {
+        needles.iter().any(|needle| {
+            let normalized_needle = Self::normalize_hollywood_body(needle);
+            normalized_needle.trim().len() > 0 && body.contains(&normalized_needle)
+        })
+    }
+
+    fn hollywood_message_has_request_cue(normalized_body: &str, raw_body: &str) -> bool {
+        raw_body.contains('?')
+            || Self::hollywood_body_contains_any(
+                normalized_body,
+                &[
+                    "can you",
+                    "could you",
+                    "would you",
+                    "will you",
+                    "please",
+                    "let me know",
+                    "reply",
+                    "respond",
+                    "confirm",
+                    "send me",
+                    "tell me",
+                ],
+            )
+    }
+
+    fn hollywood_input_synthetic_brief(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+    ) -> CoreHollywoodSyntheticBrief {
+        let assessment = Self::hollywood_message_semantic_assessment(message);
+        CoreHollywoodSyntheticBrief {
+            wake_reason: Some(assessment.wake_reason.to_string()),
+            semantic_kind: Some(assessment.kind.as_str().to_string()),
+            summary: Some(assessment.summary),
+            facts: assessment.facts,
+            suggested_actions: assessment.suggested_actions,
+            stay_silent_if_no_actionable_delta: assessment.stay_silent_if_no_actionable_delta,
+        }
+    }
+
+    fn aggregate_hollywood_pending_wakes(
+        wakes: &[crate::hollywood::HollywoodPendingSemanticWake],
+    ) -> CoreHollywoodSyntheticBrief {
+        let primary = wakes.last().map(|wake| &wake.brief);
+        let mut facts = Vec::new();
+        let mut suggested_actions = Vec::new();
+        let mut seen_actions = HashSet::new();
+        for wake in wakes {
+            if let Some(summary) = wake.brief.summary.as_deref() {
+                facts.push(summary.to_string());
+            }
+            for action in &wake.brief.suggested_actions {
+                if seen_actions.insert(action.clone()) {
+                    suggested_actions.push(action.clone());
+                }
+            }
+        }
+        let summary = if wakes.len() == 1 {
+            primary
+                .and_then(|brief| brief.summary.clone())
+                .unwrap_or_else(|| {
+                    "A deferred Hollywood coordination delta may affect your owned work."
+                        .to_string()
+                })
+        } else {
+            format!(
+                "{} deferred Hollywood coordination deltas arrived while you were busy.",
+                wakes.len()
+            )
+        };
+
+        CoreHollywoodSyntheticBrief {
+            wake_reason: Some("deferred_semantic_delta".to_string()),
+            semantic_kind: Some(if wakes.len() == 1 {
+                primary
+                    .and_then(|brief| brief.semantic_kind.clone())
+                    .unwrap_or_else(|| "ambient".to_string())
+            } else {
+                "multi_delta".to_string()
+            }),
+            summary: Some(summary),
+            facts,
+            suggested_actions,
+            stay_silent_if_no_actionable_delta: true,
+        }
+    }
+
     fn hollywood_input_delivery_metadata(
         message: &crate::hollywood::HollywoodClassifiedMessage,
     ) -> (&'static str, bool) {
         use codex_app_server_protocol::HollywoodMessageAttention;
-        use codex_app_server_protocol::HollywoodResponsePolicy;
 
-        match message.notification_message.response_policy {
-            HollywoodResponsePolicy::Required => return ("obligation", true),
-            HollywoodResponsePolicy::None => return ("attention", false),
-            HollywoodResponsePolicy::Optional => {}
+        let assessment = Self::hollywood_message_semantic_assessment(message);
+        if assessment.requires_response {
+            ("obligation", true)
+        } else if assessment.wakeworthy
+            || matches!(
+                message.attention,
+                HollywoodMessageAttention::Focused
+                    | HollywoodMessageAttention::Broadcast
+                    | HollywoodMessageAttention::Broad
+            )
+        {
+            ("attention", false)
+        } else {
+            ("ambient", false)
         }
-
-        if Self::hollywood_message_is_ack_only(message) {
-            return ("attention", false);
-        }
-
-        if message.mentioned {
-            return ("obligation", true);
-        }
-
-        if matches!(
-            message.attention,
-            HollywoodMessageAttention::Focused | HollywoodMessageAttention::Broad
-        ) {
-            return ("attention", false);
-        }
-
-        ("ambient", false)
     }
 
     fn hollywood_message_needs_wake(
         message: &crate::hollywood::HollywoodClassifiedMessage,
     ) -> bool {
-        use codex_app_server_protocol::HollywoodResponsePolicy;
+        Self::hollywood_message_semantic_assessment(message).wakeworthy
+    }
 
-        match message.notification_message.response_policy {
-            HollywoodResponsePolicy::Required => true,
-            HollywoodResponsePolicy::None => false,
-            HollywoodResponsePolicy::Optional => !Self::hollywood_message_is_ack_only(message),
+    async fn hollywood_message_needs_wake_for_thread(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+        thread_id: ThreadId,
+        state_db: Option<&Arc<codex_state::StateRuntime>>,
+    ) -> bool {
+        let default = Self::hollywood_message_needs_wake(message);
+        if let Some(relevant) =
+            Self::coordination_projection_wake_relevance(message, thread_id, state_db).await
+        {
+            return relevant;
+        }
+
+        if !default {
+            return false;
+        }
+
+        true
+    }
+
+    async fn coordination_projection_wake_relevance(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+        thread_id: ThreadId,
+        state_db: Option<&Arc<codex_state::StateRuntime>>,
+    ) -> Option<bool> {
+        use codex_app_server_protocol::HollywoodMessageKind;
+
+        if message.notification_message.message_kind != HollywoodMessageKind::Broadcast {
+            return None;
+        }
+
+        let task_id = Self::parse_coordination_projection_task_id(
+            message.notification_message.body.as_str(),
+        )?;
+        let state_db = state_db?;
+        let task = state_db.get_coordination_task(&task_id).await.ok()??;
+        if task.creator_thread_id != thread_id.to_string() {
+            return Some(false);
+        }
+
+        let action =
+            Self::parse_coordination_projection_action(message.notification_message.body.as_str());
+        Some(!matches!(action.as_deref(), Some("accept")))
+    }
+
+    fn parse_coordination_projection_task_id(body: &str) -> Option<String> {
+        let remainder = body.strip_prefix("Coordination update from ")?;
+        let summary_start = remainder.find('`')?;
+        let remainder = &remainder[summary_start + 1..];
+        let summary_end = remainder.find('`')?;
+        let remainder = &remainder[summary_end + 1..];
+        let task_id_start = remainder.find('[')?;
+        let remainder = &remainder[task_id_start + 1..];
+        let task_id_end = remainder.find(']')?;
+        let task_id = remainder[..task_id_end].trim();
+        if task_id.is_empty() {
+            None
+        } else {
+            Some(task_id.to_string())
+        }
+    }
+
+    fn parse_coordination_projection_action(body: &str) -> Option<String> {
+        let remainder = body.strip_prefix("Coordination update from ")?;
+        let (_actor, remainder) = remainder.split_once(": ")?;
+        let action = remainder.split_whitespace().next()?;
+        if action.is_empty() {
+            None
+        } else {
+            Some(action.to_ascii_lowercase())
         }
     }
 
@@ -2184,6 +2856,7 @@ impl CodexMessageProcessor {
             "understood",
             "matched",
             "agreed",
+            "copy",
         ];
         let acknowledgement_phrases = [
             "no action needed",
@@ -2212,6 +2885,80 @@ impl CodexMessageProcessor {
                 || acknowledgement_phrases
                     .iter()
                     .any(|phrase| normalized_body.contains(phrase)))
+    }
+
+    fn hollywood_body_has_actionable_handoff(body: &str) -> bool {
+        Self::hollywood_body_contains_any(
+            body,
+            &[
+                "clean handoff now",
+                "lane is yours now",
+                "your turn",
+                "passing to",
+                "pass this to",
+                "take over",
+                "please take",
+                "can you take",
+                "if you want an independent confirmation run this is the state that counts",
+                "this is the state that counts",
+            ],
+        )
+    }
+
+    fn hollywood_message_is_settled_status_update(
+        normalized_body: &str,
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+        request_cue: bool,
+    ) -> bool {
+        use codex_app_server_protocol::HollywoodResponsePolicy;
+
+        if matches!(
+            message.notification_message.response_policy,
+            HollywoodResponsePolicy::Required
+        ) || request_cue
+        {
+            return false;
+        }
+
+        if Self::hollywood_body_has_actionable_handoff(normalized_body) {
+            return false;
+        }
+
+        Self::hollywood_body_contains_any(
+            normalized_body,
+            &[
+                "wait for your ready to verify handoff",
+                "wait for either your ready to verify handoff",
+                "staying queued",
+                "staying queued on",
+                "queued on read only verification",
+                "holding final verification behind",
+                "taking the handoff now",
+                "treat that result as provisional",
+                "provisional signal only",
+                "running the independent",
+                "will report the result back",
+                "not taking the verification handoff",
+                "not taking any handoff",
+                "remain read only support",
+                "support lane stays clear",
+                "no pending support work",
+                "no follow on work",
+                "no blocker from my lane",
+                "no blockers remain",
+                "no pending edits",
+                "no further edits planned",
+                "tree remains frozen",
+                "room can stand down",
+                "lane is closed",
+                "app is done",
+                "won t rerun anything yet",
+                "holding read only",
+                "hold off on any rerun",
+                "owns the counted independent confirmation run",
+                "verification run that counts",
+            ],
+        )
     }
 
     fn tester_execution_overrides(
@@ -8810,14 +9557,24 @@ impl CodexMessageProcessor {
             wake_rooms: params.wake_rooms,
             attention: params.attention.unwrap_or_default(),
         };
-        self.attach_hollywood_runtime(
-            thread_id,
-            &thread,
-            request_id.connection_id,
-            hollywood_config.clone(),
-            "explicit_attach",
-        )
-        .await;
+        if let Err(error) = self
+            .attach_hollywood_runtime(
+                thread_id,
+                &thread,
+                request_id.connection_id,
+                hollywood_config.clone(),
+                "explicit_attach",
+            )
+            .await
+            .map_err(|message| JSONRPCErrorError {
+                code: INTERNAL_ERROR_CODE,
+                message,
+                data: None,
+            })
+        {
+            self.outgoing.send_error(request_id, error).await;
+            return;
+        }
         if let Err(error) = self
             .persist_thread_hollywood_metadata(thread_id, Some(&thread), Some(&hollywood_config))
             .await
@@ -8835,7 +9592,7 @@ impl CodexMessageProcessor {
         request_id: ConnectionRequestId,
         params: ThreadHollywoodDetachParams,
     ) {
-        let (thread_id, _) = match self.load_thread(&params.thread_id).await {
+        let (thread_id, thread) = match self.load_thread(&params.thread_id).await {
             Ok(v) => v,
             Err(error) => {
                 self.outgoing.send_error(request_id, error).await;
@@ -8844,11 +9601,11 @@ impl CodexMessageProcessor {
         };
         let thread_state = self.thread_state_manager.thread_state(thread_id).await;
         thread_state.lock().await.hollywood.detach();
+        thread.set_hollywood_session_meta(None).await;
         tracing::info!(conversation_id = %thread_id, "Hollywood detached for thread");
-        if let Some(thread) = self.thread_manager.get_thread(thread_id).await.ok()
-            && let Err(error) = self
-                .persist_thread_hollywood_metadata(thread_id, Some(&thread), None)
-                .await
+        if let Err(error) = self
+            .persist_thread_hollywood_metadata(thread_id, Some(&thread), None)
+            .await
         {
             self.outgoing.send_error(request_id, error).await;
             return;
@@ -8887,6 +9644,9 @@ impl CodexMessageProcessor {
             .await;
             return;
         };
+        thread
+            .set_hollywood_session_meta(Some((&persisted).into()))
+            .await;
         if let Err(error) = self
             .persist_thread_hollywood_metadata(thread_id, Some(&thread), Some(&persisted))
             .await
@@ -8988,9 +9748,9 @@ impl CodexMessageProcessor {
         connection_id: ConnectionId,
         hollywood_config: HollywoodConfig,
         source: &str,
-    ) {
+    ) -> Result<(), String> {
         let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-        {
+        let runtime_state = {
             let mut thread_state = thread_state.lock().await;
             let session_kind = match source {
                 "resume_request" | "persisted_resume_restore" | "legacy_resume_migration" => {
@@ -9007,7 +9767,11 @@ impl CodexMessageProcessor {
             thread_state
                 .hollywood
                 .attach(hollywood_config.clone(), session_kind, resumed_from);
-        }
+            thread_state.hollywood.clone()
+        };
+        thread
+            .set_hollywood_session_meta(Some((&hollywood_config).into()))
+            .await;
         tracing::info!(
             conversation_id = %thread_id,
             room = hollywood_config.room,
@@ -9018,6 +9782,44 @@ impl CodexMessageProcessor {
             source,
             "Hollywood attached for thread"
         );
+        let status = self
+            .thread_watch_manager
+            .loaded_status_for_thread(&thread_id.to_string())
+            .await;
+        let status_name = hollywood_thread_status_name(&status);
+        let hollywood_client = reqwest::Client::new();
+        let request = build_registry_upsert_request(
+            thread_id,
+            thread.as_ref(),
+            &hollywood_config,
+            &runtime_state,
+            &status,
+        )
+        .await;
+        match upsert_hollywood_registry(&hollywood_client, &hollywood_config, &request).await {
+            Ok(()) => {
+                thread_state
+                    .lock()
+                    .await
+                    .hollywood
+                    .note_registry_synced(Instant::now(), status_name);
+            }
+            Err(err) => {
+                if source == "explicit_attach" {
+                    thread_state.lock().await.hollywood.detach();
+                    thread.set_hollywood_session_meta(None).await;
+                    return Err(format!(
+                        "failed to attach Hollywood session `{}`: {err}",
+                        hollywood_config.room
+                    ));
+                }
+                tracing::debug!(
+                    conversation_id = %thread_id,
+                    room = hollywood_config.room,
+                    "failed to sync Hollywood registry during attach: {err}"
+                );
+            }
+        }
         if source == "explicit_attach" {
             let thread_name = thread.config_snapshot().await.thread_name;
             thread
@@ -9041,6 +9843,7 @@ impl CodexMessageProcessor {
             connection_id,
             "hollywood-thread",
         );
+        Ok(())
     }
 
     async fn persist_thread_hollywood_metadata(
@@ -9165,14 +9968,18 @@ impl CodexMessageProcessor {
             );
         }
 
-        self.attach_hollywood_runtime(
-            thread_id,
-            thread,
-            connection_id,
-            hollywood_config,
-            restore_source,
-        )
-        .await;
+        if let Err(err) = self
+            .attach_hollywood_runtime(
+                thread_id,
+                thread,
+                connection_id,
+                hollywood_config,
+                restore_source,
+            )
+            .await
+        {
+            warn!("failed to restore Hollywood runtime for thread {thread_id}: {err}");
+        }
     }
 
     async fn prepare_thread_for_archive(&self, thread_id: ThreadId) {
@@ -11508,7 +12315,7 @@ impl CodexMessageProcessor {
                             let state = thread_state.lock().await;
                             matches!(status, ThreadStatus::Idle)
                                 && state.active_turn_snapshot().is_none()
-                                && state.hollywood.should_start_startup_turn()
+                                && state.hollywood.should_start_startup_turn(now)
                         };
                         if should_start_startup_turn {
                             let startup_assessment = if let Some(state_db) = conversation.state_db()
@@ -11533,6 +12340,28 @@ impl CodexMessageProcessor {
                                 &config,
                                 conversation.state_db().is_some(),
                             );
+                            let announce_presence = startup_announces_presence(&config);
+                            let startup_summary = if announce_presence {
+                                "You just attached to Hollywood and need to establish presence, scope, and recent room state before substantive work."
+                            } else {
+                                "You just attached to Hollywood in focused mode and need to establish recent room state before substantive work."
+                            };
+                            let mut suggested_actions = vec![
+                                "scan recent room traffic for ownership and tasking".to_string(),
+                            ];
+                            if announce_presence {
+                                suggested_actions.insert(0, "announce presence once".to_string());
+                                suggested_actions.push(
+                                    "if you remain unassigned after startup, stay available and wait for explicit tasking instead of asking an open-ended question".to_string(),
+                                );
+                            } else {
+                                suggested_actions.push(
+                                    "if you remain unassigned after startup, stay silent and wait for explicit tasking instead of sending a readiness update".to_string(),
+                                );
+                                suggested_actions.push(
+                                    "if you already own active scope after reconnect or restart, send one concise scope re-establishment update".to_string(),
+                                );
+                            }
                             if let Some(notice) = startup_assessment.startup_notice.as_ref() {
                                 startup_message.push_str("\n\n");
                                 startup_message.push_str(notice);
@@ -11552,8 +12381,18 @@ impl CodexMessageProcessor {
                                         mentions: Vec::new(),
                                         attention: Some("focused".to_string()),
                                         message_kind: Some("direct".to_string()),
-                                        obligation: Some("obligation".to_string()),
-                                        requires_response: true,
+                                        obligation: Some("attention".to_string()),
+                                        synthetic_brief: Some(CoreHollywoodSyntheticBrief {
+                                            wake_reason: Some("startup".to_string()),
+                                            semantic_kind: Some("startup_protocol".to_string()),
+                                            summary: Some(startup_summary.to_string()),
+                                            facts: vec![
+                                                format!("primary room is `{}`", config.room),
+                                            ],
+                                            suggested_actions,
+                                            stay_silent_if_no_actionable_delta: true,
+                                        }),
+                                        requires_response: false,
                                     },
                                 })
                                 .await;
@@ -11584,6 +12423,19 @@ impl CodexMessageProcessor {
                                                     attention: Some("focused".to_string()),
                                                     message_kind: Some("direct".to_string()),
                                                     obligation: Some("attention".to_string()),
+                                                    synthetic_brief: Some(CoreHollywoodSyntheticBrief {
+                                                        wake_reason: Some("rolling_deploy_notice".to_string()),
+                                                        semantic_kind: Some("startup_notice".to_string()),
+                                                        summary: Some(
+                                                            "A rolling deploy or reconnect notice may affect your prior coordination state."
+                                                                .to_string(),
+                                                        ),
+                                                        facts: Vec::new(),
+                                                        suggested_actions: vec![
+                                                            "re-check your current ownership and open obligations".to_string(),
+                                                        ],
+                                                        stay_silent_if_no_actionable_delta: true,
+                                                    }),
                                                     requires_response: true,
                                                 },
                                             })
@@ -11631,6 +12483,43 @@ impl CodexMessageProcessor {
                             .await
                             {
                                 Ok(result) => {
+                                    if let Some(room_state) = result.room_state.as_ref()
+                                        && room_state.contract_version
+                                            != HOLLYWOOD_ROOM_CONTRACT_VERSION
+                                    {
+                                        thread_state.lock().await.hollywood.note_room_snapshot(
+                                            &room,
+                                            Some(room_state),
+                                            result.last_id,
+                                        );
+                                        tracing::warn!(
+                                            conversation_id = %conversation_id,
+                                            room = room,
+                                            contract_version = room_state.contract_version,
+                                            expected_contract_version = HOLLYWOOD_ROOM_CONTRACT_VERSION,
+                                            "Hollywood room contract version mismatch; skipping poll batch"
+                                        );
+                                        continue;
+                                    }
+                                    let room_state_changed = {
+                                        let mut state = thread_state.lock().await;
+                                        state.hollywood.note_room_snapshot(
+                                            &room,
+                                            result.room_state.as_ref(),
+                                            result.last_id,
+                                        )
+                                    };
+                                    if room_state_changed {
+                                        let snapshot = result.room_state.as_ref();
+                                        tracing::warn!(
+                                            conversation_id = %conversation_id,
+                                            room = room,
+                                            state_version = ?snapshot.map(|value| value.state_version),
+                                            contract_version = ?snapshot.map(|value| value.contract_version.as_str()),
+                                            "Hollywood room state version changed; skipping stale poll batch"
+                                        );
+                                        continue;
+                                    }
                                     let classified_message_count = result.messages.len();
                                     let focused_message_count = result
                                         .messages
@@ -11720,22 +12609,16 @@ impl CodexMessageProcessor {
                             subscribed_connection_ids.clone(),
                             conversation_id,
                         );
+                        let state_db = conversation.state_db();
                         let mut submitted_focused_input = false;
                         for message in merged_messages {
-                            let wakeworthy_message = Self::hollywood_message_needs_wake(&message);
-                            let actionable_attention = matches!(
-                                message.attention,
-                                codex_app_server_protocol::HollywoodMessageAttention::Focused
-                                    | codex_app_server_protocol::HollywoodMessageAttention::Broadcast
-                            ) && wakeworthy_message;
-                            let track_room_activity = actionable_attention && !message.self_authored;
-                            if track_room_activity {
-                                thread_state
-                                    .lock()
-                                    .await
-                                    .hollywood
-                                    .note_message_activity(now);
-                            }
+                            let wakeworthy_message = Self::hollywood_message_needs_wake_for_thread(
+                                &message,
+                                conversation_id,
+                                state_db.as_ref(),
+                            )
+                            .await;
+                            let synthetic_brief = Self::hollywood_input_synthetic_brief(&message);
                             let message_is_focused = message.attention
                                 == codex_app_server_protocol::HollywoodMessageAttention::Focused;
                             let message_is_broadcast = message.attention
@@ -11778,6 +12661,7 @@ impl CodexMessageProcessor {
                                                 codex_app_server_protocol::HollywoodMessageKind::Direct => "direct",
                                             }.to_string()),
                                             obligation: Some(obligation.to_string()),
+                                            synthetic_brief: Some(synthetic_brief.clone()),
                                             requires_response,
                                         },
                                     })
@@ -11798,6 +12682,19 @@ impl CodexMessageProcessor {
                                         );
                                     }
                                 }
+                            } else if wakeworthy_message && !message.self_authored {
+                                thread_state
+                                    .lock()
+                                    .await
+                                    .hollywood
+                                    .queue_semantic_wake(crate::hollywood::HollywoodPendingSemanticWake {
+                                        dedupe_key: format!(
+                                            "message:{}",
+                                            message.notification_message.id
+                                        ),
+                                        room: message.notification_message.room.clone(),
+                                        brief: synthetic_brief,
+                                    });
                             }
                             if !subscribed_connection_ids.is_empty() {
                                 thread_outgoing
@@ -11815,42 +12712,42 @@ impl CodexMessageProcessor {
                         }
 
                         if !submitted_focused_input {
-                            let should_start_autonomous_turn = {
-                                let state = thread_state.lock().await;
-                                matches!(status, ThreadStatus::Idle)
+                            let pending_wakes = {
+                                let mut state = thread_state.lock().await;
+                                if matches!(status, ThreadStatus::Idle)
                                     && state.active_turn_snapshot().is_none()
                                     && state.hollywood.should_start_autonomous_turn(now)
+                                {
+                                    state.hollywood.mark_autonomous_turn_pending();
+                                    Some(state.hollywood.take_pending_semantic_wakes())
+                                } else {
+                                    None
+                                }
                             };
 
-                            if should_start_autonomous_turn {
-                                {
-                                    thread_state
-                                        .lock()
-                                        .await
-                                        .hollywood
-                                        .mark_autonomous_turn_pending();
-                                }
+                            if let Some(pending_wakes) = pending_wakes {
+                                let synthetic_brief =
+                                    Self::aggregate_hollywood_pending_wakes(&pending_wakes);
                                 let submit_result = conversation
                                     .submit(Op::HollywoodInput {
                                         message: CoreHollywoodInputMessage {
                                             message_id: 0,
                                             room: config.room.clone(),
                                             sender_id: "hollywood-system".to_string(),
-                                            body: "Autonomous Hollywood follow-up: room activity happened after your last turn started. Continue collaborating through Hollywood if useful, use @mentions when you need another agent's attention, and stop once no further coordination is needed. Human input can interrupt you at any time.".to_string(),
+                                            body: "Autonomous Hollywood follow-up: deferred semantic coordination updates arrived while you were busy. Use the synthetic brief to decide whether any concrete room reply, claim, handoff, or silence is appropriate.".to_string(),
                                             mentions: Vec::new(),
                                             attention: Some("focused".to_string()),
                                             message_kind: Some("direct".to_string()),
                                             obligation: Some("attention".to_string()),
+                                            synthetic_brief: Some(synthetic_brief),
                                             requires_response: false,
                                         },
                                     })
                                     .await;
                                 if let Err(err) = submit_result {
-                                    thread_state
-                                        .lock()
-                                        .await
-                                        .hollywood
-                                        .clear_autonomous_turn_pending();
+                                    let mut state = thread_state.lock().await;
+                                    state.hollywood.restore_pending_semantic_wakes(pending_wakes);
+                                    state.hollywood.clear_autonomous_turn_pending();
                                     tracing::debug!(
                                         conversation_id = %conversation_id,
                                         "failed to submit autonomous Hollywood follow-up to core: {err}"
@@ -13588,6 +14485,30 @@ pub(crate) async fn read_rollout_items_from_rollout(
     Ok(items)
 }
 
+async fn rollout_has_in_progress_turns(path: &Path) -> std::io::Result<bool> {
+    let items = read_rollout_items_from_rollout(path).await?;
+    Ok(rollout_contains_in_progress_turns(&items))
+}
+
+fn rollout_contains_in_progress_turns(items: &[RolloutItem]) -> bool {
+    build_turns_from_rollout_items(items)
+        .iter()
+        .any(|turn| matches!(turn.status, TurnStatus::InProgress))
+}
+
+fn merge_background_thread_status(
+    loaded_status: ThreadStatus,
+    live_agent_status: Option<&AgentStatus>,
+) -> ThreadStatus {
+    if matches!(live_agent_status, Some(AgentStatus::Running)) {
+        return ThreadStatus::Active {
+            active_flags: Vec::new(),
+        };
+    }
+
+    resolve_thread_status(loaded_status, /*has_in_progress_turn*/ false)
+}
+
 fn extract_conversation_summary(
     path: PathBuf,
     head: &[serde_json::Value],
@@ -15123,6 +16044,65 @@ mod tests {
     }
 
     #[test]
+    fn background_thread_status_prefers_live_running_turn() {
+        let status =
+            merge_background_thread_status(ThreadStatus::Idle, Some(&AgentStatus::Running));
+        assert!(matches!(status, ThreadStatus::Active { .. }));
+
+        let status =
+            merge_background_thread_status(ThreadStatus::SystemError, Some(&AgentStatus::Running));
+        assert!(matches!(status, ThreadStatus::Active { .. }));
+    }
+
+    #[test]
+    fn background_thread_status_preserves_final_cached_state_without_live_turn() {
+        assert_eq!(
+            merge_background_thread_status(ThreadStatus::SystemError, None),
+            ThreadStatus::SystemError
+        );
+        assert_eq!(
+            merge_background_thread_status(
+                ThreadStatus::Idle,
+                Some(&AgentStatus::Completed(Some("done".to_string())))
+            ),
+            ThreadStatus::Idle
+        );
+    }
+
+    #[test]
+    fn rollout_in_progress_turn_detection_requires_missing_completion() {
+        let in_progress_items = vec![RolloutItem::EventMsg(EventMsg::TurnStarted(
+            codex_protocol::protocol::TurnStartedEvent {
+                turn_id: "turn-1".to_string(),
+                started_at: None,
+                model_context_window: None,
+                collaboration_mode_kind: Default::default(),
+            },
+        ))];
+        assert!(rollout_contains_in_progress_turns(&in_progress_items));
+
+        let completed_items = vec![
+            RolloutItem::EventMsg(EventMsg::TurnStarted(
+                codex_protocol::protocol::TurnStartedEvent {
+                    turn_id: "turn-1".to_string(),
+                    started_at: None,
+                    model_context_window: None,
+                    collaboration_mode_kind: Default::default(),
+                },
+            )),
+            RolloutItem::EventMsg(EventMsg::TurnComplete(
+                codex_protocol::protocol::TurnCompleteEvent {
+                    turn_id: "turn-1".to_string(),
+                    last_agent_message: None,
+                    completed_at: None,
+                    duration_ms: None,
+                },
+            )),
+        ];
+        assert!(!rollout_contains_in_progress_turns(&completed_items));
+    }
+
+    #[test]
     fn plain_direct_hollywood_message_is_attention_not_obligation() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
@@ -15209,10 +16189,212 @@ mod tests {
     }
 
     #[test]
-    fn broadcast_hollywood_status_message_is_attention_not_obligation() {
+    fn mentioned_idle_directive_stays_internal_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 44,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "@chris stays idle unless a narrow lane appears.".to_string(),
+                created_at: "2026-04-23T00:00:00Z".to_string(),
+                mentions: vec!["chris".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("idle_directive"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("do not send a routine idle acknowledgment"))
+        );
+    }
+
+    #[test]
+    fn direct_idle_directive_stays_internal_without_wake() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
                 id: 45,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: Some("chris".to_string()),
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "No lane for you at present. Stay idle with no scope claimed; I'll send exact scope if that changes.".to_string(),
+                created_at: "2026-04-23T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("idle_directive"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn direct_handoff_wait_update_stays_progress_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 45,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("ray".to_string()),
+                recipient_id: Some("tony".to_string()),
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "Acknowledged. I already had one rerun in flight before your note, so I’ll treat that result as provisional only. I’ll wait for your ready-to-verify handoff before the verification run that counts.".to_string(),
+                created_at: "2026-04-24T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("progress"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn ready_to_verify_handoff_remains_an_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 46,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: Some("ray".to_string()),
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Ready-to-verify handoff: my local rerun is green on the current tree (`npm test -- --run` = 5/5 passing). No more edits planned. If you want an independent confirmation run, this is the state that counts.".to_string(),
+                created_at: "2026-04-24T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "obligation");
+        assert!(requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("handoff"));
+    }
+
+    #[test]
+    fn room_close_completion_broadcast_stays_internal_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("ray".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "Room close from ray: independent verification on the frozen workspace is green. `npm test -- --run` passed here with 5/5 tests passing, Tony reported no pending edits, and no blockers remain. The app is done; QA/shutdown lane is closed and the room can stand down.".to_string(),
+                created_at: "2026-04-24T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("progress"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn mentioned_question_hollywood_message_is_direct_request_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 46,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "@chris can you verify the room summary?".to_string(),
+                created_at: "2026-04-23T00:00:00Z".to_string(),
+                mentions: vec!["chris".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+
+        assert!(CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "obligation");
+        assert!(requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("direct_request"));
+    }
+
+    #[test]
+    fn broadcast_hollywood_status_message_is_attention_not_obligation() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
                 room: "ozzz".to_string(),
                 sender_id: Some("peer".to_string()),
                 recipient_id: None,
@@ -15238,7 +16420,7 @@ mod tests {
     fn explicit_required_response_policy_forces_obligation() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
-                id: 46,
+                id: 48,
                 room: "ozzz".to_string(),
                 sender_id: Some("peer".to_string()),
                 recipient_id: None,
@@ -15261,6 +16443,395 @@ mod tests {
         ));
         assert_eq!(obligation, "obligation");
         assert!(requires_response);
+    }
+
+    #[test]
+    fn progress_broadcast_no_longer_needs_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "ozzz".to_string(),
+                sender_id: Some("peer".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Still investigating the flaky browser test.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("progress"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn unassigned_presence_broadcast_stays_presence_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("chris".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "chris online in `/home/ai/Development/losangelex`; currently unassigned and available.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("presence"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn assigned_read_only_scope_stays_progress_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("james".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Assigned read-only scope: tracing current app-server primitives for how an external controller observes another loaded thread’s outputs and live events. No file edits.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Ambient,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("progress"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn presence_with_no_paths_claimed_yet_stays_presence_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "@room tony online in /home/ai/Development/losangelex, currently unassigned and available. No paths claimed yet.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("presence"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn read_only_proof_broadcast_stays_progress_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Taking a read-only proof slice for the local operator path: verifying exactly how an external controller can inject a real user turn into another loaded agent thread using current app-server primitives. Scope is evidence only across `codex-rs/app-server-protocol`, `codex-rs/app-server`, and any linked runtime surfaces; no edits.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("progress"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn scope_update_broadcast_needs_wake_but_brief_prefers_silence_without_delta() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 48,
+                room: "ozzz".to_string(),
+                sender_id: Some("ray".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Ray owns the browser lane; no clean lane for Duggs yet.".to_string(),
+                created_at: "2026-04-09T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("scope_update"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("stay silent"))
+        );
+    }
+
+    #[test]
+    fn parse_coordination_projection_task_id_extracts_primary_task_id() {
+        let body = "Coordination update from 019e0000-0000-7000-8000-000000000002: done `Review patch` [task-1] owner=019e0000-0000-7000-8000-000000000002 unblocked=Follow-up [task-2]";
+
+        assert_eq!(
+            CodexMessageProcessor::parse_coordination_projection_task_id(body),
+            Some("task-1".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn assigned_coordination_scheduled_wake_becomes_obsolete_after_accept() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000001").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000002").expect("owner id");
+
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-1".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Review,
+                summary: "Review patch".to_string(),
+                details: "Inspect the patch.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let scheduled_task = codex_state::ClaimedScheduledTask {
+            id: "scheduled-1".to_string(),
+            thread_id: owner.to_string(),
+            title: "coordination:assigned:Review patch".to_string(),
+            prompt: "<coordination_context>\nreason: assigned\ntask_id: task-1\n</coordination_context>\n\nReview patch".to_string(),
+            kind: codex_state::ScheduledTaskKind::Once,
+            scheduled_for: Utc::now(),
+            interval_seconds: None,
+            requires_response: true,
+        };
+
+        assert!(
+            !CodexMessageProcessor::coordination_scheduled_wake_is_obsolete(
+                &state_db,
+                &scheduled_task,
+            )
+            .await?
+        );
+
+        state_db
+            .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
+                task_id: "task-1".to_string(),
+                actor_thread_id: owner,
+                path_claims: Vec::new(),
+                lease_seconds: 600,
+                act_id: "act-accept".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        assert!(
+            CodexMessageProcessor::coordination_scheduled_wake_is_obsolete(
+                &state_db,
+                &scheduled_task,
+            )
+            .await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn coordination_broadcast_wakes_creator_but_not_unrelated_peer() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000011").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000012").expect("owner id");
+        let unrelated =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000013").expect("other id");
+
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-1".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Qa,
+                summary: "Verify award summary appears in Hollywood".to_string(),
+                details: "Check the room summary.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 4444,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some(owner.to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: format!(
+                    "Coordination update from {owner}: done `Verify award summary appears in Hollywood` [task-1] owner={owner}"
+                ),
+                created_at: "2026-04-23T18:48:22Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(
+            CodexMessageProcessor::hollywood_message_needs_wake_for_thread(
+                &message,
+                creator,
+                Some(&state_db),
+            )
+            .await
+        );
+        assert!(
+            !CodexMessageProcessor::hollywood_message_needs_wake_for_thread(
+                &message,
+                unrelated,
+                Some(&state_db),
+            )
+            .await
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn coordination_accept_broadcast_does_not_wake_creator() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000021").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000022").expect("owner id");
+
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-accept".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Qa,
+                summary: "Verify creator does not wake on accept".to_string(),
+                details: "Acceptance is expected and should not start a creator follow-up turn."
+                    .to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 5555,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some(owner.to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: format!(
+                    "Coordination update from {owner}: accept `Verify creator does not wake on accept` [task-accept] owner={owner}"
+                ),
+                created_at: "2026-04-23T19:31:58Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(
+            !CodexMessageProcessor::hollywood_message_needs_wake_for_thread(
+                &message,
+                creator,
+                Some(&state_db),
+            )
+            .await
+        );
+        Ok(())
     }
 
     #[test]

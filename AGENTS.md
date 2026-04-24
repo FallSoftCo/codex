@@ -111,6 +111,61 @@ See `codex-rs/tui/styles.md`.
 
 ## Tests
 
+### Model-In-The-Loop Evaluation
+
+- Losangelex/Hollywood is a model-driven system. The thing being built is not just the runtime or state machine in isolation; it is the combined behavior of:
+  - model
+  - instructions and synthetic briefs
+  - tool surface
+  - durable state and invariants
+- Because of that, coordination, autonomy, wake-policy, instruction, brief-design, and other semantic behavior work should default to model-in-the-loop evaluation. Do not default to reasoning from deterministic mocks of an idealized model.
+- Determinism is still a super power, but it must be applied in the correct layer. Use deterministic machinery for:
+  - freezing fixtures
+  - replaying environment state
+  - stubbing or constraining tools
+  - executing commands reproducibly
+  - enforcing invariants
+  - scoring and comparing outcomes
+- Do not treat deterministic semantic simulators as proof of model behavior. They may be useful as coarse filters, debugging aids, or explanatory tools, but they are not the main evidence for claims about what the agent will actually do.
+- The preferred evaluation harness is frozen real fixtures plus non-interactive Codex runs, for example `codex exec --ephemeral ...`, so the actual model remains inside the loop while the environment stays reproducible.
+- When possible, build tests around real failure cases captured from rollout/history instead of invented toy scenarios. Prefer:
+  - real room traffic
+  - real board/task snapshots
+  - real tool availability
+  - real user prompts
+  - real failure transcripts
+- Standard workflow for semantic behavior changes:
+  1. Capture or freeze a real scenario.
+  2. Replay it with the current prompt/context/tool surface using the actual model.
+  3. Replay the same scenario with the candidate instruction/brief/runtime change.
+  4. Compare outcomes using deterministic scoring.
+  5. Only then add or update substrate-level deterministic tests for the invariants that the run exposed.
+- Prefer frozen or stubbed side effects over live shared-state evaluation when testing model behavior. The goal is to keep the model real while keeping the environment reproducible and non-destructive.
+- Use deterministic tests by default for substrate invariants such as:
+  - identity uniqueness
+  - task transition legality
+  - leases
+  - path-claim conflicts
+  - persistence
+  - replay
+  - scoring
+- Use model-in-the-loop tests by default for questions like:
+  - should the agent speak or stay silent
+  - did it interpret room traffic correctly
+  - did it claim or avoid the right work
+  - did it make use of synthetic instructions or briefs
+  - did it choose the right tool action
+  - did a wake actually produce useful behavior
+- Conclusions about model behavior are statistical, not deductive. Run the model against multiple real or representative fixtures and compare rates such as:
+  - unnecessary wake
+  - missed obligation
+  - wrong claim
+  - duplicate reply
+  - correct silence
+  - successful handoff
+- If the available evidence for a semantic claim is only deterministic simulation, explicitly treat that conclusion as provisional until model-in-the-loop evaluation confirms it.
+- For architecture decisions about prompts, synthetic briefs, wake gating, or coordination semantics, a deterministic harness without a live model run is not enough by itself.
+
 ### Snapshot tests
 
 This repo uses snapshot tests (via `insta`), especially in `codex-rs/tui`, to validate rendered output.

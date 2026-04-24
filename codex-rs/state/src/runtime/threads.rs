@@ -355,21 +355,76 @@ ON CONFLICT(child_thread_id) DO NOTHING
         archived_only: bool,
         cwd: Option<&Path>,
     ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
+        self.find_thread_by_exact_title_inner(
+            title,
+            allowed_sources,
+            model_providers,
+            archived_only,
+            cwd,
+            /*require_first_user_message*/ true,
+        )
+        .await
+    }
+
+    /// Find the newest thread whose user-facing title exactly matches `title`, including freshly
+    /// named threads that have not yet recorded a first user message.
+    pub async fn find_thread_by_exact_title_including_empty_history(
+        &self,
+        title: &str,
+        allowed_sources: &[String],
+        model_providers: Option<&[String]>,
+        archived_only: bool,
+        cwd: Option<&Path>,
+    ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
+        self.find_thread_by_exact_title_inner(
+            title,
+            allowed_sources,
+            model_providers,
+            archived_only,
+            cwd,
+            /*require_first_user_message*/ false,
+        )
+        .await
+    }
+
+    async fn find_thread_by_exact_title_inner(
+        &self,
+        title: &str,
+        allowed_sources: &[String],
+        model_providers: Option<&[String]>,
+        archived_only: bool,
+        cwd: Option<&Path>,
+        require_first_user_message: bool,
+    ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
         let mut builder = QueryBuilder::<Sqlite>::new("");
         push_thread_select_columns(&mut builder);
-        builder.push(" FROM threads");
-        push_thread_filters(
-            &mut builder,
-            ThreadFilterOptions {
-                archived_only,
-                allowed_sources,
-                model_providers,
-                anchor: None,
-                sort_key: crate::SortKey::UpdatedAt,
-                sort_direction: SortDirection::Desc,
-                search_term: None,
-            },
-        );
+        builder.push(" FROM threads WHERE 1 = 1");
+        if archived_only {
+            builder.push(" AND threads.archived = 1");
+        } else {
+            builder.push(" AND threads.archived = 0");
+        }
+        if require_first_user_message {
+            builder.push(" AND threads.first_user_message <> ''");
+        }
+        if !allowed_sources.is_empty() {
+            builder.push(" AND threads.source IN (");
+            let mut separated = builder.separated(", ");
+            for source in allowed_sources {
+                separated.push_bind(source);
+            }
+            separated.push_unseparated(")");
+        }
+        if let Some(model_providers) = model_providers
+            && !model_providers.is_empty()
+        {
+            builder.push(" AND threads.model_provider IN (");
+            let mut separated = builder.separated(", ");
+            for provider in model_providers {
+                separated.push_bind(provider);
+            }
+            separated.push_unseparated(")");
+        }
         builder.push(" AND threads.title = ");
         builder.push_bind(title);
         if let Some(cwd) = cwd {
@@ -931,6 +986,7 @@ ON CONFLICT(thread_id, position) DO NOTHING
         }
         if let Some(existing_metadata) = existing_metadata.as_ref() {
             metadata.prefer_existing_git_info(existing_metadata);
+            metadata.prefer_existing_hollywood_info(existing_metadata);
         }
         let updated_at = match updated_at_override {
             Some(updated_at) => Some(updated_at),
@@ -1470,6 +1526,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn apply_rollout_items_preserves_existing_hollywood_metadata_when_rollout_omits_it() {
+        let codex_home = unique_temp_dir();
+        let runtime = StateRuntime::init(codex_home.clone(), "test-provider".to_string())
+            .await
+            .expect("state db should initialize");
+        let thread_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000458").expect("valid thread id");
+        let mut metadata = test_thread_metadata(&codex_home, thread_id, codex_home.clone());
+        metadata.hollywood = Some(codex_protocol::protocol::HollywoodSessionMeta {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: vec!["repo/losangelex".to_string()],
+            attention_mode: "focused".to_string(),
+            include_at_all: true,
+            include_at_room: true,
+        });
+
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("initial upsert should succeed");
+
+        let created_at = metadata.created_at.to_rfc3339();
+        let builder = ThreadMetadataBuilder::new(
+            thread_id,
+            metadata.rollout_path.clone(),
+            metadata.created_at,
+            SessionSource::Cli,
+        );
+        let items = vec![RolloutItem::SessionMeta(SessionMetaLine {
+            meta: SessionMeta {
+                id: thread_id,
+                forked_from_id: None,
+                timestamp: created_at,
+                cwd: PathBuf::new(),
+                originator: String::new(),
+                cli_version: String::new(),
+                source: SessionSource::Cli,
+                agent_path: None,
+                agent_nickname: None,
+                agent_role: None,
+                model_provider: None,
+                base_instructions: None,
+                dynamic_tools: None,
+                memory_mode: None,
+                hollywood: None,
+            },
+            git: None,
+        })];
+
+        runtime
+            .apply_rollout_items(
+                &builder, &items, /*new_thread_memory_mode*/ None,
+                /*updated_at_override*/ None,
+            )
+            .await
+            .expect("apply_rollout_items should succeed");
+
+        let persisted = runtime
+            .get_thread(thread_id)
+            .await
+            .expect("thread should load")
+            .expect("thread should exist");
+        assert_eq!(
+            persisted.hollywood,
+            Some(codex_protocol::protocol::HollywoodSessionMeta {
+                url: "http://127.0.0.1:8765".to_string(),
+                room: "repo/losangelex".to_string(),
+                observed_rooms: Vec::new(),
+                wake_rooms: Vec::new(),
+                attention_mode: "focused".to_string(),
+                include_at_all: true,
+                include_at_room: true,
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn update_thread_git_info_preserves_newer_non_git_metadata() {
         let codex_home = unique_temp_dir();
         let runtime = StateRuntime::init(codex_home.clone(), "test-provider".to_string())
@@ -1643,6 +1778,56 @@ mod tests {
             persisted.first_user_message.as_deref(),
             Some("first-user-message")
         );
+    }
+
+    #[tokio::test]
+    async fn find_thread_by_exact_title_including_empty_history_prefers_newest_named_thread() {
+        let codex_home = unique_temp_dir();
+        let runtime = StateRuntime::init(codex_home.clone(), "test-provider".to_string())
+            .await
+            .expect("state db should initialize");
+        let older_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000811").expect("valid thread id");
+        let fresh_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000812").expect("valid thread id");
+
+        let mut older = test_thread_metadata(&codex_home, older_id, codex_home.clone());
+        older.title = "james".to_string();
+        older.first_user_message = Some("older thread".to_string());
+        older.updated_at = DateTime::<Utc>::from_timestamp(1_700_001_200, 0).expect("timestamp");
+        runtime
+            .upsert_thread(&older)
+            .await
+            .expect("older upsert should succeed");
+
+        let mut fresh = test_thread_metadata(&codex_home, fresh_id, codex_home.clone());
+        fresh.title = "james".to_string();
+        fresh.first_user_message = None;
+        fresh.updated_at = DateTime::<Utc>::from_timestamp(1_700_001_260, 0).expect("timestamp");
+        runtime
+            .upsert_thread(&fresh)
+            .await
+            .expect("fresh upsert should succeed");
+
+        let older_lookup = runtime
+            .find_thread_by_exact_title("james", &[], None, false, Some(codex_home.as_path()))
+            .await
+            .expect("legacy exact-title lookup should succeed")
+            .expect("legacy lookup should find the older thread");
+        assert_eq!(older_lookup.id, older_id);
+
+        let fresh_lookup = runtime
+            .find_thread_by_exact_title_including_empty_history(
+                "james",
+                &[],
+                None,
+                false,
+                Some(codex_home.as_path()),
+            )
+            .await
+            .expect("inclusive exact-title lookup should succeed")
+            .expect("inclusive lookup should find the newest named thread");
+        assert_eq!(fresh_lookup.id, fresh_id);
     }
 
     #[tokio::test]

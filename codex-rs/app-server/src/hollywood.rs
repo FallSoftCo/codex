@@ -15,6 +15,7 @@ use codex_core::default_hollywood_room_for_cwd;
 use codex_core::parse_agent_mentions;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::HollywoodSessionMeta;
+use codex_protocol::protocol::HollywoodSyntheticBrief;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -31,10 +32,13 @@ const HOLLYWOOD_CONTEXT_CLOSE_TAG: &str = "</hollywood_context>";
 
 pub(crate) const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 pub(crate) const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
+pub(crate) const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v1";
 pub(crate) const HOLLYWOOD_POLL_INTERVAL: Duration = Duration::from_millis(1500);
 pub(crate) const HOLLYWOOD_AUTONOMOUS_COOLDOWN: Duration = Duration::from_secs(2);
+pub(crate) const HOLLYWOOD_STARTUP_GRACE_PERIOD: Duration = Duration::from_secs(5);
 pub(crate) const HOLLYWOOD_REGISTRY_SYNC_INTERVAL: Duration = Duration::from_secs(15);
 const HOLLYWOOD_PAGE_LIMIT: i64 = 100;
+const HOLLYWOOD_PENDING_WAKE_LIMIT: usize = 8;
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -195,16 +199,19 @@ impl HollywoodConfig {
 pub(crate) struct HollywoodRoomState {
     last_seen_message_id: i64,
     start_from_latest: bool,
+    state_version: Option<i64>,
+    contract_version: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct HollywoodRuntimeState {
     config: Option<HollywoodConfig>,
     room_states: HashMap<String, HollywoodRoomState>,
+    attached_at: Option<Instant>,
     startup_turn_pending: bool,
-    recent_activity_at: Option<Instant>,
     last_turn_started_at: Option<Instant>,
     autonomous_turn_pending: bool,
+    pending_semantic_wakes: Vec<HollywoodPendingSemanticWake>,
     registry_session_kind: Option<String>,
     registry_resumed_from: Option<String>,
     last_registry_sync_at: Option<Instant>,
@@ -220,6 +227,7 @@ impl HollywoodRuntimeState {
     ) {
         self.config = Some(config);
         self.room_states.clear();
+        self.attached_at = Some(Instant::now());
         if let Some(config) = &self.config {
             for room in config.all_rooms() {
                 self.room_states.insert(
@@ -227,14 +235,15 @@ impl HollywoodRuntimeState {
                     HollywoodRoomState {
                         last_seen_message_id: 0,
                         start_from_latest: true,
+                        ..HollywoodRoomState::default()
                     },
                 );
             }
         }
         self.startup_turn_pending = true;
-        self.recent_activity_at = None;
         self.last_turn_started_at = None;
         self.autonomous_turn_pending = false;
+        self.pending_semantic_wakes.clear();
         self.registry_session_kind = Some(session_kind.into());
         self.registry_resumed_from = resumed_from;
         self.last_registry_sync_at = None;
@@ -244,10 +253,11 @@ impl HollywoodRuntimeState {
     pub(crate) fn detach(&mut self) {
         self.config = None;
         self.room_states.clear();
+        self.attached_at = None;
         self.startup_turn_pending = false;
-        self.recent_activity_at = None;
         self.last_turn_started_at = None;
         self.autonomous_turn_pending = false;
+        self.pending_semantic_wakes.clear();
         self.registry_session_kind = None;
         self.registry_resumed_from = None;
         self.last_registry_sync_at = None;
@@ -278,15 +288,37 @@ impl HollywoodRuntimeState {
         state.last_seen_message_id = message_id;
     }
 
+    pub(crate) fn note_room_snapshot(
+        &mut self,
+        room: &str,
+        snapshot: Option<&HollywoodRoomSnapshot>,
+        last_id: i64,
+    ) -> bool {
+        let Some(snapshot) = snapshot else {
+            return false;
+        };
+        let state = self.room_states.entry(room.to_string()).or_default();
+        let changed = state
+            .state_version
+            .is_some_and(|version| version != snapshot.state_version)
+            || state
+                .contract_version
+                .as_ref()
+                .is_some_and(|version| version != &snapshot.contract_version);
+        state.state_version = Some(snapshot.state_version);
+        state.contract_version = Some(snapshot.contract_version.clone());
+        if changed {
+            state.last_seen_message_id = last_id;
+            state.start_from_latest = false;
+        }
+        changed
+    }
+
     pub(crate) fn take_start_from_latest(&mut self, room: &str) -> bool {
         let state = self.room_states.entry(room.to_string()).or_default();
         let value = state.start_from_latest;
         state.start_from_latest = false;
         value
-    }
-
-    pub(crate) fn note_message_activity(&mut self, now: Instant) {
-        self.recent_activity_at = Some(now);
     }
 
     pub(crate) fn note_turn_started(&mut self, now: Instant) {
@@ -307,8 +339,14 @@ impl HollywoodRuntimeState {
         self.autonomous_turn_pending = false;
     }
 
-    pub(crate) fn should_start_startup_turn(&self) -> bool {
-        self.config.is_some() && self.startup_turn_pending && !self.autonomous_turn_pending
+    pub(crate) fn should_start_startup_turn(&self, now: Instant) -> bool {
+        if self.config.is_none() || !self.startup_turn_pending || self.autonomous_turn_pending {
+            return false;
+        }
+
+        self.attached_at.is_some_and(|attached_at| {
+            now.duration_since(attached_at) >= HOLLYWOOD_STARTUP_GRACE_PERIOD
+        })
     }
 
     pub(crate) fn clear_startup_turn_pending(&mut self) {
@@ -319,19 +357,44 @@ impl HollywoodRuntimeState {
         self.startup_turn_pending = true;
     }
 
+    pub(crate) fn queue_semantic_wake(&mut self, wake: HollywoodPendingSemanticWake) {
+        if let Some(existing) = self
+            .pending_semantic_wakes
+            .iter_mut()
+            .find(|existing| existing.dedupe_key == wake.dedupe_key)
+        {
+            *existing = wake;
+            return;
+        }
+        self.pending_semantic_wakes.push(wake);
+        if self.pending_semantic_wakes.len() > HOLLYWOOD_PENDING_WAKE_LIMIT {
+            let overflow = self.pending_semantic_wakes.len() - HOLLYWOOD_PENDING_WAKE_LIMIT;
+            self.pending_semantic_wakes.drain(0..overflow);
+        }
+    }
+
+    pub(crate) fn take_pending_semantic_wakes(&mut self) -> Vec<HollywoodPendingSemanticWake> {
+        std::mem::take(&mut self.pending_semantic_wakes)
+    }
+
+    pub(crate) fn restore_pending_semantic_wakes(
+        &mut self,
+        mut wakes: Vec<HollywoodPendingSemanticWake>,
+    ) {
+        for wake in wakes.drain(..) {
+            self.queue_semantic_wake(wake);
+        }
+    }
+
     pub(crate) fn should_start_autonomous_turn(&self, now: Instant) -> bool {
-        if self.config.is_none() || self.autonomous_turn_pending {
+        if self.config.is_none()
+            || self.autonomous_turn_pending
+            || self.pending_semantic_wakes.is_empty()
+        {
             return false;
         }
 
-        let Some(recent_activity_at) = self.recent_activity_at else {
-            return false;
-        };
-
         if let Some(last_turn_started_at) = self.last_turn_started_at {
-            if recent_activity_at <= last_turn_started_at {
-                return false;
-            }
             if now.duration_since(last_turn_started_at) < HOLLYWOOD_AUTONOMOUS_COOLDOWN {
                 return false;
             }
@@ -398,15 +461,32 @@ struct HollywoodApiMessage {
 }
 
 #[derive(Debug, Deserialize)]
+struct HollywoodApiRoomState {
+    room: String,
+    state_version: i64,
+    contract_version: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct HollywoodRoomSnapshot {
+    pub(crate) room: String,
+    pub(crate) state_version: i64,
+    pub(crate) contract_version: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct HollywoodMessagesResponse {
     messages: Vec<HollywoodApiMessage>,
     last_id: i64,
+    #[serde(default)]
+    room_state: Option<HollywoodApiRoomState>,
 }
 
 #[derive(Debug)]
 pub(crate) struct HollywoodPollResult {
     pub(crate) messages: Vec<HollywoodClassifiedMessage>,
     pub(crate) last_id: i64,
+    pub(crate) room_state: Option<HollywoodRoomSnapshot>,
 }
 
 #[derive(Debug)]
@@ -415,6 +495,13 @@ pub(crate) struct HollywoodClassifiedMessage {
     pub(crate) attention: HollywoodMessageAttention,
     pub(crate) mentioned: bool,
     pub(crate) self_authored: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct HollywoodPendingSemanticWake {
+    pub(crate) dedupe_key: String,
+    pub(crate) room: String,
+    pub(crate) brief: HollywoodSyntheticBrief,
 }
 
 pub(crate) async fn prime_from_latest(
@@ -454,6 +541,11 @@ pub(crate) async fn poll_messages(
     Ok(HollywoodPollResult {
         messages,
         last_id: response.last_id,
+        room_state: response.room_state.map(|room_state| HollywoodRoomSnapshot {
+            room: room_state.room,
+            state_version: room_state.state_version,
+            contract_version: room_state.contract_version,
+        }),
     })
 }
 
@@ -463,14 +555,21 @@ pub(crate) async fn upsert_registry(
     request: &HollywoodRegistryUpsertRequest,
 ) -> Result<(), String> {
     let url = format!("{}/hollywood/v1/registry", config.url.trim_end_matches('/'));
-    client
+    let response = client
         .post(url)
         .json(request)
         .send()
         .await
-        .map_err(|err| format!("Hollywood registry request failed: {err}"))?
-        .error_for_status()
         .map_err(|err| format!("Hollywood registry request failed: {err}"))?;
+    if let Err(err) = response.error_for_status_ref() {
+        let body = response.text().await.unwrap_or_default();
+        let detail = if body.trim().is_empty() {
+            err.to_string()
+        } else {
+            format!("{err}: {body}")
+        };
+        return Err(format!("Hollywood registry request failed: {detail}"));
+    }
     Ok(())
 }
 
@@ -490,6 +589,10 @@ fn durable_coordination_handshake_guidance(state_db_available: bool) -> &'static
     }
 }
 
+pub(crate) fn startup_announces_presence(config: &HollywoodConfig) -> bool {
+    !matches!(config.attention.mode, HollywoodAttentionMode::Focused)
+}
+
 pub(crate) fn format_hollywood_context_message(
     thread_id: ThreadId,
     thread_name: Option<&str>,
@@ -504,6 +607,7 @@ pub(crate) fn format_hollywood_context_message(
         .effective_wake_rooms()
         .into_iter()
         .collect::<Vec<_>>();
+    let announce_presence = startup_announces_presence(config);
     let payload_json = serde_json::json!({
         "attached": true,
         "meaning": "Hollywood is the local inter-agent room and messaging system in this runtime, not a physical place.",
@@ -518,9 +622,9 @@ pub(crate) fn format_hollywood_context_message(
         "coordination_identity": coordination_identity,
         "identities": hollywood_identities(thread_id, thread_name),
         "startup_protocol": {
-            "announce_presence": true,
+            "announce_presence": announce_presence,
             "read_recent_room_context": true,
-            "ask_user_for_tasking_when_unassigned": true,
+            "ask_user_for_tasking_when_unassigned": false,
             "relay_assigned_scope_to_room": true,
             "check_existing_scope_claims_before_editing": true,
             "claim_exact_paths_or_modules_before_editing": true,
@@ -533,8 +637,10 @@ pub(crate) fn format_hollywood_context_message(
             "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.",
             "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.",
             "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first and reserve new subagents for parallelizing your own currently owned work into bounded sidecar tasks.",
+            "If you finish startup unassigned, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question.",
             durable_coordination_guidance(state_db_available),
             "When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update so other agents and the user-facing session can converge on the same conclusion.",
+            "If another agent posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify. End your current turn promptly instead.",
             "If autonomous Hollywood follow-up finds no new state to report, prefer no user-facing follow-up at all; if one is needed, keep it to a compact status tag rather than a full explanation.",
         ],
     })
@@ -549,6 +655,7 @@ pub(crate) fn startup_handshake_message(
     state_db_available: bool,
 ) -> String {
     let identities = hollywood_identities(thread_id, thread_name).join(", ");
+    let announce_presence = startup_announces_presence(config);
     let name_guidance = match normalized_thread_name(thread_name) {
         Some(agent_name) => match coordination_identity_from_thread_name(&agent_name) {
             Some(coordination_identity) => format!(
@@ -568,12 +675,18 @@ pub(crate) fn startup_handshake_message(
             config.observed_rooms.join(", ")
         )
     };
+    let startup_guidance = if announce_presence {
+        "Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself and check for existing scope claims."
+    } else {
+        "Before doing substantive work, read recent room traffic once to orient yourself and check for existing scope claims. In focused mode, do not send a startup presence broadcast by default. If you already own active scope, need to re-establish a handoff after reconnect or rolling deploy, or receive concrete user tasking, send one concise room update naming the exact scope or status that changed."
+    };
     format!(
-        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once to orient yourself and check for existing scope claims. If you do not yet have a concrete user-assigned task, ask the user what they want you to work on. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with the already attached Hollywood sessions first and reserve new subagents for parallelizing your own currently owned work into bounded sidecar subtasks. {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate. Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with the already attached Hollywood sessions first and reserve new subagents for parallelizing your own currently owned work into bounded sidecar subtasks. {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
         config.room,
         identities,
         observed,
         name_guidance,
+        startup_guidance,
         durable_coordination_handshake_guidance(state_db_available),
     )
 }
@@ -1129,14 +1242,24 @@ mod tests {
     }
 
     #[test]
-    fn autonomous_turn_requires_activity_after_last_turn_start() {
+    fn autonomous_turn_requires_pending_semantic_wake_after_last_turn_start() {
         let mut state = HollywoodRuntimeState::default();
         state.attach(HollywoodConfig::default(), "attached", None);
         let now = Instant::now();
         state.note_turn_started(now);
-        state.note_message_activity(now - Duration::from_secs(1));
         assert!(!state.should_start_autonomous_turn(now + Duration::from_secs(3)));
-        state.note_message_activity(now + Duration::from_secs(1));
+        state.queue_semantic_wake(HollywoodPendingSemanticWake {
+            dedupe_key: "message:42".to_string(),
+            room: "main".to_string(),
+            brief: HollywoodSyntheticBrief {
+                wake_reason: Some("semantic_delta".to_string()),
+                semantic_kind: Some("scope_update".to_string()),
+                summary: Some("A peer ownership change may affect your lane.".to_string()),
+                facts: Vec::new(),
+                suggested_actions: vec!["check whether your scope changed".to_string()],
+                stay_silent_if_no_actionable_delta: true,
+            },
+        });
         assert!(state.should_start_autonomous_turn(now + Duration::from_secs(3)));
     }
 
@@ -1144,12 +1267,14 @@ mod tests {
     fn attach_marks_startup_turn_pending_until_first_turn_starts() {
         let mut state = HollywoodRuntimeState::default();
         state.attach(HollywoodConfig::default(), "attached", None);
+        let now = Instant::now();
 
-        assert!(state.should_start_startup_turn());
+        assert!(!state.should_start_startup_turn(now));
+        assert!(state.should_start_startup_turn(now + HOLLYWOOD_STARTUP_GRACE_PERIOD));
 
-        state.note_turn_started(Instant::now());
+        state.note_turn_started(now + Duration::from_secs(1));
 
-        assert!(!state.should_start_startup_turn());
+        assert!(!state.should_start_startup_turn(now + HOLLYWOOD_STARTUP_GRACE_PERIOD));
     }
 
     #[test]
@@ -1175,6 +1300,57 @@ mod tests {
                 "scout-agent".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn startup_handshake_message_prefers_waiting_for_tasking() {
+        let thread_id =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
+        let message = startup_handshake_message(
+            thread_id,
+            Some("Scout Agent"),
+            &HollywoodConfig::default(),
+            true,
+        );
+
+        assert!(message.contains("wait for explicit tasking"));
+        assert!(!message.contains("ask the user what they want you to work on"));
+        assert!(message.contains("do not send a startup presence broadcast by default"));
+    }
+
+    #[test]
+    fn startup_handshake_message_for_ambient_attach_keeps_presence_broadcast() {
+        let thread_id =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
+        let message = startup_handshake_message(
+            thread_id,
+            Some("Scout Agent"),
+            &HollywoodConfig {
+                attention: HollywoodAttentionSettings {
+                    mode: HollywoodAttentionMode::Ambient,
+                    include_at_all: true,
+                    include_at_room: true,
+                },
+                ..HollywoodConfig::default()
+            },
+            true,
+        );
+
+        assert!(message.contains("send one short explicit room-wide broadcast announcing"));
+    }
+
+    #[test]
+    fn focused_hollywood_context_marks_presence_announcement_optional() {
+        let thread_id =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
+        let message = format_hollywood_context_message(
+            thread_id,
+            Some("Scout Agent"),
+            &HollywoodConfig::default(),
+            true,
+        );
+
+        assert!(message.contains("\"announce_presence\":false"));
     }
 
     #[test]
@@ -1242,5 +1418,50 @@ mod tests {
             config.effective_wake_rooms(),
             HashSet::from(["task-room".to_string()])
         );
+    }
+
+    #[test]
+    fn first_room_snapshot_does_not_reset_cursor() {
+        let mut runtime = HollywoodRuntimeState::default();
+        let changed = runtime.note_room_snapshot(
+            "repo/losangelex",
+            Some(&HollywoodRoomSnapshot {
+                room: "repo/losangelex".to_string(),
+                state_version: 1,
+                contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            }),
+            42,
+        );
+
+        assert!(!changed);
+        assert_eq!(runtime.last_seen_message_id("repo/losangelex"), 0);
+    }
+
+    #[test]
+    fn room_snapshot_state_change_resets_cursor() {
+        let mut runtime = HollywoodRuntimeState::default();
+        runtime.set_last_seen_message_id("repo/losangelex", 7);
+        assert!(!runtime.note_room_snapshot(
+            "repo/losangelex",
+            Some(&HollywoodRoomSnapshot {
+                room: "repo/losangelex".to_string(),
+                state_version: 1,
+                contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            }),
+            7,
+        ));
+
+        let changed = runtime.note_room_snapshot(
+            "repo/losangelex",
+            Some(&HollywoodRoomSnapshot {
+                room: "repo/losangelex".to_string(),
+                state_version: 2,
+                contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            }),
+            99,
+        );
+
+        assert!(changed);
+        assert_eq!(runtime.last_seen_message_id("repo/losangelex"), 99);
     }
 }

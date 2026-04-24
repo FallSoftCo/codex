@@ -42,6 +42,12 @@ pub(crate) fn hollywood_response_input_items(
             content: vec![ContentItem::InputText { text: instruction }],
         });
     }
+    if let Some(instruction) = hollywood_synthetic_brief_instruction(message) {
+        items.push(ResponseInputItem::Message {
+            role: "developer".to_string(),
+            content: vec![ContentItem::InputText { text: instruction }],
+        });
+    }
     items.push(ResponseInputItem::Message {
         role: HollywoodMessage::ROLE.to_string(),
         content: vec![ContentItem::InputText {
@@ -77,6 +83,38 @@ pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) 
     }
 }
 
+fn hollywood_synthetic_brief_instruction(message: &HollywoodInputMessage) -> Option<String> {
+    let brief = message.synthetic_brief.as_ref()?;
+    let mut lines = vec!["Hollywood synthetic coordination brief:".to_string()];
+
+    if let Some(wake_reason) = brief.wake_reason.as_deref() {
+        lines.push(format!("- wake reason: `{wake_reason}`"));
+    }
+    if let Some(semantic_kind) = brief.semantic_kind.as_deref() {
+        lines.push(format!("- semantic kind: `{semantic_kind}`"));
+    }
+    if let Some(summary) = brief.summary.as_deref() {
+        lines.push(format!("- summary: {summary}"));
+    }
+    for fact in &brief.facts {
+        lines.push(format!("- fact: {fact}"));
+    }
+    if !brief.suggested_actions.is_empty() {
+        lines.push("- valid next moves:".to_string());
+        for action in &brief.suggested_actions {
+            lines.push(format!("  - {action}"));
+        }
+    }
+    if brief.stay_silent_if_no_actionable_delta {
+        lines.push(
+            "- if this brief does not materially change your owned work or create a real obligation, stay silent instead of sending a routine acknowledgment."
+                .to_string(),
+        );
+    }
+
+    Some(lines.join("\n"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +130,7 @@ mod tests {
             attention: Some("focused".to_string()),
             message_kind: Some("direct".to_string()),
             obligation: Some("obligation".to_string()),
+            synthetic_brief: None,
             requires_response: true,
         };
 
@@ -114,6 +153,7 @@ mod tests {
             attention: Some("focused".to_string()),
             message_kind: Some("direct".to_string()),
             obligation: Some("attention".to_string()),
+            synthetic_brief: None,
             requires_response: false,
         };
 
@@ -135,6 +175,7 @@ mod tests {
             attention: Some("focused".to_string()),
             message_kind: Some("direct".to_string()),
             obligation: Some("attention".to_string()),
+            synthetic_brief: None,
             requires_response: false,
         };
 
@@ -143,5 +184,44 @@ mod tests {
 
         assert!(instruction.contains("Keep it internal"));
         assert!(instruction.contains("runtime coordination context"));
+    }
+
+    #[test]
+    fn synthetic_brief_instruction_mentions_wake_reason_and_silence_guidance() {
+        let message = HollywoodInputMessage {
+            message_id: 7,
+            room: "repo/ozzz".to_string(),
+            sender_id: "ray".to_string(),
+            body: "Ray owns the browser lane; no clean lane for Duggs.".to_string(),
+            mentions: vec![],
+            attention: Some("broadcast".to_string()),
+            message_kind: Some("broadcast".to_string()),
+            obligation: Some("attention".to_string()),
+            synthetic_brief: Some(codex_protocol::protocol::HollywoodSyntheticBrief {
+                wake_reason: Some("semantic_delta".to_string()),
+                semantic_kind: Some("scope_update".to_string()),
+                summary: Some(
+                    "A peer ownership update may affect your available lane.".to_string(),
+                ),
+                facts: vec![
+                    "message came from `ray` in `repo/ozzz`".to_string(),
+                    "no exact unclaimed scope is visible yet".to_string(),
+                ],
+                suggested_actions: vec![
+                    "check whether your owned scope changed".to_string(),
+                    "stay silent if there is still no clean lane".to_string(),
+                ],
+                stay_silent_if_no_actionable_delta: true,
+            }),
+            requires_response: false,
+        };
+
+        let instruction =
+            hollywood_synthetic_brief_instruction(&message).expect("instruction should exist");
+
+        assert!(instruction.contains("Hollywood synthetic coordination brief"));
+        assert!(instruction.contains("semantic_delta"));
+        assert!(instruction.contains("scope_update"));
+        assert!(instruction.contains("stay silent"));
     }
 }

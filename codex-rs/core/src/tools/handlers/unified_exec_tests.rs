@@ -244,6 +244,80 @@ async fn exec_command_pre_tool_use_payload_skips_write_stdin() {
     );
 }
 
+#[tokio::test]
+async fn write_stdin_unknown_process_returns_recoverable_output() {
+    let payload = ToolPayload::Function {
+        arguments: serde_json::json!({
+            "session_id": 999999,
+            "chars": "",
+            "yield_time_ms": 10
+        })
+        .to_string(),
+    };
+    let (session, turn) = make_session_and_context().await;
+    let handler = UnifiedExecHandler;
+
+    let output = handler
+        .handle(ToolInvocation {
+            session: Arc::new(session),
+            turn: Arc::new(turn),
+            cancellation_token: tokio_util::sync::CancellationToken::new(),
+            tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
+            call_id: "call-45".to_string(),
+            tool_name: codex_tools::ToolName::plain("write_stdin"),
+            payload,
+        })
+        .await
+        .expect("stale write_stdin should return recoverable output");
+
+    assert!(
+        output.truncated_output().contains("Unknown process id 999999"),
+        "unexpected output: {}",
+        output.truncated_output()
+    );
+    assert!(
+        output
+            .advisory_note
+            .as_deref()
+            .is_some_and(|note| note.contains("tty=true")),
+        "expected a restart advisory, got {:?}",
+        output.advisory_note
+    );
+}
+
+#[test]
+fn recoverable_exec_command_output_preserves_advisory_for_missing_shell_path() {
+    let output = recoverable_exec_command_output(
+        vec![
+            "/usr/bin/zsh".to_string(),
+            "-lc".to_string(),
+            "sed -n '1,40p' README.md".to_string(),
+        ],
+        None,
+        UnifiedExecError::CreateProcess {
+            message:
+                "Rejected(\"Failed to create unified exec process: No such file or directory (os error 2)\")"
+                    .to_string(),
+        },
+    );
+
+    assert!(
+        output
+            .truncated_output()
+            .contains("Failed to create unified exec process"),
+        "unexpected output: {}",
+        output.truncated_output()
+    );
+    assert!(
+        output
+            .advisory_note
+            .as_deref()
+            .is_some_and(|note| note.contains("without an explicit `shell`")),
+        "expected missing-shell advisory, got {:?}",
+        output.advisory_note
+    );
+}
+
 #[test]
 fn exec_command_post_tool_use_payload_uses_output_for_noninteractive_one_shot_commands() {
     let payload = ToolPayload::Function {

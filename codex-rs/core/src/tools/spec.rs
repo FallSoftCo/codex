@@ -158,7 +158,7 @@ fn create_coordination_act_tool() -> ToolSpec {
         (
             "summary".to_string(),
             JsonSchema::string(Some(
-                "Optional concise act summary for the durable act log.".to_string(),
+                "Concise durable act summary. Required for `done`, `handoff`, and `yield`; use a concrete result or reason, not placeholder text.".to_string(),
             )),
         ),
         (
@@ -187,7 +187,7 @@ fn create_coordination_act_tool() -> ToolSpec {
                     Some(vec!["kind".to_string(), "path".to_string()]),
                     Some(false.into()),
                 ),
-                Some("Optional ownership claims to acquire while accepting the task.".to_string()),
+                Some("Optional exact ownership claims. For `accept`, these claims become active scope. For directed implementation `open_task`, they reserve exact scope for the awarded owner.".to_string()),
             ),
         ),
         (
@@ -222,7 +222,7 @@ fn create_coordination_act_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "coordination_act".to_string(),
-        description: "Record a durable team-work commitment. Use this when your natural-language coordination becomes an actual assignment, acceptance, completion, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy."
+        description: "Record a durable team-work commitment. Use this when your natural-language coordination becomes an actual assignment, acceptance, completion, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy. After you finish a verification or implementation task, record `done` with the observed result instead of re-accepting the task."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -257,6 +257,13 @@ fn create_list_coordination_tasks_tool() -> ToolSpec {
             ),
         ),
         (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional room filter. Defaults to the current attached Hollywood room when available."
+                    .to_string(),
+            )),
+        ),
+        (
             "include_history".to_string(),
             JsonSchema::boolean(Some(
                 "When true, include durable coordination acts alongside the task list.".to_string(),
@@ -265,7 +272,7 @@ fn create_list_coordination_tasks_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "list_coordination_tasks".to_string(),
-        description: "Inspect durable Losangelex coordination tasks and, optionally, their act history. Use this to recover state after idle gaps, restarts, or rolling deploys instead of inferring coordination truth from room scrollback alone."
+        description: "Inspect durable Losangelex coordination tasks and, optionally, their act history. When this session is attached to Hollywood, the current attached room is the default scope unless you override it. Use this to recover state after idle gaps, restarts, or rolling deploys instead of inferring coordination truth from room scrollback alone."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -317,7 +324,7 @@ fn create_hollywood_read_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_read".to_string(),
-        description: "Read messages from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream before you consider new subagents."
+        description: "Read messages from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream, and prefer it over shell commands when you need to verify room-visible wording, summaries, or message history."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -346,7 +353,8 @@ fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
         (
             "room".to_string(),
             JsonSchema::string(Some(
-                "Optional room override. Defaults to the configured Hollywood room.".to_string(),
+                "Optional room override. Defaults to the current attached Hollywood room."
+                    .to_string(),
             )),
         ),
         (
@@ -542,6 +550,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
     unavailable_called_tools: Vec<ToolName>,
     discoverable_tools: Option<Vec<DiscoverableTool>>,
     state_db_available: bool,
+    hollywood_tools_available: bool,
     dynamic_tools: &[DynamicToolSpec],
 ) -> ToolRegistryBuilder {
     use crate::tools::handlers::ApplyPatchHandler;
@@ -646,9 +655,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         .map(|configured_tool| configured_tool.name().to_string())
         .collect::<HashSet<_>>();
 
-    let hollywood_tools_enabled = !cfg!(test)
-        && config.hollywood_tools_enabled
-        && crate::hollywood::HollywoodSessionConfig::from_env().is_some();
+    let hollywood_tools_enabled = config.hollywood_tools_enabled && hollywood_tools_available;
     let mut hollywood_specs_inserted = false;
     let mut coordination_specs_inserted = false;
     let mut restart_client_inserted = false;
@@ -865,10 +872,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         }
         builder.register_handler(unavailable_tool, unavailable_tool_handler.clone());
     }
-    if !cfg!(test)
-        && config.hollywood_tools_enabled
-        && crate::hollywood::HollywoodSessionConfig::from_env().is_some()
-    {
+    if hollywood_tools_enabled {
         for spec in [
             create_hollywood_status_tool(),
             create_hollywood_read_tool(),

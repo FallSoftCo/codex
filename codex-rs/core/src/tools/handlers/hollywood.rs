@@ -12,6 +12,7 @@ use crate::hollywood::HollywoodSessionConfig;
 use crate::hollywood::canonicalize_agent_identity;
 use crate::hollywood::canonicalize_hollywood_identity;
 use crate::hollywood::identities as hollywood_identities;
+use crate::hollywood::live_identity_matches_target;
 use crate::hollywood::parse_agent_mentions;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
@@ -28,6 +29,7 @@ pub struct HollywoodTeamStatusHandler;
 pub struct HollywoodTeamMemberUpdateHandler;
 
 const HOLLYWOOD_REGISTRY_STALE_AFTER: Duration = Duration::seconds(90);
+const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v1";
 
 #[derive(Deserialize)]
 struct HollywoodReadArgs {
@@ -81,7 +83,21 @@ struct HollywoodStatusResult {
     identities: Vec<String>,
     can_read: bool,
     can_send: bool,
+    service_version: Option<String>,
+    schema_version: Option<i64>,
+    room_contract_version: Option<String>,
+    room_contract_compatible: Option<bool>,
     error: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct HollywoodHealthResponse {
+    #[serde(default)]
+    service_version: Option<String>,
+    #[serde(default)]
+    schema_version: Option<i64>,
+    #[serde(default)]
+    room_contract_version: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -109,6 +125,8 @@ struct HollywoodTeamUpResult {
     url: String,
     room: String,
     team: serde_json::Value,
+    ok: bool,
+    error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -137,6 +155,13 @@ struct HollywoodRegistryEntry {
     updated_at: Option<String>,
     last_heartbeat_at: Option<String>,
 }
+
+async fn hollywood_config_for_session(
+    session: &crate::session::session::Session,
+) -> Option<HollywoodSessionConfig> {
+    session.hollywood_session_config().await
+}
+
 impl ToolHandler for HollywoodStatusHandler {
     type Output = FunctionToolOutput;
 
@@ -145,24 +170,39 @@ impl ToolHandler for HollywoodStatusHandler {
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let config = HollywoodSessionConfig::from_env();
+        let config = hollywood_config_for_session(invocation.session.as_ref()).await;
         let thread_name = invocation.session.thread_name().await;
         let identities =
             hollywood_identities(invocation.session.conversation_id, thread_name.as_deref());
         let result = if let Some(config) = config {
             let health_url = format!("{}/hollywood/v1/health", config.url.trim_end_matches('/'));
             match Client::new().get(health_url).send().await {
-                Ok(response) => HollywoodStatusResult {
-                    configured: true,
-                    reachable: response.status().is_success(),
-                    url: Some(config.url),
-                    room: Some(config.room),
-                    attention_mode: Some(config.attention_mode),
-                    identities,
-                    can_read: true,
-                    can_send: true,
-                    error: None,
-                },
+                Ok(response) => {
+                    let reachable = response.status().is_success();
+                    let health = response.json::<HollywoodHealthResponse>().await.ok();
+                    let room_contract_version = health
+                        .as_ref()
+                        .and_then(|value| value.room_contract_version.clone());
+                    HollywoodStatusResult {
+                        configured: true,
+                        reachable,
+                        url: Some(config.url),
+                        room: Some(config.room),
+                        attention_mode: Some(config.attention_mode),
+                        identities,
+                        can_read: true,
+                        can_send: true,
+                        service_version: health
+                            .as_ref()
+                            .and_then(|value| value.service_version.clone()),
+                        schema_version: health.as_ref().and_then(|value| value.schema_version),
+                        room_contract_version: room_contract_version.clone(),
+                        room_contract_compatible: room_contract_version
+                            .as_ref()
+                            .map(|value| value == HOLLYWOOD_ROOM_CONTRACT_VERSION),
+                        error: None,
+                    }
+                }
                 Err(err) => HollywoodStatusResult {
                     configured: true,
                     reachable: false,
@@ -172,6 +212,10 @@ impl ToolHandler for HollywoodStatusHandler {
                     identities,
                     can_read: true,
                     can_send: true,
+                    service_version: None,
+                    schema_version: None,
+                    room_contract_version: None,
+                    room_contract_compatible: None,
                     error: Some(err.to_string()),
                 },
             }
@@ -185,6 +229,10 @@ impl ToolHandler for HollywoodStatusHandler {
                 identities,
                 can_read: false,
                 can_send: false,
+                service_version: None,
+                schema_version: None,
+                room_contract_version: None,
+                room_contract_compatible: None,
                 error: Some("Hollywood is not configured for this session.".to_string()),
             }
         };
@@ -206,7 +254,7 @@ impl ToolHandler for HollywoodReadHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let args = parse_function_args::<HollywoodReadArgs>(&invocation.payload)?;
-        let Some(config) = HollywoodSessionConfig::from_env() else {
+        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
             return Err(FunctionCallError::RespondToModel(
                 "Hollywood is not configured for this session.".to_string(),
             ));
@@ -267,19 +315,16 @@ impl ToolHandler for HollywoodSendHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let args = parse_function_args::<HollywoodSendArgs>(&invocation.payload)?;
-        let Some(config) = HollywoodSessionConfig::from_env() else {
+        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
             return Err(FunctionCallError::RespondToModel(
                 "Hollywood is not configured for this session.".to_string(),
             ));
         };
 
         let target_identities = resolve_target_identities(&args);
-        let room = match args.room.clone() {
-            Some(room) => room,
-            None => select_room_for_targets(&config, &target_identities)
-                .await
-                .map_err(FunctionCallError::RespondToModel)?,
-        };
+        let room = select_send_room(&config, &args, &target_identities)
+            .await
+            .map_err(FunctionCallError::RespondToModel)?;
         let sender_id = invocation.session.conversation_id.to_string();
         let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
         let recipient_id = args.to.as_deref().and_then(canonicalize_hollywood_identity);
@@ -346,7 +391,7 @@ impl ToolHandler for HollywoodTeamUpHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let args = parse_function_args::<HollywoodTeamUpArgs>(&invocation.payload)?;
-        let Some(config) = HollywoodSessionConfig::from_env() else {
+        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
             return Err(FunctionCallError::RespondToModel(
                 "Hollywood is not configured for this session.".to_string(),
             ));
@@ -373,7 +418,7 @@ impl ToolHandler for HollywoodTeamUpHandler {
             .collect::<Vec<_>>();
 
         let url = format!("{}/hollywood/v1/teams", config.url.trim_end_matches('/'));
-        let response = Client::new()
+        let response = match Client::new()
             .post(&url)
             .json(&json!({
                 "team_id": args.team_id,
@@ -385,25 +430,74 @@ impl ToolHandler for HollywoodTeamUpHandler {
             }))
             .send()
             .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood team create failed: {err}"))
-            })?
-            .error_for_status()
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood team create failed: {err}"))
-            })?
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!(
-                    "Hollywood team response parse failed: {err}"
-                ))
-            })?;
+        {
+            Ok(response) => response,
+            Err(err) => {
+                let result = HollywoodTeamUpResult {
+                    url: config.url,
+                    room,
+                    team: json!(null),
+                    ok: false,
+                    error: Some(format!("Hollywood team create failed: {err}")),
+                };
+                return Ok(FunctionToolOutput::from_text(
+                    serde_json::to_string_pretty(&result).unwrap_or_else(|serialize_err| {
+                        format!(
+                            "{{\"ok\":false,\"error\":\"Hollywood team create failed: {err}; serialization failed: {serialize_err}\"}}"
+                        )
+                    }),
+                    Some(false),
+                ));
+            }
+        };
+        let response = match response.error_for_status()
+        {
+            Ok(response) => response,
+            Err(err) => {
+                let result = HollywoodTeamUpResult {
+                    url: config.url,
+                    room,
+                    team: json!(null),
+                    ok: false,
+                    error: Some(format!("Hollywood team create failed: {err}")),
+                };
+                return Ok(FunctionToolOutput::from_text(
+                    serde_json::to_string_pretty(&result).unwrap_or_else(|serialize_err| {
+                        format!(
+                            "{{\"ok\":false,\"error\":\"Hollywood team create failed: {err}; serialization failed: {serialize_err}\"}}"
+                        )
+                    }),
+                    Some(false),
+                ));
+            }
+        };
+        let response = match response.json::<serde_json::Value>().await {
+            Ok(response) => response,
+            Err(err) => {
+                let result = HollywoodTeamUpResult {
+                    url: config.url,
+                    room,
+                    team: json!(null),
+                    ok: false,
+                    error: Some(format!("Hollywood team response parse failed: {err}")),
+                };
+                return Ok(FunctionToolOutput::from_text(
+                    serde_json::to_string_pretty(&result).unwrap_or_else(|serialize_err| {
+                        format!(
+                            "{{\"ok\":false,\"error\":\"Hollywood team response parse failed: {err}; serialization failed: {serialize_err}\"}}"
+                        )
+                    }),
+                    Some(false),
+                ));
+            }
+        };
 
         let result = HollywoodTeamUpResult {
             url: config.url,
             room,
             team: response,
+            ok: true,
+            error: None,
         };
 
         Ok(FunctionToolOutput::from_text(
@@ -423,7 +517,7 @@ impl ToolHandler for HollywoodTeamStatusHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let args = parse_function_args::<HollywoodTeamStatusArgs>(&invocation.payload)?;
-        let Some(config) = HollywoodSessionConfig::from_env() else {
+        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
             return Err(FunctionCallError::RespondToModel(
                 "Hollywood is not configured for this session.".to_string(),
             ));
@@ -475,18 +569,14 @@ impl ToolHandler for HollywoodTeamMemberUpdateHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let args = parse_function_args::<HollywoodTeamMemberUpdateArgs>(&invocation.payload)?;
-        let Some(config) = HollywoodSessionConfig::from_env() else {
+        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
             return Err(FunctionCallError::RespondToModel(
                 "Hollywood is not configured for this session.".to_string(),
             ));
         };
 
         let session_id = match args.session_id.as_deref() {
-            Some(value) => canonicalize_agent_identity(value).ok_or_else(|| {
-                FunctionCallError::RespondToModel(
-                    "invalid session_id for hollywood_team_member_update".to_string(),
-                )
-            })?,
+            Some(value) => resolve_team_member_session_id(&config, value).await?,
             None => invocation.session.conversation_id.to_string(),
         };
 
@@ -576,6 +666,20 @@ async fn select_room_for_targets(
     Ok("main".to_string())
 }
 
+async fn select_send_room(
+    config: &HollywoodSessionConfig,
+    args: &HollywoodSendArgs,
+    target_identities: &[String],
+) -> Result<String, String> {
+    if let Some(room) = args.room.clone() {
+        return Ok(room);
+    }
+    if !config.room.is_empty() {
+        return Ok(config.room.clone());
+    }
+    select_room_for_targets(config, target_identities).await
+}
+
 fn prioritized_candidate_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
     let mut rooms = Vec::new();
     let mut seen = HashSet::new();
@@ -618,12 +722,65 @@ async fn fetch_registry_entries(
 
 fn all_targets_present(target_identities: &[String], entries: &[HollywoodRegistryEntry]) -> bool {
     target_identities.iter().all(|target| {
-        entries.iter().any(|entry| {
-            entry.attached
-                && (entry.session_id == *target
-                    || entry.identities.iter().any(|identity| identity == target))
-        })
+        resolve_live_session_id_from_entries(entries, target).ok().flatten().is_some()
     })
+}
+
+async fn resolve_team_member_session_id(
+    config: &HollywoodSessionConfig,
+    value: &str,
+) -> Result<String, FunctionCallError> {
+    if let Some(session_id) = canonicalize_agent_identity(value) {
+        return Ok(session_id);
+    }
+    let identity = canonicalize_hollywood_identity(value).ok_or_else(|| {
+        FunctionCallError::RespondToModel(
+            "invalid session_id for hollywood_team_member_update".to_string(),
+        )
+    })?;
+
+    for room in prioritized_candidate_rooms(config) {
+        let entries = fetch_registry_entries(config, &room)
+            .await
+            .map_err(FunctionCallError::RespondToModel)?;
+        match resolve_live_session_id_from_entries(&entries, &identity)
+            .map_err(FunctionCallError::RespondToModel)?
+        {
+            Some(session_id) => return Ok(session_id),
+            None => continue,
+        }
+    }
+
+    Err(FunctionCallError::RespondToModel(format!(
+        "unknown live Hollywood agent `{value}`"
+    )))
+}
+
+fn resolve_live_session_id_from_entries(
+    entries: &[HollywoodRegistryEntry],
+    target: &str,
+) -> Result<Option<String>, String> {
+    let matches = entries
+        .iter()
+        .filter(|entry| entry.attached)
+        .filter(|entry| {
+            entry.session_id == target
+                || entry
+                    .identities
+                    .iter()
+                    .any(|identity| live_identity_matches_target(identity, target))
+        })
+        .map(|entry| entry.session_id.clone())
+        .collect::<Vec<_>>();
+
+    match matches.len() {
+        0 => Ok(None),
+        1 => Ok(matches.into_iter().next()),
+        _ => Err(format!(
+            "Hollywood identity `{target}` is ambiguous across live sessions: {}",
+            matches.join(", ")
+        )),
+    }
 }
 
 fn registry_entry_is_fresh(entry: &HollywoodRegistryEntry, now: &DateTime<Utc>) -> bool {
@@ -715,6 +872,46 @@ mod tests {
     }
 
     #[test]
+    fn resolve_live_session_id_from_entries_matches_generated_runtime_suffix() {
+        let entries = vec![HollywoodRegistryEntry {
+            session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+            attached: true,
+            identities: vec!["james-7c45ba".to_string()],
+            updated_at: None,
+            last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+        }];
+
+        assert_eq!(
+            resolve_live_session_id_from_entries(&entries, "james").expect("lookup should succeed"),
+            Some("019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_live_session_id_from_entries_rejects_ambiguous_generated_runtime_suffixes() {
+        let entries = vec![
+            HollywoodRegistryEntry {
+                session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+                attached: true,
+                identities: vec!["james-7c45ba".to_string()],
+                updated_at: None,
+                last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+            },
+            HollywoodRegistryEntry {
+                session_id: "019d0000-0000-7000-8000-000000000000".to_string(),
+                attached: true,
+                identities: vec!["james-91ab22".to_string()],
+                updated_at: None,
+                last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+            },
+        ];
+
+        let error = resolve_live_session_id_from_entries(&entries, "james")
+            .expect_err("ambiguous runtime suffixes should fail");
+        assert!(error.contains("ambiguous across live sessions"));
+    }
+
+    #[test]
     fn registry_entry_freshness_ignores_stale_attached_entries() {
         let now = Utc::now();
         let fresh = HollywoodRegistryEntry {
@@ -734,5 +931,23 @@ mod tests {
 
         assert!(registry_entry_is_fresh(&fresh, &now));
         assert!(!registry_entry_is_fresh(&stale, &now));
+    }
+
+    #[tokio::test]
+    async fn select_send_room_defaults_direct_messages_to_attached_room() {
+        let config = HollywoodSessionConfig {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        };
+        let args = send_args("ping @tony", Some("tony"));
+
+        let room = select_send_room(&config, &args, &resolve_target_identities(&args))
+            .await
+            .expect("room selection should succeed");
+
+        assert_eq!(room, "repo/losangelex");
     }
 }

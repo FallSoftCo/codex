@@ -50,6 +50,7 @@ pub(crate) struct ToolRouterParams<'a> {
     pub(crate) parallel_mcp_server_names: HashSet<String>,
     pub(crate) discoverable_tools: Option<Vec<DiscoverableTool>>,
     pub(crate) state_db_available: bool,
+    pub(crate) hollywood_tools_available: bool,
     pub(crate) dynamic_tools: &'a [DynamicToolSpec],
 }
 
@@ -62,6 +63,7 @@ impl ToolRouter {
             parallel_mcp_server_names,
             discoverable_tools,
             state_db_available,
+            hollywood_tools_available,
             dynamic_tools,
         } = params;
         let builder = build_specs_with_discoverable_tools(
@@ -71,6 +73,7 @@ impl ToolRouter {
             unavailable_called_tools,
             discoverable_tools,
             state_db_available,
+            hollywood_tools_available,
             dynamic_tools,
         );
         let (specs, registry) = builder.build();

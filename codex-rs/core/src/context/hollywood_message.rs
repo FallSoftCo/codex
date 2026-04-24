@@ -1,4 +1,5 @@
 use codex_protocol::protocol::HollywoodInputMessage;
+use codex_protocol::protocol::HollywoodSyntheticBrief;
 
 use super::ContextualUserFragment;
 
@@ -9,6 +10,7 @@ pub(crate) struct HollywoodMessage {
     pub(crate) sender_id: String,
     pub(crate) mentions: Vec<String>,
     pub(crate) body: String,
+    pub(crate) synthetic_brief: Option<HollywoodSyntheticBrief>,
 }
 
 impl HollywoodMessage {
@@ -19,6 +21,7 @@ impl HollywoodMessage {
             sender_id: message.sender_id.clone(),
             mentions: message.mentions.clone(),
             body: message.body.clone(),
+            synthetic_brief: message.synthetic_brief.clone(),
         }
     }
 }
@@ -37,6 +40,7 @@ impl ContextualUserFragment for HollywoodMessage {
                 "sender_id": self.sender_id,
                 "mentions": self.mentions,
                 "body": self.body,
+                "synthetic_brief": self.synthetic_brief,
             })
         )
     }

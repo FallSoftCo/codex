@@ -285,6 +285,7 @@ async fn build_nested_router(exec: &ExecContext) -> ToolRouter {
                 .then_some(server_name.clone())
         })
         .collect::<HashSet<_>>();
+    let hollywood_tools_available = exec.session.hollywood_session_config().await.is_some();
 
     ToolRouter::from_config(
         &nested_tools_config,
@@ -295,6 +296,7 @@ async fn build_nested_router(exec: &ExecContext) -> ToolRouter {
             parallel_mcp_server_names,
             discoverable_tools: None,
             state_db_available: exec.session.state_db().is_some(),
+            hollywood_tools_available,
             dynamic_tools: exec.turn.dynamic_tools.as_slice(),
         },
     )

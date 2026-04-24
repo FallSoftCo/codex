@@ -233,6 +233,13 @@ impl ThreadMetadata {
         }
     }
 
+    /// Preserve existing Hollywood metadata when rollout-derived metadata omits it.
+    pub fn prefer_existing_hollywood_info(&mut self, existing: &Self) {
+        if self.hollywood.is_none() && existing.hollywood.is_some() {
+            self.hollywood = existing.hollywood.clone();
+        }
+    }
+
     /// Return the list of field names that differ between `self` and `other`.
     pub fn diff_fields(&self, other: &Self) -> Vec<&'static str> {
         let mut diffs = Vec::new();

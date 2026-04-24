@@ -1,4 +1,5 @@
 use super::*;
+use super::wait::WaitAgentResult;
 use crate::CodexThread;
 use crate::ThreadManager;
 use crate::config::AgentRoleConfig;
@@ -2493,7 +2494,7 @@ async fn wait_agent_rejects_invalid_target() {
 }
 
 #[tokio::test]
-async fn wait_agent_rejects_empty_targets() {
+async fn wait_agent_empty_targets_returns_immediately() {
     let (session, turn) = make_session_and_context().await;
     let invocation = invocation(
         Arc::new(session),
@@ -2501,13 +2502,21 @@ async fn wait_agent_rejects_empty_targets() {
         "wait_agent",
         function_payload(json!({"targets": []})),
     );
-    let Err(err) = WaitAgentHandler.handle(invocation).await else {
-        panic!("empty ids should be rejected");
-    };
+    let output = WaitAgentHandler
+        .handle(invocation)
+        .await
+        .expect("empty targets should return immediately");
+    let (content, success) = expect_text_output(output);
+    let result: WaitAgentResult =
+        serde_json::from_str(&content).expect("wait_agent result should be json");
     assert_eq!(
-        err,
-        FunctionCallError::RespondToModel("agent ids must be non-empty".to_string())
+        result,
+        WaitAgentResult {
+            status: HashMap::new(),
+            timed_out: false,
+        }
     );
+    assert_eq!(success, None);
 }
 
 #[tokio::test]

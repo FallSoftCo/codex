@@ -338,6 +338,18 @@ async fn hollywood_input_is_submitted_as_developer_context() {
                 attention: Some("focused".to_string()),
                 message_kind: Some("direct".to_string()),
                 obligation: Some("obligation".to_string()),
+                synthetic_brief: Some(codex_protocol::protocol::HollywoodSyntheticBrief {
+                    wake_reason: Some("direct_request".to_string()),
+                    semantic_kind: Some("handoff".to_string()),
+                    summary: Some(
+                        "A peer is asking for an explicit takeover decision.".to_string(),
+                    ),
+                    facts: vec!["message came from `peer-agent`".to_string()],
+                    suggested_actions: vec![
+                        "reply or claim only if you are actually taking over".to_string(),
+                    ],
+                    stay_silent_if_no_actionable_delta: false,
+                }),
                 requires_response: true,
             },
         })
@@ -357,6 +369,12 @@ async fn hollywood_input_is_submitted_as_developer_context() {
             .iter()
             .any(|text| text.contains("Hollywood coordination obligation")),
         "expected Hollywood obligation instructions in developer input: {developer_texts:#?}"
+    );
+    assert!(
+        developer_texts
+            .iter()
+            .any(|text| text.contains("Hollywood synthetic coordination brief")),
+        "expected Hollywood synthetic brief instructions in developer input: {developer_texts:#?}"
     );
     assert!(
         developer_texts
