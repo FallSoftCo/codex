@@ -72,11 +72,12 @@ struct OpenTaskActPayload {
 #[derive(Debug, Serialize)]
 struct CoordinationActResult {
     task: codex_state::CoordinationTask,
-    act: codex_state::CoordinationAct,
+    act: Option<codex_state::CoordinationAct>,
     unblocked_tasks: Vec<codex_state::CoordinationTask>,
     ownership: Option<Value>,
     room_notified: bool,
     woken_threads: Vec<String>,
+    deduped: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -266,6 +267,19 @@ async fn handle_coordination_act(
             } else {
                 args.details.clone().unwrap_or_default()
             };
+            let reserved_claim_paths_json = path_claim_specs_to_json(&reserved_path_claims);
+            let act_payload_json = serde_json::to_string(&json!({
+                "action": "open_task",
+                "details": args.details,
+                "kind": args.kind,
+                "owner": args.owner,
+                "claim_paths": reserved_claim_paths_json,
+                "team_id": args.team_id,
+                "room": args.room,
+                "capability": args.capability,
+                "depends_on": args.depends_on,
+            }))
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
             match db.create_coordination_task(codex_state::CoordinationTaskCreateParams {
                 id: uuid::Uuid::new_v4().to_string(),
                 creator_thread_id: actor_thread_id,
@@ -283,28 +297,34 @@ async fn handle_coordination_act(
                 dependency_task_ids: args.depends_on.clone().unwrap_or_default(),
                 act_id: uuid::Uuid::new_v4().to_string(),
                 act_summary: args.summary.clone(),
-                act_payload_json: serde_json::to_string(&json!({
-                    "action": "open_task",
-                    "details": args.details,
-                    "kind": args.kind,
-                    "owner": args.owner,
-                    "claim_paths": args.claim_paths,
-                    "team_id": args.team_id,
-                    "room": args.room,
-                    "capability": args.capability,
-                    "depends_on": args.depends_on,
-                }))
-                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                act_payload_json,
             })
             .await
             {
                 Ok(outcome) => outcome,
-                Err(err) => match map_coordination_open_task_error(err) {
-                    FunctionCallError::RespondToModel(message) => {
-                        return coordination_failure_output(message, None);
+                Err(err) => {
+                    let message = err.to_string();
+                    if let Some(existing_task_id) =
+                        parse_duplicate_implementation_task_id(message.as_str())
+                    {
+                        let existing_task = db
+                            .get_coordination_task(existing_task_id)
+                            .await
+                            .map_err(|load_err| FunctionCallError::Fatal(load_err.to_string()))?
+                            .ok_or_else(|| {
+                                FunctionCallError::Fatal(format!(
+                                    "duplicate coordination task {existing_task_id} disappeared"
+                                ))
+                            })?;
+                        return coordination_duplicate_output(existing_task);
                     }
-                    fatal => return Err(fatal),
-                },
+                    match map_coordination_open_task_message(message) {
+                        FunctionCallError::RespondToModel(message) => {
+                            return coordination_failure_output(message, None);
+                        }
+                        fatal => return Err(fatal),
+                    }
+                }
             }
         }
         "accept" => {
@@ -568,11 +588,12 @@ async fn finalize_coordination_act(
 
     let result = CoordinationActResult {
         task: outcome.task,
-        act: outcome.act,
+        act: Some(outcome.act),
         unblocked_tasks: outcome.unblocked_tasks,
         ownership,
         room_notified,
         woken_threads,
+        deduped: false,
     };
     Ok(FunctionToolOutput::from_text(
         serde_json::to_string_pretty(&result)
@@ -1096,6 +1117,43 @@ fn path_claim_to_json(claim: codex_state::PathClaim) -> Value {
     })
 }
 
+fn path_claim_specs_to_json(claims: &[codex_state::PathClaimSpec]) -> Vec<Value> {
+    claims
+        .iter()
+        .map(|claim| {
+            json!({
+                "kind": claim.kind.as_str(),
+                "path": claim.path,
+            })
+        })
+        .collect()
+}
+
+fn parse_duplicate_implementation_task_id(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("duplicate coordination implementation task ")
+        .and_then(|rest| rest.strip_suffix(" already covers this scope"))
+}
+
+fn coordination_duplicate_output(
+    task: codex_state::CoordinationTask,
+) -> Result<FunctionToolOutput, FunctionCallError> {
+    let result = CoordinationActResult {
+        task,
+        act: None,
+        unblocked_tasks: Vec::new(),
+        ownership: None,
+        room_notified: false,
+        woken_threads: Vec::new(),
+        deduped: true,
+    };
+    Ok(FunctionToolOutput::from_text(
+        serde_json::to_string_pretty(&result)
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+        Some(true),
+    ))
+}
+
 fn coordination_failure_output(
     message: String,
     task: Option<&codex_state::CoordinationTask>,
@@ -1134,8 +1192,7 @@ fn map_coordination_transition_error(err: anyhow::Error) -> FunctionCallError {
     }
 }
 
-fn map_coordination_open_task_error(err: anyhow::Error) -> FunctionCallError {
-    let message = err.to_string();
+fn map_coordination_open_task_message(message: String) -> FunctionCallError {
     if message.contains("requires exact ownership claims")
         || message.contains("cannot be awarded because thread")
     {

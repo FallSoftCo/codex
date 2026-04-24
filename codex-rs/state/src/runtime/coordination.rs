@@ -13,6 +13,7 @@ use crate::model::CoordinationTaskStatus;
 use crate::model::CoordinationTaskTransitionOutcome;
 use crate::model::CoordinationTaskYieldParams;
 use crate::model::coordination_epoch_seconds_to_datetime;
+use serde::Deserialize;
 impl StateRuntime {
     pub async fn create_coordination_task(
         &self,
@@ -35,9 +36,23 @@ impl StateRuntime {
             );
         }
         if let Some(owner_thread_id) = params.owner_thread_id {
+            let owner_thread_id = owner_thread_id.to_string();
+            if matches!(params.kind, crate::CoordinationTaskKind::Implementation)
+                && !params.reserved_path_claims.is_empty()
+                && let Some(existing_task_id) = find_duplicate_incomplete_implementation_task_in_tx(
+                    &mut tx,
+                    owner_thread_id.as_str(),
+                    params.room.as_deref(),
+                    &params.reserved_path_claims,
+                )
+                .await?
+            {
+                anyhow::bail!(
+                    "duplicate coordination implementation task {existing_task_id} already covers this scope"
+                );
+            }
             let lease_seconds = params.claim_lease_seconds.max(1);
             let lease_expires_at = now.saturating_add(lease_seconds);
-            let owner_thread_id = owner_thread_id.to_string();
             let claim_result = super::path_claims::try_claim_path_ownership_in_tx(
                 &mut tx,
                 owner_thread_id.as_str(),
@@ -1023,6 +1038,178 @@ WHERE id = ?
     Ok(unblocked)
 }
 
+#[derive(Debug, Deserialize)]
+struct StoredOpenTaskPayload {
+    #[serde(default)]
+    claim_paths: Vec<StoredOpenTaskClaim>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredOpenTaskClaim {
+    kind: String,
+    path: String,
+}
+
+async fn find_duplicate_incomplete_implementation_task_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    owner_thread_id: &str,
+    room: Option<&str>,
+    requested_claims: &[crate::PathClaimSpec],
+) -> anyhow::Result<Option<String>> {
+    let rows = if let Some(room) = room {
+        sqlx::query_as::<_, CoordinationTaskRow>(
+            r#"
+SELECT
+    id,
+    creator_thread_id,
+    owner_thread_id,
+    team_id,
+    room,
+    task_kind,
+    status,
+    summary,
+    details,
+    requested_capability,
+    blocked_reason,
+    created_at,
+    updated_at,
+    completed_at,
+    lease_expires_at
+FROM coordination_tasks
+WHERE owner_thread_id = ?
+  AND room = ?
+  AND task_kind = ?
+  AND status IN (?, ?, ?, ?)
+ORDER BY updated_at DESC, created_at DESC, id DESC
+            "#,
+        )
+        .bind(owner_thread_id)
+        .bind(room)
+        .bind(crate::CoordinationTaskKind::Implementation.as_str())
+        .bind(crate::CoordinationTaskStatus::Open.as_str())
+        .bind(crate::CoordinationTaskStatus::Awarded.as_str())
+        .bind(crate::CoordinationTaskStatus::Active.as_str())
+        .bind(crate::CoordinationTaskStatus::Blocked.as_str())
+        .fetch_all(&mut **tx)
+        .await?
+    } else {
+        sqlx::query_as::<_, CoordinationTaskRow>(
+            r#"
+SELECT
+    id,
+    creator_thread_id,
+    owner_thread_id,
+    team_id,
+    room,
+    task_kind,
+    status,
+    summary,
+    details,
+    requested_capability,
+    blocked_reason,
+    created_at,
+    updated_at,
+    completed_at,
+    lease_expires_at
+FROM coordination_tasks
+WHERE owner_thread_id = ?
+  AND room IS NULL
+  AND task_kind = ?
+  AND status IN (?, ?, ?, ?)
+ORDER BY updated_at DESC, created_at DESC, id DESC
+            "#,
+        )
+        .bind(owner_thread_id)
+        .bind(crate::CoordinationTaskKind::Implementation.as_str())
+        .bind(crate::CoordinationTaskStatus::Open.as_str())
+        .bind(crate::CoordinationTaskStatus::Awarded.as_str())
+        .bind(crate::CoordinationTaskStatus::Active.as_str())
+        .bind(crate::CoordinationTaskStatus::Blocked.as_str())
+        .fetch_all(&mut **tx)
+        .await?
+    };
+
+    for row in rows {
+        let existing_claims =
+            load_reserved_path_claims_for_task_in_tx(tx, row.id.as_str()).await?;
+        if claim_sets_overlap(requested_claims, &existing_claims) {
+            return Ok(Some(row.id));
+        }
+    }
+
+    Ok(None)
+}
+
+async fn load_reserved_path_claims_for_task_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    task_id: &str,
+) -> anyhow::Result<Vec<crate::PathClaimSpec>> {
+    let payload_json = sqlx::query_scalar::<_, String>(
+        r#"
+SELECT payload_json
+FROM coordination_acts
+WHERE task_id = ?
+  AND act_kind = ?
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+        "#,
+    )
+    .bind(task_id)
+    .bind(crate::CoordinationActKind::OpenTask.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let Some(payload_json) = payload_json else {
+        return Ok(Vec::new());
+    };
+
+    let Some(payload) = serde_json::from_str::<StoredOpenTaskPayload>(payload_json.as_str()).ok()
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut claims = Vec::with_capacity(payload.claim_paths.len());
+    for claim in payload.claim_paths {
+        let kind = match claim.kind.as_str() {
+            "file" => crate::PathClaimKind::File,
+            "directory" => crate::PathClaimKind::Directory,
+            _ => continue,
+        };
+        let path = std::path::PathBuf::from(&claim.path);
+        if !path.is_absolute() {
+            continue;
+        }
+        claims.push(crate::PathClaimSpec { kind, path });
+    }
+    Ok(claims)
+}
+
+fn claim_sets_overlap(
+    requested_claims: &[crate::PathClaimSpec],
+    existing_claims: &[crate::PathClaimSpec],
+) -> bool {
+    requested_claims.iter().any(|requested| {
+        existing_claims
+            .iter()
+            .any(|existing| claim_specs_overlap(requested, existing))
+    })
+}
+
+fn claim_specs_overlap(left: &crate::PathClaimSpec, right: &crate::PathClaimSpec) -> bool {
+    match (left.kind, right.kind) {
+        (crate::PathClaimKind::File, crate::PathClaimKind::File) => left.path == right.path,
+        (crate::PathClaimKind::File, crate::PathClaimKind::Directory) => {
+            left.path.starts_with(&right.path)
+        }
+        (crate::PathClaimKind::Directory, crate::PathClaimKind::File) => {
+            right.path.starts_with(&left.path)
+        }
+        (crate::PathClaimKind::Directory, crate::PathClaimKind::Directory) => {
+            left.path.starts_with(&right.path) || right.path.starts_with(&left.path)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1625,6 +1812,98 @@ mod tests {
                 .expect("blocker claims should list cleanly")
                 .len(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn duplicate_incomplete_implementation_scope_is_rejected_on_create() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init db");
+        let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000031").expect("id");
+        let owner = ThreadId::from_string("019e0000-0000-7000-8000-000000000032").expect("id");
+        let claimed_path = temp_dir.path().join("repo/src/lib.rs");
+        let open_payload = serde_json::json!({
+            "claim_paths": [{
+                "kind": "file",
+                "path": claimed_path.to_string_lossy(),
+            }],
+        })
+        .to_string();
+
+        db.create_coordination_task(crate::CoordinationTaskCreateParams {
+            id: "task-impl-original".to_string(),
+            creator_thread_id: creator,
+            owner_thread_id: Some(owner),
+            reserved_path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/ozzz".to_string()),
+            kind: CoordinationTaskKind::Implementation,
+            summary: "land impl".to_string(),
+            details: String::new(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-impl-original".to_string(),
+            act_summary: Some("opened impl".to_string()),
+            act_payload_json: open_payload.clone(),
+        })
+        .await
+        .expect("create original task");
+
+        db.accept_coordination_task(crate::CoordinationTaskAcceptParams {
+            task_id: "task-impl-original".to_string(),
+            actor_thread_id: owner,
+            path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            lease_seconds: 600,
+            act_id: "act-accept-impl-original".to_string(),
+            act_summary: Some("taking impl".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("accept original");
+
+        let err = db
+            .create_coordination_task(crate::CoordinationTaskCreateParams {
+                id: "task-impl-duplicate".to_string(),
+                creator_thread_id: owner,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: vec![crate::PathClaimSpec {
+                    kind: crate::PathClaimKind::File,
+                    path: claimed_path.clone(),
+                }],
+                claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/ozzz".to_string()),
+                kind: CoordinationTaskKind::Implementation,
+                summary: "duplicate impl".to_string(),
+                details: String::new(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open-impl-duplicate".to_string(),
+                act_summary: Some("opened duplicate impl".to_string()),
+                act_payload_json: open_payload,
+            })
+            .await
+            .expect_err("duplicate scope create should fail");
+
+        assert!(
+            err.to_string()
+                .contains("duplicate coordination implementation task task-impl-original"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(
+            db.get_coordination_task("task-impl-duplicate")
+                .await
+                .expect("get duplicate task should succeed"),
+            None
         );
     }
 }

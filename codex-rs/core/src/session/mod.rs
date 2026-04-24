@@ -1109,6 +1109,17 @@ impl Session {
         &self,
         message: &codex_protocol::protocol::HollywoodInputMessage,
     ) {
+        let identities = crate::hollywood::identities(
+            self.conversation_id,
+            self.thread_name().await.as_deref(),
+        );
+        let sender = crate::hollywood::normalize_identity(&message.sender_id);
+        if identities
+            .iter()
+            .any(|identity| sender == crate::hollywood::normalize_identity(identity))
+        {
+            return;
+        }
         let mut state = self.state.lock().await;
         state.add_hollywood_obligation(message);
     }

@@ -1034,6 +1034,100 @@ async fn implementation_open_task_rejects_conflicting_reserved_claim_paths() {
 }
 
 #[tokio::test]
+async fn implementation_open_task_dedupes_same_owner_same_scope() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let claimed_path = turn.config.cwd.join("src/lib.rs");
+
+    let initial_open = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Land protocol changes",
+                "details": "Own the implementation lane for src/lib.rs.",
+                "kind": "implementation",
+                "owner": session.conversation_id.to_string(),
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": claimed_path.to_string_lossy()
+                }],
+                "room": "repo/ozzz",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("initial open_task should succeed");
+    let initial_result = parse_result(initial_open);
+    let task_id = initial_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": claimed_path.to_string_lossy()
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("accept should succeed");
+
+    let duplicate_open = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Duplicate implementation lane",
+                "details": "Re-state the same src/lib.rs ownership.",
+                "kind": "implementation",
+                "owner": session.conversation_id.to_string(),
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": claimed_path.to_string_lossy()
+                }],
+                "room": "repo/ozzz",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("duplicate open_task should be idempotent");
+
+    assert_eq!(duplicate_open.success, Some(true));
+    let duplicate_result = parse_result(duplicate_open);
+    assert_eq!(duplicate_result["deduped"], json!(true));
+    assert_eq!(duplicate_result["task"]["id"], initial_result["task"]["id"]);
+    assert_eq!(duplicate_result["task"]["status"], "active");
+    assert_eq!(duplicate_result["act"], Value::Null);
+    assert_eq!(duplicate_result["room_notified"], json!(false));
+    assert_eq!(duplicate_result["woken_threads"], json!([]));
+
+    let tasks = state_db
+        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+            owner_thread_id: Some(session.conversation_id),
+            creator_thread_id: None,
+            room: Some("repo/ozzz".to_string()),
+            statuses: Vec::new(),
+        })
+        .await
+        .expect("list tasks should succeed");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].id, task_id);
+}
+
+#[tokio::test]
 async fn missing_task_id_returns_recoverable_output() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
@@ -1505,6 +1599,39 @@ async fn open_task_notifies_room_using_live_session_hollywood_config() {
     assert!(
         unresolved.is_empty(),
         "successful room send should resolve same-room obligations"
+    );
+}
+
+#[tokio::test]
+async fn self_authored_hollywood_message_does_not_create_obligation() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+    let identities = crate::hollywood::identities(session.conversation_id, None);
+    let sender_id = identities
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| session.conversation_id.to_string());
+
+    session
+        .add_hollywood_obligation(&HollywoodInputMessage {
+            message_id: 8,
+            room: "repo/losangelex".to_string(),
+            sender_id,
+            body: "Reply required from myself.".to_string(),
+            mentions: Vec::new(),
+            attention: Some("focused".to_string()),
+            message_kind: Some("direct".to_string()),
+            obligation: Some("obligation".to_string()),
+            synthetic_brief: None,
+            requires_response: true,
+        })
+        .await;
+
+    let unresolved = session
+        .resolve_hollywood_obligations_for_turn(&turn.sub_id)
+        .await;
+    assert!(
+        unresolved.is_empty(),
+        "self-authored Hollywood messages should not create obligations"
     );
 }
 

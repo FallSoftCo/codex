@@ -216,6 +216,12 @@ FROM task_watches
 WHERE status = ?
   AND next_check_at <= ?
   AND (lease_until IS NULL OR lease_until < ?)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM task_watch_runs
+      WHERE task_watch_runs.task_watch_id = task_watches.id
+        AND task_watch_runs.status = ?
+  )
 ORDER BY next_check_at ASC, id ASC
 LIMIT ?
             "#,
@@ -223,6 +229,7 @@ LIMIT ?
         .bind(TaskWatchStatus::Active.as_str())
         .bind(now.timestamp())
         .bind(now.timestamp())
+        .bind(TaskWatchRunStatus::Running.as_str())
         .bind(i64::try_from(limit).unwrap_or(i64::MAX))
         .fetch_all(self.pool.as_ref())
         .await?;
@@ -358,30 +365,11 @@ INSERT INTO task_watch_runs (
         .execute(self.pool.as_ref())
         .await?;
 
-        let check_count = task_watch.check_count + 1;
-        let max_checks_reached = task_watch
-            .max_checks
-            .is_some_and(|max_checks| check_count >= max_checks);
-        let next_check_at = advance_interval_after(
-            task_watch.scheduled_for,
-            started_at,
-            task_watch.cadence_seconds,
-        );
-        let status = if max_checks_reached {
-            TaskWatchStatus::Stopped
-        } else {
-            TaskWatchStatus::Active
-        };
-
         sqlx::query(
             r#"
 UPDATE task_watches
 SET lease_owner = NULL,
     lease_until = NULL,
-    next_check_at = ?,
-    check_count = ?,
-    status = ?,
-    stopped_at = CASE WHEN ? THEN ? ELSE stopped_at END,
     last_run_turn_id = ?,
     last_run_status = ?,
     last_error = NULL,
@@ -389,11 +377,6 @@ SET lease_owner = NULL,
 WHERE id = ?
             "#,
         )
-        .bind(next_check_at.timestamp())
-        .bind(check_count)
-        .bind(status.as_str())
-        .bind(max_checks_reached)
-        .bind(started_at.timestamp())
         .bind(turn_id)
         .bind(TaskWatchRunStatus::Running.as_str())
         .bind(started_at.timestamp())
@@ -503,6 +486,8 @@ ORDER BY started_at DESC, id DESC
         summary: Option<&str>,
         error: Option<&str>,
     ) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+
         sqlx::query(
             r#"
 UPDATE task_watch_runs
@@ -518,25 +503,227 @@ WHERE id = ?
         .bind(error)
         .bind(finished_at.timestamp())
         .bind(run_id)
-        .execute(self.pool.as_ref())
+        .execute(&mut *tx)
         .await?;
+
+        let task_watch = sqlx::query_as::<_, TaskWatchRow>(
+            r#"
+SELECT
+    id,
+    thread_id,
+    title,
+    objective,
+    prompt,
+    cadence_seconds,
+    next_check_at,
+    max_checks,
+    check_count,
+    requires_response,
+    status,
+    last_decision,
+    last_observation,
+    last_run_turn_id,
+    last_run_status,
+    last_error,
+    created_at,
+    updated_at,
+    stopped_at
+FROM task_watches
+WHERE id = ?
+            "#,
+        )
+        .bind(task_watch_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let (next_check_at, check_count, task_watch_status, stopped_at) = match task_watch {
+            Some(task_watch) => {
+                let check_count = task_watch.check_count + 1;
+                let task_watch_status = TaskWatchStatus::parse(task_watch.status.as_str())?;
+                let max_checks_reached = task_watch
+                    .max_checks
+                    .is_some_and(|max_checks| check_count >= max_checks);
+                let next_check_at = if task_watch_status == TaskWatchStatus::Active {
+                    Some(
+                        advance_interval_after(
+                            finished_at,
+                            finished_at,
+                            task_watch.cadence_seconds,
+                        )
+                        .timestamp(),
+                    )
+                } else {
+                    None
+                };
+                let task_watch_status = if task_watch_status == TaskWatchStatus::Active
+                    && max_checks_reached
+                {
+                    TaskWatchStatus::Stopped
+                } else {
+                    task_watch_status
+                };
+                let stopped_at = matches!(
+                    task_watch_status,
+                    TaskWatchStatus::Completed | TaskWatchStatus::Stopped
+                )
+                .then_some(finished_at.timestamp());
+                (
+                    next_check_at,
+                    check_count,
+                    task_watch_status,
+                    stopped_at,
+                )
+            }
+            None => return Ok(()),
+        };
 
         sqlx::query(
             r#"
 UPDATE task_watches
-SET last_run_status = ?,
+SET next_check_at = COALESCE(?, next_check_at),
+    check_count = ?,
+    status = ?,
+    stopped_at = COALESCE(?, stopped_at),
+    last_run_status = ?,
     last_error = ?,
     updated_at = ?
 WHERE id = ?
             "#,
         )
+        .bind(next_check_at)
+        .bind(check_count)
+        .bind(task_watch_status.as_str())
+        .bind(stopped_at)
         .bind(status.as_str())
         .bind(error)
         .bind(finished_at.timestamp())
         .bind(task_watch_id)
-        .execute(self.pool.as_ref())
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn deliver_task_watch_to_active_thread(
+        &self,
+        task_watch: &ClaimedTaskWatch,
+        turn_id: Option<&str>,
+        delivered_at: DateTime<Utc>,
+        summary: &str,
+    ) -> anyhow::Result<String> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let run_id = uuid::Uuid::new_v4().to_string();
+        sqlx::query(
+            r#"
+INSERT INTO task_watch_runs (
+    id,
+    task_watch_id,
+    thread_id,
+    turn_id,
+    scheduled_for,
+    status,
+    summary,
+    started_at,
+    finished_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&run_id)
+        .bind(&task_watch.id)
+        .bind(&task_watch.thread_id)
+        .bind(turn_id)
+        .bind(task_watch.scheduled_for.timestamp())
+        .bind(TaskWatchRunStatus::Completed.as_str())
+        .bind(summary)
+        .bind(delivered_at.timestamp())
+        .bind(delivered_at.timestamp())
+        .execute(&mut *tx)
+        .await?;
+
+        let task_watch_row = sqlx::query_as::<_, TaskWatchRow>(
+            r#"
+SELECT
+    id,
+    thread_id,
+    title,
+    objective,
+    prompt,
+    cadence_seconds,
+    next_check_at,
+    max_checks,
+    check_count,
+    requires_response,
+    status,
+    last_decision,
+    last_observation,
+    last_run_turn_id,
+    last_run_status,
+    last_error,
+    created_at,
+    updated_at,
+    stopped_at
+FROM task_watches
+WHERE id = ?
+            "#,
+        )
+        .bind(&task_watch.id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some(task_watch_row) = task_watch_row else {
+            return Ok(run_id);
+        };
+
+        let check_count = task_watch_row.check_count + 1;
+        let current_status = TaskWatchStatus::parse(task_watch_row.status.as_str())?;
+        let max_checks_reached = task_watch_row
+            .max_checks
+            .is_some_and(|max_checks| check_count >= max_checks);
+        let next_check_at = if current_status == TaskWatchStatus::Active {
+            Some(
+                advance_interval_after(delivered_at, delivered_at, task_watch_row.cadence_seconds)
+                    .timestamp(),
+            )
+        } else {
+            None
+        };
+        let status = if current_status == TaskWatchStatus::Active && max_checks_reached {
+            TaskWatchStatus::Stopped
+        } else {
+            current_status
+        };
+        let stopped_at = matches!(status, TaskWatchStatus::Completed | TaskWatchStatus::Stopped)
+            .then_some(delivered_at.timestamp());
+
+        sqlx::query(
+            r#"
+UPDATE task_watches
+SET lease_owner = NULL,
+    lease_until = NULL,
+    next_check_at = COALESCE(?, next_check_at),
+    check_count = ?,
+    status = ?,
+    stopped_at = COALESCE(?, stopped_at),
+    last_run_turn_id = COALESCE(?, last_run_turn_id),
+    last_run_status = ?,
+    last_error = NULL,
+    updated_at = ?
+WHERE id = ?
+            "#,
+        )
+        .bind(next_check_at)
+        .bind(check_count)
+        .bind(status.as_str())
+        .bind(stopped_at)
+        .bind(turn_id)
+        .bind(TaskWatchRunStatus::Completed.as_str())
+        .bind(delivered_at.timestamp())
+        .bind(&task_watch.id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        Ok(run_id)
     }
 
     pub async fn fail_task_watch(
@@ -638,9 +825,288 @@ mod tests {
             .await
             .expect("list task watches");
         assert_eq!(watches.len(), 1);
-        assert_eq!(watches[0].check_count, 1);
+        assert_eq!(watches[0].check_count, 0);
         assert_eq!(watches[0].status, TaskWatchStatus::Active);
         assert_eq!(watches[0].last_run_turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(watches[0].last_run_status, Some(TaskWatchRunStatus::Running));
+    }
+
+    #[tokio::test]
+    async fn running_task_watch_cannot_be_claimed_twice() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let runtime = StateRuntime::init(tempdir.path().to_path_buf(), "test-provider".to_string())
+            .await
+            .expect("state runtime");
+        let thread_id = ThreadId::new();
+        let metadata = crate::runtime::test_support::test_thread_metadata(
+            tempdir.path(),
+            thread_id,
+            tempdir.path().to_path_buf(),
+        );
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("upsert thread");
+
+        let now = Utc::now();
+        runtime
+            .create_task_watch(crate::TaskWatchCreateParams {
+                id: "watch-running".to_string(),
+                thread_id: thread_id.to_string(),
+                title: "watch deploy".to_string(),
+                objective: "keep checking deploy".to_string(),
+                prompt: "inspect deploy".to_string(),
+                cadence_seconds: 30,
+                next_check_at: now,
+                max_checks: Some(3),
+                requires_response: true,
+            })
+            .await
+            .expect("create task watch");
+
+        let claimed = runtime
+            .claim_due_task_watches(now, "worker-1", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due task watches");
+        assert_eq!(claimed.len(), 1);
+        runtime
+            .start_task_watch_run(&claimed[0], "turn-running", now)
+            .await
+            .expect("start task watch run");
+
+        let claimed_again = runtime
+            .claim_due_task_watches(
+                now + chrono::Duration::seconds(31),
+                "worker-2",
+                10,
+                Duration::from_secs(30),
+            )
+            .await
+            .expect("claim due task watches again");
+        assert!(claimed_again.is_empty());
+    }
+
+    #[tokio::test]
+    async fn completing_task_watch_run_advances_next_check_and_count() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let runtime = StateRuntime::init(tempdir.path().to_path_buf(), "test-provider".to_string())
+            .await
+            .expect("state runtime");
+        let thread_id = ThreadId::new();
+        let metadata = crate::runtime::test_support::test_thread_metadata(
+            tempdir.path(),
+            thread_id,
+            tempdir.path().to_path_buf(),
+        );
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("upsert thread");
+
+        let started_at = Utc::now();
+        runtime
+            .create_task_watch(crate::TaskWatchCreateParams {
+                id: "watch-complete".to_string(),
+                thread_id: thread_id.to_string(),
+                title: "watch deploy".to_string(),
+                objective: "keep checking deploy".to_string(),
+                prompt: "inspect deploy".to_string(),
+                cadence_seconds: 30,
+                next_check_at: started_at,
+                max_checks: Some(3),
+                requires_response: true,
+            })
+            .await
+            .expect("create task watch");
+
+        let claimed = runtime
+            .claim_due_task_watches(started_at, "worker-1", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due task watches");
+        let run_id = runtime
+            .start_task_watch_run(&claimed[0], "turn-complete", started_at)
+            .await
+            .expect("start task watch run");
+
+        let finished_at = started_at + chrono::Duration::seconds(90);
+        runtime
+            .complete_task_watch_run(
+                &run_id,
+                "watch-complete",
+                TaskWatchRunStatus::Completed,
+                finished_at,
+                Some("done"),
+                None,
+            )
+            .await
+            .expect("complete task watch run");
+
+        let watches = runtime
+            .list_task_watches(Some(thread_id))
+            .await
+            .expect("list task watches");
+        assert_eq!(watches.len(), 1);
+        assert_eq!(watches[0].check_count, 1);
+        assert_eq!(watches[0].status, TaskWatchStatus::Active);
+        assert_eq!(
+            watches[0].next_check_at.timestamp(),
+            (finished_at + chrono::Duration::seconds(30)).timestamp()
+        );
+        assert_eq!(watches[0].last_run_status, Some(TaskWatchRunStatus::Completed));
+
+        let claimed_again = runtime
+            .claim_due_task_watches(finished_at, "worker-2", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due task watches again");
+        assert!(claimed_again.is_empty());
+    }
+
+    #[tokio::test]
+    async fn completing_task_watch_run_preserves_completed_status() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let runtime = StateRuntime::init(tempdir.path().to_path_buf(), "test-provider".to_string())
+            .await
+            .expect("state runtime");
+        let thread_id = ThreadId::new();
+        let metadata = crate::runtime::test_support::test_thread_metadata(
+            tempdir.path(),
+            thread_id,
+            tempdir.path().to_path_buf(),
+        );
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("upsert thread");
+
+        let started_at = Utc::now();
+        runtime
+            .create_task_watch(crate::TaskWatchCreateParams {
+                id: "watch-preserve".to_string(),
+                thread_id: thread_id.to_string(),
+                title: "watch deploy".to_string(),
+                objective: "keep checking deploy".to_string(),
+                prompt: "inspect deploy".to_string(),
+                cadence_seconds: 30,
+                next_check_at: started_at,
+                max_checks: Some(3),
+                requires_response: true,
+            })
+            .await
+            .expect("create task watch");
+
+        let claimed = runtime
+            .claim_due_task_watches(started_at, "worker-1", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due task watches");
+        let run_id = runtime
+            .start_task_watch_run(&claimed[0], "turn-complete", started_at)
+            .await
+            .expect("start task watch run");
+
+        let accepted = runtime
+            .update_task_watch(crate::TaskWatchUpdateParams {
+                id: "watch-preserve".to_string(),
+                cadence_seconds: None,
+                next_check_at: None,
+                max_checks: None,
+                last_decision: Some("complete".to_string()),
+                last_observation: Some("lane assigned".to_string()),
+                status: Some(TaskWatchStatus::Completed),
+            })
+            .await
+            .expect("update task watch");
+        assert!(accepted);
+
+        let finished_at = started_at + chrono::Duration::seconds(5);
+        runtime
+            .complete_task_watch_run(
+                &run_id,
+                "watch-preserve",
+                TaskWatchRunStatus::Completed,
+                finished_at,
+                Some("done"),
+                None,
+            )
+            .await
+            .expect("complete task watch run");
+
+        let watches = runtime
+            .list_task_watches(Some(thread_id))
+            .await
+            .expect("list task watches");
+        assert_eq!(watches.len(), 1);
+        assert_eq!(watches[0].status, TaskWatchStatus::Completed);
+        assert_eq!(watches[0].check_count, 1);
+    }
+
+    #[tokio::test]
+    async fn delivering_task_watch_to_active_thread_advances_without_failure() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let runtime = StateRuntime::init(tempdir.path().to_path_buf(), "test-provider".to_string())
+            .await
+            .expect("state runtime");
+        let thread_id = ThreadId::new();
+        let metadata = crate::runtime::test_support::test_thread_metadata(
+            tempdir.path(),
+            thread_id,
+            tempdir.path().to_path_buf(),
+        );
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("upsert thread");
+
+        let now = Utc::now();
+        runtime
+            .create_task_watch(crate::TaskWatchCreateParams {
+                id: "watch-deliver".to_string(),
+                thread_id: thread_id.to_string(),
+                title: "watch deploy".to_string(),
+                objective: "keep checking deploy".to_string(),
+                prompt: "inspect deploy".to_string(),
+                cadence_seconds: 30,
+                next_check_at: now,
+                max_checks: Some(3),
+                requires_response: true,
+            })
+            .await
+            .expect("create task watch");
+
+        let claimed = runtime
+            .claim_due_task_watches(now, "worker-1", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due task watches");
+        assert_eq!(claimed.len(), 1);
+
+        runtime
+            .deliver_task_watch_to_active_thread(
+                &claimed[0],
+                Some("turn-active"),
+                now,
+                "task watch wake was appended to an already-active thread",
+            )
+            .await
+            .expect("deliver task watch");
+
+        let watches = runtime
+            .list_task_watches(Some(thread_id))
+            .await
+            .expect("list task watches");
+        assert_eq!(watches.len(), 1);
+        assert_eq!(watches[0].check_count, 1);
+        assert_eq!(watches[0].status, TaskWatchStatus::Active);
+        assert_eq!(watches[0].last_run_turn_id.as_deref(), Some("turn-active"));
+        assert_eq!(watches[0].last_run_status, Some(TaskWatchRunStatus::Completed));
+        assert_eq!(
+            watches[0].next_check_at.timestamp(),
+            (now + chrono::Duration::seconds(30)).timestamp()
+        );
+
+        let claimed_again = runtime
+            .claim_due_task_watches(now, "worker-2", 10, Duration::from_secs(30))
+            .await
+            .expect("claim due task watches again");
+        assert!(claimed_again.is_empty());
     }
 
     #[tokio::test]

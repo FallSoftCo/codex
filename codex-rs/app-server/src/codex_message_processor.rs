@@ -986,7 +986,7 @@ impl CodexMessageProcessor {
             },
             thread_id,
             Arc::clone(&thread),
-            thread_state,
+            Arc::clone(&thread_state),
             ApiVersion::V2,
         )
         .await;
@@ -1174,7 +1174,7 @@ impl CodexMessageProcessor {
             },
             thread_id,
             Arc::clone(&thread),
-            thread_state,
+            Arc::clone(&thread_state),
             ApiVersion::V2,
         )
         .await;
@@ -1183,13 +1183,22 @@ impl CodexMessageProcessor {
             Self::resolve_background_thread_status(context, &task_watch.thread_id, Some(&thread))
                 .await;
         if matches!(status, ThreadStatus::Active { .. }) {
-            let retry_at = Utc::now() + chrono::Duration::from_std(TASK_WATCH_BUSY_RETRY_DELAY)?;
+            let wake_at = Utc::now();
+            let active_turn_id = {
+                let state = thread_state.lock().await;
+                state.active_turn_snapshot_if_running().map(|turn| turn.id)
+            };
+            thread
+                .inject_user_message_without_turn(Self::format_task_watch_wake_message(
+                    &task_watch, wake_at,
+                ))
+                .await;
             state_db
-                .record_task_watch_start_failure(
+                .deliver_task_watch_to_active_thread(
                     &task_watch,
-                    Utc::now(),
-                    retry_at,
-                    "thread is already active; rescheduling",
+                    active_turn_id.as_deref(),
+                    wake_at,
+                    "task watch wake was appended to an already-active thread",
                 )
                 .await?;
             return Ok(());
@@ -1978,6 +1987,11 @@ impl CodexMessageProcessor {
             return Ok(ScheduledTaskThreadLoad::Loaded(thread));
         }
 
+        let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+        if let Some(thread) = thread_state.lock().await.listener_thread() {
+            return Ok(ScheduledTaskThreadLoad::Loaded(thread));
+        }
+
         let rollout_path =
             find_thread_path_by_id_str(&context.config.codex_home, &thread_id.to_string())
                 .await?
@@ -2458,14 +2472,7 @@ impl CodexMessageProcessor {
         let requires_response = matches!(
             message.notification_message.response_policy,
             HollywoodResponsePolicy::Required
-        ) || ((delivery_direct || message.mentioned)
-            && matches!(
-                kind,
-                HollywoodSemanticKind::DirectRequest
-                    | HollywoodSemanticKind::Assignment
-                    | HollywoodSemanticKind::ReviewRequest
-                    | HollywoodSemanticKind::Handoff
-            ));
+        );
 
         let wakeworthy = requires_response
             || matches!(
@@ -16187,7 +16194,7 @@ mod tests {
     }
 
     #[test]
-    fn mentioned_hollywood_message_remains_an_obligation() {
+    fn mentioned_hollywood_message_without_required_policy_is_attention() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
                 id: 44,
@@ -16211,8 +16218,8 @@ mod tests {
         assert!(!CodexMessageProcessor::hollywood_message_is_ack_only(
             &message
         ));
-        assert_eq!(obligation, "obligation");
-        assert!(requires_response);
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
     }
 
     #[test]
@@ -16321,7 +16328,7 @@ mod tests {
     }
 
     #[test]
-    fn ready_to_verify_handoff_remains_an_obligation() {
+    fn ready_to_verify_handoff_without_required_policy_is_attention() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
                 id: 46,
@@ -16347,8 +16354,8 @@ mod tests {
             CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
         let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
 
-        assert_eq!(obligation, "obligation");
-        assert!(requires_response);
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
         assert_eq!(brief.semantic_kind.as_deref(), Some("handoff"));
     }
 
@@ -16386,7 +16393,7 @@ mod tests {
     }
 
     #[test]
-    fn mentioned_question_hollywood_message_is_direct_request_obligation() {
+    fn mentioned_question_hollywood_message_without_required_policy_is_attention() {
         let message = crate::hollywood::HollywoodClassifiedMessage {
             notification_message: codex_app_server_protocol::HollywoodMessage {
                 id: 46,
@@ -16412,8 +16419,8 @@ mod tests {
             CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
         let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
 
-        assert_eq!(obligation, "obligation");
-        assert!(requires_response);
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
         assert_eq!(brief.semantic_kind.as_deref(), Some("direct_request"));
     }
 
