@@ -346,6 +346,11 @@ async fn handle_coordination_act(
                     Some(&task),
                 );
             }
+            if task.status == codex_state::CoordinationTaskStatus::Active
+                && task.owner_thread_id.as_deref() == Some(actor_thread_id.to_string().as_str())
+            {
+                return coordination_duplicate_output(task);
+            }
             let lease_seconds = args
                 .lease_seconds
                 .unwrap_or(codex_state::DEFAULT_COORDINATION_LEASE_SECONDS);
@@ -376,12 +381,19 @@ async fn handle_coordination_act(
                 .await
             {
                 Ok(outcome) => outcome,
-                Err(err) => match map_coordination_transition_error(err) {
-                    FunctionCallError::RespondToModel(message) => {
-                        return coordination_failure_output(message, Some(&task));
+                Err(err) => {
+                    if let Some(current_task) =
+                        same_owner_active_task(db, task.id.as_str(), actor_thread_id).await?
+                    {
+                        return coordination_duplicate_output(current_task);
                     }
-                    fatal => return Err(fatal),
-                },
+                    match map_coordination_transition_error(err) {
+                        FunctionCallError::RespondToModel(message) => {
+                            return coordination_failure_output(message, Some(&task));
+                        }
+                        fatal => return Err(fatal),
+                    }
+                }
             };
             let ownership = if path_claims.is_empty() {
                 None
@@ -405,6 +417,9 @@ async fn handle_coordination_act(
                 }
                 Err(fatal) => return Err(fatal),
             }
+            if task.status == codex_state::CoordinationTaskStatus::Done {
+                return coordination_duplicate_output(task);
+            }
             let outcome = match db
                 .complete_coordination_task(codex_state::CoordinationTaskDoneParams {
                     task_id: task.id.clone(),
@@ -420,12 +435,19 @@ async fn handle_coordination_act(
                 .await
             {
                 Ok(outcome) => outcome,
-                Err(err) => match map_coordination_transition_error(err) {
-                    FunctionCallError::RespondToModel(message) => {
-                        return coordination_failure_output(message, Some(&task));
+                Err(err) => {
+                    if let Some(current_task) =
+                        same_controller_done_task(db, task.id.as_str(), actor_thread_id).await?
+                    {
+                        return coordination_duplicate_output(current_task);
                     }
-                    fatal => return Err(fatal),
-                },
+                    match map_coordination_transition_error(err) {
+                        FunctionCallError::RespondToModel(message) => {
+                            return coordination_failure_output(message, Some(&task));
+                        }
+                        fatal => return Err(fatal),
+                    }
+                }
             };
             let ownership = if let Some(release_paths) = args.release_paths.as_deref() {
                 Some(release_paths_for_actor(db, actor_thread_id, release_paths).await?)
@@ -977,6 +999,43 @@ async fn required_task(
         .ok_or_else(|| {
             FunctionCallError::RespondToModel(format!("coordination task {task_id} was not found"))
         })
+}
+
+async fn same_owner_active_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: &str,
+    actor_thread_id: ThreadId,
+) -> Result<Option<codex_state::CoordinationTask>, FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let Some(task) = db
+        .get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let same_owner_active = task.status == codex_state::CoordinationTaskStatus::Active
+        && task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str());
+    Ok(same_owner_active.then_some(task))
+}
+
+async fn same_controller_done_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: &str,
+    actor_thread_id: ThreadId,
+) -> Result<Option<codex_state::CoordinationTask>, FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let Some(task) = db
+        .get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let same_controller_done = task.status == codex_state::CoordinationTaskStatus::Done
+        && (task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str())
+            || task.creator_thread_id == actor_thread_id);
+    Ok(same_controller_done.then_some(task))
 }
 
 fn ensure_task_control(

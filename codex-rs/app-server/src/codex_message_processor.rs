@@ -2773,6 +2773,20 @@ impl CodexMessageProcessor {
         true
     }
 
+    async fn hollywood_message_should_queue_when_busy(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+        thread_id: ThreadId,
+        state_db: Option<&Arc<codex_state::StateRuntime>>,
+    ) -> bool {
+        if let Some(should_queue) =
+            Self::coordination_projection_busy_queue_relevance(message, thread_id, state_db).await
+        {
+            return should_queue;
+        }
+
+        true
+    }
+
     async fn coordination_projection_wake_relevance(
         message: &crate::hollywood::HollywoodClassifiedMessage,
         thread_id: ThreadId,
@@ -2796,6 +2810,31 @@ impl CodexMessageProcessor {
         let action =
             Self::parse_coordination_projection_action(message.notification_message.body.as_str());
         Some(!matches!(action.as_deref(), Some("accept")))
+    }
+
+    async fn coordination_projection_busy_queue_relevance(
+        message: &crate::hollywood::HollywoodClassifiedMessage,
+        thread_id: ThreadId,
+        state_db: Option<&Arc<codex_state::StateRuntime>>,
+    ) -> Option<bool> {
+        use codex_app_server_protocol::HollywoodMessageKind;
+
+        if message.notification_message.message_kind != HollywoodMessageKind::Broadcast {
+            return None;
+        }
+
+        let task_id = Self::parse_coordination_projection_task_id(
+            message.notification_message.body.as_str(),
+        )?;
+        let state_db = state_db?;
+        let task = state_db.get_coordination_task(&task_id).await.ok()??;
+        if task.creator_thread_id != thread_id.to_string() {
+            return None;
+        }
+
+        let action =
+            Self::parse_coordination_projection_action(message.notification_message.body.as_str());
+        Some(!matches!(action.as_deref(), Some("done")))
     }
 
     fn parse_coordination_projection_task_id(body: &str) -> Option<String> {
@@ -12657,10 +12696,11 @@ impl CodexMessageProcessor {
                                 == codex_app_server_protocol::HollywoodMessageAttention::Focused;
                             let message_is_broadcast = message.attention
                                 == codex_app_server_protocol::HollywoodMessageAttention::Broadcast;
-                            let can_submit_now = message_is_focused
-                                || (message_is_broadcast
-                                    && matches!(status, ThreadStatus::Idle)
-                                    && !thread_state.lock().await.has_active_turn());
+                            let has_active_turn = thread_state.lock().await.has_active_turn();
+                            let thread_busy =
+                                !matches!(status, ThreadStatus::Idle) || has_active_turn;
+                            let can_submit_now =
+                                message_is_focused || (message_is_broadcast && !thread_busy);
                             if can_submit_now && !message.self_authored && wakeworthy_message {
                                 let (obligation, requires_response) =
                                     Self::hollywood_input_delivery_metadata(&message);
@@ -12716,7 +12756,16 @@ impl CodexMessageProcessor {
                                         );
                                     }
                                 }
-                            } else if wakeworthy_message && !message.self_authored {
+                            } else if wakeworthy_message
+                                && !message.self_authored
+                                && (!thread_busy
+                                    || Self::hollywood_message_should_queue_when_busy(
+                                        &message,
+                                        conversation_id,
+                                        state_db.as_ref(),
+                                    )
+                                    .await)
+                            {
                                 thread_state
                                     .lock()
                                     .await
@@ -16799,6 +16848,76 @@ mod tests {
             !CodexMessageProcessor::hollywood_message_needs_wake_for_thread(
                 &message,
                 unrelated,
+                Some(&state_db),
+            )
+            .await
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn busy_creator_does_not_queue_done_projection_follow_up() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000014").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000015").expect("owner id");
+
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-busy-done".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Qa,
+                summary: "Busy creator queue suppression".to_string(),
+                details: "Creator is already in-flight and should not get a deferred done wake."
+                    .to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open-busy-done".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 4545,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some(owner.to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Broadcast,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: format!(
+                    "Coordination update from {owner}: done `Busy creator queue suppression` [task-busy-done] owner={owner}"
+                ),
+                created_at: "2026-04-24T20:44:33Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Broadcast,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(
+            CodexMessageProcessor::hollywood_message_needs_wake_for_thread(
+                &message,
+                creator,
+                Some(&state_db),
+            )
+            .await
+        );
+        assert!(
+            !CodexMessageProcessor::hollywood_message_should_queue_when_busy(
+                &message,
+                creator,
                 Some(&state_db),
             )
             .await

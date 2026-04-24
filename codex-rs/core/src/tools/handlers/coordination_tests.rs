@@ -1151,6 +1151,173 @@ async fn missing_task_id_returns_recoverable_output() {
 }
 
 #[tokio::test]
+async fn active_accept_by_same_owner_is_idempotent() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Read-only QA",
+                "kind": "qa",
+                "room": "repo/ozzz",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should be string")
+        .to_string();
+
+    let accept_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id.as_str(),
+                "summary": "Taking QA lane.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("initial accept should succeed");
+    let accept_result = parse_result(accept_output);
+    assert_eq!(accept_result["task"]["status"], "active");
+
+    let duplicate_accept = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id.as_str(),
+                "summary": "Re-accepting the same QA lane.",
+                "notify_room": true,
+            }),
+        ))
+        .await
+        .expect("same-owner active accept should be idempotent");
+
+    assert_eq!(duplicate_accept.success, Some(true));
+    let duplicate_result = parse_result(duplicate_accept);
+    assert_eq!(duplicate_result["deduped"], json!(true));
+    assert_eq!(duplicate_result["task"]["id"], open_result["task"]["id"]);
+    assert_eq!(duplicate_result["task"]["status"], "active");
+    assert_eq!(duplicate_result["act"], Value::Null);
+    assert_eq!(duplicate_result["room_notified"], json!(false));
+
+    let acts = state_db
+        .list_coordination_acts(Some(task_id.as_str()))
+        .await
+        .expect("list acts should succeed");
+    let accept_count = acts
+        .iter()
+        .filter(|act| act.kind == codex_state::CoordinationActKind::Accept)
+        .count();
+    assert_eq!(accept_count, 1);
+}
+
+#[tokio::test]
+async fn repeated_done_by_same_controller_is_idempotent() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+
+    let open_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Verification lane",
+                "kind": "qa",
+                "room": "repo/ozzz",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should be string")
+        .to_string();
+
+    CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id.as_str(),
+                "summary": "Taking verification lane.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("accept should succeed");
+
+    let done_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "done",
+                "task_id": task_id.as_str(),
+                "summary": "Verification complete.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("first done should succeed");
+    let done_result = parse_result(done_output);
+    assert_eq!(done_result["task"]["status"], "done");
+
+    let duplicate_done = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "done",
+                "task_id": task_id.as_str(),
+                "summary": "Repeating done after completion.",
+                "notify_room": true,
+            }),
+        ))
+        .await
+        .expect("same-controller done should be idempotent");
+
+    assert_eq!(duplicate_done.success, Some(true));
+    let duplicate_result = parse_result(duplicate_done);
+    assert_eq!(duplicate_result["deduped"], json!(true));
+    assert_eq!(duplicate_result["task"]["id"], open_result["task"]["id"]);
+    assert_eq!(duplicate_result["task"]["status"], "done");
+    assert_eq!(duplicate_result["act"], Value::Null);
+    assert_eq!(duplicate_result["room_notified"], json!(false));
+
+    let acts = state_db
+        .list_coordination_acts(Some(task_id.as_str()))
+        .await
+        .expect("list acts should succeed");
+    let done_count = acts
+        .iter()
+        .filter(|act| act.kind == codex_state::CoordinationActKind::Done)
+        .count();
+    assert_eq!(done_count, 1);
+}
+
+#[tokio::test]
 async fn unknown_task_returns_recoverable_output() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
