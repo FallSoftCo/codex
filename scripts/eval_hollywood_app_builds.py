@@ -244,6 +244,19 @@ def run_tests(workspace: Path) -> subprocess.CompletedProcess[str]:
     return run_command(["npm", "test", "--", "--run"], cwd=workspace, timeout=120)
 
 
+def active_thread_count(thread_states: dict[str, dict[str, Any]]) -> int:
+    return sum(
+        1
+        for state in thread_states.values()
+        if isinstance(state.get("status"), dict)
+        and state["status"].get("type") == "active"
+    )
+
+
+def all_threads_idle(thread_states: dict[str, dict[str, Any]]) -> bool:
+    return active_thread_count(thread_states) == 0
+
+
 def changed_files(workspace: Path, challenge: str) -> list[str]:
     template = CHALLENGES[challenge]
     changed: list[str] = []
@@ -321,6 +334,7 @@ def evaluate_policy(
     conn = JsonRpcWs(app_server_url)
     started_at = time.time()
     passed_at: float | None = None
+    quiesced_at: float | None = None
     test_history: list[dict[str, Any]] = []
     agents: list[AgentRun] = []
     try:
@@ -352,7 +366,17 @@ def evaluate_policy(
             if test_result.returncode == 0:
                 passed_at = elapsed
                 if post_pass_soak_seconds > 0:
-                    conn.drain(post_pass_soak_seconds)
+                    quiescence_deadline = time.time() + post_pass_soak_seconds
+                    while time.time() < quiescence_deadline:
+                        remaining = max(0.05, quiescence_deadline - time.time())
+                        conn.drain(min(5.0, remaining))
+                        candidate_thread_states = {
+                            agent.thread_id: read_thread_state(conn, agent.thread_id)
+                            for agent in agents
+                        }
+                        if all_threads_idle(candidate_thread_states):
+                            quiesced_at = round(time.time() - started_at, 1)
+                            break
                 break
 
         final_test = run_tests(workspace)
@@ -362,12 +386,7 @@ def evaluate_policy(
         summary = summarize_notifications(conn.notifications, {agent.thread_id for agent in agents})
         completed = completed_threads(conn.notifications, {agent.thread_id for agent in agents})
         changed = changed_files(workspace, challenge)
-        active_threads_after_run = sum(
-            1
-            for state in thread_states.values()
-            if isinstance(state.get("status"), dict)
-            and state["status"].get("type") == "active"
-        )
+        active_threads_after_run = active_thread_count(thread_states)
         message_count = summary["notificationCounts"].get("thread/hollywood/message", 0)
         return {
             "policy": policy,
@@ -385,6 +404,8 @@ def evaluate_policy(
             "changedFiles": changed,
             "changedFilesCount": len(changed),
             "activeThreadsAfterRun": active_threads_after_run,
+            "allThreadsIdleAfterRun": active_threads_after_run == 0,
+            "quiescedAtSeconds": quiesced_at,
             "messageCount": message_count,
             "finalTest": {
                 "returncode": final_test.returncode,
