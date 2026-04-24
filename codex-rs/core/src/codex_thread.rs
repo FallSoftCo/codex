@@ -2,22 +2,26 @@ use crate::agent::AgentStatus;
 use crate::config::ConstraintResult;
 use crate::file_watcher::WatchRegistration;
 use crate::session::Codex;
+use crate::session::SessionSettingsUpdate;
 use crate::session::SteerInputError;
 use codex_features::Feature;
 use codex_protocol::config_types::ApprovalsReviewer;
+use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::config_types::Personality;
+use codex_protocol::config_types::ReasoningSummary;
 use codex_protocol::config_types::ServiceTier;
+use codex_protocol::config_types::WindowsSandboxLevel;
 use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result as CodexResult;
 use codex_protocol::mcp::CallToolResult;
 use codex_protocol::models::ContentItem;
+use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseInputItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::Op;
-use codex_protocol::protocol::RolloutItem;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::Submission;
@@ -43,12 +47,30 @@ pub struct ThreadConfigSnapshot {
     pub approval_policy: AskForApproval,
     pub approvals_reviewer: ApprovalsReviewer,
     pub sandbox_policy: SandboxPolicy,
+    pub permission_profile: PermissionProfile,
     pub cwd: AbsolutePathBuf,
     pub ephemeral: bool,
     pub thread_name: Option<String>,
     pub reasoning_effort: Option<ReasoningEffort>,
     pub personality: Option<Personality>,
     pub session_source: SessionSource,
+}
+
+/// Turn context overrides that app-server validates before starting a turn.
+#[derive(Clone, Default)]
+pub struct CodexThreadTurnContextOverrides {
+    pub cwd: Option<PathBuf>,
+    pub approval_policy: Option<AskForApproval>,
+    pub approvals_reviewer: Option<ApprovalsReviewer>,
+    pub sandbox_policy: Option<SandboxPolicy>,
+    pub permission_profile: Option<PermissionProfile>,
+    pub windows_sandbox_level: Option<WindowsSandboxLevel>,
+    pub model: Option<String>,
+    pub effort: Option<Option<ReasoningEffort>>,
+    pub summary: Option<ReasoningSummary>,
+    pub service_tier: Option<Option<ServiceTier>>,
+    pub collaboration_mode: Option<CollaborationMode>,
+    pub personality: Option<Personality>,
 }
 
 pub struct CodexThread {
@@ -126,6 +148,51 @@ impl CodexThread {
             .await
     }
 
+    /// Validate persistent turn context overrides without committing them.
+    pub async fn validate_turn_context_overrides(
+        &self,
+        overrides: CodexThreadTurnContextOverrides,
+    ) -> ConstraintResult<()> {
+        let CodexThreadTurnContextOverrides {
+            cwd,
+            approval_policy,
+            approvals_reviewer,
+            sandbox_policy,
+            permission_profile,
+            windows_sandbox_level,
+            model,
+            effort,
+            summary,
+            service_tier,
+            collaboration_mode,
+            personality,
+        } = overrides;
+        let collaboration_mode = if let Some(collaboration_mode) = collaboration_mode {
+            collaboration_mode
+        } else {
+            self.codex
+                .session
+                .collaboration_mode()
+                .await
+                .with_updates(model, effort, /*developer_instructions*/ None)
+        };
+
+        let updates = SessionSettingsUpdate {
+            cwd,
+            approval_policy,
+            approvals_reviewer,
+            sandbox_policy,
+            permission_profile,
+            windows_sandbox_level,
+            collaboration_mode: Some(collaboration_mode),
+            reasoning_summary: summary,
+            service_tier,
+            personality,
+            ..Default::default()
+        };
+        self.codex.session.validate_settings(&updates).await
+    }
+
     /// Use sparingly: this is intended to be removed soon.
     pub async fn submit_with_id(&self, sub: Submission) -> CodexResult<()> {
         self.codex.submit_with_id(sub).await
@@ -145,10 +212,6 @@ impl CodexThread {
 
     pub(crate) async fn total_token_usage(&self) -> Option<TokenUsage> {
         self.codex.session.total_token_usage().await
-    }
-
-    pub async fn hollywood_obligation_count(&self) -> usize {
-        self.codex.session.hollywood_obligation_count().await
     }
 
     /// Returns the complete token usage snapshot currently cached for this thread.
@@ -245,10 +308,29 @@ impl CodexThread {
         self.rollout_path.clone()
     }
 
+    pub fn state_db(&self) -> Option<StateDbHandle> {
+        self.codex.state_db()
+    }
+
+    pub async fn set_hollywood_session_meta(
+        &self,
+        meta: Option<codex_protocol::protocol::HollywoodSessionMeta>,
+    ) {
+        self.codex.session.set_hollywood_session_meta(meta).await;
+    }
+
+    pub async fn hollywood_obligation_count(&self) -> usize {
+        self.codex.session.hollywood_obligation_count().await
+    }
+
+    pub async fn persist_rollout_items(&self, items: &[codex_protocol::protocol::RolloutItem]) {
+        self.codex.session.persist_rollout_items(items).await;
+    }
+
     pub async fn unified_exec_process_observation(
         &self,
         process_id: i32,
-    ) -> crate::ProcessObservation {
+    ) -> crate::unified_exec::ProcessObservation {
         self.codex
             .session
             .services
@@ -257,23 +339,8 @@ impl CodexThread {
             .await
     }
 
-    pub fn state_db(&self) -> Option<StateDbHandle> {
-        self.codex.state_db()
-    }
-
-    pub async fn persist_rollout_items(&self, items: &[RolloutItem]) {
-        self.codex.session.persist_rollout_items(items).await;
-    }
-
     pub async fn config_snapshot(&self) -> ThreadConfigSnapshot {
         self.codex.thread_config_snapshot().await
-    }
-
-    pub async fn set_hollywood_session_meta(
-        &self,
-        meta: Option<codex_protocol::protocol::HollywoodSessionMeta>,
-    ) {
-        self.codex.session.set_hollywood_session_meta(meta).await;
     }
 
     pub async fn read_mcp_resource(

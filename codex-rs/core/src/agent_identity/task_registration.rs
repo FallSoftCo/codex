@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use codex_login::AgentTaskAuthorizationTarget;
+use codex_agent_identity::AgentTaskAuthorizationTarget;
 use codex_protocol::protocol::SessionAgentTask;
 use crypto_box::SecretKey as Curve25519SecretKey;
 use ed25519_dalek::Signer as _;

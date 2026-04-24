@@ -27,12 +27,12 @@ use crate::tools::runtimes::unified_exec::UnifiedExecRequest as UnifiedExecToolR
 use crate::tools::runtimes::unified_exec::UnifiedExecRuntime;
 use crate::tools::sandboxing::ToolCtx;
 use crate::tools::sandboxing::ToolError;
-use crate::unified_exec::CompletedProcessObservation;
 use crate::unified_exec::ExecCommandRequest;
 use crate::unified_exec::MAX_UNIFIED_EXEC_PROCESSES;
 use crate::unified_exec::MAX_YIELD_TIME_MS;
 use crate::unified_exec::MIN_EMPTY_YIELD_TIME_MS;
 use crate::unified_exec::MIN_YIELD_TIME_MS;
+use crate::unified_exec::CompletedProcessObservation;
 use crate::unified_exec::ProcessEntry;
 use crate::unified_exec::ProcessStore;
 use crate::unified_exec::UnifiedExecContext;
@@ -76,8 +76,6 @@ const UNIFIED_EXEC_ENV: [(&str, &str); 10] = [
 /// In production builds this value should remain at its default (`false`) and
 /// must not be toggled.
 static FORCE_DETERMINISTIC_PROCESS_IDS: AtomicBool = AtomicBool::new(false);
-const MAX_COMPLETED_PROCESS_OBSERVATIONS: usize = 256;
-const WATCHER_HINT_THRESHOLD_MS: u64 = 60_000;
 
 pub(super) fn set_deterministic_process_ids_for_tests(enabled: bool) {
     FORCE_DETERMINISTIC_PROCESS_IDS.store(enabled, Ordering::Relaxed);
@@ -172,8 +170,7 @@ struct PreparedProcessHandles {
     output_closed_notify: Arc<Notify>,
     cancellation_token: CancellationToken,
     pause_state: Option<watch::Receiver<bool>>,
-    command: Vec<String>,
-    call_id: String,
+    hook_command: String,
     process_id: i32,
     tty: bool,
 }
@@ -213,35 +210,23 @@ impl UnifiedExecProcessManager {
     pub(crate) async fn release_process_id(&self, process_id: i32) {
         let removed = {
             let mut store = self.process_store.lock().await;
-            store.remove(process_id)
+            let removed = store.remove(process_id);
+            if let Some(entry) = removed.as_ref()
+                && entry.process.has_exited()
+            {
+                store.completed_processes.insert(
+                    process_id,
+                    CompletedProcessObservation {
+                        call_id: entry.call_id.clone(),
+                        exit_code: entry.process.exit_code(),
+                        failure_message: None,
+                    },
+                );
+            }
+            removed
         };
         if let Some(entry) = removed {
             Self::unregister_network_approval_for_entry(&entry).await;
-        }
-    }
-
-    pub(crate) async fn process_observation(&self, process_id: i32) -> ProcessObservation {
-        match self.refresh_process_state(process_id).await {
-            ProcessStatus::Alive { exit_code, .. } => ProcessObservation::Running { exit_code },
-            ProcessStatus::Exited {
-                exit_code,
-                failure_message,
-                ..
-            } => ProcessObservation::Exited {
-                exit_code,
-                failure_message,
-            },
-            ProcessStatus::Unknown => {
-                let store = self.process_store.lock().await;
-                if let Some(observation) = store.completed_processes.get(&process_id) {
-                    ProcessObservation::Exited {
-                        exit_code: observation.exit_code,
-                        failure_message: observation.failure_message.clone(),
-                    }
-                } else {
-                    ProcessObservation::Unknown
-                }
-            }
         }
     }
 
@@ -308,6 +293,7 @@ impl UnifiedExecProcessManager {
                 Arc::clone(&process),
                 context,
                 &request.command,
+                request.hook_command.clone(),
                 cwd.clone(),
                 start,
                 request.process_id,
@@ -427,27 +413,10 @@ impl UnifiedExecProcessManager {
             process_id: response_process_id,
             exit_code,
             original_token_count: Some(original_token_count),
-            session_command: Some(request.command.clone()),
-            advisory_note: watcher_hint_for_live_process(response_process_id, yield_time_ms),
+            hook_command: Some(request.hook_command.clone()),
         };
 
         Ok(response)
-    }
-
-    pub(crate) async fn terminal_interaction_call_id(
-        &self,
-        process_id: i32,
-    ) -> Result<String, UnifiedExecError> {
-        if let Ok(handles) = self.prepare_process_handles(process_id).await {
-            return Ok(handles.call_id);
-        }
-
-        let store = self.process_store.lock().await;
-        store
-            .completed_processes
-            .get(&process_id)
-            .map(|observation| observation.call_id.clone())
-            .ok_or(UnifiedExecError::UnknownProcessId { process_id })
     }
 
     pub(crate) async fn write_stdin(
@@ -464,7 +433,7 @@ impl UnifiedExecProcessManager {
             output_closed_notify,
             cancellation_token,
             pause_state,
-            command: session_command,
+            hook_command,
             process_id,
             tty,
             ..
@@ -543,9 +512,7 @@ impl UnifiedExecProcessManager {
                 call_id,
                 process_id,
             } => (Some(process_id), exit_code, call_id),
-            ProcessStatus::Exited {
-                exit_code, entry, ..
-            } => {
+            ProcessStatus::Exited { exit_code, entry } => {
                 let call_id = entry.call_id.clone();
                 (None, exit_code, call_id)
             }
@@ -565,8 +532,7 @@ impl UnifiedExecProcessManager {
             process_id,
             exit_code,
             original_token_count: Some(original_token_count),
-            session_command: Some(session_command.clone()),
-            advisory_note: watcher_hint_for_live_process(process_id, yield_time_ms),
+            hook_command: Some(hook_command),
         };
 
         Ok(response)
@@ -586,20 +552,16 @@ impl UnifiedExecProcessManager {
                 let Some(entry) = store.remove(process_id) else {
                     return ProcessStatus::Unknown;
                 };
-                let failure_message = entry.process.failure_message();
-                let exit_code = entry.process.exit_code();
                 store.completed_processes.insert(
                     process_id,
                     CompletedProcessObservation {
                         call_id: entry.call_id.clone(),
                         exit_code,
-                        failure_message: failure_message.clone(),
+                        failure_message: None,
                     },
                 );
-                prune_completed_process_observations(&mut store);
                 ProcessStatus::Exited {
                     exit_code,
-                    failure_message,
                     entry: Box::new(entry),
                 }
             } else {
@@ -646,8 +608,7 @@ impl UnifiedExecProcessManager {
             output_closed_notify,
             cancellation_token,
             pause_state,
-            command: entry.command.clone(),
-            call_id: entry.call_id.clone(),
+            hook_command: entry.hook_command.clone(),
             process_id: entry.process_id,
             tty: entry.tty,
         })
@@ -659,6 +620,7 @@ impl UnifiedExecProcessManager {
         process: Arc<UnifiedExecProcess>,
         context: &UnifiedExecContext,
         command: &[String],
+        hook_command: String,
         cwd: AbsolutePathBuf,
         started_at: Instant,
         process_id: i32,
@@ -670,7 +632,7 @@ impl UnifiedExecProcessManager {
             process: Arc::clone(&process),
             call_id: context.call_id.clone(),
             process_id,
-            command: command.to_vec(),
+            hook_command,
             tty,
             network_approval_id,
             session: Arc::downgrade(&context.session),
@@ -1050,7 +1012,20 @@ impl UnifiedExecProcessManager {
             .collect();
 
         if let Some(process_id) = Self::process_id_to_prune_from_meta(&meta) {
-            return store.remove(process_id);
+            let removed = store.remove(process_id);
+            if let Some(entry) = removed.as_ref()
+                && entry.process.has_exited()
+            {
+                store.completed_processes.insert(
+                    process_id,
+                    CompletedProcessObservation {
+                        call_id: entry.call_id.clone(),
+                        exit_code: entry.process.exit_code(),
+                        failure_message: None,
+                    },
+                );
+            }
+            return removed;
         }
 
         None
@@ -1104,16 +1079,6 @@ impl UnifiedExecProcessManager {
     }
 }
 
-fn watcher_hint_for_live_process(process_id: Option<i32>, yield_time_ms: u64) -> Option<String> {
-    let process_id = process_id?;
-    if yield_time_ms < WATCHER_HINT_THRESHOLD_MS {
-        return None;
-    }
-    Some(format!(
-        "Session {process_id} is still running. If you only need to react when it exits, prefer `watch_process_exit` over another long inline wait."
-    ))
-}
-
 enum ProcessStatus {
     Alive {
         exit_code: Option<i32>,
@@ -1122,39 +1087,9 @@ enum ProcessStatus {
     },
     Exited {
         exit_code: Option<i32>,
-        failure_message: Option<String>,
         entry: Box<ProcessEntry>,
     },
     Unknown,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ProcessObservation {
-    Running {
-        exit_code: Option<i32>,
-    },
-    Exited {
-        exit_code: Option<i32>,
-        failure_message: Option<String>,
-    },
-    Unknown,
-}
-
-fn prune_completed_process_observations(store: &mut ProcessStore) {
-    if store.completed_processes.len() <= MAX_COMPLETED_PROCESS_OBSERVATIONS {
-        return;
-    }
-
-    let mut ids = store
-        .completed_processes
-        .keys()
-        .copied()
-        .collect::<Vec<_>>();
-    ids.sort_unstable();
-    let prune_count = ids.len().saturating_sub(MAX_COMPLETED_PROCESS_OBSERVATIONS);
-    for process_id in ids.into_iter().take(prune_count) {
-        store.completed_processes.remove(&process_id);
-    }
 }
 
 #[cfg(test)]

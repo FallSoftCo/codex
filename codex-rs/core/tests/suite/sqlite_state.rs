@@ -400,6 +400,7 @@ async fn mcp_call_marks_thread_memory_mode_polluted_when_configured() -> Result<
 
     test.codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "call the rmcp echo tool".to_string(),
                 text_elements: Vec::new(),
@@ -409,6 +410,7 @@ async fn mcp_call_marks_thread_memory_mode_polluted_when_configured() -> Result<
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
+            permission_profile: None,
             model: test.session_configured.model.clone(),
             effort: None,
             summary: None,

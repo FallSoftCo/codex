@@ -56,6 +56,7 @@ use tracing::warn;
 mod agent_jobs;
 mod backfill;
 mod coordination;
+mod device_key;
 mod logs;
 mod memories;
 mod path_claims;
@@ -69,6 +70,7 @@ mod threads;
 mod watchers;
 
 pub use remote_control::RemoteControlEnrollmentRecord;
+pub use device_key::DeviceKeyBindingRecord;
 pub use threads::ThreadFilterOptions;
 
 // "Partition" is the retained-log-content bucket we cap at 10 MiB:

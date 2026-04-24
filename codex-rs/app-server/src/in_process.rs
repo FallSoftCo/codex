@@ -50,6 +50,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use crate::config_manager::ConfigManager;
 use crate::error_code::INTERNAL_ERROR_CODE;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
 use crate::error_code::OVERLOADED_ERROR_CODE;
@@ -62,6 +63,7 @@ use crate::outgoing_message::OutgoingMessage;
 use crate::outgoing_message::OutgoingMessageSender;
 use crate::outgoing_message::QueuedOutgoingMessage;
 use crate::transport::CHANNEL_CAPACITY;
+use crate::transport::ConnectionOrigin;
 use crate::transport::OutboundConnectionState;
 use crate::transport::route_outgoing_envelope;
 use codex_analytics::AppServerRpcTransport;
@@ -390,17 +392,22 @@ fn start_uninitialized(args: InProcessStartArgs) -> InProcessClientHandle {
         let processor_outgoing = Arc::clone(&outgoing_message_sender);
         let auth_manager =
             AuthManager::shared_from_config(args.config.as_ref(), args.enable_codex_api_key_env);
+        let config_manager = ConfigManager::new(
+            args.config.codex_home.to_path_buf(),
+            args.cli_overrides,
+            args.loader_overrides,
+            args.cloud_requirements,
+            args.arg0_paths.clone(),
+            args.thread_config_loader,
+        );
         let (processor_tx, mut processor_rx) = mpsc::channel::<ProcessorCommand>(channel_capacity);
         let mut processor_handle = tokio::spawn(async move {
             let processor = Arc::new(MessageProcessor::new(MessageProcessorArgs {
                 outgoing: Arc::clone(&processor_outgoing),
                 arg0_paths: args.arg0_paths,
                 config: args.config,
+                config_manager,
                 environment_manager: args.environment_manager,
-                cli_overrides: args.cli_overrides,
-                loader_overrides: args.loader_overrides,
-                cloud_requirements: args.cloud_requirements,
-                thread_config_loader: args.thread_config_loader,
                 feedback: args.feedback,
                 log_db: args.log_db,
                 config_warnings: args.config_warnings,
@@ -410,7 +417,7 @@ fn start_uninitialized(args: InProcessStartArgs) -> InProcessClientHandle {
                 remote_control_handle: None,
             }));
             let mut thread_created_rx = processor.thread_created_receiver();
-            let session = Arc::new(ConnectionSessionState::default());
+            let session = Arc::new(ConnectionSessionState::new(ConnectionOrigin::InProcess));
             let mut listen_for_threads = true;
 
             loop {
@@ -707,20 +714,12 @@ mod tests {
     use super::*;
     use codex_app_server_protocol::ClientInfo;
     use codex_app_server_protocol::ConfigRequirementsReadResponse;
-    use codex_app_server_protocol::HollywoodMessageAttention;
-    use codex_app_server_protocol::InitializeCapabilities;
-    use codex_app_server_protocol::ServerNotification;
+    use codex_app_server_protocol::DeviceKeyPublicParams;
+    use codex_app_server_protocol::DeviceKeySignParams;
+    use codex_app_server_protocol::DeviceKeySignPayload;
+    use codex_app_server_protocol::RemoteControlClientConnectionAudience;
+    use codex_app_server_protocol::RemoteControlClientEnrollmentAudience;
     use codex_app_server_protocol::SessionSource as ApiSessionSource;
-    use codex_app_server_protocol::ThreadHollywoodAttachParams;
-    use codex_app_server_protocol::ThreadHollywoodAttachResponse;
-    use codex_app_server_protocol::ThreadOwnershipClaimParams;
-    use codex_app_server_protocol::ThreadOwnershipClaimResponse;
-    use codex_app_server_protocol::ThreadOwnershipListParams;
-    use codex_app_server_protocol::ThreadOwnershipListResponse;
-    use codex_app_server_protocol::ThreadOwnershipPathKind;
-    use codex_app_server_protocol::ThreadOwnershipPathSpec;
-    use codex_app_server_protocol::ThreadOwnershipReleaseParams;
-    use codex_app_server_protocol::ThreadOwnershipReleaseResponse;
     use codex_app_server_protocol::ThreadStartParams;
     use codex_app_server_protocol::ThreadStartResponse;
     use codex_app_server_protocol::Turn;
@@ -728,17 +727,14 @@ mod tests {
     use codex_app_server_protocol::TurnStatus;
     use codex_core::config::ConfigBuilder;
     use pretty_assertions::assert_eq;
-    use uuid::Uuid;
 
     async fn build_test_config() -> Config {
-        let codex_home =
-            std::env::temp_dir().join(format!("codex-in-process-test-{}", Uuid::new_v4()));
-        std::fs::create_dir_all(&codex_home).expect("in-process test codex_home should be created");
-        ConfigBuilder::default()
-            .codex_home(codex_home)
-            .build()
-            .await
-            .expect("in-process test config should load")
+        match ConfigBuilder::default().build().await {
+            Ok(config) => config,
+            Err(_) => Config::load_default_with_cli_overrides(Vec::new())
+                .await
+                .expect("default config should load"),
+        }
     }
 
     async fn start_test_client_with_capacity(
@@ -754,7 +750,7 @@ mod tests {
             thread_config_loader: Arc::new(codex_config::NoopThreadConfigLoader),
             feedback: CodexFeedback::new(),
             log_db: None,
-            environment_manager: Arc::new(EnvironmentManager::new(/*exec_server_url*/ None)),
+            environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             config_warnings: Vec::new(),
             session_source,
             enable_codex_api_key_env: false,
@@ -762,12 +758,9 @@ mod tests {
                 client_info: ClientInfo {
                     name: "codex-in-process-test".to_string(),
                     title: None,
-                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    version: "0.0.0".to_string(),
                 },
-                capabilities: Some(InitializeCapabilities {
-                    experimental_api: true,
-                    opt_out_notification_methods: None,
-                }),
+                capabilities: None,
             },
             channel_capacity,
         };
@@ -800,6 +793,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn in_process_allows_device_key_requests_to_reach_device_key_api() {
+        let client = start_test_client(SessionSource::Cli).await;
+        const MALFORMED_KEY_ID_MESSAGE: &str = concat!(
+            "invalid device key payload: keyId must be dk_hse_, dk_tpm_, or dk_osn_ ",
+            "followed by unpadded base64url-encoded 32 bytes"
+        );
+        let requests = [
+            (
+                ClientRequest::DeviceKeyPublic {
+                    request_id: RequestId::Integer(11),
+                    params: DeviceKeyPublicParams {
+                        key_id: String::new(),
+                    },
+                },
+                MALFORMED_KEY_ID_MESSAGE,
+            ),
+            (
+                ClientRequest::DeviceKeySign {
+                    request_id: RequestId::Integer(12),
+                    params: DeviceKeySignParams {
+                        key_id: String::new(),
+                        payload: DeviceKeySignPayload::RemoteControlClientConnection {
+                            nonce: "nonce-123".to_string(),
+                            audience:
+                                RemoteControlClientConnectionAudience::RemoteControlClientWebsocket,
+                            session_id: "wssess_123".to_string(),
+                            target_origin: "https://chatgpt.com".to_string(),
+                            target_path: "/api/codex/remote/control/client".to_string(),
+                            account_user_id: "acct_123".to_string(),
+                            client_id: "cli_123".to_string(),
+                            token_expires_at: 4_102_444_800,
+                            token_sha256_base64url: "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU"
+                                .to_string(),
+                            scopes: vec!["remote_control_controller_websocket".to_string()],
+                        },
+                    },
+                },
+                MALFORMED_KEY_ID_MESSAGE,
+            ),
+            (
+                ClientRequest::DeviceKeySign {
+                    request_id: RequestId::Integer(13),
+                    params: DeviceKeySignParams {
+                        key_id: String::new(),
+                        payload: DeviceKeySignPayload::RemoteControlClientEnrollment {
+                            nonce: "nonce-123".to_string(),
+                            audience:
+                                RemoteControlClientEnrollmentAudience::RemoteControlClientEnrollment,
+                            challenge_id: "rch_123".to_string(),
+                            target_origin: "https://chatgpt.com".to_string(),
+                            target_path: "/wham/remote/control/client/enroll".to_string(),
+                            account_user_id: "acct_123".to_string(),
+                            client_id: "cli_123".to_string(),
+                            device_identity_sha256_base64url:
+                                "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU".to_string(),
+                            challenge_expires_at: 4_102_444_800,
+                        },
+                    },
+                },
+                MALFORMED_KEY_ID_MESSAGE,
+            ),
+        ];
+
+        for (request, expected_message) in requests {
+            let error = client
+                .request(request)
+                .await
+                .expect("request transport should work")
+                .expect_err("request should be rejected");
+
+            assert_eq!(error.code, INVALID_REQUEST_ERROR_CODE);
+            assert_eq!(error.message, expected_message);
+        }
+
+        client
+            .shutdown()
+            .await
+            .expect("in-process runtime should shutdown cleanly");
+    }
+
+    #[tokio::test]
     async fn in_process_start_uses_requested_session_source_for_thread_start() {
         for (requested_source, expected_source) in [
             (SessionSource::Cli, ApiSessionSource::Cli),
@@ -825,420 +899,6 @@ mod tests {
                 .await
                 .expect("in-process runtime should shutdown cleanly");
         }
-    }
-
-    #[tokio::test]
-    async fn hollywood_attach_surfaces_room_mentions_as_thread_notifications() {
-        let mut client = start_test_client(SessionSource::Cli).await;
-        let response = client
-            .request(ClientRequest::ThreadStart {
-                request_id: RequestId::Integer(20),
-                params: ThreadStartParams {
-                    ephemeral: Some(true),
-                    ..ThreadStartParams::default()
-                },
-            })
-            .await
-            .expect("request transport should work")
-            .expect("thread/start should succeed");
-        let parsed: ThreadStartResponse =
-            serde_json::from_value(response).expect("thread/start response should parse");
-        let thread_id = parsed.thread.id;
-
-        let response = client
-            .request(ClientRequest::ThreadHollywoodAttach {
-                request_id: RequestId::Integer(21),
-                params: ThreadHollywoodAttachParams {
-                    thread_id: thread_id.clone(),
-                    url: Some("http://127.0.0.1:8765".to_string()),
-                    room: Some("main".to_string()),
-                    observed_rooms: Vec::new(),
-                    wake_rooms: Vec::new(),
-                    attention: None,
-                },
-            })
-            .await
-            .expect("attach transport should work")
-            .expect("attach should succeed");
-        let _parsed: ThreadHollywoodAttachResponse =
-            serde_json::from_value(response).expect("attach response should parse");
-
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        let sender_id = format!("hollywood-smoke-{}", uuid::Uuid::new_v4());
-        let body = format!("smoke ping @{thread_id}");
-        reqwest::Client::new()
-            .post("http://127.0.0.1:8765/hollywood/v1/messages")
-            .json(&serde_json::json!({
-                "room": "main",
-                "sender_id": sender_id,
-                "body": body,
-            }))
-            .send()
-            .await
-            .expect("Hollywood send request should succeed")
-            .error_for_status()
-            .expect("Hollywood send response should be successful");
-
-        let (notification, saw_turn_started) = timeout(Duration::from_secs(8), async {
-            let mut hollywood_notification = None;
-            let mut saw_turn_started = false;
-            loop {
-                let Some(event) = client.next_event().await else {
-                    panic!("in-process client disconnected before Hollywood notification");
-                };
-                match event {
-                    InProcessServerEvent::ServerNotification(
-                        ServerNotification::ThreadHollywoodMessage(notification),
-                    ) => {
-                        if notification.message.body != body {
-                            continue;
-                        }
-                        if saw_turn_started {
-                            break (notification, saw_turn_started);
-                        }
-                        hollywood_notification = Some(notification);
-                    }
-                    InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
-                        notification,
-                    )) if notification.thread_id == thread_id => {
-                        saw_turn_started = true;
-                        if let Some(notification) = hollywood_notification.take() {
-                            break (notification, saw_turn_started);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        })
-        .await
-        .expect("timed out waiting for Hollywood notification");
-
-        assert_eq!(notification.thread_id, thread_id);
-        assert_eq!(notification.message.body, body);
-        assert_eq!(
-            notification.message.sender_id.as_deref(),
-            Some(sender_id.as_str())
-        );
-        assert!(notification.mentioned);
-        assert!(!notification.self_authored);
-        assert_eq!(notification.attention, HollywoodMessageAttention::Focused);
-        assert!(saw_turn_started);
-
-        client
-            .shutdown()
-            .await
-            .expect("in-process runtime should shutdown cleanly");
-    }
-
-    #[tokio::test]
-    async fn hollywood_attach_starts_startup_handshake_for_idle_threads() {
-        let mut client = start_test_client(SessionSource::Cli).await;
-        let response = client
-            .request(ClientRequest::ThreadStart {
-                request_id: RequestId::Integer(25),
-                params: ThreadStartParams {
-                    ephemeral: Some(true),
-                    ..ThreadStartParams::default()
-                },
-            })
-            .await
-            .expect("request transport should work")
-            .expect("thread/start should succeed");
-        let parsed: ThreadStartResponse =
-            serde_json::from_value(response).expect("thread/start response should parse");
-        let thread_id = parsed.thread.id;
-
-        let response = client
-            .request(ClientRequest::ThreadHollywoodAttach {
-                request_id: RequestId::Integer(26),
-                params: ThreadHollywoodAttachParams {
-                    thread_id: thread_id.clone(),
-                    url: Some("http://127.0.0.1:8765".to_string()),
-                    room: Some("main".to_string()),
-                    observed_rooms: Vec::new(),
-                    wake_rooms: Vec::new(),
-                    attention: None,
-                },
-            })
-            .await
-            .expect("attach transport should work")
-            .expect("attach should succeed");
-        let _parsed: ThreadHollywoodAttachResponse =
-            serde_json::from_value(response).expect("attach response should parse");
-
-        let started = timeout(Duration::from_secs(8), async {
-            loop {
-                let Some(event) = client.next_event().await else {
-                    panic!("in-process client disconnected before startup handshake turn");
-                };
-                if let InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
-                    notification,
-                )) = event
-                    && notification.thread_id == thread_id
-                {
-                    break notification.turn.id;
-                }
-            }
-        })
-        .await
-        .expect("timed out waiting for startup handshake turn");
-
-        assert!(!started.is_empty());
-
-        client
-            .shutdown()
-            .await
-            .expect("in-process runtime should shutdown cleanly");
-    }
-
-    #[tokio::test]
-    async fn hollywood_self_authored_room_activity_does_not_restart_idle_reasoning() {
-        let mut client = start_test_client(SessionSource::Cli).await;
-        let response = client
-            .request(ClientRequest::ThreadStart {
-                request_id: RequestId::Integer(30),
-                params: ThreadStartParams {
-                    ephemeral: Some(true),
-                    ..ThreadStartParams::default()
-                },
-            })
-            .await
-            .expect("request transport should work")
-            .expect("thread/start should succeed");
-        let parsed: ThreadStartResponse =
-            serde_json::from_value(response).expect("thread/start response should parse");
-        let thread_id = parsed.thread.id;
-
-        let response = client
-            .request(ClientRequest::ThreadHollywoodAttach {
-                request_id: RequestId::Integer(31),
-                params: ThreadHollywoodAttachParams {
-                    thread_id: thread_id.clone(),
-                    url: Some("http://127.0.0.1:8765".to_string()),
-                    room: Some("main".to_string()),
-                    observed_rooms: Vec::new(),
-                    wake_rooms: Vec::new(),
-                    attention: None,
-                },
-            })
-            .await
-            .expect("attach transport should work")
-            .expect("attach should succeed");
-        let _parsed: ThreadHollywoodAttachResponse =
-            serde_json::from_value(response).expect("attach response should parse");
-
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        let body = "continuing coordination after my last update".to_string();
-        reqwest::Client::new()
-            .post("http://127.0.0.1:8765/hollywood/v1/messages")
-            .json(&serde_json::json!({
-                "room": "main",
-                "sender_id": thread_id,
-                "body": body,
-            }))
-            .send()
-            .await
-            .expect("Hollywood send request should succeed")
-            .error_for_status()
-            .expect("Hollywood send response should be successful");
-
-        let notification = timeout(Duration::from_secs(8), async {
-            loop {
-                let Some(event) = client.next_event().await else {
-                    panic!(
-                        "in-process client disconnected before self-authored Hollywood notification"
-                    );
-                };
-                if let InProcessServerEvent::ServerNotification(
-                    ServerNotification::ThreadHollywoodMessage(notification),
-                ) = event
-                {
-                    if notification.message.body != body {
-                        continue;
-                    }
-                    break notification;
-                }
-            }
-        })
-        .await
-        .expect("timed out waiting for self-authored Hollywood notification");
-
-        assert_eq!(notification.thread_id, thread_id);
-        assert_eq!(notification.message.body, body);
-        assert_eq!(
-            notification.message.sender_id.as_deref(),
-            Some(thread_id.as_str())
-        );
-        assert!(!notification.mentioned);
-        assert!(notification.self_authored);
-        assert_eq!(notification.attention, HollywoodMessageAttention::Ambient);
-
-        let unexpected_turn_started = timeout(Duration::from_secs(3), async {
-            loop {
-                let Some(event) = client.next_event().await else {
-                    return false;
-                };
-                if let InProcessServerEvent::ServerNotification(ServerNotification::TurnStarted(
-                    notification,
-                )) = event
-                    && notification.thread_id == thread_id
-                {
-                    return true;
-                }
-            }
-        })
-        .await
-        .unwrap_or(false);
-        assert!(
-            !unexpected_turn_started,
-            "self-authored Hollywood room activity should not trigger a new turn",
-        );
-
-        client
-            .shutdown()
-            .await
-            .expect("in-process runtime should shutdown cleanly");
-    }
-
-    #[tokio::test]
-    async fn thread_ownership_claims_are_conflict_safe_and_releasable() {
-        let client = start_test_client(SessionSource::Cli).await;
-
-        let response = client
-            .request(ClientRequest::ThreadStart {
-                request_id: RequestId::Integer(40),
-                params: ThreadStartParams {
-                    ephemeral: Some(true),
-                    ..ThreadStartParams::default()
-                },
-            })
-            .await
-            .expect("thread/start A transport should work")
-            .expect("thread/start A should succeed");
-        let thread_a: ThreadStartResponse =
-            serde_json::from_value(response).expect("thread/start A response should parse");
-
-        let response = client
-            .request(ClientRequest::ThreadStart {
-                request_id: RequestId::Integer(41),
-                params: ThreadStartParams {
-                    ephemeral: Some(true),
-                    ..ThreadStartParams::default()
-                },
-            })
-            .await
-            .expect("thread/start B transport should work")
-            .expect("thread/start B should succeed");
-        let thread_b: ThreadStartResponse =
-            serde_json::from_value(response).expect("thread/start B response should parse");
-
-        let response = client
-            .request(ClientRequest::ThreadOwnershipClaim {
-                request_id: RequestId::Integer(42),
-                params: ThreadOwnershipClaimParams {
-                    thread_id: thread_a.thread.id.clone(),
-                    claims: vec![ThreadOwnershipPathSpec {
-                        kind: ThreadOwnershipPathKind::Directory,
-                        path: "src".to_string(),
-                    }],
-                    lease_seconds: None,
-                },
-            })
-            .await
-            .expect("thread/ownership/claim transport should work")
-            .expect("thread/ownership/claim should succeed");
-        let claimed: ThreadOwnershipClaimResponse =
-            serde_json::from_value(response).expect("claim response should parse");
-        assert!(claimed.acquired);
-        assert_eq!(claimed.data.len(), 1);
-        assert_eq!(claimed.conflicts.len(), 0);
-
-        let response = client
-            .request(ClientRequest::ThreadOwnershipClaim {
-                request_id: RequestId::Integer(43),
-                params: ThreadOwnershipClaimParams {
-                    thread_id: thread_b.thread.id.clone(),
-                    claims: vec![ThreadOwnershipPathSpec {
-                        kind: ThreadOwnershipPathKind::File,
-                        path: "src/lib.rs".to_string(),
-                    }],
-                    lease_seconds: None,
-                },
-            })
-            .await
-            .expect("conflicting claim transport should work")
-            .expect("conflicting claim should return a response");
-        let conflicted: ThreadOwnershipClaimResponse =
-            serde_json::from_value(response).expect("conflict response should parse");
-        assert!(!conflicted.acquired);
-        assert_eq!(conflicted.data.len(), 0);
-        assert_eq!(conflicted.conflicts.len(), 1);
-        assert_eq!(
-            conflicted.conflicts[0].blocking_claim.owner_thread_id,
-            thread_a.thread.id
-        );
-
-        let response = client
-            .request(ClientRequest::ThreadOwnershipList {
-                request_id: RequestId::Integer(44),
-                params: ThreadOwnershipListParams {
-                    thread_id: thread_a.thread.id.clone(),
-                    cursor: None,
-                    limit: None,
-                    owner_thread_id: None,
-                },
-            })
-            .await
-            .expect("thread/ownership/list transport should work")
-            .expect("thread/ownership/list should succeed");
-        let listed: ThreadOwnershipListResponse =
-            serde_json::from_value(response).expect("list response should parse");
-        assert_eq!(listed.data.len(), 1);
-        assert_eq!(listed.next_cursor, None);
-
-        let response = client
-            .request(ClientRequest::ThreadOwnershipRelease {
-                request_id: RequestId::Integer(45),
-                params: ThreadOwnershipReleaseParams {
-                    thread_id: thread_a.thread.id.clone(),
-                    claims: vec![ThreadOwnershipPathSpec {
-                        kind: ThreadOwnershipPathKind::Directory,
-                        path: "src".to_string(),
-                    }],
-                },
-            })
-            .await
-            .expect("thread/ownership/release transport should work")
-            .expect("thread/ownership/release should succeed");
-        let released: ThreadOwnershipReleaseResponse =
-            serde_json::from_value(response).expect("release response should parse");
-        assert_eq!(released.released, 1);
-
-        let response = client
-            .request(ClientRequest::ThreadOwnershipClaim {
-                request_id: RequestId::Integer(46),
-                params: ThreadOwnershipClaimParams {
-                    thread_id: thread_b.thread.id,
-                    claims: vec![ThreadOwnershipPathSpec {
-                        kind: ThreadOwnershipPathKind::File,
-                        path: "src/lib.rs".to_string(),
-                    }],
-                    lease_seconds: None,
-                },
-            })
-            .await
-            .expect("post-release claim transport should work")
-            .expect("post-release claim should succeed");
-        let post_release: ThreadOwnershipClaimResponse =
-            serde_json::from_value(response).expect("post-release response should parse");
-        assert!(post_release.acquired);
-
-        client
-            .shutdown()
-            .await
-            .expect("in-process runtime should shutdown cleanly");
     }
 
     #[tokio::test]

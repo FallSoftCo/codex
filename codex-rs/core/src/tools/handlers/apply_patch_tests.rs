@@ -1,21 +1,103 @@
 use super::*;
-use crate::session::tests::make_session_and_context;
 use codex_apply_patch::MaybeApplyPatchVerified;
 use codex_exec_server::LOCAL_FS;
-use codex_protocol::ThreadId;
 use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::protocol::FileChange;
 use codex_protocol::protocol::SandboxPolicy;
-use codex_state::PathClaimKind;
-use codex_state::PathClaimSpec;
-use codex_state::StateRuntime;
 use core_test_support::PathBufExt;
 use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
+use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::sync::Arc;
 use tempfile::TempDir;
+use tokio::sync::Mutex;
+
+use crate::session::tests::make_session_and_context;
+use crate::tools::context::ToolInvocation;
+use crate::tools::hook_names::HookToolName;
+use crate::tools::registry::PostToolUsePayload;
+use crate::tools::registry::PreToolUsePayload;
+use crate::turn_diff_tracker::TurnDiffTracker;
+
+fn sample_patch() -> &'static str {
+    r#"*** Begin Patch
+*** Add File: hello.txt
++hello
+*** End Patch"#
+}
+
+async fn invocation_for_payload(payload: ToolPayload) -> ToolInvocation {
+    let (session, turn) = make_session_and_context().await;
+    ToolInvocation {
+        session: session.into(),
+        turn: turn.into(),
+        cancellation_token: tokio_util::sync::CancellationToken::new(),
+        tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
+        call_id: "call-apply-patch".to_string(),
+        tool_name: codex_tools::ToolName::plain("apply_patch"),
+        source: crate::tools::context::ToolCallSource::Direct,
+        payload,
+    }
+}
+
+#[tokio::test]
+async fn pre_tool_use_payload_uses_json_patch_input() {
+    let patch = sample_patch();
+    let payload = ToolPayload::Function {
+        arguments: json!({ "input": patch }).to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler;
+
+    assert_eq!(
+        handler.pre_tool_use_payload(&invocation),
+        Some(PreToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_input: json!({ "command": patch }),
+        })
+    );
+}
+
+#[tokio::test]
+async fn pre_tool_use_payload_uses_freeform_patch_input() {
+    let patch = sample_patch();
+    let payload = ToolPayload::Custom {
+        input: patch.to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler;
+
+    assert_eq!(
+        handler.pre_tool_use_payload(&invocation),
+        Some(PreToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_input: json!({ "command": patch }),
+        })
+    );
+}
+
+#[tokio::test]
+async fn post_tool_use_payload_uses_patch_input_and_tool_output() {
+    let patch = sample_patch();
+    let payload = ToolPayload::Custom {
+        input: patch.to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let output = ApplyPatchToolOutput::from_text("Success. Updated files.".to_string());
+    let handler = ApplyPatchHandler;
+
+    assert_eq!(
+        handler.post_tool_use_payload(&invocation, &output),
+        Some(PostToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_use_id: "call-apply-patch".to_string(),
+            tool_input: json!({ "command": patch }),
+            tool_response: json!("Success. Updated files."),
+        })
+    );
+}
 
 #[test]
 fn diff_consumer_does_not_stream_json_tool_call_arguments() {
@@ -196,69 +278,5 @@ fn write_permissions_for_paths_keep_dirs_outside_workspace_root() {
             .and_then(|fs| fs.legacy_read_write_roots())
             .and_then(|(_read, write)| write),
         Some(vec![expected_outside])
-    );
-}
-
-#[tokio::test]
-async fn claim_patch_ownership_if_available_rejects_overlapping_foreign_claims() {
-    let (mut session, _turn) = make_session_and_context().await;
-    let codex_home = TempDir::new().expect("codex home");
-    let state_db = StateRuntime::init(codex_home.path().to_path_buf(), "test".to_string())
-        .await
-        .expect("state runtime");
-    session.services.state_db = Some(state_db.clone());
-
-    let patch_path = AbsolutePathBuf::from_absolute_path("/repo/src/roleplay-db.ts")
-        .expect("absolute patch path");
-    let blocker = ThreadId::new();
-    state_db
-        .claim_path_ownership(
-            blocker,
-            &[PathClaimSpec {
-                kind: PathClaimKind::Directory,
-                path: std::path::PathBuf::from("/repo/src"),
-            }],
-            Duration::from_secs(30),
-        )
-        .await
-        .expect("blocking claim");
-
-    let err = claim_patch_ownership_if_available(&session, &[patch_path])
-        .await
-        .expect_err("foreign overlapping claim should block apply_patch");
-
-    assert_eq!(
-        err.to_string(),
-        format!(
-            "apply_patch blocked by ownership conflict: thread {blocker} holds a directory claim at `/repo/src` which overlaps `/repo/src/roleplay-db.ts`"
-        )
-    );
-}
-
-#[tokio::test]
-async fn claim_patch_ownership_if_available_claims_exact_files_for_current_thread() {
-    let (mut session, _turn) = make_session_and_context().await;
-    let codex_home = TempDir::new().expect("codex home");
-    let state_db = StateRuntime::init(codex_home.path().to_path_buf(), "test".to_string())
-        .await
-        .expect("state runtime");
-    session.services.state_db = Some(state_db.clone());
-
-    let patch_path = AbsolutePathBuf::from_absolute_path("/repo/src/roleplay-db.ts")
-        .expect("absolute patch path");
-    claim_patch_ownership_if_available(&session, std::slice::from_ref(&patch_path))
-        .await
-        .expect("claim should succeed");
-
-    let claims = state_db
-        .list_path_claims(Some(session.conversation_id))
-        .await
-        .expect("list claims");
-    assert_eq!(claims.len(), 1);
-    assert_eq!(claims[0].kind, PathClaimKind::File);
-    assert_eq!(claims[0].path, patch_path.to_path_buf());
-    assert_eq!(
-        claims[0].owner_thread_id,
-        session.conversation_id.to_string()
     );
 }

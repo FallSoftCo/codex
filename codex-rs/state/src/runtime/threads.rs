@@ -497,6 +497,7 @@ ON CONFLICT(child_thread_id) DO NOTHING
                 archived_only,
                 allowed_sources,
                 model_providers,
+                cwd_filters: None,
                 anchor,
                 sort_key,
                 sort_direction: SortDirection::Desc,
@@ -1173,6 +1174,7 @@ pub struct ThreadFilterOptions<'a> {
     pub archived_only: bool,
     pub allowed_sources: &'a [String],
     pub model_providers: Option<&'a [String]>,
+    pub cwd_filters: Option<&'a [PathBuf]>,
     pub anchor: Option<&'a crate::Anchor>,
     pub sort_key: SortKey,
     pub sort_direction: SortDirection,
@@ -1187,6 +1189,7 @@ pub(super) fn push_thread_filters<'a>(
         archived_only,
         allowed_sources,
         model_providers,
+        cwd_filters,
         anchor,
         sort_key,
         sort_direction,
@@ -1216,6 +1219,20 @@ pub(super) fn push_thread_filters<'a>(
             separated.push_bind(provider);
         }
         separated.push_unseparated(")");
+    }
+    match cwd_filters {
+        Some([]) => {
+            builder.push(" AND 1 = 0");
+        }
+        Some(cwd_filters) => {
+            builder.push(" AND threads.cwd IN (");
+            let mut separated = builder.separated(", ");
+            for cwd in cwd_filters {
+                separated.push_bind(cwd.display().to_string());
+            }
+            separated.push_unseparated(")");
+        }
+        None => {}
     }
     if let Some(search_term) = search_term {
         builder.push(" AND instr(threads.title, ");
@@ -1359,6 +1376,7 @@ mod tests {
                     archived_only: false,
                     allowed_sources: &[],
                     model_providers: Some(&model_providers),
+                    cwd_filters: None,
                     anchor: Some(&anchor),
                     sort_key: SortKey::UpdatedAt,
                     sort_direction: SortDirection::Asc,
@@ -1385,6 +1403,7 @@ mod tests {
                     archived_only: false,
                     allowed_sources: &[],
                     model_providers: Some(&model_providers),
+                    cwd_filters: None,
                     anchor: page.next_anchor.as_ref(),
                     sort_key: SortKey::UpdatedAt,
                     sort_direction: SortDirection::Asc,

@@ -152,6 +152,7 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -164,6 +165,7 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -274,6 +276,7 @@ async fn gpt_5_tools_without_apply_patch_append_apply_patch_instructions() -> an
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -286,6 +289,7 @@ async fn gpt_5_tools_without_apply_patch_append_apply_patch_instructions() -> an
     wait_for_event(&codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -349,6 +353,7 @@ async fn prefixes_context_and_instructions_once_and_consistently_across_requests
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -361,6 +366,7 @@ async fn prefixes_context_and_instructions_once_and_consistently_across_requests
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -443,6 +449,7 @@ async fn overrides_turn_context_but_keeps_cached_prefix_and_key_constant() -> an
     // First turn
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -467,6 +474,7 @@ async fn overrides_turn_context_but_keeps_cached_prefix_and_key_constant() -> an
             approval_policy: Some(AskForApproval::Never),
             approvals_reviewer: None,
             sandbox_policy: Some(new_policy.clone()),
+            permission_profile: None,
             windows_sandbox_level: None,
             model: None,
             effort: Some(Some(ReasoningEffort::High)),
@@ -480,6 +488,7 @@ async fn overrides_turn_context_but_keeps_cached_prefix_and_key_constant() -> an
     // Second turn after overrides
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -551,6 +560,7 @@ async fn override_before_first_turn_emits_environment_context() -> anyhow::Resul
             approval_policy: Some(AskForApproval::Never),
             approvals_reviewer: None,
             sandbox_policy: None,
+            permission_profile: None,
             windows_sandbox_level: None,
             model: Some("gpt-5.4".to_string()),
             effort: Some(Some(ReasoningEffort::Low)),
@@ -563,6 +573,7 @@ async fn override_before_first_turn_emits_environment_context() -> anyhow::Resul
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "first message".into(),
                 text_elements: Vec::new(),
@@ -715,6 +726,7 @@ async fn per_turn_overrides_keep_cached_prefix_and_key_constant() -> anyhow::Res
     // First turn
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -737,6 +749,7 @@ async fn per_turn_overrides_keep_cached_prefix_and_key_constant() -> anyhow::Res
     };
     codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -745,6 +758,7 @@ async fn per_turn_overrides_keep_cached_prefix_and_key_constant() -> anyhow::Res
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
             sandbox_policy: new_policy.clone(),
+            permission_profile: None,
             model: "o3".to_string(),
             effort: Some(ReasoningEffort::High),
             summary: Some(ReasoningSummary::Detailed),
@@ -850,6 +864,7 @@ async fn send_user_turn_with_no_changes_does_not_send_environment_context() -> a
 
     codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -858,6 +873,7 @@ async fn send_user_turn_with_no_changes_does_not_send_environment_context() -> a
             approval_policy: default_approval_policy,
             approvals_reviewer: None,
             sandbox_policy: default_sandbox_policy.clone(),
+            permission_profile: None,
             model: default_model.clone(),
             effort: default_effort,
             summary: Some(default_summary.unwrap_or(ReasoningSummary::Auto)),
@@ -871,6 +887,7 @@ async fn send_user_turn_with_no_changes_does_not_send_environment_context() -> a
 
     codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -879,6 +896,7 @@ async fn send_user_turn_with_no_changes_does_not_send_environment_context() -> a
             approval_policy: default_approval_policy,
             approvals_reviewer: None,
             sandbox_policy: default_sandbox_policy.clone(),
+            permission_profile: None,
             model: default_model.clone(),
             effort: default_effort,
             summary: Some(default_summary.unwrap_or(ReasoningSummary::Auto)),
@@ -976,6 +994,7 @@ async fn send_user_turn_with_changes_sends_environment_context() -> anyhow::Resu
 
     codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 1".into(),
                 text_elements: Vec::new(),
@@ -984,6 +1003,7 @@ async fn send_user_turn_with_changes_sends_environment_context() -> anyhow::Resu
             approval_policy: default_approval_policy,
             approvals_reviewer: None,
             sandbox_policy: default_sandbox_policy.clone(),
+            permission_profile: None,
             model: default_model,
             effort: default_effort,
             summary: Some(default_summary.unwrap_or(ReasoningSummary::Auto)),
@@ -997,6 +1017,7 @@ async fn send_user_turn_with_changes_sends_environment_context() -> anyhow::Resu
 
     codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "hello 2".into(),
                 text_elements: Vec::new(),
@@ -1005,6 +1026,7 @@ async fn send_user_turn_with_changes_sends_environment_context() -> anyhow::Resu
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
+            permission_profile: None,
             model: "o3".to_string(),
             effort: Some(ReasoningEffort::High),
             summary: Some(ReasoningSummary::Detailed),

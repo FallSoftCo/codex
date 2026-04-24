@@ -38,11 +38,10 @@ pub(super) async fn make_test_app() -> App {
         backtrack_render_pending: false,
         feedback: codex_feedback::CodexFeedback::new(),
         feedback_audience: FeedbackAudience::External,
-        environment_manager: Arc::new(EnvironmentManager::new(/*exec_server_url*/ None)),
+        environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
         remote_app_server_url: None,
         remote_app_server_auth_token: None,
         pending_update_action: None,
-        pending_restart_request: None,
         pending_shutdown_exit_thread_id: None,
         windows_sandbox: WindowsSandboxState::default(),
         thread_event_channels: HashMap::new(),
@@ -57,7 +56,6 @@ pub(super) async fn make_test_app() -> App {
         pending_primary_events: VecDeque::new(),
         pending_app_server_requests: PendingAppServerRequests::default(),
         pending_plugin_enabled_writes: HashMap::new(),
-        email_bridge: None,
     }
 }
 

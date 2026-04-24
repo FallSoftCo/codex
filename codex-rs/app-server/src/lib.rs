@@ -21,6 +21,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::message_processor::MessageProcessor;
 use crate::message_processor::MessageProcessorArgs;
+use crate::config_manager::ConfigManager;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::OutgoingEnvelope;
 use crate::outgoing_message::OutgoingMessageSender;
@@ -33,6 +34,7 @@ use crate::transport::TransportEvent;
 use crate::transport::auth::policy_from_settings;
 use crate::transport::route_outgoing_envelope;
 use crate::transport::start_remote_control_with_options;
+use crate::transport::start_control_socket_acceptor;
 use crate::transport::start_stdio_connection;
 use crate::transport::start_websocket_acceptor;
 use codex_analytics::AppServerRpcTransport;
@@ -75,6 +77,7 @@ mod config_api;
 mod config_manager;
 mod config_manager_service;
 mod dynamic_tools;
+mod device_key_api;
 mod error_code;
 mod external_agent_config_api;
 mod filters;
@@ -548,7 +551,7 @@ pub async fn run_main_with_transport(
     let graceful_signal_restart_enabled = !single_client_mode;
     let mut app_server_client_name_rx = None;
 
-    match transport {
+    match &transport {
         AppServerTransport::Stdio => {
             let (stdio_client_name_tx, stdio_client_name_rx) = oneshot::channel::<String>();
             app_server_client_name_rx = Some(stdio_client_name_rx);
@@ -559,9 +562,18 @@ pub async fn run_main_with_transport(
             )
             .await?;
         }
+        AppServerTransport::UnixSocket { socket_path } => {
+            let accept_handle = start_control_socket_acceptor(
+                socket_path.clone(),
+                transport_event_tx.clone(),
+                transport_shutdown_token.clone(),
+            )
+            .await?;
+            transport_accept_handles.push(accept_handle);
+        }
         AppServerTransport::WebSocket { bind_address } => {
             let accept_handle = start_websocket_acceptor(
-                bind_address,
+                *bind_address,
                 transport_event_tx.clone(),
                 transport_shutdown_token.clone(),
                 policy_from_settings(&auth)?,
@@ -658,21 +670,26 @@ pub async fn run_main_with_transport(
             AuthManager::shared_from_config(&config, /*enable_codex_api_key_env*/ false);
         let cli_overrides: Vec<(String, TomlValue)> = cli_kv_overrides.clone();
         let loader_overrides = loader_overrides_for_config_api;
+        let config_manager = ConfigManager::new(
+            config.codex_home.clone().to_path_buf(),
+            cli_overrides,
+            loader_overrides,
+            cloud_requirements.clone(),
+            arg0_paths.clone(),
+            thread_config_loader.clone(),
+        );
         let processor = Arc::new(MessageProcessor::new(MessageProcessorArgs {
             outgoing: outgoing_message_sender,
             arg0_paths,
             config: Arc::new(config),
+            config_manager,
             environment_manager,
-            cli_overrides,
-            loader_overrides,
-            cloud_requirements: cloud_requirements.clone(),
-            thread_config_loader,
             feedback: feedback.clone(),
             log_db,
             config_warnings,
             session_source,
             auth_manager,
-            rpc_transport: analytics_rpc_transport(transport),
+            rpc_transport: analytics_rpc_transport(transport.clone()),
             remote_control_handle: Some(remote_control_handle),
         }));
         let mut thread_created_rx = processor.thread_created_receiver();
@@ -718,6 +735,7 @@ pub async fn run_main_with_transport(
                         match event {
                             TransportEvent::ConnectionOpened {
                                 connection_id,
+                                origin,
                                 writer,
                                 disconnect_sender,
                             } => {
@@ -747,6 +765,7 @@ pub async fn run_main_with_transport(
                                 connections.insert(
                                     connection_id,
                                     ConnectionState::new(
+                                        origin,
                                         outbound_initialized,
                                         outbound_experimental_api_enabled,
                                         outbound_opted_out_notification_methods,
@@ -782,7 +801,7 @@ pub async fn run_main_with_transport(
                                             .process_request(
                                                 connection_id,
                                                 request,
-                                                transport,
+                                                &transport,
                                                 Arc::clone(&connection_state.session),
                                             )
                                             .await;
@@ -905,7 +924,9 @@ pub async fn run_main_with_transport(
 fn analytics_rpc_transport(transport: AppServerTransport) -> AppServerRpcTransport {
     match transport {
         AppServerTransport::Stdio => AppServerRpcTransport::Stdio,
-        AppServerTransport::WebSocket { .. } | AppServerTransport::Off => {
+        AppServerTransport::UnixSocket { .. }
+        | AppServerTransport::WebSocket { .. }
+        | AppServerTransport::Off => {
             AppServerRpcTransport::Websocket
         }
     }

@@ -23,8 +23,6 @@ use crate::collect_tool_search_source_infos;
 use crate::collect_tool_suggest_entries;
 use crate::create_apply_patch_freeform_tool;
 use crate::create_apply_patch_json_tool;
-use crate::create_cancel_task_watch_tool;
-use crate::create_cancel_watcher_tool;
 use crate::create_close_agent_tool_v1;
 use crate::create_close_agent_tool_v2;
 use crate::create_code_mode_tool;
@@ -37,8 +35,6 @@ use crate::create_list_agents_tool;
 use crate::create_list_dir_tool;
 use crate::create_list_mcp_resource_templates_tool;
 use crate::create_list_mcp_resources_tool;
-use crate::create_list_task_watches_tool;
-use crate::create_list_watchers_tool;
 use crate::create_local_shell_tool;
 use crate::create_read_mcp_resource_tool;
 use crate::create_report_agent_job_result_tool;
@@ -56,14 +52,10 @@ use crate::create_test_sync_tool;
 use crate::create_tool_search_tool;
 use crate::create_tool_suggest_tool;
 use crate::create_update_plan_tool;
-use crate::create_update_task_watch_tool;
 use crate::create_view_image_tool;
 use crate::create_wait_agent_tool_v1;
 use crate::create_wait_agent_tool_v2;
 use crate::create_wait_tool;
-use crate::create_watch_agent_completion_tool;
-use crate::create_watch_process_exit_tool;
-use crate::create_watch_task_periodically_tool;
 use crate::create_web_search_tool;
 use crate::create_write_stdin_tool;
 use crate::default_namespace_description;
@@ -176,56 +168,6 @@ pub fn build_tool_registry_plan(
                 );
                 plan.register_handler("exec_command", ToolHandlerKind::UnifiedExec);
                 plan.register_handler("write_stdin", ToolHandlerKind::UnifiedExec);
-                if config.tester_tool_policy.is_none() {
-                    plan.push_spec(
-                        create_watch_process_exit_tool(),
-                        /*supports_parallel_tool_calls*/ false,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_watch_agent_completion_tool(),
-                        /*supports_parallel_tool_calls*/ false,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_list_watchers_tool(),
-                        /*supports_parallel_tool_calls*/ true,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_cancel_watcher_tool(),
-                        /*supports_parallel_tool_calls*/ true,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_watch_task_periodically_tool(),
-                        /*supports_parallel_tool_calls*/ false,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_list_task_watches_tool(),
-                        /*supports_parallel_tool_calls*/ true,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_update_task_watch_tool(),
-                        /*supports_parallel_tool_calls*/ false,
-                        config.code_mode_enabled,
-                    );
-                    plan.push_spec(
-                        create_cancel_task_watch_tool(),
-                        /*supports_parallel_tool_calls*/ true,
-                        config.code_mode_enabled,
-                    );
-                    plan.register_handler("watch_process_exit", ToolHandlerKind::Watcher);
-                    plan.register_handler("watch_agent_completion", ToolHandlerKind::Watcher);
-                    plan.register_handler("list_watchers", ToolHandlerKind::Watcher);
-                    plan.register_handler("cancel_watcher", ToolHandlerKind::Watcher);
-                    plan.register_handler("watch_task_periodically", ToolHandlerKind::Watcher);
-                    plan.register_handler("list_task_watches", ToolHandlerKind::Watcher);
-                    plan.register_handler("update_task_watch", ToolHandlerKind::Watcher);
-                    plan.register_handler("cancel_task_watch", ToolHandlerKind::Watcher);
-                }
             }
             ConfigShellToolType::Disabled => {}
             ConfigShellToolType::ShellCommand => {
@@ -248,7 +190,7 @@ pub fn build_tool_registry_plan(
         plan.register_handler("shell_command", ToolHandlerKind::ShellCommand);
     }
 
-    if config.mcp_tools_enabled && params.mcp_tools.is_some() {
+    if params.mcp_tools.is_some() {
         plan.push_spec(
             create_list_mcp_resources_tool(),
             /*supports_parallel_tool_calls*/ true,
@@ -291,19 +233,17 @@ pub fn build_tool_registry_plan(
         plan.register_handler("js_repl_reset", ToolHandlerKind::JsReplReset);
     }
 
-    if config.request_user_input_enabled {
-        plan.push_spec(
-            create_request_user_input_tool(request_user_input_tool_description(
-                config.default_mode_request_user_input,
-            )),
-            /*supports_parallel_tool_calls*/ false,
-            config.code_mode_enabled,
-        );
-        plan.register_handler(
-            REQUEST_USER_INPUT_TOOL_NAME,
-            ToolHandlerKind::RequestUserInput,
-        );
-    }
+    plan.push_spec(
+        create_request_user_input_tool(request_user_input_tool_description(
+            config.default_mode_request_user_input,
+        )),
+        /*supports_parallel_tool_calls*/ false,
+        config.code_mode_enabled,
+    );
+    plan.register_handler(
+        REQUEST_USER_INPUT_TOOL_NAME,
+        ToolHandlerKind::RequestUserInput,
+    );
 
     if config.request_permissions_tool_enabled {
         plan.push_spec(
@@ -438,7 +378,7 @@ pub fn build_tool_registry_plan(
         );
     }
 
-    if config.has_environment && config.view_image_enabled {
+    if config.has_environment {
         plan.push_spec(
             create_view_image_tool(ViewImageToolOptions {
                 can_request_original_image_detail: config.can_request_original_image_detail,
@@ -460,6 +400,7 @@ pub fn build_tool_registry_plan(
                     hide_agent_type_model_reasoning: config.hide_spawn_agent_metadata,
                     include_usage_hint: config.spawn_agent_usage_hint,
                     usage_hint_text: config.spawn_agent_usage_hint_text.clone(),
+                    max_concurrent_threads_per_session: config.max_concurrent_threads_per_session,
                 }),
                 /*supports_parallel_tool_calls*/ false,
                 config.code_mode_enabled,
@@ -505,6 +446,7 @@ pub fn build_tool_registry_plan(
                     hide_agent_type_model_reasoning: config.hide_spawn_agent_metadata,
                     include_usage_hint: config.spawn_agent_usage_hint,
                     usage_hint_text: config.spawn_agent_usage_hint_text.clone(),
+                    max_concurrent_threads_per_session: config.max_concurrent_threads_per_session,
                 }),
                 /*supports_parallel_tool_calls*/ false,
                 config.code_mode_enabled,
@@ -554,9 +496,7 @@ pub fn build_tool_registry_plan(
         }
     }
 
-    if config.mcp_tools_enabled
-        && let Some(mcp_tools) = params.mcp_tools
-    {
+    if let Some(mcp_tools) = params.mcp_tools {
         let mut entries = mcp_tools.to_vec();
         entries.sort_by_key(|tool| tool.name.display());
         let mut namespace_entries = BTreeMap::new();
@@ -620,20 +560,18 @@ pub fn build_tool_registry_plan(
     }
 
     let mut dynamic_tool_specs = Vec::new();
-    if config.dynamic_tools_enabled {
-        for tool in params.dynamic_tools {
-            match dynamic_tool_to_loadable_tool_spec(tool) {
-                Ok(loadable_tool) => {
-                    let handler_name = ToolName::new(tool.namespace.clone(), tool.name.clone());
-                    dynamic_tool_specs.push(loadable_tool);
-                    plan.register_handler(handler_name, ToolHandlerKind::DynamicTool);
-                }
-                Err(error) => {
-                    tracing::error!(
-                        "Failed to convert dynamic tool {:?} to OpenAI tool: {error:?}",
-                        tool.name
-                    );
-                }
+    for tool in params.dynamic_tools {
+        match dynamic_tool_to_loadable_tool_spec(tool) {
+            Ok(loadable_tool) => {
+                let handler_name = ToolName::new(tool.namespace.clone(), tool.name.clone());
+                dynamic_tool_specs.push(loadable_tool);
+                plan.register_handler(handler_name, ToolHandlerKind::DynamicTool);
+            }
+            Err(error) => {
+                tracing::error!(
+                    "Failed to convert dynamic tool {:?} to OpenAI tool: {error:?}",
+                    tool.name
+                );
             }
         }
     }

@@ -172,7 +172,7 @@ impl ChatWidget {
                 self.open_model_popup();
             }
             SlashCommand::Fast => {
-                let next_tier = if matches!(self.config.service_tier, Some(ServiceTier::Fast)) {
+                let next_tier = if matches!(self.current_service_tier(), Some(ServiceTier::Fast)) {
                     None
                 } else {
                     Some(ServiceTier::Fast)
@@ -213,9 +213,6 @@ impl ChatWidget {
             }
             SlashCommand::Side => {
                 self.request_empty_side_conversation();
-            }
-            SlashCommand::Away => {
-                self.app_event_tx.send(AppEvent::ShowEmailAwayStatus);
             }
             SlashCommand::Agent | SlashCommand::MultiAgents => {
                 self.app_event_tx.send(AppEvent::OpenAgentPicker);
@@ -530,12 +527,12 @@ impl ChatWidget {
                     "on" => self.set_service_tier_selection(Some(ServiceTier::Fast)),
                     "off" => self.set_service_tier_selection(/*service_tier*/ None),
                     "status" => {
-                        let status = if matches!(self.config.service_tier, Some(ServiceTier::Fast))
-                        {
-                            "on"
-                        } else {
-                            "off"
-                        };
+                        let status =
+                            if matches!(self.current_service_tier(), Some(ServiceTier::Fast)) {
+                                "on"
+                            } else {
+                                "off"
+                            };
                         self.add_info_message(
                             format!("Fast mode is {status}."),
                             /*hint*/ None,
@@ -605,30 +602,6 @@ impl ChatWidget {
                     target: ReviewTarget::Custom { instructions: args },
                     user_facing_hint: None,
                 }));
-            }
-            SlashCommand::Away => {
-                let mode = match trimmed.to_ascii_lowercase().as_str() {
-                    "" | "status" => {
-                        self.app_event_tx.send(AppEvent::ShowEmailAwayStatus);
-                        if source == SlashCommandDispatchSource::Live {
-                            self.bottom_pane.drain_pending_submission_state();
-                        }
-                        return;
-                    }
-                    "auto" => codex_config::types::EmailAwayModeOverride::Auto,
-                    "away" => codex_config::types::EmailAwayModeOverride::Away,
-                    "present" => codex_config::types::EmailAwayModeOverride::Present,
-                    _ => {
-                        self.add_error_message(
-                            "Usage: /away [auto|away|present|status]".to_string(),
-                        );
-                        if source == SlashCommandDispatchSource::Live {
-                            self.bottom_pane.drain_pending_submission_state();
-                        }
-                        return;
-                    }
-                };
-                self.app_event_tx.send(AppEvent::SetEmailAwayMode { mode });
             }
             SlashCommand::Resume if !trimmed.is_empty() => {
                 self.app_event_tx
@@ -757,7 +730,6 @@ impl ChatWidget {
             | SlashCommand::Rollout
             | SlashCommand::Copy
             | SlashCommand::Diff
-            | SlashCommand::Away
             | SlashCommand::Rename
             | SlashCommand::TestApproval => QueueDrain::Continue,
             SlashCommand::Feedback

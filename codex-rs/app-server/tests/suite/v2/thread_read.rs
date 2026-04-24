@@ -5,7 +5,6 @@ use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::rollout_path;
 use app_test_support::test_absolute_path;
 use app_test_support::to_response;
-use codex_app_server_protocol::HollywoodSessionStatus;
 use codex_app_server_protocol::JSONRPCError;
 use codex_app_server_protocol::JSONRPCResponse;
 use codex_app_server_protocol::RequestId;
@@ -13,9 +12,6 @@ use codex_app_server_protocol::SessionSource;
 use codex_app_server_protocol::SortDirection;
 use codex_app_server_protocol::ThreadForkParams;
 use codex_app_server_protocol::ThreadForkResponse;
-use codex_app_server_protocol::ThreadHollywoodAttachParams;
-use codex_app_server_protocol::ThreadHollywoodListParams;
-use codex_app_server_protocol::ThreadHollywoodListResponse;
 use codex_app_server_protocol::ThreadItem;
 use codex_app_server_protocol::ThreadListParams;
 use codex_app_server_protocol::ThreadListResponse;
@@ -98,7 +94,7 @@ async fn thread_read_returns_summary_without_turns() -> Result<()> {
     assert!(!thread.ephemeral, "stored rollouts should not be ephemeral");
     assert!(thread.path.as_ref().expect("thread path").is_absolute());
     assert_eq!(thread.cwd, test_absolute_path("/"));
-    assert_eq!(thread.cli_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(thread.cli_version, "0.0.0");
     assert_eq!(thread.source, SessionSource::Cli);
     assert_eq!(thread.git_info, None);
     assert_eq!(thread.turns.len(), 0);
@@ -552,6 +548,7 @@ async fn thread_name_set_is_reflected_in_read_list_and_resume() -> Result<()> {
             source_kinds: None,
             archived: None,
             cwd: None,
+            use_state_db_only: false,
             search_term: None,
         })
         .await?;
@@ -788,109 +785,6 @@ fn turn_user_texts(turns: &[codex_app_server_protocol::Turn]) -> Vec<&str> {
             _ => None,
         })
         .collect()
-}
-
-#[tokio::test]
-async fn thread_read_and_list_surface_hollywood_session_state() -> Result<()> {
-    let server = create_mock_responses_server_repeating_assistant("Done").await;
-    let codex_home = TempDir::new()?;
-    create_config_toml(codex_home.path(), &server.uri())?;
-
-    let mut mcp = McpProcess::new(codex_home.path()).await?;
-    timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
-
-    let start_id = mcp
-        .send_thread_start_request(ThreadStartParams {
-            model: Some("mock-model".to_string()),
-            ..Default::default()
-        })
-        .await?;
-    let start_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(start_id)),
-    )
-    .await??;
-    let ThreadStartResponse { thread, .. } = to_response::<ThreadStartResponse>(start_resp)?;
-
-    let attach_id = mcp
-        .send_thread_hollywood_attach_request(ThreadHollywoodAttachParams {
-            thread_id: thread.id.clone(),
-            url: Some("http://127.0.0.1:8765".to_string()),
-            room: Some("repo/test-room".to_string()),
-            observed_rooms: vec!["main".to_string()],
-            wake_rooms: vec!["repo/test-room".to_string()],
-            attention: None,
-        })
-        .await?;
-    let attach_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(attach_id)),
-    )
-    .await??;
-    let _: serde_json::Value = to_response(attach_resp)?;
-
-    let read_id = mcp
-        .send_thread_read_request(ThreadReadParams {
-            thread_id: thread.id.clone(),
-            include_turns: false,
-        })
-        .await?;
-    let read_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(read_id)),
-    )
-    .await??;
-    let read_result = read_resp.result.clone();
-    let ThreadReadResponse { thread } = to_response::<ThreadReadResponse>(read_resp)?;
-    let hollywood = thread
-        .hollywood
-        .expect("thread/read should include Hollywood session state");
-    assert!(hollywood.attached);
-    assert_eq!(hollywood.primary_room, "repo/test-room");
-    assert_eq!(hollywood.observed_rooms, vec!["main".to_string()]);
-    assert_eq!(hollywood.wake_rooms, vec!["repo/test-room".to_string()]);
-    assert_eq!(hollywood.status, HollywoodSessionStatus::Idle);
-    let thread_json = read_result
-        .get("thread")
-        .and_then(Value::as_object)
-        .expect("thread/read result.thread must be an object");
-    assert_eq!(
-        thread_json
-            .get("hollywood")
-            .and_then(Value::as_object)
-            .and_then(|hollywood| hollywood.get("primaryRoom"))
-            .and_then(Value::as_str),
-        Some("repo/test-room"),
-        "thread/read must serialize Hollywood session state on the wire"
-    );
-
-    let list_id = mcp
-        .send_thread_hollywood_list_request(ThreadHollywoodListParams {
-            cursor: None,
-            limit: Some(10),
-            rooms: Some(vec!["repo/test-room".to_string()]),
-            statuses: Some(vec![HollywoodSessionStatus::Idle]),
-        })
-        .await?;
-    let list_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(list_id)),
-    )
-    .await??;
-    let ThreadHollywoodListResponse { data, .. } =
-        to_response::<ThreadHollywoodListResponse>(list_resp)?;
-    let listed = data
-        .iter()
-        .find(|candidate| candidate.id == thread.id)
-        .expect("thread/hollywood/list should include the attached thread");
-    let listed_hollywood = listed
-        .hollywood
-        .as_ref()
-        .expect("thread/hollywood/list should include Hollywood session state");
-    assert!(listed_hollywood.attached);
-    assert_eq!(listed_hollywood.primary_room, "repo/test-room");
-
-    Ok(())
 }
 
 // Helper to create a config.toml pointing at the mock model server.

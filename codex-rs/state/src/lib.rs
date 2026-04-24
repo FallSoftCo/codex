@@ -100,6 +100,7 @@ pub use model::WatcherRunStatus;
 pub use model::WatcherStatus;
 pub use model::WatcherTriggerKind;
 pub use runtime::RemoteControlEnrollmentRecord;
+pub use runtime::DeviceKeyBindingRecord;
 pub use runtime::ThreadFilterOptions;
 pub use runtime::logs_db_filename;
 pub use runtime::logs_db_path;

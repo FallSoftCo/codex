@@ -655,7 +655,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
         .map(|configured_tool| configured_tool.name().to_string())
         .collect::<HashSet<_>>();
 
-    let hollywood_tools_enabled = config.hollywood_tools_enabled && hollywood_tools_available;
+    let hollywood_tools_enabled = hollywood_tools_available;
     let mut hollywood_specs_inserted = false;
     let mut coordination_specs_inserted = false;
     let mut restart_client_inserted = false;

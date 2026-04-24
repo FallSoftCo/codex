@@ -1,3 +1,4 @@
+use crate::agent::control::SpawnAgentOptions;
 use crate::agent::exceeds_thread_spawn_depth_limit;
 use crate::agent::next_thread_spawn_depth;
 use crate::agent::status::is_final;
@@ -5,6 +6,7 @@ use crate::config::Config;
 use crate::function_tool::FunctionCallError;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
+use crate::session::turn_context::TurnEnvironment;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
@@ -515,9 +517,7 @@ fn required_state_db(
     session: &Arc<Session>,
 ) -> Result<Arc<codex_state::StateRuntime>, FunctionCallError> {
     session.state_db().ok_or_else(|| {
-        FunctionCallError::RespondToModel(
-            "agent job tools are unavailable for this session because the sqlite state db could not be initialized".to_string(),
-        )
+        FunctionCallError::Fatal("sqlite state db is unavailable for this session".to_string())
     })
 }
 
@@ -631,16 +631,25 @@ async fn run_agent_job_loop(
                 let thread_id = match session
                     .services
                     .agent_control
-                    .spawn_agent(
+                    .spawn_agent_with_metadata(
                         options.spawn_config.clone(),
                         items.into(),
                         Some(SessionSource::SubAgent(SubAgentSource::Other(format!(
                             "agent_job:{job_id}"
                         )))),
+                        SpawnAgentOptions {
+                            environments: Some(
+                                turn.environments
+                                    .iter()
+                                    .map(TurnEnvironment::selection)
+                                    .collect(),
+                            ),
+                            ..Default::default()
+                        },
                     )
                     .await
                 {
-                    Ok(thread_id) => thread_id,
+                    Ok(spawned_agent) => spawned_agent.thread_id,
                     Err(CodexErr::AgentLimitReached { .. }) => {
                         db.mark_agent_job_item_pending(
                             job_id.as_str(),

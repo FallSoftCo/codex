@@ -12,7 +12,6 @@ should shrink and eventually disappear.
 */
 
 use super::App;
-use crate::app::ClientRestartRequest;
 use crate::app_command::AppCommand;
 use crate::app_event::AppEvent;
 use crate::app_server_session::AppServerSession;
@@ -125,7 +124,7 @@ impl App {
 
     pub(super) async fn handle_app_server_event(
         &mut self,
-        app_server_client: &mut AppServerSession,
+        app_server_client: &AppServerSession,
         event: AppServerEvent,
     ) {
         match event {
@@ -145,11 +144,6 @@ impl App {
                 self.handle_server_request_event(app_server_client, request)
                     .await;
             }
-            AppServerEvent::Reconnected { message } => {
-                tracing::info!("app-server event stream reconnected: {message}");
-                self.handle_app_server_reconnected(app_server_client, message)
-                    .await;
-            }
             AppServerEvent::Disconnected { message } => {
                 tracing::warn!("app-server event stream disconnected: {message}");
                 self.chat_widget.add_error_message(message.clone());
@@ -158,54 +152,11 @@ impl App {
         }
     }
 
-    async fn handle_app_server_reconnected(
-        &mut self,
-        app_server_client: &mut AppServerSession,
-        message: String,
-    ) {
-        let mut thread_ids = Vec::new();
-        if let Some(primary_thread_id) = self.primary_thread_id {
-            thread_ids.push(primary_thread_id);
-        }
-        thread_ids.extend(
-            self.agent_navigation
-                .ordered_threads()
-                .iter()
-                .map(|(thread_id, _entry)| *thread_id),
-        );
-
-        let outcome = app_server_client.recover_remote_threads(thread_ids).await;
-        let _ = self
-            .backfill_loaded_subagent_threads(app_server_client)
-            .await;
-
-        if outcome.failed.is_empty() {
-            let summary = if outcome.recovered.is_empty() {
-                message
-            } else {
-                format!("{message}; recovered {} thread(s)", outcome.recovered.len())
-            };
-            self.chat_widget.add_info_message(summary, /*hint*/ None);
-            return;
-        }
-
-        tracing::warn!(
-            failed_threads = outcome.failed.len(),
-            "failed to recover one or more remote threads after reconnect"
-        );
-        self.chat_widget.add_error_message(format!(
-            "{message}; failed to recover {} thread(s). Check logs for details.",
-            outcome.failed.len()
-        ));
-    }
-
     async fn handle_server_notification_event(
         &mut self,
         app_server_client: &AppServerSession,
         notification: ServerNotification,
     ) {
-        self.handle_email_bridge_notification(&notification).await;
-
         match &notification {
             ServerNotification::ServerRequestResolved(notification) => {
                 if let Some(request) = self
@@ -251,21 +202,6 @@ impl App {
                 self.fetch_plugins_list(app_server_client, cwd);
                 return;
             }
-            ServerNotification::ClientRestartRequested(notification) => {
-                let Ok(thread_id) = ThreadId::from_string(&notification.thread_id) else {
-                    tracing::warn!(
-                        thread_id = notification.thread_id,
-                        "ignoring client restart request with invalid thread_id"
-                    );
-                    return;
-                };
-                self.app_event_tx
-                    .send(AppEvent::RestartClient(ClientRestartRequest {
-                        thread_id,
-                        reason: notification.reason.clone(),
-                    }));
-                return;
-            }
             _ => {}
         }
 
@@ -304,8 +240,6 @@ impl App {
         app_server_client: &AppServerSession,
         request: ServerRequest,
     ) {
-        self.handle_email_bridge_request(&request).await;
-
         if let Some(unsupported) = self
             .pending_app_server_requests
             .note_server_request(&request)
@@ -466,6 +400,9 @@ fn server_notification_thread_target(
         }
         ServerNotification::ContextCompacted(notification) => Some(notification.thread_id.as_str()),
         ServerNotification::ModelRerouted(notification) => Some(notification.thread_id.as_str()),
+        ServerNotification::ModelVerification(notification) => {
+            Some(notification.thread_id.as_str())
+        }
         ServerNotification::ThreadRealtimeStarted(notification) => {
             Some(notification.thread_id.as_str())
         }
@@ -491,12 +428,7 @@ fn server_notification_thread_target(
             Some(notification.thread_id.as_str())
         }
         ServerNotification::Warning(notification) => notification.thread_id.as_deref(),
-        ServerNotification::ClientRestartRequested(notification) => {
-            Some(notification.thread_id.as_str())
-        }
-        ServerNotification::ThreadHollywoodMessage(notification) => {
-            Some(notification.thread_id.as_str())
-        }
+        ServerNotification::GuardianWarning(notification) => Some(notification.thread_id.as_str()),
         ServerNotification::SkillsChanged(_)
         | ServerNotification::McpServerStatusUpdated(_)
         | ServerNotification::McpServerOauthLoginCompleted(_)
@@ -857,6 +789,7 @@ fn append_terminal_turn_events(events: &mut Vec<Event>, turn: &Turn, include_fai
                 last_agent_message: None,
                 completed_at: turn.completed_at,
                 duration_ms: turn.duration_ms,
+                time_to_first_token_ms: None,
             }),
         }),
         TurnStatus::Interrupted => events.push(Event {
@@ -888,6 +821,7 @@ fn append_terminal_turn_events(events: &mut Vec<Event>, turn: &Turn, include_fai
                     last_agent_message: None,
                     completed_at: turn.completed_at,
                     duration_ms: turn.duration_ms,
+                    time_to_first_token_ms: None,
                 }),
             });
         }
@@ -1137,6 +1071,7 @@ mod tests {
     use codex_app_server_protocol::CommandExecutionOutputDeltaNotification;
     use codex_app_server_protocol::CommandExecutionSource;
     use codex_app_server_protocol::CommandExecutionStatus;
+    use codex_app_server_protocol::GuardianWarningNotification;
     use codex_app_server_protocol::ItemCompletedNotification;
     use codex_app_server_protocol::ItemStartedNotification;
     use codex_app_server_protocol::ReasoningSummaryTextDeltaNotification;
@@ -1395,7 +1330,6 @@ mod tests {
             agent_role: None,
             git_info: None,
             name: None,
-            hollywood: None,
             turns: vec![Turn {
                 id: "turn-1".to_string(),
                 items: vec![ThreadItem::CommandExecution {
@@ -1572,7 +1506,6 @@ mod tests {
                 agent_role: None,
                 git_info: None,
                 name: Some("restore".to_string()),
-                hollywood: None,
                 turns: vec![
                     Turn {
                         id: "turn-complete".to_string(),
@@ -1751,6 +1684,19 @@ mod tests {
         let thread_id = ThreadId::new();
         let notification = ServerNotification::Warning(WarningNotification {
             thread_id: Some(thread_id.to_string()),
+            message: "warning".to_string(),
+        });
+
+        let target = server_notification_thread_target(&notification);
+
+        assert_eq!(target, ServerNotificationThreadTarget::Thread(thread_id));
+    }
+
+    #[test]
+    fn guardian_warning_notifications_route_to_threads() {
+        let thread_id = ThreadId::new();
+        let notification = ServerNotification::GuardianWarning(GuardianWarningNotification {
+            thread_id: thread_id.to_string(),
             message: "warning".to_string(),
         });
 

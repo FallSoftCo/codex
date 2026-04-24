@@ -2,8 +2,8 @@ use super::*;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 
-fn windows_shell_safety_description() -> String {
-    format!("\n\n{}", windows_destructive_filesystem_guidance())
+fn windows_shell_guidance_description() -> String {
+    format!("\n\n{}", windows_shell_guidance())
 }
 
 #[test]
@@ -24,7 +24,7 @@ Examples of valid command strings:
 - setting an env var: ["powershell.exe", "-Command", "$env:FOO='bar'; echo $env:FOO"]
 - running an inline Python script: ["powershell.exe", "-Command", "@'\\nprint('Hello, world!')\\n'@ | python -"]"#
             .to_string()
-            + &windows_shell_safety_description()
+            + &windows_shell_guidance_description()
     } else {
         r#"Runs a shell command and returns its output.
 - The arguments to `shell` will be passed to execvp(). Most terminal commands should be prefixed with ["bash", "-lc"].
@@ -100,11 +100,12 @@ fn exec_command_tool_matches_expected_spec() {
 
     let description = if cfg!(windows) {
         format!(
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Prefer `watch_process_exit` over long inline waits when you only need to react after the process finishes.{}",
-            windows_shell_safety_description()
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction.{}",
+            windows_shell_guidance_description()
         )
     } else {
-        "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Prefer `watch_process_exit` over long inline waits when you only need to react after the process finishes.".to_string()
+        "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
+            .to_string()
     };
 
     let mut properties = BTreeMap::from([
@@ -224,159 +225,6 @@ fn write_stdin_tool_matches_expected_spec() {
 }
 
 #[test]
-fn watch_agent_completion_tool_matches_expected_spec() {
-    let tool = create_watch_agent_completion_tool();
-
-    let properties = BTreeMap::from([
-        (
-            "target".to_string(),
-            JsonSchema::string(Some(
-                "Identifier of the target agent/thread whose completion should wake the waiting thread."
-                    .to_string(),
-            )),
-        ),
-        (
-            "title".to_string(),
-            JsonSchema::string(Some("Short human-readable label for the watcher.".to_string())),
-        ),
-        (
-            "prompt".to_string(),
-            JsonSchema::string(Some(
-                "Follow-up prompt injected into the thread after the target agent satisfies the condition."
-                    .to_string(),
-            )),
-        ),
-        (
-            "condition".to_string(),
-            JsonSchema::string(Some(
-                "Optional completion condition: `final`, `completed`, or `successful`. Defaults to `final`."
-                    .to_string(),
-            )),
-        ),
-        (
-            "timeout_seconds".to_string(),
-            JsonSchema::number(Some(
-                "Optional timeout in seconds. If the target agent does not satisfy the condition in time, the watcher fails."
-                    .to_string(),
-            )),
-        ),
-        (
-            "thread_id".to_string(),
-            JsonSchema::string(Some(
-                "Optional thread/session id to wake. Defaults to the current thread."
-                    .to_string(),
-            )),
-        ),
-        (
-            "requires_response".to_string(),
-            JsonSchema::boolean(Some(
-                "Whether the deferred wake should expect a concrete response.".to_string(),
-            )),
-        ),
-    ]);
-
-    assert_eq!(
-        tool,
-        ToolSpec::Function(ResponsesApiTool {
-            name: "watch_agent_completion".to_string(),
-            description: "Registers a persisted watcher that wakes the thread when another agent reaches a target completion state. Prefer this over stretching `wait_agent` into a long-lived blocking wait.".to_string(),
-            strict: false,
-            defer_loading: None,
-            parameters: JsonSchema::object(
-                properties,
-                Some(vec![
-                    "target".to_string(),
-                    "title".to_string(),
-                    "prompt".to_string(),
-                ]),
-                Some(false.into()),
-            ),
-            output_schema: None,
-        })
-    );
-}
-
-#[test]
-fn watch_task_periodically_tool_matches_expected_spec() {
-    let tool = create_watch_task_periodically_tool();
-
-    let properties = BTreeMap::from([
-        (
-            "title".to_string(),
-            JsonSchema::string(Some(
-                "Short human-readable label for the task watch.".to_string(),
-            )),
-        ),
-        (
-            "objective".to_string(),
-            JsonSchema::string(Some(
-                "Human-readable objective the agent should periodically reevaluate.".to_string(),
-            )),
-        ),
-        (
-            "prompt".to_string(),
-            JsonSchema::string(Some(
-                "Follow-up prompt injected into the thread each time the task watch becomes due."
-                    .to_string(),
-            )),
-        ),
-        (
-            "check_every_seconds".to_string(),
-            JsonSchema::number(Some(
-                "Recurring interval in seconds between reevaluation checks.".to_string(),
-            )),
-        ),
-        (
-            "initial_delay_seconds".to_string(),
-            JsonSchema::number(Some(
-                "Optional delay in seconds before the first check. Defaults to one full interval."
-                    .to_string(),
-            )),
-        ),
-        (
-            "thread_id".to_string(),
-            JsonSchema::string(Some(
-                "Optional thread/session id to wake. Defaults to the current thread.".to_string(),
-            )),
-        ),
-        (
-            "max_checks".to_string(),
-            JsonSchema::number(Some(
-                "Optional cap on how many checks may run before the task watch auto-stops."
-                    .to_string(),
-            )),
-        ),
-        (
-            "requires_response".to_string(),
-            JsonSchema::boolean(Some(
-                "Whether the deferred wake should expect a concrete response.".to_string(),
-            )),
-        ),
-    ]);
-
-    assert_eq!(
-        tool,
-        ToolSpec::Function(ResponsesApiTool {
-            name: "watch_task_periodically".to_string(),
-            description: "Registers a persisted task watch that periodically wakes the thread to reevaluate a concrete task. Use this for time-based \"check on this later\" work.".to_string(),
-            strict: false,
-            defer_loading: None,
-            parameters: JsonSchema::object(
-                properties,
-                Some(vec![
-                    "title".to_string(),
-                    "objective".to_string(),
-                    "prompt".to_string(),
-                    "check_every_seconds".to_string(),
-                ]),
-                Some(false.into()),
-            ),
-            output_schema: None,
-        })
-    );
-}
-
-#[test]
 fn shell_tool_with_request_permission_includes_additional_permissions() {
     let tool = create_shell_tool(ShellToolOptions {
         exec_permission_approvals_enabled: true,
@@ -421,7 +269,7 @@ Examples of valid command strings:
 - running an inline Python script: ["powershell.exe", "-Command", "@'\\nprint('Hello, world!')\\n'@ | python -"]
 
 {}"#,
-            windows_destructive_filesystem_guidance()
+            windows_shell_guidance()
         )
     } else {
         r#"Runs a shell command and returns its output.
@@ -498,7 +346,7 @@ Examples of valid command strings:
 - setting an env var: "$env:FOO='bar'; echo $env:FOO"
 - running an inline Python script: "@'\\nprint('Hello, world!')\\n'@ | python -""#
             .to_string()
-            + &windows_shell_safety_description()
+            + &windows_shell_guidance_description()
     } else {
         r#"Runs a shell command and returns its output.
 - Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary."#

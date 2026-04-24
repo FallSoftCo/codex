@@ -5,7 +5,6 @@ use codex_protocol::models::ContentItem;
 use super::EnvironmentContext;
 use super::FragmentRegistration;
 use super::FragmentRegistrationProxy;
-use super::HollywoodMessage;
 use super::SkillInstructions;
 use super::SubagentNotification;
 use super::TurnAborted;
@@ -24,8 +23,6 @@ static TURN_ABORTED_REGISTRATION: FragmentRegistrationProxy<TurnAborted> =
     FragmentRegistrationProxy::new();
 static SUBAGENT_NOTIFICATION_REGISTRATION: FragmentRegistrationProxy<SubagentNotification> =
     FragmentRegistrationProxy::new();
-static HOLLYWOOD_MESSAGE_REGISTRATION: FragmentRegistrationProxy<HollywoodMessage> =
-    FragmentRegistrationProxy::new();
 
 static CONTEXTUAL_USER_FRAGMENTS: &[&dyn FragmentRegistration] = &[
     &USER_INSTRUCTIONS_REGISTRATION,
@@ -34,7 +31,6 @@ static CONTEXTUAL_USER_FRAGMENTS: &[&dyn FragmentRegistration] = &[
     &USER_SHELL_COMMAND_REGISTRATION,
     &TURN_ABORTED_REGISTRATION,
     &SUBAGENT_NOTIFICATION_REGISTRATION,
-    &HOLLYWOOD_MESSAGE_REGISTRATION,
 ];
 
 static MEMORY_EXCLUDED_CONTEXTUAL_USER_FRAGMENTS: &[&dyn FragmentRegistration] = &[

@@ -16,6 +16,7 @@ pub struct SpawnAgentToolOptions<'a> {
     pub hide_agent_type_model_reasoning: bool,
     pub include_usage_hint: bool,
     pub usage_hint_text: Option<String>,
+    pub max_concurrent_threads_per_session: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +72,7 @@ pub fn create_spawn_agent_tool_v2(options: SpawnAgentToolOptions<'_>) -> ToolSpe
             available_models_description.as_deref(),
             options.include_usage_hint,
             options.usage_hint_text,
+            options.max_concurrent_threads_per_session,
         ),
         strict: false,
         defer_loading: None,
@@ -593,7 +595,7 @@ fn spawn_agent_tool_description(
     let tool_description = format!(
         r#"
         {agent_role_guidance}
-        Spawn a sub-agent for a well-scoped task. Use this to parallelize your own current task into bounded sidecar work, not as the default way to satisfy requests to work with existing teammates or peers. {return_value_description} {SPAWN_AGENT_INHERITED_MODEL_GUIDANCE}"#
+        Spawn a sub-agent for a well-scoped task. {return_value_description} {SPAWN_AGENT_INHERITED_MODEL_GUIDANCE}"#
     );
 
     if !include_usage_hint {
@@ -618,8 +620,6 @@ This spawn_agent tool provides you access to sub-agents that inherit your curren
 
 Only use `spawn_agent` if and only if the user explicitly asks for sub-agents, delegation, or parallel agent work.
 Requests for depth, thoroughness, research, investigation, or detailed codebase analysis do not count as permission to spawn.
-If the user asks you to work with teammates, peers, or other existing agents, do not satisfy that by spawning a fresh subagent by default. Coordinate with the existing attached Losangelex/Hollywood agents first, and reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar subtasks.
-Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents; prefer the already attached Losangelex/Hollywood agents for that.
 {agent_role_usage_hint}
 
 ### When to delegate vs. do the subtask yourself
@@ -657,8 +657,16 @@ fn spawn_agent_tool_description_v2(
     available_models_description: Option<&str>,
     include_usage_hint: bool,
     usage_hint_text: Option<String>,
+    max_concurrent_threads_per_session: Option<usize>,
 ) -> String {
     let agent_role_guidance = available_models_description.unwrap_or_default();
+    let concurrency_guidance = max_concurrent_threads_per_session
+        .map(|limit| {
+            format!(
+                "This session is configured with `max_concurrent_threads_per_session = {limit}` for concurrently open agent threads."
+            )
+        })
+        .unwrap_or_default();
 
     let tool_description = format!(
         r#"
@@ -669,7 +677,7 @@ The spawned agent will have the same tools as you and the ability to spawn its o
 {SPAWN_AGENT_INHERITED_MODEL_GUIDANCE}
 It will be able to send you and other running agents messages, and its final answer will be provided to you when it finishes.
 The new agent's canonical task name will be provided to it along with the message.
-Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents; prefer the already attached Losangelex/Hollywood agents for that. Use this tool to parallelize your own current task into bounded sidecar work when spawning is explicitly authorized."#
+{concurrency_guidance}"#
     );
 
     if !include_usage_hint {

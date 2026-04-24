@@ -16,12 +16,16 @@ use crate::tools::context::ApplyPatchToolOutput;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::SharedTurnDiffTracker;
 use crate::tools::context::ToolInvocation;
+use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::hook_names::HookToolName;
 use crate::tools::orchestrator::ToolOrchestrator;
+use crate::tools::registry::PostToolUsePayload;
+use crate::tools::registry::PreToolUsePayload;
 use crate::tools::registry::ToolArgumentDiffConsumer;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
@@ -35,18 +39,14 @@ use codex_apply_patch::Hunk;
 use codex_apply_patch::parse_patch_streaming;
 use codex_exec_server::ExecutorFileSystem;
 use codex_features::Feature;
+use codex_protocol::models::AdditionalPermissionProfile;
 use codex_protocol::models::FileSystemPermissions;
-use codex_protocol::models::PermissionProfile;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::FileChange;
 use codex_protocol::protocol::PatchApplyUpdatedEvent;
 use codex_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
 use codex_sandboxing::policy_transforms::merge_permission_profiles;
 use codex_sandboxing::policy_transforms::normalize_additional_permissions;
-use codex_state::DEFAULT_PATH_CLAIM_LEASE_SECONDS;
-use codex_state::PathClaimConflict;
-use codex_state::PathClaimKind;
-use codex_state::PathClaimSpec;
 use codex_tools::ApplyPatchToolArgs;
 use codex_utils_absolute_path::AbsolutePathBuf;
 
@@ -215,7 +215,7 @@ fn write_permissions_for_paths(
     file_paths: &[AbsolutePathBuf],
     file_system_sandbox_policy: &codex_protocol::permissions::FileSystemSandboxPolicy,
     cwd: &AbsolutePathBuf,
-) -> Option<PermissionProfile> {
+) -> Option<AdditionalPermissionProfile> {
     let write_paths = file_paths
         .iter()
         .map(|path| {
@@ -232,7 +232,7 @@ fn write_permissions_for_paths(
         .collect::<Result<Vec<_>, _>>()
         .ok()?;
 
-    let permissions = (!write_paths.is_empty()).then_some(PermissionProfile {
+    let permissions = (!write_paths.is_empty()).then_some(AdditionalPermissionProfile {
         file_system: Some(FileSystemPermissions::from_read_write_roots(
             Some(vec![]),
             Some(write_paths),
@@ -241,6 +241,21 @@ fn write_permissions_for_paths(
     })?;
 
     normalize_additional_permissions(permissions).ok()
+}
+
+/// Extracts the raw patch text used as the command-shaped hook input for apply_patch.
+///
+/// The apply_patch tool can arrive as the older JSON/function shape or as a
+/// freeform custom tool call. Both represent the same file edit operation, so
+/// hooks see the raw patch body in `tool_input.command` either way.
+fn apply_patch_payload_command(payload: &ToolPayload) -> Option<String> {
+    match payload {
+        ToolPayload::Function { arguments } => parse_arguments::<ApplyPatchToolArgs>(arguments)
+            .ok()
+            .map(|args| args.input),
+        ToolPayload::Custom { input } => Some(input.clone()),
+        _ => None,
+    }
 }
 
 async fn effective_patch_permissions(
@@ -276,68 +291,6 @@ async fn effective_patch_permissions(
     )
 }
 
-async fn claim_patch_ownership_if_available(
-    session: &Session,
-    file_paths: &[AbsolutePathBuf],
-) -> Result<(), FunctionCallError> {
-    if file_paths.is_empty() {
-        return Ok(());
-    }
-    let Some(state_db) = session.state_db() else {
-        return Ok(());
-    };
-
-    let claims = file_paths
-        .iter()
-        .map(|path| PathClaimSpec {
-            kind: PathClaimKind::File,
-            path: path.to_path_buf(),
-        })
-        .collect::<Vec<_>>();
-
-    match state_db
-        .claim_path_ownership(
-            session.conversation_id,
-            &claims,
-            Duration::from_secs(u64::try_from(DEFAULT_PATH_CLAIM_LEASE_SECONDS).unwrap_or(300)),
-        )
-        .await
-    {
-        Ok(result) if result.acquired => Ok(()),
-        Ok(result) => Err(FunctionCallError::RespondToModel(
-            format_patch_ownership_conflict(&result.conflicts),
-        )),
-        Err(err) => {
-            tracing::warn!(
-                thread_id = %session.conversation_id,
-                "failed to enforce apply_patch ownership claims: {err}"
-            );
-            Ok(())
-        }
-    }
-}
-
-fn format_patch_ownership_conflict(conflicts: &[PathClaimConflict]) -> String {
-    let Some(first) = conflicts.first() else {
-        return "apply_patch blocked by ownership conflict".to_string();
-    };
-
-    let blocking_kind = first.blocking_claim.kind.as_str();
-    let requested_path = first.requested.path.display();
-    let blocking_path = first.blocking_claim.path.display();
-    let owner_thread_id = &first.blocking_claim.owner_thread_id;
-    let additional = conflicts
-        .len()
-        .checked_sub(1)
-        .filter(|count| *count > 0)
-        .map(|count| format!(" and {count} more conflicting claim(s)"))
-        .unwrap_or_default();
-
-    format!(
-        "apply_patch blocked by ownership conflict: thread {owner_thread_id} holds a {blocking_kind} claim at `{blocking_path}` which overlaps `{requested_path}`{additional}"
-    )
-}
-
 impl ToolHandler for ApplyPatchHandler {
     type Output = ApplyPatchToolOutput;
 
@@ -358,6 +311,30 @@ impl ToolHandler for ApplyPatchHandler {
 
     fn create_diff_consumer(&self) -> Option<Box<dyn ToolArgumentDiffConsumer>> {
         Some(Box::<ApplyPatchArgumentDiffConsumer>::default())
+    }
+
+    fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
+        apply_patch_payload_command(&invocation.payload).map(|command| PreToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_input: serde_json::json!({ "command": command }),
+        })
+    }
+
+    fn post_tool_use_payload(
+        &self,
+        invocation: &ToolInvocation,
+        result: &Self::Output,
+    ) -> Option<PostToolUsePayload> {
+        let tool_response =
+            result.post_tool_use_response(&invocation.call_id, &invocation.payload)?;
+        Some(PostToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_use_id: invocation.call_id.clone(),
+            tool_input: serde_json::json!({
+                "command": apply_patch_payload_command(&invocation.payload)?,
+            }),
+            tool_response,
+        })
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -408,7 +385,6 @@ impl ToolHandler for ApplyPatchHandler {
             codex_apply_patch::MaybeApplyPatchVerified::Body(changes) => {
                 let (file_paths, effective_additional_permissions, file_system_sandbox_policy) =
                     effective_patch_permissions(session.as_ref(), turn.as_ref(), &changes).await;
-                claim_patch_ownership_if_available(session.as_ref(), &file_paths).await?;
                 match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                     .await
                 {
@@ -518,7 +494,6 @@ pub(crate) async fn intercept_apply_patch(
                 .await;
             let (approval_keys, effective_additional_permissions, file_system_sandbox_policy) =
                 effective_patch_permissions(session.as_ref(), turn.as_ref(), &changes).await;
-            claim_patch_ownership_if_available(session.as_ref(), &approval_keys).await?;
             match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                 .await
             {

@@ -155,12 +155,7 @@ SELECT
     threads.archived_at,
     threads.git_sha,
     threads.git_branch,
-    threads.git_origin_url,
-    threads.hollywood_url,
-    threads.hollywood_room,
-    threads.hollywood_attention_mode,
-    threads.hollywood_include_at_all,
-    threads.hollywood_include_at_room
+    threads.git_origin_url
 FROM threads
 LEFT JOIN stage1_outputs
     ON stage1_outputs.thread_id = threads.id
@@ -180,6 +175,7 @@ LEFT JOIN jobs
                 archived_only: false,
                 allowed_sources,
                 model_providers: None,
+                cwd_filters: None,
                 anchor: None,
                 sort_key: SortKey::UpdatedAt,
                 sort_direction: SortDirection::Desc,

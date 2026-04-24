@@ -2,13 +2,7 @@ use crate::bottom_pane::FeedbackAudience;
 #[cfg(test)]
 use crate::legacy_core::append_message_history_entry;
 use crate::legacy_core::config::Config;
-#[cfg(test)]
-use crate::legacy_core::config::ConfigBuilder;
-use crate::legacy_core::default_hollywood_observed_rooms;
-use crate::legacy_core::default_hollywood_room_for_cwd;
-use crate::legacy_core::find_thread_path_by_id_str;
 use crate::legacy_core::message_history_metadata;
-use crate::legacy_core::read_session_meta_line;
 use crate::status::StatusAccountDisplay;
 use crate::status::plan_type_display_name;
 use codex_app_server_client::AppServerClient;
@@ -28,7 +22,6 @@ use codex_app_server_protocol::ExternalAgentConfigMigrationItem;
 use codex_app_server_protocol::GetAccountParams;
 use codex_app_server_protocol::GetAccountRateLimitsResponse;
 use codex_app_server_protocol::GetAccountResponse;
-use codex_app_server_protocol::HollywoodSessionAttachOptions;
 use codex_app_server_protocol::JSONRPCErrorError;
 use codex_app_server_protocol::LogoutAccountResponse;
 use codex_app_server_protocol::MemoryResetResponse;
@@ -42,14 +35,14 @@ use codex_app_server_protocol::ReviewStartResponse;
 use codex_app_server_protocol::SkillsListParams;
 use codex_app_server_protocol::SkillsListResponse;
 use codex_app_server_protocol::Thread;
+use codex_app_server_protocol::ThreadApproveGuardianDeniedActionParams;
+use codex_app_server_protocol::ThreadApproveGuardianDeniedActionResponse;
 use codex_app_server_protocol::ThreadBackgroundTerminalsCleanParams;
 use codex_app_server_protocol::ThreadBackgroundTerminalsCleanResponse;
 use codex_app_server_protocol::ThreadCompactStartParams;
 use codex_app_server_protocol::ThreadCompactStartResponse;
 use codex_app_server_protocol::ThreadForkParams;
 use codex_app_server_protocol::ThreadForkResponse;
-use codex_app_server_protocol::ThreadHollywoodAttachParams;
-use codex_app_server_protocol::ThreadHollywoodAttachResponse;
 use codex_app_server_protocol::ThreadInjectItemsParams;
 use codex_app_server_protocol::ThreadInjectItemsResponse;
 use codex_app_server_protocol::ThreadListParams;
@@ -92,6 +85,7 @@ use codex_app_server_protocol::TurnSteerParams;
 use codex_app_server_protocol::TurnSteerResponse;
 use codex_otel::TelemetryAuthMode;
 use codex_protocol::ThreadId;
+use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::openai_models::ModelAvailabilityNux;
 use codex_protocol::openai_models::ModelPreset;
@@ -103,6 +97,7 @@ use codex_protocol::protocol::ConversationStartParams;
 use codex_protocol::protocol::ConversationStartTransport;
 use codex_protocol::protocol::ConversationTextParams;
 use codex_protocol::protocol::CreditsSnapshot;
+use codex_protocol::protocol::GuardianAssessmentEvent;
 use codex_protocol::protocol::RateLimitSnapshot;
 use codex_protocol::protocol::RateLimitWindow;
 use codex_protocol::protocol::ReviewRequest;
@@ -114,9 +109,7 @@ use color_eyre::eyre::ContextCompat;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
 use std::collections::HashMap;
-use std::env;
 use std::path::PathBuf;
-use tracing::warn;
 
 /// Data collected during the TUI bootstrap phase that the main event loop
 /// needs to configure the UI, telemetry, and initial rate-limit prefetch.
@@ -142,7 +135,6 @@ pub(crate) struct AppServerBootstrap {
 pub(crate) struct AppServerSession {
     client: AppServerClient,
     next_request_id: i64,
-    known_remote_threads: HashMap<ThreadId, RemoteThreadResumeContext>,
     remote_cwd_override: Option<PathBuf>,
 }
 
@@ -157,7 +149,13 @@ pub(crate) struct ThreadSessionState {
     pub(crate) service_tier: Option<codex_protocol::config_types::ServiceTier>,
     pub(crate) approval_policy: AskForApproval,
     pub(crate) approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer,
+    /// Legacy sandbox projection kept for compatibility. Use this only when
+    /// `permission_profile` is `None`.
     pub(crate) sandbox_policy: SandboxPolicy,
+    /// Canonical active permissions when available. Consumers should prefer
+    /// this over `sandbox_policy`; `None` means the session only has a legacy
+    /// sandbox projection.
+    pub(crate) permission_profile: Option<PermissionProfile>,
     pub(crate) cwd: AbsolutePathBuf,
     pub(crate) instruction_source_paths: Vec<AbsolutePathBuf>,
     pub(crate) reasoning_effort: Option<codex_protocol::openai_models::ReasoningEffort>,
@@ -173,62 +171,12 @@ enum ThreadParamsMode {
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RemoteThreadResumeContext {
-    cwd: PathBuf,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RemoteThreadRecoveryFailure {
-    pub(crate) thread_id: ThreadId,
-    pub(crate) message: String,
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub(crate) struct RemoteThreadRecoveryOutcome {
-    pub(crate) recovered: Vec<ThreadId>,
-    pub(crate) failed: Vec<RemoteThreadRecoveryFailure>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResumeBootstrapStrategy {
-    NativeResume,
-    LegacyForkMigration,
-}
-
 impl ThreadParamsMode {
     fn model_provider_from_config(self, config: &Config) -> Option<String> {
         match self {
             Self::Embedded => Some(config.model_provider_id.clone()),
             Self::Remote => None,
         }
-    }
-}
-
-async fn determine_resume_bootstrap_strategy(
-    config: &Config,
-    thread_id: ThreadId,
-    thread_params_mode: ThreadParamsMode,
-) -> ResumeBootstrapStrategy {
-    if !matches!(thread_params_mode, ThreadParamsMode::Embedded) {
-        return ResumeBootstrapStrategy::NativeResume;
-    }
-
-    let rollout_path =
-        match find_thread_path_by_id_str(config.codex_home.as_path(), &thread_id.to_string()).await
-        {
-            Ok(Some(rollout_path)) => rollout_path,
-            Ok(None) | Err(_) => return ResumeBootstrapStrategy::NativeResume,
-        };
-
-    let Ok(meta_line) = read_session_meta_line(rollout_path.as_path()).await else {
-        return ResumeBootstrapStrategy::NativeResume;
-    };
-
-    if meta_line.meta.hollywood.is_some() {
-        ResumeBootstrapStrategy::NativeResume
-    } else {
-        ResumeBootstrapStrategy::LegacyForkMigration
     }
 }
 
@@ -242,7 +190,6 @@ impl AppServerSession {
         Self {
             client,
             next_request_id: 1,
-            known_remote_threads: HashMap::new(),
             remote_cwd_override: None,
         }
     }
@@ -325,6 +272,9 @@ impl AppServerSession {
                     feedback_audience,
                     true,
                 )
+            }
+            Some(Account::AmazonBedrock {}) => {
+                (None, None, None, None, FeedbackAudience::External, false)
             }
             None => (None, None, None, None, FeedbackAudience::External, false),
         };
@@ -411,11 +361,7 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/start failed during TUI bootstrap")?;
-        let started = started_thread_from_start_response(response, config).await?;
-        self.remember_thread_session(&started.session);
-        self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
-            .await;
-        Ok(started)
+        started_thread_from_start_response(response, config).await
     }
 
     pub(crate) async fn resume_thread(
@@ -423,17 +369,6 @@ impl AppServerSession {
         config: Config,
         thread_id: ThreadId,
     ) -> Result<AppServerStartedThread> {
-        let strategy =
-            determine_resume_bootstrap_strategy(&config, thread_id, self.thread_params_mode())
-                .await;
-        if strategy == ResumeBootstrapStrategy::LegacyForkMigration {
-            tracing::info!(
-                thread_id = %thread_id,
-                "Legacy session selected for resume; upgrading into native losangelex fork"
-            );
-            return self.fork_thread(config, thread_id).await;
-        }
-
         let request_id = self.next_request_id();
         let response: ThreadResumeResponse = self
             .client
@@ -453,15 +388,6 @@ impl AppServerSession {
             .await;
         let mut started = started_thread_from_resume_response(response, &config).await?;
         started.session.fork_parent_title = fork_parent_title;
-        self.remember_thread_session(&started.session);
-        tracing::info!(
-            requested_thread_id = %thread_id,
-            returned_thread_id = %started.session.thread_id,
-            returned_rollout_path = ?started.session.rollout_path,
-            "thread/resume returned session to TUI"
-        );
-        self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
-            .await;
         Ok(started)
     }
 
@@ -489,9 +415,6 @@ impl AppServerSession {
             .await;
         let mut started = started_thread_from_fork_response(response, &config).await?;
         started.session.fork_parent_title = fork_parent_title;
-        self.remember_thread_session(&started.session);
-        self.maybe_auto_attach_hollywood(started.session.thread_id, started.session.cwd.as_path())
-            .await;
         Ok(started)
     }
 
@@ -525,45 +448,6 @@ impl AppServerSession {
                 None
             }
         }
-    }
-
-    async fn maybe_auto_attach_hollywood(&mut self, thread_id: ThreadId, cwd: &std::path::Path) {
-        let Some(params) = hollywood_auto_attach_params(thread_id, cwd) else {
-            tracing::debug!(thread_id = %thread_id, "Hollywood auto-attach disabled for thread");
-            return;
-        };
-        if let Err(err) = self.attach_hollywood(params).await {
-            warn!(thread_id = %thread_id, "Hollywood auto-attach failed: {err}");
-        }
-    }
-
-    pub(crate) async fn attach_hollywood(
-        &mut self,
-        params: ThreadHollywoodAttachParams,
-    ) -> Result<ThreadHollywoodAttachResponse> {
-        let thread_id = params.thread_id.clone();
-        tracing::info!(
-            thread_id = %thread_id,
-            room = params.room.as_deref().unwrap_or("<default>"),
-            url = params.url.as_deref().unwrap_or("<default>"),
-            attention_mode = ?params.attention.as_ref().map(|attention| attention.mode),
-            "Attempting Hollywood auto-attach for thread"
-        );
-        let request_id = self.next_request_id();
-        let result: Result<ThreadHollywoodAttachResponse> = self
-            .client
-            .request_typed(ClientRequest::ThreadHollywoodAttach { request_id, params })
-            .await
-            .wrap_err("thread/hollywood/attach failed during TUI bootstrap");
-        match result {
-            Ok(_) => {
-                tracing::info!(thread_id = %thread_id, "Hollywood auto-attach succeeded for thread");
-            }
-            Err(ref err) => {
-                warn!(thread_id = %thread_id, "Hollywood auto-attach failed: {err}");
-            }
-        }
-        result
     }
 
     pub(crate) async fn thread_list(
@@ -610,7 +494,6 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/read failed during TUI session lookup")?;
-        self.remember_thread_from_api_thread(&response.thread);
         Ok(response.thread)
     }
 
@@ -637,55 +520,6 @@ impl AppServerSession {
             .wrap_err("thread/inject_items failed during TUI side conversation setup")
     }
 
-    pub(crate) async fn recover_remote_threads<I>(
-        &mut self,
-        thread_ids: I,
-    ) -> RemoteThreadRecoveryOutcome
-    where
-        I: IntoIterator<Item = ThreadId>,
-    {
-        if !self.is_remote() {
-            return RemoteThreadRecoveryOutcome::default();
-        }
-
-        let mut outcome = RemoteThreadRecoveryOutcome::default();
-        let mut attempted = std::collections::HashSet::new();
-        for thread_id in thread_ids {
-            if !attempted.insert(thread_id) {
-                continue;
-            }
-            let Some(context) = self.known_remote_threads.get(&thread_id).cloned() else {
-                continue;
-            };
-            let request_id = self.next_request_id();
-            let result: std::result::Result<ThreadResumeResponse, TypedRequestError> = self
-                .client
-                .request_typed(ClientRequest::ThreadResume {
-                    request_id,
-                    params: ThreadResumeParams {
-                        thread_id: thread_id.to_string(),
-                        cwd: Some(context.cwd.to_string_lossy().to_string()),
-                        hollywood: hollywood_auto_attach_options(context.cwd.as_path()),
-                        persist_extended_history: true,
-                        ..ThreadResumeParams::default()
-                    },
-                })
-                .await;
-            match result {
-                Ok(response) => {
-                    self.remember_thread_from_api_thread(&response.thread);
-                    outcome.recovered.push(thread_id);
-                }
-                Err(err) => outcome.failed.push(RemoteThreadRecoveryFailure {
-                    thread_id,
-                    message: err.to_string(),
-                }),
-            }
-        }
-
-        outcome
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn turn_start(
         &mut self,
@@ -695,6 +529,7 @@ impl AppServerSession {
         approval_policy: AskForApproval,
         approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer,
         sandbox_policy: SandboxPolicy,
+        permission_profile: Option<PermissionProfile>,
         model: String,
         effort: Option<codex_protocol::openai_models::ReasoningEffort>,
         summary: Option<codex_protocol::config_types::ReasoningSummary>,
@@ -704,6 +539,11 @@ impl AppServerSession {
         output_schema: Option<serde_json::Value>,
     ) -> Result<TurnStartResponse> {
         let request_id = self.next_request_id();
+        let (sandbox_policy, permission_profile) = turn_start_permission_overrides(
+            self.thread_params_mode(),
+            sandbox_policy,
+            permission_profile,
+        );
         self.client
             .request_typed(ClientRequest::TurnStart {
                 request_id,
@@ -711,10 +551,12 @@ impl AppServerSession {
                     thread_id: thread_id.to_string(),
                     input: items.into_iter().map(Into::into).collect(),
                     responsesapi_client_metadata: None,
+                    environments: None,
                     cwd: Some(cwd),
                     approval_policy: Some(approval_policy.into()),
                     approvals_reviewer: Some(approvals_reviewer.into()),
-                    sandbox_policy: Some(sandbox_policy.into()),
+                    sandbox_policy,
+                    permission_profile,
                     model: Some(model),
                     service_tier,
                     effort,
@@ -885,6 +727,27 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/shellCommand failed in TUI")?;
+        Ok(())
+    }
+
+    pub(crate) async fn thread_approve_guardian_denied_action(
+        &mut self,
+        thread_id: ThreadId,
+        event: &GuardianAssessmentEvent,
+    ) -> Result<()> {
+        let request_id = self.next_request_id();
+        let _: ThreadApproveGuardianDeniedActionResponse = self
+            .client
+            .request_typed(ClientRequest::ThreadApproveGuardianDeniedAction {
+                request_id,
+                params: ThreadApproveGuardianDeniedActionParams {
+                    thread_id: thread_id.to_string(),
+                    event: serde_json::to_value(event)
+                        .wrap_err("failed to serialize Guardian denial event")?,
+                },
+            })
+            .await
+            .wrap_err("thread/approveGuardianDeniedAction failed in TUI")?;
         Ok(())
     }
 
@@ -1082,33 +945,6 @@ impl AppServerSession {
         self.client.request_handle()
     }
 
-    fn remember_thread_session(&mut self, session: &ThreadSessionState) {
-        if !self.is_remote() {
-            return;
-        }
-        self.known_remote_threads.insert(
-            session.thread_id,
-            RemoteThreadResumeContext {
-                cwd: session.cwd.to_path_buf(),
-            },
-        );
-    }
-
-    fn remember_thread_from_api_thread(&mut self, thread: &Thread) {
-        if !self.is_remote() {
-            return;
-        }
-        let Ok(thread_id) = ThreadId::from_string(&thread.id) else {
-            return;
-        };
-        self.known_remote_threads.insert(
-            thread_id,
-            RemoteThreadResumeContext {
-                cwd: thread.cwd.to_path_buf(),
-            },
-        );
-    }
-
     fn next_request_id(&mut self) -> RequestId {
         let request_id = self.next_request_id;
         self.next_request_id += 1;
@@ -1122,12 +958,12 @@ pub(crate) fn status_account_display_from_auth_mode(
 ) -> Option<StatusAccountDisplay> {
     match auth_mode {
         Some(AuthMode::ApiKey) => Some(StatusAccountDisplay::ApiKey),
-        Some(AuthMode::Chatgpt) | Some(AuthMode::ChatgptAuthTokens) => {
-            Some(StatusAccountDisplay::ChatGpt {
-                email: None,
-                plan: plan_type.map(plan_type_display_name),
-            })
-        }
+        Some(AuthMode::Chatgpt)
+        | Some(AuthMode::ChatgptAuthTokens)
+        | Some(AuthMode::AgentIdentity) => Some(StatusAccountDisplay::ChatGpt {
+            email: None,
+            plan: plan_type.map(plan_type_display_name),
+        }),
         None => None,
     }
 }
@@ -1209,96 +1045,59 @@ fn sandbox_mode_from_policy(
     }
 }
 
+fn turn_start_permission_overrides(
+    mode: ThreadParamsMode,
+    sandbox_policy: SandboxPolicy,
+    permission_profile: Option<PermissionProfile>,
+) -> (
+    Option<codex_app_server_protocol::SandboxPolicy>,
+    Option<codex_app_server_protocol::PermissionProfile>,
+) {
+    match (mode, permission_profile) {
+        (ThreadParamsMode::Embedded, Some(permission_profile)) => {
+            (None, Some(permission_profile.into()))
+        }
+        (ThreadParamsMode::Embedded, None) => (None, None),
+        (ThreadParamsMode::Remote, _) => (Some(sandbox_policy.into()), None),
+    }
+}
+
+fn permission_profile_override_from_config(
+    config: &Config,
+    thread_params_mode: ThreadParamsMode,
+) -> Option<codex_app_server_protocol::PermissionProfile> {
+    if matches!(thread_params_mode, ThreadParamsMode::Remote) {
+        return None;
+    }
+
+    Some(config.permissions.permission_profile().into())
+}
+
 fn thread_start_params_from_config(
     config: &Config,
     thread_params_mode: ThreadParamsMode,
     remote_cwd_override: Option<&std::path::Path>,
     session_start_source: Option<ThreadStartSource>,
 ) -> ThreadStartParams {
+    let permission_profile = permission_profile_override_from_config(config, thread_params_mode);
+    let sandbox = permission_profile
+        .is_none()
+        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()))
+        .flatten();
     ThreadStartParams {
         model: config.model.clone(),
         model_provider: thread_params_mode.model_provider_from_config(config),
         cwd: thread_cwd_from_config(config, thread_params_mode, remote_cwd_override),
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(config),
-        sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()),
+        sandbox,
+        permission_profile,
         config: config_request_overrides_from_config(config),
         ephemeral: Some(config.ephemeral),
         session_start_source,
         persist_extended_history: true,
-        hollywood: hollywood_auto_attach_options(config.cwd.as_path()),
         ..ThreadStartParams::default()
     }
-}
-
-fn hollywood_auto_attach_options(cwd: &std::path::Path) -> Option<HollywoodSessionAttachOptions> {
-    let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
-    let has_explicit_config =
-        env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
-    let enabled = auto_attach
-        .as_deref()
-        .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
-        .unwrap_or(has_explicit_config);
-    if !enabled {
-        return None;
-    }
-
-    let mode = match env::var("HOLLYWOOD_ATTENTION_MODE")
-        .unwrap_or_else(|_| "focused".to_string())
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "ambient" => codex_app_server_protocol::HollywoodAttentionMode::Ambient,
-        "broad" => codex_app_server_protocol::HollywoodAttentionMode::Broad,
-        _ => codex_app_server_protocol::HollywoodAttentionMode::Focused,
-    };
-
-    let room = env::var("HOLLYWOOD_ROOM")
-        .ok()
-        .unwrap_or_else(|| default_hollywood_room_for_cwd(cwd));
-    let observed_rooms = default_hollywood_observed_rooms(
-        &room,
-        env::var("HOLLYWOOD_OBSERVED_ROOMS")
-            .unwrap_or_default()
-            .split(',')
-            .map(str::trim)
-            .filter(|candidate| !candidate.is_empty())
-            .map(ToOwned::to_owned)
-            .collect(),
-    );
-
-    Some(HollywoodSessionAttachOptions {
-        url: env::var("HOLLYWOOD_URL").ok(),
-        room: Some(room),
-        observed_rooms,
-        wake_rooms: env::var("HOLLYWOOD_WAKE_ROOMS")
-            .unwrap_or_default()
-            .split(',')
-            .map(str::trim)
-            .filter(|room| !room.is_empty())
-            .map(ToOwned::to_owned)
-            .collect(),
-        attention: Some(codex_app_server_protocol::HollywoodAttentionSettings {
-            mode,
-            include_at_all: true,
-            include_at_room: true,
-        }),
-    })
-}
-
-pub(crate) fn hollywood_auto_attach_params(
-    thread_id: ThreadId,
-    cwd: &std::path::Path,
-) -> Option<ThreadHollywoodAttachParams> {
-    let options = hollywood_auto_attach_options(cwd)?;
-    Some(ThreadHollywoodAttachParams {
-        thread_id: thread_id.to_string(),
-        url: options.url,
-        room: options.room,
-        observed_rooms: options.observed_rooms,
-        wake_rooms: options.wake_rooms,
-        attention: options.attention,
-    })
 }
 
 fn thread_resume_params_from_config(
@@ -1307,6 +1106,11 @@ fn thread_resume_params_from_config(
     thread_params_mode: ThreadParamsMode,
     remote_cwd_override: Option<&std::path::Path>,
 ) -> ThreadResumeParams {
+    let permission_profile = permission_profile_override_from_config(&config, thread_params_mode);
+    let sandbox = permission_profile
+        .is_none()
+        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()))
+        .flatten();
     ThreadResumeParams {
         thread_id: thread_id.to_string(),
         model: config.model.clone(),
@@ -1314,10 +1118,10 @@ fn thread_resume_params_from_config(
         cwd: thread_cwd_from_config(&config, thread_params_mode, remote_cwd_override),
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(&config),
-        sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()),
+        sandbox,
+        permission_profile,
         config: config_request_overrides_from_config(&config),
         persist_extended_history: true,
-        hollywood: hollywood_auto_attach_options(config.cwd.as_path()),
         ..ThreadResumeParams::default()
     }
 }
@@ -1328,6 +1132,11 @@ fn thread_fork_params_from_config(
     thread_params_mode: ThreadParamsMode,
     remote_cwd_override: Option<&std::path::Path>,
 ) -> ThreadForkParams {
+    let permission_profile = permission_profile_override_from_config(&config, thread_params_mode);
+    let sandbox = permission_profile
+        .is_none()
+        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()))
+        .flatten();
     ThreadForkParams {
         thread_id: thread_id.to_string(),
         model: config.model.clone(),
@@ -1335,13 +1144,13 @@ fn thread_fork_params_from_config(
         cwd: thread_cwd_from_config(&config, thread_params_mode, remote_cwd_override),
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(&config),
-        sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()),
+        sandbox,
+        permission_profile,
         config: config_request_overrides_from_config(&config),
         base_instructions: config.base_instructions.clone(),
         developer_instructions: config.developer_instructions.clone(),
         ephemeral: config.ephemeral,
         persist_extended_history: true,
-        hollywood: hollywood_auto_attach_options(config.cwd.as_path()),
         ..ThreadForkParams::default()
     }
 }
@@ -1413,6 +1222,7 @@ async fn thread_session_state_from_thread_start_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
+        response.permission_profile.clone().map(Into::into),
         response.cwd.clone(),
         response.instruction_sources.clone(),
         response.reasoning_effort,
@@ -1436,6 +1246,7 @@ async fn thread_session_state_from_thread_resume_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
+        response.permission_profile.clone().map(Into::into),
         response.cwd.clone(),
         response.instruction_sources.clone(),
         response.reasoning_effort,
@@ -1459,6 +1270,7 @@ async fn thread_session_state_from_thread_fork_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
+        response.permission_profile.clone().map(Into::into),
         response.cwd.clone(),
         response.instruction_sources.clone(),
         response.reasoning_effort,
@@ -1501,6 +1313,7 @@ async fn thread_session_state_from_thread_response(
     approval_policy: AskForApproval,
     approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer,
     sandbox_policy: SandboxPolicy,
+    permission_profile: Option<PermissionProfile>,
     cwd: AbsolutePathBuf,
     instruction_source_paths: Vec<AbsolutePathBuf>,
     reasoning_effort: Option<codex_protocol::openai_models::ReasoningEffort>,
@@ -1527,6 +1340,7 @@ async fn thread_session_state_from_thread_response(
         approval_policy,
         approvals_reviewer,
         sandbox_policy,
+        permission_profile,
         cwd,
         instruction_source_paths,
         reasoning_effort,
@@ -1589,58 +1403,14 @@ fn app_server_credits_snapshot_to_core(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::legacy_core::config::ConfigBuilder;
     use codex_app_server_protocol::ThreadStatus;
     use codex_app_server_protocol::Turn;
     use codex_app_server_protocol::TurnStatus;
-    use codex_protocol::protocol::HollywoodSessionMeta;
-    use codex_protocol::protocol::RolloutItem;
-    use codex_protocol::protocol::RolloutLine;
-    use codex_protocol::protocol::SessionMeta;
-    use codex_protocol::protocol::SessionMetaLine;
-    use codex_protocol::protocol::SessionSource;
     use codex_utils_absolute_path::test_support::PathBufExt;
     use codex_utils_absolute_path::test_support::test_path_buf;
     use pretty_assertions::assert_eq;
-    use serial_test::serial;
-    use std::fs;
-    use std::fs::File;
-    use std::io::Write;
     use tempfile::TempDir;
-
-    use codex_rollout::SESSIONS_SUBDIR;
-
-    struct EnvGuard {
-        key: &'static str,
-        value: Option<String>,
-    }
-
-    impl EnvGuard {
-        fn set(key: &'static str, value: Option<&str>) -> Self {
-            let prior = std::env::var(key).ok();
-            match value {
-                Some(value) => unsafe {
-                    std::env::set_var(key, value);
-                },
-                None => unsafe {
-                    std::env::remove_var(key);
-                },
-            }
-            Self { key, value: prior }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.value.as_deref() {
-                Some(value) => unsafe {
-                    std::env::set_var(self.key, value);
-                },
-                None => unsafe {
-                    std::env::remove_var(self.key);
-                },
-            }
-        }
-    }
 
     async fn build_config(temp_dir: &TempDir) -> Config {
         ConfigBuilder::default()
@@ -1648,51 +1418,6 @@ mod tests {
             .build()
             .await
             .expect("config should build")
-    }
-
-    fn write_rollout_session_meta(
-        codex_home: &std::path::Path,
-        thread_id: ThreadId,
-        hollywood: Option<HollywoodSessionMeta>,
-    ) {
-        let day_dir = codex_home
-            .join(SESSIONS_SUBDIR)
-            .join("2026")
-            .join("03")
-            .join("21");
-        fs::create_dir_all(&day_dir).expect("create sessions dir");
-        let filename = format!("rollout-2026-03-21T10-00-00-{thread_id}.jsonl");
-        let rollout_path = day_dir.join(filename);
-        let mut file = File::create(&rollout_path).expect("create rollout");
-        let line = RolloutLine {
-            timestamp: "2026-03-21T10:00:00Z".to_string(),
-            item: RolloutItem::SessionMeta(SessionMetaLine {
-                meta: SessionMeta {
-                    id: thread_id,
-                    forked_from_id: None,
-                    timestamp: "2026-03-21T10:00:00Z".to_string(),
-                    cwd: PathBuf::from("/tmp/project"),
-                    originator: "codex".to_string(),
-                    cli_version: "0.115.0".to_string(),
-                    source: SessionSource::Cli,
-                    agent_nickname: None,
-                    agent_role: None,
-                    agent_path: None,
-                    model_provider: Some("openai".to_string()),
-                    base_instructions: None,
-                    dynamic_tools: None,
-                    memory_mode: None,
-                    hollywood,
-                },
-                git: None,
-            }),
-        };
-        writeln!(
-            file,
-            "{}",
-            serde_json::to_string(&line).expect("serialize rollout line")
-        )
-        .expect("write rollout line");
     }
 
     #[tokio::test]
@@ -1708,6 +1433,11 @@ mod tests {
         );
 
         assert_eq!(params.cwd, Some(config.cwd.to_string_lossy().to_string()));
+        assert_eq!(params.sandbox, None);
+        assert_eq!(
+            params.permission_profile,
+            Some(config.permissions.permission_profile().into())
+        );
         assert_eq!(params.model_provider, Some(config.model_provider_id));
     }
 
@@ -1731,6 +1461,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let config = build_config(&temp_dir).await;
         let thread_id = ThreadId::new();
+        let expected_sandbox =
+            sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone());
 
         let start = thread_start_params_from_config(
             &config,
@@ -1757,6 +1489,12 @@ mod tests {
         assert_eq!(start.model_provider, None);
         assert_eq!(resume.model_provider, None);
         assert_eq!(fork.model_provider, None);
+        assert_eq!(start.sandbox, expected_sandbox);
+        assert_eq!(resume.sandbox, expected_sandbox);
+        assert_eq!(fork.sandbox, expected_sandbox);
+        assert_eq!(start.permission_profile, None);
+        assert_eq!(resume.permission_profile, None);
+        assert_eq!(fork.permission_profile, None);
     }
 
     #[tokio::test]
@@ -1765,6 +1503,8 @@ mod tests {
         let config = build_config(&temp_dir).await;
         let thread_id = ThreadId::new();
         let remote_cwd = PathBuf::from("repo/on/server");
+        let expected_sandbox =
+            sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone());
 
         let start = thread_start_params_from_config(
             &config,
@@ -1791,6 +1531,61 @@ mod tests {
         assert_eq!(start.model_provider, None);
         assert_eq!(resume.model_provider, None);
         assert_eq!(fork.model_provider, None);
+        assert_eq!(start.sandbox, expected_sandbox);
+        assert_eq!(resume.sandbox, expected_sandbox);
+        assert_eq!(fork.sandbox, expected_sandbox);
+        assert_eq!(start.permission_profile, None);
+        assert_eq!(resume.permission_profile, None);
+        assert_eq!(fork.permission_profile, None);
+    }
+
+    #[test]
+    fn turn_start_permission_overrides_send_profiles_only_for_embedded_runtime_overrides() {
+        let workspace_write = SandboxPolicy::new_workspace_write_policy();
+        let workspace_write_profile =
+            PermissionProfile::from_legacy_sandbox_policy(&workspace_write);
+
+        let (sandbox, profile) = turn_start_permission_overrides(
+            ThreadParamsMode::Embedded,
+            workspace_write.clone(),
+            Some(workspace_write_profile.clone()),
+        );
+        assert_eq!(sandbox, None);
+        assert_eq!(profile, Some(workspace_write_profile.into()));
+
+        let (sandbox, profile) = turn_start_permission_overrides(
+            ThreadParamsMode::Embedded,
+            workspace_write.clone(),
+            /*permission_profile*/ None,
+        );
+        assert_eq!(sandbox, None);
+        assert_eq!(profile, None);
+
+        let (sandbox, profile) = turn_start_permission_overrides(
+            ThreadParamsMode::Remote,
+            workspace_write.clone(),
+            Some(PermissionProfile::from_legacy_sandbox_policy(
+                &workspace_write,
+            )),
+        );
+        assert_eq!(sandbox, Some(workspace_write.into()));
+        assert_eq!(profile, None);
+
+        let external_sandbox = SandboxPolicy::ExternalSandbox {
+            network_access: codex_protocol::protocol::NetworkAccess::Restricted,
+        };
+        let (sandbox, profile) = turn_start_permission_overrides(
+            ThreadParamsMode::Embedded,
+            external_sandbox.clone(),
+            Some(PermissionProfile::from_legacy_sandbox_policy(
+                &external_sandbox,
+            )),
+        );
+        assert_eq!(sandbox, None);
+        assert_eq!(
+            profile,
+            Some(PermissionProfile::from_legacy_sandbox_policy(&external_sandbox).into())
+        );
     }
 
     #[tokio::test]
@@ -1816,104 +1611,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
-    async fn thread_resume_params_include_hollywood_when_auto_attach_enabled() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
-        let config = build_config(&temp_dir).await;
-        let thread_id = ThreadId::new();
-        let _auto_attach = EnvGuard::set("HOLLYWOOD_AUTO_ATTACH", Some("1"));
-        let _url = EnvGuard::set("HOLLYWOOD_URL", Some("http://127.0.0.1:8765"));
-        let _room = EnvGuard::set("HOLLYWOOD_ROOM", Some("main"));
-        let _mode = EnvGuard::set("HOLLYWOOD_ATTENTION_MODE", Some("ambient"));
-
-        let params = thread_resume_params_from_config(
-            config,
-            thread_id,
-            ThreadParamsMode::Remote,
-            /*remote_cwd_override*/ None,
-        );
-
-        let hollywood = params
-            .hollywood
-            .expect("Hollywood options should be present");
-        assert_eq!(hollywood.url.as_deref(), Some("http://127.0.0.1:8765"));
-        assert_eq!(hollywood.room.as_deref(), Some("main"));
-        assert_eq!(
-            hollywood
-                .attention
-                .expect("attention should be present")
-                .mode,
-            codex_app_server_protocol::HollywoodAttentionMode::Ambient
-        );
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn thread_start_params_default_hollywood_room_to_repo_scope() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
-        let repo_root = temp_dir.path().join("Losangelex Repo");
-        std::fs::create_dir_all(repo_root.join(".git")).expect("create git root");
-        std::fs::create_dir_all(repo_root.join("nested")).expect("create nested path");
-        let mut config = build_config(&temp_dir).await;
-        config.cwd = AbsolutePathBuf::try_from(repo_root.join("nested")).expect("absolute cwd");
-        let _auto_attach = EnvGuard::set("HOLLYWOOD_AUTO_ATTACH", Some("1"));
-        let _room = EnvGuard::set("HOLLYWOOD_ROOM", None);
-
-        let params = thread_start_params_from_config(
-            &config,
-            ThreadParamsMode::Embedded,
-            /*remote_cwd_override*/ None,
-            /*session_start_source*/ None,
-        );
-        let hollywood = params
-            .hollywood
-            .expect("Hollywood options should be present");
-
-        assert_eq!(hollywood.room.as_deref(), Some("repo/losangelex-repo"));
-        assert_eq!(hollywood.observed_rooms, vec!["main".to_string()]);
-    }
-
-    #[tokio::test]
-    async fn resume_strategy_migrates_legacy_rollouts_without_hollywood_metadata() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
-        let config = build_config(&temp_dir).await;
-        let thread_id = ThreadId::new();
-        write_rollout_session_meta(config.codex_home.as_path(), thread_id, None);
-
-        let strategy =
-            determine_resume_bootstrap_strategy(&config, thread_id, ThreadParamsMode::Embedded)
-                .await;
-
-        assert_eq!(strategy, ResumeBootstrapStrategy::LegacyForkMigration);
-    }
-
-    #[tokio::test]
-    async fn resume_strategy_keeps_native_rollouts_with_hollywood_metadata() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
-        let config = build_config(&temp_dir).await;
-        let thread_id = ThreadId::new();
-        write_rollout_session_meta(
-            config.codex_home.as_path(),
-            thread_id,
-            Some(HollywoodSessionMeta {
-                url: "http://127.0.0.1:8765".to_string(),
-                room: "main".to_string(),
-                observed_rooms: Vec::new(),
-                wake_rooms: Vec::new(),
-                attention_mode: "focused".to_string(),
-                include_at_all: true,
-                include_at_room: true,
-            }),
-        );
-
-        let strategy =
-            determine_resume_bootstrap_strategy(&config, thread_id, ThreadParamsMode::Embedded)
-                .await;
-
-        assert_eq!(strategy, ResumeBootstrapStrategy::NativeResume);
-    }
-
-    #[tokio::test]
     async fn resume_response_restores_turns_from_thread_items() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let config = build_config(&temp_dir).await;
@@ -1931,13 +1628,12 @@ mod tests {
                 status: ThreadStatus::Idle,
                 path: None,
                 cwd: test_path_buf("/tmp/project").abs(),
-                cli_version: env!("CARGO_PKG_VERSION").to_string(),
+                cli_version: "0.0.0".to_string(),
                 source: codex_protocol::protocol::SessionSource::Cli.into(),
                 agent_nickname: None,
                 agent_role: None,
                 git_info: None,
                 name: None,
-                hollywood: None,
                 turns: vec![Turn {
                     id: "turn-1".to_string(),
                     items: vec![
@@ -1970,6 +1666,12 @@ mod tests {
             approval_policy: codex_protocol::protocol::AskForApproval::Never.into(),
             approvals_reviewer: codex_app_server_protocol::ApprovalsReviewer::User,
             sandbox: codex_protocol::protocol::SandboxPolicy::new_read_only_policy().into(),
+            permission_profile: Some(
+                codex_protocol::models::PermissionProfile::from_legacy_sandbox_policy(
+                    &codex_protocol::protocol::SandboxPolicy::new_read_only_policy(),
+                )
+                .into(),
+            ),
             reasoning_effort: None,
         };
 
@@ -1980,6 +1682,10 @@ mod tests {
         assert_eq!(
             started.session.instruction_source_paths,
             response.instruction_sources
+        );
+        assert_eq!(
+            started.session.permission_profile,
+            response.permission_profile.clone().map(Into::into)
         );
         assert_eq!(started.turns.len(), 1);
         assert_eq!(started.turns[0], response.thread.turns[0]);
@@ -2009,6 +1715,9 @@ mod tests {
             AskForApproval::Never,
             codex_protocol::config_types::ApprovalsReviewer::User,
             SandboxPolicy::new_read_only_policy(),
+            Some(PermissionProfile::from_legacy_sandbox_policy(
+                &SandboxPolicy::new_read_only_policy(),
+            )),
             test_path_buf("/tmp/project").abs(),
             Vec::new(),
             /*reasoning_effort*/ None,
@@ -2039,6 +1748,9 @@ mod tests {
             AskForApproval::Never,
             codex_protocol::config_types::ApprovalsReviewer::User,
             SandboxPolicy::new_read_only_policy(),
+            Some(PermissionProfile::from_legacy_sandbox_policy(
+                &SandboxPolicy::new_read_only_policy(),
+            )),
             test_path_buf("/tmp/project").abs(),
             Vec::new(),
             /*reasoning_effort*/ None,

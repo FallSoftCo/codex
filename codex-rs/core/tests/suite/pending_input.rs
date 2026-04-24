@@ -5,7 +5,6 @@ use codex_protocol::AgentPath;
 use codex_protocol::items::TurnItem;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::InterAgentCommunication;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SandboxPolicy;
@@ -96,6 +95,7 @@ async fn build_codex(server: &StreamingSseServer) -> Arc<CodexThread> {
 async fn submit_user_input(codex: &CodexThread, text: &str) {
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: text.to_string(),
                 text_elements: Vec::new(),
@@ -110,6 +110,7 @@ async fn submit_user_input(codex: &CodexThread, text: &str) {
 async fn submit_danger_full_access_user_turn(test: &TestCodex, text: &str) {
     test.codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: text.to_string(),
                 text_elements: Vec::new(),
@@ -119,6 +120,7 @@ async fn submit_danger_full_access_user_turn(test: &TestCodex, text: &str) {
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
+            permission_profile: None,
             model: test.session_configured.model.clone(),
             effort: None,
             summary: None,
@@ -273,6 +275,7 @@ async fn injected_user_input_triggers_follow_up_request_with_deltas() {
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "first prompt".into(),
                 text_elements: Vec::new(),
@@ -290,6 +293,7 @@ async fn injected_user_input_triggers_follow_up_request_with_deltas() {
 
     codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "second prompt".into(),
                 text_elements: Vec::new(),
@@ -319,77 +323,6 @@ async fn injected_user_input_triggers_follow_up_request_with_deltas() {
     assert!(second_texts.iter().any(|text| text == "second prompt"));
 
     server.shutdown().await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn hollywood_input_is_submitted_as_developer_context() {
-    let (server, _completions) =
-        start_streaming_sse_server(vec![response_completed_chunks("resp-1")]).await;
-    let codex = build_codex(&server).await;
-
-    codex
-        .submit(Op::HollywoodInput {
-            message: HollywoodInputMessage {
-                message_id: 42,
-                room: "repo/ozzz".to_string(),
-                sender_id: "peer-agent".to_string(),
-                body: "Can you take over the SES bridge verification?".to_string(),
-                mentions: vec!["@release".to_string()],
-                attention: Some("focused".to_string()),
-                message_kind: Some("direct".to_string()),
-                obligation: Some("obligation".to_string()),
-                synthetic_brief: Some(codex_protocol::protocol::HollywoodSyntheticBrief {
-                    wake_reason: Some("direct_request".to_string()),
-                    semantic_kind: Some("handoff".to_string()),
-                    summary: Some(
-                        "A peer is asking for an explicit takeover decision.".to_string(),
-                    ),
-                    facts: vec!["message came from `peer-agent`".to_string()],
-                    suggested_actions: vec![
-                        "reply or claim only if you are actually taking over".to_string(),
-                    ],
-                    stay_silent_if_no_actionable_delta: false,
-                }),
-                requires_response: true,
-            },
-        })
-        .await
-        .unwrap_or_else(|err| panic!("submit Hollywood input: {err}"));
-
-    wait_for_turn_complete(&codex).await;
-
-    let requests = server.requests().await;
-    assert_eq!(requests.len(), 1);
-    let body: Value =
-        from_slice(&requests[0]).unwrap_or_else(|err| panic!("parse request body: {err}"));
-
-    let developer_texts = message_input_texts(&body, "developer");
-    assert!(
-        developer_texts
-            .iter()
-            .any(|text| text.contains("Hollywood coordination obligation")),
-        "expected Hollywood obligation instructions in developer input: {developer_texts:#?}"
-    );
-    assert!(
-        developer_texts
-            .iter()
-            .any(|text| text.contains("Hollywood synthetic coordination brief")),
-        "expected Hollywood synthetic brief instructions in developer input: {developer_texts:#?}"
-    );
-    assert!(
-        developer_texts
-            .iter()
-            .any(|text| text.contains("<hollywood_message>")),
-        "expected Hollywood message marker in developer input: {developer_texts:#?}"
-    );
-
-    let user_texts = message_input_texts(&body, "user");
-    assert!(
-        !user_texts
-            .iter()
-            .any(|text| text.contains("<hollywood_message>")),
-        "Hollywood context should not be injected as user input: {user_texts:#?}"
-    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

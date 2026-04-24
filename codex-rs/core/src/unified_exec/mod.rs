@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 
 use codex_network_proxy::NetworkProxy;
-use codex_protocol::models::PermissionProfile;
+use codex_protocol::models::AdditionalPermissionProfile;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use rand::Rng;
 use rand::rng;
@@ -55,7 +55,16 @@ pub(crate) use process::NoopSpawnLifecycle;
 pub(crate) use process::SpawnLifecycle;
 pub(crate) use process::SpawnLifecycleHandle;
 pub(crate) use process::UnifiedExecProcess;
-pub use process_manager::ProcessObservation;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProcessObservation {
+    Running { call_id: String },
+    Exited {
+        exit_code: Option<i32>,
+        failure_message: Option<String>,
+    },
+    Unknown,
+}
 
 pub(crate) const MIN_YIELD_TIME_MS: u64 = 250;
 // Minimum yield time for an empty `write_stdin`.
@@ -97,7 +106,7 @@ pub(crate) struct ExecCommandRequest {
     pub network: Option<NetworkProxy>,
     pub tty: bool,
     pub sandbox_permissions: SandboxPermissions,
-    pub additional_permissions: Option<PermissionProfile>,
+    pub additional_permissions: Option<AdditionalPermissionProfile>,
     pub additional_permissions_preapproved: bool,
     pub justification: Option<String>,
     pub prefix_rule: Option<Vec<String>>,
@@ -145,6 +154,42 @@ impl UnifiedExecProcessManager {
                 .max(MIN_EMPTY_YIELD_TIME_MS),
         }
     }
+
+    pub(crate) async fn process_observation(&self, process_id: i32) -> ProcessObservation {
+        let mut store = self.process_store.lock().await;
+        if let Some(entry) = store.processes.get(&process_id) {
+            if entry.process.has_exited() {
+                let exit_code = entry.process.exit_code();
+                let failure_message = None;
+                let call_id = entry.call_id.clone();
+                let _ = store.remove(process_id);
+                store.completed_processes.insert(
+                    process_id,
+                    CompletedProcessObservation {
+                        call_id,
+                        exit_code,
+                        failure_message: failure_message.clone(),
+                    },
+                );
+                return ProcessObservation::Exited {
+                    exit_code,
+                    failure_message,
+                };
+            }
+            return ProcessObservation::Running {
+                call_id: entry.call_id.clone(),
+            };
+        }
+
+        if let Some(completed) = store.completed_processes.get(&process_id) {
+            return ProcessObservation::Exited {
+                exit_code: completed.exit_code,
+                failure_message: completed.failure_message.clone(),
+            };
+        }
+
+        ProcessObservation::Unknown
+    }
 }
 
 impl Default for UnifiedExecProcessManager {
@@ -157,7 +202,7 @@ struct ProcessEntry {
     process: Arc<UnifiedExecProcess>,
     call_id: String,
     process_id: i32,
-    command: Vec<String>,
+    hook_command: String,
     tty: bool,
     network_approval_id: Option<String>,
     session: Weak<Session>,

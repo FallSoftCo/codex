@@ -42,10 +42,13 @@ use codex_app_server_protocol::ServerNotification;
 use codex_app_server_protocol::ServerRequest;
 use codex_arg0::Arg0DispatchPaths;
 use codex_config::NoopThreadConfigLoader;
+use codex_config::RemoteThreadConfigLoader;
+use codex_config::ThreadConfigLoader;
 use codex_core::config::Config;
 use codex_core::config_loader::CloudRequirementsLoader;
 use codex_core::config_loader::LoaderOverrides;
 pub use codex_exec_server::EnvironmentManager;
+pub use codex_exec_server::EnvironmentManagerArgs;
 pub use codex_exec_server::ExecServerRuntimePaths;
 use codex_feedback::CodexFeedback;
 use codex_protocol::protocol::SessionSource;
@@ -70,14 +73,10 @@ pub mod legacy_core {
     pub use codex_core::McpManager;
     pub use codex_core::append_message_history_entry;
     pub use codex_core::check_execpolicy_for_warnings;
-    pub use codex_core::default_hollywood_observed_rooms;
-    pub use codex_core::default_hollywood_room_for_cwd;
-    pub use codex_core::find_thread_path_by_id_str;
     pub use codex_core::format_exec_policy_error_with_source;
     pub use codex_core::grant_read_root_non_elevated;
     pub use codex_core::lookup_message_history_entry;
     pub use codex_core::message_history_metadata;
-    pub use codex_core::read_session_meta_line;
     pub use codex_core::web_search_detail;
 
     pub mod config {
@@ -101,7 +100,7 @@ pub mod legacy_core {
     }
 
     pub mod plugins {
-        pub use codex_core::plugins::*;
+        pub use codex_core::plugins::PluginsManager;
     }
 
     pub mod review_format {
@@ -139,7 +138,6 @@ pub enum AppServerEvent {
     Lagged { skipped: usize },
     ServerNotification(ServerNotification),
     ServerRequest(ServerRequest),
-    Reconnected { message: String },
     Disconnected { message: String },
 }
 
@@ -361,6 +359,13 @@ pub struct InProcessClientStartArgs {
     pub channel_capacity: usize,
 }
 
+fn configured_thread_config_loader(config: &Config) -> Arc<dyn ThreadConfigLoader> {
+    match config.experimental_thread_config_endpoint.as_deref() {
+        Some(endpoint) => Arc::new(RemoteThreadConfigLoader::new(endpoint)),
+        None => Arc::new(NoopThreadConfigLoader),
+    }
+}
+
 impl InProcessClientStartArgs {
     /// Builds initialize params from caller-provided metadata.
     pub fn initialize_params(&self) -> InitializeParams {
@@ -385,13 +390,14 @@ impl InProcessClientStartArgs {
 
     fn into_runtime_start_args(self) -> InProcessStartArgs {
         let initialize = self.initialize_params();
+        let thread_config_loader = configured_thread_config_loader(&self.config);
         InProcessStartArgs {
             arg0_paths: self.arg0_paths,
             config: self.config,
             cli_overrides: self.cli_overrides,
             loader_overrides: self.loader_overrides,
             cloud_requirements: self.cloud_requirements,
-            thread_config_loader: Arc::new(NoopThreadConfigLoader),
+            thread_config_loader,
             feedback: self.feedback,
             log_db: self.log_db,
             environment_manager: self.environment_manager,
@@ -927,11 +933,6 @@ pub(crate) fn request_method_name(request: &ClientRequest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::path::Path;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
-
     use codex_app_server_protocol::AccountUpdatedNotification;
     use codex_app_server_protocol::ConfigRequirementsReadResponse;
     use codex_app_server_protocol::GetAccountResponse;
@@ -978,7 +979,7 @@ mod tests {
             cloud_requirements: CloudRequirementsLoader::default(),
             feedback: CodexFeedback::new(),
             log_db: None,
-            environment_manager: Arc::new(EnvironmentManager::new(/*exec_server_url*/ None)),
+            environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             config_warnings: Vec::new(),
             session_source,
             enable_codex_api_key_env: false,
@@ -1156,7 +1157,6 @@ mod tests {
     fn test_remote_connect_args(websocket_url: String) -> RemoteAppServerConnectArgs {
         RemoteAppServerConnectArgs {
             websocket_url,
-            rollover_state_file: None,
             auth_token: None,
             client_name: "codex-app-server-client-test".to_string(),
             client_version: "0.0.0-test".to_string(),
@@ -1164,32 +1164,6 @@ mod tests {
             opt_out_notification_methods: Vec::new(),
             channel_capacity: 8,
         }
-    }
-
-    fn write_rollover_state_file(path: &Path, websocket_url: &str) {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("rollover state dir should exist");
-        }
-        fs::write(
-            path,
-            serde_json::json!({
-                "schema_version": 1,
-                "websocket_url": websocket_url,
-            })
-            .to_string(),
-        )
-        .expect("rollover state file should be written");
-    }
-
-    fn test_rollover_state_file_path() -> std::path::PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock should be after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "codex-app-server-client-rollover-{}-{nonce}.json",
-            std::process::id()
-        ))
     }
 
     #[tokio::test]
@@ -1627,7 +1601,6 @@ mod tests {
         .await;
         let mut client = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
             websocket_url,
-            rollover_state_file: None,
             auth_token: None,
             client_name: "codex-app-server-client-test".to_string(),
             client_version: "0.0.0-test".to_string(),
@@ -1868,13 +1841,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remote_invalid_json_surfaces_as_disconnected_event() {
+    async fn remote_disconnect_surfaces_as_event() {
         let websocket_url = start_test_remote_server(|mut websocket| async move {
             expect_remote_initialize(&mut websocket).await;
-            websocket
-                .send(Message::Text("{not-json".into()))
-                .await
-                .expect("write should succeed");
+            websocket.close(None).await.expect("close should succeed");
         })
         .await;
         let mut client = RemoteAppServerClient::connect(test_remote_connect_args(websocket_url))
@@ -1886,87 +1856,6 @@ mod tests {
             .await
             .expect("disconnect event should arrive");
         assert!(matches!(event, AppServerEvent::Disconnected { .. }));
-    }
-
-    #[tokio::test]
-    async fn remote_reconnect_uses_rollover_state_file_after_disconnect() {
-        let rollover_state_file = test_rollover_state_file_path();
-        let (close_first_server_tx, close_first_server_rx) = tokio::sync::oneshot::channel();
-        let websocket_url_a = start_test_remote_server(|mut websocket| async move {
-            expect_remote_initialize(&mut websocket).await;
-            close_first_server_rx
-                .await
-                .expect("first server close signal should arrive");
-            websocket.close(None).await.expect("close should succeed");
-        })
-        .await;
-        write_rollover_state_file(&rollover_state_file, &websocket_url_a);
-
-        let mut client = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
-            rollover_state_file: Some(rollover_state_file.clone()),
-            ..test_remote_connect_args(websocket_url_a)
-        })
-        .await
-        .expect("remote client should connect");
-
-        let websocket_url_b = start_test_remote_server(|mut websocket| async move {
-            expect_remote_initialize(&mut websocket).await;
-            let JSONRPCMessage::Request(request) = read_websocket_message(&mut websocket).await
-            else {
-                panic!("expected account/read request");
-            };
-            assert_eq!(request.method, "account/read");
-            write_websocket_message(
-                &mut websocket,
-                JSONRPCMessage::Response(JSONRPCResponse {
-                    id: request.id,
-                    result: serde_json::to_value(GetAccountResponse {
-                        account: None,
-                        requires_openai_auth: false,
-                    })
-                    .expect("response should serialize"),
-                }),
-            )
-            .await;
-        })
-        .await;
-        write_rollover_state_file(&rollover_state_file, &websocket_url_b);
-        close_first_server_tx
-            .send(())
-            .expect("first server close signal should send");
-
-        let reconnect_event = timeout(Duration::from_secs(5), async {
-            loop {
-                match client.next_event().await {
-                    Some(AppServerEvent::Reconnected { message }) => break message,
-                    Some(_) => continue,
-                    None => panic!("event stream should stay open"),
-                }
-            }
-        })
-        .await
-        .expect("reconnect event should arrive before timeout");
-        assert!(reconnect_event.contains(&websocket_url_b));
-
-        let response: GetAccountResponse = client
-            .request_typed(ClientRequest::GetAccount {
-                request_id: RequestId::Integer(1),
-                params: codex_app_server_protocol::GetAccountParams {
-                    refresh_token: false,
-                },
-            })
-            .await
-            .expect("request should succeed after reconnect");
-        assert_eq!(
-            response,
-            GetAccountResponse {
-                account: None,
-                requires_openai_auth: false,
-            }
-        );
-
-        let _ = fs::remove_file(&rollover_state_file);
-        client.shutdown().await.expect("shutdown should complete");
     }
 
     #[test]
@@ -2091,9 +1980,14 @@ mod tests {
     #[tokio::test]
     async fn runtime_start_args_forward_environment_manager() {
         let config = Arc::new(build_test_config().await);
-        let environment_manager = Arc::new(EnvironmentManager::new(Some(
-            "ws://127.0.0.1:8765".to_string(),
-        )));
+        let environment_manager = Arc::new(EnvironmentManager::new(EnvironmentManagerArgs {
+            exec_server_url: Some("ws://127.0.0.1:8765".to_string()),
+            local_runtime_paths: ExecServerRuntimePaths::new(
+                std::env::current_exe().expect("current exe"),
+                /*codex_linux_sandbox_exe*/ None,
+            )
+            .expect("runtime paths"),
+        }));
 
         let runtime_args = InProcessClientStartArgs {
             arg0_paths: Arg0DispatchPaths::default(),
@@ -2120,18 +2014,58 @@ mod tests {
             &runtime_args.environment_manager,
             &environment_manager
         ));
-        assert!(runtime_args.environment_manager.is_remote());
+        assert!(
+            runtime_args
+                .environment_manager
+                .default_environment()
+                .expect("default environment")
+                .is_remote()
+        );
     }
 
     #[tokio::test]
-    async fn shutdown_completes_without_hanging_without_retained_managers() {
+    async fn runtime_start_args_use_remote_thread_config_loader_when_configured() {
+        let mut config = build_test_config().await;
+        config.experimental_thread_config_endpoint = Some("not-a-valid-endpoint".to_string());
+
+        let runtime_args = InProcessClientStartArgs {
+            arg0_paths: Arg0DispatchPaths::default(),
+            config: Arc::new(config),
+            cli_overrides: Vec::new(),
+            loader_overrides: LoaderOverrides::default(),
+            cloud_requirements: CloudRequirementsLoader::default(),
+            feedback: CodexFeedback::new(),
+            log_db: None,
+            environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
+            config_warnings: Vec::new(),
+            session_source: SessionSource::Exec,
+            enable_codex_api_key_env: false,
+            client_name: "codex-app-server-client-test".to_string(),
+            client_version: "0.0.0-test".to_string(),
+            experimental_api: true,
+            opt_out_notification_methods: Vec::new(),
+            channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
+        }
+        .into_runtime_start_args();
+
+        let err = runtime_args
+            .thread_config_loader
+            .load(Default::default())
+            .await
+            .expect_err("configured remote loader should try to connect");
+        assert_eq!(
+            err.code(),
+            codex_config::ThreadConfigLoadErrorCode::RequestFailed
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_completes_promptly_without_retained_managers() {
         let client = start_test_client(SessionSource::Cli).await;
 
-        // Under workspace-wide load the in-process worker may legitimately need the bounded
-        // shutdown path, so this test guards against hangs rather than sub-second completion.
-        timeout(SHUTDOWN_TIMEOUT + Duration::from_secs(2), client.shutdown())
+        timeout(Duration::from_secs(1), client.shutdown())
             .await
-            .expect("shutdown should complete within the bounded shutdown window")
+            .expect("shutdown should not wait for the 5s fallback timeout")
             .expect("shutdown should complete");
     }
 }

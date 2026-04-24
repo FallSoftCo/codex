@@ -24,7 +24,6 @@ const UPDATED_AT_RFC3339: &str = "2025-01-02T12:00:00.000Z";
 const PREVIEW: &str = "Summarize this conversation";
 const MODEL_PROVIDER: &str = "openai";
 const INVALID_REQUEST_ERROR_CODE: i64 = -32600;
-const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn expected_summary(conversation_id: ThreadId, path: PathBuf) -> ConversationSummary {
     ConversationSummary {
@@ -35,7 +34,7 @@ fn expected_summary(conversation_id: ThreadId, path: PathBuf) -> ConversationSum
         updated_at: Some(UPDATED_AT_RFC3339.to_string()),
         model_provider: MODEL_PROVIDER.to_string(),
         cwd: PathBuf::from("/"),
-        cli_version: CLI_VERSION.to_string(),
+        cli_version: "0.0.0".to_string(),
         source: SessionSource::Cli,
         git_info: None,
     }

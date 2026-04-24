@@ -30,6 +30,11 @@ pub enum AuthMode {
     #[ts(rename = "chatgptAuthTokens")]
     #[strum(serialize = "chatgptAuthTokens")]
     ChatgptAuthTokens,
+    /// Programmatic Codex auth backed by a registered Agent Identity.
+    #[serde(rename = "agentIdentity")]
+    #[ts(rename = "agentIdentity")]
+    #[strum(serialize = "agentIdentity")]
+    AgentIdentity,
 }
 
 macro_rules! experimental_reason_expr {
@@ -1087,6 +1092,8 @@ server_notification_definitions! {
     ContextCompacted => "thread/compacted" (v2::ContextCompactedNotification),
     ModelRerouted => "model/rerouted" (v2::ModelReroutedNotification),
     Warning => "warning" (v2::WarningNotification),
+    GuardianWarning => "guardianWarning" (v2::GuardianWarningNotification),
+    ModelVerification => "modelVerification" (v2::ModelVerificationNotification),
     ClientRestartRequested => "client/restartRequested" (v2::ClientRestartRequestedNotification),
     DeprecationNotice => "deprecationNotice" (v2::DeprecationNoticeNotification),
     ConfigWarning => "configWarning" (v2::ConfigWarningNotification),

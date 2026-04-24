@@ -37,6 +37,7 @@ async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
 
     test.codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: prompt.into(),
                 text_elements: Vec::new(),
@@ -46,6 +47,7 @@ async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
+            permission_profile: None,
             model: session_model,
             effort: None,
             summary: None,
@@ -398,6 +400,7 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
     let session_model = test.session_configured.model.clone();
     test.codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "stream delayed completion".into(),
                 text_elements: Vec::new(),
@@ -407,6 +410,7 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
+            permission_profile: None,
             model: session_model,
             effort: None,
             summary: None,

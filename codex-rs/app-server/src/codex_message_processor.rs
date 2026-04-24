@@ -1014,6 +1014,7 @@ impl CodexMessageProcessor {
                     text: Self::format_scheduled_task_wake_message(&task, wake_at),
                     text_elements: Vec::new(),
                 }],
+                environments: None,
                 final_output_json_schema: None,
                 responsesapi_client_metadata: None,
             })
@@ -1211,6 +1212,7 @@ impl CodexMessageProcessor {
                     text: Self::format_task_watch_wake_message(&task_watch, wake_at),
                     text_elements: Vec::new(),
                 }],
+                environments: None,
                 final_output_json_schema: None,
                 responsesapi_client_metadata: None,
             })
@@ -1545,6 +1547,7 @@ impl CodexMessageProcessor {
                     text: wake_message,
                     text_elements: Vec::new(),
                 }],
+                environments: None,
                 final_output_json_schema: None,
                 responsesapi_client_metadata: None,
             })
@@ -1764,6 +1767,7 @@ impl CodexMessageProcessor {
                     text: Self::build_tester_initial_prompt(tester_run),
                     text_elements: Vec::new(),
                 }],
+                environments: None,
                 final_output_json_schema: None,
                 responsesapi_client_metadata: None,
             })
@@ -3267,8 +3271,7 @@ impl CodexMessageProcessor {
         if collaboration_mode.settings.developer_instructions.is_none()
             && let Some(instructions) = self
                 .thread_manager
-                .get_models_manager()
-                .list_collaboration_modes_for_config(collaboration_modes_config)
+                .list_collaboration_modes()
                 .into_iter()
                 .find(|preset| preset.mode == Some(collaboration_mode.mode))
                 .and_then(|preset| preset.developer_instructions.flatten())
@@ -4384,6 +4387,7 @@ impl CodexMessageProcessor {
                         }
                     }
                 }
+                CoreAuthMode::AgentIdentity => None,
             },
             None => None,
         };
@@ -4508,22 +4512,12 @@ impl CodexMessageProcessor {
             });
         }
 
-        let authorization_header_value = self
-            .auth_manager
-            .chatgpt_authorization_header_for_auth(&auth)
-            .await;
-        let mut client = BackendClient::new(self.config.chatgpt_base_url.clone())
-            .map(|client| {
-                client.with_user_agent(codex_login::default_client::get_codex_user_agent())
-            })
+        let mut client = BackendClient::from_auth(self.config.chatgpt_base_url.clone(), &auth)
             .map_err(|err| JSONRPCErrorError {
                 code: INTERNAL_ERROR_CODE,
                 message: format!("failed to construct backend client: {err}"),
                 data: None,
             })?;
-        if let Some(authorization_header_value) = authorization_header_value {
-            client = client.with_authorization_header_value(authorization_header_value);
-        }
         if let Some(account_id) = auth.get_account_id() {
             client = client.with_chatgpt_account_id(account_id);
         }
@@ -4601,6 +4595,7 @@ impl CodexMessageProcessor {
             env: env_overrides,
             size,
             sandbox_policy,
+            permission_profile: _,
         } = params;
 
         if size.is_some() && !tty {
@@ -4742,7 +4737,7 @@ impl CodexMessageProcessor {
             Some(policy) => match self.config.permissions.sandbox_policy.can_set(&policy) {
                 Ok(()) => {
                     let file_system_sandbox_policy =
-                        codex_protocol::permissions::FileSystemSandboxPolicy::from_legacy_sandbox_policy(&policy, &sandbox_cwd);
+                        codex_protocol::permissions::FileSystemSandboxPolicy::from_legacy_sandbox_policy(&policy);
                     let network_sandbox_policy =
                         codex_protocol::permissions::NetworkSandboxPolicy::from(&policy);
                     (policy, file_system_sandbox_policy, network_sandbox_policy)
@@ -5140,7 +5135,7 @@ impl CodexMessageProcessor {
 
         match listener_task_context
             .thread_manager
-            .start_thread_with_tools_and_service_name(
+            .start_thread_with_tools_and_service_name_legacy(
                 config,
                 match session_start_source
                     .unwrap_or(codex_app_server_protocol::ThreadStartSource::Startup)
@@ -7447,7 +7442,7 @@ impl CodexMessageProcessor {
                 let token_usage_thread = response.thread.clone();
                 let token_usage_turn_id = latest_token_usage_turn_id_from_rollout_items(
                     &response_history.get_rollout_items(),
-                    &token_usage_thread,
+                    token_usage_thread.turns.as_slice(),
                 );
                 self.outgoing.send_response(request_id, response).await;
                 // The client needs restored usage before it starts another turn.
@@ -7693,7 +7688,7 @@ impl CodexMessageProcessor {
                     let token_usage_thread = response.thread.clone();
                     let token_usage_turn_id = latest_token_usage_turn_id_from_rollout_items(
                         &response_history.get_rollout_items(),
-                        &token_usage_thread,
+                        token_usage_thread.turns.as_slice(),
                     );
                     self.outgoing.send_response(request_id, response).await;
                     send_thread_token_usage_update_from_rollout_items_to_connection(
@@ -7847,7 +7842,7 @@ impl CodexMessageProcessor {
                 let token_usage_thread = response.thread.clone();
                 let token_usage_turn_id = latest_token_usage_turn_id_from_rollout_items(
                     &response_history.get_rollout_items(),
-                    &token_usage_thread,
+                    token_usage_thread.turns.as_slice(),
                 );
                 self.outgoing.send_response(request_id, response).await;
                 send_thread_token_usage_update_from_rollout_items_to_connection(
@@ -8167,10 +8162,13 @@ impl CodexMessageProcessor {
     ) -> std::result::Result<Thread, String> {
         let thread = match thread_history {
             InitialHistory::Resumed(resumed) => {
+                let Some(rollout_path) = resumed.rollout_path.as_ref() else {
+                    return Err("resumed history missing rollout path".to_string());
+                };
                 load_thread_summary_for_rollout(
                     &self.config,
                     resumed.conversation_id,
-                    resumed.rollout_path.as_path(),
+                    rollout_path.as_path(),
                     fallback_provider,
                     persisted_resume_metadata,
                 )
@@ -8515,7 +8513,7 @@ impl CodexMessageProcessor {
         } else {
             latest_token_usage_turn_id_from_rollout_path(
                 rollout_path.as_path(),
-                &token_usage_thread,
+                token_usage_thread.turns.as_slice(),
             )
             .await
         };
@@ -8654,8 +8652,10 @@ impl CodexMessageProcessor {
                     sort_direction: store_sort_direction,
                     allowed_sources: allowed_sources.to_vec(),
                     model_providers: model_provider_filter.clone(),
+                    cwd_filters: None,
                     archived,
                     search_term: search_term.clone(),
+                    use_state_db_only: false,
                 })
                 .await
                 .map_err(thread_store_list_error)?;
@@ -9135,27 +9135,20 @@ impl CodexMessageProcessor {
                 McpServerStatusDetail::ToolsAndAuthOnly => McpSnapshotDetail::ToolsAndAuthOnly,
             };
 
-            let background_authorization_header_value = if let Some(auth) = auth.as_ref() {
-                auth_manager
-                    .chatgpt_authorization_header_for_auth(auth)
-                    .await
-            } else {
-                None
-            };
             let snapshot = collect_mcp_server_status_snapshot_with_detail_and_authorization_header(
                 &mcp_config,
                 auth.as_ref(),
                 request.request_id.to_string(),
                 runtime_environment,
                 detail,
-                background_authorization_header_value.as_deref(),
+                None,
             )
             .await;
 
             let effective_servers = effective_mcp_servers_with_authorization_header(
                 &mcp_config,
                 auth.as_ref(),
-                background_authorization_header_value.as_deref(),
+                None,
             );
             let McpServerStatusSnapshot {
                 tools_by_server,
@@ -10801,8 +10794,12 @@ impl CodexMessageProcessor {
                 return;
             }
         };
-        let app_summaries =
-            plugin_app_helpers::load_plugin_app_summaries(&config, &outcome.plugin.apps).await;
+        let app_summaries = plugin_app_helpers::load_plugin_app_summaries(
+            &config,
+            &outcome.plugin.apps,
+            self.thread_manager.environment_manager().as_ref(),
+        )
+        .await;
         let visible_skills = outcome
             .plugin
             .skills
@@ -10816,7 +10813,9 @@ impl CodexMessageProcessor {
             .collect::<Vec<_>>();
         let plugin = PluginDetail {
             marketplace_name: outcome.marketplace_name,
-            marketplace_path: outcome.marketplace_path,
+            marketplace_path: outcome
+                .marketplace_path
+                .unwrap_or_else(|| config.codex_home.clone()),
             summary: PluginSummary {
                 id: outcome.plugin.id,
                 name: outcome.plugin.name,
@@ -11223,6 +11222,7 @@ impl CodexMessageProcessor {
                             .approvals_reviewer
                             .map(codex_app_server_protocol::ApprovalsReviewer::to_core),
                         sandbox_policy: params.sandbox_policy.map(|p| p.to_core()),
+                        permission_profile: None,
                         windows_sandbox_level: None,
                         model: params.model,
                         effort: params.effort.map(Some),
@@ -11242,6 +11242,7 @@ impl CodexMessageProcessor {
                 thread.as_ref(),
                 Op::UserInput {
                     items: mapped_items,
+                    environments: None,
                     final_output_json_schema: params.output_schema,
                     responsesapi_client_metadata: params.responsesapi_client_metadata,
                 },
@@ -13625,7 +13626,7 @@ async fn handle_pending_thread_resume_request(
     let token_usage_thread = response.thread.clone();
     let token_usage_turn_id = latest_token_usage_turn_id_from_rollout_path(
         pending.rollout_path.as_path(),
-        &token_usage_thread,
+        token_usage_thread.turns.as_slice(),
     )
     .await;
     outgoing.send_response(request_id, response).await;

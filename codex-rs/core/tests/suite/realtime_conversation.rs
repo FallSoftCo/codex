@@ -15,7 +15,6 @@ use codex_protocol::protocol::ConversationStartTransport;
 use codex_protocol::protocol::ConversationTextParams;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::GitInfo;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::RealtimeAudioFrame;
@@ -26,11 +25,7 @@ use codex_protocol::protocol::RealtimeNoopRequested;
 use codex_protocol::protocol::RealtimeOutputModality;
 use codex_protocol::protocol::RealtimeVoice;
 use codex_protocol::protocol::RolloutItem;
-use codex_protocol::protocol::RolloutLine;
-use codex_protocol::protocol::SessionMeta;
-use codex_protocol::protocol::SessionMetaLine;
 use codex_protocol::protocol::SessionSource;
-use codex_protocol::protocol::UserMessageEvent;
 use codex_protocol::user_input::UserInput;
 use codex_utils_output_truncation::approx_token_count;
 use core_test_support::responses;
@@ -48,8 +43,6 @@ use core_test_support::wait_for_event_match;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
-use serial_test::serial;
-use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 use std::sync::Arc;
@@ -73,7 +66,6 @@ const MEMORY_PROMPT_PHRASE: &str =
     "You have access to a memory folder with guidance from prior runs.";
 const REALTIME_CONVERSATION_TEST_SUBPROCESS_ENV_VAR: &str =
     "CODEX_REALTIME_CONVERSATION_TEST_SUBPROCESS";
-const WEBSOCKET_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
 struct RealtimeCallRequestCapture {
@@ -150,7 +142,7 @@ async fn wait_for_matching_websocket_request<F>(
 where
     F: Fn(&core_test_support::responses::WebSocketRequest) -> bool,
 {
-    let deadline = tokio::time::Instant::now() + WEBSOCKET_REQUEST_TIMEOUT;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     loop {
         if let Some(request) = server
             .connections()
@@ -173,7 +165,6 @@ where
 fn run_realtime_conversation_test_in_subprocess(
     test_name: &str,
     openai_api_key: Option<&str>,
-    realtime_api_key: Option<&str>,
 ) -> Result<()> {
     let mut command = Command::new(std::env::current_exe()?);
     command
@@ -191,14 +182,6 @@ fn run_realtime_conversation_test_in_subprocess(
         }
         None => {
             command.env_remove(OPENAI_API_KEY_ENV_VAR);
-        }
-    }
-    match realtime_api_key {
-        Some(realtime_api_key) => {
-            command.env("CODEX_REALTIME_API_KEY", realtime_api_key);
-        }
-        None => {
-            command.env_remove("CODEX_REALTIME_API_KEY");
         }
     }
     let output = command.output()?;
@@ -219,18 +202,16 @@ async fn seed_recent_thread(
     let db = test.codex.state_db().context("state db enabled")?;
     let thread_id = ThreadId::new();
     let updated_at = Utc::now();
-    let rollout_dir = test
+    let rollout_path = test
         .codex_home_path()
-        .join("sessions")
-        .join(updated_at.format("%Y/%m/%d").to_string());
-    fs::create_dir_all(&rollout_dir)?;
-    let rollout_path = rollout_dir.join(format!(
-        "rollout-{}-{thread_id}.jsonl",
-        updated_at.format("%Y-%m-%dT%H-%M-%S")
-    ));
+        .join(format!("rollout-{thread_id}.jsonl"));
+    // This helper seeds SQLite metadata directly. Local listing drops stale metadata rows whose
+    // rollout path no longer exists, so create the placeholder path that the test metadata points
+    // at without exercising rollout writing in this realtime-context test.
+    std::fs::write(&rollout_path, "")?;
     let mut metadata_builder = codex_state::ThreadMetadataBuilder::new(
         thread_id,
-        rollout_path.clone(),
+        rollout_path,
         updated_at,
         SessionSource::Cli,
     );
@@ -240,45 +221,6 @@ async fn seed_recent_thread(
     let mut metadata = metadata_builder.build("test-provider");
     metadata.title = title.to_string();
     metadata.first_user_message = Some(first_user_message.to_string());
-
-    let timestamp = updated_at.to_rfc3339();
-    let session_meta = RolloutLine {
-        timestamp: timestamp.clone(),
-        item: RolloutItem::SessionMeta(SessionMetaLine {
-            meta: SessionMeta {
-                id: thread_id,
-                timestamp: timestamp.clone(),
-                cwd: metadata.cwd.clone(),
-                originator: "cli".to_string(),
-                cli_version: "0.0.0".to_string(),
-                source: SessionSource::Cli,
-                model_provider: Some("test-provider".to_string()),
-                ..Default::default()
-            },
-            git: Some(GitInfo {
-                commit_hash: None,
-                branch: metadata.git_branch.clone(),
-                repository_url: None,
-            }),
-        }),
-    };
-    let user_message = RolloutLine {
-        timestamp,
-        item: RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
-            message: first_user_message.to_string(),
-            images: None,
-            local_images: Vec::new(),
-            text_elements: Vec::new(),
-        })),
-    };
-    fs::write(
-        &rollout_path,
-        format!(
-            "{}\n{}\n",
-            serde_json::to_string(&session_meta)?,
-            serde_json::to_string(&user_message)?
-        ),
-    )?;
     db.upsert_thread(&metadata).await?;
 
     Ok(())
@@ -659,7 +601,6 @@ async fn conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth() -> 
         return run_realtime_conversation_test_in_subprocess(
             "suite::realtime_conversation::conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth",
             Some("env-realtime-key"),
-            /*realtime_api_key*/ None,
         );
     }
 
@@ -721,164 +662,6 @@ async fn conversation_start_uses_openai_env_key_fallback_with_chatgpt_auth() -> 
         _ => None,
     })
     .await;
-
-    server.shutdown().await;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[serial(realtime_api_key_env)]
-async fn conversation_start_prefers_dedicated_realtime_env_var_with_chatgpt_auth() -> Result<()> {
-    if std::env::var_os(REALTIME_CONVERSATION_TEST_SUBPROCESS_ENV_VAR).is_none() {
-        return run_realtime_conversation_test_in_subprocess(
-            "suite::realtime_conversation::conversation_start_prefers_dedicated_realtime_env_var_with_chatgpt_auth",
-            Some("openai-env-key"),
-            Some("dedicated-realtime-key"),
-        );
-    }
-    skip_if_no_network!(Ok(()));
-
-    let _openai_env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "openai-env-key");
-    let _realtime_env_guard = EnvGuard::set("CODEX_REALTIME_API_KEY", "dedicated-realtime-key");
-    let server = start_websocket_server(vec![
-        vec![],
-        vec![vec![json!({
-            "type": "session.updated",
-            "session": { "id": "sess_env", "instructions": "backend prompt" }
-        })]],
-    ])
-    .await;
-
-    let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-    builder = builder.with_config(|config| {
-        config.realtime.api_key_env_var = Some("CODEX_REALTIME_API_KEY".to_string());
-    });
-    let test = builder.build_with_websocket_server(&server).await?;
-    assert!(
-        server
-            .wait_for_handshakes(/*expected*/ 1, Duration::from_secs(2))
-            .await
-    );
-
-    test.codex
-        .submit(Op::RealtimeConversationStart(ConversationStartParams {
-            output_modality: RealtimeOutputModality::Audio,
-            prompt: Some(Some("backend prompt".to_string())),
-            session_id: None,
-            transport: None,
-            voice: None,
-        }))
-        .await?;
-
-    let started = wait_for_event_match(&test.codex, |msg| match msg {
-        EventMsg::RealtimeConversationStarted(started) => Some(Ok(started.clone())),
-        EventMsg::Error(err) => Some(Err(err.clone())),
-        _ => None,
-    })
-    .await
-    .unwrap_or_else(|err: ErrorEvent| panic!("conversation start failed: {err:?}"));
-    assert!(started.session_id.is_some());
-
-    assert_eq!(
-        server.handshakes()[1].header("authorization").as_deref(),
-        Some("Bearer dedicated-realtime-key")
-    );
-
-    test.codex.submit(Op::RealtimeConversationClose).await?;
-    let _closed = wait_for_event_match(&test.codex, |msg| match msg {
-        EventMsg::RealtimeConversationClosed(closed) => Some(closed.clone()),
-        _ => None,
-    })
-    .await;
-
-    server.shutdown().await;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[serial(realtime_api_key_env)]
-async fn conversation_start_with_missing_dedicated_realtime_env_var_emits_actionable_error()
--> Result<()> {
-    if std::env::var_os(REALTIME_CONVERSATION_TEST_SUBPROCESS_ENV_VAR).is_none() {
-        return run_realtime_conversation_test_in_subprocess(
-            "suite::realtime_conversation::conversation_start_with_missing_dedicated_realtime_env_var_emits_actionable_error",
-            Some(""),
-            Some(""),
-        );
-    }
-    skip_if_no_network!(Ok(()));
-
-    let _openai_env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "");
-    let _realtime_env_guard = EnvGuard::set("CODEX_REALTIME_API_KEY", "");
-    let server = start_websocket_server(vec![vec![]]).await;
-
-    let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-    builder = builder.with_config(|config| {
-        config.realtime.api_key_env_var = Some("CODEX_REALTIME_API_KEY".to_string());
-    });
-    let test = builder.build_with_websocket_server(&server).await?;
-
-    test.codex
-        .submit(Op::RealtimeConversationStart(ConversationStartParams {
-            output_modality: RealtimeOutputModality::Audio,
-            prompt: Some(Some("backend prompt".to_string())),
-            session_id: None,
-            transport: None,
-            voice: None,
-        }))
-        .await?;
-
-    let err = wait_for_event_match(&test.codex, |msg| match msg {
-        EventMsg::RealtimeConversationRealtime(RealtimeConversationRealtimeEvent {
-            payload: RealtimeEvent::Error(message),
-        }) => Some(message.clone()),
-        _ => None,
-    })
-    .await;
-
-    assert_eq!(
-        err,
-        "realtime voice requires the `CODEX_REALTIME_API_KEY` environment variable. Set `[realtime].api_key_env_var = \"CODEX_REALTIME_API_KEY\"` in ~/.codex/config.toml and export `CODEX_REALTIME_API_KEY` before starting Codex."
-    );
-
-    server.shutdown().await;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[serial(realtime_api_key_env)]
-async fn conversation_start_without_realtime_api_key_emits_setup_error() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let _env_guard = EnvGuard::set(OPENAI_API_KEY_ENV_VAR, "");
-    let server = start_websocket_server(vec![vec![]]).await;
-    let test = test_codex()
-        .with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing())
-        .build_with_websocket_server(&server)
-        .await?;
-
-    test.codex
-        .submit(Op::RealtimeConversationStart(ConversationStartParams {
-            output_modality: RealtimeOutputModality::Audio,
-            prompt: Some(Some("backend prompt".to_string())),
-            session_id: None,
-            transport: None,
-            voice: None,
-        }))
-        .await?;
-
-    let err = wait_for_event_match(&test.codex, |msg| match msg {
-        EventMsg::RealtimeConversationRealtime(RealtimeConversationRealtimeEvent {
-            payload: RealtimeEvent::Error(message),
-        }) => Some(message.clone()),
-        _ => None,
-    })
-    .await;
-
-    assert_eq!(
-        err,
-        "realtime voice requires API key auth. Configure `[realtime].api_key_env_var` in ~/.codex/config.toml and export that environment variable before starting Codex."
-    );
 
     server.shutdown().await;
     Ok(())
@@ -979,7 +762,6 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
         return run_realtime_conversation_test_in_subprocess(
             "suite::realtime_conversation::conversation_start_preflight_failure_emits_realtime_error_only",
             /*openai_api_key*/ None,
-            /*realtime_api_key*/ None,
         );
     }
 
@@ -1006,10 +788,7 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
         _ => None,
     })
     .await;
-    assert_eq!(
-        err,
-        "realtime voice requires API key auth. Configure `[realtime].api_key_env_var` in ~/.codex/config.toml and export that environment variable before starting Codex."
-    );
+    assert_eq!(err, "realtime conversation requires API key auth");
 
     let closed = timeout(Duration::from_millis(200), async {
         wait_for_event_match(&test.codex, |msg| match msg {
@@ -1023,32 +802,6 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
 
     server.shutdown().await;
     Ok(())
-}
-
-struct EnvGuard {
-    key: &'static str,
-    original: Option<OsString>,
-}
-
-impl EnvGuard {
-    fn set(key: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(key);
-        unsafe {
-            std::env::set_var(key, value);
-        }
-        Self { key, original }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        unsafe {
-            match &self.original {
-                Some(value) => std::env::set_var(self.key, value),
-                None => std::env::remove_var(self.key),
-            }
-        }
-    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2143,6 +1896,7 @@ async fn conversation_user_text_turn_is_sent_to_realtime_when_active() -> Result
     let prefixed_user_text = format!("[USER] {user_text}");
     test.codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: user_text.to_string(),
                 text_elements: Vec::new(),
@@ -2272,6 +2026,7 @@ async fn conversation_user_text_turn_is_capped_when_mirrored_to_realtime() -> Re
     );
     test.codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: user_text.clone(),
                 text_elements: Vec::new(),
@@ -2490,36 +2245,32 @@ async fn conversation_mirrors_assistant_message_text_to_realtime_handoff() -> Re
     })
     .await;
 
-    // Wait for the specific append request instead of polling for a fixed connection length.
-    // Full-suite scheduling can delay websocket writes enough that counting requests races even
-    // when the runtime behavior is correct.
-    let handoff_append_request = wait_for_matching_websocket_request(
-        &realtime_server,
-        "realtime handoff append request",
-        |request| {
-            request.body_json()["type"].as_str() == Some("conversation.handoff.append")
-                && request.body_json()["handoff_id"].as_str() == Some("handoff_1")
-        },
-    )
-    .await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        let connections = realtime_server.connections();
+        if connections.len() == 1 && connections[0].len() >= 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 
     let realtime_connections = realtime_server.connections();
     assert_eq!(realtime_connections.len(), 1);
-    assert!(realtime_connections[0].len() >= 2);
+    assert_eq!(realtime_connections[0].len(), 2);
     assert_eq!(
         realtime_connections[0][0].body_json()["type"].as_str(),
         Some("session.update")
     );
     assert_eq!(
-        handoff_append_request.body_json()["type"].as_str(),
+        realtime_connections[0][1].body_json()["type"].as_str(),
         Some("conversation.handoff.append")
     );
     assert_eq!(
-        handoff_append_request.body_json()["handoff_id"].as_str(),
+        realtime_connections[0][1].body_json()["handoff_id"].as_str(),
         Some("handoff_1")
     );
     assert_eq!(
-        handoff_append_request.body_json()["output_text"].as_str(),
+        realtime_connections[0][1].body_json()["output_text"].as_str(),
         Some("\"Agent Final Message\":\n\nassistant says hi")
     );
 
@@ -3434,6 +3185,7 @@ async fn inbound_handoff_request_steers_active_turn() -> Result<()> {
 
     test.codex
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: "first prompt".to_string(),
                 text_elements: Vec::new(),

@@ -37,7 +37,9 @@ use codex_protocol::mcp::ResourceTemplate as McpResourceTemplate;
 use codex_protocol::mcp::Tool as McpTool;
 use codex_protocol::memory_citation::MemoryCitation as CoreMemoryCitation;
 use codex_protocol::memory_citation::MemoryCitationEntry as CoreMemoryCitationEntry;
+use codex_protocol::models::AdditionalPermissionProfile as CoreAdditionalPermissionProfile;
 use codex_protocol::models::FileSystemPermissions as CoreFileSystemPermissions;
+use codex_protocol::models::ManagedFileSystemPermissions as CoreManagedFileSystemPermissions;
 use codex_protocol::models::MessagePhase;
 use codex_protocol::models::NetworkPermissions as CoreNetworkPermissions;
 use codex_protocol::models::PermissionProfile as CorePermissionProfile;
@@ -51,6 +53,7 @@ use codex_protocol::permissions::FileSystemAccessMode as CoreFileSystemAccessMod
 use codex_protocol::permissions::FileSystemPath as CoreFileSystemPath;
 use codex_protocol::permissions::FileSystemSandboxEntry as CoreFileSystemSandboxEntry;
 use codex_protocol::permissions::FileSystemSpecialPath as CoreFileSystemSpecialPath;
+use codex_protocol::permissions::NetworkSandboxPolicy as CoreNetworkSandboxPolicy;
 use codex_protocol::plan_tool::PlanItemArg as CorePlanItemArg;
 use codex_protocol::plan_tool::StepStatus as CorePlanStepStatus;
 use codex_protocol::protocol::AgentStatus as CoreAgentStatus;
@@ -176,6 +179,7 @@ pub enum CodexErrorInfo {
     InternalServerError,
     Unauthorized,
     BadRequest,
+    CyberPolicy,
     ThreadRollbackFailed,
     SandboxError,
     /// The response SSE stream disconnected in the middle of a turn before completion.
@@ -206,6 +210,7 @@ impl From<CoreCodexErrorInfo> for CodexErrorInfo {
             CoreCodexErrorInfo::ContextWindowExceeded => CodexErrorInfo::ContextWindowExceeded,
             CoreCodexErrorInfo::UsageLimitExceeded => CodexErrorInfo::UsageLimitExceeded,
             CoreCodexErrorInfo::ServerOverloaded => CodexErrorInfo::ServerOverloaded,
+            CoreCodexErrorInfo::CyberPolicy => CodexErrorInfo::CyberPolicy,
             CoreCodexErrorInfo::HttpConnectionFailed { http_status_code } => {
                 CodexErrorInfo::HttpConnectionFailed { http_status_code }
             }
@@ -318,14 +323,14 @@ impl From<CoreAskForApproval> for AskForApproval {
 /// decision framework before approving or denying the request.
 pub enum ApprovalsReviewer {
     User,
-    GuardianSubagent,
+    AutoReview,
 }
 
 impl ApprovalsReviewer {
     pub fn to_core(self) -> CoreApprovalsReviewer {
         match self {
             ApprovalsReviewer::User => CoreApprovalsReviewer::User,
-            ApprovalsReviewer::GuardianSubagent => CoreApprovalsReviewer::GuardianSubagent,
+            ApprovalsReviewer::AutoReview => CoreApprovalsReviewer::AutoReview,
         }
     }
 }
@@ -334,7 +339,7 @@ impl From<CoreApprovalsReviewer> for ApprovalsReviewer {
     fn from(value: CoreApprovalsReviewer) -> Self {
         match value {
             CoreApprovalsReviewer::User => ApprovalsReviewer::User,
-            CoreApprovalsReviewer::GuardianSubagent => ApprovalsReviewer::GuardianSubagent,
+            CoreApprovalsReviewer::AutoReview => ApprovalsReviewer::AutoReview,
         }
     }
 }
@@ -386,6 +391,12 @@ v2_enum_from_core!(
 v2_enum_from_core!(
     pub enum ModelRerouteReason from CoreModelRerouteReason {
         HighRiskCyberActivity
+    }
+);
+
+v2_enum_from_core!(
+    pub enum ModelVerification from codex_protocol::protocol::ModelVerification {
+        TrustedAccessForCyber
     }
 );
 
@@ -1390,13 +1401,145 @@ impl From<FileSystemSandboxEntry> for CoreFileSystemSandboxEntry {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
+pub struct PermissionProfileNetworkPermissions {
+    pub enabled: bool,
+}
+
+impl From<CoreNetworkSandboxPolicy> for PermissionProfileNetworkPermissions {
+    fn from(value: CoreNetworkSandboxPolicy) -> Self {
+        Self {
+            enabled: value.is_enabled(),
+        }
+    }
+}
+
+impl From<PermissionProfileNetworkPermissions> for CoreNetworkSandboxPolicy {
+    fn from(value: PermissionProfileNetworkPermissions) -> Self {
+        if value.enabled {
+            Self::Enabled
+        } else {
+            Self::Restricted
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[ts(tag = "type")]
+#[ts(export_to = "v2/")]
+pub enum PermissionProfileFileSystemPermissions {
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Restricted {
+        entries: Vec<FileSystemSandboxEntry>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        glob_scan_max_depth: Option<NonZeroUsize>,
+    },
+    Unrestricted,
+}
+
+impl From<CoreManagedFileSystemPermissions> for PermissionProfileFileSystemPermissions {
+    fn from(value: CoreManagedFileSystemPermissions) -> Self {
+        match value {
+            CoreManagedFileSystemPermissions::Restricted {
+                entries,
+                glob_scan_max_depth,
+            } => Self::Restricted {
+                entries: entries
+                    .into_iter()
+                    .map(FileSystemSandboxEntry::from)
+                    .collect(),
+                glob_scan_max_depth,
+            },
+            CoreManagedFileSystemPermissions::Unrestricted => Self::Unrestricted,
+        }
+    }
+}
+
+impl From<PermissionProfileFileSystemPermissions> for CoreManagedFileSystemPermissions {
+    fn from(value: PermissionProfileFileSystemPermissions) -> Self {
+        match value {
+            PermissionProfileFileSystemPermissions::Restricted {
+                entries,
+                glob_scan_max_depth,
+            } => Self::Restricted {
+                entries: entries
+                    .into_iter()
+                    .map(CoreFileSystemSandboxEntry::from)
+                    .collect(),
+                glob_scan_max_depth,
+            },
+            PermissionProfileFileSystemPermissions::Unrestricted => Self::Unrestricted,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[ts(tag = "type")]
+#[ts(export_to = "v2/")]
+pub enum PermissionProfile {
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Managed {
+        network: PermissionProfileNetworkPermissions,
+        file_system: PermissionProfileFileSystemPermissions,
+    },
+    Disabled,
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    External {
+        network: PermissionProfileNetworkPermissions,
+    },
+}
+
+impl From<CorePermissionProfile> for PermissionProfile {
+    fn from(value: CorePermissionProfile) -> Self {
+        match value {
+            CorePermissionProfile::Managed {
+                file_system,
+                network,
+            } => Self::Managed {
+                network: network.into(),
+                file_system: file_system.into(),
+            },
+            CorePermissionProfile::Disabled => Self::Disabled,
+            CorePermissionProfile::External { network } => Self::External {
+                network: network.into(),
+            },
+        }
+    }
+}
+
+impl From<PermissionProfile> for CorePermissionProfile {
+    fn from(value: PermissionProfile) -> Self {
+        match value {
+            PermissionProfile::Managed {
+                file_system,
+                network,
+            } => Self::Managed {
+                file_system: file_system.into(),
+                network: network.into(),
+            },
+            PermissionProfile::Disabled => Self::Disabled,
+            PermissionProfile::External { network } => Self::External {
+                network: network.into(),
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct AdditionalPermissionProfile {
     pub network: Option<AdditionalNetworkPermissions>,
     pub file_system: Option<AdditionalFileSystemPermissions>,
 }
 
-impl From<CorePermissionProfile> for AdditionalPermissionProfile {
-    fn from(value: CorePermissionProfile) -> Self {
+impl From<CoreAdditionalPermissionProfile> for AdditionalPermissionProfile {
+    fn from(value: CoreAdditionalPermissionProfile) -> Self {
         Self {
             network: value.network.map(AdditionalNetworkPermissions::from),
             file_system: value.file_system.map(AdditionalFileSystemPermissions::from),
@@ -1404,7 +1547,7 @@ impl From<CorePermissionProfile> for AdditionalPermissionProfile {
     }
 }
 
-impl From<AdditionalPermissionProfile> for CorePermissionProfile {
+impl From<AdditionalPermissionProfile> for CoreAdditionalPermissionProfile {
     fn from(value: AdditionalPermissionProfile) -> Self {
         Self {
             network: value.network.map(CoreNetworkPermissions::from),
@@ -1425,7 +1568,7 @@ pub struct GrantedPermissionProfile {
     pub file_system: Option<AdditionalFileSystemPermissions>,
 }
 
-impl From<GrantedPermissionProfile> for CorePermissionProfile {
+impl From<GrantedPermissionProfile> for CoreAdditionalPermissionProfile {
     fn from(value: GrantedPermissionProfile) -> Self {
         Self {
             network: value.network.map(CoreNetworkPermissions::from),
@@ -2946,6 +3089,11 @@ pub struct CommandExecParams {
     /// defaults to the user's configured policy when omitted.
     #[ts(optional = nullable)]
     pub sandbox_policy: Option<SandboxPolicy>,
+    /// Optional canonical active permissions view for this command.
+    ///
+    /// Cannot be combined with `sandboxPolicy`.
+    #[ts(optional = nullable)]
+    pub permission_profile: Option<PermissionProfile>,
 }
 
 /// Final buffered result for `command/exec`.
@@ -7179,6 +7327,8 @@ pub struct PermissionsRequestApprovalResponse {
     pub permissions: GrantedPermissionProfile,
     #[serde(default)]
     pub scope: PermissionGrantScope,
+    #[serde(default)]
+    pub strict_auto_review: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -7436,6 +7586,23 @@ pub struct WarningNotification {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
+pub struct GuardianWarningNotification {
+    pub thread_id: String,
+    pub message: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ModelVerificationNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub verifications: Vec<ModelVerification>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct ClientRestartRequestedNotification {
     /// Thread that requested the client restart.
     pub thread_id: String,
@@ -7477,6 +7644,42 @@ pub struct ConfigWarningNotification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub range: Option<TextRange>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum ConfiguredHookHandler {
+    Command {
+        command: Vec<String>,
+        timeout_sec: Option<u64>,
+        r#async: bool,
+        status_message: Option<String>,
+    },
+    Prompt {},
+    Agent {},
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ConfiguredHookMatcherGroup {
+    pub matcher: String,
+    pub hooks: Vec<ConfiguredHookHandler>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ManagedHooksRequirements {
+    pub managed_dir: Option<String>,
+    pub windows_managed_dir: Option<String>,
+    pub pre_tool_use: Vec<ConfiguredHookMatcherGroup>,
+    pub permission_request: Vec<ConfiguredHookMatcherGroup>,
+    pub post_tool_use: Vec<ConfiguredHookMatcherGroup>,
+    pub session_start: Vec<ConfiguredHookMatcherGroup>,
+    pub user_prompt_submit: Vec<ConfiguredHookMatcherGroup>,
+    pub stop: Vec<ConfiguredHookMatcherGroup>,
 }
 
 #[cfg(test)]

@@ -1,4 +1,3 @@
-use crate::TesterToolPolicy;
 use crate::can_request_original_image_detail;
 use codex_features::Feature;
 use codex_features::Features;
@@ -89,7 +88,6 @@ pub struct ToolsConfig {
     pub unified_exec_shell_mode: UnifiedExecShellMode,
     pub has_environment: bool,
     pub allow_login_shell: bool,
-    pub tester_tool_policy: Option<TesterToolPolicy>,
     pub apply_patch_tool_type: Option<ApplyPatchToolType>,
     pub web_search_mode: Option<WebSearchMode>,
     pub web_search_config: Option<WebSearchConfig>,
@@ -99,7 +97,6 @@ pub struct ToolsConfig {
     pub tool_suggest: bool,
     pub exec_permission_approvals_enabled: bool,
     pub request_permissions_tool_enabled: bool,
-    pub request_user_input_enabled: bool,
     pub code_mode_enabled: bool,
     pub code_mode_only_enabled: bool,
     pub js_repl_enabled: bool,
@@ -110,11 +107,8 @@ pub struct ToolsConfig {
     pub hide_spawn_agent_metadata: bool,
     pub spawn_agent_usage_hint: bool,
     pub spawn_agent_usage_hint_text: Option<String>,
+    pub max_concurrent_threads_per_session: Option<usize>,
     pub default_mode_request_user_input: bool,
-    pub mcp_tools_enabled: bool,
-    pub dynamic_tools_enabled: bool,
-    pub hollywood_tools_enabled: bool,
-    pub view_image_enabled: bool,
     pub experimental_supported_tools: Vec<String>,
     pub agent_jobs_tools: bool,
     pub agent_jobs_worker_tools: bool,
@@ -155,28 +149,19 @@ impl ToolsConfig {
         let include_agent_jobs = features.enabled(Feature::SpawnCsv);
         let include_default_mode_request_user_input =
             features.enabled(Feature::DefaultModeRequestUserInput);
-        let tester_tool_policy = TesterToolPolicy::from_session_source(session_source);
-        let tester_mode = tester_tool_policy.is_some();
-        let tester_terminal_harness_allowed = tester_tool_policy
-            .as_ref()
-            .is_none_or(TesterToolPolicy::allows_terminal_harness);
-        let include_search_tool = !tester_mode
-            && model_info.supports_search_tool
-            && features.enabled(Feature::ToolSearch);
+        let include_search_tool =
+            model_info.supports_search_tool && features.enabled(Feature::ToolSearch);
         let include_tool_suggest = features.enabled(Feature::ToolSuggest)
             && features.enabled(Feature::Apps)
-            && features.enabled(Feature::Plugins)
-            && !tester_mode;
+            && features.enabled(Feature::Plugins);
         let include_original_image_detail = can_request_original_image_detail(model_info);
         // API-key auth bypasses Codex backend entitlement/tool normalization, so
         // callers must confirm ChatGPT auth before exposing the built-in tool.
-        let include_image_gen_tool = !tester_mode
-            && *image_generation_tool_auth_allowed
+        let include_image_gen_tool = *image_generation_tool_auth_allowed
             && features.enabled(Feature::ImageGeneration)
             && supports_image_generation(model_info);
         let exec_permission_approvals_enabled = features.enabled(Feature::ExecPermissionApprovals);
-        let request_permissions_tool_enabled =
-            !tester_mode && features.enabled(Feature::RequestPermissionsTool);
+        let request_permissions_tool_enabled = features.enabled(Feature::RequestPermissionsTool);
         let shell_command_backend =
             if features.enabled(Feature::ShellTool) && features.enabled(Feature::ShellZshFork) {
                 ShellCommandBackendConfig::ZshFork
@@ -188,9 +173,7 @@ impl ToolsConfig {
             sandbox_policy,
             *windows_sandbox_level,
         );
-        let shell_type = if !features.enabled(Feature::ShellTool)
-            || !tester_terminal_harness_allowed
-        {
+        let shell_type = if !features.enabled(Feature::ShellTool) {
             ConfigShellToolType::Disabled
         } else if features.enabled(Feature::ShellZshFork) {
             ConfigShellToolType::ShellCommand
@@ -207,14 +190,10 @@ impl ToolsConfig {
             model_info.shell_type
         };
 
-        let apply_patch_tool_type = if tester_mode {
-            None
-        } else {
-            match model_info.apply_patch_tool_type {
-                Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
-                Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
-                None => include_apply_patch_tool.then_some(ApplyPatchToolType::Freeform),
-            }
+        let apply_patch_tool_type = match model_info.apply_patch_tool_type {
+            Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
+            Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
+            None => include_apply_patch_tool.then_some(ApplyPatchToolType::Freeform),
         };
 
         let agent_jobs_worker_tools = include_agent_jobs
@@ -231,7 +210,6 @@ impl ToolsConfig {
             unified_exec_shell_mode: UnifiedExecShellMode::Direct,
             has_environment: true,
             allow_login_shell: true,
-            tester_tool_policy,
             apply_patch_tool_type,
             web_search_mode: *web_search_mode,
             web_search_config: None,
@@ -241,35 +219,23 @@ impl ToolsConfig {
             tool_suggest: include_tool_suggest,
             exec_permission_approvals_enabled,
             request_permissions_tool_enabled,
-            request_user_input_enabled: !tester_mode,
-            code_mode_enabled: include_code_mode && !tester_mode,
-            code_mode_only_enabled: include_code_mode_only && !tester_mode,
-            js_repl_enabled: include_js_repl && !tester_mode,
+            code_mode_enabled: include_code_mode,
+            code_mode_only_enabled: include_code_mode_only,
+            js_repl_enabled: include_js_repl,
             js_repl_tools_only: include_js_repl_tools_only,
             can_request_original_image_detail: include_original_image_detail,
-            collab_tools: include_collab_tools && !tester_mode,
+            collab_tools: include_collab_tools,
             multi_agent_v2: include_multi_agent_v2,
             hide_spawn_agent_metadata: false,
             spawn_agent_usage_hint: true,
             spawn_agent_usage_hint_text: None,
+            max_concurrent_threads_per_session: None,
             default_mode_request_user_input: include_default_mode_request_user_input,
-            mcp_tools_enabled: !tester_mode,
-            dynamic_tools_enabled: !tester_mode,
-            hollywood_tools_enabled: !tester_mode,
-            view_image_enabled: !tester_mode,
             experimental_supported_tools: model_info.experimental_supported_tools.clone(),
-            agent_jobs_tools: include_agent_jobs && !tester_mode,
-            agent_jobs_worker_tools: agent_jobs_worker_tools && !tester_mode,
+            agent_jobs_tools: include_agent_jobs,
+            agent_jobs_worker_tools,
             agent_type_description: String::new(),
         }
-    }
-
-    pub fn with_js_repl_available(mut self, js_repl_available: bool) -> Self {
-        if !js_repl_available {
-            self.js_repl_enabled = false;
-            self.js_repl_tools_only = false;
-        }
-        self
     }
 
     pub fn with_agent_type_description(mut self, agent_type_description: String) -> Self {
@@ -292,6 +258,14 @@ impl ToolsConfig {
 
     pub fn with_hide_spawn_agent_metadata(mut self, hide_spawn_agent_metadata: bool) -> Self {
         self.hide_spawn_agent_metadata = hide_spawn_agent_metadata;
+        self
+    }
+
+    pub fn with_max_concurrent_threads_per_session(
+        mut self,
+        max_concurrent_threads_per_session: Option<usize>,
+    ) -> Self {
+        self.max_concurrent_threads_per_session = max_concurrent_threads_per_session;
         self
     }
 

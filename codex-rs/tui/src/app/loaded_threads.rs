@@ -121,13 +121,12 @@ mod tests {
             status: ThreadStatus::Idle,
             path: None,
             cwd: test_path_buf("/tmp").abs(),
-            cli_version: env!("CARGO_PKG_VERSION").to_string(),
+            cli_version: "0.0.0".to_string(),
             source,
             agent_nickname: None,
             agent_role: None,
             git_info: None,
             name: None,
-            hollywood: None,
             turns: Vec::new(),
         }
     }

@@ -1,6 +1,5 @@
 use super::*;
 use crate::context::ContextualUserFragment;
-use crate::event_mapping::is_contextual_user_message_content;
 use codex_protocol::items::HookPromptFragment;
 use codex_protocol::items::build_hook_prompt_message;
 use codex_protocol::models::ResponseItem;
@@ -25,34 +24,6 @@ fn detects_subagent_notification_fragment_case_insensitively() {
     assert!(SubagentNotification::matches_text(
         "<SUBAGENT_NOTIFICATION>{}</subagent_notification>"
     ));
-}
-
-#[test]
-fn detects_hollywood_message_fragment() {
-    assert!(is_contextual_user_fragment(&ContentItem::InputText {
-        text: "<hollywood_message>\n{\"message_id\":1}\n</hollywood_message>".to_string(),
-    }));
-}
-
-#[test]
-fn detects_contextual_message_content_when_any_part_is_contextual() {
-    assert!(is_contextual_user_message_content(&[
-        ContentItem::InputText {
-            text: "<hollywood_message>\n{\"message_id\":1}\n</hollywood_message>".to_string(),
-        },
-        ContentItem::InputText {
-            text: "<hollywood_context>\n{\"attached\":true}\n</hollywood_context>".to_string(),
-        },
-    ]));
-
-    assert!(is_contextual_user_message_content(&[
-        ContentItem::InputText {
-            text: "<hollywood_message>\n{\"message_id\":1}\n</hollywood_message>".to_string(),
-        },
-        ContentItem::InputText {
-            text: "normal user text".to_string(),
-        },
-    ]));
 }
 
 #[test]

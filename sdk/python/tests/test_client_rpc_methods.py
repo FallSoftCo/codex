@@ -5,8 +5,9 @@ from typing import Any
 
 from codex_app_server.client import AppServerClient, _params_dict
 from codex_app_server.generated.v2_all import (
+    ApprovalsReviewer,
     ThreadListParams,
-    ThreadRealtimeAudioChunk,
+    ThreadResumeResponse,
     ThreadTokenUsageUpdatedNotification,
 )
 from codex_app_server.models import UnknownNotification
@@ -31,56 +32,6 @@ def test_thread_set_name_and_compact_use_current_rpc_methods() -> None:
     assert calls[1][0] == "thread/compact/start"
 
 
-def test_thread_realtime_rpc_methods_use_current_names() -> None:
-    client = AppServerClient()
-    calls: list[tuple[str, dict[str, Any] | None]] = []
-
-    def fake_request(method: str, params, *, response_model):  # type: ignore[no-untyped-def]
-        calls.append((method, params))
-        return response_model.model_validate({})
-
-    client.request = fake_request  # type: ignore[method-assign]
-
-    client.thread_realtime_start("thread-1", "voice prompt")
-    client.thread_realtime_append_audio(
-        "thread-1",
-        ThreadRealtimeAudioChunk(
-            data="AQID",
-            sample_rate=24_000,
-            num_channels=1,
-            samples_per_channel=3,
-            item_id=None,
-        ),
-    )
-    client.thread_realtime_append_text("thread-1", "hello")
-    client.thread_realtime_stop("thread-1")
-
-    assert calls[0] == (
-        "thread/realtime/start",
-        {"threadId": "thread-1", "prompt": "voice prompt"},
-    )
-    assert calls[1] == (
-        "thread/realtime/appendAudio",
-        {
-            "threadId": "thread-1",
-            "audio": {
-                "data": "AQID",
-                "sampleRate": 24_000,
-                "numChannels": 1,
-                "samplesPerChannel": 3,
-            },
-        },
-    )
-    assert calls[2] == (
-        "thread/realtime/appendText",
-        {"threadId": "thread-1", "text": "hello"},
-    )
-    assert calls[3] == (
-        "thread/realtime/stop",
-        {"threadId": "thread-1"},
-    )
-
-
 def test_generated_params_models_are_snake_case_and_dump_by_alias() -> None:
     params = ThreadListParams(search_term="needle", limit=5)
 
@@ -92,6 +43,34 @@ def test_generated_params_models_are_snake_case_and_dump_by_alias() -> None:
 def test_generated_v2_bundle_has_single_shared_plan_type_definition() -> None:
     source = (ROOT / "src" / "codex_app_server" / "generated" / "v2_all.py").read_text()
     assert source.count("class PlanType(") == 1
+
+
+def test_thread_resume_response_accepts_auto_review_reviewer() -> None:
+    response = ThreadResumeResponse.model_validate(
+        {
+            "approvalPolicy": "on-request",
+            "approvalsReviewer": "auto_review",
+            "cwd": "/tmp",
+            "model": "gpt-5",
+            "modelProvider": "openai",
+            "sandbox": {"type": "dangerFullAccess"},
+            "thread": {
+                "cliVersion": "1.0.0",
+                "createdAt": 1,
+                "cwd": "/tmp",
+                "ephemeral": False,
+                "id": "thread-1",
+                "modelProvider": "openai",
+                "preview": "",
+                "source": "cli",
+                "status": {"type": "idle"},
+                "turns": [],
+                "updatedAt": 1,
+            },
+        }
+    )
+
+    assert response.approvals_reviewer is ApprovalsReviewer.auto_review
 
 
 def test_notifications_are_typed_with_canonical_v2_methods() -> None:
@@ -143,7 +122,9 @@ def test_unknown_notifications_fall_back_to_unknown_payloads() -> None:
 
 def test_invalid_notification_payload_falls_back_to_unknown() -> None:
     client = AppServerClient()
-    event = client._coerce_notification("thread/tokenUsage/updated", {"threadId": "missing"})
+    event = client._coerce_notification(
+        "thread/tokenUsage/updated", {"threadId": "missing"}
+    )
 
     assert event.method == "thread/tokenUsage/updated"
     assert isinstance(event.payload, UnknownNotification)
