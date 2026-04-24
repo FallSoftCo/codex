@@ -51,6 +51,21 @@ impl StateRuntime {
                     "duplicate coordination implementation task {existing_task_id} already covers this scope"
                 );
             }
+            if params.creator_thread_id.to_string() == owner_thread_id
+                && params.reserved_path_claims.is_empty()
+                && is_single_lane_owner_task_kind(params.kind)
+                && let Some(existing_task_id) = find_duplicate_incomplete_owner_lane_task_in_tx(
+                    &mut tx,
+                    owner_thread_id.as_str(),
+                    params.room.as_deref(),
+                    params.kind,
+                )
+                .await?
+            {
+                anyhow::bail!(
+                    "duplicate coordination owner-lane task {existing_task_id} already exists for this owner"
+                );
+            }
             let lease_seconds = params.claim_lease_seconds.max(1);
             let lease_expires_at = now.saturating_add(lease_seconds);
             let claim_result = super::path_claims::try_claim_path_ownership_in_tx(
@@ -1140,6 +1155,98 @@ ORDER BY updated_at DESC, created_at DESC, id DESC
     Ok(None)
 }
 
+async fn find_duplicate_incomplete_owner_lane_task_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    owner_thread_id: &str,
+    room: Option<&str>,
+    kind: crate::CoordinationTaskKind,
+) -> anyhow::Result<Option<String>> {
+    let rows = if let Some(room) = room {
+        sqlx::query_scalar::<_, String>(
+            r#"
+SELECT id
+FROM coordination_tasks
+WHERE owner_thread_id = ?
+  AND room = ?
+  AND task_kind = ?
+  AND status IN (?, ?, ?, ?)
+ORDER BY
+  CASE status
+    WHEN ? THEN 0
+    WHEN ? THEN 1
+    WHEN ? THEN 2
+    WHEN ? THEN 3
+    ELSE 4
+  END,
+  updated_at DESC,
+  created_at DESC,
+  id DESC
+LIMIT 1
+            "#,
+        )
+        .bind(owner_thread_id)
+        .bind(room)
+        .bind(kind.as_str())
+        .bind(crate::CoordinationTaskStatus::Open.as_str())
+        .bind(crate::CoordinationTaskStatus::Awarded.as_str())
+        .bind(crate::CoordinationTaskStatus::Active.as_str())
+        .bind(crate::CoordinationTaskStatus::Blocked.as_str())
+        .bind(crate::CoordinationTaskStatus::Active.as_str())
+        .bind(crate::CoordinationTaskStatus::Awarded.as_str())
+        .bind(crate::CoordinationTaskStatus::Open.as_str())
+        .bind(crate::CoordinationTaskStatus::Blocked.as_str())
+        .fetch_optional(&mut **tx)
+        .await?
+    } else {
+        sqlx::query_scalar::<_, String>(
+            r#"
+SELECT id
+FROM coordination_tasks
+WHERE owner_thread_id = ?
+  AND room IS NULL
+  AND task_kind = ?
+  AND status IN (?, ?, ?, ?)
+ORDER BY
+  CASE status
+    WHEN ? THEN 0
+    WHEN ? THEN 1
+    WHEN ? THEN 2
+    WHEN ? THEN 3
+    ELSE 4
+  END,
+  updated_at DESC,
+  created_at DESC,
+  id DESC
+LIMIT 1
+            "#,
+        )
+        .bind(owner_thread_id)
+        .bind(kind.as_str())
+        .bind(crate::CoordinationTaskStatus::Open.as_str())
+        .bind(crate::CoordinationTaskStatus::Awarded.as_str())
+        .bind(crate::CoordinationTaskStatus::Active.as_str())
+        .bind(crate::CoordinationTaskStatus::Blocked.as_str())
+        .bind(crate::CoordinationTaskStatus::Active.as_str())
+        .bind(crate::CoordinationTaskStatus::Awarded.as_str())
+        .bind(crate::CoordinationTaskStatus::Open.as_str())
+        .bind(crate::CoordinationTaskStatus::Blocked.as_str())
+        .fetch_optional(&mut **tx)
+        .await?
+    };
+
+    Ok(rows)
+}
+
+fn is_single_lane_owner_task_kind(kind: crate::CoordinationTaskKind) -> bool {
+    matches!(
+        kind,
+        crate::CoordinationTaskKind::Qa
+            | crate::CoordinationTaskKind::Review
+            | crate::CoordinationTaskKind::Investigation
+            | crate::CoordinationTaskKind::Handoff
+    )
+}
+
 async fn load_reserved_path_claims_for_task_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     task_id: &str,
@@ -1901,6 +2008,69 @@ mod tests {
         );
         assert_eq!(
             db.get_coordination_task("task-impl-duplicate")
+                .await
+                .expect("get duplicate task should succeed"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn duplicate_incomplete_self_owned_qa_lane_is_rejected_on_create() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init db");
+        let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000041").expect("id");
+        let owner = ThreadId::from_string("019e0000-0000-7000-8000-000000000042").expect("id");
+
+        db.create_coordination_task(crate::CoordinationTaskCreateParams {
+            id: "task-qa-original".to_string(),
+            creator_thread_id: creator,
+            owner_thread_id: Some(owner),
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/ozzz".to_string()),
+            kind: CoordinationTaskKind::Qa,
+            summary: "run final test gate".to_string(),
+            details: String::new(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-qa-original".to_string(),
+            act_summary: Some("opened qa".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("create original qa task");
+
+        let err = db
+            .create_coordination_task(crate::CoordinationTaskCreateParams {
+                id: "task-qa-duplicate".to_string(),
+                creator_thread_id: owner,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/ozzz".to_string()),
+                kind: CoordinationTaskKind::Qa,
+                summary: "duplicate qa".to_string(),
+                details: String::new(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open-qa-duplicate".to_string(),
+                act_summary: Some("opened duplicate qa".to_string()),
+                act_payload_json: "{}".to_string(),
+            })
+            .await
+            .expect_err("duplicate self-owned qa lane should fail");
+
+        assert!(
+            err.to_string()
+                .contains("duplicate coordination owner-lane task task-qa-original"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(
+            db.get_coordination_task("task-qa-duplicate")
                 .await
                 .expect("get duplicate task should succeed"),
             None

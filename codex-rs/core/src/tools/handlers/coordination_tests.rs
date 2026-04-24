@@ -1128,6 +1128,83 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
 }
 
 #[tokio::test]
+async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let (mut owner_session, owner_turn) = make_session_and_context().await;
+    owner_session.services.state_db = Some(Arc::clone(&state_db));
+    let owner_session = Arc::new(owner_session);
+    let owner_turn = Arc::new(owner_turn);
+    insert_thread_metadata(
+        &state_db,
+        owner_turn.as_ref(),
+        owner_session.conversation_id,
+    )
+    .await;
+
+    let initial_open = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Run final habit dashboard test gate",
+                "details": "Verify the room stays green before final close.",
+                "kind": "qa",
+                "owner": owner_session.conversation_id.to_string(),
+                "room": "repo/ozzz",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("initial owner-awarded QA task should succeed");
+    let initial_result = parse_result(initial_open);
+    let task_id = initial_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let duplicate_open = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&owner_session),
+            Arc::clone(&owner_turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Run habit dashboard QA and final test gate",
+                "details": "Double-check the final gate before reporting done.",
+                "kind": "qa",
+                "owner": owner_session.conversation_id.to_string(),
+                "room": "repo/ozzz",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("self-opened duplicate QA lane should be idempotent");
+
+    assert_eq!(duplicate_open.success, Some(true));
+    let duplicate_result = parse_result(duplicate_open);
+    assert_eq!(duplicate_result["deduped"], json!(true));
+    assert_eq!(duplicate_result["task"]["id"], json!(task_id));
+    assert_eq!(duplicate_result["task"]["status"], "awarded");
+    assert_eq!(duplicate_result["act"], Value::Null);
+    assert_eq!(duplicate_result["room_notified"], json!(false));
+    assert_eq!(duplicate_result["woken_threads"], json!([]));
+
+    let tasks = state_db
+        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+            owner_thread_id: Some(owner_session.conversation_id),
+            creator_thread_id: None,
+            room: Some("repo/ozzz".to_string()),
+            statuses: Vec::new(),
+        })
+        .await
+        .expect("list tasks should succeed");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].id, task_id);
+}
+
+#[tokio::test]
 async fn missing_task_id_returns_recoverable_output() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 

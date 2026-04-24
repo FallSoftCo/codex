@@ -304,8 +304,7 @@ async fn handle_coordination_act(
                 Ok(outcome) => outcome,
                 Err(err) => {
                     let message = err.to_string();
-                    if let Some(existing_task_id) =
-                        parse_duplicate_implementation_task_id(message.as_str())
+                    if let Some(existing_task_id) = parse_duplicate_task_id(message.as_str())
                     {
                         let existing_task = db
                             .get_coordination_task(existing_task_id)
@@ -1188,10 +1187,21 @@ fn path_claim_specs_to_json(claims: &[codex_state::PathClaimSpec]) -> Vec<Value>
         .collect()
 }
 
+fn parse_duplicate_task_id(message: &str) -> Option<&str> {
+    parse_duplicate_implementation_task_id(message)
+        .or_else(|| parse_duplicate_owner_lane_task_id(message))
+}
+
 fn parse_duplicate_implementation_task_id(message: &str) -> Option<&str> {
     message
         .strip_prefix("duplicate coordination implementation task ")
         .and_then(|rest| rest.strip_suffix(" already covers this scope"))
+}
+
+fn parse_duplicate_owner_lane_task_id(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("duplicate coordination owner-lane task ")
+        .and_then(|rest| rest.strip_suffix(" already exists for this owner"))
 }
 
 fn coordination_duplicate_output(
