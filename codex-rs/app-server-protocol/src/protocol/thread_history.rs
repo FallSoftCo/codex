@@ -2550,6 +2550,36 @@ mod tests {
     }
 
     #[test]
+    fn completed_turn_keeps_snapshot_without_reporting_active_turn() {
+        let mut builder = ThreadHistoryBuilder::new();
+        builder.handle_event(&EventMsg::TurnStarted(TurnStartedEvent {
+            turn_id: "turn-finished".into(),
+            started_at: Some(10),
+            model_context_window: None,
+            collaboration_mode_kind: Default::default(),
+        }));
+        builder.handle_event(&EventMsg::UserMessage(UserMessageEvent {
+            message: "done".into(),
+            images: None,
+            text_elements: Vec::new(),
+            local_images: Vec::new(),
+        }));
+        builder.handle_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            turn_id: "turn-finished".into(),
+            last_agent_message: None,
+            completed_at: Some(11),
+            duration_ms: Some(1000),
+        }));
+
+        assert!(!builder.has_active_turn());
+        let snapshot = builder
+            .active_turn_snapshot()
+            .expect("last finished turn snapshot");
+        assert_eq!(snapshot.id, "turn-finished");
+        assert_eq!(snapshot.status, TurnStatus::Completed);
+    }
+
+    #[test]
     fn late_turn_complete_does_not_close_active_turn() {
         let events = vec![
             EventMsg::TurnStarted(TurnStartedEvent {

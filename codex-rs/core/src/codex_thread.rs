@@ -147,6 +147,10 @@ impl CodexThread {
         self.codex.session.total_token_usage().await
     }
 
+    pub async fn hollywood_obligation_count(&self) -> usize {
+        self.codex.session.hollywood_obligation_count().await
+    }
+
     /// Returns the complete token usage snapshot currently cached for this thread.
     ///
     /// This accessor is intentionally narrower than direct session access: it lets

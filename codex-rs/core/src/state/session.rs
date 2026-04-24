@@ -325,6 +325,10 @@ impl SessionState {
         }
         retry
     }
+
+    pub(crate) fn hollywood_obligation_count(&self) -> usize {
+        self.outstanding_hollywood_obligations.len()
+    }
 }
 
 // Sometimes new snapshots don't include credits or plan information.

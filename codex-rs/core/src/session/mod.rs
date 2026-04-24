@@ -1145,6 +1145,11 @@ impl Session {
         state.prepare_hollywood_obligation_retry(max_attempts)
     }
 
+    pub(crate) async fn hollywood_obligation_count(&self) -> usize {
+        let state = self.state.lock().await;
+        state.hollywood_obligation_count()
+    }
+
     pub(crate) async fn route_realtime_text_input(self: &Arc<Self>, text: String) {
         handlers::user_input_or_turn_inner(
             self,

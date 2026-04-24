@@ -16,6 +16,7 @@ use crate::hollywood::HOLLYWOOD_ROOM_CONTRACT_VERSION;
 use crate::hollywood::HollywoodConfig;
 use crate::hollywood::build_registry_upsert_request;
 use crate::hollywood::format_hollywood_context_message;
+use crate::hollywood::hollywood_session_diagnostics_from_runtime;
 use crate::hollywood::hollywood_session_state_from_persisted;
 use crate::hollywood::hollywood_session_state_from_runtime;
 use crate::hollywood::hollywood_session_status_from_thread_status;
@@ -9688,12 +9689,25 @@ impl CodexMessageProcessor {
         &self,
         thread_id: ThreadId,
         thread_name: Option<&str>,
+        loaded_thread: Option<&Arc<CodexThread>>,
         persisted: Option<&HollywoodSessionMeta>,
         loaded_status: Option<&ThreadStatus>,
     ) -> Option<codex_app_server_protocol::HollywoodSessionState> {
         let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-        let thread_state = thread_state.lock().await;
-        if let Some(config) = thread_state.hollywood.config() {
+        let (config, runtime_state, active_turn) = {
+            let thread_state = thread_state.lock().await;
+            (
+                thread_state.hollywood.config(),
+                thread_state.hollywood.clone(),
+                thread_state.active_turn_snapshot_if_running(),
+            )
+        };
+        if let Some(config) = config {
+            let outstanding_obligation_count = if let Some(thread) = loaded_thread {
+                thread.hollywood_obligation_count().await
+            } else {
+                0
+            };
             let status = loaded_status
                 .map(hollywood_session_status_from_thread_status)
                 .unwrap_or(codex_app_server_protocol::HollywoodSessionStatus::Idle);
@@ -9701,8 +9715,13 @@ impl CodexMessageProcessor {
                 thread_id,
                 thread_name,
                 &config,
-                &thread_state.hollywood,
+                &runtime_state,
                 status,
+                hollywood_session_diagnostics_from_runtime(
+                    &runtime_state,
+                    active_turn.as_ref(),
+                    outstanding_obligation_count,
+                ),
             ));
         }
         persisted
@@ -9713,6 +9732,7 @@ impl CodexMessageProcessor {
         &self,
         thread_id: ThreadId,
         thread: &mut Thread,
+        loaded_thread: Option<&Arc<CodexThread>>,
         persisted: Option<&HollywoodSessionMeta>,
         loaded_status: Option<&ThreadStatus>,
     ) {
@@ -9720,6 +9740,7 @@ impl CodexMessageProcessor {
             .compute_thread_hollywood_state(
                 thread_id,
                 thread.name.as_deref(),
+                loaded_thread,
                 persisted,
                 loaded_status,
             )
@@ -9737,8 +9758,14 @@ impl CodexMessageProcessor {
         let persisted = self
             .persisted_hollywood_metadata(thread_id, loaded_thread, state_db_ctx)
             .await;
-        self.attach_thread_hollywood_state(thread_id, thread, persisted.as_ref(), loaded_status)
-            .await;
+        self.attach_thread_hollywood_state(
+            thread_id,
+            thread,
+            loaded_thread,
+            persisted.as_ref(),
+            loaded_status,
+        )
+        .await;
     }
 
     async fn attach_hollywood_runtime(
@@ -12314,7 +12341,7 @@ impl CodexMessageProcessor {
                         let should_start_startup_turn = {
                             let state = thread_state.lock().await;
                             matches!(status, ThreadStatus::Idle)
-                                && state.active_turn_snapshot().is_none()
+                                && !state.has_active_turn()
                                 && state.hollywood.should_start_startup_turn(now)
                         };
                         if should_start_startup_turn {
@@ -12626,7 +12653,7 @@ impl CodexMessageProcessor {
                             let can_submit_now = message_is_focused
                                 || (message_is_broadcast
                                     && matches!(status, ThreadStatus::Idle)
-                                    && thread_state.lock().await.active_turn_snapshot().is_none());
+                                    && !thread_state.lock().await.has_active_turn());
                             if can_submit_now && !message.self_authored && wakeworthy_message {
                                 let (obligation, requires_response) =
                                     Self::hollywood_input_delivery_metadata(&message);
@@ -12715,7 +12742,7 @@ impl CodexMessageProcessor {
                             let pending_wakes = {
                                 let mut state = thread_state.lock().await;
                                 if matches!(status, ThreadStatus::Idle)
-                                    && state.active_turn_snapshot().is_none()
+                                    && !state.has_active_turn()
                                     && state.hollywood.should_start_autonomous_turn(now)
                                 {
                                     state.hollywood.mark_autonomous_turn_pending();

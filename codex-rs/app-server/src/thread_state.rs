@@ -115,6 +115,18 @@ impl ThreadState {
         self.current_turn_history.active_turn_snapshot()
     }
 
+    pub(crate) fn has_active_turn(&self) -> bool {
+        self.current_turn_history.has_active_turn()
+    }
+
+    pub(crate) fn active_turn_snapshot_if_running(&self) -> Option<Turn> {
+        if self.current_turn_history.has_active_turn() {
+            self.current_turn_history.active_turn_snapshot()
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn track_current_turn_event(&mut self, event: &EventMsg) {
         if let EventMsg::TurnStarted(payload) = event {
             self.turn_summary.started_at = payload.started_at;
@@ -249,7 +261,7 @@ impl ThreadStateManager {
                 thread_id = %thread_id,
                 listener_generation = thread_state.listener_generation,
                 had_listener = thread_state.cancel_tx.is_some(),
-                had_active_turn = thread_state.active_turn_snapshot().is_some(),
+                had_active_turn = thread_state.has_active_turn(),
                 "clearing thread listener during thread-state teardown"
             );
             thread_state.clear_listener();
@@ -272,7 +284,7 @@ impl ThreadStateManager {
                 thread_id = %thread_id,
                 listener_generation = thread_state.listener_generation,
                 had_listener = thread_state.cancel_tx.is_some(),
-                had_active_turn = thread_state.active_turn_snapshot().is_some(),
+                had_active_turn = thread_state.has_active_turn(),
                 "clearing thread listener during app-server shutdown"
             );
             thread_state.clear_listener();

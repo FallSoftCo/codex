@@ -5,6 +5,7 @@ use codex_app_server_protocol::HollywoodMessageAttention;
 use codex_app_server_protocol::HollywoodMessageKind;
 use codex_app_server_protocol::HollywoodResponsePolicy;
 use codex_app_server_protocol::HollywoodSessionAttachOptions;
+use codex_app_server_protocol::HollywoodSessionDiagnostics;
 use codex_app_server_protocol::HollywoodSessionState;
 use codex_app_server_protocol::HollywoodSessionStatus;
 use codex_app_server_protocol::ThreadStatus;
@@ -355,6 +356,18 @@ impl HollywoodRuntimeState {
 
     pub(crate) fn mark_startup_turn_pending(&mut self) {
         self.startup_turn_pending = true;
+    }
+
+    pub(crate) fn startup_turn_pending(&self) -> bool {
+        self.startup_turn_pending
+    }
+
+    pub(crate) fn autonomous_turn_pending(&self) -> bool {
+        self.autonomous_turn_pending
+    }
+
+    pub(crate) fn pending_semantic_wake_count(&self) -> usize {
+        self.pending_semantic_wakes.len()
     }
 
     pub(crate) fn queue_semantic_wake(&mut self, wake: HollywoodPendingSemanticWake) {
@@ -851,6 +864,7 @@ pub(crate) fn hollywood_session_state_from_runtime(
     config: &HollywoodConfig,
     runtime_state: &HollywoodRuntimeState,
     status: HollywoodSessionStatus,
+    diagnostics: HollywoodSessionDiagnostics,
 ) -> HollywoodSessionState {
     HollywoodSessionState {
         attached: true,
@@ -863,6 +877,7 @@ pub(crate) fn hollywood_session_state_from_runtime(
         session_kind: runtime_state.registry_session_kind().map(ToOwned::to_owned),
         resumed_from: runtime_state.registry_resumed_from().map(ToOwned::to_owned),
         status,
+        diagnostics: Some(diagnostics),
     }
 }
 
@@ -884,7 +899,34 @@ pub(crate) fn hollywood_session_state_from_persisted(
         session_kind: None,
         resumed_from: None,
         status: HollywoodSessionStatus::Persisted,
+        diagnostics: None,
     })
+}
+
+pub(crate) fn hollywood_session_diagnostics_from_runtime(
+    runtime_state: &HollywoodRuntimeState,
+    active_turn: Option<&codex_app_server_protocol::Turn>,
+    outstanding_obligation_count: usize,
+) -> HollywoodSessionDiagnostics {
+    HollywoodSessionDiagnostics {
+        current_turn_open: active_turn.is_some(),
+        active_turn_id: active_turn.map(|turn| turn.id.clone()),
+        active_turn_started_at: active_turn.and_then(|turn| turn.started_at),
+        active_turn_item_count: active_turn
+            .map(|turn| turn.items.len())
+            .unwrap_or(0)
+            .try_into()
+            .unwrap_or(u32::MAX),
+        startup_turn_pending: runtime_state.startup_turn_pending(),
+        autonomous_turn_pending: runtime_state.autonomous_turn_pending(),
+        pending_semantic_wake_count: runtime_state
+            .pending_semantic_wake_count()
+            .try_into()
+            .unwrap_or(u32::MAX),
+        outstanding_obligation_count: outstanding_obligation_count
+            .try_into()
+            .unwrap_or(u32::MAX),
+    }
 }
 
 pub(crate) fn thread_status_name(status: &ThreadStatus) -> String {
@@ -1275,6 +1317,58 @@ mod tests {
         state.note_turn_started(now + Duration::from_secs(1));
 
         assert!(!state.should_start_startup_turn(now + HOLLYWOOD_STARTUP_GRACE_PERIOD));
+    }
+
+    #[test]
+    fn runtime_session_state_includes_live_diagnostics() {
+        let thread_id =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
+        let mut runtime = HollywoodRuntimeState::default();
+        runtime.attach(HollywoodConfig::default(), "attached", None);
+        runtime.mark_autonomous_turn_pending();
+        runtime.queue_semantic_wake(HollywoodPendingSemanticWake {
+            dedupe_key: "message:42".to_string(),
+            room: "repo/losangelex".to_string(),
+            brief: HollywoodSyntheticBrief {
+                wake_reason: Some("semantic_delta".to_string()),
+                semantic_kind: Some("assignment".to_string()),
+                summary: Some("A direct assignment needs attention.".to_string()),
+                facts: Vec::new(),
+                suggested_actions: vec!["accept or decline explicitly".to_string()],
+                stay_silent_if_no_actionable_delta: false,
+            },
+        });
+        let turn = codex_app_server_protocol::Turn {
+            id: "turn-live".to_string(),
+            items: vec![codex_app_server_protocol::ThreadItem::UserMessage {
+                id: "item-1".to_string(),
+                content: Vec::new(),
+            }],
+            status: codex_app_server_protocol::TurnStatus::InProgress,
+            error: None,
+            started_at: Some(1_714_008_400),
+            completed_at: None,
+            duration_ms: None,
+        };
+
+        let state = hollywood_session_state_from_runtime(
+            thread_id,
+            Some("Scout Agent"),
+            &HollywoodConfig::default(),
+            &runtime,
+            HollywoodSessionStatus::Active,
+            hollywood_session_diagnostics_from_runtime(&runtime, Some(&turn), 3),
+        );
+
+        let diagnostics = state.diagnostics.expect("live diagnostics");
+        assert!(diagnostics.current_turn_open);
+        assert_eq!(diagnostics.active_turn_id.as_deref(), Some("turn-live"));
+        assert_eq!(diagnostics.active_turn_started_at, Some(1_714_008_400));
+        assert_eq!(diagnostics.active_turn_item_count, 1);
+        assert!(diagnostics.startup_turn_pending);
+        assert!(diagnostics.autonomous_turn_pending);
+        assert_eq!(diagnostics.pending_semantic_wake_count, 1);
+        assert_eq!(diagnostics.outstanding_obligation_count, 3);
     }
 
     #[test]

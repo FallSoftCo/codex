@@ -3455,6 +3455,22 @@ pub enum HollywoodSessionStatus {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
+pub struct HollywoodSessionDiagnostics {
+    pub current_turn_open: bool,
+    #[ts(type = "string | null")]
+    pub active_turn_id: Option<String>,
+    #[ts(type = "number | null")]
+    pub active_turn_started_at: Option<i64>,
+    pub active_turn_item_count: u32,
+    pub startup_turn_pending: bool,
+    pub autonomous_turn_pending: bool,
+    pub pending_semantic_wake_count: u32,
+    pub outstanding_obligation_count: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct HollywoodSessionState {
     pub attached: bool,
     pub url: String,
@@ -3468,6 +3484,8 @@ pub struct HollywoodSessionState {
     #[ts(type = "string | null")]
     pub resumed_from: Option<String>,
     pub status: HollywoodSessionStatus,
+    #[ts(type = "HollywoodSessionDiagnostics | null")]
+    pub diagnostics: Option<HollywoodSessionDiagnostics>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema, TS)]
