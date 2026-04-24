@@ -372,7 +372,7 @@ async fn handle_coordination_act(
                     act_summary: args.summary.clone(),
                     act_payload_json: serde_json::to_string(&json!({
                         "action": "accept",
-                        "claim_paths": args.claim_paths,
+                        "claim_paths": path_claim_specs_to_json(&path_claims),
                         "lease_seconds": lease_seconds,
                     }))
                     .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,

@@ -429,6 +429,14 @@ WHERE id = ?
             .await?
             .ok_or_else(|| anyhow::anyhow!("coordination task {} not found", params.task_id))?;
         ensure_task_allows_done(&task)?;
+        if let Some(owner_thread_id) = task.owner_thread_id.as_deref() {
+            release_effective_task_path_claims_for_owner_in_tx(
+                &mut tx,
+                task.id.as_str(),
+                owner_thread_id,
+            )
+            .await?;
+        }
 
         sqlx::query(
             r#"
@@ -488,6 +496,13 @@ WHERE id = ?
             .await?
             .ok_or_else(|| anyhow::anyhow!("coordination task {} not found", params.task_id))?;
         ensure_task_allows_handoff(&task)?;
+        reserve_effective_task_path_claims_for_new_owner_in_tx(
+            &mut tx,
+            &task,
+            params.new_owner_thread_id,
+            now,
+        )
+        .await?;
         let blocked_dependency_task_ids =
             load_blocked_dependency_ids(&mut tx, &task.dependency_task_ids).await?;
         let status = if blocked_dependency_task_ids.is_empty() {
@@ -552,6 +567,14 @@ WHERE id = ?
             .await?
             .ok_or_else(|| anyhow::anyhow!("coordination task {} not found", params.task_id))?;
         ensure_task_allows_yield(&task)?;
+        if let Some(owner_thread_id) = task.owner_thread_id.as_deref() {
+            release_effective_task_path_claims_for_owner_in_tx(
+                &mut tx,
+                task.id.as_str(),
+                owner_thread_id,
+            )
+            .await?;
+        }
         let blocked_dependency_task_ids =
             load_blocked_dependency_ids(&mut tx, &task.dependency_task_ids).await?;
         let status = if blocked_dependency_task_ids.is_empty() {
@@ -646,6 +669,32 @@ fn format_accept_path_claim_conflicts(
     )
 }
 
+fn format_handoff_path_claim_conflicts(
+    task_id: &str,
+    conflicts: &[crate::PathClaimConflict],
+) -> String {
+    let Some(first) = conflicts.first() else {
+        return format!(
+            "coordination task {task_id} cannot be handed off because the requested scope conflicts with an existing ownership claim"
+        );
+    };
+
+    let blocking_kind = first.blocking_claim.kind.as_str();
+    let requested_path = first.requested.path.display();
+    let blocking_path = first.blocking_claim.path.display();
+    let owner_thread_id = &first.blocking_claim.owner_thread_id;
+    let additional = conflicts
+        .len()
+        .checked_sub(1)
+        .filter(|count| *count > 0)
+        .map(|count| format!(" and {count} more conflicting claim(s)"))
+        .unwrap_or_default();
+
+    format!(
+        "coordination task {task_id} cannot be handed off because thread {owner_thread_id} holds a {blocking_kind} claim at `{blocking_path}` which overlaps `{requested_path}`{additional}"
+    )
+}
+
 fn format_award_path_claim_conflicts(
     task_id: &str,
     conflicts: &[crate::PathClaimConflict],
@@ -735,9 +784,24 @@ async fn reconcile_coordination_task_leases(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     now: i64,
 ) -> anyhow::Result<()> {
-    let expired_task_ids = sqlx::query_scalar::<_, String>(
+    let expired_task_rows = sqlx::query_as::<_, CoordinationTaskRow>(
         r#"
-SELECT id
+SELECT
+    id,
+    creator_thread_id,
+    owner_thread_id,
+    team_id,
+    room,
+    task_kind,
+    status,
+    summary,
+    details,
+    requested_capability,
+    blocked_reason,
+    created_at,
+    updated_at,
+    completed_at,
+    lease_expires_at
 FROM coordination_tasks
 WHERE status = ?
   AND lease_expires_at IS NOT NULL
@@ -748,10 +812,18 @@ WHERE status = ?
     .bind(now)
     .fetch_all(&mut **tx)
     .await?;
-    for task_id in expired_task_ids {
-        let dependency_task_ids = load_dependency_ids(tx, task_id.as_str()).await?;
+    for row in expired_task_rows {
+        let task = coordination_task_from_row(tx, row).await?;
+        if let Some(owner_thread_id) = task.owner_thread_id.as_deref() {
+            release_effective_task_path_claims_for_owner_in_tx(
+                tx,
+                task.id.as_str(),
+                owner_thread_id,
+            )
+            .await?;
+        }
         let blocked_dependency_task_ids =
-            load_blocked_dependency_ids(tx, &dependency_task_ids).await?;
+            load_blocked_dependency_ids(tx, &task.dependency_task_ids).await?;
         let status =
             initial_task_status(&blocked_dependency_task_ids, /*owner_thread_id*/ None);
         sqlx::query(
@@ -767,7 +839,7 @@ WHERE id = ?
         )
         .bind(status.as_str())
         .bind(now)
-        .bind(task_id)
+        .bind(task.id)
         .execute(&mut **tx)
         .await?;
     }
@@ -1060,6 +1132,12 @@ struct StoredOpenTaskPayload {
 }
 
 #[derive(Debug, Deserialize)]
+struct StoredAcceptTaskPayload {
+    #[serde(default)]
+    claim_paths: Option<Vec<StoredOpenTaskClaim>>,
+}
+
+#[derive(Debug, Deserialize)]
 struct StoredOpenTaskClaim {
     kind: String,
     path: String,
@@ -1265,18 +1343,144 @@ LIMIT 1
     .bind(crate::CoordinationActKind::OpenTask.as_str())
     .fetch_optional(&mut **tx)
     .await?;
+    load_claim_paths_from_payload_json(payload_json.as_deref(), StoredPayloadKind::OpenTask)
+}
 
+async fn load_accepted_path_claims_for_task_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    task_id: &str,
+) -> anyhow::Result<Vec<crate::PathClaimSpec>> {
+    let payload_json = sqlx::query_scalar::<_, String>(
+        r#"
+SELECT payload_json
+FROM coordination_acts
+WHERE task_id = ?
+  AND act_kind = ?
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+        "#,
+    )
+    .bind(task_id)
+    .bind(crate::CoordinationActKind::Accept.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    load_claim_paths_from_payload_json(payload_json.as_deref(), StoredPayloadKind::Accept)
+}
+
+async fn load_effective_path_claims_for_task_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    task_id: &str,
+) -> anyhow::Result<Vec<crate::PathClaimSpec>> {
+    let accepted_claims = load_accepted_path_claims_for_task_in_tx(tx, task_id).await?;
+    if !accepted_claims.is_empty() {
+        return Ok(accepted_claims);
+    }
+    load_reserved_path_claims_for_task_in_tx(tx, task_id).await
+}
+
+async fn release_effective_task_path_claims_for_owner_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    task_id: &str,
+    owner_thread_id: &str,
+) -> anyhow::Result<u64> {
+    let claims = load_effective_path_claims_for_task_in_tx(tx, task_id).await?;
+    if claims.is_empty() {
+        return Ok(0);
+    }
+
+    let mut released = 0;
+    for claim in claims {
+        let result = sqlx::query(
+            r#"
+DELETE FROM path_claims
+WHERE owner_thread_id = ?
+  AND claim_kind = ?
+  AND path = ?
+            "#,
+        )
+        .bind(owner_thread_id)
+        .bind(claim.kind.as_str())
+        .bind(claim.path.to_string_lossy().as_ref())
+        .execute(&mut **tx)
+        .await?;
+        released += result.rows_affected();
+    }
+    Ok(released)
+}
+
+async fn reserve_effective_task_path_claims_for_new_owner_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    task: &CoordinationTask,
+    new_owner_thread_id: ThreadId,
+    now: i64,
+) -> anyhow::Result<()> {
+    let effective_claims = load_effective_path_claims_for_task_in_tx(tx, task.id.as_str()).await?;
+    if effective_claims.is_empty() {
+        if matches!(task.kind, crate::CoordinationTaskKind::Implementation) {
+            anyhow::bail!(
+                "coordination task {} requires exact ownership claims before it can be handed off",
+                task.id
+            );
+        }
+        return Ok(());
+    }
+
+    if let Some(old_owner_thread_id) = task.owner_thread_id.as_deref() {
+        release_effective_task_path_claims_for_owner_in_tx(tx, task.id.as_str(), old_owner_thread_id)
+            .await?;
+    }
+
+    let new_owner_thread_id = new_owner_thread_id.to_string();
+    let lease_expires_at = task
+        .lease_expires_at
+        .map(|expires_at| expires_at.timestamp())
+        .filter(|expires_at| *expires_at > now)
+        .unwrap_or(now.saturating_add(crate::DEFAULT_COORDINATION_LEASE_SECONDS.max(1)));
+    let claim_result = super::path_claims::try_claim_path_ownership_in_tx(
+        tx,
+        new_owner_thread_id.as_str(),
+        &effective_claims,
+        now,
+        lease_expires_at,
+    )
+    .await?;
+    if !claim_result.acquired {
+        anyhow::bail!(
+            "{}",
+            format_handoff_path_claim_conflicts(task.id.as_str(), &claim_result.conflicts)
+        );
+    }
+    Ok(())
+}
+
+enum StoredPayloadKind {
+    OpenTask,
+    Accept,
+}
+
+fn load_claim_paths_from_payload_json(
+    payload_json: Option<&str>,
+    payload_kind: StoredPayloadKind,
+) -> anyhow::Result<Vec<crate::PathClaimSpec>> {
     let Some(payload_json) = payload_json else {
         return Ok(Vec::new());
     };
 
-    let Some(payload) = serde_json::from_str::<StoredOpenTaskPayload>(payload_json.as_str()).ok()
-    else {
-        return Ok(Vec::new());
+    let stored_claims = match payload_kind {
+        StoredPayloadKind::OpenTask => serde_json::from_str::<StoredOpenTaskPayload>(payload_json)
+            .ok()
+            .map(|payload| payload.claim_paths)
+            .unwrap_or_default(),
+        StoredPayloadKind::Accept => {
+            serde_json::from_str::<StoredAcceptTaskPayload>(payload_json)
+                .ok()
+                .and_then(|payload| payload.claim_paths)
+                .unwrap_or_default()
+        }
     };
 
-    let mut claims = Vec::with_capacity(payload.claim_paths.len());
-    for claim in payload.claim_paths {
+    let mut claims = Vec::with_capacity(stored_claims.len());
+    for claim in stored_claims {
         let kind = match claim.kind.as_str() {
             "file" => crate::PathClaimKind::File,
             "directory" => crate::PathClaimKind::Directory,
@@ -1420,29 +1624,273 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn done_releases_effective_implementation_claims() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init db");
+        let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000041").expect("id");
+        let claimed_path = temp_dir.path().join("repo/src/app.js");
+        let claim_payload = serde_json::json!({
+            "claim_paths": [{
+                "kind": "file",
+                "path": claimed_path.to_string_lossy(),
+            }],
+        })
+        .to_string();
+
+        db.create_coordination_task(crate::CoordinationTaskCreateParams {
+            id: "task-done-release".to_string(),
+            creator_thread_id: creator,
+            owner_thread_id: Some(creator),
+            reserved_path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: None,
+            kind: CoordinationTaskKind::Implementation,
+            summary: "land app logic".to_string(),
+            details: String::new(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-done-release".to_string(),
+            act_summary: Some("opened impl".to_string()),
+            act_payload_json: claim_payload.clone(),
+        })
+        .await
+        .expect("create task");
+
+        db.accept_coordination_task(crate::CoordinationTaskAcceptParams {
+            task_id: "task-done-release".to_string(),
+            actor_thread_id: creator,
+            path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            lease_seconds: 600,
+            act_id: "act-accept-done-release".to_string(),
+            act_summary: Some("taking impl".to_string()),
+            act_payload_json: claim_payload,
+        })
+        .await
+        .expect("accept task");
+
+        db.complete_coordination_task(crate::CoordinationTaskDoneParams {
+            task_id: "task-done-release".to_string(),
+            actor_thread_id: creator,
+            act_id: "act-done-release".to_string(),
+            act_summary: Some("finished impl".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("complete task");
+
+        assert_eq!(
+            db.list_path_claims(Some(creator))
+                .await
+                .expect("owner claims should list cleanly"),
+            Vec::<crate::PathClaim>::new()
+        );
+    }
+
+    #[tokio::test]
+    async fn handoff_transfers_effective_implementation_claims_to_new_owner() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init db");
+        let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000042").expect("id");
+        let original_owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000043").expect("id");
+        let new_owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000044").expect("id");
+        let claimed_path = temp_dir.path().join("repo/src/app.js");
+        let claim_payload = serde_json::json!({
+            "claim_paths": [{
+                "kind": "file",
+                "path": claimed_path.to_string_lossy(),
+            }],
+        })
+        .to_string();
+
+        db.create_coordination_task(crate::CoordinationTaskCreateParams {
+            id: "task-handoff-transfer".to_string(),
+            creator_thread_id: creator,
+            owner_thread_id: Some(original_owner),
+            reserved_path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: None,
+            kind: CoordinationTaskKind::Implementation,
+            summary: "land app logic".to_string(),
+            details: String::new(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-handoff-transfer".to_string(),
+            act_summary: Some("opened impl".to_string()),
+            act_payload_json: claim_payload.clone(),
+        })
+        .await
+        .expect("create task");
+
+        db.accept_coordination_task(crate::CoordinationTaskAcceptParams {
+            task_id: "task-handoff-transfer".to_string(),
+            actor_thread_id: original_owner,
+            path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            lease_seconds: 600,
+            act_id: "act-accept-handoff-transfer".to_string(),
+            act_summary: Some("taking impl".to_string()),
+            act_payload_json: claim_payload.clone(),
+        })
+        .await
+        .expect("accept task");
+
+        let outcome = db
+            .handoff_coordination_task(crate::CoordinationTaskHandoffParams {
+                task_id: "task-handoff-transfer".to_string(),
+                actor_thread_id: original_owner,
+                new_owner_thread_id: new_owner,
+                act_id: "act-handoff-transfer".to_string(),
+                act_summary: Some("handoff impl".to_string()),
+                act_payload_json: "{}".to_string(),
+            })
+            .await
+            .expect("handoff should succeed");
+
+        assert_eq!(outcome.task.status, CoordinationTaskStatus::Awarded);
+        assert_eq!(
+            outcome.task.owner_thread_id.as_deref(),
+            Some(new_owner.to_string().as_str())
+        );
+        assert_eq!(
+            db.list_path_claims(Some(original_owner))
+                .await
+                .expect("old owner claims should list cleanly"),
+            Vec::<crate::PathClaim>::new()
+        );
+        let new_owner_claims = db
+            .list_path_claims(Some(new_owner))
+            .await
+            .expect("new owner claims should list cleanly");
+        assert_eq!(new_owner_claims.len(), 1);
+        assert_eq!(new_owner_claims[0].path, claimed_path);
+    }
+
+    #[tokio::test]
+    async fn yield_releases_effective_implementation_claims() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init db");
+        let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000045").expect("id");
+        let claimed_path = temp_dir.path().join("repo/src/app.js");
+        let claim_payload = serde_json::json!({
+            "claim_paths": [{
+                "kind": "file",
+                "path": claimed_path.to_string_lossy(),
+            }],
+        })
+        .to_string();
+
+        db.create_coordination_task(crate::CoordinationTaskCreateParams {
+            id: "task-yield-release".to_string(),
+            creator_thread_id: creator,
+            owner_thread_id: Some(creator),
+            reserved_path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: None,
+            kind: CoordinationTaskKind::Implementation,
+            summary: "land app logic".to_string(),
+            details: String::new(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-yield-release".to_string(),
+            act_summary: Some("opened impl".to_string()),
+            act_payload_json: claim_payload.clone(),
+        })
+        .await
+        .expect("create task");
+
+        db.accept_coordination_task(crate::CoordinationTaskAcceptParams {
+            task_id: "task-yield-release".to_string(),
+            actor_thread_id: creator,
+            path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
+            lease_seconds: 600,
+            act_id: "act-accept-yield-release".to_string(),
+            act_summary: Some("taking impl".to_string()),
+            act_payload_json: claim_payload,
+        })
+        .await
+        .expect("accept task");
+
+        db.yield_coordination_task(crate::CoordinationTaskYieldParams {
+            task_id: "task-yield-release".to_string(),
+            actor_thread_id: creator,
+            act_id: "act-yield-release".to_string(),
+            act_summary: Some("yielding impl".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("yield task");
+
+        assert_eq!(
+            db.list_path_claims(Some(creator))
+                .await
+                .expect("owner claims should list cleanly"),
+            Vec::<crate::PathClaim>::new()
+        );
+    }
+
+    #[tokio::test]
     async fn active_task_reopens_after_lease_expiry() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
             .await
             .expect("init db");
         let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000011").expect("id");
+        let claimed_path = temp_dir.path().join("repo/src/task.rs");
+        let claim_payload = serde_json::json!({
+            "claim_paths": [{
+                "kind": "file",
+                "path": claimed_path.to_string_lossy(),
+            }],
+        })
+        .to_string();
 
         db.create_coordination_task(crate::CoordinationTaskCreateParams {
             id: "task-1".to_string(),
             creator_thread_id: creator,
             owner_thread_id: Some(creator),
-            reserved_path_claims: Vec::new(),
+            reserved_path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
             claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
             team_id: None,
             room: None,
-            kind: CoordinationTaskKind::General,
+            kind: CoordinationTaskKind::Implementation,
             summary: "take task".to_string(),
             details: String::new(),
             requested_capability: None,
             dependency_task_ids: Vec::new(),
             act_id: "act-open".to_string(),
             act_summary: None,
-            act_payload_json: "{}".to_string(),
+            act_payload_json: claim_payload.clone(),
         })
         .await
         .expect("create task");
@@ -1450,11 +1898,14 @@ mod tests {
         db.accept_coordination_task(crate::CoordinationTaskAcceptParams {
             task_id: "task-1".to_string(),
             actor_thread_id: creator,
-            path_claims: Vec::new(),
+            path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: claimed_path.clone(),
+            }],
             lease_seconds: 1,
             act_id: "act-accept".to_string(),
             act_summary: None,
-            act_payload_json: "{}".to_string(),
+            act_payload_json: claim_payload,
         })
         .await
         .expect("accept task");
@@ -1468,6 +1919,12 @@ mod tests {
         assert_eq!(task.status, CoordinationTaskStatus::Open);
         assert_eq!(task.owner_thread_id, None);
         assert_eq!(task.lease_expires_at, None);
+        assert_eq!(
+            db.list_path_claims(Some(creator))
+                .await
+                .expect("owner claims should list cleanly"),
+            Vec::<crate::PathClaim>::new()
+        );
     }
 
     #[tokio::test]

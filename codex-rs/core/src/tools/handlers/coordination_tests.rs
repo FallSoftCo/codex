@@ -3,6 +3,7 @@ use crate::session::tests::make_session_and_context;
 use crate::session::turn_context::TurnContext;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
+use crate::tools::context::ToolCallSource;
 use crate::tools::registry::ToolHandler;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use chrono::Utc;
@@ -33,6 +34,7 @@ fn invocation(
         tracker: Arc::new(Mutex::new(TurnDiffTracker::default())),
         call_id: "call-1".to_string(),
         tool_name: codex_tools::ToolName::plain(tool_name),
+        source: ToolCallSource::Direct,
         payload: ToolPayload::Function {
             arguments: arguments.to_string(),
         },
@@ -393,6 +395,21 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
         .expect("owner claims should list cleanly");
     assert_eq!(owner_claims.len(), 1);
     assert_eq!(owner_claims[0].path, reserved_path.to_path_buf());
+
+    let acts = state_db
+        .list_coordination_acts(Some(task_id.as_str()))
+        .await
+        .expect("act query should succeed");
+    let accept_act = acts
+        .iter()
+        .find(|act| act.kind == codex_state::CoordinationActKind::Accept)
+        .expect("accept act should exist");
+    let accept_payload: Value =
+        serde_json::from_str(accept_act.payload_json.as_str()).expect("accept payload json");
+    assert_eq!(
+        accept_payload["claim_paths"][0]["path"],
+        json!(reserved_path.to_string_lossy().to_string())
+    );
 }
 
 #[tokio::test]
