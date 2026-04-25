@@ -672,8 +672,9 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                 )
                 .await
                 .map_err(anyhow::Error::msg)?;
-                let session_configured = session_configured_from_thread_resume_response(&response)
-                    .map_err(anyhow::Error::msg)?;
+                let session_configured =
+                    session_configured_from_thread_resume_response(&response, &config)
+                        .map_err(anyhow::Error::msg)?;
                 (session_configured.session_id, session_configured)
             } else {
                 let response: ThreadStartResponse = send_request_with_response(
@@ -686,8 +687,9 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                 )
                 .await
                 .map_err(anyhow::Error::msg)?;
-                let session_configured = session_configured_from_thread_start_response(&response)
-                    .map_err(anyhow::Error::msg)?;
+                let session_configured =
+                    session_configured_from_thread_start_response(&response, &config)
+                        .map_err(anyhow::Error::msg)?;
                 (session_configured.session_id, session_configured)
             }
         } else {
@@ -701,8 +703,9 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
             )
             .await
             .map_err(anyhow::Error::msg)?;
-            let session_configured = session_configured_from_thread_start_response(&response)
-                .map_err(anyhow::Error::msg)?;
+            let session_configured =
+                session_configured_from_thread_start_response(&response, &config)
+                    .map_err(anyhow::Error::msg)?;
             (session_configured.session_id, session_configured)
         };
 
@@ -751,12 +754,10 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                         thread_id: primary_thread_id_for_span.clone(),
                         input: items.into_iter().map(Into::into).collect(),
                         responsesapi_client_metadata: None,
-                        environments: None,
                         cwd: Some(default_cwd),
                         approval_policy: Some(default_approval_policy.into()),
                         approvals_reviewer: None,
                         sandbox_policy,
-                        permission_profile,
                         model: None,
                         service_tier: None,
                         effort: default_effort,
@@ -930,11 +931,7 @@ fn sandbox_mode_from_policy(
 }
 
 fn thread_start_params_from_config(config: &Config) -> ThreadStartParams {
-    let permission_profile = permission_profile_override_from_config(config);
-    let sandbox = permission_profile
-        .is_none()
-        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get()))
-        .flatten();
+    let sandbox = sandbox_mode_from_policy(config.permissions.sandbox_policy.get());
     ThreadStartParams {
         model: config.model.clone(),
         model_provider: Some(config.model_provider_id.clone()),
@@ -942,7 +939,6 @@ fn thread_start_params_from_config(config: &Config) -> ThreadStartParams {
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(config),
         sandbox,
-        permission_profile,
         config: config_request_overrides_from_config(config),
         ephemeral: Some(config.ephemeral),
         ..ThreadStartParams::default()
@@ -950,11 +946,7 @@ fn thread_start_params_from_config(config: &Config) -> ThreadStartParams {
 }
 
 fn thread_resume_params_from_config(config: &Config, thread_id: String) -> ThreadResumeParams {
-    let permission_profile = permission_profile_override_from_config(config);
-    let sandbox = permission_profile
-        .is_none()
-        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get()))
-        .flatten();
+    let sandbox = sandbox_mode_from_policy(config.permissions.sandbox_policy.get());
     ThreadResumeParams {
         thread_id,
         model: config.model.clone(),
@@ -963,7 +955,6 @@ fn thread_resume_params_from_config(config: &Config, thread_id: String) -> Threa
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(config),
         sandbox,
-        permission_profile,
         config: config_request_overrides_from_config(config),
         ..ThreadResumeParams::default()
     }
@@ -1014,6 +1005,7 @@ where
 
 fn session_configured_from_thread_start_response(
     response: &ThreadStartResponse,
+    config: &Config,
 ) -> Result<SessionConfiguredEvent, String> {
     session_configured_from_thread_response(
         &response.thread.id,
@@ -1025,7 +1017,7 @@ fn session_configured_from_thread_start_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
-        response.permission_profile.clone().map(Into::into),
+        permission_profile_override_from_config(config).map(Into::into),
         response.cwd.clone(),
         response.reasoning_effort,
     )
@@ -1033,6 +1025,7 @@ fn session_configured_from_thread_start_response(
 
 fn session_configured_from_thread_resume_response(
     response: &ThreadResumeResponse,
+    config: &Config,
 ) -> Result<SessionConfiguredEvent, String> {
     session_configured_from_thread_response(
         &response.thread.id,
@@ -1044,7 +1037,7 @@ fn session_configured_from_thread_resume_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
-        response.permission_profile.clone().map(Into::into),
+        permission_profile_override_from_config(config).map(Into::into),
         response.cwd.clone(),
         response.reasoning_effort,
     )
@@ -1295,7 +1288,6 @@ async fn resolve_resume_thread_id(
                         source_kinds: Some(all_thread_source_kinds()),
                         archived: Some(false),
                         cwd: None,
-                        use_state_db_only: false,
                         search_term: None,
                     },
                 },
@@ -1359,7 +1351,6 @@ async fn resolve_resume_thread_id(
                     source_kinds: Some(all_thread_source_kinds()),
                     archived: Some(false),
                     cwd: None,
-                    use_state_db_only: false,
                     search_term: Some(session_id.to_string()),
                 },
             },

@@ -12,7 +12,6 @@ use crate::bottom_pane::SelectionTab;
 use crate::bottom_pane::SelectionToggle;
 use crate::bottom_pane::SelectionViewParams;
 use crate::history_cell;
-use crate::legacy_core::plugins::OPENAI_CURATED_MARKETPLACE_NAME;
 use crate::onboarding::mark_url_hyperlink;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
@@ -26,7 +25,7 @@ use codex_app_server_protocol::PluginMarketplaceEntry;
 use codex_app_server_protocol::PluginReadResponse;
 use codex_app_server_protocol::PluginSummary;
 use codex_app_server_protocol::PluginUninstallResponse;
-use codex_core_plugins::OPENAI_CURATED_MARKETPLACE_NAME;
+use crate::legacy_core::plugins::OPENAI_CURATED_MARKETPLACE_NAME;
 use codex_features::Feature;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use ratatui::buffer::Buffer;
@@ -1014,7 +1013,8 @@ impl ChatWidget {
                 is_disabled: true,
                 ..Default::default()
             });
-        } else if let Some(marketplace_path) = plugin.marketplace_path.clone() {
+        } else {
+            let marketplace_path = plugin.marketplace_path.clone();
             let install_cwd = self.config.cwd.to_path_buf();
             let plugin_name = plugin.summary.name.clone();
             let plugin_display_name = display_name;
@@ -1033,13 +1033,6 @@ impl ChatWidget {
                         plugin_display_name: plugin_display_name.clone(),
                     });
                 })],
-                ..Default::default()
-            });
-        } else {
-            items.push(SelectionItem {
-                name: "Install plugin".to_string(),
-                description: Some("Installing remote plugins is not supported yet.".to_string()),
-                is_disabled: true,
                 ..Default::default()
             });
         }

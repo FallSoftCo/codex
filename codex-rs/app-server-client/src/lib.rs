@@ -100,6 +100,7 @@ pub mod legacy_core {
     }
 
     pub mod plugins {
+        pub use codex_core::plugins::OPENAI_CURATED_MARKETPLACE_NAME;
         pub use codex_core::plugins::PluginsManager;
     }
 

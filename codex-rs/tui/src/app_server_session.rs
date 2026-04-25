@@ -35,8 +35,6 @@ use codex_app_server_protocol::ReviewStartResponse;
 use codex_app_server_protocol::SkillsListParams;
 use codex_app_server_protocol::SkillsListResponse;
 use codex_app_server_protocol::Thread;
-use codex_app_server_protocol::ThreadApproveGuardianDeniedActionParams;
-use codex_app_server_protocol::ThreadApproveGuardianDeniedActionResponse;
 use codex_app_server_protocol::ThreadBackgroundTerminalsCleanParams;
 use codex_app_server_protocol::ThreadBackgroundTerminalsCleanResponse;
 use codex_app_server_protocol::ThreadCompactStartParams;
@@ -273,9 +271,6 @@ impl AppServerSession {
                     true,
                 )
             }
-            Some(Account::AmazonBedrock {}) => {
-                (None, None, None, None, FeedbackAudience::External, false)
-            }
             None => (None, None, None, None, FeedbackAudience::External, false),
         };
         Ok(AppServerBootstrap {
@@ -361,7 +356,7 @@ impl AppServerSession {
             })
             .await
             .wrap_err("thread/start failed during TUI bootstrap")?;
-        started_thread_from_start_response(response, config).await
+        started_thread_from_start_response(response, config, self.thread_params_mode()).await
     }
 
     pub(crate) async fn resume_thread(
@@ -386,7 +381,9 @@ impl AppServerSession {
         let fork_parent_title = self
             .fork_parent_title_from_app_server(response.thread.forked_from_id.as_deref())
             .await;
-        let mut started = started_thread_from_resume_response(response, &config).await?;
+        let mut started =
+            started_thread_from_resume_response(response, &config, self.thread_params_mode())
+                .await?;
         started.session.fork_parent_title = fork_parent_title;
         Ok(started)
     }
@@ -413,7 +410,9 @@ impl AppServerSession {
         let fork_parent_title = self
             .fork_parent_title_from_app_server(response.thread.forked_from_id.as_deref())
             .await;
-        let mut started = started_thread_from_fork_response(response, &config).await?;
+        let mut started =
+            started_thread_from_fork_response(response, &config, self.thread_params_mode())
+                .await?;
         started.session.fork_parent_title = fork_parent_title;
         Ok(started)
     }
@@ -539,7 +538,7 @@ impl AppServerSession {
         output_schema: Option<serde_json::Value>,
     ) -> Result<TurnStartResponse> {
         let request_id = self.next_request_id();
-        let (sandbox_policy, permission_profile) = turn_start_permission_overrides(
+        let sandbox_policy = turn_start_sandbox_policy_override(
             self.thread_params_mode(),
             sandbox_policy,
             permission_profile,
@@ -551,12 +550,10 @@ impl AppServerSession {
                     thread_id: thread_id.to_string(),
                     input: items.into_iter().map(Into::into).collect(),
                     responsesapi_client_metadata: None,
-                    environments: None,
                     cwd: Some(cwd),
                     approval_policy: Some(approval_policy.into()),
                     approvals_reviewer: Some(approvals_reviewer.into()),
                     sandbox_policy,
-                    permission_profile,
                     model: Some(model),
                     service_tier,
                     effort,
@@ -735,19 +732,7 @@ impl AppServerSession {
         thread_id: ThreadId,
         event: &GuardianAssessmentEvent,
     ) -> Result<()> {
-        let request_id = self.next_request_id();
-        let _: ThreadApproveGuardianDeniedActionResponse = self
-            .client
-            .request_typed(ClientRequest::ThreadApproveGuardianDeniedAction {
-                request_id,
-                params: ThreadApproveGuardianDeniedActionParams {
-                    thread_id: thread_id.to_string(),
-                    event: serde_json::to_value(event)
-                        .wrap_err("failed to serialize Guardian denial event")?,
-                },
-            })
-            .await
-            .wrap_err("thread/approveGuardianDeniedAction failed in TUI")?;
+        let _ = (thread_id, event);
         Ok(())
     }
 
@@ -1045,20 +1030,16 @@ fn sandbox_mode_from_policy(
     }
 }
 
-fn turn_start_permission_overrides(
+fn turn_start_sandbox_policy_override(
     mode: ThreadParamsMode,
     sandbox_policy: SandboxPolicy,
     permission_profile: Option<PermissionProfile>,
-) -> (
-    Option<codex_app_server_protocol::SandboxPolicy>,
-    Option<codex_app_server_protocol::PermissionProfile>,
-) {
+) -> Option<codex_app_server_protocol::SandboxPolicy> {
     match (mode, permission_profile) {
-        (ThreadParamsMode::Embedded, Some(permission_profile)) => {
-            (None, Some(permission_profile.into()))
+        (ThreadParamsMode::Embedded, Some(_)) => None,
+        (ThreadParamsMode::Embedded, None) | (ThreadParamsMode::Remote, _) => {
+            Some(sandbox_policy.into())
         }
-        (ThreadParamsMode::Embedded, None) => (None, None),
-        (ThreadParamsMode::Remote, _) => (Some(sandbox_policy.into()), None),
     }
 }
 
@@ -1079,11 +1060,7 @@ fn thread_start_params_from_config(
     remote_cwd_override: Option<&std::path::Path>,
     session_start_source: Option<ThreadStartSource>,
 ) -> ThreadStartParams {
-    let permission_profile = permission_profile_override_from_config(config, thread_params_mode);
-    let sandbox = permission_profile
-        .is_none()
-        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()))
-        .flatten();
+    let sandbox = sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone());
     ThreadStartParams {
         model: config.model.clone(),
         model_provider: thread_params_mode.model_provider_from_config(config),
@@ -1091,7 +1068,6 @@ fn thread_start_params_from_config(
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(config),
         sandbox,
-        permission_profile,
         config: config_request_overrides_from_config(config),
         ephemeral: Some(config.ephemeral),
         session_start_source,
@@ -1106,11 +1082,7 @@ fn thread_resume_params_from_config(
     thread_params_mode: ThreadParamsMode,
     remote_cwd_override: Option<&std::path::Path>,
 ) -> ThreadResumeParams {
-    let permission_profile = permission_profile_override_from_config(&config, thread_params_mode);
-    let sandbox = permission_profile
-        .is_none()
-        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()))
-        .flatten();
+    let sandbox = sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone());
     ThreadResumeParams {
         thread_id: thread_id.to_string(),
         model: config.model.clone(),
@@ -1119,7 +1091,6 @@ fn thread_resume_params_from_config(
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(&config),
         sandbox,
-        permission_profile,
         config: config_request_overrides_from_config(&config),
         persist_extended_history: true,
         ..ThreadResumeParams::default()
@@ -1132,11 +1103,7 @@ fn thread_fork_params_from_config(
     thread_params_mode: ThreadParamsMode,
     remote_cwd_override: Option<&std::path::Path>,
 ) -> ThreadForkParams {
-    let permission_profile = permission_profile_override_from_config(&config, thread_params_mode);
-    let sandbox = permission_profile
-        .is_none()
-        .then(|| sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone()))
-        .flatten();
+    let sandbox = sandbox_mode_from_policy(config.permissions.sandbox_policy.get().clone());
     ThreadForkParams {
         thread_id: thread_id.to_string(),
         model: config.model.clone(),
@@ -1145,7 +1112,6 @@ fn thread_fork_params_from_config(
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(&config),
         sandbox,
-        permission_profile,
         config: config_request_overrides_from_config(&config),
         base_instructions: config.base_instructions.clone(),
         developer_instructions: config.developer_instructions.clone(),
@@ -1171,8 +1137,10 @@ fn thread_cwd_from_config(
 async fn started_thread_from_start_response(
     response: ThreadStartResponse,
     config: &Config,
+    thread_params_mode: ThreadParamsMode,
 ) -> Result<AppServerStartedThread> {
-    let session = thread_session_state_from_thread_start_response(&response, config)
+    let session =
+        thread_session_state_from_thread_start_response(&response, config, thread_params_mode)
         .await
         .map_err(color_eyre::eyre::Report::msg)?;
     Ok(AppServerStartedThread {
@@ -1184,8 +1152,10 @@ async fn started_thread_from_start_response(
 async fn started_thread_from_resume_response(
     response: ThreadResumeResponse,
     config: &Config,
+    thread_params_mode: ThreadParamsMode,
 ) -> Result<AppServerStartedThread> {
-    let session = thread_session_state_from_thread_resume_response(&response, config)
+    let session =
+        thread_session_state_from_thread_resume_response(&response, config, thread_params_mode)
         .await
         .map_err(color_eyre::eyre::Report::msg)?;
     Ok(AppServerStartedThread {
@@ -1197,8 +1167,10 @@ async fn started_thread_from_resume_response(
 async fn started_thread_from_fork_response(
     response: ThreadForkResponse,
     config: &Config,
+    thread_params_mode: ThreadParamsMode,
 ) -> Result<AppServerStartedThread> {
-    let session = thread_session_state_from_thread_fork_response(&response, config)
+    let session =
+        thread_session_state_from_thread_fork_response(&response, config, thread_params_mode)
         .await
         .map_err(color_eyre::eyre::Report::msg)?;
     Ok(AppServerStartedThread {
@@ -1210,6 +1182,7 @@ async fn started_thread_from_fork_response(
 async fn thread_session_state_from_thread_start_response(
     response: &ThreadStartResponse,
     config: &Config,
+    thread_params_mode: ThreadParamsMode,
 ) -> Result<ThreadSessionState, String> {
     thread_session_state_from_thread_response(
         &response.thread.id,
@@ -1222,7 +1195,7 @@ async fn thread_session_state_from_thread_start_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
-        response.permission_profile.clone().map(Into::into),
+        permission_profile_override_from_config(config, thread_params_mode).map(Into::into),
         response.cwd.clone(),
         response.instruction_sources.clone(),
         response.reasoning_effort,
@@ -1234,6 +1207,7 @@ async fn thread_session_state_from_thread_start_response(
 async fn thread_session_state_from_thread_resume_response(
     response: &ThreadResumeResponse,
     config: &Config,
+    thread_params_mode: ThreadParamsMode,
 ) -> Result<ThreadSessionState, String> {
     thread_session_state_from_thread_response(
         &response.thread.id,
@@ -1246,7 +1220,7 @@ async fn thread_session_state_from_thread_resume_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
-        response.permission_profile.clone().map(Into::into),
+        permission_profile_override_from_config(config, thread_params_mode).map(Into::into),
         response.cwd.clone(),
         response.instruction_sources.clone(),
         response.reasoning_effort,
@@ -1258,6 +1232,7 @@ async fn thread_session_state_from_thread_resume_response(
 async fn thread_session_state_from_thread_fork_response(
     response: &ThreadForkResponse,
     config: &Config,
+    thread_params_mode: ThreadParamsMode,
 ) -> Result<ThreadSessionState, String> {
     thread_session_state_from_thread_response(
         &response.thread.id,
@@ -1270,7 +1245,7 @@ async fn thread_session_state_from_thread_fork_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
-        response.permission_profile.clone().map(Into::into),
+        permission_profile_override_from_config(config, thread_params_mode).map(Into::into),
         response.cwd.clone(),
         response.instruction_sources.clone(),
         response.reasoning_effort,

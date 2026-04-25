@@ -353,11 +353,8 @@ async fn connect_remote_app_server(
     websocket_url: String,
     auth_token: Option<String>,
 ) -> color_eyre::Result<AppServerClient> {
-    let rollover_state_file =
-        std::env::var_os("LOSANGELEX_APP_SERVER_STATE_FILE").map(PathBuf::from);
     let app_server = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
         websocket_url,
-        rollover_state_file,
         auth_token,
         client_name: "codex-tui".to_string(),
         client_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -627,9 +624,10 @@ fn config_cwd_for_app_server_target(
     app_server_target: &AppServerTarget,
     environment_manager: &EnvironmentManager,
 ) -> std::io::Result<Option<AbsolutePathBuf>> {
-    if environment_manager.is_remote()
-        || matches!(app_server_target, AppServerTarget::Remote { .. })
-    {
+    let environment_is_remote = environment_manager
+        .default_environment()
+        .is_some_and(|environment| environment.is_remote());
+    if environment_is_remote || matches!(app_server_target, AppServerTarget::Remote { .. }) {
         return Ok(None);
     }
 

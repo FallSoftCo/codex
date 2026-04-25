@@ -14,7 +14,6 @@ use crate::tui::TuiEvent;
 use chrono::DateTime;
 use chrono::Utc;
 use codex_app_server_protocol::Thread;
-use codex_app_server_protocol::ThreadListCwdFilter;
 use codex_app_server_protocol::ThreadListParams;
 use codex_app_server_protocol::ThreadSortKey;
 use codex_app_server_protocol::ThreadSourceKind;
@@ -1003,8 +1002,7 @@ fn thread_list_params(
         source_kinds: (!include_non_interactive)
             .then_some(vec![ThreadSourceKind::Cli, ThreadSourceKind::VsCode]),
         archived: Some(false),
-        cwd: cwd_filter.map(|cwd| ThreadListCwdFilter::One(cwd.to_string_lossy().into_owned())),
-        use_state_db_only: false,
+        cwd: cwd_filter.map(|cwd| cwd.to_string_lossy().into_owned()),
         search_term: None,
     }
 }

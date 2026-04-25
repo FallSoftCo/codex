@@ -403,6 +403,9 @@ fn server_notification_thread_target(
         ServerNotification::ModelVerification(notification) => {
             Some(notification.thread_id.as_str())
         }
+        ServerNotification::ClientRestartRequested(notification) => {
+            Some(notification.thread_id.as_str())
+        }
         ServerNotification::ThreadRealtimeStarted(notification) => {
             Some(notification.thread_id.as_str())
         }
@@ -425,6 +428,9 @@ fn server_notification_thread_target(
             Some(notification.thread_id.as_str())
         }
         ServerNotification::ThreadRealtimeClosed(notification) => {
+            Some(notification.thread_id.as_str())
+        }
+        ServerNotification::ThreadHollywoodMessage(notification) => {
             Some(notification.thread_id.as_str())
         }
         ServerNotification::Warning(notification) => notification.thread_id.as_deref(),

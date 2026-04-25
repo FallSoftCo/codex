@@ -206,7 +206,9 @@ impl App {
                     .network_approval_context
                     .clone()
                     .map(network_approval_context_to_core);
-                let additional_permissions = params.additional_permissions.clone().map(Into::into);
+                let additional_permissions: Option<
+                    codex_protocol::models::AdditionalPermissionProfile,
+                > = params.additional_permissions.clone().map(Into::into);
                 let proposed_execpolicy_amendment = params
                     .proposed_execpolicy_amendment
                     .clone()

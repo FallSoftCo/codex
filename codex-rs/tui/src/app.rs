@@ -128,6 +128,7 @@ use codex_protocol::approvals::ExecApprovalRequestEvent;
 use codex_protocol::config_types::Personality;
 #[cfg(target_os = "windows")]
 use codex_protocol::config_types::WindowsSandboxLevel;
+use codex_protocol::models::AdditionalPermissionProfile;
 use codex_protocol::openai_models::ModelAvailabilityNux;
 use codex_protocol::openai_models::ModelPreset;
 use codex_protocol::openai_models::ModelUpgrade;
@@ -293,7 +294,7 @@ fn default_exec_approval_decisions(
     proposed_network_policy_amendments: Option<
         &[codex_protocol::approvals::NetworkPolicyAmendment],
     >,
-    additional_permissions: Option<&codex_protocol::models::PermissionProfile>,
+    additional_permissions: Option<&AdditionalPermissionProfile>,
 ) -> Vec<codex_protocol::protocol::ReviewDecision> {
     ExecApprovalRequestEvent::default_available_decisions(
         network_approval_context,
@@ -317,9 +318,13 @@ struct GuardianApprovalsMode {
 fn guardian_approvals_mode() -> GuardianApprovalsMode {
     GuardianApprovalsMode {
         approval_policy: AskForApproval::OnRequest,
-        approvals_reviewer: ApprovalsReviewer::GuardianSubagent,
+        approvals_reviewer: ApprovalsReviewer::AutoReview,
         sandbox_policy: SandboxPolicy::new_workspace_write_policy(),
     }
+}
+
+fn auto_review_mode() -> GuardianApprovalsMode {
+    guardian_approvals_mode()
 }
 /// Baseline cadence for periodic stream commit animation ticks.
 ///
@@ -916,24 +921,8 @@ impl App {
             .maybe_prompt_windows_sandbox_enable(should_prompt_windows_sandbox_nux_at_startup);
 
         let file_search = FileSearchManager::new(config.cwd.to_path_buf(), app_event_tx.clone());
-        let mut email_bridge_startup_warning = None;
-        let email_bridge = if let Some(email_config) = config.email.clone() {
-            match EmailBridge::new(
-                email_config,
-                config.codex_home.as_path(),
-                tui.terminal_focused_handle(),
-            )
-            .await
-            {
-                Ok(email_bridge) => Some(email_bridge),
-                Err(err) => {
-                    email_bridge_startup_warning = Some(format!("Email bridge disabled: {err}"));
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let email_bridge_startup_warning = None;
+        let email_bridge = None;
         #[cfg(not(debug_assertions))]
         let upgrade_version = crate::updates::get_upgrade_version(&config);
 
