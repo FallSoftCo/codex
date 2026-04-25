@@ -60,6 +60,19 @@ def summarize(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "avgChangedFiles": statistics.mean(
                     run.get("changedFilesCount", len(run["changedFiles"])) for run in runs
                 ),
+                "quiescenceRate": sum(
+                    1 for run in runs if run.get("eventuallyQuiesced", False)
+                )
+                / len(runs),
+                "avgQuiescenceLagSeconds": (
+                    statistics.mean(
+                        run["quiescenceLagSeconds"]
+                        for run in runs
+                        if run.get("quiescenceLagSeconds") is not None
+                    )
+                    if any(run.get("quiescenceLagSeconds") is not None for run in runs)
+                    else None
+                ),
             }
         )
     return summary
@@ -93,6 +106,19 @@ def overall_summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "avgChangedFiles": statistics.mean(
                     run.get("changedFilesCount", len(run["changedFiles"])) for run in runs
                 ),
+                "quiescenceRate": sum(
+                    1 for run in runs if run.get("eventuallyQuiesced", False)
+                )
+                / len(runs),
+                "avgQuiescenceLagSeconds": (
+                    statistics.mean(
+                        run["quiescenceLagSeconds"]
+                        for run in runs
+                        if run.get("quiescenceLagSeconds") is not None
+                    )
+                    if any(run.get("quiescenceLagSeconds") is not None for run in runs)
+                    else None
+                ),
             }
         )
     return sorted(
@@ -115,6 +141,7 @@ def render_markdown(
     repeats: int,
     timeout_seconds: int,
     poll_seconds: int,
+    max_quiescence_wait_seconds: int | None,
     completed_runs: int,
     total_runs: int,
     overall: list[dict[str, Any]],
@@ -130,33 +157,50 @@ def render_markdown(
         f"- Repeats per challenge/policy: `{repeats}`",
         f"- Timeout per run: `{timeout_seconds}s`",
         f"- Poll interval: `{poll_seconds}s`",
+        (
+            f"- Max quiescence wait after green: `{max_quiescence_wait_seconds}s`"
+            if max_quiescence_wait_seconds is not None
+            else "- Max quiescence wait after green: `match soak window`"
+        ),
         f"- Completed runs: `{completed_runs}/{total_runs}`",
         "",
         "## Overall Leaderboard",
         "",
-        "| Policy | Pass Rate | Avg Time To Green | Avg Hollywood Messages | Avg Active Threads After Run | Avg Changed Files |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Policy | Pass Rate | Avg Time To Green | Quiescence Rate | Avg Quiescence Lag | Avg Hollywood Messages | Avg Active Threads After Run | Avg Changed Files |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in overall:
         avg_time = "-" if row["avgPassSeconds"] is None else f"{row['avgPassSeconds']:.1f}s"
+        avg_quiescence = (
+            "-"
+            if row["avgQuiescenceLagSeconds"] is None
+            else f"{row['avgQuiescenceLagSeconds']:.1f}s"
+        )
         lines.append(
             f"| `{row['policy']}` | {row['passRate']:.2f} | {avg_time} | "
-            f"{row['avgHollywoodMessages']:.1f} | {row['avgActiveThreadsAfterRun']:.1f} | {row['avgChangedFiles']:.1f} |"
+            f"{row['quiescenceRate']:.2f} | {avg_quiescence} | {row['avgHollywoodMessages']:.1f} | "
+            f"{row['avgActiveThreadsAfterRun']:.1f} | {row['avgChangedFiles']:.1f} |"
         )
     lines.extend(
         [
             "",
             "## Per-Challenge Summary",
             "",
-            "| Challenge | Policy | Pass Rate | Avg Time To Green | Avg Hollywood Messages | Avg Active Threads After Run | Avg Changed Files |",
-            "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+            "| Challenge | Policy | Pass Rate | Avg Time To Green | Quiescence Rate | Avg Quiescence Lag | Avg Hollywood Messages | Avg Active Threads After Run | Avg Changed Files |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for row in summary:
         avg_time = "-" if row["avgPassSeconds"] is None else f"{row['avgPassSeconds']:.1f}s"
+        avg_quiescence = (
+            "-"
+            if row["avgQuiescenceLagSeconds"] is None
+            else f"{row['avgQuiescenceLagSeconds']:.1f}s"
+        )
         lines.append(
             f"| `{row['challenge']}` | `{row['policy']}` | {row['passRate']:.2f} | {avg_time} | "
-            f"{row['avgHollywoodMessages']:.1f} | {row['avgActiveThreadsAfterRun']:.1f} | {row['avgChangedFiles']:.1f} |"
+            f"{row['quiescenceRate']:.2f} | {avg_quiescence} | {row['avgHollywoodMessages']:.1f} | "
+            f"{row['avgActiveThreadsAfterRun']:.1f} | {row['avgChangedFiles']:.1f} |"
         )
     lines.extend(
         [
@@ -183,6 +227,7 @@ def write_artifacts(
     timeout_seconds: int,
     poll_seconds: int,
     post_pass_soak_seconds: int,
+    max_quiescence_wait_seconds: int | None,
     results: list[dict[str, Any]],
 ) -> tuple[Path, Path]:
     total_runs = len(challenges) * len(policies) * repeats
@@ -200,6 +245,7 @@ def write_artifacts(
                 "timeoutSeconds": timeout_seconds,
                 "pollSeconds": poll_seconds,
                 "postPassSoakSeconds": post_pass_soak_seconds,
+                "maxQuiescenceWaitSeconds": max_quiescence_wait_seconds,
                 "completedRuns": len(results),
                 "totalRuns": total_runs,
                 "results": results,
@@ -220,6 +266,7 @@ def write_artifacts(
             repeats=repeats,
             timeout_seconds=timeout_seconds,
             poll_seconds=poll_seconds,
+            max_quiescence_wait_seconds=max_quiescence_wait_seconds,
             completed_runs=len(results),
             total_runs=total_runs,
             overall=overall,
@@ -239,6 +286,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=240)
     parser.add_argument("--poll-seconds", type=int, default=40)
     parser.add_argument("--post-pass-soak-seconds", type=int, default=20)
+    parser.add_argument("--max-quiescence-wait-seconds", type=int)
     parser.add_argument("--campaign-name", default=f"campaign-{int(time.time())}")
     args = parser.parse_args()
 
@@ -258,6 +306,7 @@ def main() -> int:
                     timeout_seconds=args.timeout_seconds,
                     poll_seconds=args.poll_seconds,
                     post_pass_soak_seconds=args.post_pass_soak_seconds,
+                    max_quiescence_wait_seconds=args.max_quiescence_wait_seconds,
                 )
                 result["repeat"] = repeat
                 results.append(result)
@@ -271,6 +320,7 @@ def main() -> int:
                     timeout_seconds=args.timeout_seconds,
                     poll_seconds=args.poll_seconds,
                     post_pass_soak_seconds=args.post_pass_soak_seconds,
+                    max_quiescence_wait_seconds=args.max_quiescence_wait_seconds,
                     results=results,
                 )
                 print(
@@ -288,6 +338,7 @@ def main() -> int:
         timeout_seconds=args.timeout_seconds,
         poll_seconds=args.poll_seconds,
         post_pass_soak_seconds=args.post_pass_soak_seconds,
+        max_quiescence_wait_seconds=args.max_quiescence_wait_seconds,
         results=results,
     )
 

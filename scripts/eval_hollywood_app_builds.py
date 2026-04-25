@@ -326,6 +326,7 @@ def evaluate_policy(
     timeout_seconds: int,
     poll_seconds: int,
     post_pass_soak_seconds: int,
+    max_quiescence_wait_seconds: int | None = None,
 ) -> dict[str, Any]:
     workspace = prepare_workspace(challenge, policy)
     install_result = install_workspace(workspace)
@@ -367,8 +368,13 @@ def evaluate_policy(
             )
             if test_result.returncode == 0:
                 passed_at = elapsed
-                if post_pass_soak_seconds > 0:
-                    quiescence_deadline = time.time() + post_pass_soak_seconds
+                quiescence_wait_seconds = (
+                    post_pass_soak_seconds
+                    if max_quiescence_wait_seconds is None
+                    else max_quiescence_wait_seconds
+                )
+                if quiescence_wait_seconds > 0:
+                    quiescence_deadline = time.time() + quiescence_wait_seconds
                     while time.time() < quiescence_deadline:
                         remaining = max(0.05, quiescence_deadline - time.time())
                         conn.drain(min(5.0, remaining))
@@ -408,6 +414,12 @@ def evaluate_policy(
             "activeThreadsAfterRun": active_threads_after_run,
             "allThreadsIdleAfterRun": active_threads_after_run == 0,
             "quiescedAtSeconds": quiesced_at,
+            "eventuallyQuiesced": quiesced_at is not None,
+            "quiescenceLagSeconds": (
+                round(quiesced_at - passed_at, 1)
+                if quiesced_at is not None and passed_at is not None
+                else None
+            ),
             "messageCount": message_count,
             "finalTest": {
                 "returncode": final_test.returncode,
@@ -444,6 +456,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=360)
     parser.add_argument("--poll-seconds", type=int, default=45)
     parser.add_argument("--post-pass-soak-seconds", type=int, default=20)
+    parser.add_argument("--max-quiescence-wait-seconds", type=int)
     parser.add_argument("--app-server-url")
     parser.add_argument("--current-app-server", default=str(DEFAULT_CURRENT_APP_SERVER))
     args = parser.parse_args()
@@ -462,6 +475,7 @@ def main() -> int:
                 timeout_seconds=args.timeout_seconds,
                 poll_seconds=args.poll_seconds,
                 post_pass_soak_seconds=args.post_pass_soak_seconds,
+                max_quiescence_wait_seconds=args.max_quiescence_wait_seconds,
             )
         )
 
