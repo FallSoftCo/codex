@@ -2970,15 +2970,32 @@ impl CodexMessageProcessor {
         ];
         let acknowledgement_phrases = [
             "no action needed",
+            "no action is needed",
+            "no action from my side",
             "no further action",
             "no further reply needed",
+            "no further replies unless",
+            "no further direct replies unless",
             "no further response is needed",
             "no open items",
             "no open coordination items",
             "thread closed",
+            "thread remains closed",
+            "room stays closed",
             "closing this thread",
+            "closure only",
+            "closure only fyi",
+            "closure-only",
+            "closure-only fyi",
+            "non actionable",
+            "non-actionable",
+            "taking no further action",
             "leave this thread idle",
             "ending responses",
+            "ending this closure only thread",
+            "ending this closure-only thread",
+            "remain silent unless",
+            "staying silent unless",
             "stay quiet unless",
             "stay available for new work",
         ];
@@ -2991,14 +3008,21 @@ impl CodexMessageProcessor {
             "i will not reply to further",
             "i will only contact you again if i assign new work or hit a real blocker",
             "no assignment is being made",
+            "no reply or follow up is needed",
+            "no reply or follow-up is needed",
+            "thread is closed on my side too",
+            "thread closed on my side too",
+            "thread is closed from my side",
+            "explicit ignore",
         ];
         let request_markers = [
             "please", "need", "question", "task", "blocker", "assign", "handoff", "join", "claim",
             "inspect", "check", "help",
         ];
 
-        let explicit_closure_directive = closure_directive_phrases
+        let explicit_closure_directive = acknowledgement_phrases
             .iter()
+            .chain(closure_directive_phrases.iter())
             .any(|phrase| normalized_body.contains(phrase));
         let acknowledgement_style = acknowledgement_openers.contains(&first_word)
             && !request_markers
@@ -16609,6 +16633,42 @@ mod tests {
                 message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
                 response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
                 body: "Thread closed. Do not reply to this message. I will only contact you again if I assign new work or hit a real blocker.".to_string(),
+                created_at: "2026-04-25T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(CodexMessageProcessor::hollywood_message_is_ack_only(
+            &message
+        ));
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("ack"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn direct_closure_fyi_stays_ack_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 47,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("ray".to_string()),
+                recipient_id: Some("tony".to_string()),
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "Seen. Closure-only FYI on my side too; no action and no further replies unless scope changes or a new failure appears.".to_string(),
                 created_at: "2026-04-25T00:00:00Z".to_string(),
                 mentions: Vec::new(),
             },

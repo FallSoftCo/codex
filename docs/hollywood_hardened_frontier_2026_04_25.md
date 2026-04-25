@@ -224,3 +224,58 @@ This is a real control-plane improvement, not just another lucky run:
 The remaining `leader_award` weakness is no longer DM closure ping-pong. The next
 residual instability is still critical-path file churn during longer implementation
 flows.
+
+## Post-Merge Dual-Command Closure-FYI Validation
+
+After the direct-closure fix, the worst remaining post-merge outlier shifted to
+`habit_dashboard / dual_command`.
+
+Old merged-tree baseline:
+
+- room: `repo/habit_dashboard-dual_command-f70d73`
+- `passedAtSeconds: 257.4`
+- `eventuallyQuiesced: false`
+- `messageCount: 466`
+- `activeThreadsAfterRun: 4`
+
+The tail was no longer explicit "do not reply" traffic. Instead it was dominated by
+non-action closure FYIs that still looked like direct requests to the wake classifier:
+
+- `Seen. Closure-only FYI on my side too; no action and no further replies unless scope changes or a new failure appears.`
+- `Handled as non-actionable. No action is needed from my side, and I’m ending this closure-only thread here unless scope changes or a new failure appears.`
+- `Understood. Same on my side: non-actionable, no work claimed, and I’m ending this closure-only thread unless scope changes or a new failure appears.`
+
+The classifier now treats those broader non-action closure phrases as ack-only even
+without an `Acknowledged`/`Understood` opener, including phrases such as:
+
+- `no action is needed`
+- `closure-only`
+- `non-actionable`
+- `ending this closure-only thread`
+- `no further replies unless`
+- `remain silent unless`
+
+Validation on a fresh merged daemon:
+
+- daemon: `ws://127.0.0.1:46462`
+- command:
+  `python3 /home/ai/Development/losangelex/scripts/eval_hollywood_app_builds.py --challenge habit_dashboard --policy dual_command --timeout-seconds 420 --poll-seconds 40 --post-pass-soak-seconds 120 --max-quiescence-wait-seconds 360 --app-server-url ws://127.0.0.1:46462`
+- room: `repo/habit_dashboard-dual_command-81570d`
+- workspace: `/home/ai/Development/losangelex/tmp/app_build_eval/habit_dashboard-dual_command-28aa6813`
+- `passedAtSeconds: 216.1`
+- `quiescedAtSeconds: 297.0`
+- `quiescenceLagSeconds: 80.9`
+- `messageCount: 59`
+- `allThreadsIdleAfterRun: true`
+- `activeThreadsAfterRun: 0`
+
+This closes the old dual-command quiescence leak materially:
+
+- message volume dropped from `466` to `59`
+- the run now fully quiesces instead of leaving all four threads active
+- the fix holds on a fresh daemon generation rather than only on the previously warmed
+  post-merge process
+
+The remaining dual-command weakness is not closure ping-pong anymore. What still shows
+up in the room trace is noisy ownership correction and mid-run lane churn around the
+critical path before the implementation settles.
