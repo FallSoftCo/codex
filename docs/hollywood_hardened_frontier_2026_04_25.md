@@ -351,3 +351,55 @@ Current conclusion:
   materially reduces critical-path churn
 - the next serious frontier candidate is no longer plain `dual_command`; it is
   `dual_command_lease`
+
+## Lease Frontier Comparison
+
+I then reran the live frontier on the same hardened daemon with the three current
+serious candidates:
+
+- `leader_award`
+- `kanban_pull`
+- `dual_command_lease`
+
+Campaign:
+
+- report: `tmp/app_build_eval/lease-frontier-2026-04-25-a/REPORT.md`
+- raw results: `tmp/app_build_eval/lease-frontier-2026-04-25-a/results.json`
+- daemon: `ws://127.0.0.1:46462`
+- challenges: `habit_dashboard`, `incident_console`, `expense_board`
+
+Overall leaderboard from that run:
+
+| Policy | Avg Time To Green | Avg Quiescence Lag | Avg Hollywood Messages |
+| --- | ---: | ---: | ---: |
+| `kanban_pull` | `202.8s` | `193.6s` | `201.7` |
+| `dual_command_lease` | `257.4s` | `103.3s` | `35.3` |
+| `leader_award` | `270.5s` | `80.2s` | `34.7` |
+
+What this means:
+
+- `kanban_pull` is still the throughput winner, but it remains extremely noisy and has
+  the worst convergence lag by a wide margin.
+- `leader_award` is still the quietest disciplined closer, but it remains the slowest
+  of the three on this slice.
+- `dual_command_lease` is the new balanced frontier policy. It is much quieter and
+  more stable than `kanban_pull`, while staying materially faster than `leader_award`
+  on `habit_dashboard` and `incident_console`.
+
+Per-challenge read:
+
+- `habit_dashboard`: `dual_command_lease` and `kanban_pull` were essentially tied on
+  time to green (`258.0s` vs `258.2s`), but `dual_command_lease` used far fewer room
+  messages (`33` vs `277`).
+- `incident_console`: `dual_command_lease` clearly won on time to green (`175.3s`)
+  while staying quieter than both anchors.
+- `expense_board`: `kanban_pull` won decisively on raw throughput (`133.9s`), while
+  `dual_command_lease` stayed much quieter but slower (`339.0s`).
+
+Current frontier conclusion:
+
+- `kanban_pull` is best when we optimize aggressively for raw throughput.
+- `leader_award` is best when we optimize for disciplined closure and minimum chatter.
+- `dual_command_lease` is now the strongest all-around compromise for stable,
+  long-running coordination because it preserved full pass/quiescence while cutting the
+  false-reassignment churn that previously made plain `dual_command` unreliable.
