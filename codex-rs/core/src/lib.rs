@@ -37,6 +37,7 @@ pub mod file_watcher;
 mod flags;
 #[cfg(test)]
 mod git_info_tests;
+mod goals;
 mod guardian;
 mod hollywood;
 mod hook_runtime;

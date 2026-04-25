@@ -21,12 +21,8 @@ use std::time::Instant;
 
 use crate::McpAuthStatusEntry;
 use crate::mcp::CODEX_APPS_MCP_SERVER_NAME;
-use crate::mcp::McpConfig;
 use crate::mcp::ToolPluginProvenance;
-use crate::mcp::configured_mcp_servers;
-use crate::mcp::effective_mcp_servers;
 use crate::mcp::mcp_permission_prompt_is_auto_approved;
-use crate::mcp::tool_plugin_provenance;
 pub(crate) use crate::mcp_tool_names::qualify_tools;
 use anyhow::Context;
 use anyhow::Result;
@@ -38,6 +34,8 @@ use codex_async_utils::OrCancelExt;
 use codex_config::Constrained;
 use codex_config::types::OAuthCredentialsStoreMode;
 use codex_exec_server::Environment;
+use codex_exec_server::HttpClient;
+use codex_exec_server::ReqwestHttpClient;
 use codex_protocol::ToolName;
 use codex_protocol::approvals::ElicitationRequest;
 use codex_protocol::approvals::ElicitationRequestEvent;
@@ -103,7 +101,7 @@ use codex_utils_plugins::mcp_connector::sanitize_name;
 const MCP_TOOL_NAME_DELIMITER: &str = "__";
 
 /// Default timeout for initializing MCP server & initially listing tools.
-pub const DEFAULT_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Default timeout for individual tool calls.
 const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -687,22 +685,6 @@ impl McpRuntimeEnvironment {
 }
 
 impl McpConnectionManager {
-    pub fn configured_servers(&self, config: &McpConfig) -> HashMap<String, McpServerConfig> {
-        configured_mcp_servers(config)
-    }
-
-    pub fn effective_servers(
-        &self,
-        config: &McpConfig,
-        auth: Option<&CodexAuth>,
-    ) -> HashMap<String, McpServerConfig> {
-        effective_mcp_servers(config, auth)
-    }
-
-    pub fn tool_plugin_provenance(&self, config: &McpConfig) -> ToolPluginProvenance {
-        tool_plugin_provenance(config)
-    }
-
     pub fn new_uninitialized(
         approval_policy: &Constrained<AskForApproval>,
         sandbox_policy: &Constrained<SandboxPolicy>,
@@ -1552,7 +1534,14 @@ async fn make_rmcp_client(
     } = config;
     let remote_environment = match experimental_environment.as_deref() {
         None | Some("local") => false,
-        Some("remote") => true,
+        Some("remote") => {
+            if !runtime_environment.environment().is_remote() {
+                return Err(StartupOutcomeError::from(anyhow!(
+                    "remote MCP server `{server_name}` requires a remote environment"
+                )));
+            }
+            true
+        }
         Some(environment) => {
             return Err(StartupOutcomeError::from(anyhow!(
                 "unsupported experimental_environment `{environment}` for MCP server `{server_name}`"
@@ -1576,14 +1565,8 @@ async fn make_rmcp_client(
                     .collect::<HashMap<_, _>>()
             });
             let launcher = if remote_environment {
-                let exec_environment = runtime_environment.environment();
-                if !exec_environment.is_remote() {
-                    return Err(StartupOutcomeError::from(anyhow!(
-                        "remote MCP server `{server_name}` requires a remote executor environment"
-                    )));
-                }
                 Arc::new(ExecutorStdioServerLauncher::new(
-                    exec_environment.get_exec_backend(),
+                    runtime_environment.environment().get_exec_backend(),
                     runtime_environment.fallback_cwd(),
                 ))
             } else {
@@ -1605,11 +1588,11 @@ async fn make_rmcp_client(
             env_http_headers,
             bearer_token_env_var,
         } => {
-            if remote_environment && !runtime_environment.environment().is_remote() {
-                return Err(StartupOutcomeError::from(anyhow!(
-                    "remote MCP server `{server_name}` requires a remote environment"
-                )));
-            }
+            let http_client: Arc<dyn HttpClient> = if remote_environment {
+                runtime_environment.environment().get_http_client()
+            } else {
+                Arc::new(ReqwestHttpClient)
+            };
             let resolved_bearer_token =
                 match resolve_bearer_token(server_name, bearer_token_env_var.as_deref()) {
                     Ok(token) => token,
@@ -1622,7 +1605,7 @@ async fn make_rmcp_client(
                 http_headers,
                 env_http_headers,
                 store_mode,
-                runtime_environment.environment().get_http_client(),
+                http_client,
                 runtime_auth_provider,
             )
             .await
