@@ -12378,6 +12378,13 @@ impl CodexMessageProcessor {
                         let status = thread_watch_manager
                             .loaded_status_for_thread(&conversation_id.to_string())
                             .await;
+                        {
+                            let mut state = thread_state.lock().await;
+                            let has_active_turn = state.has_active_turn();
+                            state
+                                .hollywood
+                                .reconcile_idle_autonomous_turn_pending(&status, has_active_turn);
+                        }
                         let thread_config_snapshot = conversation.config_snapshot().await;
                         let thread_name = thread_config_snapshot.thread_name.clone();
                         let now = Instant::now();

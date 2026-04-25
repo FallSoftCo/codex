@@ -340,6 +340,20 @@ impl HollywoodRuntimeState {
         self.autonomous_turn_pending = false;
     }
 
+    pub(crate) fn reconcile_idle_autonomous_turn_pending(
+        &mut self,
+        status: &ThreadStatus,
+        has_active_turn: bool,
+    ) {
+        if self.autonomous_turn_pending
+            && matches!(status, ThreadStatus::Idle)
+            && !has_active_turn
+            && self.pending_semantic_wakes.is_empty()
+        {
+            self.autonomous_turn_pending = false;
+        }
+    }
+
     pub(crate) fn should_start_startup_turn(&self, now: Instant) -> bool {
         if self.config.is_none() || !self.startup_turn_pending || self.autonomous_turn_pending {
             return false;
@@ -1367,6 +1381,40 @@ mod tests {
         assert!(diagnostics.autonomous_turn_pending);
         assert_eq!(diagnostics.pending_semantic_wake_count, 1);
         assert_eq!(diagnostics.outstanding_obligation_count, 3);
+    }
+
+    #[test]
+    fn reconcile_idle_autonomous_turn_pending_clears_stale_flag() {
+        let mut state = HollywoodRuntimeState::default();
+        state.attach(HollywoodConfig::default(), "attached", None);
+        state.mark_autonomous_turn_pending();
+
+        state.reconcile_idle_autonomous_turn_pending(&ThreadStatus::Idle, false);
+
+        assert!(!state.autonomous_turn_pending());
+    }
+
+    #[test]
+    fn reconcile_idle_autonomous_turn_pending_keeps_real_pending_wakes() {
+        let mut state = HollywoodRuntimeState::default();
+        state.attach(HollywoodConfig::default(), "attached", None);
+        state.mark_autonomous_turn_pending();
+        state.queue_semantic_wake(HollywoodPendingSemanticWake {
+            dedupe_key: "message:42".to_string(),
+            room: "repo/losangelex".to_string(),
+            brief: HollywoodSyntheticBrief {
+                wake_reason: Some("semantic_delta".to_string()),
+                semantic_kind: Some("assignment".to_string()),
+                summary: Some("A direct assignment needs attention.".to_string()),
+                facts: Vec::new(),
+                suggested_actions: vec!["accept or decline explicitly".to_string()],
+                stay_silent_if_no_actionable_delta: false,
+            },
+        });
+
+        state.reconcile_idle_autonomous_turn_pending(&ThreadStatus::Idle, false);
+
+        assert!(state.autonomous_turn_pending());
     }
 
     #[test]

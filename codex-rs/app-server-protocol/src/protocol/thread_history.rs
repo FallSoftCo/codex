@@ -893,8 +893,15 @@ impl ThreadHistoryBuilder {
         };
         if let Some(turn_id) = payload.turn_id.as_deref() {
             // Prefer an exact ID match so we interrupt the turn explicitly targeted by the event.
-            if let Some(turn) = self.current_turn.as_mut().filter(|turn| turn.id == turn_id) {
-                apply_abort(turn);
+            if self
+                .current_turn
+                .as_ref()
+                .is_some_and(|turn| turn.id == turn_id)
+            {
+                if let Some(turn) = self.current_turn.as_mut() {
+                    apply_abort(turn);
+                }
+                self.finish_current_turn();
                 return;
             }
 
@@ -909,6 +916,7 @@ impl ThreadHistoryBuilder {
         // If the event has no ID (or refers to an unknown turn), fall back to the active turn.
         if let Some(turn) = self.current_turn.as_mut() {
             apply_abort(turn);
+            self.finish_current_turn();
         }
     }
 
@@ -2709,6 +2717,40 @@ mod tests {
         assert_eq!(turns[1].id, "turn-b");
         assert_eq!(turns[1].status, TurnStatus::InProgress);
         assert_eq!(turns[1].items.len(), 2);
+    }
+
+    #[test]
+    fn turn_aborted_closes_active_turn_immediately() {
+        let mut builder = ThreadHistoryBuilder::new();
+        builder.handle_event(&EventMsg::TurnStarted(TurnStartedEvent {
+            turn_id: "turn-a".into(),
+            started_at: None,
+            model_context_window: None,
+            collaboration_mode_kind: Default::default(),
+        }));
+        builder.handle_event(&EventMsg::UserMessage(UserMessageEvent {
+            message: "first".into(),
+            images: None,
+            text_elements: Vec::new(),
+            local_images: Vec::new(),
+        }));
+
+        assert!(builder.has_active_turn());
+
+        builder.handle_event(&EventMsg::TurnAborted(TurnAbortedEvent {
+            turn_id: Some("turn-a".into()),
+            reason: TurnAbortReason::Interrupted,
+            completed_at: Some(1_777_086_761),
+            duration_ms: Some(203_781),
+            time_to_first_token_ms: None,
+        }));
+
+        assert!(!builder.has_active_turn());
+        assert_eq!(builder.turns.len(), 1);
+        assert_eq!(builder.turns[0].id, "turn-a");
+        assert_eq!(builder.turns[0].status, TurnStatus::Interrupted);
+        assert_eq!(builder.turns[0].completed_at, Some(1_777_086_761));
+        assert_eq!(builder.turns[0].duration_ms, Some(203_781));
     }
 
     #[test]
