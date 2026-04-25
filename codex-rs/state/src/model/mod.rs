@@ -24,6 +24,7 @@ pub use coordination::CoordinationAct;
 pub use coordination::CoordinationActKind;
 pub use coordination::CoordinationTask;
 pub use coordination::CoordinationTaskAcceptParams;
+pub use coordination::CoordinationTaskCancelParams;
 pub use coordination::CoordinationTaskCreateParams;
 pub use coordination::CoordinationTaskDoneParams;
 pub use coordination::CoordinationTaskHandoffParams;

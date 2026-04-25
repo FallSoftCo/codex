@@ -17,6 +17,7 @@ pub use model::CoordinationAct;
 pub use model::CoordinationActKind;
 pub use model::CoordinationTask;
 pub use model::CoordinationTaskAcceptParams;
+pub use model::CoordinationTaskCancelParams;
 pub use model::CoordinationTaskCreateParams;
 pub use model::CoordinationTaskDoneParams;
 pub use model::CoordinationTaskHandoffParams;

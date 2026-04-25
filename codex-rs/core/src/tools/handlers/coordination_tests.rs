@@ -428,6 +428,87 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
 }
 
 #[tokio::test]
+async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let (mut owner_session, owner_turn) = make_session_and_context().await;
+    owner_session.services.state_db = Some(Arc::clone(&state_db));
+    let owner_session = Arc::new(owner_session);
+    let owner_turn = Arc::new(owner_turn);
+    insert_thread_metadata(
+        &state_db,
+        owner_turn.as_ref(),
+        owner_session.conversation_id,
+    )
+    .await;
+    let reserved_path = turn.config.cwd.join("styles.css");
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Polish styles",
+                "details": "Own the CSS lane.",
+                "kind": "implementation",
+                "owner": owner_session.conversation_id.to_string(),
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": reserved_path.to_string_lossy()
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("direct implementation award should succeed");
+    let result = parse_result(output);
+    let task_id = result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&owner_session),
+            Arc::clone(&owner_turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": task_id,
+                "summary": "Taking the CSS lane.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("accept should succeed");
+
+    let cancel_output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "cancel",
+                "task_id": task_id,
+                "summary": "The integrated app is already green without further CSS work.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("creator cancel should succeed");
+    let cancel_result = parse_result(cancel_output);
+    assert_eq!(cancel_result["task"]["status"], "cancelled");
+    assert_eq!(cancel_result["act"]["kind"], "cancel");
+
+    let owner_claims = state_db
+        .list_path_claims(Some(owner_session.conversation_id))
+        .await
+        .expect("owner claims should list cleanly");
+    assert!(owner_claims.is_empty());
+}
+
+#[tokio::test]
 async fn accept_clears_pending_assigned_wake_for_owner() {
     let (session, turn, state_db) = make_session_with_state_db().await;
     let (mut owner_session, owner_turn) = make_session_and_context().await;
@@ -764,6 +845,32 @@ async fn yield_rejects_placeholder_summary() {
     assert_eq!(
         result["error"],
         json!("coordination_act yield requires a concrete summary, not placeholder text")
+    );
+}
+
+#[tokio::test]
+async fn cancel_rejects_placeholder_summary() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "cancel",
+                "task_id": ThreadId::new().to_string(),
+                "summary": "placeholder",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("cancel placeholder summary should return model-visible error");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["error"],
+        json!("coordination_act cancel requires a concrete summary, not placeholder text")
     );
 }
 

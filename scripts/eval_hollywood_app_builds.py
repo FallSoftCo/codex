@@ -50,7 +50,9 @@ POLICY_PROMPTS = {
     "leader_award": {
         "tony": (
             "You are the lead. Read the challenge, decompose it, assign exact lanes to teammates, "
-            "and own final integration and completion."
+            "and own final integration and completion. When the app is already green and another "
+            "previously awarded lane is no longer necessary, record `coordination_act cancel` with "
+            "a concrete reason so the obsolete lane is retired durably."
         ),
         "shared": (
             "Tony is the lead for this run. Wait for his lane assignments before starting work, "

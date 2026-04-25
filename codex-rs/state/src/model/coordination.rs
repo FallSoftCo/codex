@@ -87,6 +87,7 @@ pub enum CoordinationActKind {
     OpenTask,
     Accept,
     Done,
+    Cancel,
     Handoff,
     Yield,
 }
@@ -97,6 +98,7 @@ impl CoordinationActKind {
             Self::OpenTask => "open_task",
             Self::Accept => "accept",
             Self::Done => "done",
+            Self::Cancel => "cancel",
             Self::Handoff => "handoff",
             Self::Yield => "yield",
         }
@@ -107,6 +109,7 @@ impl CoordinationActKind {
             "open_task" => Ok(Self::OpenTask),
             "accept" => Ok(Self::Accept),
             "done" => Ok(Self::Done),
+            "cancel" => Ok(Self::Cancel),
             "handoff" => Ok(Self::Handoff),
             "yield" => Ok(Self::Yield),
             _ => Err(anyhow::anyhow!("invalid coordination act kind: {value}")),
@@ -193,6 +196,15 @@ pub struct CoordinationTaskAcceptParams {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoordinationTaskDoneParams {
+    pub task_id: String,
+    pub actor_thread_id: ThreadId,
+    pub act_id: String,
+    pub act_summary: Option<String>,
+    pub act_payload_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoordinationTaskCancelParams {
     pub task_id: String,
     pub actor_thread_id: ThreadId,
     pub act_id: String,

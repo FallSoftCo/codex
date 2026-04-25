@@ -94,7 +94,7 @@ fn create_coordination_act_tool() -> ToolSpec {
         (
             "action".to_string(),
             JsonSchema::string(Some(
-                "Coordination act to record: `open_task`, `accept`, `done`, `handoff`, or `yield`."
+                "Coordination act to record: `open_task`, `accept`, `done`, `cancel`, `handoff`, or `yield`."
                     .to_string(),
             )),
         ),
@@ -158,7 +158,7 @@ fn create_coordination_act_tool() -> ToolSpec {
         (
             "summary".to_string(),
             JsonSchema::string(Some(
-                "Concise durable act summary. Required for `done`, `handoff`, and `yield`; use a concrete result or reason, not placeholder text.".to_string(),
+                "Concise durable act summary. Required for `done`, `cancel`, `handoff`, and `yield`; use a concrete result or reason, not placeholder text.".to_string(),
             )),
         ),
         (
@@ -222,7 +222,7 @@ fn create_coordination_act_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "coordination_act".to_string(),
-        description: "Record a durable team-work commitment. Use this when your natural-language coordination becomes an actual assignment, acceptance, completion, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy. After you finish a verification or implementation task, record `done` with the observed result instead of re-accepting the task."
+        description: "Record a durable team-work commitment. Use this when your natural-language coordination becomes an actual assignment, acceptance, completion, cancellation, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy. After you finish a verification or implementation task, record `done` with the observed result instead of re-accepting the task. If a previously awarded lane is now obsolete because the broader goal is already satisfied, record `cancel` with the concrete reason so the lane and any exact claims are retired durably."
             .to_string(),
         strict: false,
         defer_loading: None,

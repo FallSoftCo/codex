@@ -455,6 +455,50 @@ async fn handle_coordination_act(
             };
             return finalize_coordination_act(session, turn, db, &args, outcome, ownership).await;
         }
+        "cancel" => {
+            let task = match required_task(db, args.task_id.as_deref()).await {
+                Ok(task) => task,
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, None);
+                }
+                Err(fatal) => return Err(fatal),
+            };
+            match ensure_task_control(&task, actor_thread_id) {
+                Ok(()) => {}
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, Some(&task));
+                }
+                Err(fatal) => return Err(fatal),
+            }
+            if let Some(current_task) =
+                same_controller_cancelled_task(db, task.id.as_str(), actor_thread_id).await?
+            {
+                return coordination_duplicate_output(current_task);
+            }
+            let outcome = match db
+                .cancel_coordination_task(codex_state::CoordinationTaskCancelParams {
+                    task_id: task.id.clone(),
+                    actor_thread_id,
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json: serde_json::to_string(&json!({
+                        "action": "cancel",
+                        "summary": args.summary,
+                    }))
+                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => match map_coordination_transition_error(err) {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, Some(&task));
+                    }
+                    fatal => return Err(fatal),
+                },
+            };
+            return finalize_coordination_act(session, turn, db, &args, outcome, None).await;
+        }
         "handoff" => {
             let task = match required_task(db, args.task_id.as_deref()).await {
                 Ok(task) => task,
@@ -558,7 +602,7 @@ async fn handle_coordination_act(
         }
         other => {
             return Err(FunctionCallError::RespondToModel(format!(
-                "invalid coordination action `{other}`; expected open_task, accept, done, handoff, or yield"
+                "invalid coordination action `{other}`; expected open_task, accept, done, cancel, handoff, or yield"
             )));
         }
     };
@@ -636,7 +680,9 @@ async fn clear_superseded_coordination_notifications(
         .and_then(|thread_id| ThreadId::from_string(thread_id).ok());
 
     match outcome.act.kind {
-        codex_state::CoordinationActKind::Accept | codex_state::CoordinationActKind::Done => {
+        codex_state::CoordinationActKind::Accept
+        | codex_state::CoordinationActKind::Done
+        | codex_state::CoordinationActKind::Cancel => {
             if let Some(owner_thread_id) = owner_thread_id {
                 clear_coordination_notifications_for_thread(
                     db,
@@ -713,7 +759,7 @@ fn validate_coordination_act_summary(
         )));
     }
 
-    if !matches!(action, "done" | "handoff" | "yield") {
+    if !matches!(action, "done" | "cancel" | "handoff" | "yield") {
         return Ok(());
     }
 
@@ -1037,6 +1083,25 @@ async fn same_controller_done_task(
     Ok(same_controller_done.then_some(task))
 }
 
+async fn same_controller_cancelled_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: &str,
+    actor_thread_id: ThreadId,
+) -> Result<Option<codex_state::CoordinationTask>, FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let Some(task) = db
+        .get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let same_controller_cancelled = task.status == codex_state::CoordinationTaskStatus::Cancelled
+        && (task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str())
+            || task.creator_thread_id == actor_thread_id);
+    Ok(same_controller_cancelled.then_some(task))
+}
+
 fn ensure_task_control(
     task: &codex_state::CoordinationTask,
     actor_thread_id: ThreadId,
@@ -1252,6 +1317,7 @@ fn map_coordination_transition_error(err: anyhow::Error) -> FunctionCallError {
         || message.contains("requires exact ownership claims")
         || message.contains("cannot become active because thread")
         || message.contains("cannot be completed from status")
+        || message.contains("cannot be cancelled from status")
         || message.contains("cannot be handed off from status")
         || message.contains("cannot be yielded from status")
     {

@@ -4,6 +4,7 @@ use crate::model::CoordinationActKind;
 use crate::model::CoordinationActRow;
 use crate::model::CoordinationTask;
 use crate::model::CoordinationTaskAcceptParams;
+use crate::model::CoordinationTaskCancelParams;
 use crate::model::CoordinationTaskCreateParams;
 use crate::model::CoordinationTaskDoneParams;
 use crate::model::CoordinationTaskHandoffParams;
@@ -484,6 +485,71 @@ WHERE id = ?
         })
     }
 
+    pub async fn cancel_coordination_task(
+        &self,
+        params: CoordinationTaskCancelParams,
+    ) -> anyhow::Result<CoordinationTaskTransitionOutcome> {
+        self.ensure_state_schema_current().await?;
+        let now = Utc::now().timestamp();
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        reconcile_coordination_task_leases(&mut tx, now).await?;
+        let task = load_coordination_task(&mut tx, params.task_id.as_str())
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("coordination task {} not found", params.task_id))?;
+        ensure_task_allows_cancel(&task)?;
+        if let Some(owner_thread_id) = task.owner_thread_id.as_deref() {
+            release_effective_task_path_claims_for_owner_in_tx(
+                &mut tx,
+                task.id.as_str(),
+                owner_thread_id,
+            )
+            .await?;
+        }
+
+        sqlx::query(
+            r#"
+UPDATE coordination_tasks
+SET status = ?,
+    blocked_reason = NULL,
+    lease_expires_at = NULL,
+    completed_at = ?,
+    updated_at = ?
+WHERE id = ?
+            "#,
+        )
+        .bind(CoordinationTaskStatus::Cancelled.as_str())
+        .bind(now)
+        .bind(now)
+        .bind(&params.task_id)
+        .execute(&mut *tx)
+        .await?;
+
+        insert_coordination_act(
+            &mut tx,
+            &params.act_id,
+            Some(params.task_id.as_str()),
+            params.actor_thread_id,
+            CoordinationActKind::Cancel,
+            params.act_summary.as_deref(),
+            params.act_payload_json.as_str(),
+            now,
+        )
+        .await?;
+
+        let task = load_coordination_task(&mut tx, params.task_id.as_str())
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("cancelled coordination task disappeared"))?;
+        let act = load_coordination_act(&mut tx, params.act_id.as_str())
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("cancel coordination act disappeared"))?;
+        tx.commit().await?;
+        Ok(CoordinationTaskTransitionOutcome {
+            task,
+            act,
+            unblocked_tasks: Vec::new(),
+        })
+    }
+
     pub async fn handoff_coordination_task(
         &self,
         params: CoordinationTaskHandoffParams,
@@ -744,6 +810,22 @@ fn ensure_task_allows_handoff(task: &CoordinationTask) -> anyhow::Result<()> {
     ) {
         anyhow::bail!(
             "coordination task {} cannot be handed off from status `{}`",
+            task.id,
+            task.status.as_str()
+        );
+    }
+    Ok(())
+}
+
+fn ensure_task_allows_cancel(task: &CoordinationTask) -> anyhow::Result<()> {
+    if matches!(
+        task.status,
+        CoordinationTaskStatus::Done
+            | CoordinationTaskStatus::Cancelled
+            | CoordinationTaskStatus::Yielded
+    ) {
+        anyhow::bail!(
+            "coordination task {} cannot be cancelled from status `{}`",
             task.id,
             task.status.as_str()
         );
@@ -2257,6 +2339,94 @@ mod tests {
             .expect_err("cancelled task should not become done");
 
         assert!(err.to_string().contains("cannot be completed from status `cancelled`"));
+    }
+
+    #[tokio::test]
+    async fn cancel_releases_effective_implementation_claims() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let db = StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+            .await
+            .expect("init db");
+        let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000080").expect("id");
+        let owner = ThreadId::from_string("019e0000-0000-7000-8000-000000000081").expect("id");
+        let path = temp_dir.path().join("styles.css");
+        std::fs::write(&path, "body {}").expect("seed file");
+
+        db.create_coordination_task(crate::CoordinationTaskCreateParams {
+            id: "task-cancel-active-impl".to_string(),
+            creator_thread_id: creator,
+            owner_thread_id: Some(owner),
+            reserved_path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: path.clone(),
+            }],
+            claim_lease_seconds: crate::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: None,
+            kind: CoordinationTaskKind::Implementation,
+            summary: "Polish styles".to_string(),
+            details: String::new(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-cancel-active-impl".to_string(),
+            act_summary: Some("opened task".to_string()),
+            act_payload_json: serde_json::json!({
+                "action": "open_task",
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": path.to_string_lossy(),
+                }],
+            })
+            .to_string(),
+        })
+        .await
+        .expect("create task");
+
+        db.accept_coordination_task(crate::CoordinationTaskAcceptParams {
+            task_id: "task-cancel-active-impl".to_string(),
+            actor_thread_id: owner,
+            path_claims: vec![crate::PathClaimSpec {
+                kind: crate::PathClaimKind::File,
+                path: path.clone(),
+            }],
+            lease_seconds: 300,
+            act_id: "act-accept-cancel-active-impl".to_string(),
+            act_summary: Some("taking styles".to_string()),
+            act_payload_json: serde_json::json!({
+                "action": "accept",
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": path.to_string_lossy(),
+                }],
+                "lease_seconds": 300,
+            })
+            .to_string(),
+        })
+        .await
+        .expect("accept task");
+
+        let outcome = db
+            .cancel_coordination_task(crate::CoordinationTaskCancelParams {
+                task_id: "task-cancel-active-impl".to_string(),
+                actor_thread_id: creator,
+                act_id: "act-cancel-active-impl".to_string(),
+                act_summary: Some("Tony integrated the necessary styles already.".to_string()),
+                act_payload_json: serde_json::json!({
+                    "action": "cancel",
+                    "summary": "Tony integrated the necessary styles already.",
+                })
+                .to_string(),
+            })
+            .await
+            .expect("cancel task");
+
+        assert_eq!(outcome.task.status, CoordinationTaskStatus::Cancelled);
+        assert_eq!(
+            db.list_path_claims(Some(owner))
+                .await
+                .expect("claim query should succeed"),
+            Vec::<crate::PathClaim>::new()
+        );
     }
 
     #[tokio::test]
