@@ -6,6 +6,7 @@
 use crate::exec::is_likely_sandbox_denied;
 use crate::guardian::GuardianApprovalRequest;
 use crate::guardian::review_approval_request;
+use crate::tools::apply_patch_turn_fs::ApplyPatchTurnFileSystem;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::sandboxing::Approvable;
 use crate::tools::sandboxing::ApprovalCtx;
@@ -47,6 +48,7 @@ pub struct ApplyPatchRequest {
     pub action: ApplyPatchAction,
     pub file_paths: Vec<AbsolutePathBuf>,
     pub changes: std::collections::HashMap<PathBuf, FileChange>,
+    pub resurrected_deleted_files: std::collections::HashMap<PathBuf, Vec<u8>>,
     pub exec_approval_requirement: ExecApprovalRequirement,
     pub additional_permissions: Option<AdditionalPermissionProfile>,
     pub permissions_preapproved: bool,
@@ -230,6 +232,8 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
         })?;
         let started_at = Instant::now();
         let fs = environment.get_filesystem();
+        let turn_fs =
+            ApplyPatchTurnFileSystem::new(fs.as_ref(), req.resurrected_deleted_files.clone());
         let sandbox = Self::file_system_sandbox_context_for_attempt(req, attempt);
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
@@ -238,7 +242,7 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
             &req.action.cwd,
             &mut stdout,
             &mut stderr,
-            fs.as_ref(),
+            &turn_fs,
             sandbox.as_ref(),
         )
         .await;

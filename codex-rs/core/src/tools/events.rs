@@ -508,7 +508,7 @@ async fn emit_patch_end(
                 stdout,
                 stderr,
                 success,
-                changes,
+                changes: changes.clone(),
                 status,
             }),
         )
@@ -517,6 +517,9 @@ async fn emit_patch_end(
     if let Some(tracker) = ctx.turn_diff_tracker {
         let unified_diff = {
             let mut guard = tracker.lock().await;
+            if success {
+                guard.on_patch_success(&changes);
+            }
             guard.get_unified_diff()
         };
         if let Ok(Some(unified_diff)) = unified_diff {

@@ -21,7 +21,10 @@ use parser::ParseError::*;
 pub use parser::UpdateFileChunk;
 pub use parser::parse_patch;
 pub use parser::parse_patch_streaming;
+use similar::Algorithm;
+use similar::DiffTag;
 use similar::TextDiff;
+use similar::capture_diff_slices;
 use thiserror::Error;
 
 pub use invocation::maybe_parse_apply_patch_verified;
@@ -399,6 +402,130 @@ struct AppliedPatch {
     new_contents: String,
 }
 
+fn normalise_line(line: &str) -> String {
+    line.trim()
+        .chars()
+        .map(|c| match c {
+            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2015}'
+            | '\u{2212}' => '-',
+            '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}' => '\'',
+            '\u{201C}' | '\u{201D}' | '\u{201E}' | '\u{201F}' => '"',
+            '\u{00A0}' | '\u{2002}' | '\u{2003}' | '\u{2004}' | '\u{2005}' | '\u{2006}'
+            | '\u{2007}' | '\u{2008}' | '\u{2009}' | '\u{200A}' | '\u{202F}' | '\u{205F}'
+            | '\u{3000}' => ' ',
+            other => other,
+        })
+        .collect()
+}
+
+fn lines_equivalent(lhs: &str, rhs: &str) -> bool {
+    normalise_line(lhs) == normalise_line(rhs)
+}
+
+fn find_ordered_alignment(
+    original_lines: &[String],
+    pattern: &[String],
+    start: usize,
+) -> Option<Vec<usize>> {
+    if pattern.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let mut alignment = Vec::with_capacity(pattern.len());
+    let mut cursor = start;
+    for needle in pattern {
+        let relative_match = original_lines[cursor..]
+            .iter()
+            .position(|line| lines_equivalent(line, needle))?;
+        let match_index = cursor + relative_match;
+        alignment.push(match_index);
+        cursor = match_index + 1;
+    }
+
+    Some(alignment)
+}
+
+fn lines_form_subsequence(subsequence: &[String], sequence: &[String]) -> bool {
+    if subsequence.is_empty() {
+        return true;
+    }
+
+    let mut seq_index = 0usize;
+    for line in subsequence {
+        let Some(relative_match) = sequence[seq_index..]
+            .iter()
+            .position(|candidate| lines_equivalent(candidate, line))
+        else {
+            return false;
+        };
+        seq_index += relative_match + 1;
+    }
+
+    true
+}
+
+fn augment_pattern_with_target_insertions(
+    original_lines: &[String],
+    pattern: &[String],
+    new_slice: &[String],
+    start: usize,
+) -> Option<Vec<String>> {
+    let alignment = find_ordered_alignment(original_lines, pattern, start)?;
+    let mut inserted_before = vec![Vec::<String>::new(); pattern.len() + 1];
+    for op in capture_diff_slices(Algorithm::Myers, pattern, new_slice) {
+        let (tag, old_range, new_range) = op.as_tag_tuple();
+        if tag == DiffTag::Insert {
+            inserted_before[old_range.start].extend_from_slice(&new_slice[new_range]);
+        }
+    }
+
+    let mut current_before = vec![Vec::<String>::new(); pattern.len() + 1];
+    for idx in 1..pattern.len() {
+        current_before[idx] = original_lines[alignment[idx - 1] + 1..alignment[idx]].to_vec();
+    }
+
+    if let Some(last_alignment) = alignment.last().copied() {
+        let trailing_insertions = &inserted_before[pattern.len()];
+        let mut cursor = last_alignment + 1;
+        while current_before[pattern.len()].len() < trailing_insertions.len()
+            && cursor < original_lines.len()
+            && lines_equivalent(
+                &original_lines[cursor],
+                &trailing_insertions[current_before[pattern.len()].len()],
+            )
+        {
+            current_before[pattern.len()].push(original_lines[cursor].clone());
+            cursor += 1;
+        }
+    }
+
+    if !current_before
+        .iter()
+        .enumerate()
+        .any(|(idx, lines)| idx > 0 && !lines.is_empty())
+    {
+        return None;
+    }
+
+    for idx in 1..=pattern.len() {
+        if !current_before[idx].is_empty()
+            && !lines_form_subsequence(&current_before[idx], &inserted_before[idx])
+        {
+            return None;
+        }
+    }
+
+    let mut augmented_pattern = Vec::new();
+    for (idx, line) in pattern.iter().enumerate() {
+        augmented_pattern.push(line.clone());
+        if !current_before[idx + 1].is_empty() {
+            augmented_pattern.extend(current_before[idx + 1].iter().cloned());
+        }
+    }
+
+    Some(augmented_pattern)
+}
+
 /// Return *only* the new file contents (joined into a single `String`) after
 /// applying the chunks to the file at `path`.
 async fn derive_new_contents_from_chunks(
@@ -514,6 +641,24 @@ fn compute_replacements(
         if let Some(start_idx) = found {
             replacements.push((start_idx, pattern.len(), new_slice.to_vec()));
             line_index = start_idx + pattern.len();
+        } else if let Some(augmented_pattern) =
+            augment_pattern_with_target_insertions(original_lines, pattern, new_slice, line_index)
+        {
+            if let Some(start_idx) = seek_sequence::seek_sequence(
+                original_lines,
+                &augmented_pattern,
+                line_index,
+                chunk.is_end_of_file,
+            ) {
+                replacements.push((start_idx, augmented_pattern.len(), new_slice.to_vec()));
+                line_index = start_idx + augmented_pattern.len();
+            } else {
+                return Err(ApplyPatchError::ComputeReplacements(format!(
+                    "Failed to find expected lines in {}:\n{}",
+                    path.display(),
+                    chunk.old_lines.join("\n"),
+                )));
+            }
         } else {
             return Err(ApplyPatchError::ComputeReplacements(format!(
                 "Failed to find expected lines in {}:\n{}",
@@ -1288,6 +1433,73 @@ f
 g
 "#
         );
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_matches_target_insertions_already_present() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("stale-context.txt");
+        fs::write(&path, "header\nhelper\nbody\nfooter\n").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
+ header
++helper
+ body
+-footer
++done"#,
+            path.display()
+        ));
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &AbsolutePathBuf::from_absolute_path(dir.path()).unwrap(),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+
+        let contents = fs::read_to_string(path).unwrap();
+        assert_eq!(contents, "header\nhelper\nbody\ndone\n");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_matches_subset_of_target_insertions_already_present() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("stale-context-subset.txt");
+        fs::write(&path, "header\nhelper-1\nbody\nfooter\n").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
+ header
++helper-1
++helper-2
+ body
+-footer
++done"#,
+            path.display()
+        ));
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &AbsolutePathBuf::from_absolute_path(dir.path()).unwrap(),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+
+        let contents = fs::read_to_string(path).unwrap();
+        assert_eq!(contents, "header\nhelper-1\nhelper-2\nbody\ndone\n");
     }
 
     #[tokio::test]

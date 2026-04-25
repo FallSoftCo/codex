@@ -40,6 +40,11 @@ pub struct TurnDiffTracker {
     temp_name_to_current_path: HashMap<String, PathBuf>,
     /// Cache of known git worktree roots to avoid repeated filesystem walks.
     git_root_cache: Vec<PathBuf>,
+    /// Last known contents for files that were deleted earlier in the same turn.
+    ///
+    /// This lets later apply_patch verification reconstruct updates against a
+    /// file that was intentionally removed and then rewritten within one turn.
+    resurrected_deleted_files: HashMap<PathBuf, Vec<u8>>,
 }
 
 impl TurnDiffTracker {
@@ -125,6 +130,32 @@ impl TurnDiffTracker {
                     .insert(dest.clone(), uuid_filename);
             };
         }
+    }
+
+    /// Record the subset of a successful patch that should affect the turn-local
+    /// file resurrection view.
+    pub fn on_patch_success(&mut self, changes: &HashMap<PathBuf, FileChange>) {
+        for (path, change) in changes {
+            match change {
+                FileChange::Delete { content } => {
+                    self.resurrected_deleted_files
+                        .insert(path.clone(), content.clone().into_bytes());
+                }
+                FileChange::Add { .. } => {
+                    self.resurrected_deleted_files.remove(path);
+                }
+                FileChange::Update { move_path, .. } => {
+                    self.resurrected_deleted_files.remove(path);
+                    if let Some(dest) = move_path {
+                        self.resurrected_deleted_files.remove(dest);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn resurrected_deleted_files(&self) -> HashMap<PathBuf, Vec<u8>> {
+        self.resurrected_deleted_files.clone()
     }
 
     fn get_path_for_internal(&self, internal: &str) -> Option<PathBuf> {

@@ -12,6 +12,7 @@ use crate::apply_patch::convert_apply_patch_to_protocol;
 use crate::function_tool::FunctionCallError;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
+use crate::tools::apply_patch_turn_fs::ApplyPatchTurnFileSystem;
 use crate::tools::context::ApplyPatchToolOutput;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::SharedTurnDiffTracker;
@@ -371,13 +372,18 @@ impl ToolHandler for ApplyPatchHandler {
             ));
         };
         let fs = environment.get_filesystem();
+        let resurrected_deleted_files = {
+            let guard = tracker.lock().await;
+            guard.resurrected_deleted_files()
+        };
+        let turn_fs = ApplyPatchTurnFileSystem::new(fs.as_ref(), resurrected_deleted_files.clone());
         let sandbox = environment
             .is_remote()
             .then(|| turn.file_system_sandbox_context(/*additional_permissions*/ None));
         match codex_apply_patch::maybe_parse_apply_patch_verified(
             &command,
             &cwd,
-            fs.as_ref(),
+            &turn_fs,
             sandbox.as_ref(),
         )
         .await
@@ -408,6 +414,7 @@ impl ToolHandler for ApplyPatchHandler {
                             action: apply.action,
                             file_paths,
                             changes,
+                            resurrected_deleted_files,
                             exec_approval_requirement: apply.exec_approval_requirement,
                             additional_permissions: effective_additional_permissions
                                 .additional_permissions,
@@ -480,8 +487,20 @@ pub(crate) async fn intercept_apply_patch(
         .as_ref()
         .filter(|env| env.is_remote())
         .map(|_| turn.file_system_sandbox_context(/*additional_permissions*/ None));
-    match codex_apply_patch::maybe_parse_apply_patch_verified(command, cwd, fs, sandbox.as_ref())
-        .await
+    let resurrected_deleted_files = if let Some(tracker) = tracker {
+        let guard = tracker.lock().await;
+        guard.resurrected_deleted_files()
+    } else {
+        HashMap::new()
+    };
+    let turn_fs = ApplyPatchTurnFileSystem::new(fs, resurrected_deleted_files.clone());
+    match codex_apply_patch::maybe_parse_apply_patch_verified(
+        command,
+        cwd,
+        &turn_fs,
+        sandbox.as_ref(),
+    )
+    .await
     {
         codex_apply_patch::MaybeApplyPatchVerified::Body(changes) => {
             session
@@ -516,6 +535,7 @@ pub(crate) async fn intercept_apply_patch(
                         action: apply.action,
                         file_paths: approval_keys,
                         changes,
+                        resurrected_deleted_files,
                         exec_approval_requirement: apply.exec_approval_requirement,
                         additional_permissions: effective_additional_permissions
                             .additional_permissions,

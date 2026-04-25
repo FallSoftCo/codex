@@ -239,6 +239,62 @@ index {ZERO_OID}..{right_oid}
 }
 
 #[test]
+fn records_deleted_file_contents_for_same_turn_resurrection() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("resurrect.txt");
+    let mut acc = TurnDiffTracker::new();
+
+    let changes = HashMap::from([(
+        file.clone(),
+        FileChange::Delete {
+            content: "before\n".to_string(),
+        },
+    )]);
+    acc.on_patch_success(&changes);
+
+    assert_eq!(
+        acc.resurrected_deleted_files().get(&file).cloned(),
+        Some(b"before\n".to_vec())
+    );
+}
+
+#[test]
+fn clears_deleted_file_resurrection_after_add_or_update() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("resurrect.txt");
+    let mut acc = TurnDiffTracker::new();
+
+    acc.on_patch_success(&HashMap::from([(
+        file.clone(),
+        FileChange::Delete {
+            content: "before\n".to_string(),
+        },
+    )]));
+    acc.on_patch_success(&HashMap::from([(
+        file.clone(),
+        FileChange::Add {
+            content: "after\n".to_string(),
+        },
+    )]));
+    assert!(!acc.resurrected_deleted_files().contains_key(&file));
+
+    acc.on_patch_success(&HashMap::from([(
+        file.clone(),
+        FileChange::Delete {
+            content: "again\n".to_string(),
+        },
+    )]));
+    acc.on_patch_success(&HashMap::from([(
+        file.clone(),
+        FileChange::Update {
+            unified_diff: "@@\n".to_string(),
+            move_path: None,
+        },
+    )]));
+    assert!(!acc.resurrected_deleted_files().contains_key(&file));
+}
+
+#[test]
 fn update_persists_across_new_baseline_for_new_file() {
     let dir = tempdir().unwrap();
     let a = dir.path().join("a.txt");
