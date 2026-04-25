@@ -116,16 +116,60 @@ POLICY_PROMPTS = {
     "dual_command": {
         "tony": (
             "You own the work graph, dependency order, and final integration. Keep the next ready lanes explicit, "
-            "reassign quickly when facts change, and make sure somebody always owns the highest-value open lane."
+            "reassign quickly when facts change, and make sure somebody always owns the highest-value open lane. "
+            "Implementation ownership is your control surface: publish the initial lane map before builders claim code, "
+            "and do not reclaim an active implementation lane unless the current owner explicitly yields, reports blocked, "
+            "or Ray presents fresh test evidence that proves the lane is idle or wrong."
+        ),
+        "james": (
+            "You are an executor under Tony's plan. Do not self-claim implementation files before Tony posts the first "
+            "lane map. After that, take only an exact lane Tony has opened or confirmed for you, keep strictly to that "
+            "scope, and hand back a concise completion note instead of freelancing into neighboring files."
+        ),
+        "chris": (
+            "You are an executor under Tony's plan. Do not self-claim implementation files before Tony posts the first "
+            "lane map. After that, take only an exact lane Tony has opened or confirmed for you, keep strictly to that "
+            "scope, and if you become free ask Tony for the next lane instead of speculating on ownership."
         ),
         "ray": (
             "You own verification, idle detection, and shutdown. Keep the test signal fresh, call out blocked or "
-            "idle teammates, and explicitly close the room when the app is actually done."
+            "idle teammates, and explicitly close the room when the app is actually done. Stay verification-only unless "
+            "Tony explicitly assigns you an implementation lane; do not claim product code on your own."
         ),
         "shared": (
             "Use dual-command coordination. Tony controls planning and reassignment; Ray controls verification and "
             "quiescence. James and Chris should execute exact lanes, hand off concise summaries, and immediately take "
-            "the next ready lane when either Tony or Ray identifies one."
+            "the next ready lane when Tony identifies one. Ray should publish verification deltas and closure signals, "
+            "not implementation claims, unless Tony explicitly hands off a code lane."
+        ),
+    },
+    "dual_command_lease": {
+        "tony": (
+            "You own the work graph, dependency order, and final integration. Publish the initial lane map before builders "
+            "claim code. Treat an executor's explicit progress heartbeat as a lease on that lane: do not reassign an "
+            "implementation file while the current owner is still heartbeating concrete progress or answering status checks. "
+            "Only reassign after the owner explicitly yields, reports blocked, or misses repeated heartbeat requests and Ray "
+            "confirms there is still no testable handback."
+        ),
+        "james": (
+            "You are an executor under Tony's plan. Do not self-claim implementation files before Tony posts the first lane map. "
+            "Once you own a lane, post concise progress heartbeats when Tony or Ray checks status, even if the visible shared diff "
+            "is not ready yet. Keep to exact assigned scope and hand back a concrete completion note when the lane is testable."
+        ),
+        "chris": (
+            "You are an executor under Tony's plan. Do not self-claim implementation files before Tony posts the first lane map. "
+            "Once you own a lane, post concise progress heartbeats when Tony or Ray checks status, even if the visible shared diff "
+            "is not ready yet. Keep to exact assigned scope and hand back a concrete completion note when the lane is testable."
+        ),
+        "ray": (
+            "You own verification, idle detection, and shutdown. Stay verification-only unless Tony explicitly assigns code. "
+            "Treat a recent owner heartbeat as active ownership, not idle work. Recommend reassignment only when the owner has "
+            "missed repeated heartbeat checks or explicitly yielded, and keep the test signal fresh once a handback exists."
+        ),
+        "shared": (
+            "Use dual-command coordination with lane leases. Tony controls planning and reassignment; Ray controls verification "
+            "and shutdown; James and Chris execute exact lanes. Active owners must answer status checks with a short progress "
+            "heartbeat before anyone treats the lane as stalled. Reassign only after a missed lease heartbeat or an explicit yield."
         ),
     },
     "kanban_pull": {

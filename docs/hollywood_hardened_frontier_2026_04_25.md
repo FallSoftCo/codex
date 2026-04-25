@@ -279,3 +279,75 @@ This closes the old dual-command quiescence leak materially:
 The remaining dual-command weakness is not closure ping-pong anymore. What still shows
 up in the room trace is noisy ownership correction and mid-run lane churn around the
 critical path before the implementation settles.
+
+## Lease-Based Dual Command
+
+The next hypothesis was that `dual_command` was still too eager to treat "no visible
+workspace diff yet" as a stalled lane. That produced unnecessary status checks,
+ownership corrections, and reassignment churn even after the closure wake fixes.
+
+To test that, I added a new policy variant, `dual_command_lease`, with three explicit
+rules:
+
+- active owners keep a lane by sending short progress heartbeats
+- Ray treats a recent heartbeat as active ownership rather than idle work
+- Tony only reassigns after missed heartbeat checks or an explicit yield/blocker
+
+### Habit Dashboard Comparison
+
+Existing post-fix `dual_command` baseline:
+
+- room: `repo/habit_dashboard-dual_command-dcb6ee`
+- `passedAtSeconds: 257.9`
+- `quiescenceLagSeconds: 69.1`
+- `messageCount: 64`
+- `activeThreadsAfterRun: 0`
+
+Lease variant:
+
+- room: `repo/habit_dashboard-dual_command_lease-aca6b6`
+- `passedAtSeconds: 215.4`
+- `quiescenceLagSeconds: 91.6`
+- `messageCount: 30`
+- `activeThreadsAfterRun: 0`
+
+What changed in the room trace:
+
+- no late ownership-correction storm
+- no Tony/Ray reassignment loop while the active owner was still working
+- one blocking `app.js` lane stayed with James until handback, while Chris stayed
+  parked on the surface layer
+
+This is a real improvement on the critical-path churn we still saw in plain
+`dual_command`:
+
+- time to green improved from `257.9s` to `215.4s`
+- message volume dropped from `64` to `30`
+- the run still fully quiesced
+
+### Incident Console Validation
+
+To make sure the lease idea was not only rescuing the simpler dashboard case, I ran the
+same variant on the more coupled `incident_console` challenge.
+
+- room: `repo/incident_console-dual_command_lease-3c3313`
+- `passedAtSeconds: 175.0`
+- `quiescedAtSeconds: 243.5`
+- `quiescenceLagSeconds: 68.5`
+- `messageCount: 42`
+- `activeThreadsAfterRun: 0`
+
+That run held the intended shape:
+
+- Tony published the lane map once
+- James kept the blocking `app.js` lane
+- Chris stayed on a parked static review lane after confirming no markup changes were needed
+- Ray stayed verification-only and used heartbeat semantics instead of pushing early reassignment
+
+Current conclusion:
+
+- closure wake hardening fixed the old no-op ping-pong
+- lease-style dual command is the first policy change after that hardening that also
+  materially reduces critical-path churn
+- the next serious frontier candidate is no longer plain `dual_command`; it is
+  `dual_command_lease`
