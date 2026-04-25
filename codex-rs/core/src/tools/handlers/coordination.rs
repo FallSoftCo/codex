@@ -77,6 +77,7 @@ struct CoordinationActResult {
     ownership: Option<Value>,
     room_notified: bool,
     woken_threads: Vec<String>,
+    superseded_owner_thread_id: Option<String>,
     deduped: bool,
 }
 
@@ -403,7 +404,8 @@ async fn handle_coordination_act(
             } else {
                 Some(accepted_claim_paths_for_actor(db, actor_thread_id, &path_claims).await?)
             };
-            return finalize_coordination_act(session, turn, db, &args, outcome, ownership).await;
+            return finalize_coordination_act(session, turn, db, &args, outcome, ownership, None)
+                .await;
         }
         "done" => {
             let task = match required_task(db, args.task_id.as_deref()).await {
@@ -457,7 +459,16 @@ async fn handle_coordination_act(
             } else {
                 None
             };
-            return finalize_coordination_act(session, turn, db, &args, outcome, ownership).await;
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                ownership,
+                task.owner_thread_id.clone(),
+            )
+            .await;
         }
         "cancel" => {
             let task = match required_task(db, args.task_id.as_deref()).await {
@@ -501,7 +512,16 @@ async fn handle_coordination_act(
                     fatal => return Err(fatal),
                 },
             };
-            return finalize_coordination_act(session, turn, db, &args, outcome, None).await;
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                None,
+                task.owner_thread_id.clone(),
+            )
+            .await;
         }
         "handoff" => {
             let task = match required_task(db, args.task_id.as_deref()).await {
@@ -558,7 +578,16 @@ async fn handle_coordination_act(
             } else {
                 None
             };
-            return finalize_coordination_act(session, turn, db, &args, outcome, ownership).await;
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                ownership,
+                task.owner_thread_id.clone(),
+            )
+            .await;
         }
         "yield" => {
             let task = match required_task(db, args.task_id.as_deref()).await {
@@ -602,7 +631,16 @@ async fn handle_coordination_act(
             } else {
                 None
             };
-            return finalize_coordination_act(session, turn, db, &args, outcome, ownership).await;
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                ownership,
+                task.owner_thread_id.clone(),
+            )
+            .await;
         }
         other => {
             return Err(FunctionCallError::RespondToModel(format!(
@@ -610,7 +648,7 @@ async fn handle_coordination_act(
             )));
         }
     };
-    finalize_coordination_act(session, turn, db, &args, outcome, None).await
+    finalize_coordination_act(session, turn, db, &args, outcome, None, None).await
 }
 
 async fn finalize_coordination_act(
@@ -620,8 +658,11 @@ async fn finalize_coordination_act(
     args: &CoordinationActArgs,
     outcome: codex_state::CoordinationTaskTransitionOutcome,
     ownership: Option<Value>,
+    prior_owner_thread_id: Option<String>,
 ) -> Result<FunctionToolOutput, FunctionCallError> {
-    clear_superseded_coordination_notifications(db, &outcome)
+    let superseded_owner_thread_id =
+        superseded_owner_thread_id(&outcome, prior_owner_thread_id.as_deref());
+    clear_superseded_coordination_notifications(db, &outcome, prior_owner_thread_id.as_deref())
         .await
         .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
 
@@ -669,6 +710,7 @@ async fn finalize_coordination_act(
         ownership,
         room_notified,
         woken_threads,
+        superseded_owner_thread_id,
         deduped: false,
     };
     Ok(FunctionToolOutput::from_text(
@@ -681,6 +723,7 @@ async fn finalize_coordination_act(
 async fn clear_superseded_coordination_notifications(
     db: &Arc<codex_state::StateRuntime>,
     outcome: &codex_state::CoordinationTaskTransitionOutcome,
+    prior_owner_thread_id: Option<&str>,
 ) -> anyhow::Result<()> {
     let task_id = outcome.task.id.as_str();
     let actor_thread_id = ThreadId::from_string(&outcome.act.actor_thread_id).ok();
@@ -689,11 +732,11 @@ async fn clear_superseded_coordination_notifications(
         .owner_thread_id
         .as_deref()
         .and_then(|thread_id| ThreadId::from_string(thread_id).ok());
+    let prior_owner_thread_id =
+        prior_owner_thread_id.and_then(|thread_id| ThreadId::from_string(thread_id).ok());
 
     match outcome.act.kind {
-        codex_state::CoordinationActKind::Accept
-        | codex_state::CoordinationActKind::Done
-        | codex_state::CoordinationActKind::Cancel => {
+        codex_state::CoordinationActKind::Accept => {
             if let Some(owner_thread_id) = owner_thread_id {
                 clear_coordination_notifications_for_thread(
                     db,
@@ -704,13 +747,32 @@ async fn clear_superseded_coordination_notifications(
                 .await?;
             }
         }
-        codex_state::CoordinationActKind::Handoff | codex_state::CoordinationActKind::Yield => {
-            if let Some(actor_thread_id) = actor_thread_id {
+        codex_state::CoordinationActKind::Done | codex_state::CoordinationActKind::Cancel => {
+            let threads_to_clear = [prior_owner_thread_id, owner_thread_id]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            for thread_id in threads_to_clear {
                 clear_coordination_notifications_for_thread(
                     db,
-                    actor_thread_id,
+                    thread_id,
                     task_id,
-                    &["assigned", "unblocked"],
+                    &["assigned", "unblocked", "cancelled"],
+                )
+                .await?;
+            }
+        }
+        codex_state::CoordinationActKind::Handoff | codex_state::CoordinationActKind::Yield => {
+            let threads_to_clear = [prior_owner_thread_id, actor_thread_id]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            for thread_id in threads_to_clear {
+                clear_coordination_notifications_for_thread(
+                    db,
+                    thread_id,
+                    task_id,
+                    &["assigned", "unblocked", "cancelled"],
                 )
                 .await?;
             }
@@ -719,6 +781,23 @@ async fn clear_superseded_coordination_notifications(
     }
 
     Ok(())
+}
+
+fn superseded_owner_thread_id(
+    outcome: &codex_state::CoordinationTaskTransitionOutcome,
+    prior_owner_thread_id: Option<&str>,
+) -> Option<String> {
+    match outcome.act.kind {
+        codex_state::CoordinationActKind::Done
+        | codex_state::CoordinationActKind::Cancel
+        | codex_state::CoordinationActKind::Handoff
+        | codex_state::CoordinationActKind::Yield => prior_owner_thread_id
+            .filter(|thread_id| !thread_id.is_empty())
+            .map(str::to_string),
+        codex_state::CoordinationActKind::OpenTask | codex_state::CoordinationActKind::Accept => {
+            None
+        }
+    }
 }
 
 async fn clear_coordination_notifications_for_thread(
@@ -1301,6 +1380,7 @@ fn coordination_duplicate_output(
         ownership: None,
         room_notified: false,
         woken_threads: Vec::new(),
+        superseded_owner_thread_id: None,
         deduped: true,
     };
     Ok(FunctionToolOutput::from_text(

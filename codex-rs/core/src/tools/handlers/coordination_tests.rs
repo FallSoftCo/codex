@@ -758,7 +758,15 @@ async fn open_task_named_owner_resolves_thread_title() {
 #[tokio::test]
 async fn handoff_named_owner_resolves_thread_title() {
     let (session, turn, state_db) = make_session_with_state_db().await;
+    let superseded_owner_thread_id = ThreadId::new();
     let owner_thread_id = ThreadId::new();
+    insert_named_thread_metadata(
+        &state_db,
+        turn.as_ref(),
+        superseded_owner_thread_id,
+        "chris",
+    )
+    .await;
     insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
 
     let open_output = CoordinationHandler
@@ -770,6 +778,7 @@ async fn handoff_named_owner_resolves_thread_title() {
                 "action": "open_task",
                 "title": "Coordinate handoff",
                 "details": "Start unassigned so the creator can reassign it.",
+                "owner": "chris",
                 "notify_room": false,
             }),
         ))
@@ -805,6 +814,10 @@ async fn handoff_named_owner_resolves_thread_title() {
     assert_eq!(
         handoff_result["woken_threads"],
         json!([owner_thread_id.to_string()])
+    );
+    assert_eq!(
+        handoff_result["superseded_owner_thread_id"],
+        json!(superseded_owner_thread_id.to_string())
     );
 }
 

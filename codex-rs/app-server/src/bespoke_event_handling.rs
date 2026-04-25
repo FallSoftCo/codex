@@ -1647,7 +1647,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .await;
         }
         EventMsg::RawResponseItem(raw_response_item_event) => {
-            maybe_interrupt_cancelled_coordination_owner(
+            maybe_interrupt_superseded_coordination_owner(
                 &raw_response_item_event.item,
                 conversation_id,
                 thread_manager.as_ref(),
@@ -2221,7 +2221,7 @@ async fn maybe_emit_raw_response_item_completed(
         .await;
 }
 
-async fn maybe_interrupt_cancelled_coordination_owner(
+async fn maybe_interrupt_superseded_coordination_owner(
     item: &codex_protocol::models::ResponseItem,
     conversation_id: ThreadId,
     thread_manager: &ThreadManager,
@@ -2235,45 +2235,54 @@ async fn maybe_interrupt_cancelled_coordination_owner(
     let Ok(payload) = serde_json::from_str::<serde_json::Value>(&output_text) else {
         return;
     };
-
-    let act_kind = payload
-        .get("act")
-        .and_then(|value| value.get("kind"))
-        .and_then(serde_json::Value::as_str);
-    if act_kind != Some("cancel") {
-        return;
-    }
-
-    let Some(task) = payload.get("task") else {
-        return;
-    };
-    if task.get("status").and_then(serde_json::Value::as_str) != Some("cancelled") {
-        return;
-    }
-
-    let Some(owner_thread_id) = task
-        .get("owner_thread_id")
-        .and_then(serde_json::Value::as_str)
-        .filter(|value| !value.is_empty())
+    let Some(owner_thread_id) =
+        superseded_coordination_owner_to_interrupt(&payload, &conversation_id)
     else {
         return;
     };
-    if owner_thread_id == conversation_id.to_string() {
-        return;
-    }
 
-    let Ok(owner_thread_id) = ThreadId::from_string(owner_thread_id) else {
-        return;
-    };
     let Ok(owner_thread) = thread_manager.get_thread(owner_thread_id).await else {
         return;
     };
     if let Err(err) = owner_thread.submit(Op::Interrupt).await {
         tracing::debug!(
             owner_thread_id = %owner_thread_id,
-            "failed to interrupt cancelled coordination owner turn: {err}"
+            "failed to interrupt superseded coordination owner turn: {err}"
         );
     }
+}
+
+fn superseded_coordination_owner_to_interrupt(
+    payload: &serde_json::Value,
+    conversation_id: &ThreadId,
+) -> Option<ThreadId> {
+    let conversation_id = conversation_id.to_string();
+    if let Some(owner_thread_id) = payload
+        .get("superseded_owner_thread_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|thread_id| !thread_id.is_empty() && *thread_id != conversation_id)
+    {
+        return ThreadId::from_string(owner_thread_id).ok();
+    }
+
+    let act_kind = payload
+        .get("act")
+        .and_then(|value| value.get("kind"))
+        .and_then(serde_json::Value::as_str);
+    if act_kind != Some("cancel") {
+        return None;
+    }
+
+    let task = payload.get("task")?;
+    if task.get("status").and_then(serde_json::Value::as_str) != Some("cancelled") {
+        return None;
+    }
+
+    let owner_thread_id = task
+        .get("owner_thread_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|thread_id| !thread_id.is_empty() && *thread_id != conversation_id)?;
+    ThreadId::from_string(owner_thread_id).ok()
 }
 
 async fn clear_stale_cancelled_coordination_notifications_for_thread(
@@ -5067,6 +5076,58 @@ mod tests {
         .await;
         assert!(state_db.list_scheduled_tasks(Some(owner)).await?.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn superseded_coordination_owner_to_interrupt_prefers_explicit_field() {
+        let conversation_id = ThreadId::new();
+        let superseded_owner = ThreadId::new();
+        let payload = serde_json::json!({
+            "superseded_owner_thread_id": superseded_owner.to_string(),
+            "act": { "kind": "handoff" },
+            "task": {
+                "status": "awarded",
+                "owner_thread_id": ThreadId::new().to_string(),
+            }
+        });
+
+        let interrupted = superseded_coordination_owner_to_interrupt(&payload, &conversation_id);
+
+        assert_eq!(interrupted, Some(superseded_owner));
+    }
+
+    #[test]
+    fn superseded_coordination_owner_to_interrupt_skips_current_conversation() {
+        let conversation_id = ThreadId::new();
+        let payload = serde_json::json!({
+            "superseded_owner_thread_id": conversation_id.to_string(),
+            "act": { "kind": "handoff" },
+            "task": {
+                "status": "awarded",
+                "owner_thread_id": ThreadId::new().to_string(),
+            }
+        });
+
+        let interrupted = superseded_coordination_owner_to_interrupt(&payload, &conversation_id);
+
+        assert!(interrupted.is_none());
+    }
+
+    #[test]
+    fn superseded_coordination_owner_to_interrupt_supports_legacy_cancel_payloads() {
+        let conversation_id = ThreadId::new();
+        let cancelled_owner = ThreadId::new();
+        let payload = serde_json::json!({
+            "act": { "kind": "cancel" },
+            "task": {
+                "status": "cancelled",
+                "owner_thread_id": cancelled_owner.to_string(),
+            }
+        });
+
+        let interrupted = superseded_coordination_owner_to_interrupt(&payload, &conversation_id);
+
+        assert_eq!(interrupted, Some(cancelled_owner));
     }
 
     #[tokio::test]
