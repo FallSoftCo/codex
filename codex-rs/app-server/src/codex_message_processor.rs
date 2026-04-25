@@ -2972,6 +2972,7 @@ impl CodexMessageProcessor {
             "no action needed",
             "no further action",
             "no further reply needed",
+            "no further response is needed",
             "no open items",
             "no open coordination items",
             "thread closed",
@@ -2981,20 +2982,34 @@ impl CodexMessageProcessor {
             "stay quiet unless",
             "stay available for new work",
         ];
+        let closure_directive_phrases = [
+            "do not reply",
+            "do not send further idle state acknowledgments",
+            "stand down unless",
+            "closing this dm thread",
+            "close this dm thread",
+            "i will not reply to further",
+            "i will only contact you again if i assign new work or hit a real blocker",
+            "no assignment is being made",
+        ];
         let request_markers = [
             "please", "need", "question", "task", "blocker", "assign", "handoff", "join", "claim",
             "inspect", "check", "help",
         ];
 
-        acknowledgement_openers.contains(&first_word)
-            && !body.contains('?')
+        let explicit_closure_directive = closure_directive_phrases
+            .iter()
+            .any(|phrase| normalized_body.contains(phrase));
+        let acknowledgement_style = acknowledgement_openers.contains(&first_word)
             && !request_markers
                 .iter()
                 .any(|marker| normalized_body.contains(marker))
             && (normalized_words.len() <= 12
                 || acknowledgement_phrases
                     .iter()
-                    .any(|phrase| normalized_body.contains(phrase)))
+                    .any(|phrase| normalized_body.contains(phrase)));
+
+        !body.contains('?') && (acknowledgement_style || explicit_closure_directive)
     }
 
     fn hollywood_body_has_actionable_handoff(body: &str) -> bool {
@@ -15254,7 +15269,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use std::sync::RwLock;
     use tempfile::TempDir;
 
     const TEST_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -15556,10 +15570,9 @@ mod tests {
         };
         let config_manager = ConfigManager::new(
             temp_dir.path().to_path_buf(),
-            Arc::new(RwLock::new(Vec::new())),
-            Arc::new(RwLock::new(BTreeMap::new())),
+            Vec::new(),
             LoaderOverrides::default(),
-            Arc::new(RwLock::new(CloudRequirementsLoader::default())),
+            CloudRequirementsLoader::default(),
             Arg0DispatchPaths::default(),
             Arc::new(StaticThreadConfigLoader::new(vec![
                 ThreadConfigSource::Session(SessionThreadConfig {
@@ -15623,6 +15636,7 @@ mod tests {
             approval_policy: codex_protocol::protocol::AskForApproval::OnRequest,
             approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer::User,
             sandbox_policy: codex_protocol::protocol::SandboxPolicy::DangerFullAccess,
+            permission_profile: codex_protocol::models::PermissionProfile::default(),
             cwd: test_path_buf("/tmp").abs(),
             ephemeral: false,
             thread_name: None,
@@ -16386,6 +16400,7 @@ mod tests {
                     last_agent_message: None,
                     completed_at: None,
                     duration_ms: None,
+                    time_to_first_token_ms: None,
                 },
             )),
         ];
@@ -16580,6 +16595,42 @@ mod tests {
         assert_eq!(obligation, "attention");
         assert!(!requires_response);
         assert_eq!(brief.semantic_kind.as_deref(), Some("progress"));
+        assert!(brief.stay_silent_if_no_actionable_delta);
+    }
+
+    #[test]
+    fn direct_closure_directive_stays_ack_without_wake() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 46,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: Some("ray".to_string()),
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Direct,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::None,
+                body: "Thread closed. Do not reply to this message. I will only contact you again if I assign new work or hit a real blocker.".to_string(),
+                created_at: "2026-04-25T00:00:00Z".to_string(),
+                mentions: Vec::new(),
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: false,
+            self_authored: false,
+        };
+
+        assert!(CodexMessageProcessor::hollywood_message_is_ack_only(
+            &message
+        ));
+        assert!(!CodexMessageProcessor::hollywood_message_needs_wake(
+            &message
+        ));
+
+        let (obligation, requires_response) =
+            CodexMessageProcessor::hollywood_input_delivery_metadata(&message);
+        let brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+
+        assert_eq!(obligation, "attention");
+        assert!(!requires_response);
+        assert_eq!(brief.semantic_kind.as_deref(), Some("ack"));
         assert!(brief.stay_silent_if_no_actionable_delta);
     }
 

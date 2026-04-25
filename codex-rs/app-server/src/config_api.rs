@@ -12,11 +12,14 @@ use codex_app_server_protocol::ConfigRequirementsReadResponse;
 use codex_app_server_protocol::ConfigValueWriteParams;
 use codex_app_server_protocol::ConfigWriteErrorCode;
 use codex_app_server_protocol::ConfigWriteResponse;
+#[cfg(test)]
 use codex_app_server_protocol::ConfiguredHookHandler;
+#[cfg(test)]
 use codex_app_server_protocol::ConfiguredHookMatcherGroup;
 use codex_app_server_protocol::ExperimentalFeatureEnablementSetParams;
 use codex_app_server_protocol::ExperimentalFeatureEnablementSetResponse;
 use codex_app_server_protocol::JSONRPCErrorError;
+#[cfg(test)]
 use codex_app_server_protocol::ManagedHooksRequirements;
 use codex_app_server_protocol::NetworkDomainPermission;
 use codex_app_server_protocol::NetworkRequirements;
@@ -25,9 +28,13 @@ use codex_app_server_protocol::SandboxMode;
 use codex_core::ThreadManager;
 use codex_core::config::Config;
 use codex_core::config_loader::ConfigRequirementsToml;
+#[cfg(test)]
 use codex_core::config_loader::HookEventsToml;
+#[cfg(test)]
 use codex_core::config_loader::HookHandlerConfig as CoreHookHandlerConfig;
+#[cfg(test)]
 use codex_core::config_loader::ManagedHooksRequirementsToml;
+#[cfg(test)]
 use codex_core::config_loader::MatcherGroup as CoreMatcherGroup;
 use codex_core::config_loader::ResidencyRequirement as CoreResidencyRequirement;
 use codex_core::config_loader::SandboxModeRequirement as CoreSandboxModeRequirement;
@@ -304,6 +311,7 @@ fn map_requirements_toml_to_api(requirements: ConfigRequirementsToml) -> ConfigR
     }
 }
 
+#[cfg(test)]
 fn map_hooks_requirements_to_api(hooks: ManagedHooksRequirementsToml) -> ManagedHooksRequirements {
     let ManagedHooksRequirementsToml {
         managed_dir,
@@ -331,6 +339,7 @@ fn map_hooks_requirements_to_api(hooks: ManagedHooksRequirementsToml) -> Managed
     }
 }
 
+#[cfg(test)]
 fn map_hook_matcher_groups_to_api(
     groups: Vec<CoreMatcherGroup>,
 ) -> Vec<ConfiguredHookMatcherGroup> {
@@ -340,6 +349,7 @@ fn map_hook_matcher_groups_to_api(
         .collect()
 }
 
+#[cfg(test)]
 fn map_hook_matcher_group_to_api(group: CoreMatcherGroup) -> ConfiguredHookMatcherGroup {
     ConfiguredHookMatcherGroup {
         matcher: group.matcher.unwrap_or_default(),
@@ -351,6 +361,7 @@ fn map_hook_matcher_group_to_api(group: CoreMatcherGroup) -> ConfiguredHookMatch
     }
 }
 
+#[cfg(test)]
 fn map_hook_handler_to_api(handler: CoreHookHandlerConfig) -> ConfiguredHookHandler {
     match handler {
         CoreHookHandlerConfig::Command {
@@ -598,6 +609,7 @@ mod tests {
             }),
             permissions: None,
         };
+        let hooks = requirements.hooks.clone().expect("hooks should be present");
 
         let mapped = map_requirements_toml_to_api(requirements);
 
@@ -631,14 +643,14 @@ mod tests {
             ])),
         );
         assert_eq!(
-            mapped.hooks,
-            Some(ManagedHooksRequirements {
-                managed_dir: Some(PathBuf::from("/enterprise/hooks")),
-                windows_managed_dir: Some(PathBuf::from(r"C:\enterprise\hooks")),
+            map_hooks_requirements_to_api(hooks),
+            ManagedHooksRequirements {
+                managed_dir: Some("/enterprise/hooks".to_string()),
+                windows_managed_dir: Some(r"C:\enterprise\hooks".to_string()),
                 pre_tool_use: vec![ConfiguredHookMatcherGroup {
-                    matcher: Some("^Bash$".to_string()),
+                    matcher: "^Bash$".to_string(),
                     hooks: vec![ConfiguredHookHandler::Command {
-                        command: "python3 /enterprise/hooks/pre.py".to_string(),
+                        command: vec!["python3 /enterprise/hooks/pre.py".to_string()],
                         timeout_sec: Some(10),
                         r#async: false,
                         status_message: Some("checking".to_string()),
@@ -649,7 +661,7 @@ mod tests {
                 session_start: Vec::new(),
                 user_prompt_submit: Vec::new(),
                 stop: Vec::new(),
-            }),
+            },
         );
         assert_eq!(
             mapped.enforce_residency,

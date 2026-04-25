@@ -171,3 +171,56 @@ So the next frontier is now sharper than before:
 - tool/runtime recovery is good enough to surface and survive the failure
 - policy guidance can mitigate the failure
 - but fully stable long-horizon behavior still needs stronger protection around temporary deletion/recreation of critical-path files
+
+## Post-Merge Direct-Closure Validation
+
+After merging upstream `origin/main`, the worst remaining leader-mode outlier was still
+`expense_board / leader_award`.
+
+Old merged-tree baseline:
+
+- room: `repo/expense_board-leader_award-e495f4`
+- `passedAtSeconds: 133.8`
+- `quiescenceLagSeconds: 357.7`
+- `messageCount: 289`
+
+Room inspection showed the tail was dominated by direct-message closure ping-pong:
+
+- `thread closed. do not reply ...`
+- `no further reply needed ...`
+- `closing this dm thread ...`
+
+Those messages were being classified as wake-worthy `DirectRequest` traffic instead of
+ack/closure traffic.
+
+The wake classifier now treats explicit closure directives as ack-only when they do not
+contain a real question or new assignment, including phrases such as:
+
+- `do not reply`
+- `closing this dm thread`
+- `i will only contact you again if i assign new work or hit a real blocker`
+- `no assignment is being made`
+
+Validation on a fresh merged daemon:
+
+- daemon: `ws://127.0.0.1:46461`
+- command:
+  `python3 /home/ai/Development/losangelex/scripts/eval_hollywood_app_builds.py --challenge expense_board --policy leader_award --timeout-seconds 420 --poll-seconds 40 --post-pass-soak-seconds 120 --max-quiescence-wait-seconds 360 --app-server-url ws://127.0.0.1:46461`
+- room: `repo/expense_board-leader_award-4b57c8`
+- workspace: `/home/ai/Development/losangelex/tmp/app_build_eval/expense_board-leader_award-c8370888`
+- `passedAtSeconds: 216.6`
+- `quiescedAtSeconds: 284.0`
+- `quiescenceLagSeconds: 67.4`
+- `messageCount: 23`
+- `allThreadsIdleAfterRun: true`
+- `activeThreadsAfterRun: 0`
+
+This is a real control-plane improvement, not just another lucky run:
+
+- message volume dropped from `289` to `23`
+- quiescence lag dropped from `357.7s` to `67.4s`
+- all four threads ended cleanly idle with no pending Hollywood diagnostics
+
+The remaining `leader_award` weakness is no longer DM closure ping-pong. The next
+residual instability is still critical-path file churn during longer implementation
+flows.
