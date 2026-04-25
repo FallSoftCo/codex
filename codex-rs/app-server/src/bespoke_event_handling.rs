@@ -224,6 +224,14 @@ pub(crate) async fn apply_bespoke_event_handling(
             outgoing.abort_pending_server_requests().await;
             respond_to_pending_interrupts(&thread_state, &outgoing, /*abort_reason*/ None).await;
             let turn_failed = thread_state.lock().await.turn_summary.last_error.is_some();
+            if let Some(state_db) = conversation.state_db() {
+                clear_stale_cancelled_coordination_notifications_for_thread(
+                    &state_db,
+                    conversation_id,
+                    turn_complete_event.completed_at,
+                )
+                .await;
+            }
             thread_watch_manager
                 .note_turn_completed(&conversation_id.to_string(), turn_failed)
                 .await;
@@ -1859,6 +1867,14 @@ pub(crate) async fn apply_bespoke_event_handling(
                 Some(turn_aborted_event.reason.clone()),
             )
             .await;
+            if let Some(state_db) = conversation.state_db() {
+                clear_stale_cancelled_coordination_notifications_for_thread(
+                    &state_db,
+                    conversation_id,
+                    turn_aborted_event.completed_at,
+                )
+                .await;
+            }
 
             thread_watch_manager
                 .note_turn_interrupted(&conversation_id.to_string())
@@ -2231,11 +2247,7 @@ async fn maybe_interrupt_cancelled_coordination_owner(
     let Some(task) = payload.get("task") else {
         return;
     };
-    if task
-        .get("status")
-        .and_then(serde_json::Value::as_str)
-        != Some("cancelled")
-    {
+    if task.get("status").and_then(serde_json::Value::as_str) != Some("cancelled") {
         return;
     }
 
@@ -2262,6 +2274,49 @@ async fn maybe_interrupt_cancelled_coordination_owner(
             "failed to interrupt cancelled coordination owner turn: {err}"
         );
     }
+}
+
+async fn clear_stale_cancelled_coordination_notifications_for_thread(
+    state_db: &Arc<codex_state::StateRuntime>,
+    thread_id: ThreadId,
+    completed_at: Option<i64>,
+) {
+    let Some(completed_at) = completed_at else {
+        return;
+    };
+    let Ok(scheduled_tasks) = state_db.list_scheduled_tasks(Some(thread_id)).await else {
+        return;
+    };
+    let thread_id_string = thread_id.to_string();
+
+    for scheduled_task in scheduled_tasks {
+        if !scheduled_task.title.starts_with("coordination:cancelled:") {
+            continue;
+        }
+        let Some(task_id) = coordination_task_id_from_prompt(scheduled_task.prompt.as_str()) else {
+            continue;
+        };
+        let Ok(Some(task)) = state_db.get_coordination_task(task_id).await else {
+            continue;
+        };
+        if task.status != codex_state::CoordinationTaskStatus::Cancelled {
+            continue;
+        }
+        if task.owner_thread_id.as_deref() != Some(thread_id_string.as_str()) {
+            continue;
+        }
+        if task.updated_at.timestamp() > completed_at {
+            continue;
+        }
+        let _ = state_db.delete_scheduled_task(&scheduled_task.id).await;
+    }
+}
+
+fn coordination_task_id_from_prompt(prompt: &str) -> Option<&str> {
+    prompt
+        .lines()
+        .find_map(|line| line.strip_prefix("task_id: ").map(str::trim))
+        .filter(|task_id| !task_id.is_empty())
 }
 
 pub(crate) async fn maybe_emit_hook_prompt_item_completed(
@@ -4928,6 +4983,89 @@ mod tests {
             other => bail!("unexpected message: {other:?}"),
         }
         assert!(rx.try_recv().is_err(), "no extra messages expected");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancelled_coordination_notification_clears_after_post_cancel_turn_boundary()
+    -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000301").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000302").expect("owner id");
+
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-cancelled-clear".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Implementation,
+                summary: "Polish styles".to_string(),
+                details: "Own the CSS lane.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open-cancelled-clear".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+        state_db
+            .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
+                task_id: "task-cancelled-clear".to_string(),
+                actor_thread_id: owner,
+                path_claims: Vec::new(),
+                lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                act_id: "act-accept-cancelled-clear".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+        let cancelled = state_db
+            .cancel_coordination_task(codex_state::CoordinationTaskCancelParams {
+                task_id: "task-cancelled-clear".to_string(),
+                actor_thread_id: creator,
+                act_id: "act-cancel-cancelled-clear".to_string(),
+                act_summary: Some("App is already green.".to_string()),
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        state_db
+            .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                id: "scheduled-cancelled-clear".to_string(),
+                thread_id: owner.to_string(),
+                title: "coordination:cancelled:Polish styles".to_string(),
+                prompt: "<coordination_context>\nreason: cancelled\ntask_id: task-cancelled-clear\n</coordination_context>\n\nPolish styles".to_string(),
+                kind: codex_state::ScheduledTaskKind::Once,
+                next_run_at: chrono::Utc::now(),
+                interval_seconds: None,
+                requires_response: true,
+            })
+            .await?;
+
+        clear_stale_cancelled_coordination_notifications_for_thread(
+            &state_db,
+            owner,
+            Some(cancelled.task.updated_at.timestamp() - 1),
+        )
+        .await;
+        assert_eq!(state_db.list_scheduled_tasks(Some(owner)).await?.len(), 1);
+
+        clear_stale_cancelled_coordination_notifications_for_thread(
+            &state_db,
+            owner,
+            Some(cancelled.task.updated_at.timestamp()),
+        )
+        .await;
+        assert!(state_db.list_scheduled_tasks(Some(owner)).await?.is_empty());
         Ok(())
     }
 
