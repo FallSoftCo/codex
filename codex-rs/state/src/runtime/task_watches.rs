@@ -555,24 +555,18 @@ WHERE id = ?
                 } else {
                     None
                 };
-                let task_watch_status = if task_watch_status == TaskWatchStatus::Active
-                    && max_checks_reached
-                {
-                    TaskWatchStatus::Stopped
-                } else {
-                    task_watch_status
-                };
+                let task_watch_status =
+                    if task_watch_status == TaskWatchStatus::Active && max_checks_reached {
+                        TaskWatchStatus::Stopped
+                    } else {
+                        task_watch_status
+                    };
                 let stopped_at = matches!(
                     task_watch_status,
                     TaskWatchStatus::Completed | TaskWatchStatus::Stopped
                 )
                 .then_some(finished_at.timestamp());
-                (
-                    next_check_at,
-                    check_count,
-                    task_watch_status,
-                    stopped_at,
-                )
+                (next_check_at, check_count, task_watch_status, stopped_at)
             }
             None => return Ok(()),
         };
@@ -692,8 +686,11 @@ WHERE id = ?
         } else {
             current_status
         };
-        let stopped_at = matches!(status, TaskWatchStatus::Completed | TaskWatchStatus::Stopped)
-            .then_some(delivered_at.timestamp());
+        let stopped_at = matches!(
+            status,
+            TaskWatchStatus::Completed | TaskWatchStatus::Stopped
+        )
+        .then_some(delivered_at.timestamp());
 
         sqlx::query(
             r#"
@@ -828,7 +825,10 @@ mod tests {
         assert_eq!(watches[0].check_count, 0);
         assert_eq!(watches[0].status, TaskWatchStatus::Active);
         assert_eq!(watches[0].last_run_turn_id.as_deref(), Some("turn-1"));
-        assert_eq!(watches[0].last_run_status, Some(TaskWatchRunStatus::Running));
+        assert_eq!(
+            watches[0].last_run_status,
+            Some(TaskWatchRunStatus::Running)
+        );
     }
 
     #[tokio::test]
@@ -952,7 +952,10 @@ mod tests {
             watches[0].next_check_at.timestamp(),
             (finished_at + chrono::Duration::seconds(30)).timestamp()
         );
-        assert_eq!(watches[0].last_run_status, Some(TaskWatchRunStatus::Completed));
+        assert_eq!(
+            watches[0].last_run_status,
+            Some(TaskWatchRunStatus::Completed)
+        );
 
         let claimed_again = runtime
             .claim_due_task_watches(finished_at, "worker-2", 10, Duration::from_secs(30))
@@ -1096,7 +1099,10 @@ mod tests {
         assert_eq!(watches[0].check_count, 1);
         assert_eq!(watches[0].status, TaskWatchStatus::Active);
         assert_eq!(watches[0].last_run_turn_id.as_deref(), Some("turn-active"));
-        assert_eq!(watches[0].last_run_status, Some(TaskWatchRunStatus::Completed));
+        assert_eq!(
+            watches[0].last_run_status,
+            Some(TaskWatchRunStatus::Completed)
+        );
         assert_eq!(
             watches[0].next_check_at.timestamp(),
             (now + chrono::Duration::seconds(30)).timestamp()

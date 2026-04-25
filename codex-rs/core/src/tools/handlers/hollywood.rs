@@ -450,8 +450,7 @@ impl ToolHandler for HollywoodTeamUpHandler {
                 ));
             }
         };
-        let response = match response.error_for_status()
-        {
+        let response = match response.error_for_status() {
             Ok(response) => response,
             Err(err) => {
                 let result = HollywoodTeamUpResult {
@@ -722,7 +721,10 @@ async fn fetch_registry_entries(
 
 fn all_targets_present(target_identities: &[String], entries: &[HollywoodRegistryEntry]) -> bool {
     target_identities.iter().all(|target| {
-        resolve_live_session_id_from_entries(entries, target).ok().flatten().is_some()
+        resolve_live_session_id_from_entries(entries, target)
+            .ok()
+            .flatten()
+            .is_some()
     })
 }
 

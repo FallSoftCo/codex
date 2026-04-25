@@ -19,9 +19,9 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 
+use crate::config_manager::ConfigManager;
 use crate::message_processor::MessageProcessor;
 use crate::message_processor::MessageProcessorArgs;
-use crate::config_manager::ConfigManager;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::OutgoingEnvelope;
 use crate::outgoing_message::OutgoingMessageSender;
@@ -33,8 +33,8 @@ use crate::transport::RemoteControlStartOptions;
 use crate::transport::TransportEvent;
 use crate::transport::auth::policy_from_settings;
 use crate::transport::route_outgoing_envelope;
-use crate::transport::start_remote_control_with_options;
 use crate::transport::start_control_socket_acceptor;
+use crate::transport::start_remote_control_with_options;
 use crate::transport::start_stdio_connection;
 use crate::transport::start_websocket_acceptor;
 use codex_analytics::AppServerRpcTransport;
@@ -76,8 +76,8 @@ mod config;
 mod config_api;
 mod config_manager;
 mod config_manager_service;
-mod dynamic_tools;
 mod device_key_api;
+mod dynamic_tools;
 mod error_code;
 mod external_agent_config_api;
 mod filters;
@@ -926,9 +926,7 @@ fn analytics_rpc_transport(transport: AppServerTransport) -> AppServerRpcTranspo
         AppServerTransport::Stdio => AppServerRpcTransport::Stdio,
         AppServerTransport::UnixSocket { .. }
         | AppServerTransport::WebSocket { .. }
-        | AppServerTransport::Off => {
-            AppServerRpcTransport::Websocket
-        }
+        | AppServerTransport::Off => AppServerRpcTransport::Websocket,
     }
 }
 

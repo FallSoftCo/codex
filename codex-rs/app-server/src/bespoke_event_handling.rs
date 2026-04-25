@@ -1639,6 +1639,12 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .await;
         }
         EventMsg::RawResponseItem(raw_response_item_event) => {
+            maybe_interrupt_cancelled_coordination_owner(
+                &raw_response_item_event.item,
+                conversation_id,
+                thread_manager.as_ref(),
+            )
+            .await;
             maybe_emit_hook_prompt_item_completed(
                 api_version,
                 conversation_id,
@@ -2197,6 +2203,65 @@ async fn maybe_emit_raw_response_item_completed(
     outgoing
         .send_server_notification(ServerNotification::RawResponseItemCompleted(notification))
         .await;
+}
+
+async fn maybe_interrupt_cancelled_coordination_owner(
+    item: &codex_protocol::models::ResponseItem,
+    conversation_id: ThreadId,
+    thread_manager: &ThreadManager,
+) {
+    let codex_protocol::models::ResponseItem::FunctionCallOutput { output, .. } = item else {
+        return;
+    };
+    let Some(output_text) = output.body.to_text() else {
+        return;
+    };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&output_text) else {
+        return;
+    };
+
+    let act_kind = payload
+        .get("act")
+        .and_then(|value| value.get("kind"))
+        .and_then(serde_json::Value::as_str);
+    if act_kind != Some("cancel") {
+        return;
+    }
+
+    let Some(task) = payload.get("task") else {
+        return;
+    };
+    if task
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        != Some("cancelled")
+    {
+        return;
+    }
+
+    let Some(owner_thread_id) = task
+        .get("owner_thread_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+    else {
+        return;
+    };
+    if owner_thread_id == conversation_id.to_string() {
+        return;
+    }
+
+    let Ok(owner_thread_id) = ThreadId::from_string(owner_thread_id) else {
+        return;
+    };
+    let Ok(owner_thread) = thread_manager.get_thread(owner_thread_id).await else {
+        return;
+    };
+    if let Err(err) = owner_thread.submit(Op::Interrupt).await {
+        tracing::debug!(
+            owner_thread_id = %owner_thread_id,
+            "failed to interrupt cancelled coordination owner turn: {err}"
+        );
+    }
 }
 
 pub(crate) async fn maybe_emit_hook_prompt_item_completed(

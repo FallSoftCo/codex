@@ -9,15 +9,15 @@ mod startup_sync;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-pub use codex_core_plugins::marketplace_upgrade::ConfiguredMarketplaceUpgradeError as PluginMarketplaceUpgradeError;
-pub use codex_core_plugins::marketplace_upgrade::ConfiguredMarketplaceUpgradeOutcome as PluginMarketplaceUpgradeOutcome;
+pub use codex_core_plugins::OPENAI_CURATED_MARKETPLACE_NAME;
 pub use codex_core_plugins::marketplace_add::MarketplaceAddError;
 pub use codex_core_plugins::marketplace_add::MarketplaceAddRequest;
 pub use codex_core_plugins::marketplace_add::add_marketplace;
 pub use codex_core_plugins::marketplace_remove::MarketplaceRemoveError;
 pub use codex_core_plugins::marketplace_remove::MarketplaceRemoveRequest;
 pub use codex_core_plugins::marketplace_remove::remove_marketplace;
-pub use codex_core_plugins::OPENAI_CURATED_MARKETPLACE_NAME;
+pub use codex_core_plugins::marketplace_upgrade::ConfiguredMarketplaceUpgradeError as PluginMarketplaceUpgradeError;
+pub use codex_core_plugins::marketplace_upgrade::ConfiguredMarketplaceUpgradeOutcome as PluginMarketplaceUpgradeOutcome;
 pub use codex_plugin::AppConnectorId;
 pub use codex_plugin::EffectiveSkillRoots;
 pub use codex_plugin::PluginCapabilitySummary;

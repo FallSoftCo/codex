@@ -22,6 +22,7 @@ use codex_app_server_protocol::TurnStartParams;
 use codex_app_server_protocol::TurnStartResponse;
 use codex_app_server_protocol::TurnStatus;
 use codex_app_server_protocol::UserInput as V2UserInput;
+use codex_protocol::ThreadId;
 use tempfile::TempDir;
 use tokio::time::timeout;
 
@@ -319,6 +320,141 @@ async fn turn_interrupt_resolves_pending_command_approval_request() -> Result<()
             .expect("turn/completed params must be present"),
     )?;
     assert_eq!(completed.thread_id, thread.id);
+    assert_eq!(completed.turn.status, TurnStatus::Interrupted);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn cancelled_coordination_wake_interrupts_active_turn() -> Result<()> {
+    #[cfg(target_os = "windows")]
+    let shell_command = vec![
+        "powershell".to_string(),
+        "-Command".to_string(),
+        "Start-Sleep -Seconds 30".to_string(),
+    ];
+    #[cfg(not(target_os = "windows"))]
+    let shell_command = vec!["sleep".to_string(), "30".to_string()];
+
+    let tmp = TempDir::new()?;
+    let codex_home = tmp.path().join("codex_home");
+    std::fs::create_dir(&codex_home)?;
+    let working_directory = tmp.path().join("workdir");
+    std::fs::create_dir(&working_directory)?;
+
+    let server =
+        create_mock_responses_server_sequence_unchecked(vec![create_shell_command_sse_response(
+            shell_command,
+            Some(&working_directory),
+            Some(30_000),
+            "call_sleep_cancelled_lane",
+        )?])
+        .await;
+    create_config_toml(&codex_home, &server.uri(), "never", "workspace-write")?;
+
+    let mut mcp = McpProcess::new(&codex_home).await?;
+    timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
+
+    let thread_req = mcp
+        .send_thread_start_request(ThreadStartParams {
+            model: Some("mock-model".to_string()),
+            ..Default::default()
+        })
+        .await?;
+    let thread_resp: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(thread_req)),
+    )
+    .await??;
+    let ThreadStartResponse { thread, .. } = to_response::<ThreadStartResponse>(thread_resp)?;
+    let owner_thread_id = ThreadId::from_string(thread.id.as_str()).expect("thread id");
+
+    let turn_req = mcp
+        .send_turn_start_request(TurnStartParams {
+            thread_id: thread.id.clone(),
+            input: vec![V2UserInput::Text {
+                text: "run sleep".to_string(),
+                text_elements: Vec::new(),
+            }],
+            cwd: Some(working_directory),
+            ..Default::default()
+        })
+        .await?;
+    let turn_resp: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(turn_req)),
+    )
+    .await??;
+    let TurnStartResponse { turn } = to_response::<TurnStartResponse>(turn_resp)?;
+
+    let state_db =
+        codex_state::StateRuntime::init(codex_home.clone(), "mock_provider".to_string()).await?;
+    let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000201").expect("creator");
+
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-cancelled-impl".to_string(),
+            creator_thread_id: creator.clone(),
+            owner_thread_id: Some(owner_thread_id.clone()),
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/test".to_string()),
+            kind: codex_state::CoordinationTaskKind::Implementation,
+            summary: "Polish styles".to_string(),
+            details: "Own the CSS lane.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-open-cancelled-impl".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await?;
+    state_db
+        .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
+            task_id: "task-cancelled-impl".to_string(),
+            actor_thread_id: owner_thread_id.clone(),
+            path_claims: Vec::new(),
+            lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            act_id: "act-accept-cancelled-impl".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await?;
+    state_db
+        .cancel_coordination_task(codex_state::CoordinationTaskCancelParams {
+            task_id: "task-cancelled-impl".to_string(),
+            actor_thread_id: creator,
+            act_id: "act-cancel-cancelled-impl".to_string(),
+            act_summary: Some("App is already green.".to_string()),
+            act_payload_json: "{}".to_string(),
+        })
+        .await?;
+    state_db
+        .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+            id: "scheduled-cancelled-impl".to_string(),
+            thread_id: thread.id.clone(),
+            title: "coordination:cancelled:Polish styles".to_string(),
+            prompt: "<coordination_context>\nreason: cancelled\ntask_id: task-cancelled-impl\n</coordination_context>\n\nPolish styles".to_string(),
+            kind: codex_state::ScheduledTaskKind::Once,
+            next_run_at: chrono::Utc::now(),
+            interval_seconds: None,
+            requires_response: true,
+        })
+        .await?;
+
+    let completed_notif: JSONRPCNotification = timeout(
+        std::time::Duration::from_secs(20),
+        mcp.read_stream_until_notification_message("turn/completed"),
+    )
+    .await??;
+    let completed: TurnCompletedNotification = serde_json::from_value(
+        completed_notif
+            .params
+            .expect("turn/completed params must be present"),
+    )?;
+    assert_eq!(completed.thread_id, thread.id);
+    assert_eq!(completed.turn.id, turn.id);
     assert_eq!(completed.turn.status, TurnStatus::Interrupted);
 
     Ok(())

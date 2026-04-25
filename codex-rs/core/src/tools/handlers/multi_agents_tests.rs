@@ -1,5 +1,5 @@
-use super::*;
 use super::wait::WaitAgentResult;
+use super::*;
 use crate::CodexThread;
 use crate::ThreadManager;
 use crate::config::AgentRoleConfig;

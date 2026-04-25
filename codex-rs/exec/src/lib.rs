@@ -659,39 +659,24 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
 
     // Handle resume subcommand through existing `thread/list` + `thread/resume`
     // APIs so exec no longer reaches into rollout storage directly.
-    let (primary_thread_id, fallback_session_configured) =
-        if let Some(ExecCommand::Resume(args)) = command.as_ref() {
-            if let Some(thread_id) = resolve_resume_thread_id(&client, &config, args).await? {
-                let response: ThreadResumeResponse = send_request_with_response(
-                    &client,
-                    ClientRequest::ThreadResume {
-                        request_id: request_ids.next(),
-                        params: thread_resume_params_from_config(&config, thread_id),
-                    },
-                    "thread/resume",
-                )
-                .await
-                .map_err(anyhow::Error::msg)?;
-                let session_configured =
-                    session_configured_from_thread_resume_response(&response, &config)
-                        .map_err(anyhow::Error::msg)?;
-                (session_configured.session_id, session_configured)
-            } else {
-                let response: ThreadStartResponse = send_request_with_response(
-                    &client,
-                    ClientRequest::ThreadStart {
-                        request_id: request_ids.next(),
-                        params: thread_start_params_from_config(&config),
-                    },
-                    "thread/start",
-                )
-                .await
-                .map_err(anyhow::Error::msg)?;
-                let session_configured =
-                    session_configured_from_thread_start_response(&response, &config)
-                        .map_err(anyhow::Error::msg)?;
-                (session_configured.session_id, session_configured)
-            }
+    let (primary_thread_id, fallback_session_configured) = if let Some(ExecCommand::Resume(args)) =
+        command.as_ref()
+    {
+        if let Some(thread_id) = resolve_resume_thread_id(&client, &config, args).await? {
+            let response: ThreadResumeResponse = send_request_with_response(
+                &client,
+                ClientRequest::ThreadResume {
+                    request_id: request_ids.next(),
+                    params: thread_resume_params_from_config(&config, thread_id),
+                },
+                "thread/resume",
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            let session_configured =
+                session_configured_from_thread_resume_response(&response, &config)
+                    .map_err(anyhow::Error::msg)?;
+            (session_configured.session_id, session_configured)
         } else {
             let response: ThreadStartResponse = send_request_with_response(
                 &client,
@@ -707,7 +692,22 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                 session_configured_from_thread_start_response(&response, &config)
                     .map_err(anyhow::Error::msg)?;
             (session_configured.session_id, session_configured)
-        };
+        }
+    } else {
+        let response: ThreadStartResponse = send_request_with_response(
+            &client,
+            ClientRequest::ThreadStart {
+                request_id: request_ids.next(),
+                params: thread_start_params_from_config(&config),
+            },
+            "thread/start",
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        let session_configured = session_configured_from_thread_start_response(&response, &config)
+            .map_err(anyhow::Error::msg)?;
+        (session_configured.session_id, session_configured)
+    };
 
     let primary_thread_id_for_span = primary_thread_id.to_string();
     // Use the start/resume response as the authoritative bootstrap payload.

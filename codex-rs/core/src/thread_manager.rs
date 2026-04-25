@@ -577,17 +577,21 @@ impl ThreadManager {
         metrics_service_name: Option<String>,
         parent_trace: Option<W3cTraceContext>,
     ) -> CodexResult<NewThread> {
-        let environments =
-            default_thread_environment_selections(self.state.environment_manager.as_ref(), &config.cwd);
-        Box::pin(self.start_thread_with_tools_and_service_name(StartThreadWithToolsOptions {
-            config,
-            initial_history,
-            dynamic_tools,
-            persist_extended_history,
-            metrics_service_name,
-            parent_trace,
-            environments,
-        }))
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
+        Box::pin(
+            self.start_thread_with_tools_and_service_name(StartThreadWithToolsOptions {
+                config,
+                initial_history,
+                dynamic_tools,
+                persist_extended_history,
+                metrics_service_name,
+                parent_trace,
+                environments,
+            }),
+        )
         .await
     }
 
@@ -601,8 +605,10 @@ impl ThreadManager {
         session_source: SessionSource,
     ) -> CodexResult<NewThread> {
         let thread_store = configured_thread_store(&config);
-        let environments =
-            default_thread_environment_selections(self.state.environment_manager.as_ref(), &config.cwd);
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
         Box::pin(self.state.spawn_thread_with_source(
             config,
             thread_store,

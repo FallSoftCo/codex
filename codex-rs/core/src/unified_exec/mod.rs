@@ -58,7 +58,9 @@ pub(crate) use process::UnifiedExecProcess;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProcessObservation {
-    Running { call_id: String },
+    Running {
+        call_id: String,
+    },
     Exited {
         exit_code: Option<i32>,
         failure_message: Option<String>,

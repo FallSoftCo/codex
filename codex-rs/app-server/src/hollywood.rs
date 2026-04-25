@@ -923,9 +923,7 @@ pub(crate) fn hollywood_session_diagnostics_from_runtime(
             .pending_semantic_wake_count()
             .try_into()
             .unwrap_or(u32::MAX),
-        outstanding_obligation_count: outstanding_obligation_count
-            .try_into()
-            .unwrap_or(u32::MAX),
+        outstanding_obligation_count: outstanding_obligation_count.try_into().unwrap_or(u32::MAX),
     }
 }
 

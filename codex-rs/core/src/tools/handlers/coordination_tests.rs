@@ -1,9 +1,9 @@
 use super::*;
 use crate::session::tests::make_session_and_context;
 use crate::session::turn_context::TurnContext;
+use crate::tools::context::ToolCallSource;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
-use crate::tools::context::ToolCallSource;
 use crate::tools::registry::ToolHandler;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use chrono::Utc;
@@ -500,12 +500,37 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
     let cancel_result = parse_result(cancel_output);
     assert_eq!(cancel_result["task"]["status"], "cancelled");
     assert_eq!(cancel_result["act"]["kind"], "cancel");
+    assert_eq!(
+        cancel_result["woken_threads"],
+        json!([owner_session.conversation_id.to_string()])
+    );
 
     let owner_claims = state_db
         .list_path_claims(Some(owner_session.conversation_id))
         .await
         .expect("owner claims should list cleanly");
     assert!(owner_claims.is_empty());
+
+    let scheduled_tasks = state_db
+        .list_scheduled_tasks(Some(owner_session.conversation_id))
+        .await
+        .expect("scheduled task query should succeed");
+    assert_eq!(scheduled_tasks.len(), 1);
+    assert_eq!(
+        scheduled_tasks[0].title,
+        "coordination:cancelled:Polish styles"
+    );
+    assert!(scheduled_tasks[0].prompt.contains("reason: cancelled"));
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("stop active work on this lane immediately")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("interrupted an in-flight turn")
+    );
 }
 
 #[tokio::test]

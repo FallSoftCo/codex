@@ -411,8 +411,7 @@ impl AppServerSession {
             .fork_parent_title_from_app_server(response.thread.forked_from_id.as_deref())
             .await;
         let mut started =
-            started_thread_from_fork_response(response, &config, self.thread_params_mode())
-                .await?;
+            started_thread_from_fork_response(response, &config, self.thread_params_mode()).await?;
         started.session.fork_parent_title = fork_parent_title;
         Ok(started)
     }
@@ -1141,8 +1140,8 @@ async fn started_thread_from_start_response(
 ) -> Result<AppServerStartedThread> {
     let session =
         thread_session_state_from_thread_start_response(&response, config, thread_params_mode)
-        .await
-        .map_err(color_eyre::eyre::Report::msg)?;
+            .await
+            .map_err(color_eyre::eyre::Report::msg)?;
     Ok(AppServerStartedThread {
         session,
         turns: response.thread.turns,
@@ -1156,8 +1155,8 @@ async fn started_thread_from_resume_response(
 ) -> Result<AppServerStartedThread> {
     let session =
         thread_session_state_from_thread_resume_response(&response, config, thread_params_mode)
-        .await
-        .map_err(color_eyre::eyre::Report::msg)?;
+            .await
+            .map_err(color_eyre::eyre::Report::msg)?;
     Ok(AppServerStartedThread {
         session,
         turns: response.thread.turns,
@@ -1171,8 +1170,8 @@ async fn started_thread_from_fork_response(
 ) -> Result<AppServerStartedThread> {
     let session =
         thread_session_state_from_thread_fork_response(&response, config, thread_params_mode)
-        .await
-        .map_err(color_eyre::eyre::Report::msg)?;
+            .await
+            .map_err(color_eyre::eyre::Report::msg)?;
     Ok(AppServerStartedThread {
         session,
         turns: response.thread.turns,

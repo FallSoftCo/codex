@@ -736,6 +736,7 @@ impl UnloadingState {
 const SCHEDULED_TASK_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const SCHEDULED_TASK_LEASE_DURATION: Duration = Duration::from_secs(120);
 const SCHEDULED_TASK_BUSY_RETRY_DELAY: Duration = Duration::from_secs(60);
+const SCHEDULED_TASK_INTERRUPT_RETRY_DELAY: Duration = Duration::from_secs(2);
 const SCHEDULED_TASK_CLAIM_LIMIT: usize = 8;
 const TASK_WATCH_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const TASK_WATCH_LEASE_DURATION: Duration = Duration::from_secs(120);
@@ -994,6 +995,40 @@ impl CodexMessageProcessor {
         let status =
             Self::resolve_background_thread_status(context, &task.thread_id, Some(&thread)).await;
         if matches!(status, ThreadStatus::Active { .. }) {
+            if Self::coordination_scheduled_wake_reason(task.title.as_str()) == Some("cancelled") {
+                let now = Utc::now();
+                match thread.submit(Op::Interrupt).await {
+                    Ok(_) => {
+                        let retry_at =
+                            now + chrono::Duration::from_std(SCHEDULED_TASK_INTERRUPT_RETRY_DELAY)?;
+                        state_db
+                            .record_scheduled_task_start_failure(
+                                &task,
+                                now,
+                                retry_at,
+                                "coordination cancellation interrupted the active turn; retrying once the thread reaches idle",
+                            )
+                            .await?;
+                        return Ok(());
+                    }
+                    Err(err) => {
+                        let retry_at =
+                            now + chrono::Duration::from_std(SCHEDULED_TASK_INTERRUPT_RETRY_DELAY)?;
+                        state_db
+                            .record_scheduled_task_start_failure(
+                                &task,
+                                now,
+                                retry_at,
+                                format!(
+                                    "failed to interrupt active turn for cancelled coordination wake: {err}"
+                                )
+                                .as_str(),
+                            )
+                            .await?;
+                        return Ok(());
+                    }
+                }
+            }
             let retry_at =
                 Utc::now() + chrono::Duration::from_std(SCHEDULED_TASK_BUSY_RETRY_DELAY)?;
             state_db
@@ -1191,7 +1226,8 @@ impl CodexMessageProcessor {
             };
             thread
                 .inject_user_message_without_turn(Self::format_task_watch_wake_message(
-                    &task_watch, wake_at,
+                    &task_watch,
+                    wake_at,
                 ))
                 .await;
             state_db
@@ -2253,6 +2289,12 @@ impl CodexMessageProcessor {
                 matches!(
                     coordination_task.status,
                     codex_state::CoordinationTaskStatus::Awarded
+                ) && coordination_task.owner_thread_id.as_deref() == Some(task.thread_id.as_str())
+            }
+            "cancelled" => {
+                matches!(
+                    coordination_task.status,
+                    codex_state::CoordinationTaskStatus::Cancelled
                 ) && coordination_task.owner_thread_id.as_deref() == Some(task.thread_id.as_str())
             }
             _ => true,
@@ -9145,11 +9187,8 @@ impl CodexMessageProcessor {
             )
             .await;
 
-            let effective_servers = effective_mcp_servers_with_authorization_header(
-                &mcp_config,
-                auth.as_ref(),
-                None,
-            );
+            let effective_servers =
+                effective_mcp_servers_with_authorization_header(&mcp_config, auth.as_ref(), None);
             let McpServerStatusSnapshot {
                 tools_by_server,
                 resources,
@@ -16777,6 +16816,80 @@ mod tests {
 
         assert!(
             CodexMessageProcessor::coordination_scheduled_wake_is_obsolete(
+                &state_db,
+                &scheduled_task,
+            )
+            .await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancelled_coordination_scheduled_wake_stays_actionable_for_owner() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000101").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000102").expect("owner id");
+
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-cancelled-1".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: Some(owner),
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Implementation,
+                summary: "Polish styles".to_string(),
+                details: "Own the CSS lane.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-open-cancelled".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        state_db
+            .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
+                task_id: "task-cancelled-1".to_string(),
+                actor_thread_id: owner,
+                path_claims: Vec::new(),
+                lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                act_id: "act-accept-cancelled".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        state_db
+            .cancel_coordination_task(codex_state::CoordinationTaskCancelParams {
+                task_id: "task-cancelled-1".to_string(),
+                actor_thread_id: creator,
+                act_id: "act-cancel-cancelled".to_string(),
+                act_summary: Some("App is already green.".to_string()),
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let scheduled_task = codex_state::ClaimedScheduledTask {
+            id: "scheduled-cancelled-1".to_string(),
+            thread_id: owner.to_string(),
+            title: "coordination:cancelled:Polish styles".to_string(),
+            prompt: "<coordination_context>\nreason: cancelled\ntask_id: task-cancelled-1\n</coordination_context>\n\nPolish styles".to_string(),
+            kind: codex_state::ScheduledTaskKind::Once,
+            scheduled_for: Utc::now(),
+            interval_seconds: None,
+            requires_response: true,
+        };
+
+        assert!(
+            !CodexMessageProcessor::coordination_scheduled_wake_is_obsolete(
                 &state_db,
                 &scheduled_task,
             )

@@ -280,32 +280,32 @@ async fn handle_coordination_act(
                 "depends_on": args.depends_on,
             }))
             .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-            match db.create_coordination_task(codex_state::CoordinationTaskCreateParams {
-                id: uuid::Uuid::new_v4().to_string(),
-                creator_thread_id: actor_thread_id,
-                owner_thread_id,
-                reserved_path_claims,
-                claim_lease_seconds: args
-                    .lease_seconds
-                    .unwrap_or(codex_state::DEFAULT_COORDINATION_LEASE_SECONDS),
-                team_id: args.team_id.clone(),
-                room: args.room.clone(),
-                kind,
-                summary: title,
-                details,
-                requested_capability: args.capability.clone(),
-                dependency_task_ids: args.depends_on.clone().unwrap_or_default(),
-                act_id: uuid::Uuid::new_v4().to_string(),
-                act_summary: args.summary.clone(),
-                act_payload_json,
-            })
-            .await
+            match db
+                .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    creator_thread_id: actor_thread_id,
+                    owner_thread_id,
+                    reserved_path_claims,
+                    claim_lease_seconds: args
+                        .lease_seconds
+                        .unwrap_or(codex_state::DEFAULT_COORDINATION_LEASE_SECONDS),
+                    team_id: args.team_id.clone(),
+                    room: args.room.clone(),
+                    kind,
+                    summary: title,
+                    details,
+                    requested_capability: args.capability.clone(),
+                    dependency_task_ids: args.depends_on.clone().unwrap_or_default(),
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json,
+                })
+                .await
             {
                 Ok(outcome) => outcome,
                 Err(err) => {
                     let message = err.to_string();
-                    if let Some(existing_task_id) = parse_duplicate_task_id(message.as_str())
-                    {
+                    if let Some(existing_task_id) = parse_duplicate_task_id(message.as_str()) {
                         let existing_task = db
                             .get_coordination_task(existing_task_id)
                             .await
@@ -624,15 +624,22 @@ async fn finalize_coordination_act(
     let mut woken_threads = Vec::new();
     if let Some(owner_thread_id) = outcome.task.owner_thread_id.as_deref()
         && owner_thread_id != session.conversation_id.to_string()
-        && matches!(
-            outcome.task.status,
-            codex_state::CoordinationTaskStatus::Awarded
-        )
     {
-        enqueue_coordination_notification(db, owner_thread_id, &outcome.task, "assigned")
-            .await
-            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-        woken_threads.push(owner_thread_id.to_string());
+        let wake_reason = match outcome.task.status {
+            codex_state::CoordinationTaskStatus::Awarded => Some("assigned"),
+            codex_state::CoordinationTaskStatus::Cancelled
+                if matches!(outcome.act.kind, codex_state::CoordinationActKind::Cancel) =>
+            {
+                Some("cancelled")
+            }
+            _ => None,
+        };
+        if let Some(wake_reason) = wake_reason {
+            enqueue_coordination_notification(db, owner_thread_id, &outcome.task, wake_reason)
+                .await
+                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+            woken_threads.push(owner_thread_id.to_string());
+        }
     }
     for task in &outcome.unblocked_tasks {
         if let Some(owner_thread_id) = task.owner_thread_id.as_deref()
@@ -1424,6 +1431,12 @@ fn format_coordination_wake_brief(task: &codex_state::CoordinationTask, reason: 
                     .to_string(),
             );
         }
+        "cancelled" => {
+            lines.push(
+                "- this previously owned lane has been cancelled and should no longer consume active work"
+                    .to_string(),
+            );
+        }
         "unblocked" => {
             lines.push("- a dependency cleared and the task is actionable again".to_string());
         }
@@ -1441,18 +1454,33 @@ fn format_coordination_wake_brief(task: &codex_state::CoordinationTask, reason: 
     }
 
     lines.push("valid_next_moves:".to_string());
-    lines.push("- if you are taking the task, call `coordination_act` `accept` once and keep ownership while you work".to_string());
-    if matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
-        && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded)
-    {
+    if reason == "cancelled" {
         lines.push(
-            "- for direct implementation awards, reuse the exact reserved `claim_paths` listed in the task details when you call `accept`"
+            "- stop active work on this lane immediately; do not keep editing or re-accept this task unless it is explicitly re-awarded"
                 .to_string(),
         );
         lines.push(
-            "- once your reserved implementation slice is complete enough for teammates to build on, call `coordination_act` `done` immediately in the same turn; do not wait for final green, a room acknowledgment, or extra monitoring"
+            "- if the cancellation interrupted an in-flight turn, treat that interrupt as authoritative and stand down from this lane"
                 .to_string(),
         );
+        lines.push(
+            "- if you already produced material local changes that still matter, send one concise summary to the creator instead of continuing implementation silently"
+                .to_string(),
+        );
+    } else {
+        lines.push("- if you are taking the task, call `coordination_act` `accept` once and keep ownership while you work".to_string());
+        if matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+            && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded)
+        {
+            lines.push(
+                "- for direct implementation awards, reuse the exact reserved `claim_paths` listed in the task details when you call `accept`"
+                    .to_string(),
+            );
+            lines.push(
+                "- once your reserved implementation slice is complete enough for teammates to build on, call `coordination_act` `done` immediately in the same turn; do not wait for final green, a room acknowledgment, or extra monitoring"
+                    .to_string(),
+            );
+        }
     }
     if coordination_task_needs_room_read(task) {
         lines.push("- use `hollywood_read` instead of shell commands when the task asks about Hollywood visibility, wording, or message history".to_string());
@@ -1469,7 +1497,12 @@ fn format_coordination_wake_brief(task: &codex_state::CoordinationTask, reason: 
                 .to_string(),
         );
     }
-    if coordination_task_is_verification(task) {
+    if reason == "cancelled" {
+        lines.push(
+            "- after you have acknowledged the cancellation and reported any truly material leftover context, end the turn promptly"
+                .to_string(),
+        );
+    } else if coordination_task_is_verification(task) {
         lines.push("- for verification or QA tasks, gather the requested evidence, then call `coordination_act` `done` with the observed result".to_string());
     } else {
         lines.push("- when the requested work is complete, call `coordination_act` `done` with a concise concrete result summary".to_string());

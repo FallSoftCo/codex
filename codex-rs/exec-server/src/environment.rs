@@ -64,7 +64,9 @@ impl EnvironmentManagerArgs {
 }
 
 impl EnvironmentManager {
-    pub fn from_env_with_runtime_paths(local_runtime_paths: Option<ExecServerRuntimePaths>) -> Self {
+    pub fn from_env_with_runtime_paths(
+        local_runtime_paths: Option<ExecServerRuntimePaths>,
+    ) -> Self {
         let Some(local_runtime_paths) = local_runtime_paths else {
             return Self::default_for_tests();
         };

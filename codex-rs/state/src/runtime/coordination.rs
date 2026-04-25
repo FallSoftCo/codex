@@ -1305,8 +1305,7 @@ ORDER BY updated_at DESC, created_at DESC, id DESC
     };
 
     for row in rows {
-        let existing_claims =
-            load_reserved_path_claims_for_task_in_tx(tx, row.id.as_str()).await?;
+        let existing_claims = load_reserved_path_claims_for_task_in_tx(tx, row.id.as_str()).await?;
         if claim_sets_overlap(requested_claims, &existing_claims) {
             return Ok(Some(row.id));
         }
@@ -1508,8 +1507,12 @@ async fn reserve_effective_task_path_claims_for_new_owner_in_tx(
     }
 
     if let Some(old_owner_thread_id) = task.owner_thread_id.as_deref() {
-        release_effective_task_path_claims_for_owner_in_tx(tx, task.id.as_str(), old_owner_thread_id)
-            .await?;
+        release_effective_task_path_claims_for_owner_in_tx(
+            tx,
+            task.id.as_str(),
+            old_owner_thread_id,
+        )
+        .await?;
     }
 
     let new_owner_thread_id = new_owner_thread_id.to_string();
@@ -1553,12 +1556,10 @@ fn load_claim_paths_from_payload_json(
             .ok()
             .map(|payload| payload.claim_paths)
             .unwrap_or_default(),
-        StoredPayloadKind::Accept => {
-            serde_json::from_str::<StoredAcceptTaskPayload>(payload_json)
-                .ok()
-                .and_then(|payload| payload.claim_paths)
-                .unwrap_or_default()
-        }
+        StoredPayloadKind::Accept => serde_json::from_str::<StoredAcceptTaskPayload>(payload_json)
+            .ok()
+            .and_then(|payload| payload.claim_paths)
+            .unwrap_or_default(),
     };
 
     let mut claims = Vec::with_capacity(stored_claims.len());
@@ -1786,8 +1787,7 @@ mod tests {
         let creator = ThreadId::from_string("019e0000-0000-7000-8000-000000000042").expect("id");
         let original_owner =
             ThreadId::from_string("019e0000-0000-7000-8000-000000000043").expect("id");
-        let new_owner =
-            ThreadId::from_string("019e0000-0000-7000-8000-000000000044").expect("id");
+        let new_owner = ThreadId::from_string("019e0000-0000-7000-8000-000000000044").expect("id");
         let claimed_path = temp_dir.path().join("repo/src/app.js");
         let claim_payload = serde_json::json!({
             "claim_paths": [{
@@ -2289,7 +2289,10 @@ mod tests {
 
         assert_eq!(refreshed.task.status, CoordinationTaskStatus::Active);
         let owner = creator.to_string();
-        assert_eq!(refreshed.task.owner_thread_id.as_deref(), Some(owner.as_str()));
+        assert_eq!(
+            refreshed.task.owner_thread_id.as_deref(),
+            Some(owner.as_str())
+        );
     }
 
     #[tokio::test]
@@ -2338,7 +2341,10 @@ mod tests {
             .await
             .expect_err("cancelled task should not become done");
 
-        assert!(err.to_string().contains("cannot be completed from status `cancelled`"));
+        assert!(
+            err.to_string()
+                .contains("cannot be completed from status `cancelled`")
+        );
     }
 
     #[tokio::test]
