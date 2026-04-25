@@ -31,6 +31,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
 use serde::Deserialize;
 use serde_json::Value;
 use std::path::Path;
+use std::path::PathBuf;
 
 use crate::function_tool::FunctionCallError;
 use crate::sandboxing::SandboxPermissions;
@@ -98,6 +99,36 @@ fn resolve_workdir_base_path(
         .and_then(Value::as_str)
         .filter(|workdir| !workdir.is_empty())
         .map_or_else(|| default_cwd.clone(), |workdir| default_cwd.join(workdir)))
+}
+
+pub(crate) fn validate_requested_workdir(
+    requested_workdir: Option<&str>,
+    resolved_workdir: &AbsolutePathBuf,
+    default_cwd: &AbsolutePathBuf,
+) -> Result<(), FunctionCallError> {
+    let path = resolved_workdir.as_path();
+    let metadata = std::fs::metadata(path).map_err(|_| {
+        let requested = requested_workdir
+            .map(PathBuf::from)
+            .unwrap_or_else(|| resolved_workdir.as_path().to_path_buf());
+        let mut message = format!("workdir `{}` does not exist", requested.display());
+        if resolved_workdir.as_path() != default_cwd.as_path() {
+            message.push_str(&format!(
+                "; omit `workdir` to use the session cwd `{}`",
+                default_cwd.display()
+            ));
+        }
+        FunctionCallError::RespondToModel(message)
+    })?;
+
+    if !metadata.is_dir() {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "workdir `{}` is not a directory",
+            path.display()
+        )));
+    }
+
+    Ok(())
 }
 
 /// Validates feature/policy constraints for `with_additional_permissions` and

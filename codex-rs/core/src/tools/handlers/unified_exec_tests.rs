@@ -1,4 +1,5 @@
 use super::*;
+use crate::function_tool::FunctionCallError;
 use crate::shell::default_user_shell;
 use crate::tools::handlers::parse_arguments_with_base_path;
 use crate::tools::handlers::resolve_workdir_base_path;
@@ -11,6 +12,7 @@ use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::sync::Arc;
+use std::time::Duration;
 use tempfile::tempdir;
 
 use crate::session::tests::make_session_and_context;
@@ -431,5 +433,57 @@ async fn write_stdin_post_tool_use_payload_keeps_parallel_session_metadata_separ
                 tool_response: serde_json::json!("alpha\n"),
             }),
         ]
+    );
+}
+
+#[tokio::test]
+async fn exec_command_handles_passive_sleep_without_spawning_shell() {
+    let payload = ToolPayload::Function {
+        arguments: serde_json::json!({
+            "cmd": "sleep 0.01",
+            "workdir": "/definitely/missing",
+            "yield_time_ms": 20,
+        })
+        .to_string(),
+    };
+    let invocation = invocation_for_payload("exec_command", "call-sleep", payload).await;
+
+    let output = UnifiedExecHandler
+        .handle(invocation)
+        .await
+        .expect("passive wait should succeed");
+
+    assert_eq!(output.process_id, None);
+    assert_eq!(output.exit_code, Some(0));
+    assert_eq!(output.hook_command.as_deref(), Some("sleep 0.01"));
+    assert!(
+        output.wall_time >= Duration::from_millis(5),
+        "expected wall time to reflect waited duration, got {:?}",
+        output.wall_time
+    );
+}
+
+#[tokio::test]
+async fn exec_command_rejects_missing_workdir_before_spawn() {
+    let payload = ToolPayload::Function {
+        arguments: serde_json::json!({
+            "cmd": "printf hello",
+            "workdir": "/definitely/missing",
+        })
+        .to_string(),
+    };
+    let invocation = invocation_for_payload("exec_command", "call-missing-workdir", payload).await;
+
+    let err = UnifiedExecHandler
+        .handle(invocation)
+        .await
+        .expect_err("missing workdir should be reported before spawn");
+
+    assert_eq!(
+        err,
+        FunctionCallError::RespondToModel(
+            "workdir `/definitely/missing` does not exist; omit `workdir` to use the session cwd"
+                .to_string()
+        )
     );
 }

@@ -14,6 +14,7 @@ use crate::tools::handlers::normalize_and_validate_additional_permissions;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::handlers::parse_arguments_with_base_path;
 use crate::tools::handlers::resolve_workdir_base_path;
+use crate::tools::handlers::validate_requested_workdir;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::registry::PostToolUsePayload;
 use crate::tools::registry::PreToolUsePayload;
@@ -39,6 +40,7 @@ use codex_utils_output_truncation::approx_token_count;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct UnifiedExecHandler;
 
@@ -208,10 +210,18 @@ impl ToolHandler for UnifiedExecHandler {
 
         let response = match tool_name.name.as_str() {
             "exec_command" => {
+                let raw_args: ExecCommandArgs = parse_arguments(&arguments)?;
+                if let Some(response) =
+                    maybe_handle_passive_wait(&raw_args, turn.truncation_policy).await
+                {
+                    return Ok(response);
+                }
+
                 let cwd = resolve_workdir_base_path(&arguments, &context.turn.cwd)?;
                 let args: ExecCommandArgs = parse_arguments_with_base_path(&arguments, &cwd)?;
                 let hook_command = args.cmd.clone();
                 let workdir = context.turn.resolve_path(args.workdir.clone());
+                let requested_workdir = args.workdir.clone();
                 maybe_emit_implicit_skill_invocation(
                     session.as_ref(),
                     context.turn.as_ref(),
@@ -279,6 +289,7 @@ impl ToolHandler for UnifiedExecHandler {
 
                 let workdir = workdir.map(|dir| context.turn.resolve_path(Some(dir)));
                 let cwd = workdir.clone().unwrap_or(cwd);
+                validate_requested_workdir(requested_workdir.as_deref(), &cwd, &context.turn.cwd)?;
                 let normalized_additional_permissions = match implicit_granted_permissions(
                     sandbox_permissions,
                     requested_additional_permissions.as_ref(),
@@ -423,6 +434,46 @@ fn emit_unified_exec_tty_metric(session_telemetry: &SessionTelemetry, tty: bool)
         /*inc*/ 1,
         &[("tty", if tty { "true" } else { "false" })],
     );
+}
+
+fn parse_passive_wait_command(command: &str) -> Option<Duration> {
+    let parts = shlex::split(command.trim())?;
+    if parts.len() != 2 || parts.first()?.as_str() != "sleep" {
+        return None;
+    }
+
+    let seconds = parts.get(1)?.parse::<f64>().ok()?;
+    if !seconds.is_finite() || seconds < 0.0 {
+        return None;
+    }
+
+    Some(Duration::from_secs_f64(seconds))
+}
+
+async fn maybe_handle_passive_wait(
+    args: &ExecCommandArgs,
+    truncation_policy: TruncationPolicy,
+) -> Option<ExecCommandToolOutput> {
+    if args.tty {
+        return None;
+    }
+
+    let duration = parse_passive_wait_command(&args.cmd)?;
+    let started_at = std::time::Instant::now();
+    tokio::time::sleep(duration).await;
+    let max_output_tokens = effective_max_output_tokens(args.max_output_tokens, truncation_policy);
+
+    Some(ExecCommandToolOutput {
+        event_call_id: String::new(),
+        chunk_id: String::new(),
+        wall_time: started_at.elapsed(),
+        raw_output: Vec::new(),
+        max_output_tokens: Some(max_output_tokens),
+        process_id: None,
+        exit_code: Some(0),
+        original_token_count: Some(0),
+        hook_command: Some(args.cmd.clone()),
+    })
 }
 
 pub(crate) fn get_command(

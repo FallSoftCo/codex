@@ -25,6 +25,7 @@ use crate::tools::handlers::normalize_and_validate_additional_permissions;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::handlers::parse_arguments_with_base_path;
 use crate::tools::handlers::resolve_workdir_base_path;
+use crate::tools::handlers::validate_requested_workdir;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::orchestrator::ToolOrchestrator;
 use crate::tools::registry::PostToolUsePayload;
@@ -243,9 +244,11 @@ impl ToolHandler for ShellHandler {
             ToolPayload::Function { arguments } => {
                 let cwd = resolve_workdir_base_path(&arguments, &turn.cwd)?;
                 let params: ShellToolCallParams = parse_arguments_with_base_path(&arguments, &cwd)?;
+                let requested_workdir = params.workdir.as_deref();
                 let prefix_rule = params.prefix_rule.clone();
                 let exec_params =
                     Self::to_exec_params(&params, turn.as_ref(), session.conversation_id);
+                validate_requested_workdir(requested_workdir, &exec_params.cwd, &turn.cwd)?;
                 Self::run_exec_like(RunExecLikeArgs {
                     tool_name: tool_name.display(),
                     exec_params,
@@ -363,6 +366,7 @@ impl ToolHandler for ShellCommandHandler {
         let cwd = resolve_workdir_base_path(&arguments, &turn.cwd)?;
         let params: ShellCommandToolCallParams = parse_arguments_with_base_path(&arguments, &cwd)?;
         let workdir = turn.resolve_path(params.workdir.clone());
+        let requested_workdir = params.workdir.as_deref();
         maybe_emit_implicit_skill_invocation(
             session.as_ref(),
             turn.as_ref(),
@@ -378,6 +382,7 @@ impl ToolHandler for ShellCommandHandler {
             session.conversation_id,
             turn.tools_config.allow_login_shell,
         )?;
+        validate_requested_workdir(requested_workdir, &exec_params.cwd, &turn.cwd)?;
         ShellHandler::run_exec_like(RunExecLikeArgs {
             tool_name: tool_name.display(),
             exec_params,

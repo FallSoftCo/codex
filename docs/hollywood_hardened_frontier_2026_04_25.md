@@ -77,3 +77,35 @@ What still needs work:
 - some policies still take tens of seconds after green to fully quiesce
 - policy comparisons should be rerun with the new quiescence metric before making broader claims
 - long-horizon benchmarks still need restart/recovery and dependency-heavy scenarios
+
+## Passive Wait Hardening
+
+The next control-plane failure after the earlier quiescence fixes was not a shell-path problem after all. In the failing `expense_board` replay on the previous daemon generation, an agent issued:
+
+- `exec_command { cmd: "sleep 20", workdir: ".../expense_board-leward-0883a99c" }`
+
+The typo in `leader_award` (`leward`) caused unified exec startup to fail deep inside process creation with a low-level `os error 2`, even though the command itself was just a passive wait.
+
+The runtime now hardens that path in two ways:
+
+- pure passive waits like `sleep 0.1` are handled directly in `exec_command` without spawning a shell or depending on `workdir`
+- non-passive commands now validate `workdir` up front and return a model-visible `workdir ... does not exist` error instead of bubbling a low-level spawn failure
+
+Validation on rebuilt binaries:
+
+- rebuilt locally from the patched tree with:
+  `CARGO_HOME=/tmp/losangelex-cargo-home-test1 CARGO_TARGET_DIR=/tmp/losangelex-cargo-target-test1 cargo +stable build -p codex-cli --bin codex -p codex-app-server --manifest-path /home/ai/Development/losangelex/codex-rs/Cargo.toml`
+- fresh daemon:
+  `ws://127.0.0.1:33269`
+- rerun command:
+  `python3 /home/ai/Development/losangelex/scripts/eval_hollywood_app_builds.py --challenge expense_board --policy leader_award --timeout-seconds 420 --poll-seconds 40 --post-pass-soak-seconds 120 --max-quiescence-wait-seconds 360 --app-server-url ws://127.0.0.1:33269`
+- result:
+  - room: `repo/expense_board-leader_award-ffdb50`
+  - workspace: `/home/ai/Development/losangelex/tmp/app_build_eval/expense_board-leader_award-45f34370`
+  - `passed: true`
+  - `passedAtSeconds: 308.8`
+  - `quiescedAtSeconds: 428.2`
+  - `allThreadsIdleAfterRun: true`
+  - `activeThreadsAfterRun: 0`
+
+Most importantly, that rerun produced no fresh `Failed to create unified exec process` entries for the new room or workspace. The prior failure class is now converted from a control-plane crash source into either a no-op passive wait or a clean model-facing workdir error.
