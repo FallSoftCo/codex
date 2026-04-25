@@ -1383,6 +1383,10 @@ fn format_coordination_wake_brief(task: &codex_state::CoordinationTask, reason: 
             "- for direct implementation awards, reuse the exact reserved `claim_paths` listed in the task details when you call `accept`"
                 .to_string(),
         );
+        lines.push(
+            "- once your reserved implementation slice is complete enough for teammates to build on, call `coordination_act` `done` immediately in the same turn; do not wait for final green, a room acknowledgment, or extra monitoring"
+                .to_string(),
+        );
     }
     if coordination_task_needs_room_read(task) {
         lines.push("- use `hollywood_read` instead of shell commands when the task asks about Hollywood visibility, wording, or message history".to_string());
@@ -1403,6 +1407,12 @@ fn format_coordination_wake_brief(task: &codex_state::CoordinationTask, reason: 
         lines.push("- for verification or QA tasks, gather the requested evidence, then call `coordination_act` `done` with the observed result".to_string());
     } else {
         lines.push("- when the requested work is complete, call `coordination_act` `done` with a concise concrete result summary".to_string());
+    }
+    if matches!(task.kind, codex_state::CoordinationTaskKind::Implementation) {
+        lines.push(
+            "- after you record `done`, `yield`, or `handoff` for an implementation lane, end the current turn unless you already have a direct follow-up request or an unresolved exact-scope conflict"
+                .to_string(),
+        );
     }
     lines.push("- do not call `accept` repeatedly just to restate ownership unless you intentionally yielded or the lease actually lapsed".to_string());
     lines.push("- only call `yield` or `handoff` if you are explicitly giving up the task, and include a concrete reason or target".to_string());
@@ -1425,7 +1435,7 @@ fn with_reserved_scope_details(details: String, claim_paths: &[PathClaimArg]) ->
         .collect::<Vec<_>>()
         .join("\n");
     let scope_block = format!(
-        "Reserved implementation scope:\n{scope_lines}\nWhen you accept this task, reuse the same `claim_paths`."
+        "Reserved implementation scope:\n{scope_lines}\nWhen you accept this task, reuse the same `claim_paths`.\nWhen that exact slice is complete enough for teammates to build on, call `coordination_act` `done` immediately instead of waiting for room acknowledgment or final green."
     );
 
     if details.trim().is_empty() {

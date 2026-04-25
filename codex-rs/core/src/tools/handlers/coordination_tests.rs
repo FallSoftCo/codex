@@ -325,6 +325,21 @@ async fn direct_awarded_implementation_wake_includes_reserved_scope_guidance() {
             .prompt
             .contains("When you accept this task, reuse the same `claim_paths`.")
     );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("call `coordination_act` `done` immediately in the same turn")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("end the current turn unless you already have a direct follow-up request")
+    );
+    assert!(
+        scheduled_tasks[0]
+            .prompt
+            .contains("instead of waiting for room acknowledgment or final green")
+    );
 }
 
 #[tokio::test]
