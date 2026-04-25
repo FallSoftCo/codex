@@ -228,7 +228,11 @@ async fn handle_coordination_act(
                 .map_err(|err| FunctionCallError::RespondToModel(err.to_string()))?
                 .unwrap_or(codex_state::CoordinationTaskKind::General);
             let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
-                Some(resolve_coordination_target(session, turn, db, owner).await?)
+                if coordination_target_is_unassigned(owner) {
+                    None
+                } else {
+                    Some(resolve_coordination_target(session, turn, db, owner).await?)
+                }
             } else {
                 None
             };
@@ -819,6 +823,17 @@ fn parse_coordination_status(value: &str) -> Result<codex_state::CoordinationTas
         other => other,
     };
     codex_state::CoordinationTaskStatus::parse(canonical).map_err(|err| err.to_string())
+}
+
+fn coordination_target_is_unassigned(value: &str) -> bool {
+    matches!(
+        value
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['-', '_'], " ")
+            .as_str(),
+        "unassigned" | "currently unassigned" | "none" | "no owner" | "no one" | "nobody"
+    )
 }
 
 async fn resolve_coordination_target(

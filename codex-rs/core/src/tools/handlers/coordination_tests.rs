@@ -218,6 +218,33 @@ async fn open_task_for_peer_persists_assigned_wake() {
 }
 
 #[tokio::test]
+async fn open_task_treats_unassigned_owner_as_unowned() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Leave this lane open",
+                "details": "Do not assign an owner yet.",
+                "kind": "general",
+                "owner": "unassigned",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task with unassigned owner should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(result["task"]["status"], "open");
+    assert!(result["task"]["owner_thread_id"].is_null());
+    assert_eq!(result["woken_threads"], json!([]));
+}
+
+#[tokio::test]
 async fn assigned_room_scoped_qa_wake_mentions_hollywood_read_and_done() {
     let (session, turn, state_db) = make_session_with_state_db().await;
     let owner_thread_id = ThreadId::new();

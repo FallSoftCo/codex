@@ -135,6 +135,7 @@ use codex_thread_store::LocalThreadStore;
 use codex_thread_store::ResumeThreadParams;
 use codex_thread_store::ThreadEventPersistenceMode;
 use codex_thread_store::ThreadStore;
+use codex_thread_store::ThreadStoreError;
 use codex_utils_output_truncation::TruncationPolicy;
 use futures::future::BoxFuture;
 use futures::future::Shared;
@@ -2814,7 +2815,15 @@ impl Session {
         if let Some(live_thread) = self.live_thread()
             && let Err(e) = live_thread.append_items(items).await
         {
-            error!("failed to record rollout items: {e:#}");
+            match e {
+                ThreadStoreError::ThreadNotFound { thread_id } => {
+                    debug!(
+                        %thread_id,
+                        "skipping rollout item persistence after live thread recorder was unloaded"
+                    );
+                }
+                other => error!("failed to record rollout items: {other:#}"),
+            }
         }
     }
 
