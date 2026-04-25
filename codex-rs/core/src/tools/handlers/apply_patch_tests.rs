@@ -280,3 +280,44 @@ fn write_permissions_for_paths_keep_dirs_outside_workspace_root() {
         Some(vec![expected_outside])
     );
 }
+
+#[test]
+fn format_apply_patch_verification_error_adds_stale_context_recovery_hint() {
+    let formatted =
+        format_apply_patch_verification_error("Failed to find expected lines in /tmp/x:\nold");
+
+    assert!(formatted.contains("apply_patch verification failed"));
+    assert!(formatted.contains("Failed to find expected lines in /tmp/x"));
+    assert!(formatted.contains("Re-read the current file or diff"));
+}
+
+#[test]
+fn format_apply_patch_verification_error_leaves_other_errors_plain() {
+    let formatted = format_apply_patch_verification_error("invalid hunk header");
+
+    assert_eq!(
+        formatted,
+        "apply_patch verification failed: invalid hunk header"
+    );
+}
+
+#[test]
+fn format_apply_patch_verification_error_adds_missing_file_recovery_hint() {
+    let formatted = format_apply_patch_verification_error(
+        "Failed to read file to update /tmp/missing.js: No such file or directory (os error 2)",
+    );
+
+    assert!(formatted.contains("apply_patch paths must reference real files"));
+    assert!(formatted.contains("rewrite it relative to the workspace root"));
+    assert!(formatted.contains("retarget or reopen the task"));
+}
+
+#[test]
+fn format_apply_patch_verification_error_adds_generic_missing_read_hint() {
+    let formatted = format_apply_patch_verification_error(
+        "Failed to read /tmp/missing.js: No such file or directory (os error 2)",
+    );
+
+    assert!(formatted.contains("apply_patch paths must reference real files"));
+    assert!(formatted.contains("rewrite it relative to the workspace root"));
+}

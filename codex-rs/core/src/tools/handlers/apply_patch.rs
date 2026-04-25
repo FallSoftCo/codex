@@ -244,6 +244,29 @@ fn write_permissions_for_paths(
     normalize_additional_permissions(permissions).ok()
 }
 
+fn format_apply_patch_verification_error(parse_error: &impl std::fmt::Display) -> String {
+    let parse_error = parse_error.to_string();
+    let missing_file_read = parse_error.contains("Failed to read file to update")
+        || (parse_error.contains("Failed to read ")
+            && parse_error.contains("No such file or directory"));
+    let hint = if parse_error.contains("Failed to find expected lines in") {
+        Some(
+            "Recovery: the target file no longer matches the patch context. Re-read the current file or diff, then regenerate the patch against the latest contents.",
+        )
+    } else if missing_file_read {
+        Some(
+            "Recovery: apply_patch paths must reference real files in the current workspace. If you used an absolute path, rewrite it relative to the workspace root; if the file still does not exist, inspect the workspace and retarget or reopen the task before retrying.",
+        )
+    } else {
+        None
+    };
+
+    match hint {
+        Some(hint) => format!("apply_patch verification failed: {parse_error}\n{hint}"),
+        None => format!("apply_patch verification failed: {parse_error}"),
+    }
+}
+
 /// Extracts the raw patch text used as the command-shaped hook input for apply_patch.
 ///
 /// The apply_patch tool can arrive as the older JSON/function shape or as a
@@ -452,9 +475,9 @@ impl ToolHandler for ApplyPatchHandler {
                 }
             }
             codex_apply_patch::MaybeApplyPatchVerified::CorrectnessError(parse_error) => {
-                Err(FunctionCallError::RespondToModel(format!(
-                    "apply_patch verification failed: {parse_error}"
-                )))
+                Err(FunctionCallError::RespondToModel(
+                    format_apply_patch_verification_error(&parse_error),
+                ))
             }
             codex_apply_patch::MaybeApplyPatchVerified::ShellParseError(error) => {
                 tracing::trace!("Failed to parse apply_patch input, {error:?}");
@@ -572,11 +595,9 @@ pub(crate) async fn intercept_apply_patch(
                 }
             }
         }
-        codex_apply_patch::MaybeApplyPatchVerified::CorrectnessError(parse_error) => {
-            Err(FunctionCallError::RespondToModel(format!(
-                "apply_patch verification failed: {parse_error}"
-            )))
-        }
+        codex_apply_patch::MaybeApplyPatchVerified::CorrectnessError(parse_error) => Err(
+            FunctionCallError::RespondToModel(format_apply_patch_verification_error(&parse_error)),
+        ),
         codex_apply_patch::MaybeApplyPatchVerified::ShellParseError(error) => {
             tracing::trace!("Failed to parse apply_patch input, {error:?}");
             Ok(None)

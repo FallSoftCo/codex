@@ -52,11 +52,17 @@ POLICY_PROMPTS = {
             "You are the lead. Read the challenge, decompose it, assign exact lanes to teammates, "
             "and own final integration and completion. When the app is already green and another "
             "previously awarded lane is no longer necessary, record `coordination_act cancel` with "
-            "a concrete reason so the obsolete lane is retired durably."
+            "a concrete reason so the obsolete lane is retired durably. Before you reclaim or "
+            "reassign a critical-path file, verify its current existence and exact workspace-relative "
+            "path in the live workspace. If a critical file is missing, make that explicit and recreate "
+            "the file at the workspace root instead of retrying stale patch context or absolute paths."
         ),
         "shared": (
             "Tony is the lead for this run. Wait for his lane assignments before starting work, "
-            "unless he explicitly asks for self-directed help."
+            "unless he explicitly asks for self-directed help. Before editing a claimed file, verify "
+            "the file still exists in the live workspace and use workspace-relative paths with "
+            "`apply_patch`; if the expected file is actually missing, stop retrying the same patch and "
+            "either recreate the file at the intended workspace path or hand the lane back."
         ),
     },
     "semantic_market": {

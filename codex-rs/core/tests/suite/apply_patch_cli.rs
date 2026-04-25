@@ -483,6 +483,10 @@ async fn apply_patch_cli_reports_missing_context(
         "expected verification failure message"
     );
     assert!(out.contains("Failed to find expected lines in"));
+    assert!(
+        out.contains("Re-read the current file or diff"),
+        "expected stale-context recovery hint: {out}"
+    );
     assert_eq!(
         harness.read_file_text("modify.txt").await?,
         "line1\nline2\n"

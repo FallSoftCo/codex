@@ -109,3 +109,65 @@ Validation on rebuilt binaries:
   - `activeThreadsAfterRun: 0`
 
 Most importantly, that rerun produced no fresh `Failed to create unified exec process` entries for the new room or workspace. The prior failure class is now converted from a control-plane crash source into either a no-op passive wait or a clean model-facing workdir error.
+
+## Apply Patch Recovery Frontier
+
+The next live failure mode after passive-wait hardening was not a router crash. It was stale or invalid file targeting during `apply_patch` recovery on a real `habit_dashboard / leader_award` run.
+
+Two things were hardened:
+
+- `apply_patch` verification failures for stale patch context now include a direct recovery hint to re-read the current file or diff before regenerating the patch.
+- missing-file verification failures now include a stronger hint:
+  - `apply_patch` paths must reference real files in the current workspace
+  - absolute paths should be rewritten relative to the workspace root
+  - if the file still does not exist, the agent should inspect the workspace and retarget or reopen the task instead of retrying the same patch
+
+Live validation on the rebuilt daemon at `ws://127.0.0.1:41263` showed the new handler output reaching the model. In the first rerun, the tool emitted:
+
+- `apply_patch verification failed: Failed to read file to update .../app.js: No such file or directory`
+- followed by the new recovery hint
+
+That did improve observability, but the stronger conclusion from the next rerun is architectural:
+
+- prompt-level tightening did not eliminate leader-mode critical-file drift
+- `leader_award` still allowed a run to fall behind on the `app.js` critical path
+- the room eventually reached a state where `app.js` had to be recreated explicitly in the workspace root to recover
+
+The latest `habit_dashboard / leader_award` slice therefore disproves the idea that better recovery phrasing alone is enough. The control plane stayed healthy, but policy quality still let a critical-path file disappear long enough to blow the evaluation budget.
+
+Current frontier after this rerun:
+
+- runtime/tooling: materially better
+- model-facing diagnostics: materially better
+- leader-mode critical-file guardianship: still not strong enough
+
+The next likely fix is not more generic runtime hardening. It is stronger coordination policy around critical-path ownership, reclamation, and verification when a claimed file disappears or diverges.
+
+### Follow-up Policy Probe
+
+I tightened the `leader_award` evaluation prompt after that failed run:
+
+- leaders must verify the current existence and workspace-relative path of a critical file before reclaiming or reassigning it
+- workers must verify the file still exists before editing it
+- if the expected file is actually missing, they must stop retrying the same patch and either recreate the file at the intended workspace path or hand the lane back
+
+On the next rerun of `habit_dashboard / leader_award` against the same hardened daemon generation, the team still experienced a transient `app.js` delete/add window and still emitted `apply_patch` verification failures, but the run recovered instead of timing out:
+
+- room: `repo/habit_dashboard-leader_award-a5c41c`
+- workspace: `/home/ai/Development/losangelex/tmp/app_build_eval/habit_dashboard-leader_award-0e56b2b4`
+- `passed: true`
+- `passedAtSeconds: 269.5`
+- `quiescedAtSeconds: 356.8`
+- `allThreadsIdleAfterRun: true`
+- `activeThreadsAfterRun: 0`
+
+This is a useful result because it narrows the diagnosis:
+
+- prompt-level critical-file guidance can improve recovery enough to get leader-mode back under budget
+- prompt-level guidance still does not eliminate critical-file churn entirely
+
+So the next frontier is now sharper than before:
+
+- tool/runtime recovery is good enough to surface and survive the failure
+- policy guidance can mitigate the failure
+- but fully stable long-horizon behavior still needs stronger protection around temporary deletion/recreation of critical-path files
