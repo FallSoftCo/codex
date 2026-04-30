@@ -93,6 +93,18 @@ fn hollywood_synthetic_brief_instruction(message: &HollywoodInputMessage) -> Opt
     if let Some(semantic_kind) = brief.semantic_kind.as_deref() {
         lines.push(format!("- semantic kind: `{semantic_kind}`"));
     }
+    if let Some(coordination_policy) = brief.coordination_policy.as_deref() {
+        lines.push(format!("- coordination policy: `{coordination_policy}`"));
+    }
+    if let Some(coordination_phase) = brief.coordination_phase.as_deref() {
+        lines.push(format!("- coordination phase: `{coordination_phase}`"));
+    }
+    if let Some(coordination_role) = brief.coordination_role.as_deref() {
+        lines.push(format!("- your coordination role: `{coordination_role}`"));
+    }
+    if let Some(coordination_epoch) = brief.coordination_epoch {
+        lines.push(format!("- policy epoch: `{coordination_epoch}`"));
+    }
     if let Some(summary) = brief.summary.as_deref() {
         lines.push(format!("- summary: {summary}"));
     }
@@ -200,6 +212,10 @@ mod tests {
             synthetic_brief: Some(codex_protocol::protocol::HollywoodSyntheticBrief {
                 wake_reason: Some("semantic_delta".to_string()),
                 semantic_kind: Some("scope_update".to_string()),
+                coordination_policy: Some("dual_command_lease".to_string()),
+                coordination_phase: Some("execution".to_string()),
+                coordination_role: Some("executor".to_string()),
+                coordination_epoch: Some(4),
                 summary: Some(
                     "A peer ownership update may affect your available lane.".to_string(),
                 ),
@@ -222,6 +238,10 @@ mod tests {
         assert!(instruction.contains("Hollywood synthetic coordination brief"));
         assert!(instruction.contains("semantic_delta"));
         assert!(instruction.contains("scope_update"));
+        assert!(instruction.contains("dual_command_lease"));
+        assert!(instruction.contains("execution"));
+        assert!(instruction.contains("executor"));
+        assert!(instruction.contains("policy epoch"));
         assert!(instruction.contains("stay silent"));
     }
 }

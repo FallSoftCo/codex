@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import time
 import uuid
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,7 @@ from replay_hollywood_operator import (
 
 REPO_ROOT = Path("/home/ai/Development/losangelex")
 TMP_ROOT = REPO_ROOT / "tmp" / "app_build_eval"
+DEFAULT_HOLLYWOOD_URL = "http://127.0.0.1:8765"
 TEAM = (
     ("tony", "planning, architecture, integration, release verification"),
     ("james", "frontend UI and polish"),
@@ -40,6 +43,8 @@ CHALLENGES = {
     "incident_console": REPO_ROOT / "evals" / "app_challenges" / "incident_console_template",
     "expense_board": REPO_ROOT / "evals" / "app_challenges" / "expense_board_template",
 }
+RUNTIME_ROOM_POLICIES = {"leader_award", "kanban_pull", "dual_command_lease"}
+ROOM_CONTRACT_VERSION = "losangelex-room/v2"
 POLICY_PROMPTS = {
     "room_message": {
         "shared": (
@@ -327,8 +332,17 @@ def changed_files(workspace: Path, challenge: str) -> list[str]:
 
 
 def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
-    policy_block = POLICY_PROMPTS[policy].get(agent_name) or POLICY_PROMPTS[policy]["shared"]
     roster = ", ".join(name for name, _ in TEAM)
+    if policy in RUNTIME_ROOM_POLICIES:
+        return (
+            f"You are {agent_name}. Your strongest lane is {specialty}. "
+            f"The team roster is: {roster}. "
+            "Work in the current repository workspace. Read README.md first, then coordinate through "
+            "Hollywood to finish the app. Follow the active room coordination policy and your Hollywood "
+            "synthetic coordination briefs; do not invent a private policy. Run tests before claiming the "
+            "app is done. Only declare completion when `npm test -- --run` passes in this workspace."
+        )
+    policy_block = POLICY_PROMPTS[policy].get(agent_name) or POLICY_PROMPTS[policy]["shared"]
     return (
         f"You are {agent_name}. Your strongest lane is {specialty}. "
         f"The team roster is: {roster}. "
@@ -337,6 +351,45 @@ def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
         "Only declare completion when `npm test -- --run` passes in this workspace. "
         f"{policy_block}"
     )
+
+
+def apply_room_policy_state(
+    *,
+    hollywood_url: str,
+    room: str,
+    policy: str,
+    agents: list[AgentRun],
+) -> dict[str, Any] | None:
+    if policy not in RUNTIME_ROOM_POLICIES:
+        return None
+
+    thread_by_role = {agent.role_name: agent.thread_id for agent in agents}
+    payload: dict[str, Any] = {
+        "room": room,
+        "contract_version": ROOM_CONTRACT_VERSION,
+        "coordination_policy": policy,
+        "coordination_phase": "execution",
+        "coordination_epoch": 1,
+        "bump_state_version": True,
+    }
+    if policy in {"leader_award", "dual_command_lease"}:
+        payload["leader_session_id"] = thread_by_role["tony"]
+        payload["verifier_session_id"] = thread_by_role["ray"]
+
+    request = urllib.request.Request(
+        f"{hollywood_url.rstrip('/')}/hollywood/v1/rooms",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(
+            f"failed to update Hollywood room policy state for {room}: {exc} {detail}".strip()
+        ) from exc
 
 
 def start_team(
@@ -373,6 +426,7 @@ def evaluate_policy(
     policy: str,
     challenge: str,
     app_server_url: str,
+    hollywood_url: str,
     timeout_seconds: int,
     poll_seconds: int,
     post_pass_soak_seconds: int,
@@ -393,6 +447,12 @@ def evaluate_policy(
     try:
         initialize(conn)
         agents = start_team(conn, workspace=workspace, room=room, run_suffix=run_suffix)
+        room_policy_state = apply_room_policy_state(
+            hollywood_url=hollywood_url,
+            room=room,
+            policy=policy,
+            agents=agents,
+        )
         tracked_threads = {agent.thread_id for agent in agents}
         conn.drain(8)
         for agent in agents:
@@ -451,6 +511,7 @@ def evaluate_policy(
             "challenge": challenge,
             "room": room,
             "workspace": str(workspace),
+            "roomPolicyState": room_policy_state,
             "install": {
                 "returncode": install_result.returncode,
                 "stdoutTail": "\n".join(install_result.stdout.splitlines()[-12:]),
@@ -508,6 +569,7 @@ def main() -> int:
     parser.add_argument("--post-pass-soak-seconds", type=int, default=20)
     parser.add_argument("--max-quiescence-wait-seconds", type=int)
     parser.add_argument("--app-server-url")
+    parser.add_argument("--hollywood-url", default=DEFAULT_HOLLYWOOD_URL)
     parser.add_argument("--current-app-server", default=str(DEFAULT_CURRENT_APP_SERVER))
     args = parser.parse_args()
 
@@ -522,6 +584,7 @@ def main() -> int:
                 policy=policy,
                 challenge=args.challenge,
                 app_server_url=app_server_url,
+                hollywood_url=args.hollywood_url,
                 timeout_seconds=args.timeout_seconds,
                 poll_seconds=args.poll_seconds,
                 post_pass_soak_seconds=args.post_pass_soak_seconds,

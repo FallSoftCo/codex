@@ -33,7 +33,7 @@ const HOLLYWOOD_CONTEXT_CLOSE_TAG: &str = "</hollywood_context>";
 
 pub(crate) const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 pub(crate) const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
-pub(crate) const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v1";
+pub(crate) const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v2";
 pub(crate) const HOLLYWOOD_POLL_INTERVAL: Duration = Duration::from_millis(1500);
 pub(crate) const HOLLYWOOD_AUTONOMOUS_COOLDOWN: Duration = Duration::from_secs(2);
 pub(crate) const HOLLYWOOD_STARTUP_GRACE_PERIOD: Duration = Duration::from_secs(5);
@@ -200,8 +200,7 @@ impl HollywoodConfig {
 pub(crate) struct HollywoodRoomState {
     last_seen_message_id: i64,
     start_from_latest: bool,
-    state_version: Option<i64>,
-    contract_version: Option<String>,
+    snapshot: Option<HollywoodRoomSnapshot>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -299,15 +298,8 @@ impl HollywoodRuntimeState {
             return false;
         };
         let state = self.room_states.entry(room.to_string()).or_default();
-        let changed = state
-            .state_version
-            .is_some_and(|version| version != snapshot.state_version)
-            || state
-                .contract_version
-                .as_ref()
-                .is_some_and(|version| version != &snapshot.contract_version);
-        state.state_version = Some(snapshot.state_version);
-        state.contract_version = Some(snapshot.contract_version.clone());
+        let changed = state.snapshot.as_ref().is_some_and(|value| value != snapshot);
+        state.snapshot = Some(snapshot.clone());
         if changed {
             state.last_seen_message_id = last_id;
             state.start_from_latest = false;
@@ -338,6 +330,12 @@ impl HollywoodRuntimeState {
 
     pub(crate) fn clear_autonomous_turn_pending(&mut self) {
         self.autonomous_turn_pending = false;
+    }
+
+    pub(crate) fn room_snapshot(&self, room: &str) -> Option<HollywoodRoomSnapshot> {
+        self.room_states
+            .get(room)
+            .and_then(|state| state.snapshot.clone())
     }
 
     pub(crate) fn reconcile_idle_autonomous_turn_pending(
@@ -492,6 +490,16 @@ struct HollywoodApiRoomState {
     room: String,
     state_version: i64,
     contract_version: String,
+    #[serde(default)]
+    coordination_policy: Option<String>,
+    #[serde(default)]
+    coordination_phase: Option<String>,
+    #[serde(default = "default_coordination_epoch")]
+    coordination_epoch: i64,
+    #[serde(default)]
+    leader_session_id: Option<String>,
+    #[serde(default)]
+    verifier_session_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -499,6 +507,11 @@ pub(crate) struct HollywoodRoomSnapshot {
     pub(crate) room: String,
     pub(crate) state_version: i64,
     pub(crate) contract_version: String,
+    pub(crate) coordination_policy: Option<String>,
+    pub(crate) coordination_phase: Option<String>,
+    pub(crate) coordination_epoch: i64,
+    pub(crate) leader_session_id: Option<String>,
+    pub(crate) verifier_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -507,6 +520,11 @@ struct HollywoodMessagesResponse {
     last_id: i64,
     #[serde(default)]
     room_state: Option<HollywoodApiRoomState>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HollywoodRoomsResponse {
+    rooms: Vec<HollywoodApiRoomState>,
 }
 
 #[derive(Debug)]
@@ -572,8 +590,43 @@ pub(crate) async fn poll_messages(
             room: room_state.room,
             state_version: room_state.state_version,
             contract_version: room_state.contract_version,
+            coordination_policy: room_state.coordination_policy,
+            coordination_phase: room_state.coordination_phase,
+            coordination_epoch: room_state.coordination_epoch,
+            leader_session_id: room_state.leader_session_id,
+            verifier_session_id: room_state.verifier_session_id,
         }),
     })
+}
+
+pub(crate) async fn fetch_room_state(
+    client: &Client,
+    config: &HollywoodConfig,
+    room: &str,
+) -> Result<Option<HollywoodRoomSnapshot>, String> {
+    let url = format!("{}/hollywood/v1/rooms", config.url.trim_end_matches('/'));
+    let response = client
+        .get(url)
+        .query(&[("room", room), ("limit", "1")])
+        .send()
+        .await
+        .map_err(|err| format!("Hollywood room-state request failed: {err}"))?
+        .error_for_status()
+        .map_err(|err| format!("Hollywood room-state request failed: {err}"))?
+        .json::<HollywoodRoomsResponse>()
+        .await
+        .map_err(|err| format!("Hollywood room-state response parse failed: {err}"))?;
+
+    Ok(response.rooms.into_iter().next().map(|room_state| HollywoodRoomSnapshot {
+        room: room_state.room,
+        state_version: room_state.state_version,
+        contract_version: room_state.contract_version,
+        coordination_policy: room_state.coordination_policy,
+        coordination_phase: room_state.coordination_phase,
+        coordination_epoch: room_state.coordination_epoch,
+        leader_session_id: room_state.leader_session_id,
+        verifier_session_id: room_state.verifier_session_id,
+    }))
 }
 
 pub(crate) async fn upsert_registry(
@@ -816,6 +869,10 @@ fn classify_message(
         mentioned,
         self_authored,
     })
+}
+
+fn default_coordination_epoch() -> i64 {
+    1
 }
 
 pub(crate) fn hollywood_identities(thread_id: ThreadId, thread_name: Option<&str>) -> Vec<String> {
@@ -1308,6 +1365,10 @@ mod tests {
             brief: HollywoodSyntheticBrief {
                 wake_reason: Some("semantic_delta".to_string()),
                 semantic_kind: Some("scope_update".to_string()),
+                coordination_policy: None,
+                coordination_phase: None,
+                coordination_role: None,
+                coordination_epoch: None,
                 summary: Some("A peer ownership change may affect your lane.".to_string()),
                 facts: Vec::new(),
                 suggested_actions: vec!["check whether your scope changed".to_string()],
@@ -1344,6 +1405,10 @@ mod tests {
             brief: HollywoodSyntheticBrief {
                 wake_reason: Some("semantic_delta".to_string()),
                 semantic_kind: Some("assignment".to_string()),
+                coordination_policy: None,
+                coordination_phase: None,
+                coordination_role: None,
+                coordination_epoch: None,
                 summary: Some("A direct assignment needs attention.".to_string()),
                 facts: Vec::new(),
                 suggested_actions: vec!["accept or decline explicitly".to_string()],
@@ -1405,6 +1470,10 @@ mod tests {
             brief: HollywoodSyntheticBrief {
                 wake_reason: Some("semantic_delta".to_string()),
                 semantic_kind: Some("assignment".to_string()),
+                coordination_policy: None,
+                coordination_phase: None,
+                coordination_role: None,
+                coordination_epoch: None,
                 summary: Some("A direct assignment needs attention.".to_string()),
                 facts: Vec::new(),
                 suggested_actions: vec!["accept or decline explicitly".to_string()],
@@ -1569,6 +1638,11 @@ mod tests {
                 room: "repo/losangelex".to_string(),
                 state_version: 1,
                 contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+                coordination_policy: Some("leader_award".to_string()),
+                coordination_phase: Some("execution".to_string()),
+                coordination_epoch: 1,
+                leader_session_id: Some("leader".to_string()),
+                verifier_session_id: Some("verifier".to_string()),
             }),
             42,
         );
@@ -1587,6 +1661,11 @@ mod tests {
                 room: "repo/losangelex".to_string(),
                 state_version: 1,
                 contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+                coordination_policy: Some("leader_award".to_string()),
+                coordination_phase: Some("execution".to_string()),
+                coordination_epoch: 1,
+                leader_session_id: Some("leader".to_string()),
+                verifier_session_id: Some("verifier".to_string()),
             }),
             7,
         ));
@@ -1597,6 +1676,11 @@ mod tests {
                 room: "repo/losangelex".to_string(),
                 state_version: 2,
                 contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+                coordination_policy: Some("kanban_pull".to_string()),
+                coordination_phase: Some("stabilization".to_string()),
+                coordination_epoch: 2,
+                leader_session_id: Some("leader".to_string()),
+                verifier_session_id: Some("verifier".to_string()),
             }),
             99,
         );

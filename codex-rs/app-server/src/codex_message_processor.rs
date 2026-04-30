@@ -16,6 +16,7 @@ use crate::hollywood::HOLLYWOOD_ROOM_CONTRACT_VERSION;
 use crate::hollywood::HollywoodConfig;
 use crate::hollywood::build_registry_upsert_request;
 use crate::hollywood::format_hollywood_context_message;
+use crate::hollywood::fetch_room_state as fetch_hollywood_room_state;
 use crate::hollywood::hollywood_session_diagnostics_from_runtime;
 use crate::hollywood::hollywood_session_state_from_persisted;
 use crate::hollywood::hollywood_session_state_from_runtime;
@@ -2735,6 +2736,10 @@ impl CodexMessageProcessor {
         CoreHollywoodSyntheticBrief {
             wake_reason: Some(assessment.wake_reason.to_string()),
             semantic_kind: Some(assessment.kind.as_str().to_string()),
+            coordination_policy: None,
+            coordination_phase: None,
+            coordination_role: None,
+            coordination_epoch: None,
             summary: Some(assessment.summary),
             facts: assessment.facts,
             suggested_actions: assessment.suggested_actions,
@@ -2782,10 +2787,123 @@ impl CodexMessageProcessor {
             } else {
                 "multi_delta".to_string()
             }),
+            coordination_policy: primary.and_then(|brief| brief.coordination_policy.clone()),
+            coordination_phase: primary.and_then(|brief| brief.coordination_phase.clone()),
+            coordination_role: primary.and_then(|brief| brief.coordination_role.clone()),
+            coordination_epoch: primary.and_then(|brief| brief.coordination_epoch),
             summary: Some(summary),
             facts,
             suggested_actions,
             stay_silent_if_no_actionable_delta: true,
+        }
+    }
+
+    fn coordination_role_for_room_snapshot(
+        snapshot: &crate::hollywood::HollywoodRoomSnapshot,
+        thread_id: &ThreadId,
+    ) -> Option<&'static str> {
+        let thread_id = thread_id.to_string();
+        if snapshot
+            .leader_session_id
+            .as_deref()
+            .is_some_and(|value| value == thread_id)
+        {
+            Some("leader")
+        } else if snapshot
+            .verifier_session_id
+            .as_deref()
+            .is_some_and(|value| value == thread_id)
+        {
+            Some("verifier")
+        } else if snapshot.coordination_policy.is_some() {
+            Some("executor")
+        } else {
+            None
+        }
+    }
+
+    fn apply_room_policy_metadata(
+        brief: &mut CoreHollywoodSyntheticBrief,
+        snapshot: Option<&crate::hollywood::HollywoodRoomSnapshot>,
+        thread_id: &ThreadId,
+    ) {
+        let Some(snapshot) = snapshot else {
+            return;
+        };
+        let Some(policy) = snapshot.coordination_policy.as_deref() else {
+            return;
+        };
+
+        brief.coordination_policy = Some(policy.to_string());
+        brief.coordination_phase = snapshot.coordination_phase.clone();
+        brief.coordination_epoch = Some(snapshot.coordination_epoch);
+        let role = Self::coordination_role_for_room_snapshot(snapshot, thread_id)
+            .map(str::to_string);
+        brief.coordination_role = role.clone();
+
+        let mut push_fact = |fact: String| {
+            if !brief.facts.iter().any(|value| value == &fact) {
+                brief.facts.push(fact);
+            }
+        };
+        let mut push_action = |action: &str| {
+            if !brief.suggested_actions.iter().any(|value| value == action) {
+                brief.suggested_actions.push(action.to_string());
+            }
+        };
+
+        push_fact(format!("room policy is `{policy}`"));
+        if let Some(phase) = snapshot.coordination_phase.as_deref() {
+            push_fact(format!("room phase is `{phase}`"));
+        }
+        if let Some(role) = role.as_deref() {
+            push_fact(format!("your room role is `{role}`"));
+        }
+
+        match policy {
+            "leader_award" => match role.as_deref() {
+                Some("leader") => {
+                    push_action("open or update exact implementation lanes before asking workers to claim scope");
+                    push_action("treat reassignment and closure as leader-controlled decisions");
+                }
+                Some("verifier") => {
+                    push_action("keep the verification gate current and close the room only after implementation lanes are done");
+                }
+                _ => {
+                    push_action("wait for a leader-opened exact lane before claiming implementation scope");
+                }
+            },
+            "kanban_pull" => {
+                push_action("pull at most one ready exact lane at a time and stay idle when no ready lane exists");
+            }
+            "dual_command_lease" => match role.as_deref() {
+                Some("leader") => {
+                    push_action("treat fresh executor progress as a live lease and avoid reassignment until the lease is stale, yielded, or blocked");
+                }
+                Some("verifier") => {
+                    push_action("treat fresh executor progress as active ownership and escalate only when the lease appears stale");
+                }
+                _ => {
+                    push_action("while you own active scope, send concise progress heartbeats before long silent intervals and yield explicitly if blocked");
+                }
+            },
+            "auto" => {
+                push_action("follow the current room phase and role guidance rather than inventing a private coordination policy");
+            }
+            _ => {}
+        }
+
+        match snapshot.coordination_phase.as_deref() {
+            Some("discovery") => {
+                push_action("reduce ambiguous work into exact claimable lanes before editing");
+            }
+            Some("stabilization") => {
+                push_action("prefer verification, cleanup, and handoff resolution over opening new lanes");
+            }
+            Some("closure") => {
+                push_action("favor closure and quiescence over reopening settled lanes unless the gate actually regressed");
+            }
+            _ => {}
         }
     }
 
@@ -12551,6 +12669,48 @@ impl CodexMessageProcessor {
                                 &config,
                                 conversation.state_db().is_some(),
                             );
+                            let startup_room_snapshot = match fetch_hollywood_room_state(
+                                &hollywood_client,
+                                &config,
+                                &config.room,
+                            )
+                            .await
+                            {
+                                Ok(snapshot) => {
+                                    if let Some(snapshot_ref) = snapshot.as_ref()
+                                        && snapshot_ref.contract_version
+                                            != HOLLYWOOD_ROOM_CONTRACT_VERSION
+                                    {
+                                        tracing::warn!(
+                                            conversation_id = %conversation_id,
+                                            room = config.room,
+                                            contract_version = snapshot_ref.contract_version,
+                                            expected_contract_version = HOLLYWOOD_ROOM_CONTRACT_VERSION,
+                                            "Hollywood startup room contract version mismatch; ignoring room policy state"
+                                        );
+                                        None
+                                    } else {
+                                        let last_id = {
+                                            let state = thread_state.lock().await;
+                                            state.hollywood.last_seen_message_id(&config.room)
+                                        };
+                                        thread_state.lock().await.hollywood.note_room_snapshot(
+                                            &config.room,
+                                            snapshot.as_ref(),
+                                            last_id,
+                                        );
+                                        snapshot
+                                    }
+                                }
+                                Err(err) => {
+                                    tracing::debug!(
+                                        conversation_id = %conversation_id,
+                                        room = config.room,
+                                        "failed to fetch Hollywood startup room state: {err}"
+                                    );
+                                    None
+                                }
+                            };
                             let announce_presence = startup_announces_presence(&config);
                             let startup_summary = if announce_presence {
                                 "You just attached to Hollywood and need to establish presence, scope, and recent room state before substantive work."
@@ -12582,6 +12742,23 @@ impl CodexMessageProcessor {
                                 state.hollywood.clear_startup_turn_pending();
                                 state.hollywood.mark_autonomous_turn_pending();
                             }
+                            let mut startup_brief = CoreHollywoodSyntheticBrief {
+                                wake_reason: Some("startup".to_string()),
+                                semantic_kind: Some("startup_protocol".to_string()),
+                                coordination_policy: None,
+                                coordination_phase: None,
+                                coordination_role: None,
+                                coordination_epoch: None,
+                                summary: Some(startup_summary.to_string()),
+                                facts: vec![format!("primary room is `{}`", config.room)],
+                                suggested_actions,
+                                stay_silent_if_no_actionable_delta: true,
+                            };
+                            Self::apply_room_policy_metadata(
+                                &mut startup_brief,
+                                startup_room_snapshot.as_ref(),
+                                &conversation_id,
+                            );
                             let submit_result = conversation
                                 .submit(Op::HollywoodInput {
                                     message: CoreHollywoodInputMessage {
@@ -12593,16 +12770,7 @@ impl CodexMessageProcessor {
                                         attention: Some("focused".to_string()),
                                         message_kind: Some("direct".to_string()),
                                         obligation: Some("attention".to_string()),
-                                        synthetic_brief: Some(CoreHollywoodSyntheticBrief {
-                                            wake_reason: Some("startup".to_string()),
-                                            semantic_kind: Some("startup_protocol".to_string()),
-                                            summary: Some(startup_summary.to_string()),
-                                            facts: vec![
-                                                format!("primary room is `{}`", config.room),
-                                            ],
-                                            suggested_actions,
-                                            stay_silent_if_no_actionable_delta: true,
-                                        }),
+                                        synthetic_brief: Some(startup_brief),
                                         requires_response: false,
                                     },
                                 })
@@ -12637,6 +12805,10 @@ impl CodexMessageProcessor {
                                                     synthetic_brief: Some(CoreHollywoodSyntheticBrief {
                                                         wake_reason: Some("rolling_deploy_notice".to_string()),
                                                         semantic_kind: Some("startup_notice".to_string()),
+                                                        coordination_policy: None,
+                                                        coordination_phase: None,
+                                                        coordination_role: None,
+                                                        coordination_epoch: None,
                                                         summary: Some(
                                                             "A rolling deploy or reconnect notice may affect your prior coordination state."
                                                                 .to_string(),
@@ -12829,7 +13001,19 @@ impl CodexMessageProcessor {
                                 state_db.as_ref(),
                             )
                             .await;
-                            let synthetic_brief = Self::hollywood_input_synthetic_brief(&message);
+                            let room_snapshot = {
+                                thread_state
+                                    .lock()
+                                    .await
+                                    .hollywood
+                                    .room_snapshot(&message.notification_message.room)
+                            };
+                            let mut synthetic_brief = Self::hollywood_input_synthetic_brief(&message);
+                            Self::apply_room_policy_metadata(
+                                &mut synthetic_brief,
+                                room_snapshot.as_ref(),
+                                &conversation_id,
+                            );
                             let message_is_focused = message.attention
                                 == codex_app_server_protocol::HollywoodMessageAttention::Focused;
                             let message_is_broadcast = message.attention
@@ -16789,6 +16973,58 @@ mod tests {
         assert_eq!(obligation, "attention");
         assert!(!requires_response);
         assert_eq!(brief.semantic_kind.as_deref(), Some("direct_request"));
+    }
+
+    #[test]
+    fn room_policy_metadata_is_injected_into_hollywood_brief() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 146,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "@james take src/app.ts and keep me posted if blocked.".to_string(),
+                created_at: "2026-04-29T00:00:00Z".to_string(),
+                mentions: vec!["james".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+        let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        let snapshot = crate::hollywood::HollywoodRoomSnapshot {
+            room: "repo/losangelex".to_string(),
+            state_version: 2,
+            contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            coordination_policy: Some("dual_command_lease".to_string()),
+            coordination_phase: Some("execution".to_string()),
+            coordination_epoch: 4,
+            leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
+            verifier_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa60".to_string()),
+        };
+        let executor_thread = ThreadId::from_string(
+            "019d0798-12d8-76c3-a812-6e323637aa61",
+        )
+        .expect("valid thread id");
+
+        CodexMessageProcessor::apply_room_policy_metadata(
+            &mut brief,
+            Some(&snapshot),
+            &executor_thread,
+        );
+
+        assert_eq!(brief.coordination_policy.as_deref(), Some("dual_command_lease"));
+        assert_eq!(brief.coordination_phase.as_deref(), Some("execution"));
+        assert_eq!(brief.coordination_role.as_deref(), Some("executor"));
+        assert_eq!(brief.coordination_epoch, Some(4));
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("progress heartbeats"))
+        );
     }
 
     #[test]

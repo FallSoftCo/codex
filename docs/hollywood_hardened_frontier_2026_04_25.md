@@ -218,6 +218,64 @@ Validation on a fresh merged daemon:
 This is a real control-plane improvement, not just another lucky run:
 
 - message volume dropped from `289` to `23`
+- the long closure wake ping-pong disappeared
+- the room reached full idle without leftover scheduled coordination wakes
+
+## Room Policy State v2
+
+The next step after wake hardening was to make coordination policy a real room-level
+runtime concept instead of only an evaluation prompt.
+
+That is now partially implemented:
+
+- Hollywood room state is now `losangelex-room/v2`
+- room metadata can persist:
+  - `coordination_policy`
+  - `coordination_phase`
+  - `coordination_epoch`
+  - `leader_session_id`
+  - `verifier_session_id`
+- app-server now fetches and stores that room snapshot
+- Hollywood synthetic briefs now carry policy/phase/role/epoch metadata
+- runtime-policy evaluations can now use generic agent prompts and rely on durable room
+  policy state instead of only prompt-local policy text
+
+The first live production-path validation used a fresh daemon at
+`ws://127.0.0.1:46561` with `model="gpt-5.4"` and the Hollywood service at
+`http://127.0.0.1:8765`.
+
+### Live Production-Path Results
+
+#### `incident_console`
+
+| Policy | Time To Green | Quiesced At | Quiescence Lag | Messages | Idle After Run |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `leader_award` | `167.7s` | `263.0s` | `95.3s` | `39` | `true` |
+| `kanban_pull` | `167.3s` | `261.0s` | `93.7s` | `73` | `true` |
+| `dual_command_lease` | `230.2s` | `401.9s` | `171.7s` | `100` | `true` |
+
+#### `expense_board`
+
+| Policy | Time To Green | Quiesced At | Quiescence Lag | Messages | Idle After Run |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `leader_award` | `195.8s` | `261.6s` | `65.8s` | `21` | `true` |
+| `kanban_pull` | `149.4s` | `292.1s` | `142.7s` | `42` | `true` |
+| `dual_command_lease` | `287.6s` | `453.0s` | `165.4s` | `70` | `true` |
+
+What this says so far:
+
+- the room-policy mechanism works end to end on the real app-server path
+- all three tested policies can now run through durable room policy state and still
+  reach full-room quiescence
+- `leader_award` remains the cleanest closer
+- `kanban_pull` is still the throughput winner on some task shapes, but with a larger
+  green-to-idle tail
+- `dual_command_lease` is still viable, but on these two production-path slices it is
+  no longer the strongest default
+
+That means the next frontier is no longer "can policy be made real in production?".
+It can. The next frontier is policy selection and phase adaptation on top of the now
+real room-policy substrate.
 - quiescence lag dropped from `357.7s` to `67.4s`
 - all four threads ended cleanly idle with no pending Hollywood diagnostics
 

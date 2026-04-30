@@ -29,7 +29,7 @@ pub struct HollywoodTeamStatusHandler;
 pub struct HollywoodTeamMemberUpdateHandler;
 
 const HOLLYWOOD_REGISTRY_STALE_AFTER: Duration = Duration::seconds(90);
-const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v1";
+const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v2";
 
 #[derive(Deserialize)]
 struct HollywoodReadArgs {

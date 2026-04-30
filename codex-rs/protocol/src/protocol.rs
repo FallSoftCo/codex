@@ -404,6 +404,14 @@ pub struct HollywoodSyntheticBrief {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantic_kind: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_phase: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_epoch: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub facts: Vec<String>,
