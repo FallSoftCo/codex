@@ -8,11 +8,13 @@ use ctor::ctor;
 use std::sync::OnceLock;
 use tempfile::TempDir;
 
+use codex_config::CloudRequirementsLoader;
+use codex_config::ConfigRequirementsToml;
+use codex_config::NetworkRequirementsToml;
 use codex_core::CodexThread;
 use codex_core::config::Config;
 use codex_core::config::ConfigBuilder;
 use codex_core::config::ConfigOverrides;
-use codex_features::Feature;
 use codex_utils_absolute_path::AbsolutePathBuf;
 pub use codex_utils_absolute_path::test_support::PathBufExt;
 pub use codex_utils_absolute_path::test_support::PathExt;
@@ -165,22 +167,39 @@ pub fn fetch_dotslash_file(
 /// temporary directory. Using a per-test directory keeps tests hermetic and
 /// avoids clobbering a developer’s real `~/.codex`.
 pub async fn load_default_config_for_test(codex_home: &TempDir) -> Config {
-    codex_core::test_support::disable_hollywood_from_env_for_tests();
+    load_default_config_for_test_with_cloud_requirements(
+        codex_home,
+        CloudRequirementsLoader::default(),
+    )
+    .await
+}
 
-    let mut config = ConfigBuilder::default()
+/// Returns a default `Config` with test-provided cloud requirements applied
+/// during config construction.
+pub async fn load_default_config_for_test_with_cloud_requirements(
+    codex_home: &TempDir,
+    cloud_requirements: CloudRequirementsLoader,
+) -> Config {
+    ConfigBuilder::default()
         .codex_home(codex_home.path().to_path_buf())
         .harness_overrides(default_test_overrides())
+        .cloud_requirements(cloud_requirements)
         .build()
         .await
-        .expect("defaults for test should always succeed");
-    // Core integration tests opt into shell snapshots explicitly. Leaving the feature on by
-    // default adds background snapshot/bootstrap work to every test session and makes unrelated
-    // full-suite concurrency assertions noisy and flaky.
-    config
-        .features
-        .disable(Feature::ShellSnapshot)
-        .expect("test config should allow disabling shell snapshot by default");
-    config
+        .expect("defaults for test should always succeed")
+}
+
+pub fn managed_network_requirements_loader() -> CloudRequirementsLoader {
+    CloudRequirementsLoader::new(async {
+        Ok(Some(ConfigRequirementsToml {
+            network: Some(NetworkRequirementsToml {
+                enabled: Some(true),
+                allow_local_binding: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
+    })
 }
 
 #[cfg(target_os = "linux")]

@@ -39,17 +39,20 @@ pub(crate) fn hollywood_response_input_items(
     if let Some(instruction) = hollywood_obligation_instruction(message) {
         items.push(ResponseInputItem::Message {
             role: "developer".to_string(),
+            phase: None,
             content: vec![ContentItem::InputText { text: instruction }],
         });
     }
     if let Some(instruction) = hollywood_synthetic_brief_instruction(message) {
         items.push(ResponseInputItem::Message {
             role: "developer".to_string(),
+            phase: None,
             content: vec![ContentItem::InputText { text: instruction }],
         });
     }
     items.push(ResponseInputItem::Message {
         role: HollywoodMessage::ROLE.to_string(),
+        phase: None,
         content: vec![ContentItem::InputText {
             text: format_hollywood_message(message),
         }],

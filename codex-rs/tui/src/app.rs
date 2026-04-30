@@ -41,6 +41,8 @@ use crate::history_cell;
 use crate::history_cell::HistoryCell;
 #[cfg(not(debug_assertions))]
 use crate::history_cell::UpdateAvailableHistoryCell;
+use crate::key_hint::KeyBindingListExt;
+use crate::keymap::RuntimeKeymap;
 use crate::legacy_core::append_message_history_entry;
 use crate::legacy_core::config::Config;
 use crate::legacy_core::config::ConfigBuilder;
@@ -71,6 +73,7 @@ use crate::test_support::PathBufExt;
 use crate::test_support::test_path_buf;
 #[cfg(test)]
 use crate::test_support::test_path_display;
+use crate::transcript_reflow::TranscriptReflowState;
 use crate::tui;
 use crate::tui::TuiEvent;
 use crate::update_action::UpdateAction;
@@ -119,7 +122,6 @@ use codex_config::types::ApprovalsReviewer;
 use codex_config::types::ModelAvailabilityNuxConfig;
 use codex_exec_server::EnvironmentManager;
 use codex_features::Feature;
-use codex_models_manager::collaboration_mode_presets::CollaborationModesConfig;
 use codex_models_manager::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG;
 use codex_models_manager::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
 use codex_otel::SessionTelemetry;
@@ -128,12 +130,14 @@ use codex_protocol::approvals::ExecApprovalRequestEvent;
 use codex_protocol::config_types::Personality;
 #[cfg(target_os = "windows")]
 use codex_protocol::config_types::WindowsSandboxLevel;
-use codex_protocol::models::AdditionalPermissionProfile;
+use codex_protocol::models::PermissionProfile;
 use codex_protocol::openai_models::ModelAvailabilityNux;
 use codex_protocol::openai_models::ModelPreset;
 use codex_protocol::openai_models::ModelUpgrade;
 use codex_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::protocol::AskForApproval;
+#[cfg(target_os = "windows")]
+use codex_protocol::protocol::FileSystemSandboxKind;
 use codex_protocol::protocol::FinalOutput;
 use codex_protocol::protocol::GetHistoryEntryResponseEvent;
 use codex_protocol::protocol::ListSkillsResponseEvent;
@@ -141,7 +145,6 @@ use codex_protocol::protocol::ListSkillsResponseEvent;
 use codex_protocol::protocol::McpAuthStatus;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::RateLimitSnapshot;
-use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SkillErrorInfo;
 use codex_protocol::protocol::TokenUsage;
@@ -184,16 +187,14 @@ mod app_server_adapter;
 pub(crate) mod app_server_requests;
 mod background_requests;
 mod config_persistence;
-mod email_bridge;
-mod email_bridge_format;
 mod event_dispatch;
 mod history_ui;
 mod input;
-
 mod loaded_threads;
 mod pending_interactive_replay;
 mod platform_actions;
 mod replay_filter;
+mod resize_reflow;
 mod session_lifecycle;
 mod side;
 mod startup_prompts;
@@ -205,7 +206,6 @@ mod thread_session_state;
 use self::agent_navigation::AgentNavigationDirection;
 use self::agent_navigation::AgentNavigationState;
 use self::app_server_requests::PendingAppServerRequests;
-use self::email_bridge::EmailBridge;
 use self::loaded_threads::find_loaded_subagent_threads_for_primary;
 use self::pending_interactive_replay::PendingInteractiveReplayState;
 use self::platform_actions::*;
@@ -295,7 +295,7 @@ fn default_exec_approval_decisions(
     proposed_network_policy_amendments: Option<
         &[codex_protocol::approvals::NetworkPolicyAmendment],
     >,
-    additional_permissions: Option<&AdditionalPermissionProfile>,
+    additional_permissions: Option<&codex_protocol::models::AdditionalPermissionProfile>,
 ) -> Vec<codex_protocol::protocol::ReviewDecision> {
     ExecApprovalRequestEvent::default_available_decisions(
         network_approval_context,
@@ -306,45 +306,43 @@ fn default_exec_approval_decisions(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct GuardianApprovalsMode {
+struct AutoReviewMode {
     approval_policy: AskForApproval,
     approvals_reviewer: ApprovalsReviewer,
-    sandbox_policy: SandboxPolicy,
+    permission_profile: PermissionProfile,
 }
 
 /// Enabling the Auto-review experiment in the TUI should also switch the
 /// current `/approvals` settings to the matching Auto-review mode. Users
 /// can still change `/approvals` afterward; this just assumes that opting into
-/// the experiment means they want guardian review enabled immediately.
-fn guardian_approvals_mode() -> GuardianApprovalsMode {
-    GuardianApprovalsMode {
+/// the experiment means they want Auto-review enabled immediately.
+fn auto_review_mode() -> AutoReviewMode {
+    AutoReviewMode {
         approval_policy: AskForApproval::OnRequest,
         approvals_reviewer: ApprovalsReviewer::AutoReview,
-        sandbox_policy: SandboxPolicy::new_workspace_write_policy(),
+        permission_profile: PermissionProfile::workspace_write(),
     }
 }
 
-fn auto_review_mode() -> GuardianApprovalsMode {
-    guardian_approvals_mode()
+#[cfg(target_os = "windows")]
+fn managed_filesystem_sandbox_is_restricted(permission_profile: &PermissionProfile) -> bool {
+    matches!(
+        permission_profile.file_system_sandbox_policy().kind,
+        FileSystemSandboxKind::Restricted
+    )
 }
+
 /// Baseline cadence for periodic stream commit animation ticks.
 ///
 /// Smooth-mode streaming drains one line per tick, so this interval controls
 /// perceived typing speed for non-backlogged output.
 const COMMIT_ANIMATION_TICK: Duration = tui::TARGET_FRAME_INTERVAL;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClientRestartRequest {
-    pub thread_id: ThreadId,
-    pub reason: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct AppExitInfo {
     pub token_usage: TokenUsage,
     pub thread_id: Option<ThreadId>,
     pub thread_name: Option<String>,
-    pub restart_request: Option<ClientRestartRequest>,
     pub update_action: Option<UpdateAction>,
     pub exit_reason: ExitReason,
 }
@@ -355,7 +353,6 @@ impl AppExitInfo {
             token_usage: TokenUsage::default(),
             thread_id: None,
             thread_name: None,
-            restart_request: None,
             update_action: None,
             exit_reason: ExitReason::Fatal(message.into()),
         }
@@ -505,6 +502,11 @@ struct SessionSummary {
     resume_command: Option<String>,
 }
 
+#[derive(Debug, Default)]
+struct InitialHistoryReplayBuffer {
+    retained_lines: VecDeque<Line<'static>>,
+}
+
 pub(crate) struct App {
     model_catalog: Arc<ModelCatalog>,
     pub(crate) session_telemetry: SessionTelemetry,
@@ -516,7 +518,7 @@ pub(crate) struct App {
     cli_kv_overrides: Vec<(String, TomlValue)>,
     harness_overrides: ConfigOverrides,
     runtime_approval_policy_override: Option<AskForApproval>,
-    runtime_sandbox_policy_override: Option<SandboxPolicy>,
+    runtime_permission_profile_override: Option<PermissionProfile>,
 
     pub(crate) file_search: FileSearchManager,
 
@@ -526,8 +528,11 @@ pub(crate) struct App {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) deferred_history_lines: Vec<Line<'static>>,
     has_emitted_history_lines: bool,
+    transcript_reflow: TranscriptReflowState,
+    initial_history_replay_buffer: Option<InitialHistoryReplayBuffer>,
 
     pub(crate) enhanced_keys_supported: bool,
+    pub(crate) keymap: RuntimeKeymap,
 
     /// Controls the animation thread that sends CommitTick events.
     pub(crate) commit_anim_running: Arc<AtomicBool>,
@@ -550,7 +555,6 @@ pub(crate) struct App {
     remote_app_server_auth_token: Option<String>,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
-    pub(crate) pending_restart_request: Option<ClientRestartRequest>,
 
     /// Tracks the thread we intentionally shut down while exiting the app.
     ///
@@ -579,7 +583,6 @@ pub(crate) struct App {
     // overwrite a newer toggle, even if the plugin is toggled from different
     // cwd contexts.
     pending_plugin_enabled_writes: HashMap<String, Option<bool>>,
-    email_bridge: Option<EmailBridge>,
 }
 
 fn active_turn_not_steerable_turn_error(error: &TypedRequestError) -> Option<AppServerTurnError> {
@@ -661,7 +664,6 @@ impl App {
         harness_overrides: ConfigOverrides,
         active_profile: Option<String>,
         initial_prompt: Option<String>,
-        requested_thread_name: Option<String>,
         initial_images: Vec<PathBuf>,
         session_selection: SessionSelection,
         feedback: codex_feedback::CodexFeedback,
@@ -711,7 +713,6 @@ impl App {
                     token_usage: TokenUsage::default(),
                     thread_id: None,
                     thread_name: None,
-                    restart_request: None,
                     update_action: None,
                     exit_reason: ExitReason::UserRequested,
                 });
@@ -741,23 +742,7 @@ impl App {
         if let Some(updated_model) = config.model.clone() {
             model = updated_model;
         }
-        let requested_thread_name = requested_thread_name
-            .map(|name| {
-                crate::legacy_core::util::normalize_thread_name(&name).ok_or_else(|| {
-                    color_eyre::eyre::eyre!(
-                        "`--agent-name` must contain at least one non-whitespace character"
-                    )
-                })
-            })
-            .transpose()?;
-        let model_catalog = Arc::new(ModelCatalog::new(
-            available_models.clone(),
-            CollaborationModesConfig {
-                default_mode_request_user_input: config
-                    .features
-                    .enabled(Feature::DefaultModeRequestUserInput),
-            },
-        ));
+        let model_catalog = Arc::new(ModelCatalog::new(available_models.clone()));
         let feedback_audience = bootstrap.feedback_audience;
         let auth_mode = bootstrap.auth_mode;
         let has_chatgpt_account = bootstrap.has_chatgpt_account;
@@ -793,12 +778,6 @@ impl App {
         let (mut chat_widget, initial_started_thread) = match session_selection {
             SessionSelection::StartFresh | SessionSelection::Exit => {
                 let started = app_server.start_thread(&config).await?;
-                let started = maybe_apply_requested_thread_name(
-                    &mut app_server,
-                    started,
-                    requested_thread_name.as_deref(),
-                )
-                .await?;
                 let startup_tooltip_override =
                     prepare_startup_tooltip_override(&mut config, &available_models, is_first_run)
                         .await;
@@ -836,12 +815,6 @@ impl App {
                         let target_label = target_session.display_label();
                         format!("Failed to resume session from {target_label}")
                     })?;
-                let resumed = maybe_apply_requested_thread_name(
-                    &mut app_server,
-                    resumed,
-                    requested_thread_name.as_deref(),
-                )
-                .await?;
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -881,12 +854,6 @@ impl App {
                         let target_label = target_session.display_label();
                         format!("Failed to fork session from {target_label}")
                     })?;
-                let forked = maybe_apply_requested_thread_name(
-                    &mut app_server,
-                    forked,
-                    requested_thread_name.as_deref(),
-                )
-                .await?;
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -922,8 +889,13 @@ impl App {
             .maybe_prompt_windows_sandbox_enable(should_prompt_windows_sandbox_nux_at_startup);
 
         let file_search = FileSearchManager::new(config.cwd.to_path_buf(), app_event_tx.clone());
-        let email_bridge_startup_warning = None;
-        let email_bridge = None;
+        let runtime_keymap = RuntimeKeymap::from_config(&config.tui_keymap).map_err(|err| {
+            color_eyre::eyre::eyre!(
+                "Invalid `tui.keymap` configuration: {err}\n\
+Fix the config and retry.\n\
+See the Codex keymap documentation for supported actions and examples."
+            )
+        })?;
         #[cfg(not(debug_assertions))]
         let upgrade_version = crate::updates::get_upgrade_version(&config);
 
@@ -937,13 +909,16 @@ impl App {
             cli_kv_overrides,
             harness_overrides,
             runtime_approval_policy_override: None,
-            runtime_sandbox_policy_override: None,
+            runtime_permission_profile_override: None,
             file_search,
             enhanced_keys_supported,
+            keymap: runtime_keymap,
             transcript_cells: Vec::new(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
+            transcript_reflow: TranscriptReflowState::default(),
+            initial_history_replay_buffer: None,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             status_line_invalid_items_warned: status_line_invalid_items_warned.clone(),
             terminal_title_invalid_items_warned: terminal_title_invalid_items_warned.clone(),
@@ -955,7 +930,6 @@ impl App {
             remote_app_server_url,
             remote_app_server_auth_token,
             pending_update_action: None,
-            pending_restart_request: None,
             pending_shutdown_exit_thread_id: None,
             windows_sandbox: WindowsSandboxState::default(),
             thread_event_channels: HashMap::new(),
@@ -970,26 +944,20 @@ impl App {
             pending_primary_events: VecDeque::new(),
             pending_app_server_requests: PendingAppServerRequests::default(),
             pending_plugin_enabled_writes: HashMap::new(),
-            email_bridge,
         };
         if let Some(started) = initial_started_thread {
             app.enqueue_primary_thread_session(started.session, started.turns)
                 .await?;
         }
-        if let Some(warning) = email_bridge_startup_warning {
-            app.chat_widget.add_error_message(warning);
-        }
 
-        // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
+        // On startup, if a managed filesystem sandbox is active, warn about
+        // world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
         {
+            let startup_permission_profile = app.config.permissions.permission_profile();
             let should_check = WindowsSandboxLevel::from_config(&app.config)
                 != WindowsSandboxLevel::Disabled
-                && matches!(
-                    app.config.permissions.sandbox_policy.get(),
-                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_protocol::protocol::SandboxPolicy::ReadOnly { .. }
-                )
+                && managed_filesystem_sandbox_is_restricted(&startup_permission_profile)
                 && !app
                     .config
                     .notices
@@ -1000,8 +968,13 @@ impl App {
                 let env_map: std::collections::HashMap<String, String> = std::env::vars().collect();
                 let tx = app.app_event_tx.clone();
                 let logs_base_dir = app.config.codex_home.clone();
-                let sandbox_policy = app.config.permissions.sandbox_policy.get().clone();
-                Self::spawn_world_writable_scan(cwd, env_map, logs_base_dir, sandbox_policy, tx);
+                Self::spawn_world_writable_scan(
+                    cwd,
+                    env_map,
+                    logs_base_dir,
+                    startup_permission_profile,
+                    tx,
+                );
             }
         }
 
@@ -1018,14 +991,6 @@ impl App {
 
         let mut listen_for_app_server_events = true;
         let mut waiting_for_initial_session_configured = wait_for_initial_session_configured;
-        let mut email_poll_interval = app.email_bridge.as_ref().map(|email_bridge| {
-            let mut interval = tokio::time::interval(email_bridge.poll_interval());
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            interval
-        });
-        if let Some(interval) = email_poll_interval.as_mut() {
-            interval.tick().await;
-        }
 
         #[cfg(not(debug_assertions))]
         let pre_loop_exit_reason = if let Some(latest_version) = upgrade_version {
@@ -1092,21 +1057,11 @@ impl App {
                     }
                     app_server_event = app_server.next_event(), if listen_for_app_server_events => {
                         match app_server_event {
-                            Some(event) => app.handle_app_server_event(&mut app_server, event).await,
+                            Some(event) => app.handle_app_server_event(&app_server, event).await,
                             None => {
                                 listen_for_app_server_events = false;
                                 tracing::warn!("app-server event stream closed");
                             }
-                        }
-                        AppRunControl::Continue
-                    }
-                    _ = async {
-                        if let Some(interval) = email_poll_interval.as_mut() {
-                            interval.tick().await;
-                        }
-                    }, if email_poll_interval.is_some() => {
-                        if let Err(err) = app.handle_email_bridge_tick(&mut app_server).await {
-                            tracing::warn!(error = %err, "email bridge tick failed");
                         }
                         AppRunControl::Continue
                     }
@@ -1139,29 +1094,15 @@ impl App {
                 return Err(err);
             }
         };
-        let restart_request = app.pending_restart_request.clone();
-        let resumable_thread = restart_request.as_ref().map_or_else(
-            || {
-                resumable_thread(
-                    app.chat_widget.thread_id(),
-                    app.chat_widget.thread_name(),
-                    app.chat_widget.rollout_path().as_deref(),
-                )
-            },
-            |request| {
-                Some(ResumableThread {
-                    thread_id: request.thread_id,
-                    thread_name: (app.chat_widget.thread_id() == Some(request.thread_id))
-                        .then(|| app.chat_widget.thread_name())
-                        .flatten(),
-                })
-            },
+        let resumable_thread = resumable_thread(
+            app.chat_widget.thread_id(),
+            app.chat_widget.thread_name(),
+            app.chat_widget.rollout_path().as_deref(),
         );
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             thread_id: resumable_thread.as_ref().map(|thread| thread.thread_id),
             thread_name: resumable_thread.and_then(|thread| thread.thread_name),
-            restart_request,
             update_action: app.pending_update_action,
             exit_reason,
         })
@@ -1173,13 +1114,10 @@ impl App {
         app_server: &mut AppServerSession,
         event: TuiEvent,
     ) -> Result<AppRunControl> {
-        if matches!(event, TuiEvent::Key(_) | TuiEvent::Paste(_))
-            && let Some(email_bridge) = self.email_bridge.as_mut()
-        {
-            email_bridge.note_local_activity();
-        }
-
-        if matches!(event, TuiEvent::Draw) {
+        let terminal_resize_reflow_enabled = self.terminal_resize_reflow_enabled();
+        if terminal_resize_reflow_enabled && matches!(event, TuiEvent::Draw | TuiEvent::Resize) {
+            self.handle_draw_pre_render(tui)?;
+        } else if matches!(event, TuiEvent::Draw | TuiEvent::Resize) {
             let size = tui.terminal.size()?;
             if size != tui.terminal.last_known_screen_size {
                 self.refresh_status_line();
@@ -1201,7 +1139,7 @@ impl App {
                     let pasted = pasted.replace("\r", "\n");
                     self.chat_widget.handle_paste(pasted);
                 }
-                TuiEvent::Draw => {
+                TuiEvent::Draw | TuiEvent::Resize => {
                     if self.backtrack_render_pending {
                         self.backtrack_render_pending = false;
                         self.render_transcript_once(tui);
@@ -1215,15 +1153,23 @@ impl App {
                     }
                     // Allow widgets to process any pending timers before rendering.
                     self.chat_widget.pre_draw_tick();
-                    tui.draw(
-                        self.chat_widget.desired_height(tui.terminal.size()?.width),
-                        |frame| {
+                    let desired_height =
+                        self.chat_widget.desired_height(tui.terminal.size()?.width);
+                    if terminal_resize_reflow_enabled {
+                        tui.draw_with_resize_reflow(desired_height, |frame| {
                             self.chat_widget.render(frame.area(), frame.buffer);
                             if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
                                 frame.set_cursor_position((x, y));
                             }
-                        },
-                    )?;
+                        })?;
+                    } else {
+                        tui.draw(desired_height, |frame| {
+                            self.chat_widget.render(frame.area(), frame.buffer);
+                            if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
+                                frame.set_cursor_position((x, y));
+                            }
+                        })?;
+                    }
                     if self.chat_widget.external_editor_state() == ExternalEditorState::Requested {
                         self.chat_widget
                             .set_external_editor_state(ExternalEditorState::Active);
@@ -1234,20 +1180,6 @@ impl App {
         }
         Ok(AppRunControl::Continue)
     }
-}
-
-async fn maybe_apply_requested_thread_name(
-    app_server: &mut AppServerSession,
-    mut started: AppServerStartedThread,
-    requested_thread_name: Option<&str>,
-) -> Result<AppServerStartedThread> {
-    if let Some(name) = requested_thread_name {
-        app_server
-            .thread_set_name(started.session.thread_id, name.to_string())
-            .await?;
-        started.session.thread_name = Some(name.to_string());
-    }
-    Ok(started)
 }
 
 impl Drop for App {

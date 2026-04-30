@@ -4,12 +4,12 @@
 use std::fs;
 use std::time::Duration;
 
+use codex_protocol::models::PermissionProfile;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ExecCommandBeginEvent;
 use codex_protocol::protocol::ExecCommandEndEvent;
 use codex_protocol::protocol::Op;
-use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -25,6 +25,7 @@ use core_test_support::streaming_sse::StreamingSseChunk;
 use core_test_support::streaming_sse::start_streaming_sse_server;
 use core_test_support::test_codex::TestCodex;
 use core_test_support::test_codex::test_codex;
+use core_test_support::test_codex::turn_permission_fields;
 use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -34,6 +35,8 @@ use tokio::sync::oneshot;
 
 async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
     let session_model = test.session_configured.model.clone();
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
 
     test.codex
         .submit(Op::UserTurn {
@@ -46,8 +49,8 @@ async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
             cwd: test.cwd.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
-            sandbox_policy: SandboxPolicy::DangerFullAccess,
-            permission_profile: None,
+            sandbox_policy,
+            permission_profile,
             model: session_model,
             effort: None,
             summary: None,
@@ -398,6 +401,8 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
         .await?;
 
     let session_model = test.session_configured.model.clone();
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
     test.codex
         .submit(Op::UserTurn {
             environments: None,
@@ -409,8 +414,8 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
             cwd: test.cwd.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
-            sandbox_policy: SandboxPolicy::DangerFullAccess,
-            permission_profile: None,
+            sandbox_policy,
+            permission_profile,
             model: session_model,
             effort: None,
             summary: None,
