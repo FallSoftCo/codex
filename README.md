@@ -20,6 +20,7 @@ Losangelex is a FallSoftCo project built on top of upstream Codex.
 It keeps the upstream Codex CLI, TUI, and app-server foundation, then layers on:
 
 - native Hollywood room integration in the app-server/runtime
+- room-level coordination policy state and phase-aware synthetic briefs
 - Losangelex launcher defaults for full-access local work
 - workspace-scoped Hollywood bootstrap and room setup
 - persisted scheduled thread wakeups
@@ -83,6 +84,9 @@ Current shipped pieces:
 - attention classification in the app-server
 - persisted Hollywood resume metadata
 - model-visible Hollywood context
+- room contract `losangelex-room/v2` with persisted coordination policy, phase, epoch, and leader/verifier bindings
+- policy-aware Hollywood synthetic briefs compiled by the app-server instead of prompt-only policy selection
+- supported room policies today: `leader_award`, `kanban_pull`, `dual_command_lease`, and adaptive `auto`
 - launch-time agent naming via `losangelex name <NAME>` / `--agent-name <NAME>`, with a durable Hollywood coordination identity derived from that name
 - bundled launcher support for automatic Hollywood bootstrap
 
@@ -152,6 +156,7 @@ Losangelex launcher / CLI / TUI
 At a high level:
 
 - Hollywood gives sessions a local coordination plane
+- Hollywood room state now also carries coordination-policy metadata consumed by the runtime
 - app-server owns thread lifecycle, wakeups, and notifications
 - SQLite stores thread metadata, Hollywood metadata, and scheduled tasks
 - the bundled launcher makes the stack easier to run with consistent defaults
@@ -167,6 +172,8 @@ Expected to work:
 - Hollywood room-aware sessions
 - per-workspace room bootstrap through the bundled launcher
 - app-server-native Hollywood notifications and attachment state
+- durable room-level coordination policy state with phase/epoch tracking
+- policy-aware synthetic coordination briefs for Hollywood-triggered turns
 - persisted scheduled wakeups for threads
 - current upstream Codex CLI/TUI/app-server behavior plus the Losangelex additions
 
@@ -175,6 +182,7 @@ Not finished yet:
 - broader watcher trigger types beyond process-exit and time-based schedules
 - richer obligation lifecycle UI for Hollywood traffic
 - full workflow-engine semantics
+- adaptive policy selection across task shapes is still experimental and being benchmarked live
 - polished packaging/release flow for non-technical users
 
 ## Quickstart
