@@ -146,15 +146,22 @@ def start_agent(
     observed_rooms: list[str],
     wake_rooms: list[str],
     name: str,
+    model: str | None = None,
+    model_provider: str | None = None,
 ) -> str:
+    params: dict[str, Any] = {
+        "cwd": workspace,
+        "approvalPolicy": "never",
+        "sandbox": "danger-full-access",
+        "persistExtendedHistory": True,
+    }
+    if model is not None:
+        params["model"] = model
+    if model_provider is not None:
+        params["modelProvider"] = model_provider
     response = conn.send_request(
         "thread/start",
-        {
-            "cwd": workspace,
-            "approvalPolicy": "never",
-            "sandbox": "danger-full-access",
-            "persistExtendedHistory": True,
-        },
+        params,
     )
     thread_id = response["thread"]["id"]
     conn.send_request(

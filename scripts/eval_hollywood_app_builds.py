@@ -32,6 +32,8 @@ from replay_hollywood_operator import (
 REPO_ROOT = Path("/home/ai/Development/losangelex")
 TMP_ROOT = REPO_ROOT / "tmp" / "app_build_eval"
 DEFAULT_HOLLYWOOD_URL = "http://127.0.0.1:8765"
+DEFAULT_EVAL_MODEL = "gpt-5.4"
+DEFAULT_EVAL_MODEL_PROVIDER = "openai"
 TEAM = (
     ("tony", "planning, architecture, integration, release verification"),
     ("james", "frontend UI and polish"),
@@ -43,7 +45,7 @@ CHALLENGES = {
     "incident_console": REPO_ROOT / "evals" / "app_challenges" / "incident_console_template",
     "expense_board": REPO_ROOT / "evals" / "app_challenges" / "expense_board_template",
 }
-RUNTIME_ROOM_POLICIES = {"leader_award", "kanban_pull", "dual_command_lease"}
+RUNTIME_ROOM_POLICIES = {"leader_award", "kanban_pull", "dual_command_lease", "auto"}
 ROOM_CONTRACT_VERSION = "losangelex-room/v2"
 POLICY_PROMPTS = {
     "room_message": {
@@ -260,6 +262,7 @@ POLICY_PROMPTS = {
         ),
     },
 }
+SUPPORTED_POLICIES = sorted(set(POLICY_PROMPTS) | RUNTIME_ROOM_POLICIES)
 
 
 @dataclass
@@ -333,6 +336,32 @@ def changed_files(workspace: Path, challenge: str) -> list[str]:
 
 def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
     roster = ", ".join(name for name, _ in TEAM)
+    if policy == "auto":
+        auto_block = (
+            "The room starts in a discovery phase. Reduce the broad goal into exact claimable lanes "
+            "before anyone claims broad implementation scope, then follow the active room coordination "
+            "policy and later phase changes."
+        )
+        if agent_name == "tony":
+            auto_block += (
+                " As the initial lead, publish the first lane map or investigation lanes before "
+                "taking product-code ownership yourself; only keep implementation scope you cannot "
+                "split cleanly, and say why."
+            )
+        else:
+            auto_block += (
+                " During discovery, do not claim broad product scope on your own; wait for an exact "
+                "lane or an explicit investigation request."
+            )
+        return (
+            f"You are {agent_name}. Your strongest lane is {specialty}. "
+            f"The team roster is: {roster}. "
+            "Work in the current repository workspace. Read README.md first, then coordinate through "
+            "Hollywood to finish the app. Follow the active room coordination policy and your Hollywood "
+            "synthetic coordination briefs; do not invent a private policy. Run tests before claiming the "
+            "app is done. Only declare completion when `npm test -- --run` passes in this workspace. "
+            f"{auto_block}"
+        )
     if policy in RUNTIME_ROOM_POLICIES:
         return (
             f"You are {agent_name}. Your strongest lane is {specialty}. "
@@ -359,20 +388,23 @@ def apply_room_policy_state(
     room: str,
     policy: str,
     agents: list[AgentRun],
+    phase: str | None = None,
+    epoch: int = 1,
 ) -> dict[str, Any] | None:
     if policy not in RUNTIME_ROOM_POLICIES:
         return None
 
     thread_by_role = {agent.role_name: agent.thread_id for agent in agents}
+    current_phase = phase or ("discovery" if policy == "auto" else "execution")
     payload: dict[str, Any] = {
         "room": room,
         "contract_version": ROOM_CONTRACT_VERSION,
         "coordination_policy": policy,
-        "coordination_phase": "execution",
-        "coordination_epoch": 1,
+        "coordination_phase": current_phase,
+        "coordination_epoch": epoch,
         "bump_state_version": True,
     }
-    if policy in {"leader_award", "dual_command_lease"}:
+    if policy in {"leader_award", "dual_command_lease", "auto"}:
         payload["leader_session_id"] = thread_by_role["tony"]
         payload["verifier_session_id"] = thread_by_role["ray"]
 
@@ -392,6 +424,46 @@ def apply_room_policy_state(
         ) from exc
 
 
+def estimate_failed_test_count(test_result: subprocess.CompletedProcess[str]) -> int | None:
+    if test_result.returncode == 0:
+        return 0
+
+    combined = "\n".join(
+        part for part in (test_result.stdout, test_result.stderr) if part
+    ).lower()
+    patterns = (
+        r"(\d+)\s+failed",
+        r"failures?:\s*(\d+)",
+        r"failed\s*\((\d+)\)",
+    )
+    for pattern in patterns:
+        import re
+
+        match = re.search(pattern, combined)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                continue
+    return None
+
+
+def infer_auto_phase(
+    *,
+    elapsed_seconds: float,
+    latest_test: subprocess.CompletedProcess[str],
+) -> str:
+    if latest_test.returncode == 0:
+        return "closure"
+
+    failed_count = estimate_failed_test_count(latest_test)
+    if failed_count is not None and failed_count <= 1:
+        return "stabilization"
+    if elapsed_seconds >= 45:
+        return "execution"
+    return "discovery"
+
+
 def start_team(
     conn: JsonRpcWs,
     *,
@@ -409,6 +481,8 @@ def start_team(
             observed_rooms=[room],
             wake_rooms=[room],
             name=runtime_name,
+            model=DEFAULT_EVAL_MODEL,
+            model_provider=DEFAULT_EVAL_MODEL_PROVIDER,
         )
         agents.append(
             AgentRun(
@@ -447,11 +521,15 @@ def evaluate_policy(
     try:
         initialize(conn)
         agents = start_team(conn, workspace=workspace, room=room, run_suffix=run_suffix)
+        current_phase = "discovery" if policy == "auto" else "execution"
+        current_epoch = 1
         room_policy_state = apply_room_policy_state(
             hollywood_url=hollywood_url,
             room=room,
             policy=policy,
             agents=agents,
+            phase=current_phase,
+            epoch=current_epoch,
         )
         tracked_threads = {agent.thread_id for agent in agents}
         conn.drain(8)
@@ -476,6 +554,22 @@ def evaluate_policy(
                     "stderrTail": "\n".join(test_result.stderr.splitlines()[-12:]),
                 }
             )
+            if policy == "auto":
+                desired_phase = infer_auto_phase(
+                    elapsed_seconds=elapsed,
+                    latest_test=test_result,
+                )
+                if desired_phase != current_phase:
+                    current_phase = desired_phase
+                    current_epoch += 1
+                    room_policy_state = apply_room_policy_state(
+                        hollywood_url=hollywood_url,
+                        room=room,
+                        policy=policy,
+                        agents=agents,
+                        phase=current_phase,
+                        epoch=current_epoch,
+                    )
             if test_result.returncode == 0:
                 passed_at = elapsed
                 quiescence_wait_seconds = (
@@ -560,7 +654,7 @@ def main() -> int:
     parser.add_argument("--challenge", choices=sorted(CHALLENGES), default="habit_dashboard")
     parser.add_argument(
         "--policy",
-        choices=sorted(POLICY_PROMPTS),
+        choices=SUPPORTED_POLICIES,
         action="append",
         help="Policies to run. Defaults to room_message, leader_award, semantic_market, hybrid.",
     )

@@ -2843,6 +2843,20 @@ impl CodexMessageProcessor {
         }
     }
 
+    fn effective_coordination_policy_for_room_snapshot(
+        snapshot: &crate::hollywood::HollywoodRoomSnapshot,
+    ) -> Option<&str> {
+        match snapshot.coordination_policy.as_deref()? {
+            "auto" => match snapshot.coordination_phase.as_deref() {
+                Some("execution") => Some("kanban_pull"),
+                Some("stabilization") | Some("closure") => Some("leader_award"),
+                Some("discovery") | None => Some("leader_award"),
+                Some(_) => Some("leader_award"),
+            },
+            policy => Some(policy),
+        }
+    }
+
     fn apply_room_policy_metadata(
         brief: &mut CoreHollywoodSyntheticBrief,
         snapshot: Option<&crate::hollywood::HollywoodRoomSnapshot>,
@@ -2851,7 +2865,10 @@ impl CodexMessageProcessor {
         let Some(snapshot) = snapshot else {
             return;
         };
-        let Some(policy) = snapshot.coordination_policy.as_deref() else {
+        let Some(configured_policy) = snapshot.coordination_policy.as_deref() else {
+            return;
+        };
+        let Some(policy) = Self::effective_coordination_policy_for_room_snapshot(snapshot) else {
             return;
         };
 
@@ -2873,12 +2890,68 @@ impl CodexMessageProcessor {
             }
         };
 
-        push_fact(format!("room policy is `{policy}`"));
+        push_fact(format!("room policy is `{configured_policy}`"));
+        if configured_policy != policy {
+            push_fact(format!(
+                "effective coordination policy for this phase is `{policy}`"
+            ));
+        }
         if let Some(phase) = snapshot.coordination_phase.as_deref() {
             push_fact(format!("room phase is `{phase}`"));
         }
         if let Some(role) = role.as_deref() {
             push_fact(format!("your room role is `{role}`"));
+        }
+
+        if configured_policy == "auto" {
+            match (snapshot.coordination_phase.as_deref(), role.as_deref()) {
+                (Some("discovery") | None, Some("leader")) => {
+                    push_action(
+                        "during discovery, publish an exact lane map or investigation lanes before claiming broad implementation scope yourself",
+                    );
+                    push_action(
+                        "if the broad goal is still ambiguous, open investigation, review, or narrowly scoped implementation lanes instead of a whole-app implementation claim",
+                    );
+                }
+                (Some("discovery") | None, Some("verifier")) => {
+                    push_action(
+                        "during discovery, keep the failing gate current and ask for exact lane splits instead of opening broad implementation scope",
+                    );
+                }
+                (Some("discovery") | None, _) => {
+                    push_action(
+                        "during discovery, avoid broad product claims and wait for an exact claimable lane or an explicit investigation request",
+                    );
+                }
+                (Some("execution"), _) => {
+                    match role.as_deref() {
+                        Some("leader") => {
+                            push_action(
+                                "during execution, feed exact implementation lanes to executors before reassigning the verifier into product code",
+                            );
+                        }
+                        Some("verifier") => {
+                            push_action(
+                                "during execution, prefer staying on verification and only take product-code scope if the leader explicitly reassigns you or no executor lane remains",
+                            );
+                        }
+                        _ => {
+                            push_action(
+                                "during execution, favor one exact ready lane at a time and avoid reopening broad ownership once the backlog is split",
+                            );
+                            push_action(
+                                "during execution, executors should pull the highest-priority exact implementation lane before the verifier leaves QA",
+                            );
+                        }
+                    }
+                }
+                (Some("stabilization") | Some("closure"), _) => {
+                    push_action(
+                        "during stabilization or closure, prefer verifying, handing off, and settling remaining lanes over opening new implementation scope",
+                    );
+                }
+                _ => {}
+            }
         }
 
         match policy {
@@ -2908,9 +2981,6 @@ impl CodexMessageProcessor {
                     push_action("while you own active scope, send concise progress heartbeats before long silent intervals and yield explicitly if blocked");
                 }
             },
-            "auto" => {
-                push_action("follow the current room phase and role guidance rather than inventing a private coordination policy");
-            }
             _ => {}
         }
 
@@ -15903,11 +15973,11 @@ mod tests {
     use chrono::Utc;
     use codex_app_server_protocol::ServerRequestPayload;
     use codex_app_server_protocol::ToolRequestUserInputParams;
+    use codex_config::CloudRequirementsLoader;
+    use codex_config::LoaderOverrides;
     use codex_config::SessionThreadConfig;
     use codex_config::StaticThreadConfigLoader;
     use codex_config::ThreadConfigSource;
-    use codex_core::config_loader::CloudRequirementsLoader;
-    use codex_core::config_loader::LoaderOverrides;
     use codex_model_provider_info::ModelProviderInfo;
     use codex_model_provider_info::WireApi;
     use codex_protocol::ThreadId;
@@ -16273,16 +16343,18 @@ mod tests {
             model: None,
             model_provider: None,
             service_tier: Some(Some(codex_protocol::config_types::ServiceTier::Fast)),
-            hollywood: None,
             cwd: None,
             approval_policy: None,
             approvals_reviewer: None,
             sandbox: None,
+            permission_profile: None,
             config: None,
             base_instructions: None,
             developer_instructions: None,
             personality: None,
+            exclude_turns: false,
             persist_extended_history: false,
+            hollywood: None,
         };
         let config_snapshot = ThreadConfigSnapshot {
             model: "gpt-5".to_string(),
@@ -16290,7 +16362,6 @@ mod tests {
             service_tier: Some(codex_protocol::config_types::ServiceTier::Flex),
             approval_policy: codex_protocol::protocol::AskForApproval::OnRequest,
             approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer::User,
-            sandbox_policy: codex_protocol::protocol::SandboxPolicy::DangerFullAccess,
             permission_profile: codex_protocol::models::PermissionProfile::default(),
             cwd: test_path_buf("/tmp").abs(),
             ephemeral: false,
@@ -16705,7 +16776,10 @@ mod tests {
         let connection_id = ConnectionId(7);
 
         let (outgoing_tx, mut outgoing_rx) = tokio::sync::mpsc::channel(8);
-        let outgoing = Arc::new(OutgoingMessageSender::new(outgoing_tx));
+        let outgoing = Arc::new(OutgoingMessageSender::new(
+            outgoing_tx,
+            codex_analytics::AnalyticsEventsClient::disabled(),
+        ));
         let thread_outgoing = ThreadScopedOutgoingMessageSender::new(
             outgoing.clone(),
             vec![connection_id],
@@ -17471,6 +17545,169 @@ mod tests {
                 .suggested_actions
                 .iter()
                 .any(|action| action.contains("progress heartbeats"))
+        );
+    }
+
+    #[test]
+    fn auto_room_policy_resolves_effective_phase_policy_in_brief() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 147,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "@james take src/app.ts and keep me posted if blocked.".to_string(),
+                created_at: "2026-04-29T00:00:00Z".to_string(),
+                mentions: vec!["james".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+        let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        let snapshot = crate::hollywood::HollywoodRoomSnapshot {
+            room: "repo/losangelex".to_string(),
+            state_version: 3,
+            contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            coordination_policy: Some("auto".to_string()),
+            coordination_phase: Some("stabilization".to_string()),
+            coordination_epoch: 5,
+            leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
+            verifier_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa60".to_string()),
+        };
+        let executor_thread = ThreadId::from_string(
+            "019d0798-12d8-76c3-a812-6e323637aa61",
+        )
+        .expect("valid thread id");
+
+        CodexMessageProcessor::apply_room_policy_metadata(
+            &mut brief,
+            Some(&snapshot),
+            &executor_thread,
+        );
+
+        assert_eq!(brief.coordination_policy.as_deref(), Some("leader_award"));
+        assert_eq!(brief.coordination_phase.as_deref(), Some("stabilization"));
+        assert_eq!(brief.coordination_role.as_deref(), Some("executor"));
+        assert!(
+            brief
+                .facts
+                .iter()
+                .any(|fact| fact.contains("effective coordination policy for this phase is `leader_award`"))
+        );
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("prefer verification, cleanup, and handoff resolution"))
+        );
+    }
+
+    #[test]
+    fn auto_room_policy_uses_leader_award_during_discovery() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 148,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Need a decomposition plan before anyone claims the whole app.".to_string(),
+                created_at: "2026-04-29T00:00:00Z".to_string(),
+                mentions: vec!["tony".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+        let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        let leader_thread = ThreadId::from_string(
+            "019d0798-12d8-76c3-a812-6e323637aa59",
+        )
+        .expect("valid thread id");
+        let snapshot = crate::hollywood::HollywoodRoomSnapshot {
+            room: "repo/losangelex".to_string(),
+            state_version: 3,
+            contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            coordination_policy: Some("auto".to_string()),
+            coordination_phase: Some("discovery".to_string()),
+            coordination_epoch: 2,
+            leader_session_id: Some(leader_thread.to_string()),
+            verifier_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa60".to_string()),
+        };
+
+        CodexMessageProcessor::apply_room_policy_metadata(
+            &mut brief,
+            Some(&snapshot),
+            &leader_thread,
+        );
+
+        assert_eq!(brief.coordination_policy.as_deref(), Some("leader_award"));
+        assert_eq!(brief.coordination_role.as_deref(), Some("leader"));
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("publish an exact lane map"))
+        );
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("open investigation, review, or narrowly scoped implementation lanes"))
+        );
+    }
+
+    #[test]
+    fn auto_room_policy_keeps_verifier_on_gate_during_execution() {
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 149,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("ray".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Execution is ready; keep QA current while executors pull code lanes.".to_string(),
+                created_at: "2026-04-29T00:00:00Z".to_string(),
+                mentions: vec!["ray".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+        let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        let verifier_thread = ThreadId::from_string(
+            "019d0798-12d8-76c3-a812-6e323637aa60",
+        )
+        .expect("valid thread id");
+        let snapshot = crate::hollywood::HollywoodRoomSnapshot {
+            room: "repo/losangelex".to_string(),
+            state_version: 4,
+            contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            coordination_policy: Some("auto".to_string()),
+            coordination_phase: Some("execution".to_string()),
+            coordination_epoch: 3,
+            leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
+            verifier_session_id: Some(verifier_thread.to_string()),
+        };
+
+        CodexMessageProcessor::apply_room_policy_metadata(
+            &mut brief,
+            Some(&snapshot),
+            &verifier_thread,
+        );
+
+        assert_eq!(brief.coordination_policy.as_deref(), Some("kanban_pull"));
+        assert_eq!(brief.coordination_role.as_deref(), Some("verifier"));
+        assert!(
+            brief
+                .suggested_actions
+                .iter()
+                .any(|action| action.contains("prefer staying on verification"))
         );
     }
 
