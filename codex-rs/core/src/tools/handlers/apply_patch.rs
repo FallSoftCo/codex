@@ -245,7 +245,9 @@ fn write_permissions_for_paths(
     normalize_additional_permissions(permissions).ok()
 }
 
-fn format_apply_patch_verification_error(parse_error: &impl std::fmt::Display) -> String {
+fn format_apply_patch_verification_error(
+    parse_error: &(impl std::fmt::Display + ?Sized),
+) -> String {
     let parse_error = parse_error.to_string();
     let missing_file_read = parse_error.contains("Failed to read file to update")
         || (parse_error.contains("Failed to read ")

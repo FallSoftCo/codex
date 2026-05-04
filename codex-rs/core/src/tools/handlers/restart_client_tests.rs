@@ -1,6 +1,7 @@
 use super::*;
 use crate::session::tests::make_session_and_context;
 use crate::session::tests::make_session_and_context_with_rx;
+use crate::tools::context::ToolCallSource;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::turn_diff_tracker::TurnDiffTracker;
@@ -34,6 +35,7 @@ async fn restart_client_rejects_subagent_threads() {
             tracker: Arc::new(Mutex::new(TurnDiffTracker::default())),
             call_id: "call-1".to_string(),
             tool_name: codex_tools::ToolName::plain(RESTART_CLIENT_TOOL_NAME),
+            source: ToolCallSource::Direct,
             payload: ToolPayload::Function {
                 arguments: json!({
                     "reason": "roll to latest build",
@@ -67,6 +69,7 @@ async fn restart_client_emits_restart_event_and_returns_requested_status() {
             tracker: Arc::new(Mutex::new(TurnDiffTracker::default())),
             call_id: "call-1".to_string(),
             tool_name: codex_tools::ToolName::plain(RESTART_CLIENT_TOOL_NAME),
+            source: ToolCallSource::Direct,
             payload: ToolPayload::Function {
                 arguments: json!({
                     "reason": "roll to latest build",

@@ -154,8 +154,7 @@ fn diff_consumer_streams_apply_patch_changes() {
     );
 
     let event = consumer
-        .finish_update_on_complete()
-        .expect("finish parser")
+        .flush_update_on_complete()
         .expect("progress event");
     assert_eq!(
         (event.call_id, event.changes),

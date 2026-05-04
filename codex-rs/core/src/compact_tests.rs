@@ -104,7 +104,6 @@ do things
                 text: "<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>"
                     .to_string(),
             }],
-            end_turn: None,
             phase: None,
         },
         ResponseItem::Message {

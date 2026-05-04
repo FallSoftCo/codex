@@ -493,6 +493,8 @@ fn test_tool_runtime(session: Arc<Session>, turn_context: Arc<TurnContext>) -> T
             unavailable_called_tools: Vec::new(),
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
+            state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn_context.dynamic_tools.as_slice(),
         },
     ));
@@ -7937,6 +7939,8 @@ async fn fatal_tool_error_stops_turn_and_reports_error() {
             unavailable_called_tools: Vec::new(),
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
+            state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: turn_context.dynamic_tools.as_slice(),
         },
     );

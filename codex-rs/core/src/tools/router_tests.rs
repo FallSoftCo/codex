@@ -181,6 +181,8 @@ async fn model_visible_specs_filter_deferred_dynamic_tools() -> anyhow::Result<(
             unavailable_called_tools: Vec::new(),
             parallel_mcp_server_names: HashSet::new(),
             discoverable_tools: None,
+            state_db_available: true,
+            hollywood_tools_available: false,
             dynamic_tools: &dynamic_tools,
         },
     );

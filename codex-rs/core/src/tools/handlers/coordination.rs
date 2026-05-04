@@ -87,6 +87,32 @@ struct HollywoodRegistryListResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct HollywoodRoomsResponse {
+    rooms: Vec<HollywoodRoomStateResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HollywoodRoomStateResponse {
+    room: String,
+    contract_version: String,
+    coordination_policy: Option<String>,
+    coordination_phase: Option<String>,
+    coordination_epoch: i64,
+    leader_session_id: Option<String>,
+    verifier_session_id: Option<String>,
+}
+
+#[derive(Debug)]
+struct CoordinationRoomPolicyContext {
+    room: String,
+    configured_policy: String,
+    effective_policy: String,
+    phase: String,
+    epoch: i64,
+    role: Option<&'static str>,
+}
+
+#[derive(Debug, Deserialize)]
 struct HollywoodRegistryEntry {
     session_id: String,
     attached: bool,
@@ -237,6 +263,22 @@ async fn handle_coordination_act(
             } else {
                 None
             };
+            let room_policy =
+                load_coordination_room_policy_context(session, db, args.room.as_deref()).await?;
+            if let Err(err) = enforce_open_task_room_policy(
+                &actor_thread_id,
+                room_policy.as_ref(),
+                kind,
+                owner_thread_id.as_ref(),
+                args.claim_paths.as_deref(),
+            ) {
+                match err {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, None);
+                    }
+                    fatal => return Err(fatal),
+                }
+            }
             if args.claim_paths.is_some() && owner_thread_id.is_none() {
                 return coordination_failure_output(
                     "coordination_act open_task requires `owner` when reserving claim_paths"
@@ -354,6 +396,18 @@ async fn handle_coordination_act(
                 && task.owner_thread_id.as_deref() == Some(actor_thread_id.to_string().as_str())
             {
                 return coordination_duplicate_output(task);
+            }
+            let room_policy =
+                load_coordination_room_policy_context(session, db, task.room.as_deref()).await?;
+            if let Err(err) =
+                enforce_accept_room_policy(&actor_thread_id, room_policy.as_ref(), &task)
+            {
+                match err {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, Some(&task));
+                    }
+                    fatal => return Err(fatal),
+                }
             }
             let lease_seconds = args
                 .lease_seconds
@@ -1081,6 +1135,157 @@ async fn hollywood_config_for_session(
     }))
 }
 
+async fn fetch_hollywood_room_policy_state(
+    config: &HollywoodSessionConfig,
+    room: &str,
+) -> Result<Option<HollywoodRoomStateResponse>, FunctionCallError> {
+    let url = format!("{}/hollywood/v1/rooms", config.url.trim_end_matches('/'));
+    let response = Client::new()
+        .get(&url)
+        .query(&[("room", room), ("limit", "1")])
+        .send()
+        .await
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood room-state read failed for `{room}`: {err}"
+            ))
+        })?
+        .error_for_status()
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood room-state read failed for `{room}`: {err}"
+            ))
+        })?
+        .json::<HollywoodRoomsResponse>()
+        .await
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood room-state response parse failed for `{room}`: {err}"
+            ))
+        })?;
+    Ok(response
+        .rooms
+        .into_iter()
+        .next()
+        .filter(|room_state| room_state.contract_version == "losangelex-room/v2"))
+}
+
+async fn load_coordination_room_policy_context(
+    session: &Arc<Session>,
+    db: &Arc<codex_state::StateRuntime>,
+    room_override: Option<&str>,
+) -> Result<Option<CoordinationRoomPolicyContext>, FunctionCallError> {
+    let Some(config) = hollywood_config_for_session(session, db).await? else {
+        return Ok(None);
+    };
+    let room = room_override.unwrap_or(config.room.as_str()).to_string();
+    let Some(room_state) = fetch_hollywood_room_policy_state(&config, &room).await? else {
+        return Ok(None);
+    };
+    let Some(configured_policy) = room_state.coordination_policy.clone() else {
+        return Ok(None);
+    };
+    let phase = if configured_policy == "auto" {
+        let tasks = db
+            .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+                owner_thread_id: None,
+                creator_thread_id: None,
+                room: Some(room.clone()),
+                statuses: Vec::new(),
+            })
+            .await
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+        infer_auto_phase_from_tasks(&tasks).to_string()
+    } else {
+        room_state
+            .coordination_phase
+            .clone()
+            .unwrap_or_else(|| "execution".to_string())
+    };
+    Ok(Some(CoordinationRoomPolicyContext {
+        room,
+        effective_policy: effective_room_policy_for_phase(&configured_policy, &phase).to_string(),
+        configured_policy,
+        phase,
+        epoch: room_state.coordination_epoch,
+        role: coordination_role_for_room_state(&room_state, session.conversation_id),
+    }))
+}
+
+fn enforce_open_task_room_policy(
+    actor_thread_id: &ThreadId,
+    room_policy: Option<&CoordinationRoomPolicyContext>,
+    kind: codex_state::CoordinationTaskKind,
+    owner_thread_id: Option<&ThreadId>,
+    claim_paths: Option<&[PathClaimArg]>,
+) -> Result<(), FunctionCallError> {
+    let Some(room_policy) = room_policy else {
+        return Ok(());
+    };
+    let _effective_policy = room_policy.effective_policy.as_str();
+    let _epoch = room_policy.epoch;
+    if room_policy.configured_policy != "auto" {
+        return Ok(());
+    }
+    if matches!(kind, codex_state::CoordinationTaskKind::Implementation)
+        && room_policy.phase == "discovery"
+        && claim_paths.is_none_or(|paths| paths.is_empty())
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "auto room policy in `{}` phase `{}` blocks broad implementation claims; open investigation/review lanes or direct-assign exact implementation claim_paths first",
+            room_policy.room, room_policy.phase
+        )));
+    }
+    if matches!(room_policy.role, Some("verifier"))
+        && matches!(kind, codex_state::CoordinationTaskKind::Implementation)
+    {
+        let verifier_is_taking_lane = owner_thread_id.is_none()
+            || owner_thread_id.is_some_and(|owner| owner == actor_thread_id);
+        if verifier_is_taking_lane {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "auto room policy in `{}` keeps the verifier on QA unless an implementation lane is explicitly reassigned to another owner",
+                room_policy.room
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn enforce_accept_room_policy(
+    actor_thread_id: &ThreadId,
+    room_policy: Option<&CoordinationRoomPolicyContext>,
+    task: &codex_state::CoordinationTask,
+) -> Result<(), FunctionCallError> {
+    let Some(room_policy) = room_policy else {
+        return Ok(());
+    };
+    let _effective_policy = room_policy.effective_policy.as_str();
+    let _epoch = room_policy.epoch;
+    if room_policy.configured_policy != "auto"
+        || !matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+    {
+        return Ok(());
+    }
+    let actor_thread_id = actor_thread_id.to_string();
+    if room_policy.phase == "discovery"
+        && task.owner_thread_id.as_deref() != Some(actor_thread_id.as_str())
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "auto room policy in `{}` phase `{}` requires implementation lanes to be explicitly awarded before they are accepted",
+            room_policy.room, room_policy.phase
+        )));
+    }
+    if matches!(room_policy.role, Some("verifier"))
+        && task.owner_thread_id.as_deref() != Some(actor_thread_id.as_str())
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "auto room policy in `{}` keeps the verifier on QA unless the implementation lane is explicitly awarded to the verifier",
+            room_policy.room
+        )));
+    }
+    Ok(())
+}
+
 async fn fetch_registry_entries(
     config: &HollywoodSessionConfig,
     room: &str,
@@ -1130,6 +1335,84 @@ fn parse_registry_timestamp(value: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .ok()
         .map(|parsed| parsed.with_timezone(&Utc))
+}
+
+fn coordination_role_for_room_state(
+    room_state: &HollywoodRoomStateResponse,
+    actor_thread_id: ThreadId,
+) -> Option<&'static str> {
+    let actor_thread_id = actor_thread_id.to_string();
+    if room_state
+        .leader_session_id
+        .as_deref()
+        .is_some_and(|thread_id| thread_id == actor_thread_id)
+    {
+        Some("leader")
+    } else if room_state
+        .verifier_session_id
+        .as_deref()
+        .is_some_and(|thread_id| thread_id == actor_thread_id)
+    {
+        Some("verifier")
+    } else if room_state.coordination_policy.is_some() {
+        Some("executor")
+    } else {
+        None
+    }
+}
+
+fn infer_auto_phase_from_tasks(tasks: &[codex_state::CoordinationTask]) -> &'static str {
+    let incomplete = tasks
+        .iter()
+        .filter(|task| {
+            !matches!(
+                task.status,
+                codex_state::CoordinationTaskStatus::Done
+                    | codex_state::CoordinationTaskStatus::Cancelled
+            )
+        })
+        .collect::<Vec<_>>();
+    if incomplete.is_empty() {
+        return if tasks.is_empty() {
+            "discovery"
+        } else {
+            "closure"
+        };
+    }
+    if incomplete
+        .iter()
+        .any(|task| matches!(task.kind, codex_state::CoordinationTaskKind::Implementation))
+    {
+        return "execution";
+    }
+    let has_completed_implementation = tasks.iter().any(|task| {
+        matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+            && matches!(task.status, codex_state::CoordinationTaskStatus::Done)
+    });
+    let has_stabilization_lane = incomplete.iter().any(|task| {
+        matches!(
+            task.kind,
+            codex_state::CoordinationTaskKind::Qa
+                | codex_state::CoordinationTaskKind::Review
+                | codex_state::CoordinationTaskKind::Handoff
+        )
+    });
+    if has_completed_implementation || has_stabilization_lane {
+        "stabilization"
+    } else {
+        "discovery"
+    }
+}
+
+fn effective_room_policy_for_phase<'a>(configured_policy: &'a str, phase: &str) -> &'a str {
+    match configured_policy {
+        "auto" => match phase {
+            "execution" => "kanban_pull",
+            "stabilization" | "closure" | "discovery" => "leader_award",
+            _ => "leader_award",
+        },
+        policy => policy,
+    }
 }
 
 async fn required_task(

@@ -15,8 +15,8 @@ use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
 use crate::hollywood::HOLLYWOOD_ROOM_CONTRACT_VERSION;
 use crate::hollywood::HollywoodConfig;
 use crate::hollywood::build_registry_upsert_request;
-use crate::hollywood::format_hollywood_context_message;
 use crate::hollywood::fetch_room_state as fetch_hollywood_room_state;
+use crate::hollywood::format_hollywood_context_message;
 use crate::hollywood::hollywood_session_diagnostics_from_runtime;
 use crate::hollywood::hollywood_session_state_from_persisted;
 use crate::hollywood::hollywood_session_state_from_runtime;
@@ -126,10 +126,11 @@ use codex_app_server_protocol::MockExperimentalMethodParams;
 use codex_app_server_protocol::MockExperimentalMethodResponse;
 use codex_app_server_protocol::ModelListParams;
 use codex_app_server_protocol::ModelListResponse;
+use codex_app_server_protocol::PermissionProfile as ApiPermissionProfile;
 use codex_app_server_protocol::PermissionProfileModificationParams;
 use codex_app_server_protocol::PermissionProfileSelectionParams;
-use codex_app_server_protocol::PluginDetail;
 use codex_app_server_protocol::PluginAvailability;
+use codex_app_server_protocol::PluginDetail;
 use codex_app_server_protocol::PluginInstallParams;
 use codex_app_server_protocol::PluginInstallResponse;
 use codex_app_server_protocol::PluginInterface;
@@ -151,7 +152,6 @@ use codex_app_server_protocol::PluginSource;
 use codex_app_server_protocol::PluginSummary;
 use codex_app_server_protocol::PluginUninstallParams;
 use codex_app_server_protocol::PluginUninstallResponse;
-use codex_app_server_protocol::PermissionProfile as ApiPermissionProfile;
 use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ReviewDelivery as ApiReviewDelivery;
 use codex_app_server_protocol::ReviewStartParams;
@@ -169,6 +169,8 @@ use codex_app_server_protocol::SkillsListParams;
 use codex_app_server_protocol::SkillsListResponse;
 use codex_app_server_protocol::SortDirection;
 use codex_app_server_protocol::Thread;
+use codex_app_server_protocol::ThreadApproveGuardianDeniedActionParams;
+use codex_app_server_protocol::ThreadApproveGuardianDeniedActionResponse;
 use codex_app_server_protocol::ThreadArchiveParams;
 use codex_app_server_protocol::ThreadArchiveResponse;
 use codex_app_server_protocol::ThreadArchivedNotification;
@@ -181,14 +183,6 @@ use codex_app_server_protocol::ThreadDecrementElicitationParams;
 use codex_app_server_protocol::ThreadDecrementElicitationResponse;
 use codex_app_server_protocol::ThreadForkParams;
 use codex_app_server_protocol::ThreadForkResponse;
-use codex_app_server_protocol::ThreadHollywoodAttachParams;
-use codex_app_server_protocol::ThreadHollywoodAttachResponse;
-use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
-use codex_app_server_protocol::ThreadHollywoodAttentionSetResponse;
-use codex_app_server_protocol::ThreadHollywoodDetachParams;
-use codex_app_server_protocol::ThreadHollywoodDetachResponse;
-use codex_app_server_protocol::ThreadHollywoodListParams;
-use codex_app_server_protocol::ThreadHollywoodListResponse;
 use codex_app_server_protocol::ThreadGoal;
 use codex_app_server_protocol::ThreadGoalClearParams;
 use codex_app_server_protocol::ThreadGoalClearResponse;
@@ -199,14 +193,22 @@ use codex_app_server_protocol::ThreadGoalSetParams;
 use codex_app_server_protocol::ThreadGoalSetResponse;
 use codex_app_server_protocol::ThreadGoalStatus;
 use codex_app_server_protocol::ThreadGoalUpdatedNotification;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
+use codex_app_server_protocol::ThreadHollywoodAttachResponse;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetResponse;
+use codex_app_server_protocol::ThreadHollywoodDetachParams;
+use codex_app_server_protocol::ThreadHollywoodDetachResponse;
+use codex_app_server_protocol::ThreadHollywoodListParams;
+use codex_app_server_protocol::ThreadHollywoodListResponse;
 use codex_app_server_protocol::ThreadIncrementElicitationParams;
 use codex_app_server_protocol::ThreadIncrementElicitationResponse;
 use codex_app_server_protocol::ThreadInjectItemsParams;
 use codex_app_server_protocol::ThreadInjectItemsResponse;
 use codex_app_server_protocol::ThreadItem;
+use codex_app_server_protocol::ThreadListCwdFilter;
 use codex_app_server_protocol::ThreadListParams;
 use codex_app_server_protocol::ThreadListResponse;
-use codex_app_server_protocol::ThreadListCwdFilter;
 use codex_app_server_protocol::ThreadLoadedListParams;
 use codex_app_server_protocol::ThreadLoadedListResponse;
 use codex_app_server_protocol::ThreadMemoryModeSetParams;
@@ -238,8 +240,6 @@ use codex_app_server_protocol::ThreadRealtimeStartResponse;
 use codex_app_server_protocol::ThreadRealtimeStartTransport;
 use codex_app_server_protocol::ThreadRealtimeStopParams;
 use codex_app_server_protocol::ThreadRealtimeStopResponse;
-use codex_app_server_protocol::ThreadApproveGuardianDeniedActionParams;
-use codex_app_server_protocol::ThreadApproveGuardianDeniedActionResponse;
 use codex_app_server_protocol::ThreadResumeParams;
 use codex_app_server_protocol::ThreadResumeResponse;
 use codex_app_server_protocol::ThreadRollbackParams;
@@ -361,9 +361,9 @@ use codex_mcp::McpSnapshotDetail;
 use codex_mcp::collect_mcp_server_status_snapshot_with_detail;
 use codex_mcp::discover_supported_scopes;
 use codex_mcp::effective_mcp_servers;
-use codex_memories_write::clear_memory_roots_contents;
 use codex_mcp::read_mcp_resource as read_mcp_resource_without_thread;
 use codex_mcp::resolve_oauth_scopes;
+use codex_memories_write::clear_memory_roots_contents;
 use codex_models_manager::collaboration_mode_presets::builtin_collaboration_mode_presets;
 use codex_protocol::ThreadId;
 use codex_protocol::config_types::CollaborationMode;
@@ -376,6 +376,7 @@ use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result as CodexResult;
 use codex_protocol::items::TurnItem;
 use codex_protocol::models::ResponseItem;
+use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::protocol::AgentStatus;
 use codex_protocol::protocol::ConversationAudioParams;
 use codex_protocol::protocol::ConversationStartParams;
@@ -402,7 +403,6 @@ use codex_protocol::protocol::USER_MESSAGE_BEGIN;
 use codex_protocol::protocol::W3cTraceContext;
 use codex_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
 use codex_protocol::user_input::UserInput as CoreInputItem;
-use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_rmcp_client::perform_oauth_login_return_url;
 use codex_rollout::state_db::StateDbHandle;
 use codex_rollout::state_db::get_state_db;
@@ -441,10 +441,10 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::Mutex;
-use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio::sync::Semaphore;
 use tokio::sync::SemaphorePermit;
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
@@ -827,9 +827,9 @@ pub(crate) struct CodexMessageProcessorArgs {
 
 fn thread_store_from_config(config: &Config) -> Arc<dyn ThreadStore> {
     match &config.experimental_thread_store {
-        ThreadStoreConfig::Local => {
-            Arc::new(LocalThreadStore::new(LocalThreadStoreConfig::from_config(config)))
-        }
+        ThreadStoreConfig::Local => Arc::new(LocalThreadStore::new(
+            LocalThreadStoreConfig::from_config(config),
+        )),
         ThreadStoreConfig::Remote { endpoint } => Arc::new(RemoteThreadStore::new(endpoint)),
         #[cfg(debug_assertions)]
         ThreadStoreConfig::InMemory { id } => InMemoryThreadStore::for_id(id),
@@ -2859,11 +2859,57 @@ impl CodexMessageProcessor {
         }
     }
 
-    fn effective_coordination_policy_for_room_snapshot(
-        snapshot: &crate::hollywood::HollywoodRoomSnapshot,
-    ) -> Option<&str> {
-        match snapshot.coordination_policy.as_deref()? {
-            "auto" => match snapshot.coordination_phase.as_deref() {
+    fn infer_auto_coordination_phase_from_tasks(
+        tasks: &[codex_state::CoordinationTask],
+    ) -> &'static str {
+        let incomplete = tasks
+            .iter()
+            .filter(|task| {
+                !matches!(
+                    task.status,
+                    codex_state::CoordinationTaskStatus::Done
+                        | codex_state::CoordinationTaskStatus::Cancelled
+                )
+            })
+            .collect::<Vec<_>>();
+        if incomplete.is_empty() {
+            return if tasks.is_empty() {
+                "discovery"
+            } else {
+                "closure"
+            };
+        }
+        if incomplete
+            .iter()
+            .any(|task| matches!(task.kind, codex_state::CoordinationTaskKind::Implementation))
+        {
+            return "execution";
+        }
+        let has_completed_implementation = tasks.iter().any(|task| {
+            matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+                && matches!(task.status, codex_state::CoordinationTaskStatus::Done)
+        });
+        let has_stabilization_lane = incomplete.iter().any(|task| {
+            matches!(
+                task.kind,
+                codex_state::CoordinationTaskKind::Qa
+                    | codex_state::CoordinationTaskKind::Review
+                    | codex_state::CoordinationTaskKind::Handoff
+            )
+        });
+        if has_completed_implementation || has_stabilization_lane {
+            "stabilization"
+        } else {
+            "discovery"
+        }
+    }
+
+    fn effective_coordination_policy_for_phase<'a>(
+        configured_policy: &'a str,
+        phase: Option<&str>,
+    ) -> Option<&'a str> {
+        match configured_policy {
+            "auto" => match phase {
                 Some("execution") => Some("kanban_pull"),
                 Some("stabilization") | Some("closure") => Some("leader_award"),
                 Some("discovery") | None => Some("leader_award"),
@@ -2873,10 +2919,35 @@ impl CodexMessageProcessor {
         }
     }
 
+    async fn inferred_coordination_phase_for_room_snapshot(
+        snapshot: Option<&crate::hollywood::HollywoodRoomSnapshot>,
+        state_db: Option<&Arc<codex_state::StateRuntime>>,
+    ) -> Option<String> {
+        let snapshot = snapshot?;
+        let configured_policy = snapshot.coordination_policy.as_deref()?;
+        if configured_policy != "auto" {
+            return snapshot.coordination_phase.clone();
+        }
+        let Some(state_db) = state_db else {
+            return snapshot.coordination_phase.clone();
+        };
+        let tasks = state_db
+            .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+                owner_thread_id: None,
+                creator_thread_id: None,
+                room: Some(snapshot.room.clone()),
+                statuses: Vec::new(),
+            })
+            .await
+            .ok()?;
+        Some(Self::infer_auto_coordination_phase_from_tasks(&tasks).to_string())
+    }
+
     fn apply_room_policy_metadata(
         brief: &mut CoreHollywoodSyntheticBrief,
         snapshot: Option<&crate::hollywood::HollywoodRoomSnapshot>,
         thread_id: &ThreadId,
+        phase_override: Option<&str>,
     ) {
         let Some(snapshot) = snapshot else {
             return;
@@ -2884,15 +2955,18 @@ impl CodexMessageProcessor {
         let Some(configured_policy) = snapshot.coordination_policy.as_deref() else {
             return;
         };
-        let Some(policy) = Self::effective_coordination_policy_for_room_snapshot(snapshot) else {
+        let effective_phase = phase_override.or(snapshot.coordination_phase.as_deref());
+        let Some(policy) =
+            Self::effective_coordination_policy_for_phase(configured_policy, effective_phase)
+        else {
             return;
         };
 
         brief.coordination_policy = Some(policy.to_string());
-        brief.coordination_phase = snapshot.coordination_phase.clone();
+        brief.coordination_phase = effective_phase.map(ToOwned::to_owned);
         brief.coordination_epoch = Some(snapshot.coordination_epoch);
-        let role = Self::coordination_role_for_room_snapshot(snapshot, thread_id)
-            .map(str::to_string);
+        let role =
+            Self::coordination_role_for_room_snapshot(snapshot, thread_id).map(str::to_string);
         brief.coordination_role = role.clone();
 
         let mut push_fact = |fact: String| {
@@ -2912,15 +2986,23 @@ impl CodexMessageProcessor {
                 "effective coordination policy for this phase is `{policy}`"
             ));
         }
-        if let Some(phase) = snapshot.coordination_phase.as_deref() {
+        if let Some(phase) = effective_phase {
             push_fact(format!("room phase is `{phase}`"));
+        }
+        if configured_policy == "auto"
+            && effective_phase != snapshot.coordination_phase.as_deref()
+            && let Some(phase) = effective_phase
+        {
+            push_fact(format!(
+                "inferred room phase from coordination backlog is `{phase}`"
+            ));
         }
         if let Some(role) = role.as_deref() {
             push_fact(format!("your room role is `{role}`"));
         }
 
         if configured_policy == "auto" {
-            match (snapshot.coordination_phase.as_deref(), role.as_deref()) {
+            match (effective_phase, role.as_deref()) {
                 (Some("discovery") | None, Some("leader")) => {
                     push_action(
                         "during discovery, publish an exact lane map or investigation lanes before claiming broad implementation scope yourself",
@@ -2939,28 +3021,26 @@ impl CodexMessageProcessor {
                         "during discovery, avoid broad product claims and wait for an exact claimable lane or an explicit investigation request",
                     );
                 }
-                (Some("execution"), _) => {
-                    match role.as_deref() {
-                        Some("leader") => {
-                            push_action(
-                                "during execution, feed exact implementation lanes to executors before reassigning the verifier into product code",
-                            );
-                        }
-                        Some("verifier") => {
-                            push_action(
-                                "during execution, prefer staying on verification and only take product-code scope if the leader explicitly reassigns you or no executor lane remains",
-                            );
-                        }
-                        _ => {
-                            push_action(
-                                "during execution, favor one exact ready lane at a time and avoid reopening broad ownership once the backlog is split",
-                            );
-                            push_action(
-                                "during execution, executors should pull the highest-priority exact implementation lane before the verifier leaves QA",
-                            );
-                        }
+                (Some("execution"), _) => match role.as_deref() {
+                    Some("leader") => {
+                        push_action(
+                            "during execution, feed exact implementation lanes to executors before reassigning the verifier into product code",
+                        );
                     }
-                }
+                    Some("verifier") => {
+                        push_action(
+                            "during execution, prefer staying on verification and only take product-code scope if the leader explicitly reassigns you or no executor lane remains",
+                        );
+                    }
+                    _ => {
+                        push_action(
+                            "during execution, favor one exact ready lane at a time and avoid reopening broad ownership once the backlog is split",
+                        );
+                        push_action(
+                            "during execution, executors should pull the highest-priority exact implementation lane before the verifier leaves QA",
+                        );
+                    }
+                },
                 (Some("stabilization") | Some("closure"), _) => {
                     push_action(
                         "during stabilization or closure, prefer verifying, handing off, and settling remaining lanes over opening new implementation scope",
@@ -2973,42 +3053,60 @@ impl CodexMessageProcessor {
         match policy {
             "leader_award" => match role.as_deref() {
                 Some("leader") => {
-                    push_action("open or update exact implementation lanes before asking workers to claim scope");
+                    push_action(
+                        "open or update exact implementation lanes before asking workers to claim scope",
+                    );
                     push_action("treat reassignment and closure as leader-controlled decisions");
                 }
                 Some("verifier") => {
-                    push_action("keep the verification gate current and close the room only after implementation lanes are done");
+                    push_action(
+                        "keep the verification gate current and close the room only after implementation lanes are done",
+                    );
                 }
                 _ => {
-                    push_action("wait for a leader-opened exact lane before claiming implementation scope");
+                    push_action(
+                        "wait for a leader-opened exact lane before claiming implementation scope",
+                    );
                 }
             },
             "kanban_pull" => {
-                push_action("pull at most one ready exact lane at a time and stay idle when no ready lane exists");
+                push_action(
+                    "pull at most one ready exact lane at a time and stay idle when no ready lane exists",
+                );
             }
             "dual_command_lease" => match role.as_deref() {
                 Some("leader") => {
-                    push_action("treat fresh executor progress as a live lease and avoid reassignment until the lease is stale, yielded, or blocked");
+                    push_action(
+                        "treat fresh executor progress as a live lease and avoid reassignment until the lease is stale, yielded, or blocked",
+                    );
                 }
                 Some("verifier") => {
-                    push_action("treat fresh executor progress as active ownership and escalate only when the lease appears stale");
+                    push_action(
+                        "treat fresh executor progress as active ownership and escalate only when the lease appears stale",
+                    );
                 }
                 _ => {
-                    push_action("while you own active scope, send concise progress heartbeats before long silent intervals and yield explicitly if blocked");
+                    push_action(
+                        "while you own active scope, send concise progress heartbeats before long silent intervals and yield explicitly if blocked",
+                    );
                 }
             },
             _ => {}
         }
 
-        match snapshot.coordination_phase.as_deref() {
+        match effective_phase {
             Some("discovery") => {
                 push_action("reduce ambiguous work into exact claimable lanes before editing");
             }
             Some("stabilization") => {
-                push_action("prefer verification, cleanup, and handoff resolution over opening new lanes");
+                push_action(
+                    "prefer verification, cleanup, and handoff resolution over opening new lanes",
+                );
             }
             Some("closure") => {
-                push_action("favor closure and quiescence over reopening settled lanes unless the gate actually regressed");
+                push_action(
+                    "favor closure and quiescence over reopening settled lanes unless the gate actually regressed",
+                );
             }
             _ => {}
         }
@@ -4180,7 +4278,9 @@ impl CodexMessageProcessor {
         self.thread_list_state_permit
             .acquire()
             .await
-            .map_err(|err| internal_error(format!("failed to acquire thread list state permit: {err}")))
+            .map_err(|err| {
+                internal_error(format!("failed to acquire thread list state permit: {err}"))
+            })
     }
 
     fn external_auth_active_error(&self) -> JSONRPCErrorError {
@@ -5221,7 +5321,11 @@ impl CodexMessageProcessor {
                     &file_system_sandbox_policy,
                     network_sandbox_policy,
                 );
-            if let Err(err) = self.config.permissions.permission_profile.can_set(&permission_profile)
+            if let Err(err) = self
+                .config
+                .permissions
+                .permission_profile
+                .can_set(&permission_profile)
             {
                 let error = JSONRPCErrorError {
                     code: INVALID_REQUEST_ERROR_CODE,
@@ -5441,8 +5545,12 @@ impl CodexMessageProcessor {
             .config_manager
             .load_with_overrides(/*request_overrides*/ None, typesafe_overrides)
             .await
-            .map_err(|err| internal_error(format!("failed to load imported session config: {err}")))?;
-        let environments = self.thread_manager.default_environment_selections(&config.cwd);
+            .map_err(|err| {
+                internal_error(format!("failed to load imported session config: {err}"))
+            })?;
+        let environments = self
+            .thread_manager
+            .default_environment_selections(&config.cwd);
         let imported_thread = self
             .thread_manager
             .start_thread_with_options(StartThreadOptions {
@@ -9083,8 +9191,9 @@ impl CodexMessageProcessor {
             /*has_in_progress_turn*/ false,
         );
         let config_snapshot = forked_thread.config_snapshot().await;
-        let active_permission_profile =
-            thread_response_active_permission_profile(config_snapshot.active_permission_profile.clone());
+        let active_permission_profile = thread_response_active_permission_profile(
+            config_snapshot.active_permission_profile.clone(),
+        );
         let response = ThreadForkResponse {
             thread: thread.clone(),
             model: session_configured.model,
@@ -11287,8 +11396,10 @@ impl CodexMessageProcessor {
 
         let plugins_input = config.plugins_config_input();
         let outcome = tokio::task::spawn_blocking(move || {
-            plugins_manager
-                .upgrade_configured_marketplaces_for_config(&plugins_input, marketplace_name.as_deref())
+            plugins_manager.upgrade_configured_marketplaces_for_config(
+                &plugins_input,
+                marketplace_name.as_deref(),
+            )
         })
         .await
         .map_err(|err| internal_error(format!("failed to upgrade marketplaces: {err}")))?
@@ -13363,10 +13474,16 @@ impl CodexMessageProcessor {
                                 suggested_actions,
                                 stay_silent_if_no_actionable_delta: true,
                             };
+                            let startup_phase = Self::inferred_coordination_phase_for_room_snapshot(
+                                startup_room_snapshot.as_ref(),
+                                conversation.state_db().as_ref(),
+                            )
+                            .await;
                             Self::apply_room_policy_metadata(
                                 &mut startup_brief,
                                 startup_room_snapshot.as_ref(),
                                 &conversation_id,
+                                startup_phase.as_deref(),
                             );
                             let submit_result = conversation
                                 .submit(Op::HollywoodInput {
@@ -13618,10 +13735,16 @@ impl CodexMessageProcessor {
                                     .room_snapshot(&message.notification_message.room)
                             };
                             let mut synthetic_brief = Self::hollywood_input_synthetic_brief(&message);
+                            let inferred_phase = Self::inferred_coordination_phase_for_room_snapshot(
+                                room_snapshot.as_ref(),
+                                state_db.as_ref(),
+                            )
+                            .await;
                             Self::apply_room_policy_metadata(
                                 &mut synthetic_brief,
                                 room_snapshot.as_ref(),
                                 &conversation_id,
+                                inferred_phase.as_deref(),
                             );
                             let message_is_focused = message.attention
                                 == codex_app_server_protocol::HollywoodMessageAttention::Focused;
@@ -14195,7 +14318,9 @@ impl CodexMessageProcessor {
                 Ok(config) => {
                     let setup_request = WindowsSandboxSetupRequest {
                         mode,
-                        policy: config.permissions.legacy_sandbox_policy(config.cwd.as_path()),
+                        policy: config
+                            .permissions
+                            .legacy_sandbox_policy(config.cwd.as_path()),
                         policy_cwd: config.cwd.to_path_buf(),
                         command_cwd,
                         env_map: std::env::vars().collect(),
@@ -14399,7 +14524,10 @@ fn normalize_thread_list_cwd_filter(
     })
 }
 
-fn legacy_normalize_thread_list_cwd_filter_error(cwd: String, err: &impl std::fmt::Display) -> JSONRPCErrorError {
+fn legacy_normalize_thread_list_cwd_filter_error(
+    cwd: String,
+    err: &impl std::fmt::Display,
+) -> JSONRPCErrorError {
     JSONRPCErrorError {
         code: INVALID_PARAMS_ERROR_CODE,
         message: format!("invalid thread/list cwd filter `{cwd}`: {err}"),
@@ -16608,7 +16736,7 @@ mod tests {
             approval_policy: None,
             approvals_reviewer: None,
             sandbox: None,
-            permission_profile: None,
+            permissions: None,
             config: None,
             base_instructions: None,
             developer_instructions: None,
@@ -16624,6 +16752,7 @@ mod tests {
             approval_policy: codex_protocol::protocol::AskForApproval::OnRequest,
             approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer::User,
             permission_profile: codex_protocol::models::PermissionProfile::default(),
+            active_permission_profile: None,
             cwd: test_path_buf("/tmp").abs(),
             ephemeral: false,
             thread_name: None,
@@ -17786,18 +17915,20 @@ mod tests {
             leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
             verifier_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa60".to_string()),
         };
-        let executor_thread = ThreadId::from_string(
-            "019d0798-12d8-76c3-a812-6e323637aa61",
-        )
-        .expect("valid thread id");
+        let executor_thread =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa61").expect("valid thread id");
 
         CodexMessageProcessor::apply_room_policy_metadata(
             &mut brief,
             Some(&snapshot),
             &executor_thread,
+            None,
         );
 
-        assert_eq!(brief.coordination_policy.as_deref(), Some("dual_command_lease"));
+        assert_eq!(
+            brief.coordination_policy.as_deref(),
+            Some("dual_command_lease")
+        );
         assert_eq!(brief.coordination_phase.as_deref(), Some("execution"));
         assert_eq!(brief.coordination_role.as_deref(), Some("executor"));
         assert_eq!(brief.coordination_epoch, Some(4));
@@ -17838,31 +17969,28 @@ mod tests {
             leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
             verifier_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa60".to_string()),
         };
-        let executor_thread = ThreadId::from_string(
-            "019d0798-12d8-76c3-a812-6e323637aa61",
-        )
-        .expect("valid thread id");
+        let executor_thread =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa61").expect("valid thread id");
 
         CodexMessageProcessor::apply_room_policy_metadata(
             &mut brief,
             Some(&snapshot),
             &executor_thread,
+            None,
         );
 
         assert_eq!(brief.coordination_policy.as_deref(), Some("leader_award"));
         assert_eq!(brief.coordination_phase.as_deref(), Some("stabilization"));
         assert_eq!(brief.coordination_role.as_deref(), Some("executor"));
-        assert!(
-            brief
-                .facts
-                .iter()
-                .any(|fact| fact.contains("effective coordination policy for this phase is `leader_award`"))
-        );
+        assert!(brief.facts.iter().any(|fact| {
+            fact.contains("effective coordination policy for this phase is `leader_award`")
+        }));
         assert!(
             brief
                 .suggested_actions
                 .iter()
-                .any(|action| action.contains("prefer verification, cleanup, and handoff resolution"))
+                .any(|action| action
+                    .contains("prefer verification, cleanup, and handoff resolution"))
         );
     }
 
@@ -17885,10 +18013,8 @@ mod tests {
             self_authored: false,
         };
         let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
-        let leader_thread = ThreadId::from_string(
-            "019d0798-12d8-76c3-a812-6e323637aa59",
-        )
-        .expect("valid thread id");
+        let leader_thread =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread id");
         let snapshot = crate::hollywood::HollywoodRoomSnapshot {
             room: "repo/losangelex".to_string(),
             state_version: 3,
@@ -17904,6 +18030,7 @@ mod tests {
             &mut brief,
             Some(&snapshot),
             &leader_thread,
+            None,
         );
 
         assert_eq!(brief.coordination_policy.as_deref(), Some("leader_award"));
@@ -17914,12 +18041,9 @@ mod tests {
                 .iter()
                 .any(|action| action.contains("publish an exact lane map"))
         );
-        assert!(
-            brief
-                .suggested_actions
-                .iter()
-                .any(|action| action.contains("open investigation, review, or narrowly scoped implementation lanes"))
-        );
+        assert!(brief.suggested_actions.iter().any(|action| {
+            action.contains("open investigation, review, or narrowly scoped implementation lanes")
+        }));
     }
 
     #[test]
@@ -17932,7 +18056,8 @@ mod tests {
                 recipient_id: None,
                 message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
                 response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
-                body: "Execution is ready; keep QA current while executors pull code lanes.".to_string(),
+                body: "Execution is ready; keep QA current while executors pull code lanes."
+                    .to_string(),
                 created_at: "2026-04-29T00:00:00Z".to_string(),
                 mentions: vec!["ray".to_string()],
             },
@@ -17941,10 +18066,8 @@ mod tests {
             self_authored: false,
         };
         let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
-        let verifier_thread = ThreadId::from_string(
-            "019d0798-12d8-76c3-a812-6e323637aa60",
-        )
-        .expect("valid thread id");
+        let verifier_thread =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa60").expect("valid thread id");
         let snapshot = crate::hollywood::HollywoodRoomSnapshot {
             room: "repo/losangelex".to_string(),
             state_version: 4,
@@ -17960,6 +18083,7 @@ mod tests {
             &mut brief,
             Some(&snapshot),
             &verifier_thread,
+            None,
         );
 
         assert_eq!(brief.coordination_policy.as_deref(), Some("kanban_pull"));
@@ -17970,6 +18094,211 @@ mod tests {
                 .iter()
                 .any(|action| action.contains("prefer staying on verification"))
         );
+    }
+
+    #[tokio::test]
+    async fn auto_room_policy_infers_execution_phase_from_incomplete_implementation_backlog()
+    -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000031").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000032").expect("owner id");
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-auto-execution".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: None,
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Implementation,
+                summary: "Land app changes".to_string(),
+                details: "Implementation lane is still in play.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-auto-execution-open".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 150,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("tony".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Keep code lanes flowing while QA stays current.".to_string(),
+                created_at: "2026-04-30T00:00:00Z".to_string(),
+                mentions: vec!["ray".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+        let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        let snapshot = crate::hollywood::HollywoodRoomSnapshot {
+            room: "repo/losangelex".to_string(),
+            state_version: 5,
+            contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            coordination_policy: Some("auto".to_string()),
+            coordination_phase: Some("discovery".to_string()),
+            coordination_epoch: 6,
+            leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
+            verifier_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa60".to_string()),
+        };
+
+        let inferred_phase = CodexMessageProcessor::inferred_coordination_phase_for_room_snapshot(
+            Some(&snapshot),
+            Some(&state_db),
+        )
+        .await;
+        CodexMessageProcessor::apply_room_policy_metadata(
+            &mut brief,
+            Some(&snapshot),
+            &owner,
+            inferred_phase.as_deref(),
+        );
+
+        assert_eq!(brief.coordination_phase.as_deref(), Some("execution"));
+        assert_eq!(brief.coordination_policy.as_deref(), Some("kanban_pull"));
+        assert!(brief.facts.iter().any(|fact| {
+            fact.contains("inferred room phase from coordination backlog is `execution`")
+        }));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn auto_room_policy_infers_stabilization_phase_from_post_impl_backlog() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let state_db =
+            codex_state::StateRuntime::init(temp_dir.path().to_path_buf(), "openai".to_string())
+                .await?;
+        let creator =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000041").expect("creator id");
+        let owner =
+            ThreadId::from_string("019e0000-0000-7000-8000-000000000042").expect("owner id");
+        let claimed_path = temp_dir.path().join("src/app.ts");
+        std::fs::create_dir_all(
+            claimed_path
+                .parent()
+                .expect("claimed implementation path should have a parent"),
+        )?;
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-auto-done-impl".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: None,
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Implementation,
+                summary: "Finish implementation".to_string(),
+                details: "Done implementation lane.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-auto-stabilization-open".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+        state_db
+            .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
+                task_id: "task-auto-done-impl".to_string(),
+                actor_thread_id: owner.clone(),
+                path_claims: vec![codex_state::PathClaimSpec {
+                    kind: codex_state::PathClaimKind::File,
+                    path: claimed_path,
+                }],
+                lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                act_id: "act-auto-stabilization-accept".to_string(),
+                act_summary: Some("claim implementation scope".to_string()),
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+        state_db
+            .complete_coordination_task(codex_state::CoordinationTaskDoneParams {
+                task_id: "task-auto-done-impl".to_string(),
+                actor_thread_id: owner.clone(),
+                act_id: "act-auto-stabilization-done".to_string(),
+                act_summary: Some("implementation complete".to_string()),
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+        state_db
+            .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                id: "task-auto-qa".to_string(),
+                creator_thread_id: creator,
+                owner_thread_id: None,
+                reserved_path_claims: Vec::new(),
+                claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+                team_id: None,
+                room: Some("repo/losangelex".to_string()),
+                kind: codex_state::CoordinationTaskKind::Qa,
+                summary: "Run QA".to_string(),
+                details: "Only verification remains.".to_string(),
+                requested_capability: None,
+                dependency_task_ids: Vec::new(),
+                act_id: "act-auto-qa-open".to_string(),
+                act_summary: None,
+                act_payload_json: "{}".to_string(),
+            })
+            .await?;
+
+        let message = crate::hollywood::HollywoodClassifiedMessage {
+            notification_message: codex_app_server_protocol::HollywoodMessage {
+                id: 151,
+                room: "repo/losangelex".to_string(),
+                sender_id: Some("ray".to_string()),
+                recipient_id: None,
+                message_kind: codex_app_server_protocol::HollywoodMessageKind::Ambient,
+                response_policy: codex_app_server_protocol::HollywoodResponsePolicy::Optional,
+                body: "Implementation is done; settle QA and closure lanes.".to_string(),
+                created_at: "2026-04-30T00:00:00Z".to_string(),
+                mentions: vec!["tony".to_string()],
+            },
+            attention: codex_app_server_protocol::HollywoodMessageAttention::Focused,
+            mentioned: true,
+            self_authored: false,
+        };
+        let mut brief = CodexMessageProcessor::hollywood_input_synthetic_brief(&message);
+        let snapshot = crate::hollywood::HollywoodRoomSnapshot {
+            room: "repo/losangelex".to_string(),
+            state_version: 6,
+            contract_version: HOLLYWOOD_ROOM_CONTRACT_VERSION.to_string(),
+            coordination_policy: Some("auto".to_string()),
+            coordination_phase: Some("execution".to_string()),
+            coordination_epoch: 7,
+            leader_session_id: Some("019d0798-12d8-76c3-a812-6e323637aa59".to_string()),
+            verifier_session_id: Some(owner.to_string()),
+        };
+
+        let inferred_phase = CodexMessageProcessor::inferred_coordination_phase_for_room_snapshot(
+            Some(&snapshot),
+            Some(&state_db),
+        )
+        .await;
+        CodexMessageProcessor::apply_room_policy_metadata(
+            &mut brief,
+            Some(&snapshot),
+            &owner,
+            inferred_phase.as_deref(),
+        );
+
+        assert_eq!(brief.coordination_phase.as_deref(), Some("stabilization"));
+        assert_eq!(brief.coordination_policy.as_deref(), Some("leader_award"));
+        assert!(brief.facts.iter().any(|fact| {
+            fact.contains("inferred room phase from coordination backlog is `stabilization`")
+        }));
+        Ok(())
     }
 
     #[test]

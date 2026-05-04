@@ -1166,6 +1166,233 @@ async fn implementation_open_task_requires_claim_paths_for_direct_owner() {
 }
 
 #[tokio::test]
+async fn auto_discovery_blocks_broad_implementation_open_task() {
+    let server = MockServer::start().await;
+    let leader_thread_id = ThreadId::new();
+    let verifier_thread_id = ThreadId::new();
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/rooms"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rooms": [{
+                "room": "repo/current-room",
+                "contract_version": "losangelex-room/v2",
+                "coordination_policy": "auto",
+                "coordination_phase": "discovery",
+                "coordination_epoch": 3,
+                "leader_session_id": leader_thread_id.to_string(),
+                "verifier_session_id": verifier_thread_id.to_string(),
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Take the whole app",
+                "details": "I'll just own the whole product lane for now.",
+                "kind": "implementation",
+                "room": "repo/current-room",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("auto discovery broad implementation claim should return a recoverable failure");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    assert!(
+        result["error"]
+            .as_str()
+            .expect("error string should exist")
+            .contains("blocks broad implementation claims")
+    );
+}
+
+#[tokio::test]
+async fn auto_execution_verifier_cannot_accept_unassigned_implementation_lane() {
+    let server = MockServer::start().await;
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let leader_thread_id = ThreadId::new();
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/rooms"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rooms": [{
+                "room": "repo/current-room",
+                "contract_version": "losangelex-room/v2",
+                "coordination_policy": "auto",
+                "coordination_phase": "execution",
+                "coordination_epoch": 4,
+                "leader_session_id": leader_thread_id.to_string(),
+                "verifier_session_id": session.conversation_id.to_string(),
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+    let claimed_path = turn.config.cwd.join("src/app.js");
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-auto-verifier-blocked".to_string(),
+            creator_thread_id: leader_thread_id,
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/current-room".to_string()),
+            kind: codex_state::CoordinationTaskKind::Implementation,
+            summary: "Take app implementation lane".to_string(),
+            details: "Implementation work is ready.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-auto-verifier-blocked-open".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("task create should succeed");
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": "task-auto-verifier-blocked",
+                "summary": "Taking the app implementation lane.",
+                "claim_paths": [{
+                    "kind": "file",
+                    "path": claimed_path.to_string_lossy().to_string(),
+                }],
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("verifier implementation accept should return a recoverable failure");
+
+    assert_eq!(output.success, Some(false));
+    let result = parse_result(output);
+    assert!(
+        result["error"]
+            .as_str()
+            .expect("error string should exist")
+            .contains("keeps the verifier on QA")
+    );
+}
+
+#[tokio::test]
+async fn auto_execution_verifier_can_accept_explicitly_awarded_implementation_lane() {
+    let server = MockServer::start().await;
+    let (session, turn, state_db) = make_session_with_state_db().await;
+    let leader_thread_id = ThreadId::new();
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/rooms"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rooms": [{
+                "room": "repo/current-room",
+                "contract_version": "losangelex-room/v2",
+                "coordination_policy": "auto",
+                "coordination_phase": "execution",
+                "coordination_epoch": 5,
+                "leader_session_id": leader_thread_id.to_string(),
+                "verifier_session_id": session.conversation_id.to_string(),
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/current-room".to_string(),
+            observed_rooms: Vec::new(),
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+    let reserved_path = turn.config.cwd.join("src/app.js");
+    let reserved_payload = json!({
+        "claim_paths": [{
+            "kind": "file",
+            "path": reserved_path.to_string_lossy().to_string(),
+        }]
+    })
+    .to_string();
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-auto-verifier-awarded".to_string(),
+            creator_thread_id: leader_thread_id,
+            owner_thread_id: Some(session.conversation_id),
+            reserved_path_claims: vec![codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: reserved_path.to_path_buf(),
+            }],
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/current-room".to_string()),
+            kind: codex_state::CoordinationTaskKind::Implementation,
+            summary: "Take app implementation lane".to_string(),
+            details: "Implementation work is explicitly assigned to the verifier.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-auto-verifier-awarded-open".to_string(),
+            act_summary: None,
+            act_payload_json: reserved_payload,
+        })
+        .await
+        .expect("task create should succeed");
+
+    let output = CoordinationHandler
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "accept",
+                "task_id": "task-auto-verifier-awarded",
+                "summary": "Taking the explicitly awarded implementation lane.",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("awarded verifier implementation accept should succeed");
+
+    assert_eq!(output.success, Some(true));
+    let result = parse_result(output);
+    assert_eq!(result["task"]["status"], "active");
+    assert_eq!(
+        result["task"]["owner_thread_id"],
+        json!(session.conversation_id.to_string())
+    );
+}
+
+#[tokio::test]
 async fn implementation_open_task_rejects_conflicting_reserved_claim_paths() {
     let (session, turn, state_db) = make_session_with_state_db().await;
     let owner_thread_id = ThreadId::new();

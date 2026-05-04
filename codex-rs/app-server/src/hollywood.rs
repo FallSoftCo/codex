@@ -298,7 +298,10 @@ impl HollywoodRuntimeState {
             return false;
         };
         let state = self.room_states.entry(room.to_string()).or_default();
-        let changed = state.snapshot.as_ref().is_some_and(|value| value != snapshot);
+        let changed = state
+            .snapshot
+            .as_ref()
+            .is_some_and(|value| value != snapshot);
         state.snapshot = Some(snapshot.clone());
         if changed {
             state.last_seen_message_id = last_id;
@@ -617,16 +620,20 @@ pub(crate) async fn fetch_room_state(
         .await
         .map_err(|err| format!("Hollywood room-state response parse failed: {err}"))?;
 
-    Ok(response.rooms.into_iter().next().map(|room_state| HollywoodRoomSnapshot {
-        room: room_state.room,
-        state_version: room_state.state_version,
-        contract_version: room_state.contract_version,
-        coordination_policy: room_state.coordination_policy,
-        coordination_phase: room_state.coordination_phase,
-        coordination_epoch: room_state.coordination_epoch,
-        leader_session_id: room_state.leader_session_id,
-        verifier_session_id: room_state.verifier_session_id,
-    }))
+    Ok(response
+        .rooms
+        .into_iter()
+        .next()
+        .map(|room_state| HollywoodRoomSnapshot {
+            room: room_state.room,
+            state_version: room_state.state_version,
+            contract_version: room_state.contract_version,
+            coordination_policy: room_state.coordination_policy,
+            coordination_phase: room_state.coordination_phase,
+            coordination_epoch: room_state.coordination_epoch,
+            leader_session_id: room_state.leader_session_id,
+            verifier_session_id: room_state.verifier_session_id,
+        }))
 }
 
 pub(crate) async fn upsert_registry(
