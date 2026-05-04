@@ -603,10 +603,8 @@ impl ThreadManager {
             self.state.environment_manager.as_ref(),
             &config.cwd,
         );
-        let thread_store = thread_store_from_config(&config);
         self.start_thread_with_options(StartThreadOptions {
             config,
-            thread_store,
             initial_history,
             session_source: None,
             dynamic_tools,
@@ -627,14 +625,12 @@ impl ThreadManager {
         parent_trace: Option<W3cTraceContext>,
         session_source: SessionSource,
     ) -> CodexResult<NewThread> {
-        let thread_store = thread_store_from_config(&config);
         let environments = default_thread_environment_selections(
             self.state.environment_manager.as_ref(),
             &config.cwd,
         );
         self.start_thread_with_options(StartThreadOptions {
             config,
-            thread_store,
             initial_history: InitialHistory::New,
             session_source: Some(session_source),
             dynamic_tools,

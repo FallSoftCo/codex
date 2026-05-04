@@ -78,9 +78,10 @@ impl ToolArgumentDiffConsumer for ApplyPatchArgumentDiffConsumer {
             .map(EventMsg::PatchApplyUpdated)
     }
 
-    fn flush_on_complete(&mut self) -> Option<EventMsg> {
-        self.flush_update_on_complete()
-            .map(EventMsg::PatchApplyUpdated)
+    fn finish(&mut self) -> Result<Option<EventMsg>, FunctionCallError> {
+        Ok(self
+            .flush_update_on_complete()
+            .map(EventMsg::PatchApplyUpdated))
     }
 }
 
@@ -508,9 +509,8 @@ pub(crate) async fn intercept_apply_patch(
     tool_name: &str,
 ) -> Result<Option<FunctionToolOutput>, FunctionCallError> {
     let sandbox = turn
-        .environment
-        .as_ref()
-        .filter(|env| env.is_remote())
+        .primary_environment()
+        .filter(|turn_environment| turn_environment.environment.is_remote())
         .map(|_| turn.file_system_sandbox_context(/*additional_permissions*/ None));
     let resurrected_deleted_files = if let Some(tracker) = tracker {
         let guard = tracker.lock().await;
