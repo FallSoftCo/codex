@@ -1,22 +1,85 @@
 use crate::hollywood::HollywoodEnvironmentContext;
-use crate::hollywood::HollywoodSemanticContext;
 use crate::session::turn_context::TurnContext;
-use crate::shell::Shell;
 use codex_protocol::protocol::TurnContextItem;
 use codex_protocol::protocol::TurnContextNetworkItem;
-use std::path::PathBuf;
+use codex_utils_absolute_path::AbsolutePathBuf;
 
 use super::ContextualUserFragment;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct EnvironmentContext {
-    pub(crate) cwd: Option<PathBuf>,
-    pub(crate) shell: String,
+    pub(crate) environments: EnvironmentContextEnvironments,
     pub(crate) current_date: Option<String>,
     pub(crate) timezone: Option<String>,
     pub(crate) network: Option<NetworkContext>,
     pub(crate) subagents: Option<String>,
     pub(crate) hollywood: Option<HollywoodEnvironmentContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EnvironmentContextEnvironment {
+    pub(crate) id: String,
+    pub(crate) cwd: AbsolutePathBuf,
+    pub(crate) shell: String,
+}
+
+impl EnvironmentContextEnvironment {
+    fn legacy(cwd: AbsolutePathBuf, shell: String) -> Self {
+        Self {
+            id: String::new(),
+            cwd,
+            shell,
+        }
+    }
+
+    fn from_turn_environments(
+        environments: &[crate::session::turn_context::TurnEnvironment],
+    ) -> Vec<Self> {
+        environments
+            .iter()
+            .map(|environment| Self {
+                id: environment.environment_id.clone(),
+                cwd: environment.cwd.clone(),
+                shell: environment.shell.clone(),
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EnvironmentContextEnvironments {
+    None,
+    Single(EnvironmentContextEnvironment),
+    Multiple(Vec<EnvironmentContextEnvironment>),
+}
+
+impl EnvironmentContextEnvironments {
+    fn from_vec(environments: Vec<EnvironmentContextEnvironment>) -> Self {
+        let mut environments = environments;
+        match environments.pop() {
+            None => Self::None,
+            Some(environment) if environments.is_empty() => Self::Single(environment),
+            Some(environment) => {
+                environments.push(environment);
+                Self::Multiple(environments)
+            }
+        }
+    }
+
+    fn equals_except_shell(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::None, Self::None) => true,
+            (Self::Single(left), Self::Single(right)) => left.cwd == right.cwd,
+            (Self::Multiple(left), Self::Multiple(right)) => {
+                left.len() == right.len()
+                    && left
+                        .iter()
+                        .zip(right.iter())
+                        .all(|(left, right)| left.id == right.id && left.cwd == right.cwd)
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -36,22 +99,36 @@ impl NetworkContext {
 
 impl EnvironmentContext {
     pub(crate) fn new(
-        cwd: Option<PathBuf>,
-        shell: String,
+        environments: Vec<EnvironmentContextEnvironment>,
         current_date: Option<String>,
         timezone: Option<String>,
         network: Option<NetworkContext>,
         subagents: Option<String>,
-        hollywood: Option<HollywoodEnvironmentContext>,
     ) -> Self {
         Self {
-            cwd,
-            shell,
+            environments: EnvironmentContextEnvironments::from_vec(environments),
             current_date,
             timezone,
             network,
             subagents,
-            hollywood,
+            hollywood: None,
+        }
+    }
+
+    fn new_with_environments(
+        environments: EnvironmentContextEnvironments,
+        current_date: Option<String>,
+        timezone: Option<String>,
+        network: Option<NetworkContext>,
+        subagents: Option<String>,
+    ) -> Self {
+        Self {
+            environments,
+            current_date,
+            timezone,
+            network,
+            subagents,
+            hollywood: None,
         }
     }
 
@@ -59,21 +136,12 @@ impl EnvironmentContext {
     /// comparing turn to turn, since the initial environment_context will
     /// include the shell, and then it is not configurable from turn to turn.
     pub(crate) fn equals_except_shell(&self, other: &EnvironmentContext) -> bool {
-        let EnvironmentContext {
-            cwd,
-            current_date,
-            timezone,
-            network,
-            subagents,
-            hollywood,
-            shell: _,
-        } = other;
-        self.cwd == *cwd
-            && self.current_date == *current_date
-            && self.timezone == *timezone
-            && self.network == *network
-            && self.subagents == *subagents
-            && self.hollywood == *hollywood
+        self.environments.equals_except_shell(&other.environments)
+            && self.current_date == other.current_date
+            && self.timezone == other.timezone
+            && self.network == other.network
+            && self.subagents == other.subagents
+            && self.hollywood == other.hollywood
     }
 
     pub(crate) fn diff_from_turn_context_item(
@@ -81,35 +149,43 @@ impl EnvironmentContext {
         after: &EnvironmentContext,
     ) -> Self {
         let before_network = Self::network_from_turn_context_item(before);
-        let cwd = match &after.cwd {
-            Some(cwd) if before.cwd.as_path() != cwd.as_path() => Some(cwd.clone()),
-            _ => None,
+        let environments = match &after.environments {
+            EnvironmentContextEnvironments::Single(environment) => {
+                if before.cwd.as_path() != environment.cwd.as_path() {
+                    EnvironmentContextEnvironments::Single(EnvironmentContextEnvironment::legacy(
+                        environment.cwd.clone(),
+                        environment.shell.clone(),
+                    ))
+                } else {
+                    EnvironmentContextEnvironments::None
+                }
+            }
+            EnvironmentContextEnvironments::Multiple(environments) => {
+                EnvironmentContextEnvironments::Multiple(environments.clone())
+            }
+            EnvironmentContextEnvironments::None => EnvironmentContextEnvironments::None,
         };
         let network = if before_network != after.network {
             after.network.clone()
         } else {
             before_network
         };
-        EnvironmentContext::new(
-            cwd,
-            after.shell.clone(),
+        EnvironmentContext::new_with_environments(
+            environments,
             after.current_date.clone(),
             after.timezone.clone(),
             network,
             /*subagents*/ None,
-            /*hollywood*/ None,
         )
     }
 
-    pub(crate) fn from_turn_context(turn_context: &TurnContext, shell: &Shell) -> Self {
+    pub(crate) fn from_turn_context(turn_context: &TurnContext) -> Self {
         Self::new(
-            Some(turn_context.cwd.to_path_buf()),
-            shell.name().to_string(),
+            EnvironmentContextEnvironment::from_turn_environments(&turn_context.environments),
             turn_context.current_date.clone(),
             turn_context.timezone.clone(),
             Self::network_from_turn_context(turn_context),
             /*subagents*/ None,
-            /*hollywood*/ None,
         )
     }
 
@@ -117,14 +193,16 @@ impl EnvironmentContext {
         turn_context_item: &TurnContextItem,
         shell: String,
     ) -> Self {
+        let cwd = match AbsolutePathBuf::try_from(turn_context_item.cwd.clone()) {
+            Ok(cwd) => cwd,
+            Err(_) => AbsolutePathBuf::resolve_path_against_base(&turn_context_item.cwd, "/"),
+        };
         Self::new(
-            Some(turn_context_item.cwd.clone()),
-            shell,
+            vec![EnvironmentContextEnvironment::legacy(cwd, shell)],
             turn_context_item.current_date.clone(),
             turn_context_item.timezone.clone(),
             Self::network_from_turn_context_item(turn_context_item),
             /*subagents*/ None,
-            /*hollywood*/ None,
         )
     }
 
@@ -182,86 +260,92 @@ impl ContextualUserFragment for EnvironmentContext {
     const END_MARKER: &'static str = codex_protocol::protocol::ENVIRONMENT_CONTEXT_CLOSE_TAG;
 
     fn body(&self) -> String {
-        self.clone().serialize_to_xml()
-    }
-}
-
-fn append_hollywood_context_lines(
-    lines: &mut Vec<String>,
-    semantic: HollywoodSemanticContext,
-    tools: Vec<String>,
-) {
-    lines.push("  <hollywood>".to_string());
-    lines.push(format!("    <attached>{}</attached>", semantic.attached));
-    lines.push(format!("    <url>{}</url>", semantic.url));
-    lines.push(format!("    <room>{}</room>", semantic.room));
-    lines.push(format!(
-        "    <attention_mode>{}</attention_mode>",
-        semantic.attention_mode
-    ));
-    if let Some(agent_name) = semantic.agent_name {
-        lines.push(format!("    <agent_name>{agent_name}</agent_name>"));
-    }
-    if let Some(coordination_identity) = semantic.coordination_identity {
-        lines.push(format!(
-            "    <coordination_identity>{coordination_identity}</coordination_identity>"
-        ));
-    }
-    lines.push("    <identities>".to_string());
-    for identity in semantic.identities {
-        lines.push(format!("      <identity>{identity}</identity>"));
-    }
-    lines.push("    </identities>".to_string());
-    lines.push("    <tools>".to_string());
-    for tool in tools {
-        lines.push(format!("      <tool>{tool}</tool>"));
-    }
-    lines.push("    </tools>".to_string());
-    lines.push("  </hollywood>".to_string());
-}
-
-impl EnvironmentContext {
-    /// Serializes the environment context to XML. Libraries like `quick-xml`
-    /// require custom macros to handle Enums with newtypes, so we just do it
-    /// manually, to keep things simple. Output looks like:
-    ///
-    /// ```xml
-    /// <environment_context>
-    ///   <cwd>...</cwd>
-    ///   <shell>...</shell>
-    /// </environment_context>
-    /// ```
-    pub fn serialize_to_xml(self) -> String {
         let mut lines = Vec::new();
-        if let Some(cwd) = &self.cwd {
-            lines.push(format!("  <cwd>{}</cwd>", cwd.to_string_lossy()));
+        match &self.environments {
+            EnvironmentContextEnvironments::Single(environment) => {
+                lines.push(format!(
+                    "  <cwd>{}</cwd>",
+                    environment.cwd.to_string_lossy()
+                ));
+                lines.push(format!("  <shell>{}</shell>", environment.shell));
+            }
+            EnvironmentContextEnvironments::Multiple(environments) => {
+                lines.push("  <environments>".to_string());
+                for environment in environments {
+                    lines.push(format!("    <environment id=\"{}\">", environment.id));
+                    lines.push(format!(
+                        "      <cwd>{}</cwd>",
+                        environment.cwd.to_string_lossy()
+                    ));
+                    lines.push(format!("      <shell>{}</shell>", environment.shell));
+                    lines.push("    </environment>".to_string());
+                }
+                lines.push("  </environments>".to_string());
+            }
+            EnvironmentContextEnvironments::None => {}
         }
-
-        lines.push(format!("  <shell>{}</shell>", self.shell));
         if let Some(current_date) = &self.current_date {
             lines.push(format!("  <current_date>{current_date}</current_date>"));
         }
         if let Some(timezone) = &self.timezone {
             lines.push(format!("  <timezone>{timezone}</timezone>"));
         }
-        if let Some(network) = &self.network {
-            lines.push("  <network enabled=\"true\">".to_string());
-            for allowed in &network.allowed_domains {
-                lines.push(format!("    <allowed>{allowed}</allowed>"));
+        match &self.network {
+            Some(network) => {
+                lines.push("  <network enabled=\"true\">".to_string());
+                for allowed in &network.allowed_domains {
+                    lines.push(format!("    <allowed>{allowed}</allowed>"));
+                }
+                for denied in &network.denied_domains {
+                    lines.push(format!("    <denied>{denied}</denied>"));
+                }
+                lines.push("  </network>".to_string());
             }
-            for denied in &network.denied_domains {
-                lines.push(format!("    <denied>{denied}</denied>"));
+            None => {
+                // TODO(mbolin): Include this line if it helps the model.
+                // lines.push("  <network enabled=\"false\" />".to_string());
             }
-            lines.push("  </network>".to_string());
         }
         if let Some(subagents) = &self.subagents {
             lines.push("  <subagents>".to_string());
             lines.extend(subagents.lines().map(|line| format!("    {line}")));
             lines.push("  </subagents>".to_string());
         }
-        if let Some(hollywood) = self.hollywood {
-            let HollywoodEnvironmentContext { semantic, runtime } = hollywood;
-            append_hollywood_context_lines(&mut lines, semantic, runtime.tools);
+        if let Some(hollywood) = &self.hollywood {
+            lines.push("  <hollywood>".to_string());
+            lines.push(format!(
+                "    <attached>{}</attached>",
+                hollywood.semantic.attached
+            ));
+            lines.push(format!("    <url>{}</url>", hollywood.semantic.url));
+            lines.push(format!("    <room>{}</room>", hollywood.semantic.room));
+            lines.push(format!(
+                "    <attention_mode>{}</attention_mode>",
+                hollywood.semantic.attention_mode
+            ));
+            if let Some(agent_name) = &hollywood.semantic.agent_name {
+                lines.push(format!("    <agent_name>{agent_name}</agent_name>"));
+            }
+            if let Some(coordination_identity) = &hollywood.semantic.coordination_identity {
+                lines.push(format!(
+                    "    <coordination_identity>{coordination_identity}</coordination_identity>"
+                ));
+            }
+            if !hollywood.semantic.identities.is_empty() {
+                lines.push("    <identities>".to_string());
+                for identity in &hollywood.semantic.identities {
+                    lines.push(format!("      <identity>{identity}</identity>"));
+                }
+                lines.push("    </identities>".to_string());
+            }
+            if !hollywood.runtime.tools.is_empty() {
+                lines.push("    <tools>".to_string());
+                for tool in &hollywood.runtime.tools {
+                    lines.push(format!("      <tool>{tool}</tool>"));
+                }
+                lines.push("    </tools>".to_string());
+            }
+            lines.push("  </hollywood>".to_string());
         }
         format!("\n{}\n", lines.join("\n"))
     }

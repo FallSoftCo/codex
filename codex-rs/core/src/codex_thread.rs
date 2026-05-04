@@ -15,6 +15,7 @@ use codex_protocol::config_types::WindowsSandboxLevel;
 use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result as CodexResult;
 use codex_protocol::mcp::CallToolResult;
+use codex_protocol::models::ActivePermissionProfile;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseInputItem;
@@ -24,12 +25,16 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SandboxPolicy;
+use codex_protocol::protocol::SessionConfiguredEvent;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::Submission;
 use codex_protocol::protocol::ThreadMemoryMode;
 use codex_protocol::protocol::TokenUsageInfo;
 use codex_protocol::protocol::W3cTraceContext;
 use codex_protocol::user_input::UserInput;
+use codex_thread_store::StoredThreadHistory;
+use codex_thread_store::ThreadStoreError;
+use codex_thread_store::ThreadStoreResult;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use rmcp::model::ReadResourceRequestParams;
 use std::collections::HashMap;
@@ -48,6 +53,7 @@ pub struct ThreadConfigSnapshot {
     pub approval_policy: AskForApproval,
     pub approvals_reviewer: ApprovalsReviewer,
     pub permission_profile: PermissionProfile,
+    pub active_permission_profile: Option<ActivePermissionProfile>,
     pub cwd: AbsolutePathBuf,
     pub ephemeral: bool,
     pub thread_name: Option<String>,
@@ -76,6 +82,7 @@ pub struct CodexThreadTurnContextOverrides {
     pub approvals_reviewer: Option<ApprovalsReviewer>,
     pub sandbox_policy: Option<SandboxPolicy>,
     pub permission_profile: Option<PermissionProfile>,
+    pub active_permission_profile: Option<ActivePermissionProfile>,
     pub windows_sandbox_level: Option<WindowsSandboxLevel>,
     pub model: Option<String>,
     pub effort: Option<Option<ReasoningEffort>>,
@@ -88,6 +95,7 @@ pub struct CodexThreadTurnContextOverrides {
 pub struct CodexThread {
     pub(crate) codex: Codex,
     pub(crate) session_source: SessionSource,
+    session_configured: SessionConfiguredEvent,
     rollout_path: Option<PathBuf>,
     out_of_band_elicitation_count: Mutex<u64>,
     _watch_registration: WatchRegistration,
@@ -98,6 +106,7 @@ pub struct CodexThread {
 impl CodexThread {
     pub(crate) fn new(
         codex: Codex,
+        session_configured: SessionConfiguredEvent,
         rollout_path: Option<PathBuf>,
         session_source: SessionSource,
         watch_registration: WatchRegistration,
@@ -105,6 +114,7 @@ impl CodexThread {
         Self {
             codex,
             session_source,
+            session_configured,
             rollout_path,
             out_of_band_elicitation_count: Mutex::new(0),
             _watch_registration: watch_registration,
@@ -226,6 +236,7 @@ impl CodexThread {
             approvals_reviewer,
             sandbox_policy,
             permission_profile,
+            active_permission_profile,
             windows_sandbox_level,
             model,
             effort,
@@ -250,6 +261,7 @@ impl CodexThread {
             approvals_reviewer,
             sandbox_policy,
             permission_profile,
+            active_permission_profile,
             windows_sandbox_level,
             collaboration_mode: Some(collaboration_mode),
             reasoning_summary: summary,
@@ -370,12 +382,34 @@ impl CodexThread {
         self.rollout_path.clone()
     }
 
+    pub(crate) fn session_configured(&self) -> SessionConfiguredEvent {
+        self.session_configured.clone()
+    }
+
+    pub(crate) fn is_running(&self) -> bool {
+        !self.codex.tx_sub.is_closed()
+    }
+
     pub async fn guardian_trunk_rollout_path(&self) -> Option<PathBuf> {
         self.codex
             .session
             .guardian_review_session
             .trunk_rollout_path()
             .await
+    }
+
+    pub async fn load_history(
+        &self,
+        include_archived: bool,
+    ) -> ThreadStoreResult<StoredThreadHistory> {
+        let live_thread = self
+            .codex
+            .session
+            .live_thread_for_persistence("load history")
+            .map_err(|err| ThreadStoreError::Internal {
+                message: err.to_string(),
+            })?;
+        live_thread.load_history(include_archived).await
     }
 
     pub fn state_db(&self) -> Option<StateDbHandle> {

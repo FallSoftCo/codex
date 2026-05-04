@@ -390,18 +390,19 @@ impl ToolHandler for ApplyPatchHandler {
         // Avoid building temporary ExecParams/command vectors; derive directly from inputs.
         let cwd = turn.cwd.clone();
         let command = vec!["apply_patch".to_string(), patch_input.clone()];
-        let Some(environment) = turn.environment.as_ref() else {
+        let Some(turn_environment) = turn.primary_environment() else {
             return Err(FunctionCallError::RespondToModel(
                 "apply_patch is unavailable in this session".to_string(),
             ));
         };
-        let fs = environment.get_filesystem();
+        let fs = turn_environment.environment.get_filesystem();
         let resurrected_deleted_files = {
             let guard = tracker.lock().await;
             guard.resurrected_deleted_files()
         };
         let turn_fs = ApplyPatchTurnFileSystem::new(fs.as_ref(), resurrected_deleted_files.clone());
-        let sandbox = environment
+        let sandbox = turn_environment
+            .environment
             .is_remote()
             .then(|| turn.file_system_sandbox_context(/*additional_permissions*/ None));
         match codex_apply_patch::maybe_parse_apply_patch_verified(

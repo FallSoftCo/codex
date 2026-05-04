@@ -2,6 +2,7 @@ mod invocation;
 mod parser;
 mod seek_sequence;
 mod standalone_executable;
+mod streaming_parser;
 
 use std::collections::HashMap;
 use std::io;
@@ -20,11 +21,11 @@ pub use parser::ParseError;
 use parser::ParseError::*;
 pub use parser::UpdateFileChunk;
 pub use parser::parse_patch;
-pub use parser::parse_patch_streaming;
 use similar::Algorithm;
 use similar::DiffTag;
 use similar::TextDiff;
 use similar::capture_diff_slices;
+pub use streaming_parser::StreamingPatchParser;
 use thiserror::Error;
 
 pub use invocation::maybe_parse_apply_patch_verified;
@@ -43,6 +44,21 @@ pub const APPLY_PATCH_TOOL_INSTRUCTIONS: &str = include_str!("../apply_patch_too
 /// process-invocation contract for the standalone `apply_patch` command
 /// surface.
 pub const CODEX_CORE_APPLY_PATCH_ARG1: &str = "--codex-run-as-apply-patch";
+
+pub fn parse_patch_streaming(patch: &str) -> Result<ApplyPatchArgs, ParseError> {
+    let mut parser = StreamingPatchParser::default();
+    let hunks = parser.push_delta(patch)?;
+    let hunks = if patch.ends_with('\n') {
+        parser.finish()?
+    } else {
+        parser.finish().or(Ok(hunks))?
+    };
+    Ok(ApplyPatchArgs {
+        patch: patch.to_string(),
+        hunks,
+        workdir: None,
+    })
+}
 
 #[derive(Debug, Error, PartialEq)]
 pub enum ApplyPatchError {
