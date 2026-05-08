@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::future::Future;
@@ -38,7 +39,8 @@ pub struct ListMemoriesRequest {
     pub max_results: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
 pub struct ListMemoriesResponse {
     pub path: Option<String>,
     pub entries: Vec<MemoryEntry>,
@@ -54,7 +56,8 @@ pub struct ReadMemoryRequest {
     pub max_tokens: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
 pub struct ReadMemoryResponse {
     pub path: String,
     pub start_line_number: usize,
@@ -70,10 +73,12 @@ pub struct SearchMemoriesRequest {
     pub cursor: Option<String>,
     pub context_lines: usize,
     pub case_sensitive: bool,
+    pub normalized: bool,
     pub max_results: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
 pub struct SearchMemoriesResponse {
     pub queries: Vec<String>,
     pub match_mode: SearchMatchMode,
@@ -83,27 +88,33 @@ pub struct SearchMemoriesResponse {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SearchMatchMode {
     Any,
-    All,
+    AllOnSameLine,
+    AllWithinLines {
+        #[schemars(range(min = 1))]
+        line_count: usize,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
 pub struct MemoryEntry {
     pub path: String,
     pub entry_type: MemoryEntryType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryEntryType {
     File,
     Directory,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
 pub struct MemorySearchMatch {
     pub path: String,
     pub match_line_number: usize,
@@ -118,6 +129,8 @@ pub enum MemoriesBackendError {
     InvalidPath { path: String, reason: String },
     #[error("cursor '{cursor}' {reason}")]
     InvalidCursor { cursor: String, reason: String },
+    #[error("path '{path}' was not found")]
+    NotFound { path: String },
     #[error("line_offset must be a 1-indexed line number")]
     InvalidLineOffset,
     #[error("max_lines must be a positive integer")]
@@ -128,6 +141,8 @@ pub enum MemoriesBackendError {
     NotFile { path: String },
     #[error("queries must not be empty or contain empty strings")]
     EmptyQuery,
+    #[error("all_within_lines.line_count must be a positive integer")]
+    InvalidMatchWindow,
     #[error("I/O error while reading memories: {0}")]
     Io(#[from] std::io::Error),
 }

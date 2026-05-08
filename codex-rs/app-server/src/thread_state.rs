@@ -10,11 +10,11 @@ use codex_core::CodexThread;
 use codex_core::ThreadConfigSnapshot;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::RolloutItem;
 use codex_rollout::state_db::StateDbHandle;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Weak;
 use tokio::sync::Mutex;
@@ -27,7 +27,7 @@ type PendingInterruptQueue = Vec<ConnectionRequestId>;
 
 pub(crate) struct PendingThreadResumeRequest {
     pub(crate) request_id: ConnectionRequestId,
-    pub(crate) rollout_path: PathBuf,
+    pub(crate) history_items: Vec<RolloutItem>,
     pub(crate) config_snapshot: ThreadConfigSnapshot,
     pub(crate) instruction_sources: Vec<AbsolutePathBuf>,
     pub(crate) thread_summary: codex_app_server_protocol::Thread,
@@ -71,6 +71,7 @@ pub(crate) struct ThreadState {
     pub(crate) pending_interrupts: PendingInterruptQueue,
     pub(crate) pending_rollbacks: Option<ConnectionRequestId>,
     pub(crate) turn_summary: TurnSummary,
+    pub(crate) last_terminal_turn_id: Option<String>,
     pub(crate) cancel_tx: Option<oneshot::Sender<()>>,
     pub(crate) experimental_raw_events: bool,
     pub(crate) hollywood: HollywoodRuntimeState,
@@ -142,7 +143,7 @@ impl ThreadState {
         }
     }
 
-    pub(crate) fn track_current_turn_event(&mut self, event: &EventMsg) {
+    pub(crate) fn track_current_turn_event(&mut self, event_turn_id: &str, event: &EventMsg) {
         if let EventMsg::TurnStarted(payload) = event {
             self.turn_summary.started_at = payload.started_at;
         }
@@ -150,6 +151,7 @@ impl ThreadState {
         if matches!(event, EventMsg::TurnAborted(_) | EventMsg::TurnComplete(_))
             && !self.current_turn_history.has_active_turn()
         {
+            self.last_terminal_turn_id = Some(event_turn_id.to_string());
             self.current_turn_history.reset();
         }
     }
@@ -215,9 +217,14 @@ impl ThreadEntry {
 
 #[derive(Default)]
 struct ThreadStateManagerInner {
-    live_connections: HashSet<ConnectionId>,
+    live_connections: HashMap<ConnectionId, ConnectionCapabilities>,
     threads: HashMap<ThreadId, ThreadEntry>,
     thread_ids_by_connection: HashMap<ConnectionId, HashSet<ThreadId>>,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ConnectionCapabilities {
+    pub(crate) request_attestation: bool,
 }
 
 #[derive(Clone, Default)]
@@ -230,12 +237,36 @@ impl ThreadStateManager {
         Self::default()
     }
 
-    pub(crate) async fn connection_initialized(&self, connection_id: ConnectionId) {
+    pub(crate) async fn connection_initialized(
+        &self,
+        connection_id: ConnectionId,
+        capabilities: ConnectionCapabilities,
+    ) {
         self.state
             .lock()
             .await
             .live_connections
-            .insert(connection_id);
+            .insert(connection_id, capabilities);
+    }
+
+    pub(crate) async fn first_attestation_capable_connection_for_thread(
+        &self,
+        thread_id: ThreadId,
+    ) -> Option<ConnectionId> {
+        let state = self.state.lock().await;
+        state
+            .threads
+            .get(&thread_id)?
+            .connection_ids
+            .iter()
+            .filter_map(|connection_id| {
+                state
+                    .live_connections
+                    .get(connection_id)?
+                    .request_attestation
+                    .then_some(*connection_id)
+            })
+            .min_by_key(|connection_id| connection_id.0)
     }
 
     pub(crate) async fn subscribed_connection_ids(&self, thread_id: ThreadId) -> Vec<ConnectionId> {
@@ -358,7 +389,7 @@ impl ThreadStateManager {
     ) -> Option<Arc<Mutex<ThreadState>>> {
         let thread_state = {
             let mut state = self.state.lock().await;
-            if !state.live_connections.contains(&connection_id) {
+            if !state.live_connections.contains_key(&connection_id) {
                 return None;
             }
             state
@@ -386,7 +417,7 @@ impl ThreadStateManager {
         connection_id: ConnectionId,
     ) -> bool {
         let mut state = self.state.lock().await;
-        if !state.live_connections.contains(&connection_id) {
+        if !state.live_connections.contains_key(&connection_id) {
             return false;
         }
         state

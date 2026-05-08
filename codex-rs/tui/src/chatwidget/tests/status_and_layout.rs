@@ -131,6 +131,112 @@ async fn token_usage_update_uses_runtime_context_window() {
         "expected /status to avoid raw config context window, got: {context_line}"
     );
 }
+
+#[tokio::test]
+async fn status_line_git_summary_items_render_values() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.status_line_git_summary = Some(StatusLineGitSummary {
+        pull_request: Some(crate::branch_summary::StatusLinePullRequest {
+            number: 20_252,
+            url: "https://github.com/openai/codex/pull/20252".to_string(),
+        }),
+        branch_change_stats: Some(crate::branch_summary::GitBranchDiffStats {
+            additions: 143,
+            deletions: 22,
+        }),
+    });
+
+    assert_eq!(
+        chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::PullRequestNumber),
+        Some("PR #20252".to_string())
+    );
+    assert_eq!(
+        chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::BranchChanges),
+        Some("+143 -22".to_string())
+    );
+}
+
+#[tokio::test]
+async fn raw_output_status_line_value_only_shows_when_enabled() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    assert_eq!(
+        chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::RawOutput),
+        None
+    );
+
+    chat.set_raw_output_mode(/*enabled*/ true);
+
+    assert_eq!(
+        chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::RawOutput),
+        Some("raw output".to_string())
+    );
+}
+
+#[tokio::test]
+async fn status_line_branch_changes_render_no_changes() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.status_line_git_summary = Some(StatusLineGitSummary {
+        pull_request: None,
+        branch_change_stats: Some(crate::branch_summary::GitBranchDiffStats {
+            additions: 0,
+            deletions: 0,
+        }),
+    });
+
+    assert_eq!(
+        chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::BranchChanges),
+        Some("No changes".to_string())
+    );
+}
+
+#[tokio::test]
+async fn stale_status_line_git_summary_update_is_ignored() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.status_line_git_summary_cwd = Some(PathBuf::from("/expected"));
+    chat.status_line_git_summary_pending = true;
+
+    chat.set_status_line_git_summary(
+        PathBuf::from("/other"),
+        StatusLineGitSummary {
+            pull_request: Some(crate::branch_summary::StatusLinePullRequest {
+                number: 20_252,
+                url: "https://github.com/openai/codex/pull/20252".to_string(),
+            }),
+            branch_change_stats: Some(crate::branch_summary::GitBranchDiffStats {
+                additions: 143,
+                deletions: 22,
+            }),
+        },
+    );
+
+    assert!(chat.status_line_git_summary.is_none());
+    assert!(!chat.status_line_git_summary_pending);
+}
+
+#[tokio::test]
+async fn raw_output_mode_can_change_without_inserting_notice() {
+    let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.set_raw_output_mode(/*enabled*/ true);
+
+    assert!(chat.raw_output_mode());
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    chat.set_raw_output_mode_and_notify(/*enabled*/ false);
+
+    assert!(!chat.raw_output_mode());
+    let history = drain_insert_history(&mut rx)
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        history.contains("Raw output mode off: rich transcript rendering restored."),
+        "expected raw output notice, got {history:?}"
+    );
+}
+
 #[tokio::test]
 async fn helpers_are_available_and_do_not_panic() {
     let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
@@ -140,8 +246,10 @@ async fn helpers_are_available_and_do_not_panic() {
     let session_telemetry = test_session_telemetry(&cfg, resolved_model.as_str());
     let init = ChatWidgetInit {
         config: cfg.clone(),
+        environment_manager: Arc::new(codex_exec_server::EnvironmentManager::default_for_tests()),
         frame_requester: FrameRequester::test_dummy(),
         app_event_tx: tx,
+        workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
         has_chatgpt_account: false,
@@ -1017,7 +1125,7 @@ async fn fast_status_indicator_requires_chatgpt_auth() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
 
     assert!(!chat.should_show_fast_status(chat.current_model(), chat.current_service_tier(),));
 
@@ -1033,7 +1141,7 @@ async fn fast_status_indicator_is_hidden_for_models_without_fast_support() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-codex")).await;
     set_fast_mode_test_catalog(&mut chat);
     assert!(!get_available_model(&chat, "gpt-5.3-codex").supports_fast_mode());
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_chatgpt_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(!get_available_model(&chat, "gpt-5.3-codex").supports_fast_mode());
@@ -1217,6 +1325,34 @@ async fn warning_event_adds_warning_history_cell() {
 }
 
 #[tokio::test]
+async fn repeated_model_metadata_warning_is_hidden_for_same_slug() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let warning = "Model metadata for `unknown-model` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.";
+
+    handle_warning(&mut chat, warning);
+    handle_warning(&mut chat, warning);
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one warning history cell");
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("unknown-model"),
+        "warning cell missing model slug: {rendered}"
+    );
+}
+
+#[tokio::test]
+async fn repeated_generic_warning_is_not_hidden() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    handle_warning(&mut chat, "test warning message");
+    handle_warning(&mut chat, "test warning message");
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 2, "expected both warning history cells");
+}
+
+#[tokio::test]
 async fn status_line_invalid_items_warn_once() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.config.tui_status_line = Some(vec![
@@ -1310,6 +1446,7 @@ async fn status_line_branch_state_resets_when_git_branch_disabled() {
 #[tokio::test]
 async fn status_line_branch_refreshes_after_turn_complete() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    install_noop_workspace_command_runner(&mut chat);
     chat.config.tui_status_line = Some(vec!["git-branch".to_string()]);
     chat.status_line_branch_lookup_complete = true;
     chat.status_line_branch_pending = false;
@@ -1322,6 +1459,7 @@ async fn status_line_branch_refreshes_after_turn_complete() {
 #[tokio::test]
 async fn status_line_branch_refreshes_after_interrupt() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    install_noop_workspace_command_runner(&mut chat);
     chat.config.tui_status_line = Some(vec!["git-branch".to_string()]);
     chat.status_line_branch_lookup_complete = true;
     chat.status_line_branch_pending = false;
@@ -1329,6 +1467,37 @@ async fn status_line_branch_refreshes_after_interrupt() {
     handle_turn_interrupted(&mut chat, "turn-1");
 
     assert!(chat.status_line_branch_pending);
+}
+
+fn install_noop_workspace_command_runner(chat: &mut ChatWidget) {
+    chat.workspace_command_runner = Some(std::sync::Arc::new(NoopWorkspaceCommandRunner));
+}
+
+struct NoopWorkspaceCommandRunner;
+
+impl crate::workspace_command::WorkspaceCommandExecutor for NoopWorkspaceCommandRunner {
+    fn run(
+        &self,
+        _command: crate::workspace_command::WorkspaceCommand,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        crate::workspace_command::WorkspaceCommandOutput,
+                        crate::workspace_command::WorkspaceCommandError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async {
+            Ok(crate::workspace_command::WorkspaceCommandOutput {
+                exit_code: 1,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        })
+    }
 }
 
 #[tokio::test]
@@ -1365,7 +1534,7 @@ async fn status_line_fast_mode_renders_on_and_off() {
     chat.refresh_status_line();
     assert_eq!(status_line_text(&chat), Some("Fast off".to_string()));
 
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     chat.refresh_status_line();
     assert_eq!(status_line_text(&chat), Some("Fast on".to_string()));
 }
@@ -1378,7 +1547,7 @@ async fn status_line_fast_mode_footer_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.show_welcome_banner = false;
     chat.config.tui_status_line = Some(vec!["fast-mode".to_string()]);
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     chat.refresh_status_line();
 
     let width = 80;
@@ -1405,7 +1574,7 @@ async fn status_line_model_with_reasoning_includes_fast_for_fast_capable_models(
         "current-dir".to_string(),
     ]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_chatgpt_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
@@ -1553,7 +1722,7 @@ async fn status_line_model_with_reasoning_fast_footer_snapshot() {
         "current-dir".to_string(),
     ]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_chatgpt_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
@@ -1587,7 +1756,7 @@ async fn status_line_model_with_reasoning_context_remaining_footer_snapshot() {
         "current-dir".to_string(),
     ]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast));
+    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_chatgpt_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
@@ -1723,8 +1892,7 @@ async fn session_configured_clears_goal_status_footer() {
         cwd: test_path_buf("/home/user/project").abs(),
         instruction_source_paths: Vec::new(),
         reasoning_effort: Some(ReasoningEffortConfig::default()),
-        history_log_id: 0,
-        history_entry_count: 0,
+        message_history: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
     });

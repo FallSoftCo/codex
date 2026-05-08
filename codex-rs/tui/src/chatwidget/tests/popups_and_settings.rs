@@ -70,8 +70,10 @@ async fn experimental_mode_plan_is_ignored_on_startup() {
     let session_telemetry = test_session_telemetry(&cfg, resolved_model.as_str());
     let init = ChatWidgetInit {
         config: cfg.clone(),
+        environment_manager: Arc::new(codex_exec_server::EnvironmentManager::default_for_tests()),
         frame_requester: FrameRequester::test_dummy(),
         app_event_tx: AppEventSender::new(unbounded_channel::<AppEvent>().0),
+        workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
         has_chatgpt_account: false,
@@ -655,6 +657,10 @@ async fn plugin_detail_popup_snapshot_shows_install_actions_and_capability_summa
                 summary,
                 Some("Turn Figma files into implementation context."),
                 &["design-review", "extract-copy"],
+                &[
+                    (codex_app_server_protocol::HookEventName::PreToolUse, 1),
+                    (codex_app_server_protocol::HookEventName::Stop, 2),
+                ],
                 &[("Figma", true), ("Slack", false)],
                 &["figma-mcp", "docs-mcp"],
             ),
@@ -695,6 +701,10 @@ async fn plugin_detail_popup_hides_disclosure_for_installed_plugins() {
                 summary,
                 Some("Turn Figma files into implementation context."),
                 &["design-review", "extract-copy"],
+                &[
+                    (codex_app_server_protocol::HookEventName::PreToolUse, 1),
+                    (codex_app_server_protocol::HookEventName::Stop, 2),
+                ],
                 &[("Figma", true), ("Slack", false)],
                 &["figma-mcp", "docs-mcp"],
             ),
@@ -2452,6 +2462,7 @@ async fn model_picker_hides_show_in_picker_false_models_from_cache() {
         }],
         supports_personality: false,
         additional_speed_tiers: Vec::new(),
+        service_tiers: Vec::new(),
         is_default: false,
         upgrade: None,
         show_in_picker,
@@ -2672,6 +2683,7 @@ async fn single_reasoning_option_skips_selection() {
         supported_reasoning_efforts: single_effort,
         supports_personality: false,
         additional_speed_tiers: Vec::new(),
+        service_tiers: Vec::new(),
         is_default: false,
         upgrade: None,
         show_in_picker: true,

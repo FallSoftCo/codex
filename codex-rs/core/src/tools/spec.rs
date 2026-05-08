@@ -1,36 +1,26 @@
 use crate::shell::Shell;
 use crate::shell::ShellType;
-use crate::tools::handlers::CoordinationHandler;
-use crate::tools::handlers::HollywoodReadHandler;
-use crate::tools::handlers::HollywoodSendHandler;
-use crate::tools::handlers::HollywoodStatusHandler;
-use crate::tools::handlers::HollywoodTeamMemberUpdateHandler;
-use crate::tools::handlers::HollywoodTeamStatusHandler;
-use crate::tools::handlers::HollywoodTeamUpHandler;
-use crate::tools::handlers::agent_jobs::BatchJobHandler;
+use crate::tools::flat_tool_name;
 use crate::tools::handlers::multi_agents_common::DEFAULT_WAIT_TIMEOUT_MS;
 use crate::tools::handlers::multi_agents_common::MAX_WAIT_TIMEOUT_MS;
 use crate::tools::handlers::multi_agents_common::MIN_WAIT_TIMEOUT_MS;
+use crate::tools::handlers::multi_agents_spec::WaitAgentTimeoutOptions;
+use crate::tools::losangelex_spec::register_losangelex_tools;
 use crate::tools::registry::ToolRegistryBuilder;
+use crate::tools::spec_plan::build_tool_registry_builder;
+use crate::tools::spec_plan_types::ToolNamespace;
+use crate::tools::spec_plan_types::ToolRegistryBuildDeferredTool;
+use crate::tools::spec_plan_types::ToolRegistryBuildMcpTool;
+use crate::tools::spec_plan_types::ToolRegistryBuildParams;
 use codex_mcp::ToolInfo;
 use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_tools::AdditionalProperties;
 use codex_tools::DiscoverableTool;
 use codex_tools::JsonSchema;
 use codex_tools::ResponsesApiTool;
-use codex_tools::ToolHandlerKind;
 use codex_tools::ToolName;
-use codex_tools::ToolNamespace;
-use codex_tools::ToolRegistryPlanDeferredTool;
-use codex_tools::ToolRegistryPlanMcpTool;
-use codex_tools::ToolRegistryPlanParams;
-use codex_tools::ToolSpec;
 use codex_tools::ToolUserShellType;
 use codex_tools::ToolsConfig;
-use codex_tools::WaitAgentTimeoutOptions;
-use codex_tools::augment_tool_spec_for_code_mode;
-use codex_tools::build_tool_registry_plan;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -46,30 +36,27 @@ pub(crate) fn tool_user_shell_type(user_shell: &Shell) -> ToolUserShellType {
 }
 
 struct McpToolPlanInputs<'a> {
-    mcp_tools: Vec<ToolRegistryPlanMcpTool<'a>>,
+    mcp_tools: Vec<ToolRegistryBuildMcpTool<'a>>,
     tool_namespaces: HashMap<String, ToolNamespace>,
 }
 
-fn map_mcp_tools_for_plan(mcp_tools: &HashMap<String, ToolInfo>) -> McpToolPlanInputs<'_> {
+fn map_mcp_tools_for_plan(mcp_tools: &[ToolInfo]) -> McpToolPlanInputs<'_> {
     McpToolPlanInputs {
         mcp_tools: mcp_tools
-            .values()
-            .map(|tool| ToolRegistryPlanMcpTool {
+            .iter()
+            .map(|tool| ToolRegistryBuildMcpTool {
                 name: tool.canonical_tool_name(),
                 tool: &tool.tool,
             })
             .collect(),
         tool_namespaces: mcp_tools
-            .values()
+            .iter()
             .map(|tool| {
                 (
                     tool.callable_namespace.clone(),
                     ToolNamespace {
                         name: tool.callable_namespace.clone(),
-                        description: tool
-                            .connector_description
-                            .clone()
-                            .or_else(|| tool.server_instructions.clone()),
+                        description: tool.namespace_description.clone(),
                     },
                 )
             })
@@ -77,527 +64,29 @@ fn map_mcp_tools_for_plan(mcp_tools: &HashMap<String, ToolInfo>) -> McpToolPlanI
     }
 }
 
-fn create_hollywood_status_tool() -> ToolSpec {
-    ToolSpec::Function(ResponsesApiTool {
-        name: "hollywood_status".to_string(),
-        description: "Check whether Hollywood is configured and reachable for this session. Use this first when the user asks you to work with teammates, peers, or other existing agents so you can coordinate with existing attached Losangelex agents before considering `spawn_agent`."
-            .to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(BTreeMap::new(), Some(Vec::new()), Some(false.into())),
-        output_schema: None,
-    })
-}
-
-fn create_coordination_act_tool() -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "action".to_string(),
-            JsonSchema::string(Some(
-                "Coordination act to record: `open_task`, `accept`, `done`, `cancel`, `handoff`, or `yield`."
-                    .to_string(),
-            )),
-        ),
-        (
-            "task_id".to_string(),
-            JsonSchema::string(Some(
-                "Existing coordination task id for actions other than `open_task`.".to_string(),
-            )),
-        ),
-        (
-            "title".to_string(),
-            JsonSchema::string(Some(
-                "Task summary for `open_task`. Keep it short and concrete.".to_string(),
-            )),
-        ),
-        (
-            "details".to_string(),
-            JsonSchema::string(Some(
-                "Optional longer task details or handoff notes.".to_string(),
-            )),
-        ),
-        (
-            "kind".to_string(),
-            JsonSchema::string(Some(
-                "Optional task kind for `open_task`: `general`, `implementation`, `review`, `investigation`, `qa`, or `handoff`."
-                    .to_string(),
-            )),
-        ),
-        (
-            "owner".to_string(),
-            JsonSchema::string(Some(
-                "Optional target agent thread id or alias. Use this for directed awards or handoffs."
-                    .to_string(),
-            )),
-        ),
-        (
-            "team_id".to_string(),
-            JsonSchema::string(Some(
-                "Optional coordination team id to associate with the task.".to_string(),
-            )),
-        ),
-        (
-            "room".to_string(),
-            JsonSchema::string(Some(
-                "Optional Hollywood room associated with the task.".to_string(),
-            )),
-        ),
-        (
-            "capability".to_string(),
-            JsonSchema::string(Some(
-                "Optional requested capability or specialty for the task.".to_string(),
-            )),
-        ),
-        (
-            "depends_on".to_string(),
-            JsonSchema::array(
-                JsonSchema::string(Some("Blocking coordination task id.".to_string())),
-                Some("Optional dependency task ids that must be done before this task becomes actionable.".to_string()),
-            ),
-        ),
-        (
-            "summary".to_string(),
-            JsonSchema::string(Some(
-                "Concise durable act summary. Required for `done`, `cancel`, `handoff`, and `yield`; use a concrete result or reason, not placeholder text.".to_string(),
-            )),
-        ),
-        (
-            "notify_room".to_string(),
-            JsonSchema::boolean(Some(
-                "When true, also post a concise Hollywood room summary for visibility. Defaults to true."
-                    .to_string(),
-            )),
-        ),
-        (
-            "claim_paths".to_string(),
-            JsonSchema::array(
-                JsonSchema::object(
-                    BTreeMap::from([
-                        (
-                            "kind".to_string(),
-                            JsonSchema::string(Some("`file` or `directory`.".to_string())),
-                        ),
-                        (
-                            "path".to_string(),
-                            JsonSchema::string(Some(
-                                "Absolute path or path relative to the current cwd.".to_string(),
-                            )),
-                        ),
-                    ]),
-                    Some(vec!["kind".to_string(), "path".to_string()]),
-                    Some(false.into()),
-                ),
-                Some("Optional exact ownership claims. For `accept`, these claims become active scope. For directed implementation `open_task`, they reserve exact scope for the awarded owner.".to_string()),
-            ),
-        ),
-        (
-            "release_paths".to_string(),
-            JsonSchema::array(
-                JsonSchema::object(
-                    BTreeMap::from([
-                        (
-                            "kind".to_string(),
-                            JsonSchema::string(Some("`file` or `directory`.".to_string())),
-                        ),
-                        (
-                            "path".to_string(),
-                            JsonSchema::string(Some(
-                                "Absolute path or path relative to the current cwd.".to_string(),
-                            )),
-                        ),
-                    ]),
-                    Some(vec!["kind".to_string(), "path".to_string()]),
-                    Some(false.into()),
-                ),
-                Some("Optional ownership claims to release while finishing, handing off, or yielding the task.".to_string()),
-            ),
-        ),
-        (
-            "lease_seconds".to_string(),
-            JsonSchema::number(Some(
-                "Optional active-lease duration for `accept`. Defaults to a long development-friendly lease."
-                    .to_string(),
-            )),
-        ),
-    ]);
-    ToolSpec::Function(ResponsesApiTool {
-        name: "coordination_act".to_string(),
-        description: "Record a durable team-work commitment. Use this when your natural-language coordination becomes an actual assignment, acceptance, completion, cancellation, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy. After you finish a verification or implementation task, record `done` with the observed result instead of re-accepting the task. If a previously awarded lane is now obsolete because the broader goal is already satisfied, record `cancel` with the concrete reason so the lane and any exact claims are retired durably."
-            .to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(
-            properties,
-            Some(vec!["action".to_string()]),
-            Some(false.into()),
-        ),
-        output_schema: None,
-    })
-}
-
-fn create_list_coordination_tasks_tool() -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "owner".to_string(),
-            JsonSchema::string(Some(
-                "Optional owner agent thread id or alias filter.".to_string(),
-            )),
-        ),
-        (
-            "creator".to_string(),
-            JsonSchema::string(Some(
-                "Optional creator agent thread id or alias filter.".to_string(),
-            )),
-        ),
-        (
-            "statuses".to_string(),
-            JsonSchema::array(
-                JsonSchema::string(Some("Task status filter.".to_string())),
-                Some("Optional task statuses to include.".to_string()),
-            ),
-        ),
-        (
-            "room".to_string(),
-            JsonSchema::string(Some(
-                "Optional room filter. Defaults to the current attached Hollywood room when available."
-                    .to_string(),
-            )),
-        ),
-        (
-            "include_history".to_string(),
-            JsonSchema::boolean(Some(
-                "When true, include durable coordination acts alongside the task list.".to_string(),
-            )),
-        ),
-    ]);
-    ToolSpec::Function(ResponsesApiTool {
-        name: "list_coordination_tasks".to_string(),
-        description: "Inspect durable Losangelex coordination tasks and, optionally, their act history. When this session is attached to Hollywood, the current attached room is the default scope unless you override it. Use this to recover state after idle gaps, restarts, or rolling deploys instead of inferring coordination truth from room scrollback alone."
-            .to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
-        output_schema: None,
-    })
-}
-
-fn create_restart_client_tool() -> ToolSpec {
-    let properties = BTreeMap::from([(
-        "reason".to_string(),
-        JsonSchema::string(Some(
-            "Optional concise reason for the restart request, for example `rolling deploy`, `latest build available`, or `resume on new client generation`.".to_string(),
-        )),
-    )]);
-    ToolSpec::Function(ResponsesApiTool {
-        name: "restart_client".to_string(),
-        description: "Request that the current Losangelex client exit and auto-resume this root thread through the launcher when available. Use this when the user explicitly asks you to restart onto a newer build or roll forward to the current client generation. This restarts the interactive client only; it does not create a new thread or subagent.".to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
-        output_schema: None,
-    })
-}
-
-fn create_hollywood_read_tool() -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "room".to_string(),
-            JsonSchema::string(Some(
-                "Optional room to read from. Defaults to the configured Hollywood room."
-                    .to_string(),
-            )),
-        ),
-        (
-            "after_id".to_string(),
-            JsonSchema::number(Some(
-                "Optional message id cursor. When provided, only newer messages are returned."
-                    .to_string(),
-            )),
-        ),
-        (
-            "limit".to_string(),
-            JsonSchema::number(Some(
-                "Optional maximum number of messages to return. Defaults to 20, max 100."
-                    .to_string(),
-            )),
-        ),
-    ]);
-    ToolSpec::Function(ResponsesApiTool {
-        name: "hollywood_read".to_string(),
-        description: "Read messages from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream, and prefer it over shell commands when you need to verify room-visible wording, summaries, or message history."
-            .to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
-        output_schema: None,
-    })
-}
-
-fn durable_coordination_tool_text(state_db_available: bool) -> &'static str {
-    if state_db_available {
-        "When the conversation becomes a real assignment, acceptance, handoff, dependency, or completion, pair the room update with `coordination_act` so the commitment is durable."
-    } else {
-        "This session does not currently expose durable coordination tools, so do not rely on `coordination_act`; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
-    }
-}
-
-fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "text".to_string(),
-            JsonSchema::string(Some(
-                "Message body to send to Hollywood. Use @mentions when you need another agent's attention, and make ownership claims concrete with exact files, modules, directories, or narrow globs."
-                    .to_string(),
-            )),
-        ),
-        (
-            "room".to_string(),
-            JsonSchema::string(Some(
-                "Optional room override. Defaults to the current attached Hollywood room."
-                    .to_string(),
-            )),
-        ),
-        (
-            "to".to_string(),
-            JsonSchema::string(Some(
-                "Optional direct recipient session id or alias. When omitted, the message goes to the room."
-                    .to_string(),
-            )),
-        ),
-        (
-            "broadcast".to_string(),
-            JsonSchema::boolean(Some(
-                "When true, mark this as an explicit room-wide broadcast that should wake idle attached agents."
-                    .to_string(),
-            )),
-        ),
-        (
-            "response_policy".to_string(),
-            JsonSchema::string(Some(
-                "Optional reply contract for the message: `required`, `optional`, or `none`. Use `none` for acknowledgements or informational updates that should not trigger a reply."
-                    .to_string(),
-            )),
-        ),
-    ]);
-    ToolSpec::Function(ResponsesApiTool {
-        name: "hollywood_send".to_string(),
-        description: format!(
-            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room; prefer this over `spawn_agent` when the user asks you to work with teammates, peers, or other existing agents. Reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar tasks. When claiming work, announce exact file/module ownership and avoid overlapping paths until the room resolves the overlap. {}",
-            durable_coordination_tool_text(state_db_available)
-        ),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(
-            properties,
-            Some(vec!["text".to_string()]),
-            Some(false.into()),
-        ),
-        output_schema: None,
-    })
-}
-
-fn create_hollywood_team_up_tool() -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "purpose".to_string(),
-            JsonSchema::string(Some("Shared purpose for the team.".to_string())),
-        ),
-        (
-            "targets".to_string(),
-            JsonSchema::array(
-                JsonSchema::string(Some("Target session id or alias.".to_string())),
-                Some("Sessions to invite onto the team.".to_string()),
-            ),
-        ),
-        (
-            "room".to_string(),
-            JsonSchema::string(Some(
-                "Optional control room for the team record. Defaults to main.".to_string(),
-            )),
-        ),
-        (
-            "task_room".to_string(),
-            JsonSchema::string(Some(
-                "Optional working room members should join after accepting.".to_string(),
-            )),
-        ),
-        (
-            "team_id".to_string(),
-            JsonSchema::string(Some("Optional explicit team id.".to_string())),
-        ),
-    ]);
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "hollywood_team_up".to_string(),
-        description: "Create a structured Hollywood team with a leader, purpose, and invited member sessions. Use this when you need to form an explicit working group from existing attached Losangelex agents rather than spawning fresh subagents.".to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(
-            properties,
-            Some(vec!["purpose".to_string(), "targets".to_string()]),
-            Some(false.into()),
-        ),
-        output_schema: None,
-    })
-}
-
-fn create_hollywood_team_status_tool() -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "room".to_string(),
-            JsonSchema::string(Some(
-                "Optional room to inspect. Defaults to the configured Hollywood room.".to_string(),
-            )),
-        ),
-        (
-            "limit".to_string(),
-            JsonSchema::number(Some(
-                "Maximum number of teams to return. Defaults to 20.".to_string(),
-            )),
-        ),
-    ]);
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "hollywood_team_status".to_string(),
-        description: "Inspect structured Hollywood teams and member state for a room. Use this to understand invites, leaders, roles, and which sessions have joined or acknowledged.".to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(properties, Some(Vec::new()), Some(false.into())),
-        output_schema: None,
-    })
-}
-
-fn create_hollywood_team_member_update_tool() -> ToolSpec {
-    let properties = BTreeMap::from([
-        (
-            "team_id".to_string(),
-            JsonSchema::string(Some("Team id to update.".to_string())),
-        ),
-        (
-            "session_id".to_string(),
-            JsonSchema::string(Some(
-                "Optional session id or alias to update. Defaults to this session.".to_string(),
-            )),
-        ),
-        (
-            "role".to_string(),
-            JsonSchema::string(Some(
-                "Optional updated role, for example leader, member, reviewer, observer."
-                    .to_string(),
-            )),
-        ),
-        (
-            "state".to_string(),
-            JsonSchema::string(Some(
-                "Optional updated team state, for example pending, accepted, joined, active, declined, deferred, timed_out."
-                    .to_string(),
-            )),
-        ),
-        (
-            "joined_room".to_string(),
-            JsonSchema::string(Some(
-                "Optional joined working room for this member.".to_string(),
-            )),
-        ),
-        (
-            "task".to_string(),
-            JsonSchema::string(Some(
-                "Optional current task summary for this member.".to_string(),
-            )),
-        ),
-        (
-            "scope".to_string(),
-            JsonSchema::string(Some(
-                "Optional scope or ownership summary for this member. Prefer exact files, modules, directories, or narrow globs over vague area names.".to_string(),
-            )),
-        ),
-    ]);
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "hollywood_team_member_update".to_string(),
-        description: "Update structured team-member state in Hollywood. Use this to accept or decline invites, mark joined/active state, and record claimed scope with concrete files, modules, directories, or narrow globs.".to_string(),
-        strict: false,
-        defer_loading: None,
-        parameters: JsonSchema::object(
-            properties,
-            Some(vec!["team_id".to_string()]),
-            Some(false.into()),
-        ),
-        output_schema: None,
-    })
-}
-
-fn is_state_backed_tool_name(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "watch_process_exit"
-            | "watch_agent_completion"
-            | "list_watchers"
-            | "cancel_watcher"
-            | "watch_task_periodically"
-            | "list_task_watches"
-            | "update_task_watch"
-            | "cancel_task_watch"
-            | "spawn_agents_on_csv"
-            | "report_agent_job_result"
-    )
-}
-
 pub(crate) fn build_specs_with_discoverable_tools(
     config: &ToolsConfig,
-    mcp_tools: Option<HashMap<String, ToolInfo>>,
-    deferred_mcp_tools: Option<HashMap<String, ToolInfo>>,
+    mcp_tools: Option<Vec<ToolInfo>>,
+    deferred_mcp_tools: Option<Vec<ToolInfo>>,
     unavailable_called_tools: Vec<ToolName>,
     discoverable_tools: Option<Vec<DiscoverableTool>>,
     state_db_available: bool,
     hollywood_tools_available: bool,
     dynamic_tools: &[DynamicToolSpec],
 ) -> ToolRegistryBuilder {
-    use crate::tools::handlers::ApplyPatchHandler;
-    use crate::tools::handlers::CodeModeExecuteHandler;
-    use crate::tools::handlers::CodeModeWaitHandler;
-    use crate::tools::handlers::DynamicToolHandler;
-    use crate::tools::handlers::GoalHandler;
-    use crate::tools::handlers::ListDirHandler;
-    use crate::tools::handlers::McpHandler;
-    use crate::tools::handlers::McpResourceHandler;
-    use crate::tools::handlers::PlanHandler;
-    use crate::tools::handlers::RequestPermissionsHandler;
-    use crate::tools::handlers::RequestPluginInstallHandler;
-    use crate::tools::handlers::RequestUserInputHandler;
-    use crate::tools::handlers::RestartClientHandler;
-    use crate::tools::handlers::ShellCommandHandler;
-    use crate::tools::handlers::ShellHandler;
-    use crate::tools::handlers::TestSyncHandler;
-    use crate::tools::handlers::ToolSearchHandler;
     use crate::tools::handlers::UnavailableToolHandler;
-    use crate::tools::handlers::UnifiedExecHandler;
-    use crate::tools::handlers::ViewImageHandler;
-    use crate::tools::handlers::WatcherHandler;
-    use crate::tools::handlers::multi_agents::CloseAgentHandler;
-    use crate::tools::handlers::multi_agents::ResumeAgentHandler;
-    use crate::tools::handlers::multi_agents::SendInputHandler;
-    use crate::tools::handlers::multi_agents::SpawnAgentHandler;
-    use crate::tools::handlers::multi_agents::WaitAgentHandler;
-    use crate::tools::handlers::multi_agents_v2::CloseAgentHandler as CloseAgentHandlerV2;
-    use crate::tools::handlers::multi_agents_v2::FollowupTaskHandler as FollowupTaskHandlerV2;
-    use crate::tools::handlers::multi_agents_v2::ListAgentsHandler as ListAgentsHandlerV2;
-    use crate::tools::handlers::multi_agents_v2::SendMessageHandler as SendMessageHandlerV2;
-    use crate::tools::handlers::multi_agents_v2::SpawnAgentHandler as SpawnAgentHandlerV2;
-    use crate::tools::handlers::multi_agents_v2::WaitAgentHandler as WaitAgentHandlerV2;
     use crate::tools::handlers::unavailable_tool_message;
     use crate::tools::tool_search_entry::build_tool_search_entries_for_config;
 
-    let mut builder = ToolRegistryBuilder::new();
-    let mcp_tool_plan_inputs = mcp_tools.as_ref().map(map_mcp_tools_for_plan);
+    let mcp_tool_plan_inputs = mcp_tools.as_deref().map(map_mcp_tools_for_plan);
     let deferred_mcp_tool_sources = deferred_mcp_tools.as_ref().map(|tools| {
         tools
-            .values()
-            .map(|tool| ToolRegistryPlanDeferredTool {
+            .iter()
+            .map(|tool| ToolRegistryBuildDeferredTool {
                 name: tool.canonical_tool_name(),
                 server_name: tool.server_name.as_str(),
                 connector_name: tool.connector_name.as_deref(),
-                connector_description: tool.connector_description.as_deref(),
+                description: tool.namespace_description.as_deref(),
             })
             .collect::<Vec<_>>()
     });
@@ -613,9 +102,19 @@ pub(crate) fn build_specs_with_discoverable_tools(
     };
     let default_wait_timeout_ms =
         DEFAULT_WAIT_TIMEOUT_MS.clamp(min_wait_timeout_ms, MAX_WAIT_TIMEOUT_MS);
-    let plan = build_tool_registry_plan(
+    let deferred_dynamic_tools = dynamic_tools
+        .iter()
+        .filter(|tool| tool.defer_loading && (config.namespace_tools || tool.namespace.is_none()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let tool_search_entries = build_tool_search_entries_for_config(
         config,
-        ToolRegistryPlanParams {
+        deferred_mcp_tools.as_deref(),
+        &deferred_dynamic_tools,
+    );
+    let mut builder = build_tool_registry_builder(
+        config,
+        ToolRegistryBuildParams {
             mcp_tools: mcp_tool_plan_inputs
                 .as_ref()
                 .map(|inputs| inputs.mcp_tools.as_slice()),
@@ -631,228 +130,19 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 min_timeout_ms: min_wait_timeout_ms,
                 max_timeout_ms: MAX_WAIT_TIMEOUT_MS,
             },
+            tool_search_entries: &tool_search_entries,
         },
     );
-    let shell_handler = Arc::new(ShellHandler);
-    let unified_exec_handler = Arc::new(UnifiedExecHandler);
-    let plan_handler = Arc::new(PlanHandler);
-    let apply_patch_handler = Arc::new(ApplyPatchHandler);
-    let dynamic_tool_handler = Arc::new(DynamicToolHandler);
-    let goal_handler = Arc::new(GoalHandler);
-    let view_image_handler = Arc::new(ViewImageHandler);
-    let mcp_handler = Arc::new(McpHandler);
-    let mcp_resource_handler = Arc::new(McpResourceHandler);
-    let shell_command_handler = Arc::new(ShellCommandHandler::from(config.shell_command_backend));
-    let request_permissions_handler = Arc::new(RequestPermissionsHandler);
-    let request_user_input_handler = Arc::new(RequestUserInputHandler {
-        available_modes: config.request_user_input_available_modes.clone(),
-    });
-    let deferred_dynamic_tools = dynamic_tools
-        .iter()
-        .filter(|tool| tool.defer_loading && (config.namespace_tools || tool.namespace.is_none()))
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut tool_search_handler = None;
-    let request_plugin_install_handler = Arc::new(RequestPluginInstallHandler);
-    let code_mode_handler = Arc::new(CodeModeExecuteHandler);
-    let code_mode_wait_handler = Arc::new(CodeModeWaitHandler);
-    let unavailable_tool_handler = Arc::new(UnavailableToolHandler);
-    let mut existing_spec_names = plan
-        .specs
+    register_losangelex_tools(&mut builder, state_db_available, hollywood_tools_available);
+
+    let mut existing_spec_names = builder
+        .specs()
         .iter()
         .map(|configured_tool| configured_tool.name().to_string())
         .collect::<HashSet<_>>();
 
-    let hollywood_tools_enabled = hollywood_tools_available;
-    let mut hollywood_specs_inserted = false;
-    let mut coordination_specs_inserted = false;
-    let mut restart_client_inserted = false;
-
-    for spec in plan.specs {
-        if !state_db_available && is_state_backed_tool_name(spec.name()) {
-            continue;
-        }
-        if !restart_client_inserted && matches!(spec.name(), "update_plan" | "spawn_agent") {
-            builder.push_spec(create_restart_client_tool());
-            restart_client_inserted = true;
-        }
-        if state_db_available
-            && !coordination_specs_inserted
-            && matches!(spec.name(), "update_plan" | "spawn_agent")
-        {
-            builder.push_spec(create_coordination_act_tool());
-            builder.push_spec(create_list_coordination_tasks_tool());
-            coordination_specs_inserted = true;
-        }
-        if hollywood_tools_enabled
-            && !hollywood_specs_inserted
-            && matches!(
-                spec.name(),
-                "spawn_agent" | "send_input" | "send_message" | "followup_task"
-            )
-        {
-            builder.push_spec(create_hollywood_status_tool());
-            builder.push_spec(create_hollywood_read_tool());
-            builder.push_spec(create_hollywood_send_tool(state_db_available));
-            builder.push_spec(create_hollywood_team_up_tool());
-            builder.push_spec(create_hollywood_team_status_tool());
-            builder.push_spec(create_hollywood_team_member_update_tool());
-            hollywood_specs_inserted = true;
-        }
-        if spec.supports_parallel_tool_calls {
-            builder.push_spec_with_parallel_support(
-                spec.spec, /*supports_parallel_tool_calls*/ true,
-            );
-        } else {
-            builder.push_spec(spec.spec);
-        }
-    }
-
-    if !restart_client_inserted {
-        builder.push_spec(create_restart_client_tool());
-    }
-
-    if state_db_available && !coordination_specs_inserted {
-        builder.push_spec(create_coordination_act_tool());
-        builder.push_spec(create_list_coordination_tasks_tool());
-    }
-
-    if hollywood_tools_enabled && !hollywood_specs_inserted {
-        builder.push_spec(create_hollywood_status_tool());
-        builder.push_spec(create_hollywood_read_tool());
-        builder.push_spec(create_hollywood_send_tool(state_db_available));
-        builder.push_spec(create_hollywood_team_up_tool());
-        builder.push_spec(create_hollywood_team_status_tool());
-        builder.push_spec(create_hollywood_team_member_update_tool());
-    }
-
-    for handler in plan.handlers {
-        if !state_db_available
-            && matches!(
-                handler.kind,
-                ToolHandlerKind::AgentJobs | ToolHandlerKind::Watcher
-            )
-        {
-            continue;
-        }
-        match handler.kind {
-            ToolHandlerKind::AgentJobs => {
-                builder.register_handler(handler.name, Arc::new(BatchJobHandler));
-            }
-            ToolHandlerKind::ApplyPatch => {
-                builder.register_handler(handler.name, apply_patch_handler.clone());
-            }
-            ToolHandlerKind::CloseAgentV1 => {
-                builder.register_handler(handler.name, Arc::new(CloseAgentHandler));
-            }
-            ToolHandlerKind::CloseAgentV2 => {
-                builder.register_handler(handler.name, Arc::new(CloseAgentHandlerV2));
-            }
-            ToolHandlerKind::CodeModeExecute => {
-                builder.register_handler(handler.name, code_mode_handler.clone());
-            }
-            ToolHandlerKind::CodeModeWait => {
-                builder.register_handler(handler.name, code_mode_wait_handler.clone());
-            }
-            ToolHandlerKind::DynamicTool => {
-                builder.register_handler(handler.name, dynamic_tool_handler.clone());
-            }
-            ToolHandlerKind::FollowupTaskV2 => {
-                builder.register_handler(handler.name, Arc::new(FollowupTaskHandlerV2));
-            }
-            ToolHandlerKind::Goal => {
-                builder.register_handler(handler.name, goal_handler.clone());
-            }
-            ToolHandlerKind::ListAgentsV2 => {
-                builder.register_handler(handler.name, Arc::new(ListAgentsHandlerV2));
-            }
-            ToolHandlerKind::ListDir => {
-                builder.register_handler(handler.name, Arc::new(ListDirHandler));
-            }
-            ToolHandlerKind::Mcp => {
-                builder.register_handler(handler.name, mcp_handler.clone());
-            }
-            ToolHandlerKind::McpResource => {
-                builder.register_handler(handler.name, mcp_resource_handler.clone());
-            }
-            ToolHandlerKind::Plan => {
-                builder.register_handler(handler.name, plan_handler.clone());
-            }
-            ToolHandlerKind::RequestPermissions => {
-                builder.register_handler(handler.name, request_permissions_handler.clone());
-            }
-            ToolHandlerKind::RequestUserInput => {
-                builder.register_handler(handler.name, request_user_input_handler.clone());
-            }
-            ToolHandlerKind::ResumeAgentV1 => {
-                builder.register_handler(handler.name, Arc::new(ResumeAgentHandler));
-            }
-            ToolHandlerKind::SendInputV1 => {
-                builder.register_handler(handler.name, Arc::new(SendInputHandler));
-            }
-            ToolHandlerKind::SendMessageV2 => {
-                builder.register_handler(handler.name, Arc::new(SendMessageHandlerV2));
-            }
-            ToolHandlerKind::Shell => {
-                builder.register_handler(handler.name, shell_handler.clone());
-            }
-            ToolHandlerKind::ShellCommand => {
-                builder.register_handler(handler.name, shell_command_handler.clone());
-            }
-            ToolHandlerKind::SpawnAgentV1 => {
-                builder.register_handler(handler.name, Arc::new(SpawnAgentHandler));
-            }
-            ToolHandlerKind::SpawnAgentV2 => {
-                builder.register_handler(handler.name, Arc::new(SpawnAgentHandlerV2));
-            }
-            ToolHandlerKind::TestSync => {
-                builder.register_handler(handler.name, Arc::new(TestSyncHandler));
-            }
-            ToolHandlerKind::ToolSearch => {
-                if tool_search_handler.is_none() {
-                    let entries = build_tool_search_entries_for_config(
-                        config,
-                        deferred_mcp_tools.as_ref(),
-                        &deferred_dynamic_tools,
-                    );
-                    tool_search_handler = Some(Arc::new(ToolSearchHandler::new(entries)));
-                }
-                if let Some(tool_search_handler) = tool_search_handler.as_ref() {
-                    builder.register_handler(handler.name, tool_search_handler.clone());
-                }
-            }
-            ToolHandlerKind::RequestPluginInstall => {
-                builder.register_handler(handler.name, request_plugin_install_handler.clone());
-            }
-            ToolHandlerKind::UnifiedExec => {
-                builder.register_handler(handler.name, unified_exec_handler.clone());
-            }
-            ToolHandlerKind::ViewImage => {
-                builder.register_handler(handler.name, view_image_handler.clone());
-            }
-            ToolHandlerKind::Watcher => {
-                builder.register_handler(handler.name, Arc::new(WatcherHandler));
-            }
-            ToolHandlerKind::WaitAgentV1 => {
-                builder.register_handler(handler.name, Arc::new(WaitAgentHandler));
-            }
-            ToolHandlerKind::WaitAgentV2 => {
-                builder.register_handler(handler.name, Arc::new(WaitAgentHandlerV2));
-            }
-        }
-    }
-    if let Some(deferred_mcp_tools) = deferred_mcp_tools.as_ref() {
-        for (name, _) in deferred_mcp_tools.iter().filter(|(name, _)| {
-            !mcp_tools
-                .as_ref()
-                .is_some_and(|tools| tools.contains_key(*name))
-        }) {
-            builder.register_handler(name.clone(), mcp_handler.clone());
-        }
-    }
-
     for unavailable_tool in unavailable_called_tools {
-        let tool_name = unavailable_tool.display();
+        let tool_name = flat_tool_name(&unavailable_tool).into_owned();
         if existing_spec_names.insert(tool_name.clone()) {
             let spec = codex_tools::ToolSpec::Function(ResponsesApiTool {
                 name: tool_name.clone(),
@@ -869,47 +159,15 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 output_schema: None,
                 defer_loading: None,
             });
-            let spec = if config.code_mode_enabled {
-                augment_tool_spec_for_code_mode(spec)
-            } else {
-                spec
-            };
-            builder.push_spec(spec);
+            builder.register_handler(Arc::new(UnavailableToolHandler::new(
+                unavailable_tool,
+                spec,
+            )));
+        } else {
+            builder.register_handler(Arc::new(UnavailableToolHandler::without_spec(
+                unavailable_tool,
+            )));
         }
-        builder.register_handler(unavailable_tool, unavailable_tool_handler.clone());
-    }
-    if hollywood_tools_enabled {
-        for spec in [
-            create_hollywood_status_tool(),
-            create_hollywood_read_tool(),
-            create_hollywood_send_tool(state_db_available),
-            create_hollywood_team_up_tool(),
-            create_hollywood_team_status_tool(),
-            create_hollywood_team_member_update_tool(),
-        ] {
-            if existing_spec_names.insert(spec.name().to_string()) {
-                builder.push_spec(spec);
-            }
-        }
-    }
-    if state_db_available {
-        builder.register_handler("coordination_act", Arc::new(CoordinationHandler));
-        builder.register_handler("list_coordination_tasks", Arc::new(CoordinationHandler));
-    }
-    builder.register_handler("restart_client", Arc::new(RestartClientHandler));
-    if hollywood_tools_enabled {
-        builder.register_handler("hollywood_status", Arc::new(HollywoodStatusHandler));
-        builder.register_handler("hollywood_read", Arc::new(HollywoodReadHandler));
-        builder.register_handler("hollywood_send", Arc::new(HollywoodSendHandler));
-        builder.register_handler("hollywood_team_up", Arc::new(HollywoodTeamUpHandler));
-        builder.register_handler(
-            "hollywood_team_status",
-            Arc::new(HollywoodTeamStatusHandler),
-        );
-        builder.register_handler(
-            "hollywood_team_member_update",
-            Arc::new(HollywoodTeamMemberUpdateHandler),
-        );
     }
     builder
 }

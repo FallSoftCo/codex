@@ -1,26 +1,37 @@
 pub(crate) mod agent_jobs;
+pub(crate) mod agent_jobs_spec;
 pub(crate) mod apply_patch;
+pub(crate) mod apply_patch_spec;
 pub(crate) mod coordination;
 mod dynamic;
 mod goal;
+pub(crate) mod goal_spec;
 pub(crate) mod hollywood;
-mod list_dir;
 mod mcp;
 mod mcp_resource;
+pub(crate) mod mcp_resource_spec;
 pub(crate) mod multi_agents;
 pub(crate) mod multi_agents_common;
+pub(crate) mod multi_agents_spec;
 pub(crate) mod multi_agents_v2;
 mod plan;
+pub(crate) mod plan_spec;
 mod request_permissions;
 mod request_plugin_install;
+pub(crate) mod request_plugin_install_spec;
 mod request_user_input;
+pub(crate) mod request_user_input_spec;
 pub(crate) mod restart_client;
 mod shell;
+pub(crate) mod shell_spec;
 mod test_sync;
+pub(crate) mod test_sync_spec;
 mod tool_search;
+pub(crate) mod tool_search_spec;
 mod unavailable_tool;
 pub(crate) mod unified_exec;
 mod view_image;
+pub(crate) mod view_image_spec;
 pub(crate) mod watcher;
 
 use codex_sandboxing::policy_transforms::intersect_permission_profiles;
@@ -31,11 +42,12 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
 use serde::Deserialize;
 use serde_json::Value;
 use std::path::Path;
-use std::path::PathBuf;
 
 use crate::function_tool::FunctionCallError;
 use crate::sandboxing::SandboxPermissions;
 use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
+use crate::session::turn_context::TurnEnvironment;
 pub(crate) use crate::tools::code_mode::CodeModeExecuteHandler;
 pub(crate) use crate::tools::code_mode::CodeModeWaitHandler;
 pub use apply_patch::ApplyPatchHandler;
@@ -43,28 +55,36 @@ use codex_protocol::models::AdditionalPermissionProfile;
 use codex_protocol::protocol::AskForApproval;
 pub use coordination::CoordinationHandler;
 pub use dynamic::DynamicToolHandler;
-pub use goal::GoalHandler;
+pub use goal::CreateGoalHandler;
+pub use goal::GetGoalHandler;
+pub use goal::UpdateGoalHandler;
 pub use hollywood::HollywoodReadHandler;
 pub use hollywood::HollywoodSendHandler;
 pub use hollywood::HollywoodStatusHandler;
 pub use hollywood::HollywoodTeamMemberUpdateHandler;
 pub use hollywood::HollywoodTeamStatusHandler;
 pub use hollywood::HollywoodTeamUpHandler;
-pub use list_dir::ListDirHandler;
 pub use mcp::McpHandler;
-pub use mcp_resource::McpResourceHandler;
+pub use mcp_resource::ListMcpResourceTemplatesHandler;
+pub use mcp_resource::ListMcpResourcesHandler;
+pub use mcp_resource::ReadMcpResourceHandler;
 pub use plan::PlanHandler;
 pub use request_permissions::RequestPermissionsHandler;
 pub use request_plugin_install::RequestPluginInstallHandler;
 pub use request_user_input::RequestUserInputHandler;
 pub use restart_client::RestartClientHandler;
+pub use shell::ContainerExecHandler;
+pub use shell::LocalShellHandler;
 pub use shell::ShellCommandHandler;
+pub(crate) use shell::ShellCommandHandlerOptions;
 pub use shell::ShellHandler;
 pub use test_sync::TestSyncHandler;
 pub use tool_search::ToolSearchHandler;
 pub use unavailable_tool::UnavailableToolHandler;
 pub(crate) use unavailable_tool::unavailable_tool_message;
-pub use unified_exec::UnifiedExecHandler;
+pub use unified_exec::ExecCommandHandler;
+pub(crate) use unified_exec::ExecCommandHandlerOptions;
+pub use unified_exec::WriteStdinHandler;
 pub use view_image::ViewImageHandler;
 pub use watcher::WatcherHandler;
 
@@ -100,34 +120,25 @@ fn resolve_workdir_base_path(
         .map_or_else(|| default_cwd.clone(), |workdir| default_cwd.join(workdir)))
 }
 
-pub(crate) fn validate_requested_workdir(
-    requested_workdir: Option<&str>,
-    resolved_workdir: &AbsolutePathBuf,
-    default_cwd: &AbsolutePathBuf,
-) -> Result<(), FunctionCallError> {
-    let path = resolved_workdir.as_path();
-    let metadata = std::fs::metadata(path).map_err(|_| {
-        let requested = requested_workdir
-            .map(PathBuf::from)
-            .unwrap_or_else(|| resolved_workdir.as_path().to_path_buf());
-        let mut message = format!("workdir `{}` does not exist", requested.display());
-        if resolved_workdir.as_path() != default_cwd.as_path() {
-            message.push_str(&format!(
-                "; omit `workdir` to use the session cwd `{}`",
-                default_cwd.display()
-            ));
-        }
-        FunctionCallError::RespondToModel(message)
-    })?;
-
-    if !metadata.is_dir() {
-        return Err(FunctionCallError::RespondToModel(format!(
-            "workdir `{}` is not a directory",
-            path.display()
-        )));
-    }
-
-    Ok(())
+fn resolve_tool_environment<'a>(
+    turn: &'a TurnContext,
+    environment_id: Option<&str>,
+) -> Result<Option<&'a TurnEnvironment>, FunctionCallError> {
+    environment_id.map_or_else(
+        || Ok(turn.environments.primary()),
+        |environment_id| {
+            turn.environments
+                .turn_environments
+                .iter()
+                .find(|environment| environment.environment_id == environment_id)
+                .map(Some)
+                .ok_or_else(|| {
+                    FunctionCallError::RespondToModel(format!(
+                        "unknown turn environment id `{environment_id}`"
+                    ))
+                })
+        },
+    )
 }
 
 /// Validates feature/policy constraints for `with_additional_permissions` and

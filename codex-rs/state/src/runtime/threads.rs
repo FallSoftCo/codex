@@ -13,6 +13,7 @@ SELECT
     threads.created_at_ms AS created_at,
     threads.updated_at_ms AS updated_at,
     threads.source,
+    threads.thread_source,
     threads.agent_nickname,
     threads.agent_role,
     threads.agent_path,
@@ -545,6 +546,7 @@ INSERT INTO threads (
     created_at_ms,
     updated_at_ms,
     source,
+    thread_source,
     agent_nickname,
     agent_role,
     agent_path,
@@ -569,7 +571,7 @@ INSERT INTO threads (
     hollywood_include_at_all,
     hollywood_include_at_room,
     memory_mode
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO NOTHING
             "#,
         )
@@ -580,6 +582,11 @@ ON CONFLICT(id) DO NOTHING
         .bind(datetime_to_epoch_millis(metadata.created_at))
         .bind(datetime_to_epoch_millis(updated_at))
         .bind(metadata.source.as_str())
+        .bind(
+            metadata
+                .thread_source
+                .map(codex_protocol::protocol::ThreadSource::as_str),
+        )
         .bind(metadata.agent_nickname.as_deref())
         .bind(metadata.agent_role.as_deref())
         .bind(metadata.agent_path.as_deref())
@@ -792,6 +799,9 @@ WHERE id = ?
         creation_memory_mode: Option<&str>,
     ) -> anyhow::Result<()> {
         let updated_at = self.allocate_thread_updated_at(metadata.updated_at)?;
+        // Backfill/reconcile callers merge existing git info before upserting, but that
+        // read/modify/write is not atomic. Preserve non-null SQLite git fields here so
+        // an explicit metadata update cannot be lost if a stale rollout upsert lands later.
         sqlx::query(
             r#"
 INSERT INTO threads (
@@ -802,6 +812,7 @@ INSERT INTO threads (
     created_at_ms,
     updated_at_ms,
     source,
+    thread_source,
     agent_nickname,
     agent_role,
     agent_path,
@@ -826,7 +837,7 @@ INSERT INTO threads (
     hollywood_include_at_all,
     hollywood_include_at_room,
     memory_mode
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     rollout_path = excluded.rollout_path,
     created_at = excluded.created_at,
@@ -834,6 +845,7 @@ ON CONFLICT(id) DO UPDATE SET
     created_at_ms = excluded.created_at_ms,
     updated_at_ms = excluded.updated_at_ms,
     source = excluded.source,
+    thread_source = excluded.thread_source,
     agent_nickname = excluded.agent_nickname,
     agent_role = excluded.agent_role,
     agent_path = excluded.agent_path,
@@ -849,14 +861,14 @@ ON CONFLICT(id) DO UPDATE SET
     first_user_message = excluded.first_user_message,
     archived = excluded.archived,
     archived_at = excluded.archived_at,
-    git_sha = excluded.git_sha,
-    git_branch = excluded.git_branch,
-    git_origin_url = excluded.git_origin_url,
-    hollywood_url = excluded.hollywood_url,
-    hollywood_room = excluded.hollywood_room,
-    hollywood_attention_mode = excluded.hollywood_attention_mode,
-    hollywood_include_at_all = excluded.hollywood_include_at_all,
-    hollywood_include_at_room = excluded.hollywood_include_at_room
+    git_sha = COALESCE(threads.git_sha, excluded.git_sha),
+    git_branch = COALESCE(threads.git_branch, excluded.git_branch),
+    git_origin_url = COALESCE(threads.git_origin_url, excluded.git_origin_url),
+    hollywood_url = COALESCE(threads.hollywood_url, excluded.hollywood_url),
+    hollywood_room = COALESCE(threads.hollywood_room, excluded.hollywood_room),
+    hollywood_attention_mode = COALESCE(threads.hollywood_attention_mode, excluded.hollywood_attention_mode),
+    hollywood_include_at_all = COALESCE(threads.hollywood_include_at_all, excluded.hollywood_include_at_all),
+    hollywood_include_at_room = COALESCE(threads.hollywood_include_at_room, excluded.hollywood_include_at_room)
             "#,
         )
         .bind(metadata.id.to_string())
@@ -866,6 +878,11 @@ ON CONFLICT(id) DO UPDATE SET
         .bind(datetime_to_epoch_millis(metadata.created_at))
         .bind(datetime_to_epoch_millis(updated_at))
         .bind(metadata.source.as_str())
+        .bind(
+            metadata
+                .thread_source
+                .map(codex_protocol::protocol::ThreadSource::as_str),
+        )
         .bind(metadata.agent_nickname.as_deref())
         .bind(metadata.agent_role.as_deref())
         .bind(metadata.agent_path.as_deref())
@@ -1118,6 +1135,7 @@ SELECT
     threads.created_at_ms AS created_at,
     threads.updated_at_ms AS updated_at,
     threads.source,
+    threads.thread_source,
     threads.agent_nickname,
     threads.agent_role,
     threads.agent_path,
@@ -1457,6 +1475,7 @@ mod tests {
                 originator: String::new(),
                 cli_version: String::new(),
                 source: SessionSource::Cli,
+                thread_source: None,
                 agent_path: None,
                 agent_nickname: None,
                 agent_role: None,
@@ -1516,6 +1535,7 @@ mod tests {
                 originator: String::new(),
                 cli_version: String::new(),
                 source: SessionSource::Cli,
+                thread_source: None,
                 agent_path: None,
                 agent_nickname: None,
                 agent_role: None,
@@ -1593,6 +1613,7 @@ mod tests {
                 originator: String::new(),
                 cli_version: String::new(),
                 source: SessionSource::Cli,
+                thread_source: None,
                 agent_path: None,
                 agent_nickname: None,
                 agent_role: None,
@@ -1629,6 +1650,47 @@ mod tests {
                 include_at_all: true,
                 include_at_room: true,
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn upsert_thread_preserves_existing_git_fields_atomically() {
+        let codex_home = unique_temp_dir();
+        let runtime = StateRuntime::init(codex_home.clone(), "test-provider".to_string())
+            .await
+            .expect("state db should initialize");
+        let thread_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000458").expect("valid thread id");
+        let mut metadata = test_thread_metadata(&codex_home, thread_id, codex_home.clone());
+        metadata.git_sha = Some("sqlite-sha".to_string());
+        metadata.git_branch = Some("sqlite-branch".to_string());
+        metadata.git_origin_url = Some("git@example.com:openai/codex.git".to_string());
+
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("initial upsert should succeed");
+
+        let mut rollout_metadata = metadata.clone();
+        rollout_metadata.git_sha = Some("rollout-sha".to_string());
+        rollout_metadata.git_branch = Some("rollout-branch".to_string());
+        rollout_metadata.git_origin_url = Some("https://example.com/repo.git".to_string());
+
+        runtime
+            .upsert_thread(&rollout_metadata)
+            .await
+            .expect("rollout upsert should succeed");
+
+        let persisted = runtime
+            .get_thread(thread_id)
+            .await
+            .expect("thread should load")
+            .expect("thread should exist");
+        assert_eq!(persisted.git_sha.as_deref(), Some("sqlite-sha"));
+        assert_eq!(persisted.git_branch.as_deref(), Some("sqlite-branch"));
+        assert_eq!(
+            persisted.git_origin_url.as_deref(),
+            Some("git@example.com:openai/codex.git")
         );
     }
 

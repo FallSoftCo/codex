@@ -1428,6 +1428,7 @@ mod tests {
                 id: "item-1".to_string(),
                 content: Vec::new(),
             }],
+            items_view: codex_app_server_protocol::TurnItemsView::Full,
             status: codex_app_server_protocol::TurnStatus::InProgress,
             error: None,
             started_at: Some(1_714_008_400),

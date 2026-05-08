@@ -3,7 +3,6 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 use codex_exec_server::ExecutorFileSystem;
-use codex_exec_server::FileSystemSandboxContext;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use tree_sitter::Parser;
 use tree_sitter::Query;
@@ -102,84 +101,6 @@ fn extract_apply_patch_from_shell(
     }
 }
 
-#[derive(Clone, Copy)]
-enum PathResolutionIntent {
-    ExistingPath,
-    ExistingParent,
-}
-
-async fn resolve_patch_path_with_workspace_dedup(
-    raw_path: &Path,
-    cwd: &AbsolutePathBuf,
-    fs: &dyn ExecutorFileSystem,
-    sandbox: Option<&FileSystemSandboxContext>,
-    intent: PathResolutionIntent,
-) -> AbsolutePathBuf {
-    let resolved = AbsolutePathBuf::resolve_path_against_base(raw_path, cwd);
-    if raw_path.is_absolute() || path_matches_intent(&resolved, fs, sandbox, intent).await {
-        return resolved;
-    }
-
-    for candidate in duplicated_workspace_relative_candidates(raw_path, cwd) {
-        if path_matches_intent(&candidate, fs, sandbox, intent).await {
-            return candidate;
-        }
-    }
-
-    resolved
-}
-
-async fn path_matches_intent(
-    path: &AbsolutePathBuf,
-    fs: &dyn ExecutorFileSystem,
-    sandbox: Option<&FileSystemSandboxContext>,
-    intent: PathResolutionIntent,
-) -> bool {
-    match intent {
-        PathResolutionIntent::ExistingPath => fs.get_metadata(path, sandbox).await.is_ok(),
-        PathResolutionIntent::ExistingParent => {
-            if let Some(parent) = path.parent() {
-                fs.get_metadata(&parent, sandbox).await.is_ok()
-            } else {
-                false
-            }
-        }
-    }
-}
-
-fn duplicated_workspace_relative_candidates(
-    raw_path: &Path,
-    cwd: &AbsolutePathBuf,
-) -> Vec<AbsolutePathBuf> {
-    if raw_path.is_absolute() {
-        return Vec::new();
-    }
-
-    let resolved = AbsolutePathBuf::resolve_path_against_base(raw_path, cwd);
-    let mut candidates = Vec::new();
-    for ancestor in cwd.ancestors().skip(1) {
-        let Ok(suffix) = cwd.as_path().strip_prefix(ancestor.as_path()) else {
-            continue;
-        };
-        if suffix.as_os_str().is_empty() {
-            continue;
-        }
-        let Ok(remainder) = raw_path.strip_prefix(suffix) else {
-            continue;
-        };
-        if remainder.as_os_str().is_empty() {
-            continue;
-        }
-
-        let candidate = cwd.join(remainder);
-        if candidate != resolved && !candidates.contains(&candidate) {
-            candidates.push(candidate);
-        }
-    }
-
-    candidates
-}
-
 // TODO: make private once we remove tests in lib.rs
 pub fn maybe_parse_apply_patch(argv: &[String]) -> MaybeApplyPatch {
     match argv {
@@ -241,33 +162,15 @@ pub async fn maybe_parse_apply_patch_verified(
                 .unwrap_or_else(|| cwd.clone());
             let mut changes = HashMap::new();
             for hunk in hunks {
+                let path = hunk.resolve_path(&effective_cwd);
                 match hunk {
-                    Hunk::AddFile {
-                        path: raw_path,
-                        contents,
-                    } => {
-                        let path = resolve_patch_path_with_workspace_dedup(
-                            &raw_path,
-                            &effective_cwd,
-                            fs,
-                            sandbox,
-                            PathResolutionIntent::ExistingParent,
-                        )
-                        .await;
+                    Hunk::AddFile { contents, .. } => {
                         changes.insert(
                             path.into_path_buf(),
                             ApplyPatchFileChange::Add { content: contents },
                         );
                     }
-                    Hunk::DeleteFile { path: raw_path } => {
-                        let path = resolve_patch_path_with_workspace_dedup(
-                            &raw_path,
-                            &effective_cwd,
-                            fs,
-                            sandbox,
-                            PathResolutionIntent::ExistingPath,
-                        )
-                        .await;
+                    Hunk::DeleteFile { .. } => {
                         let content = match fs.read_file_text(&path, sandbox).await {
                             Ok(content) => content,
                             Err(e) => {
@@ -285,47 +188,23 @@ pub async fn maybe_parse_apply_patch_verified(
                         );
                     }
                     Hunk::UpdateFile {
-                        path: raw_path,
-                        move_path,
-                        chunks,
+                        move_path, chunks, ..
                     } => {
-                        let path = resolve_patch_path_with_workspace_dedup(
-                            &raw_path,
-                            &effective_cwd,
-                            fs,
-                            sandbox,
-                            PathResolutionIntent::ExistingPath,
-                        )
-                        .await;
                         let ApplyPatchFileUpdate {
                             unified_diff,
                             content: contents,
+                            ..
                         } = match unified_diff_from_chunks(&path, &chunks, fs, sandbox).await {
                             Ok(diff) => diff,
                             Err(e) => {
                                 return MaybeApplyPatchVerified::CorrectnessError(e);
                             }
                         };
-                        let move_path = if let Some(move_path) = move_path {
-                            Some(
-                                resolve_patch_path_with_workspace_dedup(
-                                    &move_path,
-                                    &effective_cwd,
-                                    fs,
-                                    sandbox,
-                                    PathResolutionIntent::ExistingParent,
-                                )
-                                .await
-                                .into_path_buf(),
-                            )
-                        } else {
-                            None
-                        };
                         changes.insert(
                             path.into_path_buf(),
                             ApplyPatchFileChange::Update {
                                 unified_diff,
-                                move_path,
+                                move_path: move_path.map(|p| effective_cwd.join(p).into_path_buf()),
                                 new_content: contents,
                             },
                         );
@@ -829,6 +708,7 @@ PATCH"#,
 "#;
         let expected = ApplyPatchFileUpdate {
             unified_diff: expected_diff.to_string(),
+            original_content: "foo\nbar\nbaz\n".to_string(),
             content: "foo\nbar\nBAZ\n".to_string(),
         };
         assert_eq!(expected, diff);
@@ -867,6 +747,7 @@ PATCH"#,
 "#;
         let expected = ApplyPatchFileUpdate {
             unified_diff: expected_diff.to_string(),
+            original_content: "foo\nbar\nbaz\n".to_string(),
             content: "foo\nbar\nbaz\nquux\n".to_string(),
         };
         assert_eq!(expected, diff);
@@ -961,9 +842,10 @@ PATCH"#,
 
         assert_eq!(action.cwd.as_path(), worktree_dir.as_path());
 
+        let source_path = worktree_dir.join(source_name);
         let change = action
             .changes()
-            .get(&worktree_dir.join(source_name))
+            .get(source_path.as_path())
             .expect("source file change present");
 
         match change {
@@ -977,64 +859,59 @@ PATCH"#,
         }
     }
 
-    #[test]
-    fn test_duplicated_workspace_relative_candidates_strip_redundant_workspace_prefix() {
-        let dir = tempdir().unwrap();
-        let cwd = AbsolutePathBuf::from_absolute_path(dir.path().join("app_build_eval/workspace"))
-            .unwrap();
-        let candidates = duplicated_workspace_relative_candidates(
-            Path::new("app_build_eval/workspace/app.js"),
-            &cwd,
-        );
+    #[tokio::test]
+    async fn test_unreadable_destinations_still_verify() {
+        let session_dir = tempdir().unwrap();
+        fs::write(session_dir.path().join("binary.dat"), [0xff, 0xfe, 0xfd]).unwrap();
+        let cwd = AbsolutePathBuf::from_absolute_path(session_dir.path()).unwrap();
+        let add_argv = vec![
+            "apply_patch".to_string(),
+            "*** Begin Patch\n*** Add File: binary.dat\n+text\n*** End Patch".to_string(),
+        ];
+        fs::write(session_dir.path().join("source.txt"), "before\n").unwrap();
+        let move_argv = vec![
+            "apply_patch".to_string(),
+            "*** Begin Patch\n*** Update File: source.txt\n*** Move to: binary.dat\n@@\n-before\n+after\n*** End Patch".to_string(),
+        ];
 
-        assert_eq!(candidates, vec![cwd.join("app.js")]);
+        for argv in [add_argv, move_argv] {
+            let result = maybe_parse_apply_patch_verified(
+                &argv,
+                &cwd,
+                LOCAL_FS.as_ref(),
+                /*sandbox*/ None,
+            )
+            .await;
+
+            assert!(matches!(result, MaybeApplyPatchVerified::Body(_)));
+        }
     }
 
+    #[cfg(unix)]
     #[tokio::test]
-    async fn test_apply_patch_dedups_workspace_relative_update_path_during_verification() {
-        let root_dir = tempdir().unwrap();
-        let workspace = root_dir.path().join("app_build_eval/workspace");
-        fs::create_dir_all(&workspace).unwrap();
-        let app_js = workspace.join("app.js");
-        fs::write(&app_js, "before\n").unwrap();
+    async fn test_delete_symlink_still_verifies() {
+        use std::os::unix::fs::symlink;
 
+        let session_dir = tempdir().unwrap();
+        fs::write(session_dir.path().join("target.txt"), "target\n").unwrap();
+        symlink(
+            session_dir.path().join("target.txt"),
+            session_dir.path().join("link.txt"),
+        )
+        .unwrap();
         let argv = vec![
             "apply_patch".to_string(),
-            r#"*** Begin Patch
-*** Update File: app_build_eval/workspace/app.js
-@@
--before
-+after
-*** End Patch"#
-                .to_string(),
+            "*** Begin Patch\n*** Delete File: link.txt\n*** End Patch".to_string(),
         ];
 
         let result = maybe_parse_apply_patch_verified(
             &argv,
-            &AbsolutePathBuf::from_absolute_path(&workspace).unwrap(),
+            &AbsolutePathBuf::from_absolute_path(session_dir.path()).unwrap(),
             LOCAL_FS.as_ref(),
             /*sandbox*/ None,
         )
         .await;
 
-        assert_eq!(
-            result,
-            MaybeApplyPatchVerified::Body(ApplyPatchAction {
-                changes: HashMap::from([(
-                    app_js,
-                    ApplyPatchFileChange::Update {
-                        unified_diff: r#"@@ -1 +1 @@
--before
-+after
-"#
-                        .to_string(),
-                        move_path: None,
-                        new_content: "after\n".to_string(),
-                    },
-                )]),
-                patch: argv[1].clone(),
-                cwd: AbsolutePathBuf::from_absolute_path(&workspace).unwrap(),
-            })
-        );
+        assert!(matches!(result, MaybeApplyPatchVerified::Body(_)));
     }
 }

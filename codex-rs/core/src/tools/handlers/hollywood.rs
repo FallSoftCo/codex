@@ -20,6 +20,7 @@ use crate::tools::context::ToolPayload;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
+use codex_tools::ToolName;
 
 pub struct HollywoodStatusHandler;
 pub struct HollywoodReadHandler;
@@ -165,6 +166,10 @@ async fn hollywood_config_for_session(
 impl ToolHandler for HollywoodStatusHandler {
     type Output = FunctionToolOutput;
 
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "hollywood_status".to_string())
+    }
+
     fn kind(&self) -> ToolKind {
         ToolKind::Function
     }
@@ -248,6 +253,10 @@ impl ToolHandler for HollywoodStatusHandler {
 impl ToolHandler for HollywoodReadHandler {
     type Output = FunctionToolOutput;
 
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "hollywood_read".to_string())
+    }
+
     fn kind(&self) -> ToolKind {
         ToolKind::Function
     }
@@ -308,6 +317,10 @@ impl ToolHandler for HollywoodReadHandler {
 
 impl ToolHandler for HollywoodSendHandler {
     type Output = FunctionToolOutput;
+
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "hollywood_send".to_string())
+    }
 
     fn kind(&self) -> ToolKind {
         ToolKind::Function
@@ -384,6 +397,10 @@ impl ToolHandler for HollywoodSendHandler {
 
 impl ToolHandler for HollywoodTeamUpHandler {
     type Output = FunctionToolOutput;
+
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "hollywood_team_up".to_string())
+    }
 
     fn kind(&self) -> ToolKind {
         ToolKind::Function
@@ -510,6 +527,10 @@ impl ToolHandler for HollywoodTeamUpHandler {
 impl ToolHandler for HollywoodTeamStatusHandler {
     type Output = FunctionToolOutput;
 
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "hollywood_team_status".to_string())
+    }
+
     fn kind(&self) -> ToolKind {
         ToolKind::Function
     }
@@ -561,6 +582,10 @@ impl ToolHandler for HollywoodTeamStatusHandler {
 
 impl ToolHandler for HollywoodTeamMemberUpdateHandler {
     type Output = FunctionToolOutput;
+
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "hollywood_team_member_update".to_string())
+    }
 
     fn kind(&self) -> ToolKind {
         ToolKind::Function

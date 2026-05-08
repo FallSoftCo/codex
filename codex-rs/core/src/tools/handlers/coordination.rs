@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use codex_protocol::ThreadId;
+use codex_tools::ToolName;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -24,7 +25,17 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub struct CoordinationHandler;
+pub struct CoordinationHandler {
+    tool_name: ToolName,
+}
+
+impl CoordinationHandler {
+    pub(crate) fn new(name: &'static str) -> Self {
+        Self {
+            tool_name: ToolName::new(None, name.to_string()),
+        }
+    }
+}
 const HOLLYWOOD_REGISTRY_STALE_AFTER: Duration = Duration::seconds(90);
 
 #[derive(Debug, Deserialize)]
@@ -127,6 +138,10 @@ fn default_notify_room() -> bool {
 
 impl ToolHandler for CoordinationHandler {
     type Output = FunctionToolOutput;
+
+    fn tool_name(&self) -> ToolName {
+        self.tool_name.clone()
+    }
 
     fn kind(&self) -> ToolKind {
         ToolKind::Function

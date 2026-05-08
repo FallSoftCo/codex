@@ -6,6 +6,7 @@ use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
 use codex_protocol::protocol::SessionSource;
+use codex_tools::ToolName;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -27,6 +28,10 @@ struct RestartClientResult {
 
 impl ToolHandler for RestartClientHandler {
     type Output = FunctionToolOutput;
+
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, RESTART_CLIENT_TOOL_NAME.to_string())
+    }
 
     fn kind(&self) -> ToolKind {
         ToolKind::Function

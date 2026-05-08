@@ -8,11 +8,23 @@ use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::AgentStatus;
+use codex_tools::ToolName;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
 
-pub struct WatcherHandler;
+pub struct WatcherHandler {
+    tool_name: ToolName,
+}
+
+impl WatcherHandler {
+    #[allow(dead_code)]
+    pub(crate) fn new(name: &'static str) -> Self {
+        Self {
+            tool_name: ToolName::new(None, name.to_string()),
+        }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct WatchProcessExitArgs {
@@ -108,6 +120,10 @@ fn default_requires_response() -> bool {
 
 impl ToolHandler for WatcherHandler {
     type Output = FunctionToolOutput;
+
+    fn tool_name(&self) -> ToolName {
+        self.tool_name.clone()
+    }
 
     fn kind(&self) -> ToolKind {
         ToolKind::Function

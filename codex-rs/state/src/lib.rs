@@ -100,7 +100,6 @@ pub use model::WatcherRun;
 pub use model::WatcherRunStatus;
 pub use model::WatcherStatus;
 pub use model::WatcherTriggerKind;
-pub use runtime::DeviceKeyBindingRecord;
 pub use runtime::RemoteControlEnrollmentRecord;
 pub use runtime::ThreadFilterOptions;
 pub use runtime::ThreadGoalAccountingMode;
