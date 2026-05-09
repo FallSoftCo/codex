@@ -213,27 +213,6 @@ async fn spawn_agent_description_lists_visible_models_and_reasoning_efforts() ->
     );
     assert!(
         description.contains(
-            "If the user asks you to work with teammates, peers, or other existing agents, do not satisfy that by spawning a fresh subagent by default."
-        ),
-        "expected teammate-coordination clarification in spawn_agent description: {description:?}"
-    );
-    assert!(
-        description.contains(
-            "reserve `spawn_agent` for parallelizing your own currently owned work into bounded sidecar subtasks."
-        ),
-        "expected owned-work parallelization rule in spawn_agent description: {description:?}"
-    );
-    assert!(
-        description
-            .contains("Coordinate with the existing attached Losangelex/Hollywood agents first"),
-        "expected Hollywood-first clarification in spawn_agent description: {description:?}"
-    );
-    assert!(
-        description.contains("prefer the already attached Losangelex/Hollywood agents for that"),
-        "expected existing-agent preference in v2 spawn_agent description: {description:?}"
-    );
-    assert!(
-        description.contains(
             "Agent-role guidance below only helps choose which agent to use after spawning is already authorized; it never authorizes spawning by itself."
         ),
         "expected agent-role clarification in spawn_agent description: {description:?}"

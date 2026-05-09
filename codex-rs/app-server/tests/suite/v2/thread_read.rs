@@ -78,6 +78,7 @@ use uuid::Uuid;
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
 #[cfg(not(windows))]
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const EXPECTED_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tokio::test]
 async fn thread_read_returns_summary_without_turns() -> Result<()> {
@@ -125,7 +126,7 @@ async fn thread_read_returns_summary_without_turns() -> Result<()> {
     assert!(!thread.ephemeral, "stored rollouts should not be ephemeral");
     assert!(thread.path.as_ref().expect("thread path").is_absolute());
     assert_eq!(thread.cwd, test_absolute_path("/"));
-    assert_eq!(thread.cli_version, "0.0.0");
+    assert_eq!(thread.cli_version, EXPECTED_CLI_VERSION);
     assert_eq!(thread.source, SessionSource::Cli);
     assert_eq!(thread.git_info, None);
     assert_eq!(thread.turns.len(), 0);

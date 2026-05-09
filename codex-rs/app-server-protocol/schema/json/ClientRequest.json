@@ -1210,6 +1210,43 @@
       },
       "type": "object"
     },
+    "HollywoodAttentionMode": {
+      "enum": [
+        "focused",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodAttentionSettings": {
+      "properties": {
+        "includeAtAll": {
+          "default": true,
+          "type": "boolean"
+        },
+        "includeAtRoom": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/definitions/HollywoodAttentionMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionStatus": {
+      "enum": [
+        "persisted",
+        "idle",
+        "active",
+        "waiting",
+        "blocked"
+      ],
+      "type": "string"
+    },
     "HookMigration": {
       "properties": {
         "name": {
@@ -3627,6 +3664,28 @@
       },
       "required": [
         "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadOwnershipPathKind": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "ThreadOwnershipPathSpec": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/ThreadOwnershipPathKind"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
       ],
       "type": "object"
     },

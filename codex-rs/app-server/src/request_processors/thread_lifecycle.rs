@@ -298,6 +298,12 @@ pub(super) async fn ensure_listener_task_running(
                     if let EventMsg::RawResponseItem(raw_response_item_event) = &event.msg
                         && !raw_events_enabled
                     {
+                        maybe_interrupt_superseded_coordination_owner(
+                            &raw_response_item_event.item,
+                            conversation_id,
+                            thread_manager.as_ref(),
+                        )
+                        .await;
                         maybe_emit_hook_prompt_item_completed(
                             conversation_id,
                             &event.id,

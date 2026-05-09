@@ -95,6 +95,7 @@ use super::analytics::wait_for_analytics_payload;
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
 #[cfg(not(windows))]
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const EXPECTED_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CODEX_5_2_INSTRUCTIONS_TEMPLATE_DEFAULT: &str = "You are Codex, a coding agent based on GPT-5. You and the user share the same workspace and collaborate to achieve the user's goals.";
 
 fn normalized_existing_path(path: impl AsRef<Path>) -> Result<PathBuf> {
@@ -347,7 +348,7 @@ async fn thread_resume_returns_rollout_history() -> Result<()> {
     assert_eq!(thread.model_provider, "mock_provider");
     assert!(thread.path.as_ref().expect("thread path").is_absolute());
     assert_eq!(thread.cwd, test_absolute_path("/"));
-    assert_eq!(thread.cli_version, "0.0.0");
+    assert_eq!(thread.cli_version, EXPECTED_CLI_VERSION);
     assert_eq!(thread.source, SessionSource::Cli);
     assert_eq!(thread.git_info, None);
     assert_eq!(thread.status, ThreadStatus::Idle);

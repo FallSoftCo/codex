@@ -44,7 +44,7 @@ fn project_layers_for_cwd(cwd: &Path) -> Vec<ConfigLayerEntry> {
     };
     let project_root = cwd_dir
         .ancestors()
-        .find(|ancestor| ancestor.join(".git").exists())
+        .find(|ancestor| is_valid_git_marker(&ancestor.join(".git")))
         .unwrap_or(cwd_dir.as_path())
         .to_path_buf();
 
@@ -77,6 +77,16 @@ fn project_layers_for_cwd(cwd: &Path) -> Vec<ConfigLayerEntry> {
             })
         })
         .collect()
+}
+
+fn is_valid_git_marker(dot_git: &Path) -> bool {
+    if dot_git.is_dir() {
+        return dot_git.join("HEAD").is_file();
+    }
+
+    fs::read_to_string(dot_git)
+        .ok()
+        .is_some_and(|contents| contents.trim_start().starts_with("gitdir:"))
 }
 
 async fn make_config_for_cwd(codex_home: &TempDir, cwd: PathBuf) -> TestConfig {
@@ -132,7 +142,7 @@ async fn load_skills_for_test(config: &TestConfig) -> SkillLoadOutcome {
 }
 
 fn mark_as_git_repo(dir: &Path) {
-    // Config/project-root discovery only checks for the presence of `.git` (file or dir),
+    // Config/project-root discovery accepts a `.git` file with a `gitdir:` entry,
     // so we can avoid shelling out to `git init` in tests.
     fs::write(dir.join(".git"), "gitdir: fake\n").unwrap();
 }

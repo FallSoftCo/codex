@@ -1093,6 +1093,14 @@ impl Session {
         &self,
         message: &codex_protocol::protocol::HollywoodInputMessage,
     ) {
+        if crate::hollywood::identities(self.conversation_id, None)
+            .iter()
+            .any(|identity| {
+                crate::hollywood::live_identity_matches_target(&message.sender_id, identity)
+            })
+        {
+            return;
+        }
         let mut state = self.state.lock().await;
         state.add_hollywood_obligation(message);
     }

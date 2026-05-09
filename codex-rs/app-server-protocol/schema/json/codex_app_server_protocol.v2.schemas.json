@@ -5982,6 +5982,278 @@
       "title": "GuardianWarningNotification",
       "type": "object"
     },
+    "HollywoodAttentionMode": {
+      "enum": [
+        "focused",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodAttentionSettings": {
+      "properties": {
+        "includeAtAll": {
+          "default": true,
+          "type": "boolean"
+        },
+        "includeAtRoom": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/definitions/HollywoodAttentionMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessage": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "messageKind": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodMessageKind"
+            }
+          ],
+          "default": "ambient"
+        },
+        "recipientId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responsePolicy": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodResponsePolicy"
+            }
+          ],
+          "default": "optional"
+        },
+        "room": {
+          "type": "string"
+        },
+        "senderId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "body",
+        "createdAt",
+        "id",
+        "mentions",
+        "room"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessageAttention": {
+      "enum": [
+        "focused",
+        "broadcast",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageKind": {
+      "enum": [
+        "ambient",
+        "broadcast",
+        "direct"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attention": {
+          "$ref": "#/definitions/HollywoodMessageAttention"
+        },
+        "mentioned": {
+          "type": "boolean"
+        },
+        "message": {
+          "$ref": "#/definitions/HollywoodMessage"
+        },
+        "selfAuthored": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attention",
+        "mentioned",
+        "message",
+        "selfAuthored",
+        "threadId"
+      ],
+      "title": "HollywoodMessageNotification",
+      "type": "object"
+    },
+    "HollywoodResponsePolicy": {
+      "enum": [
+        "required",
+        "optional",
+        "none"
+      ],
+      "type": "string"
+    },
+    "HollywoodSessionDiagnostics": {
+      "properties": {
+        "activeTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activeTurnItemCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "activeTurnStartedAt": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "autonomousTurnPending": {
+          "type": "boolean"
+        },
+        "currentTurnOpen": {
+          "type": "boolean"
+        },
+        "outstandingObligationCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "pendingSemanticWakeCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "startupTurnPending": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "activeTurnItemCount",
+        "autonomousTurnPending",
+        "currentTurnOpen",
+        "outstandingObligationCount",
+        "pendingSemanticWakeCount",
+        "startupTurnPending"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionState": {
+      "properties": {
+        "attached": {
+          "type": "boolean"
+        },
+        "attention": {
+          "$ref": "#/definitions/HollywoodAttentionSettings"
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "identities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "observedRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "primaryRoom": {
+          "type": "string"
+        },
+        "resumedFrom": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionKind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/HollywoodSessionStatus"
+        },
+        "url": {
+          "type": "string"
+        },
+        "wakeRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "attached",
+        "attention",
+        "identities",
+        "observedRooms",
+        "primaryRoom",
+        "status",
+        "url",
+        "wakeRooms"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionStatus": {
+      "enum": [
+        "persisted",
+        "idle",
+        "active",
+        "waiting",
+        "blocked"
+      ],
+      "type": "string"
+    },
     "HookCompletedNotification": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -12189,6 +12461,26 @@
           "type": "object"
         },
         {
+          "properties": {
+            "method": {
+              "enum": [
+                "thread/hollywood/message"
+              ],
+              "title": "Thread/hollywood/messageNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/HollywoodMessageNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Thread/hollywood/messageNotification",
+          "type": "object"
+        },
+        {
           "description": "Notifies the user of world-writable directories on Windows, which cannot be protected by the sandbox.",
           "properties": {
             "method": {
@@ -12928,6 +13220,17 @@
             }
           ],
           "description": "Optional Git metadata captured when the thread was created."
+        },
+        "hollywood": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional Hollywood coordination state when attached."
         },
         "id": {
           "type": "string"
@@ -14328,6 +14631,81 @@
         "threadId"
       ],
       "title": "ThreadNameUpdatedNotification",
+      "type": "object"
+    },
+    "ThreadOwnershipPathClaim": {
+      "properties": {
+        "claimedAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/ThreadOwnershipPathKind"
+        },
+        "leaseExpiresAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "ownerThreadId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "claimedAt",
+        "id",
+        "kind",
+        "leaseExpiresAt",
+        "ownerThreadId",
+        "path",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "ThreadOwnershipPathClaimConflict": {
+      "properties": {
+        "blockingClaim": {
+          "$ref": "#/definitions/ThreadOwnershipPathClaim"
+        },
+        "requested": {
+          "$ref": "#/definitions/ThreadOwnershipPathSpec"
+        }
+      },
+      "required": [
+        "blockingClaim",
+        "requested"
+      ],
+      "type": "object"
+    },
+    "ThreadOwnershipPathKind": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "ThreadOwnershipPathSpec": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/ThreadOwnershipPathKind"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ],
       "type": "object"
     },
     "ThreadReadParams": {

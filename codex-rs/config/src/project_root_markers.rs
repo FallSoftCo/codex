@@ -1,5 +1,7 @@
 use std::io;
 
+use codex_file_system::ExecutorFileSystem;
+use codex_utils_absolute_path::AbsolutePathBuf;
 use toml::Value as TomlValue;
 
 const DEFAULT_PROJECT_ROOT_MARKERS: &[&str] = &[".git"];
@@ -47,4 +49,31 @@ pub fn default_project_root_markers() -> Vec<String> {
         .iter()
         .map(ToString::to_string)
         .collect()
+}
+
+pub async fn project_root_marker_exists(
+    fs: &dyn ExecutorFileSystem,
+    marker_path: &AbsolutePathBuf,
+    marker: &str,
+) -> io::Result<bool> {
+    let metadata = fs.get_metadata(marker_path, /*sandbox*/ None).await?;
+    if marker != ".git" {
+        return Ok(true);
+    }
+
+    if metadata.is_directory {
+        let head_path = marker_path.join("HEAD");
+        return match fs.get_metadata(&head_path, /*sandbox*/ None).await {
+            Ok(head_metadata) => Ok(head_metadata.is_file),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(err) => Err(err),
+        };
+    }
+
+    if metadata.is_file {
+        let contents = fs.read_file_text(marker_path, /*sandbox*/ None).await?;
+        return Ok(contents.trim_start().starts_with("gitdir:"));
+    }
+
+    Ok(false)
 }

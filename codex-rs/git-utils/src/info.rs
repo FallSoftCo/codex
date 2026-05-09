@@ -38,6 +38,24 @@ pub fn get_git_repo_root(base_dir: &Path) -> Option<PathBuf> {
     find_ancestor_git_entry(base).map(|(repo_root, _)| repo_root)
 }
 
+fn is_valid_git_entry(dot_git: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(dot_git) else {
+        return false;
+    };
+
+    if metadata.is_dir() {
+        return std::fs::metadata(dot_git.join("HEAD")).is_ok_and(|head| head.is_file());
+    }
+
+    if metadata.is_file() {
+        return std::fs::read_to_string(dot_git)
+            .ok()
+            .is_some_and(|contents| contents.trim_start().starts_with("gitdir:"));
+    }
+
+    false
+}
+
 /// Timeout for git commands to prevent freezing on large repositories
 const GIT_COMMAND_TIMEOUT: TokioDuration = TokioDuration::from_secs(5);
 
@@ -736,11 +754,20 @@ pub async fn resolve_root_git_project_for_trust(
         .ok()?
         .is_directory
     {
-        return Some(repo_root);
+        let head = dot_git.join("HEAD");
+        if fs
+            .get_metadata(&head, /*sandbox*/ None)
+            .await
+            .ok()
+            .is_some_and(|metadata| !metadata.is_directory)
+        {
+            return Some(repo_root);
+        }
+        return None;
     }
 
     let git_dir_s = fs.read_file_text(&dot_git, /*sandbox*/ None).await.ok()?;
-    let git_dir_rel = git_dir_s.trim().strip_prefix("gitdir:")?.trim();
+    let git_dir_rel = git_dir_s.trim_start().strip_prefix("gitdir:")?.trim();
     if git_dir_rel.is_empty() {
         return None;
     }
@@ -760,7 +787,7 @@ fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {
 
     loop {
         let dot_git = dir.join(".git");
-        if dot_git.exists() {
+        if is_valid_git_entry(&dot_git) {
             return Some((dir, dot_git));
         }
 
@@ -780,11 +807,39 @@ async fn find_ancestor_git_entry_with_fs(
 ) -> Option<(AbsolutePathBuf, AbsolutePathBuf)> {
     for dir in base_dir.ancestors() {
         let dot_git = dir.join(".git");
-        if fs.get_metadata(&dot_git, /*sandbox*/ None).await.is_ok() {
+        if is_valid_git_entry_with_fs(fs, &dot_git).await {
             return Some((dir, dot_git));
         }
     }
     None
+}
+
+async fn is_valid_git_entry_with_fs(
+    fs: &dyn ExecutorFileSystem,
+    dot_git: &AbsolutePathBuf,
+) -> bool {
+    let Ok(metadata) = fs.get_metadata(dot_git, /*sandbox*/ None).await else {
+        return false;
+    };
+
+    if metadata.is_directory {
+        let head = dot_git.join("HEAD");
+        return fs
+            .get_metadata(&head, /*sandbox*/ None)
+            .await
+            .ok()
+            .is_some_and(|metadata| metadata.is_file);
+    }
+
+    if metadata.is_file {
+        return fs
+            .read_file_text(dot_git, /*sandbox*/ None)
+            .await
+            .ok()
+            .is_some_and(|contents| contents.trim_start().starts_with("gitdir:"));
+    }
+
+    false
 }
 
 /// Returns a list of local git branches.

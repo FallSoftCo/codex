@@ -4,4 +4,4 @@
 import type { HollywoodAttentionSettings } from "./HollywoodAttentionSettings";
 import type { HollywoodSessionStatus } from "./HollywoodSessionStatus";
 
-export type HollywoodSessionState = { attached: boolean, url: string, primaryRoom: string, observedRooms: Array<string>, wakeRooms: Array<string>, attention: HollywoodAttentionSettings, identities: Array<string>, sessionKind: string | null, resumedFrom: string | null, status: HollywoodSessionStatus, };
+export type HollywoodSessionState = { attached: boolean, url: string, primaryRoom: string, observedRooms: Array<string>, wakeRooms: Array<string>, attention: HollywoodAttentionSettings, identities: Array<string>, sessionKind: string | null, resumedFrom: string | null, status: HollywoodSessionStatus, diagnostics: HollywoodSessionDiagnostics | null, };

@@ -1065,7 +1065,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
     let (server_url, server_handle, server_control) = start_apps_server_with_delays_and_control(
         initial_connectors,
         initial_tools,
-        Duration::from_millis(300),
+        Duration::from_secs(2),
         Duration::ZERO,
     )
     .await?;

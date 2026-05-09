@@ -30,19 +30,14 @@ use codex_state::StateRuntime;
 use codex_state::state_db_path;
 use codex_tui::AppExitInfo;
 use codex_tui::Cli as TuiCli;
-use codex_tui::ClientRestartRequest;
 use codex_tui::ExitReason;
 use codex_tui::UpdateAction;
 use codex_utils_cli::CliConfigOverrides;
 use owo_colors::OwoColorize;
 use std::ffi::OsString;
-use std::fs;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use supports_color::Stream;
-
-const LOSANGELEX_RESTART_HANDOFF_FILE_ENV_VAR: &str = "LOSANGELEX_RESTART_HANDOFF_FILE";
-const LOSANGELEX_CLIENT_RESTART_EXIT_CODE: i32 = 85;
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod app_cmd;
@@ -973,30 +968,6 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
     lines
 }
 
-fn restart_handoff_file_path() -> Option<PathBuf> {
-    std::env::var_os(LOSANGELEX_RESTART_HANDOFF_FILE_ENV_VAR)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-}
-
-fn write_restart_handoff(
-    path: &std::path::Path,
-    restart_request: &ClientRestartRequest,
-) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent)?;
-    }
-
-    let payload = serde_json::to_vec(&serde_json::json!({
-        "thread_id": restart_request.thread_id.to_string(),
-        "reason": restart_request.reason.clone(),
-    }))?;
-    fs::write(path, payload)?;
-    Ok(())
-}
-
 /// Handle the app exit and print the results. Optionally run the update action.
 fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
     match exit_info.exit_reason {
@@ -1007,24 +978,14 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
         ExitReason::UserRequested => { /* normal exit */ }
     }
 
-    let restart_request = exit_info.restart_request.clone();
-    let restart_handoff_path = restart_request
-        .as_ref()
-        .and_then(|_| restart_handoff_file_path());
     let formatted_exit_info = exit_info.clone();
     let update_action = exit_info.update_action;
-    if restart_handoff_path.is_none() {
-        let color_enabled = supports_color::on(Stream::Stdout).is_some();
-        for line in format_exit_messages(formatted_exit_info, color_enabled) {
-            println!("{line}");
-        }
+    let color_enabled = supports_color::on(Stream::Stdout).is_some();
+    for line in format_exit_messages(formatted_exit_info, color_enabled) {
+        println!("{line}");
     }
     if let Some(action) = update_action {
         run_update_action(action)?;
-    }
-    if let (Some(restart_request), Some(path)) = (restart_request, restart_handoff_path) {
-        write_restart_handoff(&path, &restart_request)?;
-        std::process::exit(LOSANGELEX_CLIENT_RESTART_EXIT_CODE);
     }
     Ok(())
 }
@@ -3195,7 +3156,6 @@ mod tests {
                 .map(ThreadId::from_string)
                 .map(Result::unwrap),
             thread_name: thread_name.map(str::to_string),
-            restart_request: None,
             update_action: None,
             exit_reason: ExitReason::UserRequested,
         }
@@ -3207,7 +3167,6 @@ mod tests {
             token_usage: TokenUsage::default(),
             thread_id: None,
             thread_name: None,
-            restart_request: None,
             update_action: None,
             exit_reason: ExitReason::UserRequested,
         };
@@ -3257,30 +3216,6 @@ mod tests {
                 "To continue this session, run codex resume 123e4567-e89b-12d3-a456-426614174000"
                     .to_string(),
             ]
-        );
-    }
-
-    #[test]
-    fn write_restart_handoff_serializes_expected_payload() {
-        let tempdir = tempfile::tempdir().expect("tempdir should be available");
-        let path = tempdir.path().join("restart-handoff.json");
-        let restart_request = ClientRestartRequest {
-            thread_id: ThreadId::from_string("123e4567-e89b-12d3-a456-426614174000")
-                .expect("thread id should parse"),
-            reason: Some("rolling deploy".to_string()),
-        };
-
-        write_restart_handoff(&path, &restart_request).expect("handoff write should succeed");
-
-        let payload: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(&path).expect("handoff file should be readable"))
-                .expect("handoff payload should be valid json");
-        assert_eq!(
-            payload,
-            serde_json::json!({
-                "thread_id": "123e4567-e89b-12d3-a456-426614174000",
-                "reason": "rolling deploy",
-            })
         );
     }
 

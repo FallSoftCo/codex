@@ -1420,7 +1420,7 @@ async fn maybe_emit_raw_response_item_completed(
         .await;
 }
 
-async fn maybe_interrupt_superseded_coordination_owner(
+pub(crate) async fn maybe_interrupt_superseded_coordination_owner(
     item: &codex_protocol::models::ResponseItem,
     conversation_id: ThreadId,
     thread_manager: &ThreadManager,

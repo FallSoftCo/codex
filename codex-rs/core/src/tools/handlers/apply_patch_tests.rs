@@ -117,7 +117,10 @@ fn diff_consumer_streams_apply_patch_changes() {
             .is_none()
     );
 
-    let event = consumer.flush_update_on_complete().expect("progress event");
+    let event = consumer
+        .finish_update_on_complete()
+        .expect("finish update")
+        .expect("progress event");
     assert_eq!(
         (event.call_id, event.changes),
         (

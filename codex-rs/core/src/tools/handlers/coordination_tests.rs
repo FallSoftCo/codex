@@ -73,6 +73,10 @@ fn parse_result(output: FunctionToolOutput) -> Value {
     serde_json::from_str(&output.into_text()).expect("coordination handler should return json")
 }
 
+fn coordination_handler() -> CoordinationHandler {
+    CoordinationHandler::new("coordination_act")
+}
+
 async fn insert_thread_metadata(
     state_db: &Arc<codex_state::StateRuntime>,
     turn: &TurnContext,
@@ -169,7 +173,7 @@ async fn open_task_for_peer_persists_assigned_wake() {
     let owner_thread_id_str = owner_thread_id.to_string();
     insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -221,7 +225,7 @@ async fn open_task_for_peer_persists_assigned_wake() {
 async fn open_task_treats_unassigned_owner_as_unowned() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -251,7 +255,7 @@ async fn assigned_room_scoped_qa_wake_mentions_hollywood_read_and_done() {
     let owner_thread_id_str = owner_thread_id.to_string();
     insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
 
-    CoordinationHandler
+    coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -303,7 +307,7 @@ async fn direct_awarded_implementation_wake_includes_reserved_scope_guidance() {
     let owner_thread_id_str = owner_thread_id.to_string();
     insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -384,7 +388,7 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
     .await;
     let reserved_path = turn.config.cwd.join("src/protocol.rs");
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -410,7 +414,7 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
         .expect("task id should exist")
         .to_string();
 
-    let accept_output = CoordinationHandler
+    let accept_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&owner_session),
             Arc::clone(&owner_turn),
@@ -469,7 +473,7 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
     .await;
     let reserved_path = turn.config.cwd.join("styles.css");
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -495,7 +499,7 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
         .expect("task id should exist")
         .to_string();
 
-    CoordinationHandler
+    coordination_handler()
         .handle(invocation(
             Arc::clone(&owner_session),
             Arc::clone(&owner_turn),
@@ -510,7 +514,7 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
         .await
         .expect("accept should succeed");
 
-    let cancel_output = CoordinationHandler
+    let cancel_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -574,7 +578,7 @@ async fn accept_clears_pending_assigned_wake_for_owner() {
     )
     .await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -605,7 +609,7 @@ async fn accept_clears_pending_assigned_wake_for_owner() {
         1
     );
 
-    CoordinationHandler
+    coordination_handler()
         .handle(invocation(
             Arc::clone(&owner_session),
             Arc::clone(&owner_turn),
@@ -637,7 +641,7 @@ async fn done_unblocks_awarded_dependency_and_persists_wake() {
     let owner_thread_id_str = owner_thread_id.to_string();
     insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
 
-    let dependency_output = CoordinationHandler
+    let dependency_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -658,7 +662,7 @@ async fn done_unblocks_awarded_dependency_and_persists_wake() {
         .expect("dependency task id should exist")
         .to_string();
 
-    let blocked_output = CoordinationHandler
+    let blocked_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -669,6 +673,10 @@ async fn done_unblocks_awarded_dependency_and_persists_wake() {
                 "details": "Follow the protocol once it lands.",
                 "kind": "implementation",
                 "owner": owner_thread_id_str,
+                "claim_paths": [{
+                    "kind": "directory",
+                    "path": "codex-rs/tui"
+                }],
                 "depends_on": [dependency_task_id.clone()],
                 "notify_room": false,
             }),
@@ -687,7 +695,7 @@ async fn done_unblocks_awarded_dependency_and_persists_wake() {
         0
     );
 
-    let done_output = CoordinationHandler
+    let done_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -728,7 +736,7 @@ async fn open_task_named_owner_resolves_thread_title() {
     let owner_thread_id = ThreadId::new();
     insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -769,7 +777,7 @@ async fn handoff_named_owner_resolves_thread_title() {
     .await;
     insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -790,7 +798,7 @@ async fn handoff_named_owner_resolves_thread_title() {
         .expect("task id should exist")
         .to_string();
 
-    let handoff_output = CoordinationHandler
+    let handoff_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -825,7 +833,7 @@ async fn handoff_named_owner_resolves_thread_title() {
 async fn handoff_requires_meaningful_summary() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -844,7 +852,7 @@ async fn handoff_requires_meaningful_summary() {
         .expect("task id should exist")
         .to_string();
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -871,7 +879,7 @@ async fn handoff_requires_meaningful_summary() {
 async fn yield_rejects_placeholder_summary() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -890,7 +898,7 @@ async fn yield_rejects_placeholder_summary() {
         .expect("task id should exist")
         .to_string();
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -917,7 +925,7 @@ async fn yield_rejects_placeholder_summary() {
 async fn cancel_rejects_placeholder_summary() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -943,7 +951,7 @@ async fn cancel_rejects_placeholder_summary() {
 async fn accept_rejects_noop_summary() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -962,7 +970,7 @@ async fn accept_rejects_noop_summary() {
         .expect("task id should exist")
         .to_string();
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -989,7 +997,7 @@ async fn accept_rejects_noop_summary() {
 async fn implementation_accept_requires_exact_claim_paths() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1009,7 +1017,7 @@ async fn implementation_accept_requires_exact_claim_paths() {
         .expect("task id should exist")
         .to_string();
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1054,7 +1062,7 @@ async fn implementation_accept_rejects_conflicting_claim_paths() {
         .await
         .expect("blocker claim should succeed");
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1074,7 +1082,7 @@ async fn implementation_accept_rejects_conflicting_claim_paths() {
         .expect("task id should exist")
         .to_string();
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1125,7 +1133,7 @@ async fn implementation_open_task_requires_claim_paths_for_direct_owner() {
     let owner_thread_id = ThreadId::new();
     insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1198,7 +1206,7 @@ async fn auto_discovery_blocks_broad_implementation_open_task() {
         }))
         .await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1277,7 +1285,7 @@ async fn auto_execution_verifier_cannot_accept_unassigned_implementation_lane() 
         .await
         .expect("task create should succeed");
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1368,7 +1376,7 @@ async fn auto_execution_verifier_can_accept_explicitly_awarded_implementation_la
         .await
         .expect("task create should succeed");
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1413,7 +1421,7 @@ async fn implementation_open_task_rejects_conflicting_reserved_claim_paths() {
         .await
         .expect("blocker claim should succeed");
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1469,7 +1477,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
     let (session, turn, state_db) = make_session_with_state_db().await;
     let claimed_path = turn.config.cwd.join("src/lib.rs");
 
-    let initial_open = CoordinationHandler
+    let initial_open = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1496,7 +1504,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
         .expect("task id should exist")
         .to_string();
 
-    CoordinationHandler
+    coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1514,7 +1522,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
         .await
         .expect("accept should succeed");
 
-    let duplicate_open = CoordinationHandler
+    let duplicate_open = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1572,7 +1580,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
     )
     .await;
 
-    let initial_open = CoordinationHandler
+    let initial_open = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1595,7 +1603,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
         .expect("task id should exist")
         .to_string();
 
-    let duplicate_open = CoordinationHandler
+    let duplicate_open = coordination_handler()
         .handle(invocation(
             Arc::clone(&owner_session),
             Arc::clone(&owner_turn),
@@ -1639,7 +1647,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
 async fn missing_task_id_returns_recoverable_output() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1662,7 +1670,7 @@ async fn missing_task_id_returns_recoverable_output() {
 async fn active_accept_by_same_owner_is_idempotent() {
     let (session, turn, state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1683,7 +1691,7 @@ async fn active_accept_by_same_owner_is_idempotent() {
         .expect("task id should be string")
         .to_string();
 
-    let accept_output = CoordinationHandler
+    let accept_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1700,7 +1708,7 @@ async fn active_accept_by_same_owner_is_idempotent() {
     let accept_result = parse_result(accept_output);
     assert_eq!(accept_result["task"]["status"], "active");
 
-    let duplicate_accept = CoordinationHandler
+    let duplicate_accept = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1738,7 +1746,7 @@ async fn active_accept_by_same_owner_is_idempotent() {
 async fn repeated_done_by_same_controller_is_idempotent() {
     let (session, turn, state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1759,7 +1767,7 @@ async fn repeated_done_by_same_controller_is_idempotent() {
         .expect("task id should be string")
         .to_string();
 
-    CoordinationHandler
+    coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1774,7 +1782,7 @@ async fn repeated_done_by_same_controller_is_idempotent() {
         .await
         .expect("accept should succeed");
 
-    let done_output = CoordinationHandler
+    let done_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1791,7 +1799,7 @@ async fn repeated_done_by_same_controller_is_idempotent() {
     let done_result = parse_result(done_output);
     assert_eq!(done_result["task"]["status"], "done");
 
-    let duplicate_done = CoordinationHandler
+    let duplicate_done = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1829,7 +1837,7 @@ async fn repeated_done_by_same_controller_is_idempotent() {
 async fn unknown_task_returns_recoverable_output() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1858,7 +1866,7 @@ async fn list_coordination_tasks_accepts_named_owner_and_status_alias() {
     let owner_thread_id = ThreadId::new();
     insert_named_thread_metadata(&state_db, turn.as_ref(), owner_thread_id, "tony").await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1879,7 +1887,7 @@ async fn list_coordination_tasks_accepts_named_owner_and_status_alias() {
         .expect("task id should exist")
         .to_string();
 
-    let list_output = CoordinationHandler
+    let list_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1902,7 +1910,7 @@ async fn list_coordination_tasks_accepts_named_owner_and_status_alias() {
 async fn list_coordination_tasks_accepts_todo_status_alias_for_open() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    let open_output = CoordinationHandler
+    let open_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1922,7 +1930,7 @@ async fn list_coordination_tasks_accepts_todo_status_alias_for_open() {
         .expect("task id should exist")
         .to_string();
 
-    let list_output = CoordinationHandler
+    let list_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1944,7 +1952,7 @@ async fn list_coordination_tasks_accepts_todo_status_alias_for_open() {
 async fn list_coordination_tasks_accepts_proposed_status_alias_for_open() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
 
-    CoordinationHandler
+    coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1958,7 +1966,7 @@ async fn list_coordination_tasks_accepts_proposed_status_alias_for_open() {
         .await
         .expect("open_task should succeed");
 
-    let list_output = CoordinationHandler
+    let list_output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -1990,7 +1998,7 @@ async fn open_task_named_owner_resolves_fresh_named_thread_without_history() {
     )
     .await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -2018,7 +2026,7 @@ async fn open_task_named_owner_resolves_current_thread_title() {
     let (session, turn, state_db) = make_session_with_state_db().await;
     rename_thread_metadata(&state_db, session.conversation_id, "tony").await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -2073,7 +2081,7 @@ async fn open_task_named_owner_resolves_live_hollywood_identity_in_current_room(
         .await;
     insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -2128,7 +2136,7 @@ async fn open_task_named_owner_resolves_generated_runtime_suffix_identity_in_cur
         .await;
     insert_thread_metadata(&state_db, turn.as_ref(), owner_thread_id).await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -2176,7 +2184,7 @@ async fn open_task_named_owner_in_hollywood_mode_requires_live_room_match() {
     let stale_named_thread = ThreadId::new();
     insert_named_thread_metadata(&state_db, turn.as_ref(), stale_named_thread, "james").await;
 
-    let error = match CoordinationHandler
+    let error = match coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -2236,7 +2244,7 @@ async fn open_task_notifies_room_using_live_session_hollywood_config() {
         })
         .await;
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),
@@ -2258,9 +2266,12 @@ async fn open_task_notifies_room_using_live_session_hollywood_config() {
         .received_requests()
         .await
         .expect("wiremock should capture requests");
-    assert_eq!(requests.len(), 1);
+    let message_request = requests
+        .iter()
+        .find(|request| request.method == "POST" && request.url.path() == "/hollywood/v1/messages")
+        .expect("room notification request should be sent");
     let body: Value =
-        serde_json::from_slice(&requests[0].body).expect("room notify body should be json");
+        serde_json::from_slice(&message_request.body).expect("room notify body should be json");
     assert_eq!(body["room"], json!("repo/losangelex"));
     assert_eq!(
         body["sender_id"],
@@ -2364,7 +2375,7 @@ async fn list_coordination_tasks_defaults_to_attached_room_scope() {
         .await
         .expect("other room task should be created");
 
-    let output = CoordinationHandler
+    let output = coordination_handler()
         .handle(invocation(
             Arc::clone(&session),
             Arc::clone(&turn),

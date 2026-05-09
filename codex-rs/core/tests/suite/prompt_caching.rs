@@ -179,23 +179,9 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
     let mut expected_tools_names = if cfg!(windows) {
         vec!["shell_command"]
     } else {
-        vec![
-            "exec_command",
-            "write_stdin",
-            "watch_process_exit",
-            "watch_agent_completion",
-            "list_watchers",
-            "cancel_watcher",
-            "watch_task_periodically",
-            "list_task_watches",
-            "update_task_watch",
-            "cancel_task_watch",
-        ]
+        vec!["exec_command", "write_stdin"]
     };
     expected_tools_names.extend([
-        "coordination_act",
-        "list_coordination_tasks",
-        "restart_client",
         "update_plan",
         "request_user_input",
         "apply_patch",
@@ -206,6 +192,9 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
         "resume_agent",
         "wait_agent",
         "close_agent",
+        "restart_client",
+        "coordination_act",
+        "list_coordination_tasks",
     ]);
     if hollywood_tools_expected() {
         expected_tools_names.extend([

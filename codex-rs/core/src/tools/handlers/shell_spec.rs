@@ -95,7 +95,7 @@ pub(crate) fn create_exec_command_tool_with_environment_id(
                 windows_shell_guidance()
             )
         } else {
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Prefer `watch_process_exit` over long inline waits when you only need to react after the process finishes."
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
                 .to_string()
         },
         strict: false,

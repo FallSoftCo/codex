@@ -36,16 +36,18 @@ fn default_mode_instructions_replace_mode_names_placeholder() {
 }
 
 #[test]
-fn default_mode_instructions_prefer_hollywood_for_existing_agent_coordination() {
-    let default_instructions = default_preset(CollaborationModesConfig::default())
+fn default_mode_instructions_describe_default_mode_behavior() {
+    let default_instructions = default_preset()
         .developer_instructions
         .expect("default preset should include instructions")
         .expect("default instructions should be set");
 
     assert!(default_instructions.contains(
-        "prefer Hollywood coordination with the already attached peers instead of spawning new subagents"
+        "In Default mode, strongly prefer making reasonable assumptions and executing the user's request"
     ));
-    assert!(default_instructions.contains(
-        "Use `spawn_agent` only when the user explicitly asks for subagents, delegation, or parallel new workers"
-    ));
+    assert!(
+        default_instructions
+            .contains("Never write a multiple choice question as a textual assistant message")
+    );
+    assert!(!default_instructions.contains("prefer Hollywood coordination"));
 }

@@ -487,7 +487,8 @@ mod tests {
     fn default_hollywood_room_for_cwd_uses_repo_slug() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let repo_root = temp_dir.path().join("Los Angeles Lex");
-        fs::create_dir_all(repo_root.join(".git")).expect("create git root");
+        fs::create_dir_all(&repo_root).expect("create repo root");
+        fs::write(repo_root.join(".git"), "gitdir: here\n").expect("create git root");
         fs::create_dir_all(repo_root.join("nested/worktree")).expect("create nested path");
 
         assert_eq!(

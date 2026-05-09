@@ -1552,7 +1552,7 @@ async fn codex_home_within_project_tree_is_not_double_loaded() -> std::io::Resul
     let nested_dot_codex = nested.join(".codex");
 
     tokio::fs::create_dir_all(&nested_dot_codex).await?;
-    tokio::fs::create_dir_all(project_root.join(".git")).await?;
+    tokio::fs::write(project_root.join(".git"), "gitdir: here\n").await?;
     tokio::fs::write(nested_dot_codex.join(CONFIG_TOML_FILE), "foo = \"child\"\n").await?;
 
     tokio::fs::create_dir_all(&project_dot_codex).await?;

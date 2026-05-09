@@ -2334,7 +2334,7 @@ async fn wait_agent_rejects_invalid_target() {
 }
 
 #[tokio::test]
-async fn wait_agent_rejects_empty_targets() {
+async fn wait_agent_accepts_empty_targets() {
     let (session, turn) = make_session_and_context().await;
     let invocation = invocation(
         Arc::new(session),
@@ -2342,13 +2342,21 @@ async fn wait_agent_rejects_empty_targets() {
         "wait_agent",
         function_payload(json!({"targets": []})),
     );
-    let Err(err) = WaitAgentHandler::default().handle(invocation).await else {
-        panic!("empty ids should be rejected");
-    };
+    let output = WaitAgentHandler::default()
+        .handle(invocation)
+        .await
+        .expect("empty ids should produce an empty wait result");
+    let (content, success) = expect_text_output(output);
+    let result: wait::WaitAgentResult =
+        serde_json::from_str(&content).expect("wait_agent result should be json");
     assert_eq!(
-        err,
-        FunctionCallError::RespondToModel("agent ids must be non-empty".to_string())
+        result,
+        wait::WaitAgentResult {
+            status: HashMap::new(),
+            timed_out: false,
+        }
     );
+    assert_eq!(success, None);
 }
 
 #[tokio::test]

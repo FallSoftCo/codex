@@ -2291,6 +2291,7 @@ mod tests {
                     agent_role: None,
                     git_info: None,
                     name: None,
+                    hollywood: None,
                     turns: Vec::new(),
                 },
                 model: "gpt-5".to_string(),
@@ -2335,6 +2336,7 @@ mod tests {
                         "agentRole": null,
                         "gitInfo": null,
                         "name": null,
+                        "hollywood": null,
                         "turns": []
                     },
                     "model": "gpt-5",

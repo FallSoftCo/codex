@@ -1710,6 +1710,276 @@
       ],
       "type": "object"
     },
+    "HollywoodAttentionMode": {
+      "enum": [
+        "focused",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodAttentionSettings": {
+      "properties": {
+        "includeAtAll": {
+          "default": true,
+          "type": "boolean"
+        },
+        "includeAtRoom": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/definitions/HollywoodAttentionMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessage": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "messageKind": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodMessageKind"
+            }
+          ],
+          "default": "ambient"
+        },
+        "recipientId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responsePolicy": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HollywoodResponsePolicy"
+            }
+          ],
+          "default": "optional"
+        },
+        "room": {
+          "type": "string"
+        },
+        "senderId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "body",
+        "createdAt",
+        "id",
+        "mentions",
+        "room"
+      ],
+      "type": "object"
+    },
+    "HollywoodMessageAttention": {
+      "enum": [
+        "focused",
+        "broadcast",
+        "ambient",
+        "broad"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageKind": {
+      "enum": [
+        "ambient",
+        "broadcast",
+        "direct"
+      ],
+      "type": "string"
+    },
+    "HollywoodMessageNotification": {
+      "properties": {
+        "attention": {
+          "$ref": "#/definitions/HollywoodMessageAttention"
+        },
+        "mentioned": {
+          "type": "boolean"
+        },
+        "message": {
+          "$ref": "#/definitions/HollywoodMessage"
+        },
+        "selfAuthored": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attention",
+        "mentioned",
+        "message",
+        "selfAuthored",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "HollywoodResponsePolicy": {
+      "enum": [
+        "required",
+        "optional",
+        "none"
+      ],
+      "type": "string"
+    },
+    "HollywoodSessionDiagnostics": {
+      "properties": {
+        "activeTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activeTurnItemCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "activeTurnStartedAt": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "autonomousTurnPending": {
+          "type": "boolean"
+        },
+        "currentTurnOpen": {
+          "type": "boolean"
+        },
+        "outstandingObligationCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "pendingSemanticWakeCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "startupTurnPending": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "activeTurnItemCount",
+        "autonomousTurnPending",
+        "currentTurnOpen",
+        "outstandingObligationCount",
+        "pendingSemanticWakeCount",
+        "startupTurnPending"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionState": {
+      "properties": {
+        "attached": {
+          "type": "boolean"
+        },
+        "attention": {
+          "$ref": "#/definitions/HollywoodAttentionSettings"
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "identities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "observedRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "primaryRoom": {
+          "type": "string"
+        },
+        "resumedFrom": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionKind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/HollywoodSessionStatus"
+        },
+        "url": {
+          "type": "string"
+        },
+        "wakeRooms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "attached",
+        "attention",
+        "identities",
+        "observedRooms",
+        "primaryRoom",
+        "status",
+        "url",
+        "wakeRooms"
+      ],
+      "type": "object"
+    },
+    "HollywoodSessionStatus": {
+      "enum": [
+        "persisted",
+        "idle",
+        "active",
+        "waiting",
+        "blocked"
+      ],
+      "type": "string"
+    },
     "HookCompletedNotification": {
       "properties": {
         "run": {
@@ -3070,6 +3340,17 @@
             }
           ],
           "description": "Optional Git metadata captured when the thread was created."
+        },
+        "hollywood": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional Hollywood coordination state when attached."
         },
         "id": {
           "type": "string"
@@ -6057,6 +6338,26 @@
         "params"
       ],
       "title": "Thread/realtime/closedNotification",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/hollywood/message"
+          ],
+          "title": "Thread/hollywood/messageNotificationMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/HollywoodMessageNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "title": "Thread/hollywood/messageNotification",
       "type": "object"
     },
     {

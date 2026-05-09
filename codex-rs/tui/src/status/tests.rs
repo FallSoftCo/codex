@@ -124,7 +124,9 @@ fn sanitize_directory(lines: Vec<String>) -> Vec<String> {
     lines
         .into_iter()
         .map(|line| {
-            if let (Some(dir_pos), Some(pipe_idx)) = (line.find("Directory: "), line.rfind('│')) {
+            let line = if let (Some(dir_pos), Some(pipe_idx)) =
+                (line.find("Directory: "), line.rfind('│'))
+            {
                 let prefix = &line[..dir_pos + "Directory: ".len()];
                 let suffix = &line[pipe_idx..];
                 let content_width = pipe_idx.saturating_sub(dir_pos + "Directory: ".len());
@@ -138,9 +140,30 @@ fn sanitize_directory(lines: Vec<String>) -> Vec<String> {
                 rebuilt
             } else {
                 line
-            }
+            };
+            sanitize_codex_version(line)
         })
         .collect()
+}
+
+fn sanitize_codex_version(line: String) -> String {
+    let Some(start) = line.find("OpenAI Codex (v") else {
+        return line;
+    };
+    let Some(end_relative) = line[start..].find(')') else {
+        return line;
+    };
+    let end = start + end_relative + 1;
+    let replacement = "OpenAI Codex (v0.0.0)";
+    let original_width = line[start..end].len();
+
+    let mut rebuilt = line[..start].to_string();
+    rebuilt.push_str(replacement);
+    if original_width > replacement.len() {
+        rebuilt.push_str(&" ".repeat(original_width - replacement.len()));
+    }
+    rebuilt.push_str(&line[end..]);
+    rebuilt
 }
 
 fn reset_at_from(captured_at: &chrono::DateTime<chrono::Local>, seconds: i64) -> i64 {

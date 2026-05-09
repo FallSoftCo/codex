@@ -18,6 +18,7 @@ use chrono::Utc;
 use codex_protocol::ThreadId;
 use codex_tools::ToolName;
 use reqwest::Client;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -1164,13 +1165,16 @@ async fn fetch_hollywood_room_policy_state(
             FunctionCallError::RespondToModel(format!(
                 "Hollywood room-state read failed for `{room}`: {err}"
             ))
-        })?
-        .error_for_status()
-        .map_err(|err| {
-            FunctionCallError::RespondToModel(format!(
-                "Hollywood room-state read failed for `{room}`: {err}"
-            ))
-        })?
+        })?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let response = response.error_for_status().map_err(|err| {
+        FunctionCallError::RespondToModel(format!(
+            "Hollywood room-state read failed for `{room}`: {err}"
+        ))
+    })?;
+    let response = response
         .json::<HollywoodRoomsResponse>()
         .await
         .map_err(|err| {

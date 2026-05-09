@@ -57,7 +57,6 @@ fn guardian_review_request_includes_patch_context() {
                 content: "hello".to_string(),
             },
         )]),
-        resurrected_deleted_files: HashMap::new(),
         exec_approval_requirement: ExecApprovalRequirement::NeedsApproval {
             reason: None,
             proposed_execpolicy_amendment: None,
@@ -91,7 +90,6 @@ fn permission_request_payload_uses_apply_patch_hook_name_and_aliases() {
         action,
         file_paths: vec![path],
         changes: HashMap::new(),
-        resurrected_deleted_files: HashMap::new(),
         exec_approval_requirement: ExecApprovalRequirement::NeedsApproval {
             reason: None,
             proposed_execpolicy_amendment: None,
@@ -131,7 +129,6 @@ fn file_system_sandbox_context_uses_active_attempt() {
         action: ApplyPatchAction::new_add_for_test(&path, "hello".to_string()),
         file_paths: vec![path.clone()],
         changes: HashMap::new(),
-        resurrected_deleted_files: HashMap::new(),
         exec_approval_requirement: ExecApprovalRequirement::Skip {
             bypass_sandbox: false,
             proposed_execpolicy_amendment: None,
@@ -189,7 +186,6 @@ fn no_sandbox_attempt_has_no_file_system_context() {
         action: ApplyPatchAction::new_add_for_test(&path, "hello".to_string()),
         file_paths: vec![path.clone()],
         changes: HashMap::new(),
-        resurrected_deleted_files: HashMap::new(),
         exec_approval_requirement: ExecApprovalRequirement::Skip {
             bypass_sandbox: false,
             proposed_execpolicy_amendment: None,

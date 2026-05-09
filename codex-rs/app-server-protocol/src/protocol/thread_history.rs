@@ -2607,6 +2607,7 @@ mod tests {
             last_agent_message: None,
             completed_at: Some(11),
             duration_ms: Some(1000),
+            time_to_first_token_ms: None,
         }));
 
         assert!(!builder.has_active_turn());
@@ -2765,7 +2766,6 @@ mod tests {
             reason: TurnAbortReason::Interrupted,
             completed_at: Some(1_777_086_761),
             duration_ms: Some(203_781),
-            time_to_first_token_ms: None,
         }));
 
         assert!(!builder.has_active_turn());

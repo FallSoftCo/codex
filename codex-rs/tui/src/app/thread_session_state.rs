@@ -336,6 +336,7 @@ mod tests {
             agent_role: None,
             git_info: None,
             name: Some("read thread".to_string()),
+            hollywood: None,
             turns: Vec::new(),
         };
 

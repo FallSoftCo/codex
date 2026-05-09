@@ -460,6 +460,56 @@
       ],
       "type": "object"
     },
+    "HollywoodSessionDiagnostics": {
+      "properties": {
+        "activeTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activeTurnItemCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "activeTurnStartedAt": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "autonomousTurnPending": {
+          "type": "boolean"
+        },
+        "currentTurnOpen": {
+          "type": "boolean"
+        },
+        "outstandingObligationCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "pendingSemanticWakeCount": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "startupTurnPending": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "activeTurnItemCount",
+        "autonomousTurnPending",
+        "currentTurnOpen",
+        "outstandingObligationCount",
+        "pendingSemanticWakeCount",
+        "startupTurnPending"
+      ],
+      "type": "object"
+    },
     "HollywoodSessionState": {
       "properties": {
         "attached": {
@@ -467,6 +517,16 @@
         },
         "attention": {
           "$ref": "#/definitions/HollywoodAttentionSettings"
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodSessionDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "identities": {
           "items": {
@@ -934,7 +994,7 @@
               "type": "null"
             }
           ],
-          "description": "Structured Hollywood attachment/status when the thread is or was configured for room coordination."
+          "description": "Optional Hollywood coordination state when attached."
         },
         "id": {
           "type": "string"

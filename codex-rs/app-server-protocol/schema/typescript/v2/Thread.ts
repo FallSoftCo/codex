@@ -79,8 +79,7 @@ gitInfo: GitInfo | null,
  */
 name: string | null,
 /**
- * Structured Hollywood attachment/status when the thread is or was configured for room
- * coordination.
+ * Optional Hollywood coordination state when attached.
  */
 hollywood: HollywoodSessionState | null,
 /**

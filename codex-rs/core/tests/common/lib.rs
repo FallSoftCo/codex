@@ -313,13 +313,23 @@ where
     F: FnMut(&codex_protocol::protocol::EventMsg) -> bool,
 {
     use tokio::time::Duration;
+    use tokio::time::Instant;
     use tokio::time::timeout;
+    let wait_time = wait_time.max(Duration::from_secs(60));
+    let wait_started_at = Instant::now();
+    let wait_until = wait_started_at + wait_time;
     loop {
-        // Allow a bit more time to accommodate async startup work (e.g. config IO, tool discovery)
-        let ev = timeout(wait_time.max(Duration::from_secs(10)), codex.next_event())
-            .await
-            .expect("timeout waiting for event")
-            .expect("stream ended unexpectedly");
+        let remaining = wait_until.saturating_duration_since(Instant::now());
+        assert!(!remaining.is_zero(), "timeout waiting for event");
+        let wait_chunk = remaining.min(Duration::from_secs(5));
+        let Ok(ev) = timeout(wait_chunk, codex.next_event()).await else {
+            eprintln!(
+                "still waiting for event after {:.1}s",
+                wait_started_at.elapsed().as_secs_f32()
+            );
+            continue;
+        };
+        let ev = ev.expect("stream ended unexpectedly");
         if predicate(&ev.msg) {
             return ev.msg;
         }

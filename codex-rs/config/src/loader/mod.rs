@@ -18,6 +18,7 @@ use crate::diagnostics::io_error_from_config_error;
 use crate::merge::merge_toml_values;
 use crate::overrides::build_cli_overrides_layer;
 use crate::project_root_markers::default_project_root_markers;
+use crate::project_root_markers::project_root_marker_exists;
 use crate::project_root_markers::project_root_markers_from_config;
 use crate::state::ConfigLayerEntry;
 use crate::state::ConfigLayerStack;
@@ -932,12 +933,11 @@ async fn find_project_root(
     for ancestor in cwd.ancestors() {
         for marker in project_root_markers {
             let marker_path = ancestor.join(marker);
-            if fs
-                .get_metadata(&marker_path, /*sandbox*/ None)
-                .await
-                .is_ok()
-            {
-                return Ok(ancestor);
+            match project_root_marker_exists(fs, &marker_path, marker).await {
+                Ok(true) => return Ok(ancestor),
+                Ok(false) => {}
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err),
             }
         }
     }

@@ -67,9 +67,12 @@ async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
 
 async fn submit_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
     let session_model = test.session_configured.model.clone();
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
 
     test.codex
         .submit(Op::UserTurn {
+            environments: None,
             items: vec![UserInput::Text {
                 text: prompt.into(),
                 text_elements: Vec::new(),
@@ -78,7 +81,8 @@ async fn submit_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
             cwd: test.cwd.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             approvals_reviewer: None,
-            sandbox_policy: SandboxPolicy::DangerFullAccess,
+            sandbox_policy,
+            permission_profile,
             model: session_model,
             effort: None,
             summary: None,

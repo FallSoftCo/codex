@@ -2951,6 +2951,7 @@ async fn inactive_thread_started_notification_initializes_replay_session() -> Re
                 agent_role: Some("explorer".to_string()),
                 git_info: None,
                 name: Some("agent thread".to_string()),
+                hollywood: None,
                 turns: Vec::new(),
             },
         }),
@@ -3034,6 +3035,7 @@ async fn inactive_thread_started_notification_preserves_primary_model_when_path_
                 agent_role: Some("explorer".to_string()),
                 git_info: None,
                 name: Some("agent thread".to_string()),
+                hollywood: None,
                 turns: Vec::new(),
             },
         }),
@@ -3090,6 +3092,7 @@ async fn thread_read_session_state_does_not_reuse_primary_permission_profile() {
         agent_role: None,
         git_info: None,
         name: Some("read thread".to_string()),
+        hollywood: None,
         turns: Vec::new(),
     };
 
@@ -5062,6 +5065,7 @@ async fn thread_rollback_response_discards_queued_active_thread_events() {
                 agent_role: None,
                 git_info: None,
                 name: None,
+                hollywood: None,
                 turns: Vec::new(),
             },
         },

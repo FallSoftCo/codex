@@ -1841,6 +1841,7 @@ mod tests {
                 agent_role: None,
                 git_info: None,
                 name: None,
+                hollywood: None,
                 turns: vec![Turn {
                     id: "turn-1".to_string(),
                     items_view: codex_app_server_protocol::TurnItemsView::Full,

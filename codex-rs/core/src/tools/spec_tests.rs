@@ -378,20 +378,12 @@ async fn assert_default_model_tools(
     } else {
         vec![shell_tool]
     };
+    expected.extend(expected_tail);
     expected.extend([
-        "watch_process_exit",
-        "watch_agent_completion",
-        "list_watchers",
-        "cancel_watcher",
-        "watch_task_periodically",
-        "list_task_watches",
-        "update_task_watch",
-        "cancel_task_watch",
+        "restart_client",
         "coordination_act",
         "list_coordination_tasks",
-        "restart_client",
     ]);
-    expected.extend(expected_tail);
     assert_model_tools(model_slug, features, web_search_mode, &expected).await;
 }
 
@@ -784,16 +776,8 @@ async fn spawn_agent_description_omits_usage_hint_when_disabled() {
     let description = multi_agent_v2_spawn_agent_description(&tools_config);
 
     assert!(description.contains("No picker-visible model overrides are currently loaded."));
-    assert!(description.contains("Spawns an agent to work on the specified task."));
-    assert!(description.contains(
-        "The new agent's canonical task name will be provided to it along with the message."
-    ));
-    assert!(description.contains(
-        "Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents;"
-    ));
-    assert!(description.contains(
-        "Use this tool to parallelize your own current task into bounded sidecar work when spawning is explicitly authorized."
-    ));
+    assert!(!description.contains("Only use `spawn_agent` if and only if"));
+    assert!(!description.contains("Requests for depth, thoroughness"));
     assert!(!description.contains("Custom delegation guidance only."));
 }
 
@@ -807,10 +791,7 @@ async fn spawn_agent_description_uses_configured_usage_hint_text() {
     let description = multi_agent_v2_spawn_agent_description(&tools_config);
 
     assert!(description.contains("No picker-visible model overrides are currently loaded."));
-    assert!(description.contains("Spawns an agent to work on the specified task."));
-    assert!(description.contains(
-        "Do not use this tool as the default response when the user asks you to work with teammates, peers, or other existing agents;"
-    ));
+    assert!(!description.contains("Only use `spawn_agent` if and only if"));
     assert!(description.contains("Custom delegation guidance only."));
 }
 
