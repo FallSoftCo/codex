@@ -83,6 +83,7 @@ mod config_manager_service;
 mod connection_rpc_gate;
 mod dynamic_tools;
 mod error_code;
+mod extensions;
 mod filters;
 mod fs_watch;
 mod fuzzy_file_search;
@@ -96,6 +97,7 @@ mod outgoing_message;
 mod request_processors;
 mod request_serialization;
 mod server_request_error;
+mod skills_watcher;
 mod thread_state;
 mod thread_status;
 mod transport;
@@ -109,6 +111,7 @@ pub use crate::transport::auth::AppServerWebsocketAuthSettings;
 pub use crate::transport::auth::WebsocketAuthCliMode;
 
 const LOG_FORMAT_ENV_VAR: &str = "LOG_FORMAT";
+const OTEL_SERVICE_NAME: &str = "codex-app-server";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LogFormat {
@@ -127,7 +130,7 @@ fn configured_thread_config_loader(config: &Config) -> Arc<dyn ThreadConfigLoade
 
 /// Control-plane messages from the processor/transport side to the outbound router task.
 ///
-/// `run_main_with_transport` now uses two loops/tasks:
+/// `run_main_with_transport_options` uses two loops/tasks:
 /// - processor loop: handles incoming JSON-RPC and request dispatch
 /// - outbound loop: performs potentially slow writes to per-connection writers
 ///
@@ -162,22 +165,33 @@ enum ShutdownAction {
     Finish,
 }
 
-async fn shutdown_signal() -> IoResult<()> {
+#[derive(Clone, Copy)]
+enum ShutdownSignal {
+    Forceable,
+    #[cfg(unix)]
+    GracefulOnly,
+}
+
+async fn shutdown_signal() -> IoResult<ShutdownSignal> {
     #[cfg(unix)]
     {
         use tokio::signal::unix::SignalKind;
         use tokio::signal::unix::signal;
 
         let mut term = signal(SignalKind::terminate())?;
+        let mut hangup = signal(SignalKind::hangup())?;
         tokio::select! {
-            ctrl_c_result = tokio::signal::ctrl_c() => ctrl_c_result,
-            _ = term.recv() => Ok(()),
+            ctrl_c_result = tokio::signal::ctrl_c() => ctrl_c_result.map(|_| ShutdownSignal::Forceable),
+            _ = term.recv() => Ok(ShutdownSignal::Forceable),
+            _ = hangup.recv() => Ok(ShutdownSignal::GracefulOnly),
         }
     }
 
     #[cfg(not(unix))]
     {
-        tokio::signal::ctrl_c().await
+        tokio::signal::ctrl_c()
+            .await
+            .map(|_| ShutdownSignal::Forceable)
     }
 }
 
@@ -190,9 +204,16 @@ impl ShutdownState {
         self.forced
     }
 
-    fn on_signal(&mut self, connection_count: usize, running_turn_count: usize) {
+    fn on_signal(
+        &mut self,
+        signal: ShutdownSignal,
+        connection_count: usize,
+        running_turn_count: usize,
+    ) {
         if self.requested {
-            self.forced = true;
+            if matches!(signal, ShutdownSignal::Forceable) {
+                self.forced = true;
+            }
             return;
         }
 
@@ -356,16 +377,19 @@ pub async fn run_main(
     arg0_paths: Arg0DispatchPaths,
     cli_config_overrides: CliConfigOverrides,
     loader_overrides: LoaderOverrides,
+    strict_config: bool,
     default_analytics_enabled: bool,
 ) -> IoResult<()> {
-    run_main_with_transport(
+    run_main_with_transport_options(
         arg0_paths,
         cli_config_overrides,
         loader_overrides,
+        strict_config,
         default_analytics_enabled,
         AppServerTransport::Stdio,
         SessionSource::VSCode,
         AppServerWebsocketAuthSettings::default(),
+        AppServerRuntimeOptions::default(),
     )
     .await
 }
@@ -389,33 +413,12 @@ impl Default for AppServerRuntimeOptions {
     }
 }
 
-pub async fn run_main_with_transport(
-    arg0_paths: Arg0DispatchPaths,
-    cli_config_overrides: CliConfigOverrides,
-    loader_overrides: LoaderOverrides,
-    default_analytics_enabled: bool,
-    transport: AppServerTransport,
-    session_source: SessionSource,
-    auth: AppServerWebsocketAuthSettings,
-) -> IoResult<()> {
-    run_main_with_transport_options(
-        arg0_paths,
-        cli_config_overrides,
-        loader_overrides,
-        default_analytics_enabled,
-        transport,
-        session_source,
-        auth,
-        AppServerRuntimeOptions::default(),
-    )
-    .await
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn run_main_with_transport_options(
     arg0_paths: Arg0DispatchPaths,
     cli_config_overrides: CliConfigOverrides,
     loader_overrides: LoaderOverrides,
+    strict_config: bool,
     default_analytics_enabled: bool,
     transport: AppServerTransport,
     session_source: SessionSource,
@@ -452,6 +455,7 @@ pub async fn run_main_with_transport_options(
         codex_home.to_path_buf(),
         cli_kv_overrides.clone(),
         loader_overrides,
+        strict_config,
         Default::default(),
         arg0_paths.clone(),
         Arc::new(NoopThreadConfigLoader),
@@ -480,6 +484,10 @@ pub async fn run_main_with_transport_options(
     {
         Ok(config) => (config, true),
         Err(err) => {
+            if strict_config {
+                return Err(err);
+            }
+
             let message = config_warning_from_error("Invalid configuration; using defaults.", &err);
             config_warnings.push(message);
             (
@@ -494,6 +502,20 @@ pub async fn run_main_with_transport_options(
         }
     };
 
+    let otel = codex_core::otel_init::build_provider(
+        &config,
+        env!("CARGO_PKG_VERSION"),
+        Some(OTEL_SERVICE_NAME),
+        default_analytics_enabled,
+    )
+    .map_err(|e| {
+        std::io::Error::new(
+            ErrorKind::InvalidData,
+            format!("error loading otel config: {e}"),
+        )
+    })?;
+    codex_core::otel_init::record_process_start(otel.as_ref(), OTEL_SERVICE_NAME);
+    codex_core::otel_init::install_sqlite_telemetry(otel.as_ref(), OTEL_SERVICE_NAME);
     let state_db_result = rollout_state_db::try_init(&config).await;
     let state_db_init_error = state_db_result.as_ref().err().map(ToString::to_string);
     let state_db = state_db_result.ok();
@@ -572,19 +594,6 @@ pub async fn run_main_with_transport_options(
     }
 
     let feedback = CodexFeedback::new();
-
-    let otel = codex_core::otel_init::build_provider(
-        &config,
-        env!("CARGO_PKG_VERSION"),
-        Some("codex-app-server"),
-        default_analytics_enabled,
-    )
-    .map_err(|e| {
-        std::io::Error::new(
-            ErrorKind::InvalidData,
-            format!("error loading otel config: {e}"),
-        )
-    })?;
 
     // Install a simple subscriber so `tracing` output is visible. Users can
     // control the log level with `RUST_LOG` and switch to JSON logs with
@@ -816,11 +825,15 @@ pub async fn run_main_with_transport_options(
 
                 tokio::select! {
                     shutdown_signal_result = shutdown_signal(), if graceful_signal_restart_enabled && !shutdown_state.forced() => {
-                        if let Err(err) = shutdown_signal_result {
-                            warn!("failed to listen for shutdown signal during graceful restart drain: {err}");
-                        }
+                        let signal = match shutdown_signal_result {
+                            Ok(signal) => signal,
+                            Err(err) => {
+                                warn!("failed to listen for shutdown signal during graceful restart drain: {err}");
+                                continue;
+                            }
+                        };
                         let running_turn_count = *running_turn_count_rx.borrow();
-                        shutdown_state.on_signal(connections.len(), running_turn_count);
+                        shutdown_state.on_signal(signal, connections.len(), running_turn_count);
                     }
                     changed = running_turn_count_rx.changed(), if graceful_signal_restart_enabled && shutdown_state.requested() => {
                         if changed.is_err() {

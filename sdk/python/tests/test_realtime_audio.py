@@ -6,7 +6,7 @@ import wave
 
 import pytest
 
-from codex_app_server.realtime_audio import (
+from openai_codex import (
     iter_pcm16le_audio_chunks,
     iter_wav_audio_bytes_chunks,
     pcm16le_audio_chunk,

@@ -10,8 +10,8 @@ use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::registry::ToolExecutor;
 use crate::tools::registry::ToolHandler;
-use crate::tools::registry::ToolKind;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
@@ -137,15 +137,11 @@ fn default_notify_room() -> bool {
     true
 }
 
-impl ToolHandler for CoordinationHandler {
+impl ToolExecutor<ToolInvocation> for CoordinationHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -236,6 +232,8 @@ impl ToolHandler for CoordinationHandler {
         }
     }
 }
+
+impl ToolHandler for CoordinationHandler {}
 
 async fn handle_coordination_act(
     session: &Arc<Session>,

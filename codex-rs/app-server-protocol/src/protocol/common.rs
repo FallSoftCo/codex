@@ -663,12 +663,12 @@ client_request_definitions! {
     },
     PluginList => "plugin/list" {
         params: v2::PluginListParams,
-        serialization: global_shared_read("config"),
+        serialization: global_shared_read("plugin-read"),
         response: v2::PluginListResponse,
     },
     PluginRead => "plugin/read" {
         params: v2::PluginReadParams,
-        serialization: global("config"),
+        serialization: global_shared_read("plugin-read"),
         response: v2::PluginReadResponse,
     },
     PluginSkillRead => "plugin/skill/read" {
@@ -690,6 +690,11 @@ client_request_definitions! {
         params: v2::PluginShareListParams,
         serialization: global("config"),
         response: v2::PluginShareListResponse,
+    },
+    PluginShareCheckout => "plugin/share/checkout" {
+        params: v2::PluginShareCheckoutParams,
+        serialization: global("config"),
+        response: v2::PluginShareCheckoutResponse,
     },
     PluginShareDelete => "plugin/share/delete" {
         params: v2::PluginShareDeleteParams,
@@ -849,6 +854,13 @@ client_request_definitions! {
         params: v2::MockExperimentalMethodParams,
         serialization: None,
         response: v2::MockExperimentalMethodResponse,
+    },
+    #[experimental("environment/add")]
+    /// Adds or replaces a remote environment by id for later selection.
+    EnvironmentAdd => "environment/add" {
+        params: v2::EnvironmentAddParams,
+        serialization: global("environment"),
+        response: v2::EnvironmentAddResponse,
     },
 
     McpServerOauthLogin => "mcpServer/oauth/login" {
@@ -1722,7 +1734,24 @@ mod tests {
         };
         assert_eq!(
             plugin_list.serialization_scope(),
-            Some(ClientRequestSerializationScope::GlobalSharedRead("config"))
+            Some(ClientRequestSerializationScope::GlobalSharedRead(
+                "plugin-read"
+            ))
+        );
+
+        let plugin_read = ClientRequest::PluginRead {
+            request_id: request_id(),
+            params: v2::PluginReadParams {
+                marketplace_path: Some(absolute_path("/tmp/marketplace")),
+                remote_marketplace_name: None,
+                plugin_name: "plugin-a".to_string(),
+            },
+        };
+        assert_eq!(
+            plugin_read.serialization_scope(),
+            Some(ClientRequestSerializationScope::GlobalSharedRead(
+                "plugin-read"
+            ))
         );
 
         let plugin_uninstall = ClientRequest::PluginUninstall {
@@ -1839,6 +1868,18 @@ mod tests {
         assert_eq!(
             add_credits_nudge.serialization_scope(),
             Some(ClientRequestSerializationScope::Global("account-auth"))
+        );
+
+        let environment_add = ClientRequest::EnvironmentAdd {
+            request_id: request_id(),
+            params: v2::EnvironmentAddParams {
+                environment_id: "remote-a".to_string(),
+                exec_server_url: "ws://127.0.0.1:8765".to_string(),
+            },
+        };
+        assert_eq!(
+            environment_add.serialization_scope(),
+            Some(ClientRequestSerializationScope::Global("environment"))
         );
     }
 
@@ -2625,9 +2666,32 @@ mod tests {
     }
 
     #[test]
+    fn serialize_environment_add() -> Result<()> {
+        let request = ClientRequest::EnvironmentAdd {
+            request_id: RequestId::Integer(9),
+            params: v2::EnvironmentAddParams {
+                environment_id: "remote-a".to_string(),
+                exec_server_url: "ws://127.0.0.1:8765".to_string(),
+            },
+        };
+        assert_eq!(
+            json!({
+                "method": "environment/add",
+                "id": 9,
+                "params": {
+                    "environmentId": "remote-a",
+                    "execServerUrl": "ws://127.0.0.1:8765"
+                }
+            }),
+            serde_json::to_value(&request)?,
+        );
+        Ok(())
+    }
+
+    #[test]
     fn serialize_fs_get_metadata() -> Result<()> {
         let request = ClientRequest::FsGetMetadata {
-            request_id: RequestId::Integer(9),
+            request_id: RequestId::Integer(10),
             params: v2::FsGetMetadataParams {
                 path: absolute_path("tmp/example"),
             },
@@ -2635,7 +2699,7 @@ mod tests {
         assert_eq!(
             json!({
                 "method": "fs/getMetadata",
-                "id": 9,
+                "id": 10,
                 "params": {
                     "path": absolute_path_string("tmp/example")
                 }
@@ -2894,6 +2958,19 @@ mod tests {
         };
         let reason = crate::experimental_api::ExperimentalApi::experimental_reason(&request);
         assert_eq!(reason, Some("mock/experimentalMethod"));
+    }
+
+    #[test]
+    fn environment_add_is_marked_experimental() {
+        let request = ClientRequest::EnvironmentAdd {
+            request_id: RequestId::Integer(1),
+            params: v2::EnvironmentAddParams {
+                environment_id: "remote-a".to_string(),
+                exec_server_url: "ws://127.0.0.1:8765".to_string(),
+            },
+        };
+        let reason = crate::experimental_api::ExperimentalApi::experimental_reason(&request);
+        assert_eq!(reason, Some("environment/add"));
     }
 
     #[test]

@@ -662,7 +662,7 @@ async fn conversation_webrtc_close_while_sideband_connecting_drops_pending_join(
     let realtime_server = start_websocket_server_with_headers(vec![WebSocketConnectionConfig {
         requests: vec![vec![]],
         response_headers: Vec::new(),
-        accept_delay: Some(Duration::from_millis(500)),
+        accept_delay: Some(Duration::from_secs(5)),
         close_after_requests: false,
     }])
     .await;
@@ -754,6 +754,9 @@ async fn conversation_webrtc_sideband_connect_failure_closes_with_error() -> Res
         config.experimental_realtime_ws_model = Some("realtime-test-model".to_string());
         config.experimental_realtime_ws_startup_context = Some(String::new());
         config.experimental_realtime_ws_base_url = Some("http://127.0.0.1:1".to_string());
+        // Keep the failure-path test inside wait_for_event's timeout on Windows,
+        // where refused localhost websocket connects can take around two seconds.
+        config.model_provider.request_max_retries = Some(0);
         config.realtime.version = RealtimeWsVersion::V1;
     });
     let test = builder.build(&server).await?;

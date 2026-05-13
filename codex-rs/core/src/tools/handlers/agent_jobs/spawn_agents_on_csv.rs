@@ -3,8 +3,8 @@ use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::handlers::agent_jobs_spec::create_spawn_agents_on_csv_tool;
+use crate::tools::registry::ToolExecutor;
 use crate::tools::registry::ToolHandler;
-use crate::tools::registry::ToolKind;
 use codex_tools::ToolName;
 use codex_tools::ToolSpec;
 
@@ -12,7 +12,7 @@ use super::*;
 
 pub struct SpawnAgentsOnCsvHandler;
 
-impl ToolHandler for SpawnAgentsOnCsvHandler {
+impl ToolExecutor<ToolInvocation> for SpawnAgentsOnCsvHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
@@ -21,14 +21,6 @@ impl ToolHandler for SpawnAgentsOnCsvHandler {
 
     fn spec(&self) -> Option<ToolSpec> {
         Some(create_spawn_agents_on_csv_tool())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
-    }
-
-    fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(payload, ToolPayload::Function { .. })
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -52,6 +44,12 @@ impl ToolHandler for SpawnAgentsOnCsvHandler {
     }
 }
 
+impl ToolHandler for SpawnAgentsOnCsvHandler {
+    fn matches_kind(&self, payload: &ToolPayload) -> bool {
+        matches!(payload, ToolPayload::Function { .. })
+    }
+}
+
 /// Create a new agent job from a CSV and run it to completion.
 ///
 /// Each CSV row becomes a job item. The instruction string is a template where `{column}`
@@ -70,6 +68,7 @@ pub async fn handle(
     }
 
     let db = required_state_db(&session)?;
+    #[allow(deprecated)]
     let input_path = turn.resolve_path(Some(args.csv_path));
     let input_path_display = input_path.display().to_string();
     let csv_content = tokio::fs::read_to_string(&input_path)
@@ -143,7 +142,10 @@ pub async fn handle(
     let job_id = Uuid::new_v4().to_string();
     let output_csv_path = args.output_csv_path.map_or_else(
         || default_output_csv_path(&input_path, job_id.as_str()),
-        |path| turn.resolve_path(Some(path)),
+        |path| {
+            #[allow(deprecated)]
+            turn.resolve_path(Some(path))
+        },
     );
     let job_suffix = &job_id[..8];
     let job_name = format!("agent-job-{job_suffix}");

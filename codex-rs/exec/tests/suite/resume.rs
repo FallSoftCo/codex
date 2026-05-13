@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 use anyhow::Context;
-use codex_utils_cargo_bin::find_resource;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
 use core_test_support::test_codex_exec::test_codex_exec;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -8,6 +9,7 @@ use std::string::ToString;
 use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
+use wiremock::MockServer;
 
 /// Utility: scan the sessions dir for a rollout file that contains `marker`
 /// in any response_item.message.content entry. Returns the absolute path.
@@ -104,26 +106,41 @@ fn last_user_image_count(path: &std::path::Path) -> usize {
     last_count
 }
 
-fn exec_fixture() -> anyhow::Result<std::path::PathBuf> {
-    Ok(find_resource!("tests/fixtures/cli_responses_fixture.sse")?)
-}
-
 fn exec_repo_root() -> anyhow::Result<std::path::PathBuf> {
     Ok(codex_utils_cargo_bin::repo_root()?)
 }
 
-#[test]
-fn exec_resume_last_appends_to_existing_file() -> anyhow::Result<()> {
+fn exec_sse_response(index: usize) -> String {
+    let response_id = format!("resp-exec-{index}");
+    let message_id = format!("msg-exec-{index}");
+    responses::sse(vec![
+        responses::ev_response_created(&response_id),
+        responses::ev_assistant_message(&message_id, "exec response"),
+        responses::ev_completed(&response_id),
+    ])
+}
+
+async fn mount_exec_responses(
+    server: &MockServer,
+    count: usize,
+) -> core_test_support::responses::ResponseMock {
+    responses::mount_sse_sequence(server, (0..count).map(exec_sse_response).collect()).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_last_appends_to_existing_file() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 2).await;
     let repo_root = exec_repo_root()?;
 
     // 1) First run: create a session with a unique marker in the content.
     let marker = format!("resume-last-{}", Uuid::new_v4());
     let prompt = format!("echo {marker}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -140,8 +157,7 @@ fn exec_resume_last_appends_to_existing_file() -> anyhow::Result<()> {
     let marker2 = format!("resume-last-2-{}", Uuid::new_v4());
     let prompt2 = format!("echo {marker2}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -164,18 +180,20 @@ fn exec_resume_last_appends_to_existing_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn exec_resume_last_accepts_prompt_after_flag_in_json_mode() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_last_accepts_prompt_after_flag_in_json_mode() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 2).await;
     let repo_root = exec_repo_root()?;
 
     // 1) First run: create a session with a unique marker in the content.
     let marker = format!("resume-last-json-{}", Uuid::new_v4());
     let prompt = format!("echo {marker}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -192,8 +210,7 @@ fn exec_resume_last_accepts_prompt_after_flag_in_json_mode() -> anyhow::Result<(
     let marker2 = format!("resume-last-json-2-{}", Uuid::new_v4());
     let prompt2 = format!("echo {marker2}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -216,18 +233,20 @@ fn exec_resume_last_accepts_prompt_after_flag_in_json_mode() -> anyhow::Result<(
     Ok(())
 }
 
-#[test]
-fn exec_resume_last_respects_cwd_filter_and_all_flag() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_last_respects_cwd_filter() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 3).await;
 
     let dir_a = TempDir::new()?;
     let dir_b = TempDir::new()?;
 
     let marker_a = format!("resume-cwd-a-{}", Uuid::new_v4());
     let prompt_a = format!("echo {marker_a}");
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(dir_a.path())
@@ -237,8 +256,66 @@ fn exec_resume_last_respects_cwd_filter_and_all_flag() -> anyhow::Result<()> {
 
     let marker_b = format!("resume-cwd-b-{}", Uuid::new_v4());
     let prompt_b = format!("echo {marker_b}");
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
+        .arg("--skip-git-repo-check")
+        .arg("-C")
+        .arg(dir_b.path())
+        .arg(&prompt_b)
+        .assert()
+        .success();
+
+    let sessions_dir = test.home_path().join("sessions");
+    let path_a = find_session_file_containing_marker(&sessions_dir, &marker_a)
+        .expect("no session file found for marker_a");
+    find_session_file_containing_marker(&sessions_dir, &marker_b)
+        .expect("no session file found for marker_b");
+
+    let marker_a2 = format!("resume-cwd-a-2-{}", Uuid::new_v4());
+    let prompt_a2 = format!("echo {marker_a2}");
+    test.cmd_with_server(&server)
+        .arg("--skip-git-repo-check")
+        .arg("-C")
+        .arg(dir_a.path())
+        .arg("resume")
+        .arg("--last")
+        .arg(&prompt_a2)
+        .assert()
+        .success();
+
+    let resumed_path_cwd = find_session_file_containing_marker(&sessions_dir, &marker_a2)
+        .expect("no resumed session file containing marker_a2");
+    assert_eq!(
+        resumed_path_cwd, path_a,
+        "resume --last should prefer sessions whose latest turn context matches the current cwd"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_last_all_ignores_cwd_filter() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let test = test_codex_exec();
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 3).await;
+
+    let dir_a = TempDir::new()?;
+    let dir_b = TempDir::new()?;
+
+    let marker_a = format!("resume-cwd-all-a-{}", Uuid::new_v4());
+    let prompt_a = format!("echo {marker_a}");
+    test.cmd_with_server(&server)
+        .arg("--skip-git-repo-check")
+        .arg("-C")
+        .arg(dir_a.path())
+        .arg(&prompt_a)
+        .assert()
+        .success();
+
+    let marker_b = format!("resume-cwd-all-b-{}", Uuid::new_v4());
+    let prompt_b = format!("echo {marker_b}");
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(dir_b.path())
@@ -252,34 +329,9 @@ fn exec_resume_last_respects_cwd_filter_and_all_flag() -> anyhow::Result<()> {
     let path_b = find_session_file_containing_marker(&sessions_dir, &marker_b)
         .expect("no session file found for marker_b");
 
-    // `updated_at` is second-granularity, so ensure the touch lands in a later second
-    // than the initial session creation on fast CI (especially Windows).
-    std::thread::sleep(std::time::Duration::from_millis(1100));
-
-    // Make thread B deterministically newest according to rollout metadata.
-    let session_id_b = extract_conversation_id(&path_b);
-    let marker_b_touch = format!("resume-cwd-b-touch-{}", Uuid::new_v4());
-    let prompt_b_touch = format!("echo {marker_b_touch}");
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
-        .arg("--skip-git-repo-check")
-        .arg("-C")
-        .arg(dir_b.path())
-        .arg("resume")
-        .arg(&session_id_b)
-        .arg(&prompt_b_touch)
-        .assert()
-        .success();
-
-    // `resume --last` sorts by `updated_at`, which is second-granularity. Sleep so
-    // the upcoming `resume --last --all` write lands in a later second and becomes
-    // deterministically newest (instead of tying and falling back to UUID order).
-    std::thread::sleep(std::time::Duration::from_millis(1100));
-
-    let marker_b2 = format!("resume-cwd-b-2-{}", Uuid::new_v4());
+    let marker_b2 = format!("resume-cwd-all-b-2-{}", Uuid::new_v4());
     let prompt_b2 = format!("echo {marker_b2}");
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(dir_a.path())
@@ -297,50 +349,32 @@ fn exec_resume_last_respects_cwd_filter_and_all_flag() -> anyhow::Result<()> {
         "resume --last --all should pick newest session"
     );
 
-    let marker_a2 = format!("resume-cwd-a-2-{}", Uuid::new_v4());
-    let prompt_a2 = format!("echo {marker_a2}");
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
-        .arg("--skip-git-repo-check")
-        .arg("-C")
-        .arg(dir_a.path())
-        .arg("resume")
-        .arg("--last")
-        .arg(&prompt_a2)
-        .assert()
-        .success();
-
-    let resumed_path_cwd = find_session_file_containing_marker(&sessions_dir, &marker_a2)
-        .expect("no resumed session file containing marker_a2");
-    // The `--all` resume above appends a new turn to `path_b` while running from `dir_a`, so the
-    // session's latest cwd now matches `dir_a`. A subsequent `resume --last` should therefore pick
-    // the newest matching session (`path_b`).
-    assert_eq!(
-        resumed_path_cwd, path_b,
-        "resume --last should prefer sessions whose latest turn context matches the current cwd"
-    );
-
     Ok(())
 }
 
-#[test]
-fn exec_resume_accepts_global_flags_after_subcommand() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_accepts_global_flags_after_subcommand() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 2).await;
 
     // Seed a session.
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("echo seed-resume-session")
         .assert()
         .success();
 
     // Resume while passing global flags after the subcommand to ensure clap accepts them.
+    let base = format!("{}/v1", server.uri());
+    let base_config = format!("openai_base_url={}", serde_json::to_string(&base)?);
     test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
         .arg("resume")
         .arg("--last")
+        .arg("--config")
+        .arg(base_config)
         .arg("--json")
         .arg("--model")
         .arg("gpt-5.2-codex")
@@ -355,18 +389,20 @@ fn exec_resume_accepts_global_flags_after_subcommand() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn exec_resume_by_id_appends_to_existing_file() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_by_id_appends_to_existing_file() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 2).await;
     let repo_root = exec_repo_root()?;
 
     // 1) First run: create a session
     let marker = format!("resume-by-id-{}", Uuid::new_v4());
     let prompt = format!("echo {marker}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -387,8 +423,7 @@ fn exec_resume_by_id_appends_to_existing_file() -> anyhow::Result<()> {
     let marker2 = format!("resume-by-id-2-{}", Uuid::new_v4());
     let prompt2 = format!("echo {marker2}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -410,17 +445,19 @@ fn exec_resume_by_id_appends_to_existing_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 2).await;
     let repo_root = exec_repo_root()?;
 
     let marker = format!("resume-config-{}", Uuid::new_v4());
     let prompt = format!("echo {marker}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("--sandbox")
         .arg("workspace-write")
@@ -440,8 +477,7 @@ fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<()> {
     let prompt2 = format!("echo {marker2}");
 
     let output = test
-        .cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+        .cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("--sandbox")
         .arg("workspace-write")
@@ -484,17 +520,19 @@ fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn exec_resume_accepts_images_after_subcommand() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_accepts_images_after_subcommand() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
     let test = test_codex_exec();
-    let fixture = exec_fixture()?;
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 2).await;
     let repo_root = exec_repo_root()?;
 
     let marker = format!("resume-image-{}", Uuid::new_v4());
     let prompt = format!("echo {marker}");
 
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)
@@ -516,8 +554,7 @@ fn exec_resume_accepts_images_after_subcommand() -> anyhow::Result<()> {
 
     let marker2 = format!("resume-image-2-{}", Uuid::new_v4());
     let prompt2 = format!("echo {marker2}");
-    test.cmd()
-        .env("CODEX_RS_SSE_FIXTURE", &fixture)
+    test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")
         .arg("-C")
         .arg(&repo_root)

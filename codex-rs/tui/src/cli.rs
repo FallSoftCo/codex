@@ -16,6 +16,10 @@ pub struct Cli {
     #[arg(long = "agent-name", alias = "thread-name", value_name = "NAME")]
     pub agent_name: Option<String>,
 
+    /// Error out when config.toml contains fields that are not recognized by this version of Codex.
+    #[arg(long = "strict-config", default_value_t = false)]
+    pub strict_config: bool,
+
     // Internal controls set by the top-level `codex resume` subcommand.
     // These are not exposed as user flags on the base `codex` command.
     #[clap(skip)]
@@ -67,9 +71,7 @@ pub struct Cli {
 
     /// Disable alternate screen mode
     ///
-    /// Runs the TUI in inline mode, preserving terminal scrollback history. This is useful
-    /// in terminal multiplexers like Zellij that follow the xterm spec strictly and disable
-    /// scrollback in alternate screen buffers.
+    /// Runs the TUI in inline mode, preserving terminal scrollback history.
     #[arg(long = "no-alt-screen", default_value_t = false)]
     pub no_alt_screen: bool,
 

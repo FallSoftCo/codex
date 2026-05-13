@@ -24,6 +24,23 @@ filter = 'test(approval_matrix_covers_all_modes)'
 slow-timeout = { period = "30s", terminate-after = 2 }
 
 [[profile.default.overrides]]
+# These integration tests use repeated waits around full Codex turns. Keep
+# nextest from killing them before their own diagnostics fire under full-suite
+# load.
+filter = 'package(codex-core) & test(snapshot_rollback_past_compaction_replays_append_only_history)'
+slow-timeout = { period = "1m", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# This integration test uses the same repeated event wait pattern.
+filter = 'package(codex-core) & test(snapshot_rollback_followup_turn_trims_context_updates)'
+slow-timeout = { period = "1m", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# This integration test uses the same repeated event wait pattern.
+filter = 'package(codex-core) & test(thread_rollback_after_generated_image_drops_entire_image_turn_history)'
+slow-timeout = { period = "1m", terminate-after = 4 }
+
+[[profile.default.overrides]]
 filter = 'package(codex-app-server-protocol) & (test(typescript_schema_fixtures_match_generated) | test(json_schema_fixtures_match_generated) | test(generate_ts_with_experimental_api_retains_experimental_entries) | test(generated_ts_optional_nullable_fields_only_in_params) | test(generate_json_filters_experimental_fields_and_methods))'
 test-group = 'app_server_protocol_codegen'
 

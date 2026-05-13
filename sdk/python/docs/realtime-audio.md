@@ -8,7 +8,7 @@ local microphone capture.
 ## Start realtime and stream PCM16 audio
 
 ```python
-from codex_app_server import Codex, iter_pcm16le_audio_chunks
+from openai_codex import Codex, iter_pcm16le_audio_chunks
 
 PROMPT = "You are the spoken control layer for Codex."
 
@@ -34,7 +34,7 @@ chunk is already base64-encoded and shaped for `thread/realtime/appendAudio`.
 ## Stream WAV audio
 
 ```python
-from codex_app_server import Codex, iter_wav_audio_file_chunks
+from openai_codex import Codex, iter_wav_audio_file_chunks
 
 with Codex() as codex:
     thread = codex.thread_start(model="gpt-5")

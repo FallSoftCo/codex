@@ -3,8 +3,8 @@ use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::registry::ToolExecutor;
 use crate::tools::registry::ToolHandler;
-use crate::tools::registry::ToolKind;
 use codex_protocol::protocol::SessionSource;
 use codex_tools::ToolName;
 use serde::Deserialize;
@@ -26,15 +26,11 @@ struct RestartClientResult {
     reason: Option<String>,
 }
 
-impl ToolHandler for RestartClientHandler {
+impl ToolExecutor<ToolInvocation> for RestartClientHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, RESTART_CLIENT_TOOL_NAME.to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -79,6 +75,8 @@ impl ToolHandler for RestartClientHandler {
         Ok(FunctionToolOutput::from_text(content, Some(true)))
     }
 }
+
+impl ToolHandler for RestartClientHandler {}
 
 #[cfg(test)]
 #[path = "restart_client_tests.rs"]

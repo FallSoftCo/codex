@@ -57,7 +57,6 @@ mod image_rollout;
 mod items;
 mod json_result;
 mod live_cli;
-mod live_reload;
 mod model_overrides;
 mod model_switching;
 mod model_visible_layout;
@@ -115,3 +114,5 @@ mod view_image;
 mod web_search;
 mod websocket_fallback;
 mod window_headers;
+#[cfg(target_os = "windows")]
+mod windows_sandbox;

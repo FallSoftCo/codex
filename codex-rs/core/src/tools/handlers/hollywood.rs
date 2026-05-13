@@ -18,8 +18,8 @@ use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::registry::ToolExecutor;
 use crate::tools::registry::ToolHandler;
-use crate::tools::registry::ToolKind;
 use codex_tools::ToolName;
 
 pub struct HollywoodStatusHandler;
@@ -163,15 +163,11 @@ async fn hollywood_config_for_session(
     session.hollywood_session_config().await
 }
 
-impl ToolHandler for HollywoodStatusHandler {
+impl ToolExecutor<ToolInvocation> for HollywoodStatusHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_status".to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -250,15 +246,13 @@ impl ToolHandler for HollywoodStatusHandler {
     }
 }
 
-impl ToolHandler for HollywoodReadHandler {
+impl ToolHandler for HollywoodStatusHandler {}
+
+impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_read".to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -315,15 +309,13 @@ impl ToolHandler for HollywoodReadHandler {
     }
 }
 
-impl ToolHandler for HollywoodSendHandler {
+impl ToolHandler for HollywoodReadHandler {}
+
+impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_send".to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -395,15 +387,13 @@ impl ToolHandler for HollywoodSendHandler {
     }
 }
 
-impl ToolHandler for HollywoodTeamUpHandler {
+impl ToolHandler for HollywoodSendHandler {}
+
+impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_up".to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -524,15 +514,13 @@ impl ToolHandler for HollywoodTeamUpHandler {
     }
 }
 
-impl ToolHandler for HollywoodTeamStatusHandler {
+impl ToolHandler for HollywoodTeamUpHandler {}
+
+impl ToolExecutor<ToolInvocation> for HollywoodTeamStatusHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_status".to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -580,15 +568,13 @@ impl ToolHandler for HollywoodTeamStatusHandler {
     }
 }
 
-impl ToolHandler for HollywoodTeamMemberUpdateHandler {
+impl ToolHandler for HollywoodTeamStatusHandler {}
+
+impl ToolExecutor<ToolInvocation> for HollywoodTeamMemberUpdateHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_member_update".to_string())
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -653,6 +639,8 @@ impl ToolHandler for HollywoodTeamMemberUpdateHandler {
         ))
     }
 }
+
+impl ToolHandler for HollywoodTeamMemberUpdateHandler {}
 
 fn resolve_target_identities(args: &HollywoodSendArgs) -> Vec<String> {
     let mut identities = Vec::new();

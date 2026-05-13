@@ -4,21 +4,13 @@ import asyncio
 from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
-import codex_app_server.api as public_api_module
-from codex_app_server.client import AppServerClient
-from codex_app_server.generated.v2_all import (
-    AgentMessageDeltaNotification,
-    ItemCompletedNotification,
-    MessagePhase,
-    ThreadTokenUsageUpdatedNotification,
-    TurnCompletedNotification,
-    TurnStatus,
-)
-from codex_app_server.models import InitializeResponse, Notification
-from codex_app_server.api import (
+import openai_codex.api as public_api_module
+from openai_codex.api import (
+    ApprovalMode,
     AsyncCodex,
     AsyncThread,
     AsyncTurnHandle,
@@ -27,6 +19,17 @@ from codex_app_server.api import (
     Thread,
     TurnHandle,
 )
+from openai_codex.client import AppServerClient
+from openai_codex.generated.v2_all import (
+    AgentMessageDeltaNotification,
+    ItemCompletedNotification,
+    MessagePhase,
+    ThreadTokenUsageUpdatedNotification,
+    TurnCompletedNotification,
+    TurnStartParams,
+    TurnStatus,
+)
+from openai_codex.models import InitializeResponse, Notification
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -93,6 +96,7 @@ def _item_completed_notification(
         method="item/completed",
         payload=ItemCompletedNotification.model_validate(
             {
+                "completedAtMs": 123,
                 "item": item,
                 "threadId": thread_id,
                 "turnId": turn_id,
@@ -131,6 +135,22 @@ def _token_usage_notification(
             }
         ),
     )
+
+
+def _approval_settings(params: list[Any]) -> list[dict[str, object]]:
+    """Return serialized approval settings from captured Pydantic params."""
+    return [
+        {
+            key: value
+            for key, value in param.model_dump(
+                by_alias=True,
+                exclude_none=True,
+                mode="json",
+            ).items()
+            if key in {"approvalPolicy", "approvalsReviewer"}
+        }
+        for param in params
+    ]
 
 
 def test_codex_init_failure_closes_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -226,7 +246,18 @@ def test_async_codex_initializes_only_once_under_concurrency() -> None:
     asyncio.run(scenario())
 
 
-def test_turn_stream_rejects_second_active_consumer() -> None:
+def _approval_mode_turn_params(approval_mode: ApprovalMode) -> TurnStartParams:
+    """Build real generated turn params from one public approval mode."""
+    approval_policy, approvals_reviewer = public_api_module._approval_mode_settings(approval_mode)
+    return TurnStartParams(
+        thread_id="thread-1",
+        input=[],
+        approval_policy=approval_policy,
+        approvals_reviewer=approvals_reviewer,
+    )
+
+
+def test_turn_stream_yields_routed_notifications() -> None:
     client = AppServerClient()
     notifications: deque[Notification] = deque(
         [
@@ -234,19 +265,17 @@ def test_turn_stream_rejects_second_active_consumer() -> None:
             _completed_notification(turn_id="turn-1"),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
 
-    first_stream = TurnHandle(client, "thread-1", "turn-1").stream()
-    assert next(first_stream).method == "item/agentMessage/delta"
+    events = list(TurnHandle(client, "thread-1", "turn-1").stream())
 
-    second_stream = TurnHandle(client, "thread-1", "turn-2").stream()
-    with pytest.raises(RuntimeError, match="Concurrent turn consumers are not yet supported"):
-        next(second_stream)
-
-    first_stream.close()
+    assert [event.method for event in events] == [
+        "item/agentMessage/delta",
+        "turn/completed",
+    ]
 
 
-def test_async_turn_stream_rejects_second_active_consumer() -> None:
+def test_async_turn_stream_yields_routed_notifications() -> None:
     async def scenario() -> None:
         codex = AsyncCodex()
 
@@ -260,20 +289,20 @@ def test_async_turn_stream_rejects_second_active_consumer() -> None:
             ]
         )
 
-        async def fake_next_notification() -> Notification:
+        async def fake_next_turn_notification(turn_id: str) -> Notification:  # noqa: ARG001
             return notifications.popleft()
 
         codex._ensure_initialized = fake_ensure_initialized  # type: ignore[method-assign]
-        codex._client.next_notification = fake_next_notification  # type: ignore[method-assign]
+        codex._client.next_turn_notification = fake_next_turn_notification  # type: ignore[method-assign]
 
-        first_stream = AsyncTurnHandle(codex, "thread-1", "turn-1").stream()
-        assert (await anext(first_stream)).method == "item/agentMessage/delta"
+        events: list[Notification] = []
+        async for event in AsyncTurnHandle(codex, "thread-1", "turn-1").stream():
+            events.append(event)
 
-        second_stream = AsyncTurnHandle(codex, "thread-1", "turn-2").stream()
-        with pytest.raises(RuntimeError, match="Concurrent turn consumers are not yet supported"):
-            await anext(second_stream)
-
-        await first_stream.aclose()
+        assert [event.method for event in events] == [
+            "item/agentMessage/delta",
+            "turn/completed",
+        ]
 
     asyncio.run(scenario())
 
@@ -285,7 +314,7 @@ def test_turn_run_returns_completed_turn_payload() -> None:
             _completed_notification(),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
 
     result = TurnHandle(client, "thread-1", "turn-1").run()
 
@@ -305,7 +334,7 @@ def test_thread_run_accepts_string_input_and_returns_run_result() -> None:
             _completed_notification(),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
     seen: dict[str, object] = {}
 
     def fake_turn_start(thread_id: str, wire_input: object, *, params=None):  # noqa: ANN001,ANN202
@@ -331,9 +360,15 @@ def test_thread_realtime_methods_delegate_to_client() -> None:
     client = AppServerClient()
     seen: list[tuple[str, object]] = []
 
-    client.thread_realtime_start = lambda thread_id, prompt: seen.append(("start", (thread_id, prompt)))  # type: ignore[method-assign]
-    client.thread_realtime_append_audio = lambda thread_id, audio: seen.append(("audio", (thread_id, audio)))  # type: ignore[method-assign]
-    client.thread_realtime_append_text = lambda thread_id, text: seen.append(("text", (thread_id, text)))  # type: ignore[method-assign]
+    client.thread_realtime_start = lambda thread_id, prompt: seen.append(
+        ("start", (thread_id, prompt))
+    )  # type: ignore[method-assign]
+    client.thread_realtime_append_audio = lambda thread_id, audio: seen.append(
+        ("audio", (thread_id, audio))
+    )  # type: ignore[method-assign]
+    client.thread_realtime_append_text = lambda thread_id, text: seen.append(
+        ("text", (thread_id, text))
+    )  # type: ignore[method-assign]
     client.thread_realtime_stop = lambda thread_id: seen.append(("stop", thread_id))  # type: ignore[method-assign]
 
     thread = Thread(client, "thread-1")
@@ -404,7 +439,7 @@ def test_thread_run_uses_last_completed_assistant_message_as_final_response() ->
             _completed_notification(),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
     client.turn_start = lambda thread_id, wire_input, *, params=None: SimpleNamespace(  # noqa: ARG005,E731
         turn=SimpleNamespace(id="turn-1")
     )
@@ -429,7 +464,7 @@ def test_thread_run_preserves_empty_last_assistant_message() -> None:
             _completed_notification(),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
     client.turn_start = lambda thread_id, wire_input, *, params=None: SimpleNamespace(  # noqa: ARG005,E731
         turn=SimpleNamespace(id="turn-1")
     )
@@ -460,7 +495,7 @@ def test_thread_run_prefers_explicit_final_answer_over_later_commentary() -> Non
             _completed_notification(),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
     client.turn_start = lambda thread_id, wire_input, *, params=None: SimpleNamespace(  # noqa: ARG005,E731
         turn=SimpleNamespace(id="turn-1")
     )
@@ -486,7 +521,7 @@ def test_thread_run_returns_none_when_only_commentary_messages_complete() -> Non
             _completed_notification(),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
     client.turn_start = lambda thread_id, wire_input, *, params=None: SimpleNamespace(  # noqa: ARG005,E731
         turn=SimpleNamespace(id="turn-1")
     )
@@ -504,7 +539,7 @@ def test_thread_run_raises_on_failed_turn() -> None:
             _completed_notification(status="failed", error_message="boom"),
         ]
     )
-    client.next_notification = notifications.popleft  # type: ignore[method-assign]
+    client.next_turn_notification = lambda turn_id: notifications.popleft()  # type: ignore[method-assign]
     client.turn_start = lambda thread_id, wire_input, *, params=None: SimpleNamespace(  # noqa: ARG005,E731
         turn=SimpleNamespace(id="turn-1")
     )
@@ -537,12 +572,12 @@ def test_async_thread_run_accepts_string_input_and_returns_run_result() -> None:
             seen["params"] = params
             return SimpleNamespace(turn=SimpleNamespace(id="turn-1"))
 
-        async def fake_next_notification() -> Notification:
+        async def fake_next_turn_notification(turn_id: str) -> Notification:  # noqa: ARG001
             return notifications.popleft()
 
         codex._ensure_initialized = fake_ensure_initialized  # type: ignore[method-assign]
         codex._client.turn_start = fake_turn_start  # type: ignore[method-assign]
-        codex._client.next_notification = fake_next_notification  # type: ignore[method-assign]
+        codex._client.next_turn_notification = fake_next_turn_notification  # type: ignore[method-assign]
 
         result = await AsyncThread(codex, "thread-1").run("hello")
 
@@ -577,12 +612,12 @@ def test_async_thread_run_uses_last_completed_assistant_message_as_final_respons
         async def fake_turn_start(thread_id: str, wire_input: object, *, params=None):  # noqa: ANN001,ANN202,ARG001
             return SimpleNamespace(turn=SimpleNamespace(id="turn-1"))
 
-        async def fake_next_notification() -> Notification:
+        async def fake_next_turn_notification(turn_id: str) -> Notification:  # noqa: ARG001
             return notifications.popleft()
 
         codex._ensure_initialized = fake_ensure_initialized  # type: ignore[method-assign]
         codex._client.turn_start = fake_turn_start  # type: ignore[method-assign]
-        codex._client.next_notification = fake_next_notification  # type: ignore[method-assign]
+        codex._client.next_turn_notification = fake_next_turn_notification  # type: ignore[method-assign]
 
         result = await AsyncThread(codex, "thread-1").run("hello")
 
@@ -616,12 +651,12 @@ def test_async_thread_run_returns_none_when_only_commentary_messages_complete() 
         async def fake_turn_start(thread_id: str, wire_input: object, *, params=None):  # noqa: ANN001,ANN202,ARG001
             return SimpleNamespace(turn=SimpleNamespace(id="turn-1"))
 
-        async def fake_next_notification() -> Notification:
+        async def fake_next_turn_notification(turn_id: str) -> Notification:  # noqa: ARG001
             return notifications.popleft()
 
         codex._ensure_initialized = fake_ensure_initialized  # type: ignore[method-assign]
         codex._client.turn_start = fake_turn_start  # type: ignore[method-assign]
-        codex._client.next_notification = fake_next_notification  # type: ignore[method-assign]
+        codex._client.next_turn_notification = fake_next_turn_notification  # type: ignore[method-assign]
 
         result = await AsyncThread(codex, "thread-1").run("hello")
 
@@ -629,6 +664,26 @@ def test_async_thread_run_returns_none_when_only_commentary_messages_complete() 
         assert result.items == [commentary_notification.payload.item]
 
     asyncio.run(scenario())
+
+
+def test_approval_modes_serialize_to_expected_start_params() -> None:
+    """ApprovalMode should map to the app-server params sent for new work."""
+    assert {
+        mode.value: _approval_settings([_approval_mode_turn_params(mode)])[0]
+        for mode in ApprovalMode
+    } == {
+        "deny_all": {"approvalPolicy": "never"},
+        "auto_review": {
+            "approvalPolicy": "on-request",
+            "approvalsReviewer": "auto_review",
+        },
+    }
+
+
+def test_unknown_approval_mode_is_rejected() -> None:
+    """Invalid approval modes should fail before params are constructed."""
+    with pytest.raises(ValueError, match="deny_all, auto_review"):
+        public_api_module._approval_mode_settings("allow_all")  # type: ignore[arg-type]
 
 
 def test_retry_examples_compare_status_with_enum() -> None:

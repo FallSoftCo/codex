@@ -15,7 +15,6 @@ use codex_config::ConfigRequirements;
 use codex_config::ConfigRequirementsToml;
 use codex_config::ConstrainedWithSource;
 use codex_config::FeatureRequirementsToml;
-use codex_config::LoaderOverrides;
 use codex_config::McpServerIdentity;
 use codex_config::McpServerRequirement;
 use codex_config::PluginRequirementsToml;
@@ -51,6 +50,7 @@ use codex_config::types::ToolSuggestDisabledTool;
 use codex_config::types::ToolSuggestDiscoverable;
 use codex_config::types::TuiKeymap;
 use codex_config::types::TuiNotificationSettings;
+use codex_config::types::TuiPetAnchor;
 use codex_config::types::UriBasedFileOpener;
 use codex_config::types::WindowsSandboxModeToml;
 use codex_core_plugins::PluginsConfigInput;
@@ -64,11 +64,10 @@ use codex_features::FeatureToml;
 use codex_features::Features;
 use codex_features::FeaturesToml;
 use codex_features::MultiAgentV2ConfigToml;
+use codex_features::NetworkProxyConfigToml;
 use codex_git_utils::resolve_root_git_project_for_trust;
 use codex_login::AuthManagerConfig;
-use codex_mcp::BuiltinMcpServerOptions;
 use codex_mcp::McpConfig;
-use codex_mcp::enabled_builtin_mcp_servers;
 use codex_memories_read::memory_root;
 use codex_model_provider_info::LEGACY_OLLAMA_CHAT_PROVIDER_ID;
 use codex_model_provider_info::ModelProviderInfo;
@@ -100,6 +99,9 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use codex_utils_absolute_path::AbsolutePathBufGuard;
+use rmcp::model::ElicitationCapability;
+use rmcp::model::FormElicitationCapability;
+use rmcp::model::UrlElicitationCapability;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -111,6 +113,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::config::permissions::BUILT_IN_WORKSPACE_PROFILE;
+use crate::config::permissions::apply_network_proxy_feature_config;
 use crate::config::permissions::builtin_permission_profile;
 use crate::config::permissions::compile_permission_profile_selection;
 use crate::config::permissions::default_builtin_permission_profile_name;
@@ -132,9 +135,11 @@ mod otel;
 mod permissions;
 #[cfg(test)]
 mod schema;
+pub use codex_config::ConfigLoadOptions;
 pub use codex_config::Constrained;
 pub use codex_config::ConstraintError;
 pub use codex_config::ConstraintResult;
+pub use codex_config::LoaderOverrides;
 pub use codex_network_proxy::NetworkProxyAuditMetadata;
 use codex_sandboxing::compatibility_sandbox_policy_for_permission_profile;
 pub use codex_sandboxing::system_bwrap_warning;
@@ -461,6 +466,9 @@ pub struct Config {
     /// Whether to inject the `<apps_instructions>` developer block.
     pub include_apps_instructions: bool,
 
+    /// Whether to inject the `<collaboration_mode>` developer block.
+    pub include_collaboration_mode_instructions: bool,
+
     /// Whether to inject the `<skills_instructions>` developer block.
     pub include_skill_instructions: bool,
 
@@ -524,8 +532,8 @@ pub struct Config {
     /// Controls whether the TUI uses the terminal's alternate screen buffer.
     ///
     /// This is the same `tui.alternate_screen` value from `config.toml`.
-    /// - `auto` (default): Disable alternate screen in Zellij, enable elsewhere.
-    /// - `always`: Always use alternate screen (original behavior).
+    /// - `auto` (default): Use alternate screen.
+    /// - `always`: Always use alternate screen.
     /// - `never`: Never use alternate screen (inline mode, preserves scrollback).
     pub tui_alternate_screen: AltScreenMode,
     /// Ordered list of status line item identifiers for the TUI.
@@ -545,6 +553,12 @@ pub struct Config {
 
     /// Syntax highlighting theme override (kebab-case name).
     pub tui_theme: Option<String>,
+
+    /// Pet id preselected by the terminal pet picker.
+    pub tui_pet: Option<String>,
+
+    /// Vertical anchor used by terminal pet rendering.
+    pub tui_pet_anchor: TuiPetAnchor,
 
     /// Preferred layout for resume/fork session picker results.
     pub tui_session_picker_view: SessionPickerViewMode,
@@ -655,6 +669,11 @@ pub struct Config {
     /// When true, session is not persisted on disk. Default to `false`
     pub ephemeral: bool,
 
+    /// Whether enabled hooks should run without requiring persisted hook trust for this session.
+    ///
+    /// This is a runtime-only knob populated from invocation overrides, not from config files.
+    pub bypass_hook_trust: bool,
+
     /// Optional URI-based file opener. If set, citations to files in the model
     /// output will be hyperlinked using the specified URI scheme.
     pub file_opener: UriBasedFileOpener,
@@ -707,7 +726,7 @@ pub struct Config {
     /// Base URL for requests to ChatGPT (as opposed to the OpenAI API).
     pub chatgpt_base_url: String,
 
-    /// Optional path override for the built-in apps MCP server.
+    /// Optional path override for the host-owned apps MCP server.
     pub apps_mcp_path_override: Option<String>,
 
     /// Machine-local realtime audio device preferences used by realtime voice.
@@ -827,6 +846,7 @@ pub struct MultiAgentV2Config {
     pub root_agent_usage_hint_text: Option<String>,
     pub subagent_usage_hint_text: Option<String>,
     pub hide_spawn_agent_metadata: bool,
+    pub non_code_mode_only: bool,
 }
 
 impl Default for MultiAgentV2Config {
@@ -840,6 +860,7 @@ impl Default for MultiAgentV2Config {
             root_agent_usage_hint_text: None,
             subagent_usage_hint_text: None,
             hide_spawn_agent_metadata: false,
+            non_code_mode_only: false,
         }
     }
 }
@@ -884,6 +905,7 @@ pub struct ConfigBuilder {
     cli_overrides: Option<Vec<(String, TomlValue)>>,
     harness_overrides: Option<ConfigOverrides>,
     loader_overrides: Option<LoaderOverrides>,
+    strict_config: bool,
     cloud_requirements: CloudRequirementsLoader,
     thread_config_loader: Option<Arc<dyn ThreadConfigLoader>>,
     fallback_cwd: Option<PathBuf>,
@@ -907,6 +929,11 @@ impl ConfigBuilder {
 
     pub fn loader_overrides(mut self, loader_overrides: LoaderOverrides) -> Self {
         self.loader_overrides = Some(loader_overrides);
+        self
+    }
+
+    pub fn strict_config(mut self, strict_config: bool) -> Self {
+        self.strict_config = strict_config;
         self
     }
 
@@ -939,6 +966,7 @@ impl ConfigBuilder {
             cli_overrides,
             harness_overrides,
             loader_overrides,
+            strict_config,
             cloud_requirements,
             thread_config_loader,
             fallback_cwd,
@@ -961,7 +989,10 @@ impl ConfigBuilder {
             &codex_home,
             Some(cwd),
             &cli_overrides,
-            loader_overrides,
+            ConfigLoadOptions {
+                loader_overrides,
+                strict_config,
+            },
             cloud_requirements,
             thread_config_loader
                 .as_deref()
@@ -1086,11 +1117,6 @@ impl Config {
     ) -> McpConfig {
         let plugins_input = self.plugins_config_input();
         let loaded_plugins = plugins_manager.plugins_for_config(&plugins_input).await;
-        let builtin_mcp_servers = enabled_builtin_mcp_servers(BuiltinMcpServerOptions {
-            memories_enabled: self.features.enabled(Feature::BuiltInMcp)
-                && self.features.enabled(Feature::MemoryTool)
-                && self.memories.use_memories,
-        });
         let mut configured_mcp_servers = self.mcp_servers.get().clone();
         for plugin in loaded_plugins
             .plugins()
@@ -1111,12 +1137,8 @@ impl Config {
             && mcp_requirements.value.is_empty()
         {
             // A present empty allowlist bans configurable MCPs, including plugin MCPs merged
-            // above. Built-ins are product-owned and stay available regardless of admin
-            // allowlists.
+            // above.
             filter_mcp_servers_by_requirements(&mut configured_mcp_servers, Some(mcp_requirements));
-        }
-        for builtin_server in &builtin_mcp_servers {
-            configured_mcp_servers.remove(builtin_server.name());
         }
 
         McpConfig {
@@ -1133,8 +1155,17 @@ impl Config {
             codex_linux_sandbox_exe: self.codex_linux_sandbox_exe.clone(),
             use_legacy_landlock: self.features.use_legacy_landlock(),
             apps_enabled: self.features.enabled(Feature::Apps),
+            client_elicitation_capability: if self.features.enabled(Feature::AuthElicitation) {
+                ElicitationCapability {
+                    form: Some(FormElicitationCapability::default()),
+                    url: Some(UrlElicitationCapability::default()),
+                }
+            } else {
+                // https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation#capabilities
+                // indicates this should be an empty object.
+                ElicitationCapability::default()
+            },
             configured_mcp_servers,
-            builtin_mcp_servers,
             plugin_capability_summaries: loaded_plugins.capability_summaries().to_vec(),
         }
     }
@@ -1242,56 +1273,38 @@ impl Config {
         )
         .await
     }
-
-    /// This is a secondary way of creating [Config], which is appropriate when
-    /// the harness is meant to be used with a specific configuration that
-    /// ignores user settings. For example, the `codex exec` subcommand is
-    /// designed to use [AskForApproval::Never] exclusively.
-    ///
-    /// Further, [ConfigOverrides] contains some options that are not supported
-    /// in [ConfigToml], such as `cwd`, `codex_self_exe`, `codex_linux_sandbox_exe`, and
-    /// `main_execve_wrapper_exe`.
-    pub async fn load_with_cli_overrides_and_harness_overrides(
-        cli_overrides: Vec<(String, TomlValue)>,
-        harness_overrides: ConfigOverrides,
-    ) -> std::io::Result<Self> {
-        ConfigBuilder::default()
-            .cli_overrides(cli_overrides)
-            .harness_overrides(harness_overrides)
-            .build()
-            .await
-    }
 }
 
-/// DEPRECATED: Use [Config::load_with_cli_overrides()] instead because working
-/// with [ConfigToml] directly means that [ConfigRequirements] have not been
-/// applied yet, which risks failing to enforce required constraints.
-pub async fn load_config_as_toml_with_cli_overrides(
-    codex_home: &Path,
-    cwd: Option<&AbsolutePathBuf>,
-    cli_overrides: Vec<(String, TomlValue)>,
-) -> std::io::Result<ConfigToml> {
-    load_config_as_toml_with_cli_and_loader_overrides(
-        codex_home,
-        cwd,
-        cli_overrides,
-        LoaderOverrides::default(),
-    )
-    .await
-}
-
+/// DEPRECATED for most callers: prefer [Config::load_with_cli_overrides()] or
+/// [ConfigBuilder] because working with [ConfigToml] directly means
+/// [ConfigRequirements] have not been applied yet, which risks skipping
+/// required constraints.
 pub async fn load_config_as_toml_with_cli_and_loader_overrides(
     codex_home: &Path,
     cwd: Option<&AbsolutePathBuf>,
     cli_overrides: Vec<(String, TomlValue)>,
     loader_overrides: LoaderOverrides,
 ) -> std::io::Result<ConfigToml> {
+    load_config_as_toml_with_cli_and_load_options(codex_home, cwd, cli_overrides, loader_overrides)
+        .await
+}
+
+/// DEPRECATED for most callers: prefer [Config::load_with_cli_overrides()] or
+/// [ConfigBuilder] because working with [ConfigToml] directly means
+/// [ConfigRequirements] have not been applied yet, which risks skipping
+/// required constraints.
+pub async fn load_config_as_toml_with_cli_and_load_options(
+    codex_home: &Path,
+    cwd: Option<&AbsolutePathBuf>,
+    cli_overrides: Vec<(String, TomlValue)>,
+    options: impl Into<ConfigLoadOptions>,
+) -> std::io::Result<ConfigToml> {
     let config_layer_stack = load_config_layers_state(
         LOCAL_FS.as_ref(),
         codex_home,
         cwd.cloned(),
         &cli_overrides,
-        loader_overrides,
+        options,
         CloudRequirementsLoader::default(),
         &codex_config::NoopThreadConfigLoader,
     )
@@ -1873,6 +1886,7 @@ pub struct ConfigOverrides {
     pub show_raw_agent_reasoning: Option<bool>,
     pub tools_web_search_request: Option<bool>,
     pub ephemeral: Option<bool>,
+    pub bypass_hook_trust: Option<bool>,
     /// Additional directories that should be treated as writable roots for this session.
     pub additional_writable_roots: Vec<PathBuf>,
 }
@@ -1983,6 +1997,10 @@ fn resolve_multi_agent_v2_config(
         .and_then(|config| config.hide_spawn_agent_metadata)
         .or_else(|| base.and_then(|config| config.hide_spawn_agent_metadata))
         .unwrap_or(default.hide_spawn_agent_metadata);
+    let non_code_mode_only = profile
+        .and_then(|config| config.non_code_mode_only)
+        .or_else(|| base.and_then(|config| config.non_code_mode_only))
+        .unwrap_or(default.non_code_mode_only);
 
     MultiAgentV2Config {
         max_concurrent_threads_per_session,
@@ -1992,6 +2010,7 @@ fn resolve_multi_agent_v2_config(
         root_agent_usage_hint_text,
         subagent_usage_hint_text,
         hide_spawn_agent_metadata,
+        non_code_mode_only,
     }
 }
 
@@ -2020,6 +2039,13 @@ fn apps_mcp_path_override_toml_config(
     features: Option<&FeaturesToml>,
 ) -> Option<&AppsMcpPathOverrideConfigToml> {
     match features?.apps_mcp_path_override.as_ref()? {
+        FeatureToml::Enabled(_) => None,
+        FeatureToml::Config(config) => Some(config),
+    }
+}
+
+fn network_proxy_toml_config(features: Option<&FeaturesToml>) -> Option<&NetworkProxyConfigToml> {
+    match features?.network_proxy.as_ref()? {
         FeatureToml::Enabled(_) => None,
         FeatureToml::Config(config) => Some(config),
     }
@@ -2105,6 +2131,7 @@ impl Config {
             approvals_reviewer: mut constrained_approvals_reviewer,
             permission_profile: mut constrained_permission_profile,
             web_search_mode: mut constrained_web_search_mode,
+            allow_managed_hooks_only: _,
             feature_requirements,
             managed_hooks: _,
             mcp_servers,
@@ -2148,8 +2175,17 @@ impl Config {
             show_raw_agent_reasoning,
             tools_web_search_request: override_tools_web_search_request,
             ephemeral,
+            bypass_hook_trust,
             additional_writable_roots,
         } = overrides;
+        let bypass_hook_trust = bypass_hook_trust.unwrap_or_default();
+
+        if bypass_hook_trust {
+            startup_warnings.push(
+                "`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation."
+                    .to_string(),
+            );
+        }
 
         if sandbox_mode.is_some() && permission_profile.is_some() {
             return Err(std::io::Error::new(
@@ -2215,6 +2251,7 @@ impl Config {
             feature_requirements,
             &mut startup_warnings,
         )?;
+        let enable_network_proxy = features.enabled(Feature::NetworkProxy);
         let windows_sandbox_mode = resolve_windows_sandbox_mode(&cfg, &config_profile);
         let windows_sandbox_private_desktop =
             resolve_windows_sandbox_private_desktop(&cfg, &config_profile);
@@ -2298,7 +2335,7 @@ impl Config {
         let using_implicit_builtin_profile =
             permission_config_syntax.is_none() && default_permissions.is_none();
         let (
-            configured_network_proxy_config,
+            mut configured_network_proxy_config,
             permission_profile,
             file_system_sandbox_policy,
             mut active_permission_profile,
@@ -2511,6 +2548,22 @@ impl Config {
                 None,
             )
         };
+        if enable_network_proxy && permission_profile.network_sandbox_policy().is_enabled() {
+            if let Some(network_proxy) = network_proxy_toml_config(cfg.features.as_ref()) {
+                apply_network_proxy_feature_config(
+                    &mut configured_network_proxy_config,
+                    network_proxy,
+                );
+            }
+            if let Some(network_proxy) = network_proxy_toml_config(config_profile.features.as_ref())
+            {
+                apply_network_proxy_feature_config(
+                    &mut configured_network_proxy_config,
+                    network_proxy,
+                );
+            }
+            configured_network_proxy_config.network.enabled = true;
+        }
         let approval_policy_was_explicit = approval_policy_override.is_some()
             || config_profile.approval_policy.is_some()
             || cfg.approval_policy.is_some();
@@ -2782,6 +2835,10 @@ impl Config {
             .include_apps_instructions
             .or(cfg.include_apps_instructions)
             .unwrap_or(true);
+        let include_collaboration_mode_instructions = config_profile
+            .include_collaboration_mode_instructions
+            .or(cfg.include_collaboration_mode_instructions)
+            .unwrap_or(true);
         let include_skill_instructions = cfg
             .skills
             .as_ref()
@@ -2878,12 +2935,6 @@ impl Config {
                     }
                 })
                 .map_err(std::io::Error::from)?;
-
-            if cfg!(target_os = "windows") {
-                startup_warnings.push(format!(
-                    "managed filesystem deny_read from {filesystem_requirements_source} is only enforced for direct file tools on Windows; shell subprocess reads are not sandboxed"
-                ));
-            }
         }
         apply_requirement_constrained_value(
             "approvals_reviewer",
@@ -3003,6 +3054,7 @@ impl Config {
             commit_attribution,
             include_permissions_instructions,
             include_apps_instructions,
+            include_collaboration_mode_instructions,
             include_skill_instructions,
             include_environment_context,
             // The config.toml omits "_mode" because it's a config file. However, "_mode"
@@ -3066,6 +3118,7 @@ impl Config {
             config_layer_stack,
             history,
             ephemeral: ephemeral.unwrap_or_default(),
+            bypass_hook_trust,
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
             codex_self_exe,
             codex_linux_sandbox_exe,
@@ -3184,6 +3237,12 @@ impl Config {
                 .unwrap_or(true),
             tui_terminal_title: cfg.tui.as_ref().and_then(|t| t.terminal_title.clone()),
             tui_theme: cfg.tui.as_ref().and_then(|t| t.theme.clone()),
+            tui_pet: cfg.tui.as_ref().and_then(|t| t.pet.clone()),
+            tui_pet_anchor: cfg
+                .tui
+                .as_ref()
+                .map(|t| t.pet_anchor)
+                .unwrap_or_default(),
             tui_session_picker_view: config_profile
                 .tui
                 .as_ref()

@@ -18,21 +18,12 @@ pub(crate) fn register_losangelex_tools(
     state_db_available: bool,
     hollywood_tools_available: bool,
 ) {
-    builder.push_spec(
-        create_restart_client_tool(),
-        /*supports_parallel_tool_calls*/ false,
-    );
+    builder.push_spec(create_restart_client_tool());
     builder.register_handler(Arc::new(RestartClientHandler));
 
     if state_db_available {
-        builder.push_spec(
-            create_coordination_act_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
-        builder.push_spec(
-            create_list_coordination_tasks_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
+        builder.push_spec(create_coordination_act_tool());
+        builder.push_spec(create_list_coordination_tasks_tool());
         builder.register_handler(Arc::new(CoordinationHandler::new("coordination_act")));
         builder.register_handler(Arc::new(CoordinationHandler::new(
             "list_coordination_tasks",
@@ -40,30 +31,12 @@ pub(crate) fn register_losangelex_tools(
     }
 
     if hollywood_tools_available {
-        builder.push_spec(
-            create_hollywood_status_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
-        builder.push_spec(
-            create_hollywood_read_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
-        builder.push_spec(
-            create_hollywood_send_tool(state_db_available),
-            /*supports_parallel_tool_calls*/ false,
-        );
-        builder.push_spec(
-            create_hollywood_team_up_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
-        builder.push_spec(
-            create_hollywood_team_status_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
-        builder.push_spec(
-            create_hollywood_team_member_update_tool(),
-            /*supports_parallel_tool_calls*/ false,
-        );
+        builder.push_spec(create_hollywood_status_tool());
+        builder.push_spec(create_hollywood_read_tool());
+        builder.push_spec(create_hollywood_send_tool(state_db_available));
+        builder.push_spec(create_hollywood_team_up_tool());
+        builder.push_spec(create_hollywood_team_status_tool());
+        builder.push_spec(create_hollywood_team_member_update_tool());
         builder.register_handler(Arc::new(HollywoodStatusHandler));
         builder.register_handler(Arc::new(HollywoodReadHandler));
         builder.register_handler(Arc::new(HollywoodSendHandler));

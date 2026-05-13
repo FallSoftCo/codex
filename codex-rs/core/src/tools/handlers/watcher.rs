@@ -4,8 +4,8 @@ use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::registry::ToolExecutor;
 use crate::tools::registry::ToolHandler;
-use crate::tools::registry::ToolKind;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::AgentStatus;
 use codex_tools::ToolName;
@@ -118,19 +118,11 @@ fn default_requires_response() -> bool {
     true
 }
 
-impl ToolHandler for WatcherHandler {
+impl ToolExecutor<ToolInvocation> for WatcherHandler {
     type Output = FunctionToolOutput;
 
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
-    }
-
-    fn kind(&self) -> ToolKind {
-        ToolKind::Function
-    }
-
-    fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(payload, ToolPayload::Function { .. })
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
@@ -370,6 +362,12 @@ impl ToolHandler for WatcherHandler {
                 "unsupported watcher tool {other}"
             ))),
         }
+    }
+}
+
+impl ToolHandler for WatcherHandler {
+    fn matches_kind(&self, payload: &ToolPayload) -> bool {
+        matches!(payload, ToolPayload::Function { .. })
     }
 }
 
