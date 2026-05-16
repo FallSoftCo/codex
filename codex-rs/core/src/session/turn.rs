@@ -44,12 +44,14 @@ use crate::session::PreviousTurnSettings;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::stream_events_utils::HandleOutputCtx;
+use crate::stream_events_utils::TurnItemContributorPolicy;
+use crate::stream_events_utils::finalize_non_tool_response_item;
 use crate::stream_events_utils::handle_non_tool_response_item;
 use crate::stream_events_utils::handle_output_item_done;
 use crate::stream_events_utils::last_assistant_message_from_item;
 use crate::stream_events_utils::mark_thread_memory_mode_polluted_if_external_context;
 use crate::stream_events_utils::raw_assistant_output_text_from_item;
-use crate::stream_events_utils::record_completed_response_item;
+use crate::stream_events_utils::record_completed_response_item_with_finalized_facts;
 use crate::tools::ToolRouter;
 use crate::tools::context::SharedTurnDiffTracker;
 use crate::tools::parallel::ToolCallRuntime;
@@ -139,6 +141,7 @@ use tracing::warn;
 pub(crate) async fn run_turn(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
+    turn_extension_data: Arc<codex_extension_api::ExtensionData>,
     input: Vec<UserInput>,
     prewarmed_client_session: Option<ModelClientSession>,
     cancellation_token: CancellationToken,
@@ -454,6 +457,7 @@ pub(crate) async fn run_turn(
         match run_sampling_request(
             Arc::clone(&sess),
             Arc::clone(&turn_context),
+            Arc::clone(&turn_extension_data),
             Arc::clone(&turn_diff_tracker),
             &mut client_session,
             turn_metadata_header.as_deref(),
@@ -1009,6 +1013,7 @@ pub(crate) fn build_prompt(
 async fn run_sampling_request(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
+    turn_store: Arc<codex_extension_api::ExtensionData>,
     turn_diff_tracker: SharedTurnDiffTracker,
     client_session: &mut ModelClientSession,
     turn_metadata_header: Option<&str>,
@@ -1065,6 +1070,7 @@ async fn run_sampling_request(
             tool_runtime.clone(),
             Arc::clone(&sess),
             Arc::clone(&turn_context),
+            Arc::clone(&turn_store),
             client_session,
             turn_metadata_header,
             Arc::clone(&turn_diff_tracker),
@@ -1750,6 +1756,7 @@ async fn emit_turn_item_in_plan_mode(
 async fn handle_assistant_item_done_in_plan_mode(
     sess: &Session,
     turn_context: &TurnContext,
+    turn_store: &codex_extension_api::ExtensionData,
     item: &ResponseItem,
     state: &mut PlanModeStreamState,
     previously_active_item: Option<&TurnItem>,
@@ -1760,21 +1767,38 @@ async fn handle_assistant_item_done_in_plan_mode(
     {
         maybe_complete_plan_item_from_message(sess, turn_context, state, item).await;
 
-        if let Some(turn_item) =
-            handle_non_tool_response_item(sess, turn_context, item, /*plan_mode*/ true).await
+        let mut finalized_facts = None;
+        if let Some(finalized_turn_item) = finalize_non_tool_response_item(
+            sess,
+            turn_context,
+            TurnItemContributorPolicy::Run(turn_store),
+            item,
+            /*plan_mode*/ true,
+        )
+        .await
         {
+            finalized_facts = Some(finalized_turn_item.facts.clone());
             emit_turn_item_in_plan_mode(
                 sess,
                 turn_context,
-                turn_item,
+                finalized_turn_item.turn_item,
                 previously_active_item,
                 state,
             )
             .await;
         }
+        let final_last_agent_message = finalized_facts
+            .as_ref()
+            .and_then(|facts| facts.last_agent_message.clone());
 
-        record_completed_response_item(sess, turn_context, item).await;
-        if let Some(agent_message) = last_assistant_message_from_item(item, /*plan_mode*/ true) {
+        record_completed_response_item_with_finalized_facts(
+            sess,
+            turn_context,
+            item,
+            finalized_facts.as_ref(),
+        )
+        .await;
+        if let Some(agent_message) = final_last_agent_message {
             *last_agent_message = Some(agent_message);
         }
         return true;
@@ -1820,6 +1844,7 @@ async fn try_run_sampling_request(
     tool_runtime: ToolCallRuntime,
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
+    turn_store: Arc<codex_extension_api::ExtensionData>,
     client_session: &mut ModelClientSession,
     turn_metadata_header: Option<&str>,
     turn_diff_tracker: SharedTurnDiffTracker,
@@ -1868,6 +1893,9 @@ async fn try_run_sampling_request(
     let plan_mode = turn_context.collaboration_mode.mode == ModeKind::Plan;
     let mut assistant_message_stream_parsers = AssistantMessageStreamParsers::new(plan_mode);
     let mut plan_mode_state = plan_mode.then(|| PlanModeStreamState::new(&turn_context.sub_id));
+    let defer_streamed_turn_items_for_contributors =
+        !sess.services.extensions.turn_item_contributors().is_empty();
+    let mut active_item_is_streaming_to_client = false;
     let receiving_span = trace_span!("receiving_stream");
     let mut completed_response_id: Option<String> = None;
     let outcome: CodexResult<SamplingRequestResult> = loop {
@@ -1920,7 +1948,13 @@ async fn try_run_sampling_request(
                     sess.send_event(&turn_context, event).await;
                 }
                 let previously_active_item = active_item.take();
-                if let Some(previous) = previously_active_item.as_ref()
+                let previously_streamed_item = if active_item_is_streaming_to_client {
+                    previously_active_item
+                } else {
+                    None
+                };
+                active_item_is_streaming_to_client = false;
+                if let Some(previous) = previously_streamed_item.as_ref()
                     && matches!(previous, TurnItem::AgentMessage(_))
                 {
                     let item_id = previous.id();
@@ -1937,9 +1971,10 @@ async fn try_run_sampling_request(
                     && handle_assistant_item_done_in_plan_mode(
                         &sess,
                         &turn_context,
+                        turn_store.as_ref(),
                         &item,
                         state,
-                        previously_active_item.as_ref(),
+                        previously_streamed_item.as_ref(),
                         &mut last_agent_message,
                     )
                     .await
@@ -1950,6 +1985,7 @@ async fn try_run_sampling_request(
                 let mut ctx = HandleOutputCtx {
                     sess: sess.clone(),
                     turn_context: turn_context.clone(),
+                    turn_store: Arc::clone(&turn_store),
                     tool_runtime: tool_runtime.clone(),
                     cancellation_token: cancellation_token.child_token(),
                 };
@@ -1969,12 +2005,13 @@ async fn try_run_sampling_request(
                     | ResponseItem::WebSearchCall { .. }
                     | ResponseItem::ImageGenerationCall { .. }
                     | ResponseItem::Compaction { .. }
+                    | ResponseItem::CompactionTrigger
                     | ResponseItem::ContextCompaction { .. }
                     | ResponseItem::Other => false,
                 };
 
                 let output_result =
-                    match handle_output_item_done(&mut ctx, item, previously_active_item)
+                    match handle_output_item_done(&mut ctx, item, previously_streamed_item)
                         .instrument(handle_responses)
                         .await
                     {
@@ -2008,15 +2045,18 @@ async fn try_run_sampling_request(
                 if let Some(turn_item) = handle_non_tool_response_item(
                     sess.as_ref(),
                     turn_context.as_ref(),
+                    TurnItemContributorPolicy::Skip,
                     &item,
                     plan_mode,
                 )
                 .await
                 {
                     let mut turn_item = turn_item;
+                    let stream_item_to_client = !defer_streamed_turn_items_for_contributors;
                     let mut seeded_parsed: Option<ParsedAssistantTextDelta> = None;
                     let mut seeded_item_id: Option<String> = None;
-                    if matches!(turn_item, TurnItem::AgentMessage(_))
+                    if stream_item_to_client
+                        && matches!(turn_item, TurnItem::AgentMessage(_))
                         && let Some(raw_text) = raw_assistant_output_text_from_item(&item)
                     {
                         let item_id = turn_item.id();
@@ -2035,31 +2075,34 @@ async fn try_run_sampling_request(
                         seeded_parsed = plan_mode.then_some(seeded);
                         seeded_item_id = Some(item_id);
                     }
-                    if let Some(state) = plan_mode_state.as_mut()
-                        && matches!(turn_item, TurnItem::AgentMessage(_))
-                    {
-                        let item_id = turn_item.id();
-                        state
-                            .pending_agent_message_items
-                            .insert(item_id, turn_item.clone());
-                    } else {
-                        sess.emit_turn_item_started(&turn_context, &turn_item).await;
-                    }
-                    if let (Some(state), Some(item_id), Some(parsed)) = (
-                        plan_mode_state.as_mut(),
-                        seeded_item_id.as_deref(),
-                        seeded_parsed,
-                    ) {
-                        emit_streamed_assistant_text_delta(
-                            &sess,
-                            &turn_context,
-                            Some(state),
-                            item_id,
-                            parsed,
-                        )
-                        .await;
+                    if stream_item_to_client {
+                        if let Some(state) = plan_mode_state.as_mut()
+                            && matches!(turn_item, TurnItem::AgentMessage(_))
+                        {
+                            let item_id = turn_item.id();
+                            state
+                                .pending_agent_message_items
+                                .insert(item_id, turn_item.clone());
+                        } else {
+                            sess.emit_turn_item_started(&turn_context, &turn_item).await;
+                        }
+                        if let (Some(state), Some(item_id), Some(parsed)) = (
+                            plan_mode_state.as_mut(),
+                            seeded_item_id.as_deref(),
+                            seeded_parsed,
+                        ) {
+                            emit_streamed_assistant_text_delta(
+                                &sess,
+                                &turn_context,
+                                Some(state),
+                                item_id,
+                                parsed,
+                            )
+                            .await;
+                        }
                     }
                     active_item = Some(turn_item);
+                    active_item_is_streaming_to_client = stream_item_to_client;
                 }
             }
             ResponseEvent::ServerModel(server_model) => {
@@ -2126,6 +2169,9 @@ async fn try_run_sampling_request(
                 // In review child threads, suppress assistant text deltas; the
                 // UI will show a selection popup from the final ReviewOutput.
                 if let Some(active) = active_item.as_ref() {
+                    if !active_item_is_streaming_to_client {
+                        continue;
+                    }
                     let item_id = active.id();
                     if matches!(active, TurnItem::AgentMessage(_)) {
                         let parsed = assistant_message_stream_parsers.parse_delta(&item_id, &delta);
@@ -2174,6 +2220,9 @@ async fn try_run_sampling_request(
                 summary_index,
             } => {
                 if let Some(active) = active_item.as_ref() {
+                    if !active_item_is_streaming_to_client {
+                        continue;
+                    }
                     let event = ReasoningContentDeltaEvent {
                         thread_id: sess.conversation_id.to_string(),
                         turn_id: turn_context.sub_id.clone(),
@@ -2189,6 +2238,9 @@ async fn try_run_sampling_request(
             }
             ResponseEvent::ReasoningSummaryPartAdded { summary_index } => {
                 if let Some(active) = active_item.as_ref() {
+                    if !active_item_is_streaming_to_client {
+                        continue;
+                    }
                     let event =
                         EventMsg::AgentReasoningSectionBreak(AgentReasoningSectionBreakEvent {
                             item_id: active.id(),
@@ -2204,6 +2256,9 @@ async fn try_run_sampling_request(
                 content_index,
             } => {
                 if let Some(active) = active_item.as_ref() {
+                    if !active_item_is_streaming_to_client {
+                        continue;
+                    }
                     let event = ReasoningRawContentDeltaEvent {
                         thread_id: sess.conversation_id.to_string(),
                         turn_id: turn_context.sub_id.clone(),
@@ -2273,3 +2328,7 @@ pub(crate) fn get_last_assistant_message_from_turn(responses: &[ResponseItem]) -
     }
     None
 }
+
+#[cfg(test)]
+#[path = "turn_tests.rs"]
+mod tests;

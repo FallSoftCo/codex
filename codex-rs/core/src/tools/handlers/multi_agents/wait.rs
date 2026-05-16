@@ -27,9 +27,8 @@ impl Handler {
     }
 }
 
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for Handler {
-    type Output = WaitAgentResult;
-
     fn tool_name(&self) -> ToolName {
         ToolName::plain("wait_agent")
     }
@@ -38,7 +37,10 @@ impl ToolExecutor<ToolInvocation> for Handler {
         Some(create_wait_agent_tool_v1(self.options))
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn crate::tools::context::ToolOutput>, FunctionCallError> {
         let ToolInvocation {
             session,
             turn,
@@ -49,10 +51,10 @@ impl ToolExecutor<ToolInvocation> for Handler {
         let arguments = function_arguments(payload)?;
         let args: WaitArgs = parse_arguments(&arguments)?;
         if args.targets.is_empty() {
-            return Ok(WaitAgentResult {
+            return Ok(boxed_tool_output(WaitAgentResult {
                 status: HashMap::new(),
                 timed_out: false,
-            });
+            }));
         }
         let receiver_thread_ids = parse_agent_id_targets(args.targets)?;
         let mut receiver_agents = Vec::with_capacity(receiver_thread_ids.len());
@@ -202,11 +204,11 @@ impl ToolExecutor<ToolInvocation> for Handler {
             )
             .await;
 
-        Ok(result)
+        Ok(boxed_tool_output(result))
     }
 }
 
-impl ToolHandler for Handler {
+impl CoreToolRuntime for Handler {
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
         matches!(payload, ToolPayload::Function { .. })
     }

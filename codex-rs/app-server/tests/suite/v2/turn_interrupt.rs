@@ -431,8 +431,8 @@ async fn cancelled_coordination_wake_interrupts_active_turn() -> Result<()> {
     state_db
         .create_coordination_task(codex_state::CoordinationTaskCreateParams {
             id: "task-cancelled-impl".to_string(),
-            creator_thread_id: creator.clone(),
-            owner_thread_id: Some(owner_thread_id.clone()),
+            creator_thread_id: creator,
+            owner_thread_id: Some(owner_thread_id),
             reserved_path_claims: vec![codex_state::PathClaimSpec {
                 kind: codex_state::PathClaimKind::Directory,
                 path: tmp.path().join("workdir"),
@@ -453,7 +453,7 @@ async fn cancelled_coordination_wake_interrupts_active_turn() -> Result<()> {
     state_db
         .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
             task_id: "task-cancelled-impl".to_string(),
-            actor_thread_id: owner_thread_id.clone(),
+            actor_thread_id: owner_thread_id,
             path_claims: vec![codex_state::PathClaimSpec {
                 kind: codex_state::PathClaimKind::Directory,
                 path: tmp.path().join("workdir"),

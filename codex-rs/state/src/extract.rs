@@ -208,6 +208,7 @@ mod tests {
             images: Some(vec![]),
             local_images: vec![],
             text_elements: vec![],
+            ..Default::default()
         }));
 
         apply_rollout_item(&mut metadata, &item, "test-provider");
@@ -228,6 +229,7 @@ mod tests {
             images: Some(vec!["https://example.com/image.png".to_string()]),
             local_images: vec![],
             text_elements: vec![],
+            ..Default::default()
         }));
 
         apply_rollout_item(&mut metadata, &item, "test-provider");
@@ -251,6 +253,7 @@ mod tests {
             images: Some(vec![]),
             local_images: vec![],
             text_elements: vec![],
+            ..Default::default()
         }));
 
         apply_rollout_item(&mut metadata, &item, "test-provider");
@@ -290,6 +293,7 @@ mod tests {
             images: Some(vec![]),
             local_images: vec![],
             text_elements: vec![],
+            ..Default::default()
         }));
 
         apply_rollout_item(&mut metadata, &user_item, "test-provider");

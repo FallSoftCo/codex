@@ -7,11 +7,12 @@ use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
+use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
+use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::ToolExecutor;
-use crate::tools::registry::ToolHandler;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
@@ -137,103 +138,107 @@ fn default_notify_room() -> bool {
     true
 }
 
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for CoordinationHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let ToolInvocation {
-            session,
-            turn,
-            tool_name,
-            payload,
-            ..
-        } = invocation;
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
+            let ToolInvocation {
+                session,
+                turn,
+                tool_name,
+                payload,
+                ..
+            } = invocation;
 
-        let ToolPayload::Function { arguments } = payload else {
-            return Err(FunctionCallError::RespondToModel(
-                "coordination handler received unsupported payload".to_string(),
-            ));
-        };
+            let ToolPayload::Function { arguments } = payload else {
+                return Err(FunctionCallError::RespondToModel(
+                    "coordination handler received unsupported payload".to_string(),
+                ));
+            };
 
-        let db = required_state_db(&session)?;
-        match tool_name.name.as_str() {
-            "coordination_act" => {
-                let args: CoordinationActArgs = parse_arguments(&arguments)?;
-                handle_coordination_act(&session, &turn, &db, args).await
-            }
-            "list_coordination_tasks" => {
-                let args: ListCoordinationTasksArgs = parse_arguments(&arguments)?;
-                let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
-                    Some(resolve_coordination_target(&session, &turn, &db, owner).await?)
-                } else {
-                    None
-                };
-                let creator_thread_id = if let Some(creator) = args.creator.as_deref() {
-                    Some(resolve_coordination_target(&session, &turn, &db, creator).await?)
-                } else {
-                    None
-                };
-                let statuses = args
-                    .statuses
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|status| parse_coordination_status(status.as_str()))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(FunctionCallError::RespondToModel)?;
-                let room = match args.room {
-                    Some(room) => Some(room),
-                    None => hollywood_config_for_session(&session, &db)
-                        .await?
-                        .map(|config| config.room),
-                };
-                let tasks = db
-                    .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
-                        owner_thread_id,
-                        creator_thread_id,
-                        room,
-                        statuses,
-                    })
-                    .await
-                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-                let content = if args.include_history {
-                    let task_ids = tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
-                    let acts = db
-                        .list_coordination_acts(None)
+            let db = required_state_db(&session)?;
+            match tool_name.name.as_str() {
+                "coordination_act" => {
+                    let args: CoordinationActArgs = parse_arguments(&arguments)?;
+                    handle_coordination_act(&session, &turn, &db, args).await
+                }
+                "list_coordination_tasks" => {
+                    let args: ListCoordinationTasksArgs = parse_arguments(&arguments)?;
+                    let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
+                        Some(resolve_coordination_target(&session, &turn, &db, owner).await?)
+                    } else {
+                        None
+                    };
+                    let creator_thread_id = if let Some(creator) = args.creator.as_deref() {
+                        Some(resolve_coordination_target(&session, &turn, &db, creator).await?)
+                    } else {
+                        None
+                    };
+                    let statuses = args
+                        .statuses
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|status| parse_coordination_status(status.as_str()))
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(FunctionCallError::RespondToModel)?;
+                    let room = match args.room {
+                        Some(room) => Some(room),
+                        None => hollywood_config_for_session(&session, &db)
+                            .await?
+                            .map(|config| config.room),
+                    };
+                    let tasks = db
+                        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+                            owner_thread_id,
+                            creator_thread_id,
+                            room,
+                            statuses,
+                        })
                         .await
                         .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-                    let acts = acts
-                        .into_iter()
-                        .filter(|act| {
-                            act.task_id
-                                .as_ref()
-                                .is_some_and(|task_id| task_ids.contains(task_id))
+                    let content = if args.include_history {
+                        let task_ids = tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
+                        let acts = db
+                            .list_coordination_acts(None)
+                            .await
+                            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+                        let acts = acts
+                            .into_iter()
+                            .filter(|act| {
+                                act.task_id
+                                    .as_ref()
+                                    .is_some_and(|task_id| task_ids.contains(task_id))
+                            })
+                            .collect::<Vec<_>>();
+                        json!({
+                            "tasks": tasks,
+                            "acts": acts,
                         })
-                        .collect::<Vec<_>>();
-                    json!({
-                        "tasks": tasks,
-                        "acts": acts,
-                    })
-                } else {
-                    json!({ "tasks": tasks })
-                };
-                Ok(FunctionToolOutput::from_text(
-                    serde_json::to_string_pretty(&content)
-                        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
-                    Some(true),
-                ))
+                    } else {
+                        json!({ "tasks": tasks })
+                    };
+                    Ok(FunctionToolOutput::from_text(
+                        serde_json::to_string_pretty(&content)
+                            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                        Some(true),
+                    ))
+                }
+                other => Err(FunctionCallError::RespondToModel(format!(
+                    "unsupported coordination tool {other}"
+                ))),
             }
-            other => Err(FunctionCallError::RespondToModel(format!(
-                "unsupported coordination tool {other}"
-            ))),
         }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
-
-impl ToolHandler for CoordinationHandler {}
 
 async fn handle_coordination_act(
     session: &Arc<Session>,
@@ -1246,7 +1251,7 @@ fn enforce_open_task_room_policy(
     }
     if matches!(kind, codex_state::CoordinationTaskKind::Implementation)
         && room_policy.phase == "discovery"
-        && claim_paths.is_none_or(|paths| paths.is_empty())
+        && claim_paths.is_none_or(<[PathClaimArg]>::is_empty)
     {
         return Err(FunctionCallError::RespondToModel(format!(
             "auto room policy in `{}` phase `{}` blocks broad implementation claims; open investigation/review lanes or direct-assign exact implementation claim_paths first",
@@ -1528,17 +1533,17 @@ async fn claim_paths_for_actor(
         .list_path_claims(Some(actor_thread_id))
         .await
         .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-    let claims = owned_claims
-        .into_iter()
-        .filter(|claim| {
-            claim_paths
-                .iter()
-                .any(|requested| requested.kind == claim.kind && requested.path == claim.path)
-        })
-        .collect::<Vec<_>>();
     Ok(json!({
         "acquired": true,
-        "claims": claims.into_iter().map(path_claim_to_json).collect::<Vec<_>>(),
+        "claims": owned_claims
+            .into_iter()
+            .filter(|claim| {
+                claim_paths
+                    .iter()
+                    .any(|requested| requested.kind == claim.kind && requested.path == claim.path)
+            })
+            .map(path_claim_to_json)
+            .collect::<Vec<_>>(),
         "conflicts": Vec::<Value>::new(),
     }))
 }

@@ -59,7 +59,6 @@ pub(crate) use realtime_end_instructions::RealtimeEndInstructions;
 pub(crate) use realtime_start_instructions::RealtimeStartInstructions;
 pub(crate) use realtime_start_with_instructions::RealtimeStartWithInstructions;
 pub(crate) use skill_instructions::SkillInstructions;
-pub(crate) use spawn_agent_instructions::SpawnAgentInstructions;
 pub(crate) use subagent_notification::SubagentNotification;
 pub(crate) use turn_aborted::TurnAborted;
 pub(crate) use user_instructions::UserInstructions;

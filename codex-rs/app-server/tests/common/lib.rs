@@ -44,9 +44,32 @@ pub use rollout::create_fake_rollout_with_text_elements;
 pub use rollout::create_fake_rollout_with_token_usage;
 pub use rollout::rollout_path;
 use serde::de::DeserializeOwned;
+use std::future::Future;
 
 pub fn to_response<T: DeserializeOwned>(response: JSONRPCResponse) -> anyhow::Result<T> {
     let value = serde_json::to_value(response.result)?;
     let codex_response = serde_json::from_value(value)?;
     Ok(codex_response)
+}
+
+pub fn run_current_thread_test_with_stack<F>(name: &str, future: F) -> anyhow::Result<()>
+where
+    F: Future<Output = anyhow::Result<()>> + Send + 'static,
+{
+    const TEST_STACK_SIZE_BYTES: usize = 64 * 1024 * 1024;
+
+    let handle = std::thread::Builder::new()
+        .name(name.to_string())
+        .stack_size(TEST_STACK_SIZE_BYTES)
+        .spawn(move || -> anyhow::Result<()> {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?
+                .block_on(Box::pin(future))
+        })?;
+
+    match handle.join() {
+        Ok(result) => result,
+        Err(_) => Err(anyhow::anyhow!("{name} thread panicked")),
+    }
 }

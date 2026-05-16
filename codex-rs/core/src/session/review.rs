@@ -46,7 +46,7 @@ pub(super) async fn spawn_review_thread(
     .with_image_generation_capability(provider_capabilities.image_generation)
     .with_web_search_capability(provider_capabilities.web_search)
     .with_unified_exec_shell_mode_for_session(
-        crate::tools::spec::tool_user_shell_type(sess.services.user_shell.as_ref()),
+        crate::tools::tool_user_shell_type(sess.services.user_shell.as_ref()),
         sess.services.shell_zsh_path.as_ref(),
         sess.services.main_execve_wrapper_exe.as_ref(),
     )
@@ -63,6 +63,16 @@ pub(super) async fn spawn_review_thread(
         review_features
             .enabled(Feature::MultiAgentV2)
             .then_some(config.multi_agent_v2.min_wait_timeout_ms),
+    )
+    .with_wait_agent_max_timeout_ms(
+        review_features
+            .enabled(Feature::MultiAgentV2)
+            .then_some(config.multi_agent_v2.max_wait_timeout_ms),
+    )
+    .with_wait_agent_default_timeout_ms(
+        review_features
+            .enabled(Feature::MultiAgentV2)
+            .then_some(config.multi_agent_v2.default_wait_timeout_ms),
     )
     .with_agent_type_description(crate::agent::role::spawn_tool_spec::build(
         &config.agent_roles,

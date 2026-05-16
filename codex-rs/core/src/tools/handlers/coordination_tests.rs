@@ -3,11 +3,12 @@ use crate::session::tests::make_session_and_context;
 use crate::session::turn_context::TurnContext;
 use crate::tools::context::ToolCallSource;
 use crate::tools::context::ToolInvocation;
+use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
-use crate::tools::registry::ToolHandler;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use chrono::Utc;
 use codex_protocol::ThreadId;
+use codex_protocol::models::ResponseInputItem;
 use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::SessionSource;
 use pretty_assertions::assert_eq;
@@ -69,8 +70,31 @@ async fn make_session_with_state_db() -> (
     (Arc::new(session), Arc::new(turn), state_db)
 }
 
-fn parse_result(output: FunctionToolOutput) -> Value {
-    serde_json::from_str(&output.into_text()).expect("coordination handler should return json")
+fn function_output_payload(
+    output: &dyn ToolOutput,
+) -> codex_protocol::models::FunctionCallOutputPayload {
+    let payload = ToolPayload::Function {
+        arguments: "{}".to_string(),
+    };
+    let ResponseInputItem::FunctionCallOutput { output, .. } =
+        output.to_response_item("call-1", &payload)
+    else {
+        panic!("coordination handler should return function output");
+    };
+    output
+}
+
+fn output_success(output: &dyn ToolOutput) -> Option<bool> {
+    function_output_payload(output).success
+}
+
+fn parse_result(output: Box<dyn ToolOutput>) -> Value {
+    let output = function_output_payload(output.as_ref());
+    let text = output
+        .body
+        .to_text()
+        .expect("coordination handler output should be text");
+    serde_json::from_str(&text).expect("coordination handler should return json")
 }
 
 fn coordination_handler() -> CoordinationHandler {
@@ -1032,7 +1056,7 @@ async fn implementation_accept_requires_exact_claim_paths() {
         .await
         .expect("implementation accept should return a recoverable failure output");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     assert!(
         result["error"]
@@ -1101,7 +1125,7 @@ async fn implementation_accept_rejects_conflicting_claim_paths() {
         .await
         .expect("conflicting claim should return a recoverable failure output");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     let message = result["error"]
         .as_str()
@@ -1149,7 +1173,7 @@ async fn implementation_open_task_requires_claim_paths_for_direct_owner() {
         .await
         .expect("direct implementation award should return a recoverable failure output");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     assert!(
         result["error"]
@@ -1223,7 +1247,7 @@ async fn auto_discovery_blocks_broad_implementation_open_task() {
         .await
         .expect("auto discovery broad implementation claim should return a recoverable failure");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     assert!(
         result["error"]
@@ -1304,7 +1328,7 @@ async fn auto_execution_verifier_cannot_accept_unassigned_implementation_lane() 
         .await
         .expect("verifier implementation accept should return a recoverable failure");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     assert!(
         result["error"]
@@ -1391,7 +1415,7 @@ async fn auto_execution_verifier_can_accept_explicitly_awarded_implementation_la
         .await
         .expect("awarded verifier implementation accept should succeed");
 
-    assert_eq!(output.success, Some(true));
+    assert_eq!(output_success(output.as_ref()), Some(true));
     let result = parse_result(output);
     assert_eq!(result["task"]["status"], "active");
     assert_eq!(
@@ -1441,7 +1465,7 @@ async fn implementation_open_task_rejects_conflicting_reserved_claim_paths() {
         .await
         .expect("conflicting reserved claim should return a recoverable failure output");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     let message = result["error"]
         .as_str()
@@ -1544,7 +1568,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
         .await
         .expect("duplicate open_task should be idempotent");
 
-    assert_eq!(duplicate_open.success, Some(true));
+    assert_eq!(output_success(duplicate_open.as_ref()), Some(true));
     let duplicate_result = parse_result(duplicate_open);
     assert_eq!(duplicate_result["deduped"], json!(true));
     assert_eq!(duplicate_result["task"]["id"], initial_result["task"]["id"]);
@@ -1621,7 +1645,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
         .await
         .expect("self-opened duplicate QA lane should be idempotent");
 
-    assert_eq!(duplicate_open.success, Some(true));
+    assert_eq!(output_success(duplicate_open.as_ref()), Some(true));
     let duplicate_result = parse_result(duplicate_open);
     assert_eq!(duplicate_result["deduped"], json!(true));
     assert_eq!(duplicate_result["task"]["id"], json!(task_id));
@@ -1660,7 +1684,7 @@ async fn missing_task_id_returns_recoverable_output() {
         .await
         .expect("missing task id should return recoverable output");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     assert_eq!(result["ok"], false);
     assert_eq!(result["error"], "coordination_act requires `task_id`");
@@ -1723,7 +1747,7 @@ async fn active_accept_by_same_owner_is_idempotent() {
         .await
         .expect("same-owner active accept should be idempotent");
 
-    assert_eq!(duplicate_accept.success, Some(true));
+    assert_eq!(output_success(duplicate_accept.as_ref()), Some(true));
     let duplicate_result = parse_result(duplicate_accept);
     assert_eq!(duplicate_result["deduped"], json!(true));
     assert_eq!(duplicate_result["task"]["id"], open_result["task"]["id"]);
@@ -1814,7 +1838,7 @@ async fn repeated_done_by_same_controller_is_idempotent() {
         .await
         .expect("same-controller done should be idempotent");
 
-    assert_eq!(duplicate_done.success, Some(true));
+    assert_eq!(output_success(duplicate_done.as_ref()), Some(true));
     let duplicate_result = parse_result(duplicate_done);
     assert_eq!(duplicate_result["deduped"], json!(true));
     assert_eq!(duplicate_result["task"]["id"], open_result["task"]["id"]);
@@ -1851,7 +1875,7 @@ async fn unknown_task_returns_recoverable_output() {
         .await
         .expect("unknown task should return recoverable output");
 
-    assert_eq!(output.success, Some(false));
+    assert_eq!(output_success(output.as_ref()), Some(false));
     let result = parse_result(output);
     assert_eq!(result["ok"], false);
     assert_eq!(

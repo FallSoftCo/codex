@@ -1,3 +1,5 @@
+use crate::tools::context::ToolInvocation;
+use crate::tools::context::ToolOutput;
 use crate::tools::handlers::CoordinationHandler;
 use crate::tools::handlers::HollywoodReadHandler;
 use crate::tools::handlers::HollywoodSendHandler;
@@ -6,45 +8,107 @@ use crate::tools::handlers::HollywoodTeamMemberUpdateHandler;
 use crate::tools::handlers::HollywoodTeamStatusHandler;
 use crate::tools::handlers::HollywoodTeamUpHandler;
 use crate::tools::handlers::RestartClientHandler;
-use crate::tools::registry::ToolRegistryBuilder;
+use crate::tools::registry::CoreToolRuntime;
+use crate::tools::registry::ToolExecutor;
 use codex_tools::JsonSchema;
 use codex_tools::ResponsesApiTool;
+use codex_tools::ToolExposure;
+use codex_tools::ToolName;
 use codex_tools::ToolSpec;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-pub(crate) fn register_losangelex_tools(
-    builder: &mut ToolRegistryBuilder,
+pub(crate) fn append_losangelex_tool_executors(
+    executors: &mut Vec<Arc<dyn CoreToolRuntime>>,
     state_db_available: bool,
     hollywood_tools_available: bool,
 ) {
-    builder.push_spec(create_restart_client_tool());
-    builder.register_handler(Arc::new(RestartClientHandler));
+    executors.push(losangelex_tool(
+        RestartClientHandler,
+        create_restart_client_tool(),
+    ));
 
     if state_db_available {
-        builder.push_spec(create_coordination_act_tool());
-        builder.push_spec(create_list_coordination_tasks_tool());
-        builder.register_handler(Arc::new(CoordinationHandler::new("coordination_act")));
-        builder.register_handler(Arc::new(CoordinationHandler::new(
-            "list_coordination_tasks",
-        )));
+        executors.push(losangelex_tool(
+            CoordinationHandler::new("coordination_act"),
+            create_coordination_act_tool(),
+        ));
+        executors.push(losangelex_tool(
+            CoordinationHandler::new("list_coordination_tasks"),
+            create_list_coordination_tasks_tool(),
+        ));
     }
 
     if hollywood_tools_available {
-        builder.push_spec(create_hollywood_status_tool());
-        builder.push_spec(create_hollywood_read_tool());
-        builder.push_spec(create_hollywood_send_tool(state_db_available));
-        builder.push_spec(create_hollywood_team_up_tool());
-        builder.push_spec(create_hollywood_team_status_tool());
-        builder.push_spec(create_hollywood_team_member_update_tool());
-        builder.register_handler(Arc::new(HollywoodStatusHandler));
-        builder.register_handler(Arc::new(HollywoodReadHandler));
-        builder.register_handler(Arc::new(HollywoodSendHandler));
-        builder.register_handler(Arc::new(HollywoodTeamUpHandler));
-        builder.register_handler(Arc::new(HollywoodTeamStatusHandler));
-        builder.register_handler(Arc::new(HollywoodTeamMemberUpdateHandler));
+        executors.push(losangelex_tool(
+            HollywoodStatusHandler,
+            create_hollywood_status_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodReadHandler,
+            create_hollywood_read_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodSendHandler,
+            create_hollywood_send_tool(state_db_available),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodTeamUpHandler,
+            create_hollywood_team_up_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodTeamStatusHandler,
+            create_hollywood_team_status_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodTeamMemberUpdateHandler,
+            create_hollywood_team_member_update_tool(),
+        ));
     }
 }
+
+fn losangelex_tool<T>(handler: T, spec: ToolSpec) -> Arc<dyn CoreToolRuntime>
+where
+    T: ToolExecutor<ToolInvocation> + 'static,
+{
+    Arc::new(LosangelexToolRuntime { handler, spec })
+}
+
+struct LosangelexToolRuntime<T> {
+    handler: T,
+    spec: ToolSpec,
+}
+
+#[async_trait::async_trait]
+impl<T> ToolExecutor<ToolInvocation> for LosangelexToolRuntime<T>
+where
+    T: ToolExecutor<ToolInvocation> + 'static,
+{
+    fn tool_name(&self) -> ToolName {
+        self.handler.tool_name()
+    }
+
+    fn spec(&self) -> Option<ToolSpec> {
+        Some(self.spec.clone())
+    }
+
+    fn exposure(&self) -> ToolExposure {
+        self.handler.exposure()
+    }
+
+    fn supports_parallel_tool_calls(&self) -> bool {
+        self.handler.supports_parallel_tool_calls()
+    }
+
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, crate::function_tool::FunctionCallError> {
+        self.handler.handle(invocation).await
+    }
+}
+
+impl<T> CoreToolRuntime for LosangelexToolRuntime<T> where T: ToolExecutor<ToolInvocation> + 'static {}
 
 fn object_schema(
     properties: BTreeMap<String, JsonSchema>,

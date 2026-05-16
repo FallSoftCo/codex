@@ -422,10 +422,10 @@ impl HollywoodRuntimeState {
             return false;
         }
 
-        if let Some(last_turn_started_at) = self.last_turn_started_at {
-            if now.duration_since(last_turn_started_at) < HOLLYWOOD_AUTONOMOUS_COOLDOWN {
-                return false;
-            }
+        if let Some(last_turn_started_at) = self.last_turn_started_at
+            && now.duration_since(last_turn_started_at) < HOLLYWOOD_AUTONOMOUS_COOLDOWN
+        {
+            return false;
         }
 
         true

@@ -6,6 +6,7 @@ use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use codex_protocol::ThreadId;
+use codex_protocol::models::ResponseInputItem;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SubAgentSource;
@@ -80,8 +81,21 @@ async fn restart_client_emits_restart_event_and_returns_requested_status() {
         .await
         .expect("restart_client should succeed");
 
-    let result: serde_json::Value =
-        serde_json::from_str(&output.into_text()).expect("restart_client result should be json");
+    let payload = ToolPayload::Function {
+        arguments: "{}".to_string(),
+    };
+    let ResponseInputItem::FunctionCallOutput { output, .. } =
+        output.to_response_item("call-1", &payload)
+    else {
+        panic!("restart_client should return function output");
+    };
+    let result: serde_json::Value = serde_json::from_str(
+        &output
+            .body
+            .to_text()
+            .expect("restart_client output should be text"),
+    )
+    .expect("restart_client result should be json");
     assert_eq!(
         result,
         json!({

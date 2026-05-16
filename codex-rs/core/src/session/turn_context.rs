@@ -235,6 +235,18 @@ impl TurnContext {
                 .enabled(Feature::MultiAgentV2)
                 .then_some(config.multi_agent_v2.min_wait_timeout_ms),
         )
+        .with_wait_agent_max_timeout_ms(
+            config
+                .features
+                .enabled(Feature::MultiAgentV2)
+                .then_some(config.multi_agent_v2.max_wait_timeout_ms),
+        )
+        .with_wait_agent_default_timeout_ms(
+            config
+                .features
+                .enabled(Feature::MultiAgentV2)
+                .then_some(config.multi_agent_v2.default_wait_timeout_ms),
+        )
         .with_agent_type_description(crate::agent::role::spawn_tool_spec::build(
             &config.agent_roles,
         ));
@@ -302,6 +314,7 @@ impl TurnContext {
     pub(crate) fn file_system_sandbox_context(
         &self,
         additional_permissions: Option<AdditionalPermissionProfile>,
+        cwd: &AbsolutePathBuf,
     ) -> FileSystemSandboxContext {
         let (base_file_system_sandbox_policy, base_network_sandbox_policy) =
             self.permission_profile.to_runtime_permissions();
@@ -320,8 +333,7 @@ impl TurnContext {
         );
         FileSystemSandboxContext {
             permissions,
-            #[allow(deprecated)]
-            cwd: Some(self.cwd.clone()),
+            cwd: Some(cwd.clone()),
             windows_sandbox_level: self.windows_sandbox_level,
             windows_sandbox_private_desktop: self
                 .config
@@ -421,14 +433,18 @@ impl Session {
         let config = session_configuration.original_config_do_not_use.clone();
         let mut per_turn_config = (*config).clone();
         per_turn_config.cwd = cwd;
+        per_turn_config.workspace_roots = session_configuration.workspace_roots.clone();
+        per_turn_config
+            .permissions
+            .set_workspace_roots(session_configuration.workspace_roots.clone());
         per_turn_config.model_reasoning_effort =
             session_configuration.collaboration_mode.reasoning_effort();
         per_turn_config.model_reasoning_summary = session_configuration.model_reasoning_summary;
         per_turn_config.service_tier = session_configuration.service_tier.clone();
         per_turn_config.personality = session_configuration.personality;
         per_turn_config.approvals_reviewer = session_configuration.approvals_reviewer;
-        per_turn_config.permissions.permission_profile =
-            session_configuration.permission_profile.clone();
+        session_configuration
+            .apply_permission_profile_to_permissions(&mut per_turn_config.permissions);
         let permission_profile = session_configuration.permission_profile();
         let resolved_web_search_mode =
             resolve_web_search_mode_for_turn(&per_turn_config.web_search_mode, &permission_profile);
@@ -455,8 +471,10 @@ impl Session {
             Self::build_per_turn_config(session_configuration, session_configuration.cwd.clone());
         config.model = Some(session_configuration.collaboration_mode.model().to_string());
         config.permissions.approval_policy = session_configuration.approval_policy.clone();
-        config.permissions.active_permission_profile =
-            session_configuration.active_permission_profile.clone();
+        config.workspace_roots = session_configuration.workspace_roots.clone();
+        config
+            .permissions
+            .set_workspace_roots(session_configuration.workspace_roots.clone());
         config
     }
 
@@ -510,7 +528,7 @@ impl Session {
         .with_image_generation_capability(provider_capabilities.image_generation)
         .with_web_search_capability(provider_capabilities.web_search)
         .with_unified_exec_shell_mode_for_session(
-            crate::tools::spec::tool_user_shell_type(user_shell),
+            crate::tools::tool_user_shell_type(user_shell),
             shell_zsh_path,
             main_execve_wrapper_exe,
         )
@@ -539,6 +557,18 @@ impl Session {
                 .features
                 .enabled(Feature::MultiAgentV2)
                 .then_some(per_turn_config.multi_agent_v2.min_wait_timeout_ms),
+        )
+        .with_wait_agent_max_timeout_ms(
+            per_turn_config
+                .features
+                .enabled(Feature::MultiAgentV2)
+                .then_some(per_turn_config.multi_agent_v2.max_wait_timeout_ms),
+        )
+        .with_wait_agent_default_timeout_ms(
+            per_turn_config
+                .features
+                .enabled(Feature::MultiAgentV2)
+                .then_some(per_turn_config.multi_agent_v2.default_wait_timeout_ms),
         )
         .with_agent_type_description(crate::agent::role::spawn_tool_spec::build(
             &per_turn_config.agent_roles,

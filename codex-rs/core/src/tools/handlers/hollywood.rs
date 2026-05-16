@@ -16,10 +16,11 @@ use crate::hollywood::live_identity_matches_target;
 use crate::hollywood::parse_agent_mentions;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
+use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
+use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::ToolExecutor;
-use crate::tools::registry::ToolHandler;
 use codex_tools::ToolName;
 
 pub struct HollywoodStatusHandler;
@@ -163,240 +164,260 @@ async fn hollywood_config_for_session(
     session.hollywood_session_config().await
 }
 
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for HollywoodStatusHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_status".to_string())
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let config = hollywood_config_for_session(invocation.session.as_ref()).await;
-        let thread_name = invocation.session.thread_name().await;
-        let identities =
-            hollywood_identities(invocation.session.conversation_id, thread_name.as_deref());
-        let result = if let Some(config) = config {
-            let health_url = format!("{}/hollywood/v1/health", config.url.trim_end_matches('/'));
-            match Client::new().get(health_url).send().await {
-                Ok(response) => {
-                    let reachable = response.status().is_success();
-                    let health = response.json::<HollywoodHealthResponse>().await.ok();
-                    let room_contract_version = health
-                        .as_ref()
-                        .and_then(|value| value.room_contract_version.clone());
-                    HollywoodStatusResult {
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
+            let config = hollywood_config_for_session(invocation.session.as_ref()).await;
+            let thread_name = invocation.session.thread_name().await;
+            let identities =
+                hollywood_identities(invocation.session.conversation_id, thread_name.as_deref());
+            let result = if let Some(config) = config {
+                let health_url =
+                    format!("{}/hollywood/v1/health", config.url.trim_end_matches('/'));
+                match Client::new().get(health_url).send().await {
+                    Ok(response) => {
+                        let reachable = response.status().is_success();
+                        let health = response.json::<HollywoodHealthResponse>().await.ok();
+                        let room_contract_version = health
+                            .as_ref()
+                            .and_then(|value| value.room_contract_version.clone());
+                        HollywoodStatusResult {
+                            configured: true,
+                            reachable,
+                            url: Some(config.url),
+                            room: Some(config.room),
+                            attention_mode: Some(config.attention_mode),
+                            identities,
+                            can_read: true,
+                            can_send: true,
+                            service_version: health
+                                .as_ref()
+                                .and_then(|value| value.service_version.clone()),
+                            schema_version: health.as_ref().and_then(|value| value.schema_version),
+                            room_contract_version: room_contract_version.clone(),
+                            room_contract_compatible: room_contract_version
+                                .as_ref()
+                                .map(|value| value == HOLLYWOOD_ROOM_CONTRACT_VERSION),
+                            error: None,
+                        }
+                    }
+                    Err(err) => HollywoodStatusResult {
                         configured: true,
-                        reachable,
+                        reachable: false,
                         url: Some(config.url),
                         room: Some(config.room),
                         attention_mode: Some(config.attention_mode),
                         identities,
                         can_read: true,
                         can_send: true,
-                        service_version: health
-                            .as_ref()
-                            .and_then(|value| value.service_version.clone()),
-                        schema_version: health.as_ref().and_then(|value| value.schema_version),
-                        room_contract_version: room_contract_version.clone(),
-                        room_contract_compatible: room_contract_version
-                            .as_ref()
-                            .map(|value| value == HOLLYWOOD_ROOM_CONTRACT_VERSION),
-                        error: None,
-                    }
+                        service_version: None,
+                        schema_version: None,
+                        room_contract_version: None,
+                        room_contract_compatible: None,
+                        error: Some(err.to_string()),
+                    },
                 }
-                Err(err) => HollywoodStatusResult {
-                    configured: true,
+            } else {
+                HollywoodStatusResult {
+                    configured: false,
                     reachable: false,
-                    url: Some(config.url),
-                    room: Some(config.room),
-                    attention_mode: Some(config.attention_mode),
+                    url: None,
+                    room: None,
+                    attention_mode: None,
                     identities,
-                    can_read: true,
-                    can_send: true,
+                    can_read: false,
+                    can_send: false,
                     service_version: None,
                     schema_version: None,
                     room_contract_version: None,
                     room_contract_compatible: None,
-                    error: Some(err.to_string()),
-                },
-            }
-        } else {
-            HollywoodStatusResult {
-                configured: false,
-                reachable: false,
-                url: None,
-                room: None,
-                attention_mode: None,
-                identities,
-                can_read: false,
-                can_send: false,
-                service_version: None,
-                schema_version: None,
-                room_contract_version: None,
-                room_contract_compatible: None,
-                error: Some("Hollywood is not configured for this session.".to_string()),
-            }
-        };
+                    error: Some("Hollywood is not configured for this session.".to_string()),
+                }
+            };
 
-        Ok(FunctionToolOutput::from_text(
-            serde_json::to_string_pretty(&result)
-                .unwrap_or_else(|err| format!("failed to serialize hollywood status: {err}")),
-            Some(true),
-        ))
+            Ok(FunctionToolOutput::from_text(
+                serde_json::to_string_pretty(&result)
+                    .unwrap_or_else(|err| format!("failed to serialize hollywood status: {err}")),
+                Some(true),
+            ))
+        }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
 
-impl ToolHandler for HollywoodStatusHandler {}
-
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_read".to_string())
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let args = parse_function_args::<HollywoodReadArgs>(&invocation.payload)?;
-        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
-            return Err(FunctionCallError::RespondToModel(
-                "Hollywood is not configured for this session.".to_string(),
-            ));
-        };
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
+            let args = parse_function_args::<HollywoodReadArgs>(&invocation.payload)?;
+            let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await
+            else {
+                return Err(FunctionCallError::RespondToModel(
+                    "Hollywood is not configured for this session.".to_string(),
+                ));
+            };
 
-        let room = args.room.unwrap_or_else(|| config.room.clone());
-        let after_id = args.after_id.unwrap_or(0);
-        let limit = args.limit.unwrap_or(20).clamp(1, 100);
-        let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
+            let room = args.room.unwrap_or_else(|| config.room.clone());
+            let after_id = args.after_id.unwrap_or(0);
+            let limit = args.limit.unwrap_or(20).clamp(1, 100);
+            let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
 
-        let response = Client::new()
-            .get(&url)
-            .query(&[
-                ("room", room.as_str()),
-                ("after_id", &after_id.to_string()),
-                ("limit", &limit.to_string()),
-            ])
-            .send()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood read failed: {err}"))
-            })?
-            .error_for_status()
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood read failed: {err}"))
-            })?
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood response parse failed: {err}"))
-            })?;
-        let thread_name = invocation.session.thread_name().await;
+            let response = Client::new()
+                .get(&url)
+                .query(&[
+                    ("room", room.as_str()),
+                    ("after_id", &after_id.to_string()),
+                    ("limit", &limit.to_string()),
+                ])
+                .send()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!("Hollywood read failed: {err}"))
+                })?
+                .error_for_status()
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!("Hollywood read failed: {err}"))
+                })?
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!(
+                        "Hollywood response parse failed: {err}"
+                    ))
+                })?;
+            let thread_name = invocation.session.thread_name().await;
 
-        let result = HollywoodReadResult {
-            url: config.url,
-            room,
-            identities: hollywood_identities(
-                invocation.session.conversation_id,
-                thread_name.as_deref(),
-            ),
-            messages: response,
-        };
+            let result = HollywoodReadResult {
+                url: config.url,
+                room,
+                identities: hollywood_identities(
+                    invocation.session.conversation_id,
+                    thread_name.as_deref(),
+                ),
+                messages: response,
+            };
 
-        Ok(FunctionToolOutput::from_text(
-            serde_json::to_string_pretty(&result)
-                .unwrap_or_else(|err| format!("failed to serialize hollywood read: {err}")),
-            Some(true),
-        ))
+            Ok(FunctionToolOutput::from_text(
+                serde_json::to_string_pretty(&result)
+                    .unwrap_or_else(|err| format!("failed to serialize hollywood read: {err}")),
+                Some(true),
+            ))
+        }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
 
-impl ToolHandler for HollywoodReadHandler {}
-
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_send".to_string())
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let args = parse_function_args::<HollywoodSendArgs>(&invocation.payload)?;
-        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
-            return Err(FunctionCallError::RespondToModel(
-                "Hollywood is not configured for this session.".to_string(),
-            ));
-        };
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
+            let args = parse_function_args::<HollywoodSendArgs>(&invocation.payload)?;
+            let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await
+            else {
+                return Err(FunctionCallError::RespondToModel(
+                    "Hollywood is not configured for this session.".to_string(),
+                ));
+            };
 
-        let target_identities = resolve_target_identities(&args);
-        let room = select_send_room(&config, &args, &target_identities)
-            .await
-            .map_err(FunctionCallError::RespondToModel)?;
-        let sender_id = invocation.session.conversation_id.to_string();
-        let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
-        let recipient_id = args.to.as_deref().and_then(canonicalize_hollywood_identity);
-        let text = args.text.clone();
-        let response_policy = args.response_policy.clone();
-        let message_kind = if args.broadcast.unwrap_or(false) {
-            "broadcast".to_string()
-        } else if recipient_id.is_some() {
-            "direct".to_string()
-        } else {
-            "ambient".to_string()
-        };
+            let target_identities = resolve_target_identities(&args);
+            let room = select_send_room(&config, &args, &target_identities)
+                .await
+                .map_err(FunctionCallError::RespondToModel)?;
+            let sender_id = invocation.session.conversation_id.to_string();
+            let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
+            let recipient_id = args.to.as_deref().and_then(canonicalize_hollywood_identity);
+            let text = args.text.clone();
+            let response_policy = args.response_policy.clone();
+            let message_kind = if args.broadcast.unwrap_or(false) {
+                "broadcast".to_string()
+            } else if recipient_id.is_some() {
+                "direct".to_string()
+            } else {
+                "ambient".to_string()
+            };
 
-        Client::new()
-            .post(&url)
-            .json(&json!({
-                "room": room,
-                "sender_id": sender_id,
-                "recipient_id": recipient_id,
-                "message_kind": message_kind,
-                "response_policy": response_policy,
-                "body": text,
-            }))
-            .send()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood send failed: {err}"))
-            })?
-            .error_for_status()
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood send failed: {err}"))
-            })?;
+            Client::new()
+                .post(&url)
+                .json(&json!({
+                    "room": room,
+                    "sender_id": sender_id,
+                    "recipient_id": recipient_id,
+                    "message_kind": message_kind,
+                    "response_policy": response_policy,
+                    "body": text,
+                }))
+                .send()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!("Hollywood send failed: {err}"))
+                })?
+                .error_for_status()
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!("Hollywood send failed: {err}"))
+                })?;
 
-        invocation
-            .session
-            .mark_hollywood_send_for_turn(&invocation.turn.sub_id, &room)
-            .await;
+            invocation
+                .session
+                .mark_hollywood_send_for_turn(&invocation.turn.sub_id, &room)
+                .await;
 
-        let result = HollywoodSendResult {
-            url: config.url,
-            room,
-            sender_id,
-            recipient_id,
-            message_kind,
-            response_policy,
-            text,
-            ok: true,
-        };
+            let result = HollywoodSendResult {
+                url: config.url,
+                room,
+                sender_id,
+                recipient_id,
+                message_kind,
+                response_policy,
+                text,
+                ok: true,
+            };
 
-        Ok(FunctionToolOutput::from_text(
-            serde_json::to_string_pretty(&result)
-                .unwrap_or_else(|err| format!("failed to serialize hollywood send: {err}")),
-            Some(true),
-        ))
+            Ok(FunctionToolOutput::from_text(
+                serde_json::to_string_pretty(&result)
+                    .unwrap_or_else(|err| format!("failed to serialize hollywood send: {err}")),
+                Some(true),
+            ))
+        }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
 
-impl ToolHandler for HollywoodSendHandler {}
-
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_up".to_string())
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
         let args = parse_function_args::<HollywoodTeamUpArgs>(&invocation.payload)?;
         let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
             return Err(FunctionCallError::RespondToModel(
@@ -511,136 +532,148 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
                 .unwrap_or_else(|err| format!("failed to serialize hollywood team create: {err}")),
             Some(true),
         ))
+        }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
 
-impl ToolHandler for HollywoodTeamUpHandler {}
-
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for HollywoodTeamStatusHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_status".to_string())
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let args = parse_function_args::<HollywoodTeamStatusArgs>(&invocation.payload)?;
-        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
-            return Err(FunctionCallError::RespondToModel(
-                "Hollywood is not configured for this session.".to_string(),
-            ));
-        };
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
+            let args = parse_function_args::<HollywoodTeamStatusArgs>(&invocation.payload)?;
+            let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await
+            else {
+                return Err(FunctionCallError::RespondToModel(
+                    "Hollywood is not configured for this session.".to_string(),
+                ));
+            };
 
-        let room = args.room.unwrap_or_else(|| config.room.clone());
-        let limit = args.limit.unwrap_or(20).clamp(1, 100);
-        let url = format!("{}/hollywood/v1/teams", config.url.trim_end_matches('/'));
-        let response = Client::new()
-            .get(&url)
-            .query(&[("room", room.as_str()), ("limit", &limit.to_string())])
-            .send()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}"))
-            })?
-            .error_for_status()
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}"))
-            })?
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!(
-                    "Hollywood team response parse failed: {err}"
-                ))
-            })?;
+            let room = args.room.unwrap_or_else(|| config.room.clone());
+            let limit = args.limit.unwrap_or(20).clamp(1, 100);
+            let url = format!("{}/hollywood/v1/teams", config.url.trim_end_matches('/'));
+            let response = Client::new()
+                .get(&url)
+                .query(&[("room", room.as_str()), ("limit", &limit.to_string())])
+                .send()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}"))
+                })?
+                .error_for_status()
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!("Hollywood team read failed: {err}"))
+                })?
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!(
+                        "Hollywood team response parse failed: {err}"
+                    ))
+                })?;
 
-        let result = HollywoodTeamStatusResult {
-            url: config.url,
-            room,
-            teams: response,
-        };
+            let result = HollywoodTeamStatusResult {
+                url: config.url,
+                room,
+                teams: response,
+            };
 
-        Ok(FunctionToolOutput::from_text(
-            serde_json::to_string_pretty(&result)
-                .unwrap_or_else(|err| format!("failed to serialize hollywood team read: {err}")),
-            Some(true),
-        ))
+            Ok(FunctionToolOutput::from_text(
+                serde_json::to_string_pretty(&result).unwrap_or_else(|err| {
+                    format!("failed to serialize hollywood team read: {err}")
+                }),
+                Some(true),
+            ))
+        }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
 
-impl ToolHandler for HollywoodTeamStatusHandler {}
-
+#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for HollywoodTeamMemberUpdateHandler {
-    type Output = FunctionToolOutput;
-
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_member_update".to_string())
     }
 
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
-        let args = parse_function_args::<HollywoodTeamMemberUpdateArgs>(&invocation.payload)?;
-        let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await else {
-            return Err(FunctionCallError::RespondToModel(
-                "Hollywood is not configured for this session.".to_string(),
-            ));
-        };
+    async fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
+        let output = async {
+            let args = parse_function_args::<HollywoodTeamMemberUpdateArgs>(&invocation.payload)?;
+            let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await
+            else {
+                return Err(FunctionCallError::RespondToModel(
+                    "Hollywood is not configured for this session.".to_string(),
+                ));
+            };
 
-        let session_id = match args.session_id.as_deref() {
-            Some(value) => resolve_team_member_session_id(&config, value).await?,
-            None => invocation.session.conversation_id.to_string(),
-        };
+            let session_id = match args.session_id.as_deref() {
+                Some(value) => resolve_team_member_session_id(&config, value).await?,
+                None => invocation.session.conversation_id.to_string(),
+            };
 
-        let url = format!(
-            "{}/hollywood/v1/team-members",
-            config.url.trim_end_matches('/')
-        );
-        let response = Client::new()
-            .post(&url)
-            .json(&json!({
-                "team_id": args.team_id,
-                "session_id": session_id,
-                "role": args.role,
-                "state": args.state,
-                "joined_room": args.joined_room,
-                "task": args.task,
-                "scope": args.scope,
-            }))
-            .send()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!(
-                    "Hollywood team member update failed: {err}"
-                ))
-            })?
-            .error_for_status()
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!(
-                    "Hollywood team member update failed: {err}"
-                ))
-            })?
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|err| {
-                FunctionCallError::RespondToModel(format!(
-                    "Hollywood team member response parse failed: {err}"
-                ))
-            })?;
+            let url = format!(
+                "{}/hollywood/v1/team-members",
+                config.url.trim_end_matches('/')
+            );
+            let response = Client::new()
+                .post(&url)
+                .json(&json!({
+                    "team_id": args.team_id,
+                    "session_id": session_id,
+                    "role": args.role,
+                    "state": args.state,
+                    "joined_room": args.joined_room,
+                    "task": args.task,
+                    "scope": args.scope,
+                }))
+                .send()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!(
+                        "Hollywood team member update failed: {err}"
+                    ))
+                })?
+                .error_for_status()
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!(
+                        "Hollywood team member update failed: {err}"
+                    ))
+                })?
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|err| {
+                    FunctionCallError::RespondToModel(format!(
+                        "Hollywood team member response parse failed: {err}"
+                    ))
+                })?;
 
-        let result = HollywoodTeamMemberUpdateResult {
-            url: config.url,
-            member: response,
-        };
+            let result = HollywoodTeamMemberUpdateResult {
+                url: config.url,
+                member: response,
+            };
 
-        Ok(FunctionToolOutput::from_text(
-            serde_json::to_string_pretty(&result).unwrap_or_else(|err| {
-                format!("failed to serialize hollywood team member update: {err}")
-            }),
-            Some(true),
-        ))
+            Ok(FunctionToolOutput::from_text(
+                serde_json::to_string_pretty(&result).unwrap_or_else(|err| {
+                    format!("failed to serialize hollywood team member update: {err}")
+                }),
+                Some(true),
+            ))
+        }
+        .await?;
+        Ok(boxed_tool_output(output))
     }
 }
-
-impl ToolHandler for HollywoodTeamMemberUpdateHandler {}
 
 fn resolve_target_identities(args: &HollywoodSendArgs) -> Vec<String> {
     let mut identities = Vec::new();

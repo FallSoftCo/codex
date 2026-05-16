@@ -191,7 +191,6 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
         "resume_agent",
         "wait_agent",
         "close_agent",
-        "web_search",
         "restart_client",
         "coordination_act",
         "list_coordination_tasks",
@@ -206,6 +205,7 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
             "hollywood_team_member_update",
         ]);
     }
+    expected_tools_names.push("web_search");
     let body0 = req1.single_request().body_json();
 
     let expected_instructions = if expected_tools_names.contains(&"apply_patch") {
@@ -250,10 +250,6 @@ async fn gpt_5_tools_without_apply_patch_append_apply_patch_instructions() -> an
     let TestCodex { codex, .. } = test_codex()
         .with_config(|config| {
             config.user_instructions = Some("be consistent and helpful".to_string());
-            config
-                .features
-                .disable(Feature::ApplyPatchFreeform)
-                .expect("test config should allow feature update");
             config
                 .features
                 .enable(Feature::CollaborationModes)

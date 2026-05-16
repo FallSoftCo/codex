@@ -291,9 +291,12 @@ async fn explicit_plugin_mentions_inject_plugin_guidance() -> Result<()> {
     write_plugin_mcp_plugin(codex_home.as_ref(), &rmcp_test_server_bin);
     write_plugin_app_plugin(codex_home.as_ref());
 
-    let codex =
-        build_apps_enabled_plugin_test_codex(&server, codex_home, apps_server.chatgpt_base_url)
-            .await?;
+    let codex = build_apps_enabled_plugin_test_codex(
+        &server,
+        Arc::clone(&codex_home),
+        apps_server.chatgpt_base_url,
+    )
+    .await?;
     wait_for_sample_mcp_ready(&codex).await?;
 
     codex
@@ -375,7 +378,7 @@ async fn explicit_plugin_mentions_track_plugin_used_analytics() -> Result<()> {
 
     let codex_home = Arc::new(TempDir::new()?);
     write_plugin_skill_plugin(codex_home.as_ref());
-    let codex = build_analytics_plugin_test_codex(&server, codex_home).await?;
+    let codex = build_analytics_plugin_test_codex(&server, Arc::clone(&codex_home)).await?;
 
     codex
         .submit(Op::UserInput {

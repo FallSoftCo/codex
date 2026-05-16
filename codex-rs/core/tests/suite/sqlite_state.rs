@@ -169,6 +169,7 @@ async fn backfill_scans_existing_rollouts() -> Result<()> {
                         images: None,
                         local_images: Vec::new(),
                         text_elements: Vec::new(),
+                        ..Default::default()
                     })),
                 },
             ];
@@ -387,6 +388,7 @@ async fn mcp_call_marks_thread_memory_mode_polluted_when_configured() -> Result<
                 enabled_tools: None,
                 disabled_tools: None,
                 scopes: None,
+                oauth: None,
                 oauth_resource: None,
                 tools: HashMap::new(),
             },

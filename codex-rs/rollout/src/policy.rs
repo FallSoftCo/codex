@@ -80,6 +80,7 @@ pub fn should_persist_response_item(item: &ResponseItem) -> bool {
         | ResponseItem::ImageGenerationCall { .. }
         | ResponseItem::Compaction { .. }
         | ResponseItem::ContextCompaction { .. } => true,
+        ResponseItem::CompactionTrigger => false,
         ResponseItem::Other => false,
     }
 }
@@ -100,6 +101,7 @@ pub fn should_persist_response_item_for_memories(item: &ResponseItem) -> bool {
         ResponseItem::Reasoning { .. }
         | ResponseItem::ImageGenerationCall { .. }
         | ResponseItem::Compaction { .. }
+        | ResponseItem::CompactionTrigger
         | ResponseItem::ContextCompaction { .. }
         | ResponseItem::Other => false,
     }

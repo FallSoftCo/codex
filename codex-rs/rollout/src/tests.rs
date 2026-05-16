@@ -1405,6 +1405,7 @@ async fn test_updated_at_uses_file_mtime() -> Result<()> {
             images: None,
             text_elements: Vec::new(),
             local_images: Vec::new(),
+            ..Default::default()
         })),
     };
     writeln!(file, "{}", serde_json::to_string(&user_event_line)?)?;

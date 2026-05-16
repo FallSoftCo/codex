@@ -16,6 +16,7 @@ use crate::app_event::WindowsSandboxEnableMode;
 use crate::app_event_sender::AppEventSender;
 use crate::app_server_session::AppServerSession;
 use crate::app_server_session::AppServerStartedThread;
+use crate::app_server_session::TurnPermissionsOverride;
 use crate::app_server_session::app_server_rate_limit_snapshots;
 use crate::bottom_pane::AppLinkViewParams;
 use crate::bottom_pane::ApprovalRequest;
@@ -46,6 +47,7 @@ use crate::keymap::RuntimeKeymap;
 use crate::legacy_core::config::Config;
 use crate::legacy_core::config::ConfigBuilder;
 use crate::legacy_core::config::ConfigOverrides;
+use crate::legacy_core::config::PermissionProfileSnapshot;
 use crate::legacy_core::config::edit::ConfigEdit;
 use crate::legacy_core::config::edit::ConfigEditsBuilder;
 #[cfg(target_os = "windows")]
@@ -125,9 +127,9 @@ use codex_app_server_protocol::Turn;
 use codex_app_server_protocol::TurnError as AppServerTurnError;
 use codex_app_server_protocol::TurnStatus;
 use codex_config::ConfigLayerStackOrdering;
+use codex_config::LoaderOverrides;
 use codex_config::types::ApprovalsReviewer;
 use codex_config::types::ModelAvailabilityNuxConfig;
-use codex_core_plugins::PluginsManager;
 use codex_exec_server::EnvironmentManager;
 use codex_features::Feature;
 use codex_model_provider::create_model_provider;
@@ -139,6 +141,8 @@ use codex_protocol::ThreadId;
 use codex_protocol::config_types::Personality;
 #[cfg(target_os = "windows")]
 use codex_protocol::config_types::WindowsSandboxLevel;
+use codex_protocol::models::ActivePermissionProfile;
+use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::openai_models::ModelAvailabilityNux;
 use codex_protocol::openai_models::ModelPreset;
@@ -149,6 +153,7 @@ use codex_protocol::permissions::FileSystemSandboxKind;
 use codex_rollout::StateDbHandle;
 use codex_terminal_detection::user_agent;
 use codex_utils_absolute_path::AbsolutePathBuf;
+use codex_utils_approval_presets::builtin_permission_profile_for_active_permission_profile;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
 use crossterm::event::KeyCode;
@@ -196,6 +201,7 @@ mod loaded_threads;
 mod pending_interactive_replay;
 mod pets;
 mod platform_actions;
+mod plugin_mentions;
 mod replay_filter;
 mod resize_reflow;
 mod session_lifecycle;
@@ -325,7 +331,7 @@ fn default_exec_approval_decisions(
 struct AutoReviewMode {
     approval_policy: AskForApproval,
     approvals_reviewer: ApprovalsReviewer,
-    permission_profile: PermissionProfile,
+    active_permission_profile: ActivePermissionProfile,
 }
 
 /// Enabling the Auto-review experiment in the TUI should also switch the
@@ -336,7 +342,17 @@ fn auto_review_mode() -> AutoReviewMode {
     AutoReviewMode {
         approval_policy: AskForApproval::OnRequest,
         approvals_reviewer: ApprovalsReviewer::AutoReview,
-        permission_profile: PermissionProfile::workspace_write(),
+        active_permission_profile: ActivePermissionProfile::new(
+            BUILT_IN_PERMISSION_PROFILE_WORKSPACE,
+        ),
+    }
+}
+
+#[cfg(test)]
+impl AutoReviewMode {
+    fn permission_profile(&self) -> PermissionProfile {
+        builtin_permission_profile_for_active_permission_profile(&self.active_permission_profile)
+            .expect("auto-review mode should use a built-in permission profile")
     }
 }
 
@@ -396,8 +412,7 @@ fn session_summary(
     let usage_line = (!token_usage.is_zero()).then(|| token_usage.to_string());
     let thread_id =
         resumable_thread(thread_id, thread_name, rollout_path).map(|thread| thread.thread_id);
-    let resume_command =
-        crate::legacy_core::util::resume_command(/*thread_name*/ None, thread_id);
+    let resume_command = codex_utils_cli::resume_command(/*thread_name*/ None, thread_id);
 
     if usage_line.is_none() && resume_command.is_none() {
         return None;
@@ -465,6 +480,7 @@ pub(crate) struct App {
     pub(crate) active_profile: Option<String>,
     cli_kv_overrides: Vec<(String, TomlValue)>,
     harness_overrides: ConfigOverrides,
+    loader_overrides: LoaderOverrides,
     runtime_approval_policy_override: Option<AskForApproval>,
     runtime_permission_profile_override: Option<PermissionProfile>,
 
@@ -629,6 +645,7 @@ impl App {
         mut config: Config,
         cli_kv_overrides: Vec<(String, TomlValue)>,
         harness_overrides: ConfigOverrides,
+        loader_overrides: LoaderOverrides,
         active_profile: Option<String>,
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
@@ -758,6 +775,7 @@ impl App {
         let (mut chat_widget, initial_started_thread) = match session_selection {
             SessionSelection::StartFresh | SessionSelection::Exit => {
                 let started = app_server.start_thread(&config).await?;
+                // Only count a startup tooltip once the fresh thread can actually render it.
                 let startup_tooltip_override =
                     prepare_startup_tooltip_override(&mut config, &available_models, is_first_run)
                         .await;
@@ -899,6 +917,7 @@ See the Codex keymap documentation for supported actions and examples."
             active_profile,
             cli_kv_overrides,
             harness_overrides,
+            loader_overrides,
             runtime_approval_policy_override: None,
             runtime_permission_profile_override: None,
             file_search,
@@ -953,7 +972,7 @@ See the Codex keymap documentation for supported actions and examples."
         // world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
         {
-            let startup_permission_profile = app.config.permissions.permission_profile();
+            let startup_permission_profile = app.config.permissions.effective_permission_profile();
             let should_check = WindowsSandboxLevel::from_config(&app.config)
                 != WindowsSandboxLevel::Disabled
                 && managed_filesystem_sandbox_is_restricted(&startup_permission_profile)
