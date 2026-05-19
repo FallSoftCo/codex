@@ -781,7 +781,13 @@ def run_model(
         str(output_path),
         prompt,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+        stdin=subprocess.DEVNULL,
+    )
     if result.returncode != 0:
         raise RuntimeError(
             f"codex exec failed with rc={result.returncode}\nSTDERR:\n{result.stderr}"
