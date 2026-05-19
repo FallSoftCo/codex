@@ -122,6 +122,7 @@ async fn responses_api_emits_api_request_event() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -167,6 +168,7 @@ async fn process_sse_emits_tracing_for_output_item() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -212,6 +214,7 @@ async fn process_sse_emits_failed_event_on_parse_error() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -259,6 +262,7 @@ async fn process_sse_records_failed_event_when_stream_closes_without_completed()
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -325,6 +329,7 @@ async fn process_sse_failed_event_records_response_error_message() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -389,6 +394,7 @@ async fn process_sse_failed_event_logs_parse_error() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -441,6 +447,7 @@ async fn process_sse_failed_event_logs_missing_error() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -501,6 +508,7 @@ async fn process_sse_failed_event_logs_response_completed_parse_error() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -555,6 +563,7 @@ async fn process_sse_emits_completed_telemetry() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -633,6 +642,7 @@ async fn turn_and_completed_response_spans_record_token_usage() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -720,6 +730,7 @@ async fn handle_responses_span_records_response_kind_and_tool_name() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -813,6 +824,7 @@ async fn record_responses_sets_span_fields_for_response_events() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -901,6 +913,7 @@ async fn handle_response_item_records_tool_result_for_custom_tool_call() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -976,6 +989,7 @@ async fn handle_response_item_records_tool_result_for_function_call() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1052,6 +1066,7 @@ async fn handle_response_item_records_tool_result_for_shell_command_call() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1160,6 +1175,7 @@ async fn handle_shell_command_autoapprove_from_config_records_tool_decision() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1214,6 +1230,7 @@ async fn handle_shell_command_user_approved_records_tool_decision() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1283,6 +1300,7 @@ async fn handle_shell_command_user_approved_for_session_records_tool_decision() 
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1352,6 +1370,7 @@ async fn handle_sandbox_error_user_approves_retry_records_tool_decision() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1421,6 +1440,7 @@ async fn handle_shell_command_user_denies_records_tool_decision() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1490,6 +1510,7 @@ async fn handle_sandbox_error_user_approves_for_session_records_tool_decision() 
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();
@@ -1560,6 +1581,7 @@ async fn handle_sandbox_error_user_denies_records_tool_decision() {
             }],
             final_output_json_schema: None,
             responsesapi_client_metadata: None,
+            thread_settings: Default::default(),
         })
         .await
         .unwrap();

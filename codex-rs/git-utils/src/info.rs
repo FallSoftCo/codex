@@ -56,6 +56,23 @@ fn is_valid_git_entry(dot_git: &Path) -> bool {
     false
 }
 
+/// Return the repository root for `cwd` using the provided filesystem.
+///
+/// This mirrors [`get_git_repo_root`] for local paths, but works when `cwd`
+/// only exists inside a selected remote environment.
+pub async fn get_git_repo_root_with_fs(
+    fs: &dyn ExecutorFileSystem,
+    cwd: &AbsolutePathBuf,
+) -> Option<AbsolutePathBuf> {
+    let base = match fs.get_metadata(cwd, /*sandbox*/ None).await {
+        Ok(metadata) if metadata.is_directory => cwd.clone(),
+        _ => cwd.parent()?,
+    };
+    find_ancestor_git_entry_with_fs(fs, &base)
+        .await
+        .map(|(repo_root, _)| repo_root)
+}
+
 /// Timeout for git commands to prevent freezing on large repositories
 const GIT_COMMAND_TIMEOUT: TokioDuration = TokioDuration::from_secs(5);
 const DISABLED_HOOKS_PATH: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
@@ -747,11 +764,8 @@ pub async fn resolve_root_git_project_for_trust(
     fs: &dyn ExecutorFileSystem,
     cwd: &AbsolutePathBuf,
 ) -> Option<AbsolutePathBuf> {
-    let base = match fs.get_metadata(cwd, /*sandbox*/ None).await {
-        Ok(metadata) if metadata.is_directory => cwd.clone(),
-        _ => cwd.parent()?,
-    };
-    let (repo_root, dot_git) = find_ancestor_git_entry_with_fs(fs, &base).await?;
+    let repo_root = get_git_repo_root_with_fs(fs, cwd).await?;
+    let dot_git = repo_root.join(".git");
     if fs
         .get_metadata(&dot_git, /*sandbox*/ None)
         .await

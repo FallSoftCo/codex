@@ -50,12 +50,6 @@ impl ToolExecutor<ToolInvocation> for Handler {
         } = invocation;
         let arguments = function_arguments(payload)?;
         let args: WaitArgs = parse_arguments(&arguments)?;
-        if args.targets.is_empty() {
-            return Ok(boxed_tool_output(WaitAgentResult {
-                status: HashMap::new(),
-                timed_out: false,
-            }));
-        }
         let receiver_thread_ids = parse_agent_id_targets(args.targets)?;
         let mut receiver_agents = Vec::with_capacity(receiver_thread_ids.len());
         let mut target_by_thread_id = HashMap::with_capacity(receiver_thread_ids.len());
@@ -209,6 +203,13 @@ impl ToolExecutor<ToolInvocation> for Handler {
 }
 
 impl CoreToolRuntime for Handler {
+    fn search_info(&self) -> Option<ToolSearchInfo> {
+        multi_agent_tool_search_info(
+            "wait_agent wait agent subagent status final result complete timeout targets",
+            self.spec()?,
+        )
+    }
+
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
         matches!(payload, ToolPayload::Function { .. })
     }
