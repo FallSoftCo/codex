@@ -758,6 +758,9 @@ def run_model(
     model: str,
     prompt: str,
     schema: dict[str, Any],
+    timeout_seconds: int | None,
+    retries: int,
+    ignore_user_config: bool,
 ) -> tuple[dict[str, Any], int]:
     with tempfile.NamedTemporaryFile("w", delete=False, suffix=".json") as schema_file:
         json.dump(schema, schema_file)
@@ -768,32 +771,56 @@ def run_model(
     command = [
         str(codex),
         "exec",
-        "--ephemeral",
         "--color",
         "never",
-        "-C",
-        str(REPO_ROOT),
-        "-m",
-        model,
-        "--output-schema",
-        str(schema_path),
-        "-o",
-        str(output_path),
-        prompt,
     ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        check=False,
-        stdin=subprocess.DEVNULL,
+    if ignore_user_config:
+        command.append("--ignore-user-config")
+    command.extend(
+        [
+            "--ephemeral",
+            "-C",
+            str(REPO_ROOT),
+            "-m",
+            model,
+            "--output-schema",
+            str(schema_path),
+            "-o",
+            str(output_path),
+            prompt,
+        ]
     )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"codex exec failed with rc={result.returncode}\nSTDERR:\n{result.stderr}"
+    attempts = retries + 1
+    last_error = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                stdin=subprocess.DEVNULL,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as error:
+            last_error = (
+                f"codex exec timed out after {timeout_seconds}s "
+                f"(attempt {attempt}/{attempts})"
+            )
+            if attempt < attempts:
+                continue
+            raise RuntimeError(last_error) from error
+        if result.returncode == 0:
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            return payload, parse_tokens(result.stderr)
+        last_error = (
+            f"codex exec failed with rc={result.returncode} "
+            f"(attempt {attempt}/{attempts})\nSTDERR:\n{result.stderr}"
         )
-    payload = json.loads(output_path.read_text(encoding="utf-8"))
-    return payload, parse_tokens(result.stderr)
+        if attempt < attempts:
+            continue
+        raise RuntimeError(last_error)
+    raise RuntimeError(last_error or "codex exec failed without producing a result")
 
 
 def heuristic_auto_match(state: SimulationState) -> list[ActionChoice]:
@@ -1236,6 +1263,9 @@ def decide_assignments(
     model: str,
     rng: random.Random,
     repeat: int,
+    model_call_timeout: int | None,
+    model_call_retries: int,
+    ignore_user_config: bool,
 ) -> list[ActionChoice]:
     if policy == "auto_match":
         return heuristic_auto_match_with_rng(state, rng)
@@ -1255,6 +1285,9 @@ def decide_assignments(
                 model=model,
                 prompt=prompt,
                 schema=SINGLE_ACTION_SCHEMA,
+                timeout_seconds=model_call_timeout,
+                retries=model_call_retries,
+                ignore_user_config=ignore_user_config,
             )
             state.model_calls += 1
             state.model_tokens += tokens
@@ -1275,7 +1308,15 @@ def decide_assignments(
         return enforce_strict_leader_award(state, assignments)
     if policy == "semantic_market":
         prompt = market_prompt(policy, state, rng=rng, repeat=repeat)
-        payload, tokens = run_model(codex=codex, model=model, prompt=prompt, schema=MARKET_SCHEMA)
+        payload, tokens = run_model(
+            codex=codex,
+            model=model,
+            prompt=prompt,
+            schema=MARKET_SCHEMA,
+            timeout_seconds=model_call_timeout,
+            retries=model_call_retries,
+            ignore_user_config=ignore_user_config,
+        )
         state.model_calls += 1
         state.model_tokens += tokens
         return pick_market_assignments(state, parse_market_response(payload, state.scenario))
@@ -1290,6 +1331,9 @@ def decide_assignments(
                 model=model,
                 prompt=prompt,
                 schema=SINGLE_AGENT_BIDS_SCHEMA,
+                timeout_seconds=model_call_timeout,
+                retries=model_call_retries,
+                ignore_user_config=ignore_user_config,
             )
             state.model_calls += 1
             state.model_tokens += tokens
@@ -1306,6 +1350,9 @@ def decide_assignments(
                 model=model,
                 prompt=prompt,
                 schema=SINGLE_ACTION_SCHEMA,
+                timeout_seconds=model_call_timeout,
+                retries=model_call_retries,
+                ignore_user_config=ignore_user_config,
             )
             state.model_calls += 1
             state.model_tokens += tokens
@@ -1313,7 +1360,15 @@ def decide_assignments(
         return assignments
 
     prompt = assignment_prompt(policy, state, rng=rng, repeat=repeat)
-    payload, tokens = run_model(codex=codex, model=model, prompt=prompt, schema=ASSIGNMENT_SCHEMA)
+    payload, tokens = run_model(
+        codex=codex,
+        model=model,
+        prompt=prompt,
+        schema=ASSIGNMENT_SCHEMA,
+        timeout_seconds=model_call_timeout,
+        retries=model_call_retries,
+        ignore_user_config=ignore_user_config,
+    )
     state.model_calls += 1
     state.model_tokens += tokens
     parsed = parse_assignment_response(payload, state.scenario)
@@ -1465,6 +1520,9 @@ def run_once(
     model: str,
     max_rounds: int,
     repeat: int,
+    model_call_timeout: int | None,
+    model_call_retries: int,
+    ignore_user_config: bool,
 ) -> dict[str, Any]:
     state = SimulationState(scenario=scenario)
     rng = random.Random(f"{scenario.id}:{policy}:{repeat}")
@@ -1491,6 +1549,9 @@ def run_once(
             model=model,
             rng=rng,
             repeat=repeat,
+            model_call_timeout=model_call_timeout,
+            model_call_retries=model_call_retries,
+            ignore_user_config=ignore_user_config,
         )
         apply_assignments(state, assignments)
         if (
@@ -1607,6 +1668,21 @@ def print_table(summary: list[dict[str, Any]]) -> None:
         print(" ".join(str(cell).ljust(widths[idx]) for idx, cell in enumerate(row)))
 
 
+def result_payload(model: str, results: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "model": model,
+        "results": results,
+        "summary": aggregate(results),
+    }
+
+
+def write_json_atomic(path: pathlib.Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1638,19 +1714,56 @@ def main() -> int:
         help="Number of repeats per scenario/policy pair.",
     )
     parser.add_argument(
+        "--repeat-start",
+        type=int,
+        default=1,
+        help="First repeat number to use. Useful when resuming chunked runs.",
+    )
+    parser.add_argument(
         "--max-rounds",
         type=int,
         default=12,
         help="Maximum decision rounds per run.",
     )
     parser.add_argument(
+        "--model-call-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for each codex exec model call. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--model-call-retries",
+        type=int,
+        default=1,
+        help="Number of times to retry a failed or timed-out model call.",
+    )
+    parser.add_argument(
+        "--ignore-user-config",
+        action="store_true",
+        help="Pass --ignore-user-config to codex exec so user plugins/config do not affect runs.",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Print full JSON output instead of the summary table.",
     )
+    parser.add_argument(
+        "--output-json",
+        type=pathlib.Path,
+        help="Continuously write accumulated JSON results to this path after each run.",
+    )
     args = parser.parse_args()
+    if args.repeats < 1:
+        parser.error("--repeats must be at least 1")
+    if args.repeat_start < 1:
+        parser.error("--repeat-start must be at least 1")
+    if args.model_call_timeout < 0:
+        parser.error("--model-call-timeout must be non-negative")
+    if args.model_call_retries < 0:
+        parser.error("--model-call-retries must be non-negative")
 
     codex = pathlib.Path(args.codex)
+    model_call_timeout = args.model_call_timeout or None
     scenarios = args.scenario or sorted(SCENARIOS)
     policies = args.policy or sorted(POLICY_DESCRIPTIONS)
     for scenario_id in scenarios:
@@ -1660,37 +1773,35 @@ def main() -> int:
     for scenario_id in scenarios:
         scenario = SCENARIOS[scenario_id]
         for policy in policies:
-            for repeat in range(args.repeats):
+            for repeat in range(args.repeat_start, args.repeat_start + args.repeats):
                 result = run_once(
                     scenario=scenario,
                     policy=policy,
                     codex=codex,
                     model=args.model,
                     max_rounds=args.max_rounds,
-                    repeat=repeat + 1,
+                    repeat=repeat,
+                    model_call_timeout=model_call_timeout,
+                    model_call_retries=args.model_call_retries,
+                    ignore_user_config=args.ignore_user_config,
                 )
-                result["repeat"] = repeat + 1
+                result["repeat"] = repeat
                 results.append(result)
+                if args.output_json is not None:
+                    write_json_atomic(args.output_json, result_payload(args.model, results))
                 print(
-                    f"completed scenario={scenario_id} policy={policy} repeat={repeat + 1}",
+                    f"completed scenario={scenario_id} policy={policy} repeat={repeat}",
                     file=sys.stderr,
                     flush=True,
                 )
 
-    summary = aggregate(results)
+    payload = result_payload(args.model, results)
+    if args.output_json is not None:
+        write_json_atomic(args.output_json, payload)
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "model": args.model,
-                    "results": results,
-                    "summary": summary,
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps(payload, indent=2))
     else:
-        print_table(summary)
+        print_table(payload["summary"])
     return 0
 
 
