@@ -106,6 +106,14 @@ The durable standard is:
   default, shut the app-server down after completion, and recorded zero
   coordination-tool errors. Codex solved 2/3 tasks and failed `III-21_n5` with
   `S=P=0.200` after `739.4s`; Losangelex solved 3/3 with average time `92.4s`.
+- Regenerated the hardened published-benchmark paper at
+  `tmp/research/published-agent-benchmarks/paper-2026-05-20-hardened-published-benchmarks/hardened-published-agent-benchmarks.pdf`
+  and retained the coordination topology frontier paper at
+  `tmp/research/losangelex-vs-codex/world-class-2026-05-20-policy-frontier/frontier-manuscript.pdf`.
+  Both PDFs were emailed through the Ozzz production SESv2 path from
+  `seo@fallsoft.co` with configuration set `fallsoftco-vc-access`; SES message
+  id:
+  `0100019e4722458d-038be9a5-2d32-45dc-97fb-b1be9cedc4b5-000000`.
 
 ## Blocking Losangelex Work
 
