@@ -54,10 +54,19 @@ The durable standard is:
   no captured `unknown live Hollywood agent`, no MCP auth contamination under a
   throwaway `CODEX_HOME`, and five exact-room registry entries containing
   runtime identities.
-- Remaining L2 caveat: this fix publishes attach-time heartbeats. Longer runs
-  still need periodic registry refresh or a longer freshness contract so active
-  benchmark agents cannot age out of `HOLLYWOOD_REGISTRY_STALE_AFTER` during a
-  single long turn.
+- Implemented periodic app-server registry refresh for attached Hollywood
+  sessions. The listener now upserts registry snapshots on the existing
+  15-second sync cadence and at turn start/turn completion, preserving runtime
+  names from `thread/name/set`.
+- Live heartbeat validation:
+  `tmp/research/published-agent-benchmarks/marble-db-heartbeat-validity-2026-05-20`.
+  Case `database-001` ran for `97.7s`, completed with recall `1.000` and exact
+  set match `true`, and the exact room had five registry entries with runtime
+  identities and fresh `last_heartbeat_at` timestamps after the former 90-second
+  staleness boundary.
+- Remaining L2 gap: benchmark runners still need to count unknown-agent,
+  invalid-agent, and malformed coordination-tool errors in result JSON instead
+  of relying on ad hoc log scans.
 
 ## Blocking Losangelex Work
 
@@ -89,8 +98,10 @@ Current status:
 - Short benchmark mentions now resolve against generated runtime identities.
 - App-server attach now publishes registry entries with stored runtime thread
   names.
-- Not complete until periodic heartbeat/freshness is handled and the runners
-  count coordination-tool errors in their result JSON.
+- App-server listener heartbeats now refresh active registry entries during long
+  turns and immediately at turn boundaries.
+- Not complete until the runners count coordination-tool errors in their result
+  JSON.
 
 ### L3. Answer-Key Isolation
 

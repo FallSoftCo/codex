@@ -214,6 +214,7 @@ pub(crate) struct HollywoodRuntimeState {
     pending_semantic_wakes: Vec<HollywoodPendingSemanticWake>,
     registry_session_kind: Option<String>,
     registry_resumed_from: Option<String>,
+    registry_thread_name: Option<String>,
     last_registry_sync_at: Option<Instant>,
     last_registry_status: Option<String>,
 }
@@ -246,6 +247,7 @@ impl HollywoodRuntimeState {
         self.pending_semantic_wakes.clear();
         self.registry_session_kind = Some(session_kind.into());
         self.registry_resumed_from = resumed_from;
+        self.registry_thread_name = None;
         self.last_registry_sync_at = None;
         self.last_registry_status = None;
     }
@@ -260,6 +262,7 @@ impl HollywoodRuntimeState {
         self.pending_semantic_wakes.clear();
         self.registry_session_kind = None;
         self.registry_resumed_from = None;
+        self.registry_thread_name = None;
         self.last_registry_sync_at = None;
         self.last_registry_status = None;
     }
@@ -437,6 +440,21 @@ impl HollywoodRuntimeState {
 
     pub(crate) fn registry_resumed_from(&self) -> Option<&str> {
         self.registry_resumed_from.as_deref()
+    }
+
+    pub(crate) fn set_registry_thread_name(&mut self, thread_name: Option<String>) {
+        let thread_name = thread_name
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        if self.registry_thread_name != thread_name {
+            self.registry_thread_name = thread_name;
+            self.last_registry_sync_at = None;
+            self.last_registry_status = None;
+        }
+    }
+
+    pub(crate) fn registry_thread_name(&self) -> Option<&str> {
+        self.registry_thread_name.as_deref()
     }
 
     pub(crate) fn should_sync_registry(&self, now: Instant, status: &str) -> bool {
@@ -658,6 +676,19 @@ pub(crate) async fn upsert_registry(
         return Err(format!("Hollywood registry request failed: {detail}"));
     }
     Ok(())
+}
+
+pub(crate) async fn publish_registry_snapshot(
+    client: &Client,
+    thread_id: ThreadId,
+    thread: &CodexThread,
+    config: &HollywoodConfig,
+    runtime_state: &HollywoodRuntimeState,
+    status: &ThreadStatus,
+) -> Result<(), String> {
+    let request =
+        build_registry_upsert_request(thread_id, thread, config, runtime_state, status).await;
+    upsert_registry(client, config, &request).await
 }
 
 fn durable_coordination_guidance(state_db_available: bool) -> &'static str {
@@ -1034,11 +1065,12 @@ pub(crate) async fn build_registry_upsert_request(
     config: &HollywoodConfig,
     runtime_state: &HollywoodRuntimeState,
     status: &ThreadStatus,
-    thread_name: Option<&str>,
 ) -> HollywoodRegistryUpsertRequest {
     let snapshot = thread.config_snapshot().await;
     let cwd = snapshot.cwd.display().to_string();
-    let thread_name = thread_name.or(snapshot.thread_name.as_deref());
+    let thread_name = runtime_state
+        .registry_thread_name()
+        .or(snapshot.thread_name.as_deref());
     HollywoodRegistryUpsertRequest {
         session_id: thread_id.to_string(),
         room: config.room.clone(),
@@ -1519,6 +1551,25 @@ mod tests {
                 "scout-agent".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn registry_thread_name_is_trimmed_and_cleared_with_session_state() {
+        let mut runtime = HollywoodRuntimeState::default();
+        runtime.attach(HollywoodConfig::default(), "attached", None);
+
+        runtime.set_registry_thread_name(Some("  Scout Agent  ".to_string()));
+
+        assert_eq!(runtime.registry_thread_name(), Some("Scout Agent"));
+
+        runtime.detach();
+
+        assert_eq!(runtime.registry_thread_name(), None);
+
+        runtime.set_registry_thread_name(Some("Stale Agent".to_string()));
+        runtime.attach(HollywoodConfig::default(), "attached", None);
+
+        assert_eq!(runtime.registry_thread_name(), None);
     }
 
     #[test]

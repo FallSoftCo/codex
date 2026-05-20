@@ -1,4 +1,9 @@
 use super::*;
+use crate::hollywood::HOLLYWOOD_REGISTRY_SYNC_INTERVAL;
+use crate::hollywood::publish_registry_snapshot;
+use crate::hollywood::thread_status_name;
+use reqwest::Client;
+use tokio::time::MissedTickBehavior;
 
 pub(super) const THREAD_UNLOADING_DELAY: Duration = Duration::from_secs(30 * 60);
 
@@ -256,6 +261,9 @@ pub(super) async fn ensure_listener_task_running(
         ..
     } = listener_task_context;
     let outgoing_for_task = Arc::clone(&outgoing);
+    let registry_client = Client::new();
+    let mut registry_sync_interval = tokio::time::interval(HOLLYWOOD_REGISTRY_SYNC_INTERVAL);
+    registry_sync_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -326,6 +334,10 @@ pub(super) async fn ensure_listener_task_running(
                         continue;
                     }
 
+                    let sync_registry_after_event = matches!(
+                        &event.msg,
+                        EventMsg::TurnStarted(_) | EventMsg::TurnComplete(_)
+                    );
                     apply_bespoke_event_handling(
                         event.clone(),
                         conversation_id,
@@ -336,6 +348,26 @@ pub(super) async fn ensure_listener_task_running(
                         thread_watch_manager.clone(),
                         thread_list_state_permit.clone(),
                         fallback_model_provider.clone(),
+                    )
+                    .await;
+                    if sync_registry_after_event {
+                        sync_hollywood_registry_for_thread(
+                            &registry_client,
+                            conversation_id,
+                            &conversation,
+                            &thread_state,
+                            &thread_watch_manager,
+                        )
+                        .await;
+                    }
+                }
+                _ = registry_sync_interval.tick() => {
+                    sync_hollywood_registry_for_thread(
+                        &registry_client,
+                        conversation_id,
+                        &conversation,
+                        &thread_state,
+                        &thread_watch_manager,
                     )
                     .await;
                 }
@@ -381,6 +413,58 @@ pub(super) async fn ensure_listener_task_running(
         }
     });
     Ok(())
+}
+
+async fn sync_hollywood_registry_for_thread(
+    client: &Client,
+    conversation_id: ThreadId,
+    conversation: &Arc<CodexThread>,
+    thread_state: &Arc<Mutex<ThreadState>>,
+    thread_watch_manager: &ThreadWatchManager,
+) {
+    let status = thread_watch_manager
+        .loaded_status_for_thread(&conversation_id.to_string())
+        .await;
+    let status_name = thread_status_name(&status);
+    let now = Instant::now();
+    let registry_snapshot = {
+        let thread_state = thread_state.lock().await;
+        if !thread_state
+            .hollywood
+            .should_sync_registry(now, &status_name)
+        {
+            None
+        } else {
+            thread_state
+                .hollywood
+                .config()
+                .map(|config| (config, thread_state.hollywood.clone()))
+        }
+    };
+    let Some((config, runtime_state)) = registry_snapshot else {
+        return;
+    };
+
+    if let Err(err) = publish_registry_snapshot(
+        client,
+        conversation_id,
+        conversation,
+        &config,
+        &runtime_state,
+        &status,
+    )
+    .await
+    {
+        warn!("failed to refresh Hollywood registry for thread {conversation_id}: {err}");
+        return;
+    }
+
+    let mut thread_state = thread_state.lock().await;
+    if thread_state.hollywood.config().as_ref() == Some(&config) {
+        thread_state
+            .hollywood
+            .note_registry_synced(Instant::now(), status_name);
+    }
 }
 
 pub(super) async fn wait_for_thread_shutdown(thread: &Arc<CodexThread>) -> ThreadShutdownResult {
