@@ -42,6 +42,22 @@ The durable standard is:
   the pinned `openai-codex-cli-bin==0.131.0a4` has no compatible wheel; Rust
   formatting was run directly with `cargo fmt -- --config imports_granularity=Item`.
   `just fix -p codex-core` completed.
+- A follow-up MARBLE diagnostic validity probe exposed that attached app-server
+  threads were not published to the Hollywood registry at all. A second probe
+  confirmed registry rows existed but only carried UUID aliases, not benchmark
+  runtime names. The app-server attach path now publishes a registry heartbeat
+  immediately after `thread/hollywood/attach` and uses stored `thread/name/set`
+  metadata so entries include identities such as `marble-db-agent5-b68b8c`.
+- Live validation after the app-server fix:
+  `tmp/research/published-agent-benchmarks/marble-db-validity-l2-named-registry-2026-05-20`.
+  Case `database-001` completed with recall `1.000`, exact-set match `false`,
+  no captured `unknown live Hollywood agent`, no MCP auth contamination under a
+  throwaway `CODEX_HOME`, and five exact-room registry entries containing
+  runtime identities.
+- Remaining L2 caveat: this fix publishes attach-time heartbeats. Longer runs
+  still need periodic registry refresh or a longer freshness contract so active
+  benchmark agents cannot age out of `HOLLYWOOD_REGISTRY_STALE_AFTER` during a
+  single long turn.
 
 ## Blocking Losangelex Work
 
@@ -67,6 +83,14 @@ Done means:
 - ambiguous names fail with a deterministic ambiguity error;
 - benchmark reports include counts of unknown-agent, invalid-agent, and
   malformed coordination-tool calls.
+
+Current status:
+
+- Short benchmark mentions now resolve against generated runtime identities.
+- App-server attach now publishes registry entries with stored runtime thread
+  names.
+- Not complete until periodic heartbeat/freshness is handled and the runners
+  count coordination-tool errors in their result JSON.
 
 ### L3. Answer-Key Isolation
 

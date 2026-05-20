@@ -1034,9 +1034,11 @@ pub(crate) async fn build_registry_upsert_request(
     config: &HollywoodConfig,
     runtime_state: &HollywoodRuntimeState,
     status: &ThreadStatus,
+    thread_name: Option<&str>,
 ) -> HollywoodRegistryUpsertRequest {
     let snapshot = thread.config_snapshot().await;
     let cwd = snapshot.cwd.display().to_string();
+    let thread_name = thread_name.or(snapshot.thread_name.as_deref());
     HollywoodRegistryUpsertRequest {
         session_id: thread_id.to_string(),
         room: config.room.clone(),
@@ -1044,7 +1046,7 @@ pub(crate) async fn build_registry_upsert_request(
         cwd: Some(cwd),
         repo_name: repo_name_from_cwd(snapshot.cwd.as_path()),
         attention_mode: hollywood_attention_mode_name(config.attention.mode),
-        identities: hollywood_identities(thread_id, snapshot.thread_name.as_deref()),
+        identities: hollywood_identities(thread_id, thread_name),
         session_kind: runtime_state
             .registry_session_kind()
             .unwrap_or("attached")

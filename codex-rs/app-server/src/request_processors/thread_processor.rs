@@ -2,10 +2,12 @@ use super::*;
 use crate::error_code::method_not_found;
 use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
 use crate::hollywood::HollywoodConfig;
+use crate::hollywood::build_registry_upsert_request;
 use crate::hollywood::format_hollywood_context_message;
 use crate::hollywood::hollywood_session_diagnostics_from_runtime;
 use crate::hollywood::hollywood_session_state_from_runtime;
 use crate::hollywood::hollywood_session_status_from_thread_status;
+use crate::hollywood::upsert_registry;
 use codex_app_server_protocol::ThreadHollywoodAttachParams;
 use codex_app_server_protocol::ThreadHollywoodAttachResponse;
 use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
@@ -451,6 +453,21 @@ impl ThreadRequestProcessor {
             wake_rooms: params.wake_rooms,
             attention: params.attention.unwrap_or_default(),
         };
+        let stored_thread_name = self
+            .thread_store
+            .read_thread(StoreReadThreadParams {
+                thread_id,
+                include_archived: true,
+                include_history: false,
+            })
+            .await
+            .ok()
+            .and_then(|stored_thread| stored_thread.name)
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty());
+        let thread_name = stored_thread_name
+            .as_deref()
+            .or(config_snapshot.thread_name.as_deref());
 
         {
             let thread_state = self.thread_state_manager.thread_state(thread_id).await;
@@ -468,7 +485,7 @@ impl ThreadRequestProcessor {
         thread
             .inject_user_message_without_turn(format_hollywood_context_message(
                 thread_id,
-                config_snapshot.thread_name.as_deref(),
+                thread_name,
                 &hollywood_config,
                 thread
                     .state_db()
@@ -476,6 +493,32 @@ impl ThreadRequestProcessor {
                     .is_some(),
             ))
             .await;
+        let runtime_state = {
+            let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+            thread_state.lock().await.hollywood.clone()
+        };
+        let status = self
+            .thread_watch_manager
+            .loaded_status_for_thread(&thread_id.to_string())
+            .await;
+        let registry_request = build_registry_upsert_request(
+            thread_id,
+            &thread,
+            &hollywood_config,
+            &runtime_state,
+            &status,
+            thread_name,
+        )
+        .await;
+        if let Err(err) = upsert_registry(
+            &reqwest::Client::new(),
+            &hollywood_config,
+            &registry_request,
+        )
+        .await
+        {
+            warn!("failed to publish Hollywood registry attach for thread {thread_id}: {err}");
+        }
         self.try_attach_thread_listener(thread_id, vec![request_id.connection_id])
             .await;
         Ok(ThreadHollywoodAttachResponse {})
