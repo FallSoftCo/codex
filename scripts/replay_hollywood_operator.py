@@ -28,8 +28,13 @@ class AgentRun:
 
 
 class JsonRpcWs:
-    def __init__(self, url: str) -> None:
-        self.ws = websocket.create_connection(url, suppress_origin=True, timeout=120)
+    def __init__(self, url: str, request_timeout: float = 120) -> None:
+        self.ws = websocket.create_connection(
+            url,
+            suppress_origin=True,
+            timeout=request_timeout,
+        )
+        self.request_timeout = request_timeout
         self.next_id = 1
         self.notifications: list[dict[str, Any]] = []
 
@@ -56,7 +61,7 @@ class JsonRpcWs:
             )
         )
         while True:
-            message = self._recv_json(timeout=120)
+            message = self._recv_json(timeout=self.request_timeout)
             if "id" in message and message.get("id") == request_id:
                 if "error" in message:
                     raise RuntimeError(
