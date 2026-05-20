@@ -125,7 +125,27 @@ def frontier(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for candidate in rows:
         if not any(dominates(other, candidate) for other in rows if other is not candidate):
             output.append(candidate)
-    return sorted(output, key=lambda row: (-(row["success"]["rate"] or 0), row["completion_time"]["mean"] or 0, row["model_tokens"]["mean"] or 0))
+    return sorted(
+        output,
+        key=lambda row: (
+            -(row["success"]["rate"] or 0),
+            row["completion_time"]["mean"] or 0,
+            row["model_tokens"]["mean"] or 0,
+        ),
+    )
+
+
+def primary_frontier(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the cost/error frontier among rows with the best observed success."""
+    if not rows:
+        return []
+    best_success = max(row["success"]["rate"] or 0.0 for row in rows)
+    successful_rows = [
+        row
+        for row in rows
+        if (row["success"]["rate"] or 0.0) == best_success
+    ]
+    return frontier(successful_rows)
 
 
 def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -203,9 +223,9 @@ def write_report(
         for row in overall_rows
         if row.get("coverage") == row.get("expected_coverage")
     ]
-    overall_frontier = frontier(complete_overall_rows)
+    overall_frontier = primary_frontier(complete_overall_rows)
     scenario_frontiers = {
-        scenario: frontier([row for row in summary_rows if row["scenario"] == scenario])
+        scenario: primary_frontier([row for row in summary_rows if row["scenario"] == scenario])
         for scenario in scenarios
     }
 
@@ -273,8 +293,9 @@ def write_report(
             "## Interpretation",
             "",
             (
-                "World-class claims should be frontier claims, not single-winner claims. A policy "
-                "is interesting when it is not dominated over success, simulated time, model calls, "
+                "World-class claims should be frontier claims, not single-winner claims. The "
+                "primary frontier first filters to policies with the best observed success rate, "
+                "then keeps policies that are not dominated over simulated time, model calls, "
                 "tokens, and coordination-error metrics. Deterministic matchers are useful lower "
                 "bounds on model cost, but they do not test semantic interpretation. Per-agent "
                 "markets test decentralized model judgement but can multiply calls and tokens. "
@@ -323,9 +344,11 @@ def main() -> int:
         "model": model,
         "summary": summary_rows,
         "overall": overall_rows,
-        "overall_frontier": frontier(complete_overall_rows),
+        "overall_frontier": primary_frontier(complete_overall_rows),
         "scenario_frontiers": {
-            scenario: frontier([row for row in summary_rows if row["scenario"] == scenario])
+            scenario: primary_frontier(
+                [row for row in summary_rows if row["scenario"] == scenario]
+            )
             for scenario in sorted({result["scenario"] for result in results})
         },
     }
