@@ -94,6 +94,12 @@ The durable standard is:
   `tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20`;
   the remaining `III-25_n2` through `III-30_n2` tail still needs to be rerun
   with the fixed scorer.
+- Reran the Silo level III n=2 tail and combined it with the completed records:
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-combined-2026-05-20`.
+  Both systems finished 22/30 full-success tasks with average `S=0.750`,
+  average `P=0.762`, and zero coordination-tool errors. Losangelex averaged
+  `88.3s` per task versus Codex `126.8s`; by level, both systems were 10/10 on
+  level I, 7/10 on level II, and 5/10 on level III.
 
 ## Blocking Losangelex Work
 
@@ -182,10 +188,9 @@ Done means:
 
 Current status:
 
-- The managed hidden-path n=2 sweep completed levels I/II and the first four
-  level III task pairs before finding and fixing a nested-sequence scorer bug.
-- Remaining work: rerun the level III tail, combine it with the completed
-  records, then decide whether to add n=5 repeats or start an n=10 attempt.
+- The managed hidden-path n=2 sweep is complete across levels I/II/III and
+  combined into one provenance-preserving artifact.
+- Remaining work: add n=5 repeats and decide whether to start an n=10 attempt.
 
 ### L6. Stratified SWE-bench Expansion
 

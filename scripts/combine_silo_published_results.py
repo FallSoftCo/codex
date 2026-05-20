@@ -36,6 +36,9 @@ def main() -> int:
                 "path": str(path),
                 "campaignName": data.get("campaignName"),
                 "systems": data.get("systems"),
+                "appServer": data.get("appServer"),
+                "hiddenPaths": data.get("hiddenPaths"),
+                "defaultHiddenPathsEnabled": data.get("defaultHiddenPathsEnabled"),
                 "summary": data.get("summary"),
             }
         )

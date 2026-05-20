@@ -800,26 +800,22 @@ def run_losangelex_task(
 
 
 def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
-    by_system: dict[str, list[dict[str, Any]]] = {}
-    for record in records:
-        by_system.setdefault(record["system"], []).append(record)
-    systems: dict[str, Any] = {}
-    for system, system_records in sorted(by_system.items()):
-        count = len(system_records)
-        successes = sum(1 for record in system_records if record["score"]["success"])
+    def summarize(record_group: list[dict[str, Any]]) -> dict[str, Any]:
+        count = len(record_group)
+        successes = sum(1 for record in record_group if record["score"]["success"])
         avg_success_rate = sum(
             record["score"]["metrics"]["S_success_rate"]
-            for record in system_records
+            for record in record_group
         ) / count
         avg_partial = sum(
             record["score"]["metrics"]["P_partial_correctness"]
-            for record in system_records
+            for record in record_group
         ) / count
-        avg_seconds = sum(record["seconds"] for record in system_records) / count
+        avg_seconds = sum(record["seconds"] for record in record_group) / count
         coordination_tool_errors = sum(
-            coordination_error_total(record) for record in system_records
+            coordination_error_total(record) for record in record_group
         )
-        systems[system] = {
+        return {
             "tasks": count,
             "fullSuccesses": successes,
             "fullSuccessRate": successes / count,
@@ -828,7 +824,27 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "avgSeconds": avg_seconds,
             "coordinationToolErrors": coordination_tool_errors,
         }
-    return {"systems": systems}
+
+    by_system: dict[str, list[dict[str, Any]]] = {}
+    by_level_system: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for record in records:
+        by_system.setdefault(record["system"], []).append(record)
+        level = str(record["score"].get("level", "unknown"))
+        by_level_system.setdefault(level, {}).setdefault(
+            record["system"], []
+        ).append(record)
+    systems: dict[str, Any] = {}
+    for system, system_records in sorted(by_system.items()):
+        systems[system] = summarize(system_records)
+    levels: dict[str, Any] = {}
+    for level, level_records_by_system in sorted(by_level_system.items()):
+        levels[level] = {
+            "systems": {
+                system: summarize(level_records)
+                for system, level_records in sorted(level_records_by_system.items())
+            }
+        }
+    return {"systems": systems, "levels": levels}
 
 
 def coordination_error_total(record: dict[str, Any]) -> int:
@@ -864,6 +880,23 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
             f"{row['avgPartialCorrectness']:.3f} | {row['avgSeconds']:.1f} | "
             f"{row['coordinationToolErrors']} |"
         )
+    lines.extend(
+        [
+            "",
+            "## By Level",
+            "",
+            "| Level | System | Tasks | Full successes | Avg S | Avg P | Avg seconds | Coordination errors |",
+            "|---|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for level, level_summary in summary["levels"].items():
+        for system, row in level_summary["systems"].items():
+            lines.append(
+                f"| {level} | {system} | {row['tasks']} | {row['fullSuccesses']} "
+                f"({row['fullSuccessRate']:.2%}) | {row['avgAgentSuccessRate']:.3f} | "
+                f"{row['avgPartialCorrectness']:.3f} | {row['avgSeconds']:.1f} | "
+                f"{row['coordinationToolErrors']} |"
+            )
     lines.extend(["", "## Tasks", ""])
     for record in records:
         metrics = record["score"]["metrics"]
