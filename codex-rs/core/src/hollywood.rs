@@ -305,9 +305,15 @@ pub fn live_identity_matches_target(value: &str, target: &str) -> bool {
     if normalized_value == normalized_target {
         return true;
     }
-    normalized_value
-        .strip_prefix(&format!("{normalized_target}-"))
-        .is_some_and(is_generated_runtime_identity_suffix)
+    generated_runtime_identity_base(&normalized_value).is_some_and(|runtime_base| {
+        runtime_base == normalized_target
+            || runtime_base.ends_with(&format!("-{normalized_target}"))
+    })
+}
+
+fn generated_runtime_identity_base(value: &str) -> Option<&str> {
+    let (runtime_base, suffix) = value.rsplit_once('-')?;
+    is_generated_runtime_identity_suffix(suffix).then_some(runtime_base)
 }
 
 fn is_generated_runtime_identity_suffix(value: &str) -> bool {
@@ -479,8 +485,20 @@ mod tests {
     fn live_identity_matches_target_accepts_exact_and_generated_runtime_suffixes() {
         assert!(live_identity_matches_target("james", "james"));
         assert!(live_identity_matches_target("james-7c45ba", "james"));
+        assert!(live_identity_matches_target(
+            "marble-db-agent1-7c45ba",
+            "agent1"
+        ));
+        assert!(live_identity_matches_target(
+            "silo-agent-002-5b254e",
+            "agent-002"
+        ));
         assert!(!live_identity_matches_target("james-proof", "james"));
         assert!(!live_identity_matches_target("jameson-7c45ba", "james"));
+        assert!(!live_identity_matches_target(
+            "marble-db-agent10-7c45ba",
+            "agent1"
+        ));
     }
 
     #[test]

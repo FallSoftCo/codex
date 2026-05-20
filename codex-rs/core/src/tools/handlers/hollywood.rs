@@ -936,6 +936,23 @@ mod tests {
     }
 
     #[test]
+    fn resolve_live_session_id_from_entries_matches_benchmark_runtime_prefix() {
+        let entries = vec![HollywoodRegistryEntry {
+            session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+            attached: true,
+            identities: vec!["marble-db-agent1-7c45ba".to_string()],
+            updated_at: None,
+            last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+        }];
+
+        assert_eq!(
+            resolve_live_session_id_from_entries(&entries, "agent1")
+                .expect("lookup should succeed"),
+            Some("019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string())
+        );
+    }
+
+    #[test]
     fn resolve_live_session_id_from_entries_rejects_ambiguous_generated_runtime_suffixes() {
         let entries = vec![
             HollywoodRegistryEntry {
@@ -956,6 +973,30 @@ mod tests {
 
         let error = resolve_live_session_id_from_entries(&entries, "james")
             .expect_err("ambiguous runtime suffixes should fail");
+        assert!(error.contains("ambiguous across live sessions"));
+    }
+
+    #[test]
+    fn resolve_live_session_id_from_entries_rejects_ambiguous_benchmark_runtime_prefixes() {
+        let entries = vec![
+            HollywoodRegistryEntry {
+                session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+                attached: true,
+                identities: vec!["marble-db-agent1-7c45ba".to_string()],
+                updated_at: None,
+                last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+            },
+            HollywoodRegistryEntry {
+                session_id: "019d0000-0000-7000-8000-000000000000".to_string(),
+                attached: true,
+                identities: vec!["silo-agent1-91ab22".to_string()],
+                updated_at: None,
+                last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+            },
+        ];
+
+        let error = resolve_live_session_id_from_entries(&entries, "agent1")
+            .expect_err("ambiguous benchmark runtime prefixes should fail");
         assert!(error.contains("ambiguous across live sessions"));
     }
 
