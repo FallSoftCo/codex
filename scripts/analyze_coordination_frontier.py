@@ -314,11 +314,16 @@ def main() -> int:
 
     summary_rows = summarize(results)
     overall_rows = overall_policy_summary(results)
+    complete_overall_rows = [
+        row
+        for row in overall_rows
+        if row.get("coverage") == row.get("expected_coverage")
+    ]
     analysis = {
         "model": model,
         "summary": summary_rows,
         "overall": overall_rows,
-        "overall_frontier": frontier(overall_rows),
+        "overall_frontier": frontier(complete_overall_rows),
         "scenario_frontiers": {
             scenario: frontier([row for row in summary_rows if row["scenario"] == scenario])
             for scenario in sorted({result["scenario"] for result in results})
