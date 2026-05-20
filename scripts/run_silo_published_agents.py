@@ -259,6 +259,10 @@ def _normalize_value(value: Any) -> Any:
     return value
 
 
+def _canonical_sequence_key(value: Any) -> str:
+    return json.dumps(_normalize_value(value), sort_keys=True, separators=(",", ":"))
+
+
 def _lis_length(values: list[Any]) -> int:
     if not values:
         return 0
@@ -403,11 +407,14 @@ def compute_partial_correctness(
                 elif actual == expected:
                     total += 1.0
                 else:
-                    positions_by_value = {value: index for index, value in enumerate(expected)}
+                    positions_by_value = {
+                        _canonical_sequence_key(value): index
+                        for index, value in enumerate(expected)
+                    }
                     positions = [
-                        positions_by_value[value]
+                        positions_by_value[_canonical_sequence_key(value)]
                         for value in actual
-                        if value in positions_by_value
+                        if _canonical_sequence_key(value) in positions_by_value
                     ]
                     total += _lis_length(positions) / len(expected)
             else:

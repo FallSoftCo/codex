@@ -86,6 +86,14 @@ The durable standard is:
   The result JSON records a managed app-server, campaign-local `codex-home`,
   default hidden MARBLE repo path, and zero coordination-tool errors; the managed
   app-server was unreachable after runner exit, confirming teardown.
+- A full managed hidden-path Silo n=2 sweep reached 48 scored records before
+  exposing a level III scorer defect on `III-25_n2`: some expected sequence
+  items are nested lists and therefore cannot be used directly as dictionary
+  keys. The level III LIS partial-correctness scorer now canonicalizes nested
+  sequence values before matching them. The completed portion is preserved at
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20`;
+  the remaining `III-25_n2` through `III-30_n2` tail still needs to be rerun
+  with the fixed scorer.
 
 ## Blocking Losangelex Work
 
@@ -171,6 +179,13 @@ Done means:
 - n=2 and n=5 are complete, n=10 is attempted if cost permits;
 - repeated runs are added for variance on at least the highest-value task IDs;
 - S/P/C/D metrics are reported using Silo-compatible scoring.
+
+Current status:
+
+- The managed hidden-path n=2 sweep completed levels I/II and the first four
+  level III task pairs before finding and fixing a nested-sequence scorer bug.
+- Remaining work: rerun the level III tail, combine it with the completed
+  records, then decide whether to add n=5 repeats or start an n=10 attempt.
 
 ### L6. Stratified SWE-bench Expansion
 
