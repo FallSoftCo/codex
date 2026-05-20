@@ -18,6 +18,30 @@ import websocket
 
 
 DEFAULT_CURRENT_APP_SERVER = Path.home() / ".codex/losangelex/current-app-server.json"
+COORDINATION_TOOL_NAMES = {
+    "coordination_act",
+    "hollywood_read",
+    "hollywood_send",
+    "hollywood_status",
+    "hollywood_team_member_update",
+    "hollywood_team_status",
+    "hollywood_team_up",
+}
+COORDINATION_ERROR_PATTERNS = (
+    ("unknownLiveAgent", ("unknown live hollywood agent",)),
+    ("invalidAgent", ("invalid live hollywood agent", "invalid agent")),
+    (
+        "malformedToolCall",
+        (
+            "arguments must",
+            "failed to parse",
+            "incompatible payload",
+            "invalid arguments",
+            "malformed",
+            "missing arguments",
+        ),
+    ),
+)
 
 
 @dataclass
@@ -270,7 +294,115 @@ def summarize_notifications(
         "turnCompletedByThread": dict(turn_completed),
         "lastAgentMessagesByThread": dict(by_thread),
         "hollywoodMessages": hollywood_messages,
+        "coordinationToolSummary": summarize_coordination_tools(
+            notifications,
+            tracked_threads,
+        ),
     }
+
+
+def summarize_coordination_tools(
+    notifications: list[dict[str, Any]], tracked_threads: set[str]
+) -> dict[str, Any]:
+    calls_by_tool: Counter[str] = Counter()
+    errors_by_tool: Counter[str] = Counter()
+    errors_by_thread: Counter[str] = Counter()
+    errors_by_category: Counter[str] = Counter()
+    examples: list[dict[str, Any]] = []
+
+    for message in notifications:
+        if message.get("method") != "item/completed":
+            continue
+        params = message.get("params", {})
+        thread_id = params.get("threadId")
+        if tracked_threads and thread_id not in tracked_threads:
+            continue
+        item = params.get("item")
+        if not isinstance(item, dict):
+            continue
+        tool = item.get("tool")
+        if not isinstance(tool, str) or tool not in COORDINATION_TOOL_NAMES:
+            continue
+
+        calls_by_tool[tool] += 1
+        status = str(item.get("status", "")).lower()
+        success = item.get("success")
+        output_text = _coordination_tool_output_text(item)
+        category = _coordination_error_category(output_text)
+        failed = success is False or status == "failed" or category is not None
+        if not failed:
+            continue
+
+        category = category or "otherFailure"
+        errors_by_tool[tool] += 1
+        if isinstance(thread_id, str):
+            errors_by_thread[thread_id] += 1
+        errors_by_category[category] += 1
+        if len(examples) < 10:
+            examples.append(
+                {
+                    "threadId": thread_id,
+                    "tool": tool,
+                    "category": category,
+                    "message": _truncate_for_summary(output_text),
+                }
+            )
+
+    return {
+        "toolCalls": {
+            "total": sum(calls_by_tool.values()),
+            "byTool": dict(calls_by_tool),
+        },
+        "errorCalls": {
+            "total": sum(errors_by_tool.values()),
+            "byTool": dict(errors_by_tool),
+            "byThread": dict(errors_by_thread),
+            "byCategory": dict(errors_by_category),
+        },
+        "examples": examples,
+    }
+
+
+def _coordination_tool_output_text(item: dict[str, Any]) -> str:
+    text_parts = []
+    for key in ("error", "result", "contentItems", "content_items"):
+        text_parts.extend(_iter_strings(item.get(key)))
+    return "\n".join(text_parts)
+
+
+def _iter_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        strings: list[str] = []
+        for item in value:
+            strings.extend(_iter_strings(item))
+        return strings
+    if isinstance(value, dict):
+        strings: list[str] = []
+        if isinstance(value.get("text"), str):
+            strings.append(value["text"])
+        for key, item in value.items():
+            if key in {"text", "type"}:
+                continue
+            strings.extend(_iter_strings(item))
+        return strings
+    return []
+
+
+def _coordination_error_category(text: str) -> str | None:
+    lowered = text.lower()
+    for category, patterns in COORDINATION_ERROR_PATTERNS:
+        if any(pattern in lowered for pattern in patterns):
+            return category
+    return None
+
+
+def _truncate_for_summary(text: str, limit: int = 500) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3] + "..."
 
 
 def completed_threads(

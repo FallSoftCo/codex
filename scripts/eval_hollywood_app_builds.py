@@ -626,6 +626,7 @@ def evaluate_policy(
                 else None
             ),
             "messageCount": message_count,
+            "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
             "finalTest": {
                 "returncode": final_test.returncode,
                 "stdoutTail": "\n".join(final_test.stdout.splitlines()[-20:]),

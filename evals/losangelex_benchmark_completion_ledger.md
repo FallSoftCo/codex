@@ -67,6 +67,11 @@ The durable standard is:
 - Remaining L2 gap: benchmark runners still need to count unknown-agent,
   invalid-agent, and malformed coordination-tool errors in result JSON instead
   of relying on ad hoc log scans.
+- Added shared benchmark notification analysis for Losangelex coordination tools.
+  Future MARBLE, Silo, SWE-bench, and app-build records now include
+  `coordinationToolSummary` with total calls, error calls by tool/thread/category,
+  and bounded examples; MARBLE and Silo Markdown summaries include coordination
+  error totals.
 
 ## Blocking Losangelex Work
 
@@ -100,8 +105,11 @@ Current status:
   names.
 - App-server listener heartbeats now refresh active registry entries during long
   turns and immediately at turn boundaries.
-- Not complete until the runners count coordination-tool errors in their result
-  JSON.
+- Benchmark runners now count coordination-tool errors in result JSON for future
+  runs.
+- L2 is complete for the current published-runner surface; rerun benchmark
+  campaigns before paper regeneration so the archived result JSON carries these
+  fields.
 
 ### L3. Answer-Key Isolation
 

@@ -444,6 +444,7 @@ def run_losangelex_prediction(
         "activeThreadsAfterRun": active_thread_count(final_states),
         "patchChars": len(patch),
         "status": git_status(workspace),
+        "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
         "notificationsSummaryPath": str(notifications_path),
         "threadStatesPath": str(states_path),
         "agents": [

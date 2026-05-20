@@ -885,6 +885,7 @@ def run_losangelex_task(
         ],
         "rawPrediction": raw_prediction,
         "score": score_task(task, predicted),
+        "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "threadStatesPath": str(output_dir / "thread-states.json"),
     }
@@ -903,6 +904,9 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             record["score"]["metrics"]["rootCauseRecall"] for record in system_records
         ) / count
         avg_seconds = sum(record["seconds"] for record in system_records) / count
+        coordination_tool_errors = sum(
+            coordination_error_total(record) for record in system_records
+        )
         systems[system] = {
             "tasks": count,
             "fullSuccesses": successes,
@@ -911,8 +915,20 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "exactSetMatchRate": exact / count,
             "avgRootCauseRecall": avg_recall,
             "avgSeconds": avg_seconds,
+            "coordinationToolErrors": coordination_tool_errors,
         }
     return {"systems": systems}
+
+
+def coordination_error_total(record: dict[str, Any]) -> int:
+    summary = record.get("coordinationToolSummary", {})
+    if not isinstance(summary, dict):
+        return 0
+    error_calls = summary.get("errorCalls", {})
+    if not isinstance(error_calls, dict):
+        return 0
+    total = error_calls.get("total", 0)
+    return int(total) if isinstance(total, (int, float)) else 0
 
 
 def write_report(
@@ -935,15 +951,15 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Exact set matches | Avg recall | Avg seconds |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| System | Tasks | Full successes | Exact set matches | Avg recall | Avg seconds | Coordination errors |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
             f"| {system} | {row['tasks']} | {row['fullSuccesses']} "
             f"({row['fullSuccessRate']:.2%}) | {row['exactSetMatches']} "
             f"({row['exactSetMatchRate']:.2%}) | {row['avgRootCauseRecall']:.3f} | "
-            f"{row['avgSeconds']:.1f} |"
+            f"{row['avgSeconds']:.1f} | {row['coordinationToolErrors']} |"
         )
     lines.extend(["", "## Tasks", ""])
     for record in records:
@@ -954,7 +970,8 @@ def write_report(
             f"recall={metrics['rootCauseRecall']:.3f} "
             f"predicted={record['score']['predicted']} "
             f"gold={record['score']['gold']} "
-            f"seconds={record['seconds']:.1f}"
+            f"seconds={record['seconds']:.1f} "
+            f"coordination_errors={coordination_error_total(record)}"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

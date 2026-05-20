@@ -763,6 +763,7 @@ def run_losangelex_task(
             for agent in agents
         ],
         "score": score,
+        "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "threadStatesPath": str(output_dir / "thread-states.json"),
     }
@@ -785,6 +786,9 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             for record in system_records
         ) / count
         avg_seconds = sum(record["seconds"] for record in system_records) / count
+        coordination_tool_errors = sum(
+            coordination_error_total(record) for record in system_records
+        )
         systems[system] = {
             "tasks": count,
             "fullSuccesses": successes,
@@ -792,8 +796,20 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "avgAgentSuccessRate": avg_success_rate,
             "avgPartialCorrectness": avg_partial,
             "avgSeconds": avg_seconds,
+            "coordinationToolErrors": coordination_tool_errors,
         }
     return {"systems": systems}
+
+
+def coordination_error_total(record: dict[str, Any]) -> int:
+    summary = record.get("coordinationToolSummary", {})
+    if not isinstance(summary, dict):
+        return 0
+    error_calls = summary.get("errorCalls", {})
+    if not isinstance(error_calls, dict):
+        return 0
+    total = error_calls.get("total", 0)
+    return int(total) if isinstance(total, (int, float)) else 0
 
 
 def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]]) -> None:
@@ -808,14 +824,15 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Avg S | Avg P | Avg seconds |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| System | Tasks | Full successes | Avg S | Avg P | Avg seconds | Coordination errors |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
             f"| {system} | {row['tasks']} | {row['fullSuccesses']} "
             f"({row['fullSuccessRate']:.2%}) | {row['avgAgentSuccessRate']:.3f} | "
-            f"{row['avgPartialCorrectness']:.3f} | {row['avgSeconds']:.1f} |"
+            f"{row['avgPartialCorrectness']:.3f} | {row['avgSeconds']:.1f} | "
+            f"{row['coordinationToolErrors']} |"
         )
     lines.extend(["", "## Tasks", ""])
     for record in records:
@@ -825,7 +842,8 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
             f"success={record['score']['success']} "
             f"S={metrics['S_success_rate']:.3f} "
             f"P={metrics['P_partial_correctness']:.3f} "
-            f"seconds={record['seconds']:.1f}"
+            f"seconds={record['seconds']:.1f} "
+            f"coordination_errors={coordination_error_total(record)}"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
