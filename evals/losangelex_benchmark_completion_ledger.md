@@ -72,6 +72,9 @@ The durable standard is:
   `coordinationToolSummary` with total calls, error calls by tool/thread/category,
   and bounded examples; MARBLE and Silo Markdown summaries include coordination
   error totals.
+- Hardened the published Silo and MARBLE runners so their benchmark repositories
+  are hidden by default during agent execution. The result JSON records the
+  effective `hiddenPaths` and whether default hiding was enabled.
 
 ## Blocking Losangelex Work
 
@@ -120,6 +123,14 @@ Done means:
 - the runners record which paths were hidden;
 - invalid leakage attempts are detected from stdout/stderr/last-message traces
   where possible and scored as invalid runs.
+
+Current status:
+
+- Silo and MARBLE now hide their published benchmark repositories by default and
+  still record all hidden paths.
+- Remaining work: default hiding should also cover previous result roots where
+  practical, and leakage attempts should become explicit invalid-run metadata
+  instead of post-hoc manual review.
 
 ### L4. Native MARBLE Database
 

@@ -207,6 +207,29 @@ def discover_tasks(
     return selected
 
 
+def default_hidden_paths(silo_root: Path) -> list[Path]:
+    return [silo_root]
+
+
+def effective_hidden_paths(
+    *,
+    explicit_paths: list[Path],
+    silo_root: Path,
+    include_defaults: bool,
+) -> list[Path]:
+    paths = list(explicit_paths)
+    if include_defaults:
+        paths.extend(default_hidden_paths(silo_root))
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path.resolve() if path.exists() else path)
+        if key not in seen:
+            seen.add(key)
+            deduped.append(path)
+    return deduped
+
+
 def fresh_workspace(path: Path) -> None:
     if path.exists():
         shutil.rmtree(path)
@@ -890,6 +913,11 @@ def main() -> int:
             "and previous result roots that contain answer keys."
         ),
     )
+    parser.add_argument(
+        "--no-default-hide-paths",
+        action="store_true",
+        help="Do not hide the published benchmark repository during agent execution.",
+    )
     args = parser.parse_args()
 
     tasks = discover_tasks(
@@ -906,7 +934,12 @@ def main() -> int:
     output_dir = args.out_root / args.campaign_name
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
-    with temporarily_hide_paths(args.hide_paths):
+    hidden_paths = effective_hidden_paths(
+        explicit_paths=args.hide_paths,
+        silo_root=args.silo_root,
+        include_defaults=not args.no_default_hide_paths,
+    )
+    with temporarily_hide_paths(hidden_paths):
         for task in tasks:
             for system in args.system:
                 workspace = output_dir / "workspaces" / system / task.task_file.stem
@@ -945,7 +978,8 @@ def main() -> int:
                             "campaignName": args.campaign_name,
                             "model": args.model,
                             "systems": args.system,
-                            "hiddenPaths": [str(path) for path in args.hide_paths],
+                            "hiddenPaths": [str(path) for path in hidden_paths],
+                            "defaultHiddenPathsEnabled": not args.no_default_hide_paths,
                             "records": records,
                             "summary": aggregate(records),
                         },
