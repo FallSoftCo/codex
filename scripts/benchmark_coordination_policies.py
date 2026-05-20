@@ -1566,7 +1566,7 @@ def run_once(
         rounds += 1
 
     while not state.completed_success() and state.in_progress:
-        state.advance_until_decision()
+        state.advance_to_next_completion()
         if state.deadlock:
             break
 
