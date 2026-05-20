@@ -25,17 +25,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from benchmark_app_server import add_benchmark_app_server_args
+from benchmark_app_server import benchmark_app_server
 from eval_hollywood_app_builds import (
     DEFAULT_EVAL_MODEL_PROVIDER,
     active_thread_count,
     all_threads_idle,
 )
 from replay_hollywood_operator import (
-    DEFAULT_CURRENT_APP_SERVER,
     JsonRpcWs,
     completed_threads,
     initialize,
-    load_app_server_url,
     read_thread_state,
     send_turn,
     summarize_notifications,
@@ -892,8 +892,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--model", default="gpt-5.4")
     parser.add_argument("--codex", type=Path, default=DEFAULT_CODEX)
-    parser.add_argument("--app-server-url")
-    parser.add_argument("--current-app-server", type=Path, default=DEFAULT_CURRENT_APP_SERVER)
+    add_benchmark_app_server_args(parser)
     parser.add_argument("--max-rounds", type=int, default=3)
     parser.add_argument("--per-agent-timeout-seconds", type=int, default=600)
     parser.add_argument("--timeout-seconds", type=int, default=1800)
@@ -927,10 +926,6 @@ def main() -> int:
         agent_counts=args.agent_counts,
         limit=args.limit,
     )
-    app_server_url = args.app_server_url
-    if "losangelex" in args.system and app_server_url is None:
-        app_server_url = load_app_server_url(args.current_app_server)
-
     output_dir = args.out_root / args.campaign_name
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
@@ -939,7 +934,19 @@ def main() -> int:
         silo_root=args.silo_root,
         include_defaults=not args.no_default_hide_paths,
     )
-    with temporarily_hide_paths(hidden_paths):
+    with benchmark_app_server(
+        required="losangelex" in args.system,
+        app_server_url=args.app_server_url,
+        reuse_current_app_server=args.reuse_current_app_server,
+        current_app_server=args.current_app_server,
+        codex=args.codex,
+        output_dir=output_dir,
+        benchmark_codex_home=args.benchmark_codex_home,
+        codex_home_source=args.codex_home_source,
+        start_timeout_seconds=args.app_server_start_timeout_seconds,
+    ) as app_server, temporarily_hide_paths(hidden_paths):
+        app_server_url = app_server.url if app_server is not None else None
+        app_server_metadata = app_server.metadata() if app_server is not None else None
         for task in tasks:
             for system in args.system:
                 workspace = output_dir / "workspaces" / system / task.task_file.stem
@@ -980,6 +987,7 @@ def main() -> int:
                             "systems": args.system,
                             "hiddenPaths": [str(path) for path in hidden_paths],
                             "defaultHiddenPathsEnabled": not args.no_default_hide_paths,
+                            "appServer": app_server_metadata,
                             "records": records,
                             "summary": aggregate(records),
                         },

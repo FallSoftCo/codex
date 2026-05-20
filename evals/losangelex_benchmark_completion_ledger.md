@@ -75,6 +75,17 @@ The durable standard is:
 - Hardened the published Silo and MARBLE runners so their benchmark repositories
   are hidden by default during agent execution. The result JSON records the
   effective `hiddenPaths` and whether default hiding was enabled.
+- Added managed benchmark app-server startup for Silo and MARBLE. When
+  Losangelex runs do not pass `--app-server-url`, the runners now create an
+  isolated campaign-local `CODEX_HOME`, copy only auth identity files, start
+  `codex app-server`, record URL/log/PID/home metadata in `results.json`, and
+  shut the server down after the campaign. `--reuse-current-app-server` preserves
+  the old current-server path for debugging.
+- Live managed-run validation:
+  `tmp/research/published-agent-benchmarks/marble-db-managed-l1-smoke-2026-05-20`.
+  The result JSON records a managed app-server, campaign-local `codex-home`,
+  default hidden MARBLE repo path, and zero coordination-tool errors; the managed
+  app-server was unreachable after runner exit, confirming teardown.
 
 ## Blocking Losangelex Work
 
@@ -88,6 +99,16 @@ Done means:
   feature flags;
 - a failed app-server startup becomes a benchmark record rather than a harness
   crash.
+
+Current status:
+
+- Silo and MARBLE have managed isolated app-server startup and campaign-level
+  app-server metadata.
+- A MARBLE smoke run validated managed startup, hidden-path defaults,
+  coordination-tool summary emission, and teardown.
+- Remaining work: SWE-bench and app-build runners still need the same managed
+  startup path, and startup failures should be represented as scored benchmark
+  records instead of process-level failures.
 
 ### L2. Hollywood Identity and Tool Routing
 
