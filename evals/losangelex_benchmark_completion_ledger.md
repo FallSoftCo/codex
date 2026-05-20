@@ -100,6 +100,12 @@ The durable standard is:
   average `P=0.762`, and zero coordination-tool errors. Losangelex averaged
   `88.3s` per task versus Codex `126.8s`; by level, both systems were 10/10 on
   level I, 7/10 on level II, and 5/10 on level III.
+- Reran the balanced Silo n=5 slice under the hardened managed runner:
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-balanced-n5-2026-05-20`.
+  The run used a campaign-local managed app-server, hid the Silo repository by
+  default, shut the app-server down after completion, and recorded zero
+  coordination-tool errors. Codex solved 2/3 tasks and failed `III-21_n5` with
+  `S=P=0.200` after `739.4s`; Losangelex solved 3/3 with average time `92.4s`.
 
 ## Blocking Losangelex Work
 
@@ -190,7 +196,10 @@ Current status:
 
 - The managed hidden-path n=2 sweep is complete across levels I/II/III and
   combined into one provenance-preserving artifact.
-- Remaining work: add n=5 repeats and decide whether to start an n=10 attempt.
+- The balanced n=5 slice has been rerun under the hardened managed runner and
+  reproduces the prior positive Losangelex level-III result.
+- Remaining work: decide whether to start an n=10 attempt or spend the budget on
+  repeated n=5/n=2 variance runs.
 
 ### L6. Stratified SWE-bench Expansion
 
