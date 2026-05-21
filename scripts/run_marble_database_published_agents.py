@@ -25,6 +25,7 @@ from typing import Any
 
 from benchmark_app_server import add_benchmark_app_server_args
 from benchmark_app_server import benchmark_app_server
+from benchmark_app_server import prepare_minimal_codex_home
 from eval_hollywood_app_builds import (
     DEFAULT_EVAL_MODEL_PROVIDER,
     active_thread_count,
@@ -124,11 +125,13 @@ def run_command(
     cwd: Path,
     timeout: int,
     input_text: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             command,
             cwd=str(cwd),
+            env=env,
             text=True,
             input=input_text,
             capture_output=True,
@@ -1120,6 +1123,172 @@ Use only labels listed in `case.md`. Do not include commentary outside the JSON 
 """
 
 
+def codex_subagent_worker_prompt(
+    task: MarbleDatabaseTask,
+    config: MarbleAgentConfig,
+    *,
+    evidence_mode: str,
+) -> str:
+    if evidence_mode == "diagnostic-observations":
+        diagnostics = (
+            "- The workspace includes `diagnostics/schema.sql` and `diagnostics/observations.md`; "
+            "the observations are label-free monitoring outputs from the published diagnostic surfaces.\n"
+        )
+    elif evidence_mode == "native-postgres":
+        diagnostics = (
+            "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` "
+            "to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
+        )
+    elif evidence_mode == "schema":
+        diagnostics = (
+            "- The workspace includes `diagnostics/schema.sql`, copied from the published case environment without anomaly labels.\n"
+        )
+    else:
+        diagnostics = "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
+    return f"""You are Codex subagent `{config.agent_id}` in a MARBLE/MultiAgentBench database diagnosis benchmark.
+
+Important benchmark rules:
+- Do not spawn any subagents. You are a worker, not an orchestrator.
+- You are not alone in the workspace; other Codex subagents are working in parallel.
+- Do not overwrite another agent's files.
+- Do not inspect benchmark repositories, previous result directories, or any path outside this workspace.
+- The answer key and anomaly trigger fields are not present in the workspace.
+
+Case: {task.task_id}
+Role: {config.role}
+
+Published role/profile for this agent:
+{config.profile}
+
+Workspace instructions:
+- Read `case.md` first.
+{diagnostics}- Use only labels listed in `case.md`.
+- Write your analysis to `shared/{config.agent_id}.md`.
+- Also write `submissions/{config.agent_id}.json` with:
+  {{"predicted_root_causes": ["LABEL_1"], "rationale": "brief"}}
+- If the task prompt asks for multiple labels, include your best ranked labels up to that count.
+
+When your two files are written, finish. Do not wait for other agents and do not delegate.
+"""
+
+
+def codex_subagent_parent_prompt(task: MarbleDatabaseTask, *, evidence_mode: str) -> str:
+    worker_sections = "\n\n".join(
+        f"### Worker {config.agent_id}\n{codex_subagent_worker_prompt(task, config, evidence_mode=evidence_mode)}"
+        for config in task.agents
+    )
+    if evidence_mode == "diagnostic-observations":
+        diagnostics = "Use `diagnostics/observations.md` and `diagnostics/schema.sql` as label-free monitoring evidence."
+    elif evidence_mode == "native-postgres":
+        diagnostics = "Use `./query_db.py '<SQL query>'` if the worker reports need confirmation from the live PostgreSQL database."
+    elif evidence_mode == "schema":
+        diagnostics = "Use `diagnostics/schema.sql` only as schema context; it contains no anomaly labels."
+    else:
+        diagnostics = "This is a prompt-only diagnostic run with no live database fixture."
+    return f"""We are running a published MARBLE/MultiAgentBench database diagnosis task.
+
+System under evaluation: codex-subagents
+Case: {task.task_id}
+
+The user explicitly wants a true Codex subagent baseline. You must use Codex
+subagents for the role workers, not serial solo execution.
+
+Parent orchestration rules:
+- Spawn exactly one Codex subagent for each worker prompt below.
+- For each `spawn_agent` call, set `fork_turns` to exactly `none`.
+- Do not include `agent_type`, `model`, `reasoning_effort`, `service_tier`, or
+  `fork_context` in any `spawn_agent` call.
+- Spawn the workers before doing your own final diagnosis so their work can run in parallel.
+- Do not use Hollywood or Losangelex tools.
+- Do not run `codex`, `codex exec`, or any other shell fallback to simulate subagents.
+- Tell each worker exactly the corresponding prompt below.
+- Wait for all spawned workers to finish. When calling `wait_agent`, use
+  `timeout_ms` of at least `10000`; prefer `600000`.
+- Never call `wait_agent` with small timeout values such as `1`, `5`, `1000`,
+  or `5000`.
+- If any `spawn_agent` call fails, do not complete the task yourself. Write no
+  final JSON and return `SPAWN_FAILED` with the error.
+- If a spawned worker starts but later fails or times out, record that fact and
+  continue with available worker files.
+- After workers finish, read `case.md`, `shared/*.md`, and `submissions/*.json`. {diagnostics}
+- Write exactly one final JSON object to `submissions/final.json`:
+  {{"predicted_root_causes": ["LABEL_1", "LABEL_2"], "rationale": "brief"}}
+- Use only labels listed in `case.md`.
+- Return a concise final message naming the final labels and any worker failures.
+
+Worker prompts:
+
+{worker_sections}
+"""
+
+
+def codex_subagent_tool_summary(stdout: str, stderr: str) -> dict[str, Any]:
+    combined = stdout + "\n" + stderr
+    error_lines = [
+        line
+        for line in combined.splitlines()
+        if "codex_core::tools::router: error=" in line
+    ]
+    return {
+        "spawnAgentCalls": combined.count("collab: SpawnAgent"),
+        "waitAgentCalls": combined.count("collab: Wait"),
+        "sendInputCalls": combined.count("collab: SendInput"),
+        "errorCalls": {
+            "total": len(error_lines),
+            "examples": error_lines[:10],
+        },
+    }
+
+
+def codex_subagent_artifact_summary(
+    workspace: Path,
+    agents: list[MarbleAgentConfig],
+) -> dict[str, Any]:
+    shared_dir = workspace / "shared"
+    submissions_dir = workspace / "submissions"
+    expected = [agent.agent_id for agent in agents]
+    shared_present = [
+        agent_id for agent_id in expected if (shared_dir / f"{agent_id}.md").exists()
+    ]
+    submissions_present = [
+        agent_id
+        for agent_id in expected
+        if (submissions_dir / f"{agent_id}.json").exists()
+    ]
+    return {
+        "expectedAgents": expected,
+        "sharedPresent": shared_present,
+        "submissionsPresent": submissions_present,
+        "missingShared": [
+            agent_id for agent_id in expected if agent_id not in shared_present
+        ],
+        "missingSubmissions": [
+            agent_id for agent_id in expected if agent_id not in submissions_present
+        ],
+        "finalExists": (submissions_dir / "final.json").exists(),
+    }
+
+
+def write_codex_subagents_config(codex_home: Path) -> None:
+    codex_home.mkdir(parents=True, exist_ok=True)
+    (codex_home / "config.toml").write_text(
+        "\n".join(
+            [
+                "[features.multi_agent_v2]",
+                "enabled = true",
+                "max_concurrent_threads_per_session = 8",
+                "default_wait_timeout_ms = 600000",
+                "hide_spawn_agent_metadata = true",
+                "",
+                f'[projects."{REPO_ROOT}"]',
+                'trust_level = "trusted"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def run_codex_task(
     *,
     task: MarbleDatabaseTask,
@@ -1248,6 +1417,82 @@ def run_codex_task(
         "agentRuns": run_records,
         "rawPrediction": raw_prediction,
         "score": score_task(task, predicted),
+        "nativePostgres": native_postgres_metadata,
+    }
+
+
+def run_codex_subagents_task(
+    *,
+    task: MarbleDatabaseTask,
+    workspace: Path,
+    codex: Path,
+    model: str,
+    timeout_seconds: int,
+    output_dir: Path,
+    codex_home: Path,
+    evidence_mode: str,
+    marble_root: Path,
+    hidden_paths: list[Path],
+) -> dict[str, Any]:
+    fresh_workspace(workspace, task, evidence_mode)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    with native_postgres_runtime(
+        enabled=evidence_mode == "native-postgres",
+        task=task,
+        marble_root=marble_root,
+        workspace=workspace,
+        output_dir=output_dir,
+    ) as native_postgres:
+        with temporarily_hide_paths(hidden_paths):
+            prompt = codex_subagent_parent_prompt(task, evidence_mode=evidence_mode)
+            (output_dir / "parent-prompt.txt").write_text(prompt, encoding="utf-8")
+            last_message_path = output_dir / "parent-last-message.txt"
+            env = os.environ.copy()
+            env["CODEX_HOME"] = str(codex_home)
+            result = run_command(
+                [
+                    str(codex),
+                    "-C",
+                    str(workspace),
+                    "--sandbox",
+                    "workspace-write",
+                    "--ask-for-approval",
+                    "never",
+                    "exec",
+                    "--skip-git-repo-check",
+                    "-m",
+                    model,
+                    "-o",
+                    str(last_message_path),
+                    "-",
+                ],
+                cwd=workspace,
+                timeout=timeout_seconds,
+                input_text=prompt,
+                env=env,
+            )
+            (output_dir / "parent-stdout.log").write_text(result.stdout, encoding="utf-8")
+            (output_dir / "parent-stderr.log").write_text(result.stderr, encoding="utf-8")
+
+        native_postgres_metadata = native_postgres.__dict__
+        predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+    return {
+        "system": "codex-subagents",
+        "caseId": task.task_id,
+        "sourceIndex": task.source_index,
+        "workspace": str(workspace),
+        "seconds": round(time.time() - started, 1),
+        "parentRun": {
+            "returncode": result.returncode,
+            "lastMessagePath": str(last_message_path),
+            "stdoutPath": str(output_dir / "parent-stdout.log"),
+            "stderrPath": str(output_dir / "parent-stderr.log"),
+        },
+        "rawPrediction": raw_prediction,
+        "score": score_task(task, predicted),
+        "coordinationToolSummary": codex_subagent_tool_summary(result.stdout, result.stderr),
+        "codexSubagentArtifacts": codex_subagent_artifact_summary(workspace, task.agents),
         "nativePostgres": native_postgres_metadata,
     }
 
@@ -1609,7 +1854,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--system",
-        choices=("codex", "losangelex"),
+        choices=("codex", "codex-subagents", "losangelex"),
         action="append",
         required=True,
     )
@@ -1654,6 +1899,15 @@ def main() -> int:
     )
     output_dir = args.out_root / args.campaign_name
     output_dir.mkdir(parents=True, exist_ok=True)
+    codex_subagents_home = None
+    if "codex-subagents" in args.system:
+        codex_subagents_home = (output_dir / "codex-subagents-home").resolve()
+        prepare_minimal_codex_home(
+            codex_home=codex_subagents_home,
+            source_home=args.codex_home_source,
+            output_dir=output_dir,
+        )
+        write_codex_subagents_config(codex_subagents_home)
     records: list[dict[str, Any]] = []
     hidden_paths = effective_hidden_paths(
         explicit_paths=args.hide_paths,
@@ -1705,6 +1959,21 @@ def main() -> int:
                         marble_root=args.marble_root,
                         hidden_paths=task_hidden_paths,
                     )
+                elif system == "codex-subagents":
+                    if codex_subagents_home is None:
+                        raise RuntimeError("codex-subagents CODEX_HOME was not prepared")
+                    record = run_codex_subagents_task(
+                        task=task,
+                        workspace=workspace,
+                        codex=args.codex,
+                        model=args.model,
+                        timeout_seconds=args.timeout_seconds,
+                        output_dir=run_dir,
+                        codex_home=codex_subagents_home,
+                        evidence_mode=args.evidence_mode,
+                        marble_root=args.marble_root,
+                        hidden_paths=task_hidden_paths,
+                    )
                 else:
                     if app_server_url is None:
                         raise RuntimeError("app server URL is required for Losangelex runs")
@@ -1735,6 +2004,11 @@ def main() -> int:
                             "hiddenPaths": [str(path) for path in hidden_paths],
                             "defaultHiddenPathsEnabled": not args.no_default_hide_paths,
                             "appServer": app_server_metadata,
+                            "codexSubagentsHome": (
+                                str(codex_subagents_home)
+                                if codex_subagents_home is not None
+                                else None
+                            ),
                             "records": records,
                             "summary": aggregate(records),
                         },
