@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired Codex baselines complete for n=5 and n=10; full-context oracle complete for n=2/n=5/n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied cohort accuracy, while full-context oracle bounds the coordination value |
-| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native ten-stratum sample: Codex 3/10 full recall, Losangelex 3/10 full recall, Losangelex avg recall/precision slightly higher and faster on all 10 | native evidence is mixed; useful for failure taxonomy and runtime, not SOTA correctness |
+| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native file-query bridge verified on `database-001` for both systems after discovering socket access was blocked | native ten-stratum sample must be rerun with the fixed query bridge before paper use |
 
 ## Session Log
 
@@ -247,8 +247,10 @@ separates at least three effects:
 3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
    path is real, not adapted. The preferred target is native MARBLE database
    execution with the benchmark's Docker/PostgreSQL substrate. Status: substrate
-   smoke plus a ten-stratum paired native sample are complete; inspect failures
-   and broaden before paper regeneration.
+   smoke and single-task file-query bridge model smokes are complete; the
+   earlier ten-stratum native sample is invalid as DB-grounded evidence because
+   sandboxed agents could not access the Unix-socket helper. Rerun the
+   ten-stratum sample with the file-query bridge before paper regeneration.
 
 The world-class paper should make only claims justified by those gates:
 
@@ -360,7 +362,7 @@ Current status:
 - One paired Codex/Losangelex model-in-the-loop smoke is complete on
   `database-001` with recall `1.000` for both systems, strict exact-set miss for
   both systems, zero coordination-tool errors, and clean Docker teardown.
-- A ten-stratum paired native-postgres sample is now complete across one task
+- A ten-stratum paired native-postgres sample was attempted across one task
   from each published database root-cause stratum. Combined artifacts:
   - partial first campaign:
     `tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21/results.json`
@@ -369,7 +371,12 @@ Current status:
   - sampled tasks: `database-001`, `database-003`, `database-005`,
     `database-006`, `database-007`, `database-051`, `database-052`,
     `database-056`, `database-058`, `database-059`.
-- Combined native MARBLE sample results:
+- Validity finding: the attempted ten-stratum sample is **not valid native
+  database evidence**. Failure-trace inspection showed sandboxed model runs were
+  blocked from the Unix-socket helper with `PermissionError: [Errno 1]
+  Operation not permitted`; the result therefore measures fallback behavior
+  under missing DB evidence, not live PostgreSQL diagnosis.
+- Invalid sample results, retained only as a failure corpus:
   - Codex: 10 tasks, 3 full-recall successes, 1 exact-set match, avg recall
     `0.450`, avg precision `0.333`, mean seconds `403.6`, coordination-tool
     errors `0`.
@@ -390,9 +397,24 @@ Current status:
     redundant/fetch/vacuum setup with `TypeError`.
   - future result JSON/report summaries now include explicit root-cause
     precision and F1 in addition to recall and exact set match.
-- Remaining work: inspect native MARBLE failure traces, improve prompts or
-  fixture observability only if justified without answer leakage, then expand
-  toward a larger stratified subset or full 100-task database run.
+  - the native query helper now uses a workspace file-request bridge instead of
+    an out-of-workspace Unix socket, avoiding sandbox `connect()` denial while
+    keeping SQL execution in the harness.
+- Bridge validation after the fix:
+  - deterministic local smoke:
+    `tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-local-smoke-2026-05-21`;
+    `./query_db.py` returned live `pg_stat_statements` output.
+  - Losangelex model smoke:
+    `tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-losangelex-smoke-2026-05-21/results.json`;
+    `database-001`, recall `1.000`, precision `0.500`, F1 `0.667`, `131.6s`,
+    zero coordination-tool errors, 18 logged SQL queries, no permission errors.
+  - Codex model smoke:
+    `tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21/results.json`;
+    `database-001`, recall `1.000`, precision `0.500`, F1 `0.667`, `415.8s`,
+    zero coordination-tool errors, 13 logged SQL queries, no permission errors.
+- Remaining work: rerun the ten-stratum native MARBLE sample with the file-query
+  bridge, then inspect failure traces and expand toward a larger stratified
+  subset or full 100-task database run.
 
 ### L5. Larger Objective Silo Matrix
 
@@ -497,34 +519,34 @@ question is not "is multi-agent always better?" but:
 - Silo full-context oracle is complete for n=2/n=5/n=10 and is more accurate
   and faster than both cohort systems, which sharply limits any simplistic
   "multi-agent beats single-agent" claim.
-- Native MARBLE PostgreSQL execution now has a ten-stratum paired sample. Codex
-  and Losangelex both have 3/10 full-recall successes; Losangelex has slightly
-  higher average recall/precision and is faster on all 10, while Codex has the
-  only exact-set match. This is mixed evidence, not a correctness dominance
-  result.
+- Native MARBLE PostgreSQL now has a validated file-query bridge for sandboxed
+  model runs. The earlier ten-stratum sample is invalid as DB-grounded evidence
+  because agents could not query the live database; rerun it before using MARBLE
+  in the paper.
 
 ### Execution Queue
 
-1. Native MARBLE: inspect the ten-stratum native-postgres failure traces,
-   especially redundant-index, vacuum, and insert/fetch over-prediction cases.
-2. Native MARBLE: if the stratified sample is stable, expand toward the full
+1. Native MARBLE: rerun the ten-stratum native-postgres sample with the
+   workspace file-query bridge.
+2. Native MARBLE: inspect the valid ten-stratum failure traces, especially
+   redundant-index, vacuum, and insert/fetch over-prediction cases.
+3. Native MARBLE: if the stratified sample is stable, expand toward the full
    100-task database set or a power-justified larger stratified subset.
-3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
+4. Silo variance: repeat the highest-value n=10 tasks where systems disagree
    and estimate paired variance over correctness and runtime.
-4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
+5. SWE-bench: add a stratified sample that includes multi-file, ambiguous
    ownership, dependency-chain, and verifier-heavy tasks. Keep tiny single-file
    tasks as negative controls.
-5. App-build/coordination evals: preserve them as ecological support, not as
+6. App-build/coordination evals: preserve them as ecological support, not as
    the primary objective benchmark evidence.
-6. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
+7. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
    runtime distributions, coordination-tool error rates, and failure taxonomy.
-7. Paper: regenerate tables, figures, abstract, related work, threats to
+8. Paper: regenerate tables, figures, abstract, related work, threats to
    validity, and conclusion from the frozen artifacts.
-8. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
+9. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
    message IDs here.
 
 ### Current Next Step
 
-Inspect the native MARBLE stratified-sample failure traces, decide whether the
-fixture/prompt needs non-leaky improvements, then commit and push both
-configured Losangelex remotes to the same branch tip.
+Rerun the native MARBLE ten-stratum sample with the fixed file-query bridge,
+then commit and push both configured Losangelex remotes to the same branch tip.

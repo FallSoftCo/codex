@@ -14,7 +14,6 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import threading
 import time
@@ -96,6 +95,7 @@ class NativePostgresMetadata:
     enabled: bool
     docker_compose_dir: str | None = None
     query_socket: str | None = None
+    query_request_dir: str | None = None
     setup_log: str | None = None
     background_pids: list[int] | None = None
 
@@ -286,8 +286,10 @@ def write_query_client(path: Path) -> None:
     path.write_text(
         """#!/usr/bin/env python3
 import json
-import socket
+import os
 import sys
+import time
+import uuid
 from pathlib import Path
 
 
@@ -296,23 +298,31 @@ def main() -> int:
         print("usage: ./query_db.py '<SQL query>'", file=sys.stderr)
         return 2
     sql = " ".join(sys.argv[1:])
-    socket_file = Path(__file__).with_name("query_db_socket.txt")
-    if socket_file.exists():
-        socket_path = Path(socket_file.read_text(encoding="utf-8").strip())
+    request_dir_file = Path(__file__).with_name("query_db_requests.txt")
+    if request_dir_file.exists():
+        request_dir = Path(request_dir_file.read_text(encoding="utf-8").strip())
     else:
-        socket_path = Path(__file__).with_name("query_db.sock")
-    request = json.dumps({"sql": sql}).encode("utf-8")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-        client.connect(str(socket_path))
-        client.sendall(request)
-        client.shutdown(socket.SHUT_WR)
-        chunks = []
-        while True:
-            chunk = client.recv(65536)
-            if not chunk:
-                break
-            chunks.append(chunk)
-    response = json.loads(b"".join(chunks).decode("utf-8"))
+        request_dir = Path(__file__).with_name("query_requests")
+    request_dir.mkdir(parents=True, exist_ok=True)
+    request_id = uuid.uuid4().hex
+    request_path = request_dir / f"{request_id}.request.json"
+    tmp_path = request_dir / f"{request_id}.request.tmp"
+    response_path = request_dir / f"{request_id}.response.json"
+    tmp_path.write_text(json.dumps({"id": request_id, "sql": sql}), encoding="utf-8")
+    os.replace(tmp_path, request_path)
+    deadline = time.time() + 45
+    while time.time() < deadline:
+        if response_path.exists():
+            response = json.loads(response_path.read_text(encoding="utf-8"))
+            try:
+                response_path.unlink()
+            except FileNotFoundError:
+                pass
+            break
+        time.sleep(0.1)
+    else:
+        print("query timed out waiting for harness response", file=sys.stderr)
+        return 124
     if response.get("stdout"):
         print(response["stdout"], end="")
     if response.get("stderr"):
@@ -819,68 +829,50 @@ def run_native_activities(task: MarbleDatabaseTask, log_path: Path) -> list[subp
     return background
 
 
-class QueryServer:
-    def __init__(self, socket_path: Path, log_path: Path):
-        self.socket_path = socket_path
+class FileQueryServer:
+    def __init__(self, request_dir: Path, log_path: Path):
+        self.request_dir = request_dir
         self.log_path = log_path
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self._server: socket.socket | None = None
+        self._seen: set[str] = set()
 
     def start(self) -> None:
-        try:
-            self.socket_path.unlink()
-        except FileNotFoundError:
-            pass
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(str(self.socket_path))
-        self.socket_path.chmod(0o700)
-        server.listen()
-        self._server = server
+        self.request_dir.mkdir(parents=True, exist_ok=True)
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                client.connect(str(self.socket_path))
-        except OSError:
-            pass
         if self._thread is not None:
             self._thread.join(timeout=5)
-        if self._server is not None:
-            self._server.close()
-        try:
-            self.socket_path.unlink()
-        except FileNotFoundError:
-            pass
 
     def _serve(self) -> None:
-        assert self._server is not None
         while not self._stop.is_set():
-            try:
-                conn, _ = self._server.accept()
-            except OSError:
-                break
-            with conn:
-                if self._stop.is_set():
-                    break
-                request = self._read_request(conn)
+            handled = False
+            for request_path in sorted(self.request_dir.glob("*.request.json")):
+                if request_path.name in self._seen:
+                    continue
+                self._seen.add(request_path.name)
+                handled = True
+                request = self._read_request(request_path)
                 response = self._handle_request(request)
-                conn.sendall(json.dumps(response).encode("utf-8"))
+                response_path = self.request_dir / f"{request.get('id', request_path.stem)}.response.json"
+                tmp_path = response_path.with_suffix(".response.tmp")
+                tmp_path.write_text(json.dumps(response), encoding="utf-8")
+                tmp_path.replace(response_path)
+                try:
+                    request_path.unlink()
+                except FileNotFoundError:
+                    pass
+            if not handled:
+                time.sleep(0.05)
 
-    def _read_request(self, conn: socket.socket) -> dict[str, Any]:
-        chunks = []
-        while True:
-            chunk = conn.recv(65536)
-            if not chunk:
-                break
-            chunks.append(chunk)
+    def _read_request(self, request_path: Path) -> dict[str, Any]:
         try:
-            return json.loads(b"".join(chunks).decode("utf-8"))
-        except json.JSONDecodeError:
-            return {"sql": ""}
+            return json.loads(request_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {"id": request_path.stem.removesuffix(".request"), "sql": ""}
 
     def _handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         sql = str(request.get("sql", ""))[:4000]
@@ -941,7 +933,7 @@ def native_postgres_runtime(
         encoding="utf-8",
     )
     compose_files = [(docker_dir / "docker-compose.yml").resolve(), override_file]
-    query_server: QueryServer | None = None
+    query_server: FileQueryServer | None = None
     background: list[subprocess.Popen[str]] = []
     previous_compose_files = ACTIVE_COMPOSE_FILES
     ACTIVE_COMPOSE_FILES = compose_files
@@ -983,17 +975,17 @@ def native_postgres_runtime(
             raise RuntimeError("native MARBLE database initialization failed")
         prepare_native_tables(task, setup_log)
         background = run_native_activities(task, setup_log)
-        socket_path = Path("/tmp") / f"losangelex-marble-{uuid.uuid4().hex}.sock"
-        (workspace / "query_db_socket.txt").write_text(
-            str(socket_path) + "\n",
+        request_dir = (workspace / "query_requests").resolve()
+        (workspace / "query_db_requests.txt").write_text(
+            str(request_dir) + "\n",
             encoding="utf-8",
         )
-        query_server = QueryServer(socket_path, setup_log)
+        query_server = FileQueryServer(request_dir, setup_log)
         query_server.start()
         yield NativePostgresMetadata(
             enabled=True,
             docker_compose_dir=str(docker_dir),
-            query_socket=str(socket_path),
+            query_request_dir=str(request_dir),
             setup_log=str(setup_log),
             background_pids=[process.pid for process in background],
         )
