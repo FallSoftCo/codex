@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired Codex baselines complete for n=5 and n=10; full-context oracle complete for n=2/n=5/n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied cohort accuracy, while full-context oracle bounds the coordination value |
-| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native file-query bridge verified under hidden-path execution on `database-001` after finding socket and compose-path blockers | native ten-stratum sample must be rerun after query-bridge and previous-result hiding fixes before paper use |
+| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native isolated ten-stratum sample: both systems 10/10 full recall, 0/10 exact-set, avg precision 0.583; Losangelex faster on all 10 | useful speed/coordination result, not exact-set SOTA; needs over-prediction analysis and broader sample |
 
 ## Session Log
 
@@ -247,10 +247,8 @@ separates at least three effects:
 3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
    path is real, not adapted. The preferred target is native MARBLE database
    execution with the benchmark's Docker/PostgreSQL substrate. Status: substrate
-   smoke and single-task file-query bridge model smokes are complete; the
-   earlier ten-stratum native sample is invalid as DB-grounded evidence because
-   sandboxed agents could not access the Unix-socket helper. Rerun the
-   ten-stratum sample with the file-query bridge before paper regeneration.
+   smoke, bridge smokes, and an isolated ten-stratum native sample are complete.
+   Broaden or repeat before making strong MARBLE-general claims.
 
 The world-class paper should make only claims justified by those gates:
 
@@ -442,9 +440,27 @@ Current status:
   `database-001`, recall `1.000`, precision `0.500`, F1 `0.667`, `161.7s`,
   zero coordination-tool errors, 38 logged SQL queries, no compose `.env`
   permission errors, and `46` hidden paths including prior result campaigns.
-- Remaining work: rerun the ten-stratum native MARBLE sample after both fixes,
-  then inspect failure traces and expand toward a larger stratified subset or
-  full 100-task database run.
+- Valid isolated ten-stratum native MARBLE sample:
+  `tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21/results.json`.
+  - Hidden paths: `47`, including prior result campaigns.
+  - Query bridge: every task/system setup log has live SQL queries; no
+    permission errors, compose `.env` errors, or previous-result leakage hits
+    were found in the post-run scan.
+  - Docker/PostgreSQL teardown left no MARBLE containers running.
+  - Codex: 10 tasks, 10 full-recall successes, 0 exact-set matches, avg recall
+    `1.000`, avg precision `0.583`, avg F1 `0.733`, mean seconds `422.1`,
+    coordination-tool errors `0`.
+  - Losangelex: 10 tasks, 10 full-recall successes, 0 exact-set matches, avg
+    recall `1.000`, avg precision `0.583`, avg F1 `0.733`, mean seconds
+    `148.1`, coordination-tool errors `0`.
+  - Paired deltas: recall/precision/F1 ties on all 10 sampled tasks;
+    Losangelex faster on all 10. Mean Codex/Losangelex runtime ratio `2.91x`,
+    median `2.87x`.
+  - Failure signal: both systems systematically over-predict one extra label;
+    exact-set match remains `0/10` for both. The paper should report both full
+    recall and strict exact-set/precision, not only recall.
+- Remaining work: inspect the exact-set over-prediction pattern, then expand
+  toward a larger stratified subset or full 100-task database run.
 
 ### L5. Larger Objective Silo Matrix
 
@@ -549,34 +565,34 @@ question is not "is multi-agent always better?" but:
 - Silo full-context oracle is complete for n=2/n=5/n=10 and is more accurate
   and faster than both cohort systems, which sharply limits any simplistic
   "multi-agent beats single-agent" claim.
-- Native MARBLE PostgreSQL now has a validated file-query bridge for sandboxed
-  model runs under hidden-path execution, and previous result directories are
-  hidden by default for future campaigns. Both attempted ten-stratum samples are
-  invalid as paper evidence; rerun after the latest query and hiding fixes.
+- Native MARBLE PostgreSQL now has an isolated ten-stratum paired sample. Codex
+  and Losangelex tie on full recall, precision, F1, exact-set rate, and
+  coordination-tool errors; Losangelex is faster on all 10. Both systems still
+  have 0/10 exact-set matches due extra-label over-prediction.
 
 ### Execution Queue
 
-1. Native MARBLE: rerun the ten-stratum native-postgres sample with the
-   workspace file-query bridge.
-2. Native MARBLE: inspect the valid ten-stratum failure traces, especially
-   redundant-index, vacuum, and insert/fetch over-prediction cases.
-3. Native MARBLE: if the stratified sample is stable, expand toward the full
+1. Native MARBLE: inspect the isolated ten-stratum over-prediction traces and
+   decide whether output-shape prompting or scoring should be tightened without
+   leaking answers.
+2. Native MARBLE: repeat or expand the isolated sample toward the full
    100-task database set or a power-justified larger stratified subset.
-4. Silo variance: repeat the highest-value n=10 tasks where systems disagree
+3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
    and estimate paired variance over correctness and runtime.
-5. SWE-bench: add a stratified sample that includes multi-file, ambiguous
+4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
    ownership, dependency-chain, and verifier-heavy tasks. Keep tiny single-file
    tasks as negative controls.
-6. App-build/coordination evals: preserve them as ecological support, not as
+5. App-build/coordination evals: preserve them as ecological support, not as
    the primary objective benchmark evidence.
-7. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
+6. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
    runtime distributions, coordination-tool error rates, and failure taxonomy.
-8. Paper: regenerate tables, figures, abstract, related work, threats to
+7. Paper: regenerate tables, figures, abstract, related work, threats to
    validity, and conclusion from the frozen artifacts.
-9. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
+8. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
    message IDs here.
 
 ### Current Next Step
 
-Rerun the native MARBLE ten-stratum sample with the fixed file-query bridge,
-then commit and push both configured Losangelex remotes to the same branch tip.
+Inspect native MARBLE over-prediction on the isolated ten-stratum sample, then
+decide whether to run repeats, a larger stratified subset, or the full 100-task
+database set.
