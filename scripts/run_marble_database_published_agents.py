@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
+import socket
 import subprocess
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -43,6 +46,7 @@ DEFAULT_CODEX = REPO_ROOT / "codex-rs" / "target" / "debug" / "codex"
 DEFAULT_OUT_ROOT = REPO_ROOT / "tmp" / "research" / "published-agent-benchmarks"
 DEFAULT_MARBLE_ROOT = DEFAULT_OUT_ROOT / "repos" / "MARBLE"
 DATABASE_JSONL = "multiagentbench/database/database_main.jsonl"
+ACTIVE_COMPOSE_FILES: list[Path] | None = None
 VALID_LABELS = [
     "INSERT_LARGE_DATA",
     "MISSING_INDEXES",
@@ -76,6 +80,7 @@ class MarbleDatabaseTask:
     requested_predictions: int
     agents: list[MarbleAgentConfig]
     init_sql: str
+    anomalies: list[dict[str, Any]]
     task_file: Path
 
 
@@ -84,6 +89,15 @@ class HollywoodAgent:
     agent_id: str
     runtime_name: str
     thread_id: str
+
+
+@dataclass(frozen=True)
+class NativePostgresMetadata:
+    enabled: bool
+    docker_compose_dir: str | None = None
+    query_socket: str | None = None
+    setup_log: str | None = None
+    background_pids: list[int] | None = None
 
 
 @contextmanager
@@ -206,6 +220,7 @@ def load_tasks(
                 requested_predictions=int(task_data.get("number_of_labels_pred", 2)),
                 agents=agents,
                 init_sql=str(environment.get("init_sql", "")),
+                anomalies=list(environment.get("anomalies", [])),
                 task_file=task_file,
             )
         )
@@ -262,6 +277,78 @@ def fresh_workspace(path: Path, task: MarbleDatabaseTask, evidence_mode: str) ->
             diagnostic_observations(task),
             encoding="utf-8",
         )
+    if evidence_mode == "native-postgres":
+        write_query_client(path / "query_db.py")
+        (path / "database.md").write_text(native_database_markdown(), encoding="utf-8")
+
+
+def write_query_client(path: Path) -> None:
+    path.write_text(
+        """#!/usr/bin/env python3
+import json
+import socket
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("usage: ./query_db.py '<SQL query>'", file=sys.stderr)
+        return 2
+    sql = " ".join(sys.argv[1:])
+    socket_file = Path(__file__).with_name("query_db_socket.txt")
+    if socket_file.exists():
+        socket_path = Path(socket_file.read_text(encoding="utf-8").strip())
+    else:
+        socket_path = Path(__file__).with_name("query_db.sock")
+    request = json.dumps({"sql": sql}).encode("utf-8")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.connect(str(socket_path))
+        client.sendall(request)
+        client.shutdown(socket.SHUT_WR)
+        chunks = []
+        while True:
+            chunk = client.recv(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    response = json.loads(b"".join(chunks).decode("utf-8"))
+    if response.get("stdout"):
+        print(response["stdout"], end="")
+    if response.get("stderr"):
+        print(response["stderr"], end="", file=sys.stderr)
+    return int(response.get("returncode", 1))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
+def native_database_markdown() -> str:
+    return "\n".join(
+        [
+            "# Live PostgreSQL Diagnostic Interface",
+            "",
+            "Use `./query_db.py '<SQL query>'` to inspect the live MARBLE PostgreSQL",
+            "database prepared for this case. The helper returns tab-separated psql",
+            "output. Keep queries bounded with explicit `LIMIT` clauses.",
+            "",
+            "Useful catalog views include:",
+            "",
+            "- `pg_stat_statements`",
+            "- `pg_stat_activity`",
+            "- `pg_locks`",
+            "- `pg_stat_user_tables`",
+            "- `pg_stat_all_tables`",
+            "- `pg_stat_user_indexes`",
+            "- `pg_indexes`",
+            "",
+        ]
+    )
 
 
 def public_case_markdown(task: MarbleDatabaseTask) -> str:
@@ -485,6 +572,449 @@ def read_prediction(workspace: Path, requested_predictions: int) -> tuple[list[s
     return labels[:requested_predictions], raw_text
 
 
+def append_log(path: Path, text: str) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(text)
+        if not text.endswith("\n"):
+            handle.write("\n")
+
+
+def postgres_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PGPASSWORD"] = "Test123_456"
+    return env
+
+
+def psql_args() -> list[str]:
+    if ACTIVE_COMPOSE_FILES is not None:
+        command = ["docker", "compose"]
+        for compose_file in ACTIVE_COMPOSE_FILES:
+            command.extend(["-f", str(compose_file)])
+        command.extend(
+            [
+                "exec",
+                "-T",
+                "-e",
+                "PGPASSWORD=Test123_456",
+                "postgres_db",
+                "psql",
+                "-X",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-P",
+                "pager=off",
+                "-h",
+                "127.0.0.1",
+                "-U",
+                "test",
+                "-d",
+                "sysbench",
+            ]
+        )
+        return command
+    return [
+        "psql",
+        "-X",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-P",
+        "pager=off",
+        "-h",
+        "127.0.0.1",
+        "-U",
+        "test",
+        "-d",
+        "sysbench",
+    ]
+
+
+def run_psql(
+    sql: str,
+    *,
+    timeout: int,
+    log_path: Path,
+    stdout: int | None = subprocess.PIPE,
+) -> subprocess.CompletedProcess[str]:
+    append_log(log_path, f"\n$ psql -c {sql[:500]!r}")
+    result = subprocess.run(
+        [*psql_args(), "-c", sql],
+        env=postgres_env(),
+        text=True,
+        stdout=stdout,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+    stdout_text = result.stdout if isinstance(result.stdout, str) else ""
+    append_log(log_path, stdout_text[-4000:])
+    append_log(log_path, result.stderr[-4000:])
+    append_log(log_path, f"returncode={result.returncode}")
+    return result
+
+
+def run_psql_input(sql: str, *, timeout: int, log_path: Path) -> subprocess.CompletedProcess[str]:
+    append_log(log_path, f"\n$ psql < {len(sql)} bytes")
+    result = subprocess.run(
+        psql_args(),
+        env=postgres_env(),
+        text=True,
+        input=sql,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    append_log(log_path, result.stdout[-4000:])
+    append_log(log_path, result.stderr[-4000:])
+    append_log(log_path, f"returncode={result.returncode}")
+    return result
+
+
+def wait_for_postgres(log_path: Path, timeout_seconds: int = 120) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        result = subprocess.run(
+            [*psql_args(), "-c", "SELECT 1;"],
+            env=postgres_env(),
+            text=True,
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0:
+            return
+        append_log(log_path, result.stderr[-1000:])
+        time.sleep(2)
+    raise RuntimeError("PostgreSQL did not become ready before timeout")
+
+
+def anomaly_settings(task: MarbleDatabaseTask, label: str) -> dict[str, int]:
+    for anomaly in task.anomalies:
+        anomaly_name = normalize_label(str(anomaly.get("anomaly", "")))
+        if anomaly_name == label:
+            return {
+                "nrow": min(max(int(anomaly.get("nrow", 10000)), 1000), 20000),
+                "ncolumn": min(max(int(anomaly.get("ncolumn", 8)), 1), 20),
+                "colsize": min(max(int(anomaly.get("colsize", 32)), 8), 200),
+            }
+    return {"nrow": 10000, "ncolumn": 8, "colsize": 32}
+
+
+def wide_table_sql(table_name: str, *, nrow: int, ncolumn: int) -> str:
+    columns = ", ".join(f"name{i} text" for i in range(ncolumn))
+    values = ", ".join(f"md5((g + {i})::text)" for i in range(ncolumn))
+    return (
+        f"DROP TABLE IF EXISTS {table_name}; "
+        f"CREATE TABLE {table_name} (id integer, {columns}); "
+        f"INSERT INTO {table_name} SELECT g, {values} "
+        f"FROM generate_series(1, {nrow}) AS s(g);"
+    )
+
+
+def prepare_native_tables(task: MarbleDatabaseTask, log_path: Path) -> None:
+    roots = set(task.gold_root_causes)
+    setup_sql: list[str] = []
+    if "INSERT_LARGE_DATA" in roots:
+        settings = anomaly_settings(task, "INSERT_LARGE_DATA")
+        columns = ", ".join(f"name{i} text" for i in range(settings["ncolumn"]))
+        setup_sql.append(f"DROP TABLE IF EXISTS marble_insert; CREATE TABLE marble_insert (id integer, {columns});")
+    if "FETCH_LARGE_DATA" in roots:
+        setup_sql.append(wide_table_sql("marble_fetch", **anomaly_settings(task, "FETCH_LARGE_DATA")))
+    if "MISSING_INDEXES" in roots:
+        setup_sql.append(wide_table_sql("marble_missing", **anomaly_settings(task, "MISSING_INDEXES")))
+    if "VACUUM" in roots:
+        settings = anomaly_settings(task, "VACUUM")
+        setup_sql.append(wide_table_sql("marble_vacuum", **settings))
+        setup_sql.append(f"DELETE FROM marble_vacuum WHERE id <= {int(settings['nrow'] * 0.8)};")
+    if "REDUNDANT_INDEX" in roots:
+        setup_sql.append(wide_table_sql("marble_redundant", **anomaly_settings(task, "REDUNDANT_INDEX")))
+    if "LOCK_CONTENTION" in roots:
+        setup_sql.append(wide_table_sql("marble_lock", **anomaly_settings(task, "LOCK_CONTENTION")))
+    if "POOR_JOIN_PERFORMANCE" in roots or "CPU_CONTENTION" in roots:
+        setup_sql.append(wide_table_sql("marble_join_a", nrow=5000, ncolumn=4))
+        setup_sql.append(wide_table_sql("marble_join_b", nrow=5000, ncolumn=4))
+    if setup_sql:
+        result = run_psql_input("\n".join(setup_sql), timeout=180, log_path=log_path)
+        if result.returncode != 0:
+            raise RuntimeError("failed to prepare native MARBLE tables")
+
+
+def start_lock_contention(log_path: Path) -> list[subprocess.Popen[str]]:
+    processes: list[subprocess.Popen[str]] = []
+    holder_log = log_path.with_name("native-postgres-lock-holder.log")
+    waiter_log = log_path.with_name("native-postgres-lock-waiters.log")
+    holder_handle = holder_log.open("w", encoding="utf-8")
+    waiter_handle = waiter_log.open("w", encoding="utf-8")
+    holder = subprocess.Popen(
+        [
+            *psql_args(),
+            "-c",
+            "BEGIN; UPDATE marble_lock SET name0 = 'holder' WHERE id = 1; SELECT pg_sleep(900);",
+        ],
+        env=postgres_env(),
+        text=True,
+        stdout=holder_handle,
+        stderr=holder_handle,
+    )
+    processes.append(holder)
+    time.sleep(2)
+    for _ in range(3):
+        waiter = subprocess.Popen(
+            [*psql_args(), "-c", "UPDATE marble_lock SET name0 = 'waiter' WHERE id = 1;"],
+            env=postgres_env(),
+            text=True,
+            stdout=waiter_handle,
+            stderr=waiter_handle,
+        )
+        processes.append(waiter)
+    append_log(log_path, f"started lock contention pids={[process.pid for process in processes]}")
+    return processes
+
+
+def run_native_activities(task: MarbleDatabaseTask, log_path: Path) -> list[subprocess.Popen[str]]:
+    roots = set(task.gold_root_causes)
+    result = run_psql("SELECT pg_stat_statements_reset();", timeout=30, log_path=log_path)
+    if result.returncode != 0:
+        raise RuntimeError("failed to reset pg_stat_statements")
+    background: list[subprocess.Popen[str]] = []
+    if "INSERT_LARGE_DATA" in roots:
+        settings = anomaly_settings(task, "INSERT_LARGE_DATA")
+        values = ", ".join(f"md5((g + {i})::text)" for i in range(settings["ncolumn"]))
+        run_psql(
+            f"INSERT INTO marble_insert SELECT g, {values} FROM generate_series(1, {settings['nrow']}) AS s(g);",
+            timeout=120,
+            log_path=log_path,
+        )
+    if "FETCH_LARGE_DATA" in roots:
+        run_psql("SELECT * FROM marble_fetch;", timeout=120, log_path=log_path, stdout=subprocess.DEVNULL)
+    if "MISSING_INDEXES" in roots:
+        for index in range(20):
+            run_psql(
+                f"SELECT * FROM marble_missing WHERE name0 = 'not-present-{index}' LIMIT 5;",
+                timeout=30,
+                log_path=log_path,
+            )
+    if "VACUUM" in roots:
+        run_psql("VACUUM (VERBOSE, ANALYZE) marble_vacuum;", timeout=120, log_path=log_path)
+    if "REDUNDANT_INDEX" in roots:
+        run_psql(
+            "CREATE INDEX marble_redundant_name0_idx ON marble_redundant(name0); "
+            "CREATE INDEX marble_redundant_name0_dup1 ON marble_redundant(name0); "
+            "CREATE INDEX marble_redundant_name0_dup2 ON marble_redundant(name0); "
+            "CREATE INDEX marble_redundant_name1_dup1 ON marble_redundant(name1);",
+            timeout=120,
+            log_path=log_path,
+        )
+    if "LOCK_CONTENTION" in roots:
+        background.extend(start_lock_contention(log_path))
+    if "POOR_JOIN_PERFORMANCE" in roots or "CPU_CONTENTION" in roots:
+        run_psql(
+            "SELECT count(*) FROM marble_join_a a JOIN marble_join_b b ON substring(a.name0, 1, 2) = substring(b.name0, 1, 2);",
+            timeout=120,
+            log_path=log_path,
+        )
+    return background
+
+
+class QueryServer:
+    def __init__(self, socket_path: Path, log_path: Path):
+        self.socket_path = socket_path
+        self.log_path = log_path
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._server: socket.socket | None = None
+
+    def start(self) -> None:
+        try:
+            self.socket_path.unlink()
+        except FileNotFoundError:
+            pass
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(self.socket_path))
+        self.socket_path.chmod(0o700)
+        server.listen()
+        self._server = server
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect(str(self.socket_path))
+        except OSError:
+            pass
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+        if self._server is not None:
+            self._server.close()
+        try:
+            self.socket_path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def _serve(self) -> None:
+        assert self._server is not None
+        while not self._stop.is_set():
+            try:
+                conn, _ = self._server.accept()
+            except OSError:
+                break
+            with conn:
+                if self._stop.is_set():
+                    break
+                request = self._read_request(conn)
+                response = self._handle_request(request)
+                conn.sendall(json.dumps(response).encode("utf-8"))
+
+    def _read_request(self, conn: socket.socket) -> dict[str, Any]:
+        chunks = []
+        while True:
+            chunk = conn.recv(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        try:
+            return json.loads(b"".join(chunks).decode("utf-8"))
+        except json.JSONDecodeError:
+            return {"sql": ""}
+
+    def _handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
+        sql = str(request.get("sql", ""))[:4000]
+        append_log(self.log_path, f"\n[query] {sql}")
+        if not sql.strip():
+            return {"returncode": 2, "stdout": "", "stderr": "empty SQL query\n"}
+        try:
+            result = subprocess.run(
+                [*psql_args(), "-A", "-F", "\t", "-c", f"SET statement_timeout TO '10s'; {sql}"],
+                env=postgres_env(),
+                text=True,
+                capture_output=True,
+                timeout=15,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return {"returncode": 124, "stdout": "", "stderr": "query timed out\n"}
+        stdout = result.stdout[-20000:]
+        stderr = result.stderr[-12000:]
+        append_log(self.log_path, stdout[-4000:])
+        append_log(self.log_path, stderr[-4000:])
+        return {"returncode": result.returncode, "stdout": stdout, "stderr": stderr}
+
+
+@contextmanager
+def native_postgres_runtime(
+    *,
+    enabled: bool,
+    task: MarbleDatabaseTask,
+    marble_root: Path,
+    workspace: Path,
+    output_dir: Path,
+) -> Any:
+    if not enabled:
+        yield NativePostgresMetadata(enabled=False)
+        return
+
+    global ACTIVE_COMPOSE_FILES
+    docker_dir = (marble_root / "marble" / "environments" / "db_env_docker").resolve()
+    setup_log = output_dir / "native-postgres-setup.log"
+    override_file = (output_dir / "native-postgres-compose.override.yml").resolve()
+    override_file.write_text(
+        "\n".join(
+            [
+                "services:",
+                "  postgres_db:",
+                "    image: postgres:16",
+                "    ports: !reset []",
+                "  prometheus:",
+                "    ports: !reset []",
+                "  node_exporter:",
+                "    ports: !reset []",
+                "  pg_exporter:",
+                "    ports: !reset []",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    compose_files = [(docker_dir / "docker-compose.yml").resolve(), override_file]
+    query_server: QueryServer | None = None
+    background: list[subprocess.Popen[str]] = []
+    previous_compose_files = ACTIVE_COMPOSE_FILES
+    ACTIVE_COMPOSE_FILES = compose_files
+    try:
+        append_log(setup_log, f"docker compose dir: {docker_dir}")
+        append_log(setup_log, f"docker compose override: {override_file}")
+        compose_command = ["docker", "compose"]
+        for compose_file in compose_files:
+            compose_command.extend(["-f", str(compose_file)])
+        subprocess.run(
+            [*compose_command, "down", "-v"],
+            cwd=docker_dir,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+        up = subprocess.run(
+            [*compose_command, "up", "-d", "--remove-orphans"],
+            cwd=docker_dir,
+            text=True,
+            capture_output=True,
+            timeout=180,
+            check=False,
+        )
+        append_log(setup_log, up.stdout[-4000:])
+        append_log(setup_log, up.stderr[-4000:])
+        if up.returncode != 0:
+            raise RuntimeError("docker compose up failed for native MARBLE database")
+        wait_for_postgres(setup_log)
+        init_sql = "\n".join(
+            [
+                task.init_sql,
+                "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
+            ]
+        )
+        init = run_psql_input(init_sql, timeout=180, log_path=setup_log)
+        if init.returncode != 0:
+            raise RuntimeError("native MARBLE database initialization failed")
+        prepare_native_tables(task, setup_log)
+        background = run_native_activities(task, setup_log)
+        socket_path = Path("/tmp") / f"losangelex-marble-{uuid.uuid4().hex}.sock"
+        (workspace / "query_db_socket.txt").write_text(
+            str(socket_path) + "\n",
+            encoding="utf-8",
+        )
+        query_server = QueryServer(socket_path, setup_log)
+        query_server.start()
+        yield NativePostgresMetadata(
+            enabled=True,
+            docker_compose_dir=str(docker_dir),
+            query_socket=str(socket_path),
+            setup_log=str(setup_log),
+            background_pids=[process.pid for process in background],
+        )
+    finally:
+        if query_server is not None:
+            query_server.stop()
+        for process in background:
+            if process.poll() is None:
+                process.terminate()
+        for process in background:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        subprocess.run(
+            [*compose_command, "down", "-v"],
+            cwd=docker_dir,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+        ACTIVE_COMPOSE_FILES = previous_compose_files
+
+
 def score_task(task: MarbleDatabaseTask, predicted: list[str]) -> dict[str, Any]:
     gold = set(task.gold_root_causes)
     predicted_set = set(predicted)
@@ -516,10 +1046,14 @@ def codex_agent_prompt(
         "- The workspace includes `diagnostics/schema.sql` and `diagnostics/observations.md`; the observations are label-free monitoring outputs from the published diagnostic surfaces.\n"
         if evidence_mode == "diagnostic-observations"
         else (
+        "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
+        if evidence_mode == "native-postgres"
+        else (
         "- The workspace includes `diagnostics/schema.sql`, copied from the published "
         "case environment without anomaly labels.\n"
         if evidence_mode == "schema"
         else "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
+        )
         )
     )
     return f"""We are running a published MARBLE/MultiAgentBench database diagnosis task.
@@ -554,9 +1088,13 @@ def coordinator_prompt(task: MarbleDatabaseTask, *, evidence_mode: str) -> str:
         "Use `diagnostics/observations.md` as the database monitoring evidence and `diagnostics/schema.sql` as schema context; neither file contains answer labels."
         if evidence_mode == "diagnostic-observations"
         else (
+        "Use `./query_db.py '<SQL query>'` when more live PostgreSQL evidence is needed."
+        if evidence_mode == "native-postgres"
+        else (
         "Use `diagnostics/schema.sql` only as schema context; it contains no anomaly labels."
         if evidence_mode == "schema"
         else "This is a prompt-only diagnostic run with no live database fixture."
+        )
         )
     )
     return f"""Finalize MARBLE database case {task.task_id}.
@@ -580,21 +1118,73 @@ def run_codex_task(
     per_agent_timeout_seconds: int,
     output_dir: Path,
     evidence_mode: str,
+    marble_root: Path,
 ) -> dict[str, Any]:
     fresh_workspace(workspace, task, evidence_mode)
     output_dir.mkdir(parents=True, exist_ok=True)
     started = time.time()
     run_records: list[dict[str, Any]] = []
-    for round_index in range(1, max_rounds + 1):
-        for config in task.agents:
-            agent_dir = output_dir / config.agent_id / f"round-{round_index:03d}"
-            agent_dir.mkdir(parents=True, exist_ok=True)
-            prompt = codex_agent_prompt(
-                task,
-                config,
-                round_index=round_index,
-                evidence_mode=evidence_mode,
-            )
+    with native_postgres_runtime(
+        enabled=evidence_mode == "native-postgres",
+        task=task,
+        marble_root=marble_root,
+        workspace=workspace,
+        output_dir=output_dir,
+    ) as native_postgres:
+        for round_index in range(1, max_rounds + 1):
+            for config in task.agents:
+                agent_dir = output_dir / config.agent_id / f"round-{round_index:03d}"
+                agent_dir.mkdir(parents=True, exist_ok=True)
+                prompt = codex_agent_prompt(
+                    task,
+                    config,
+                    round_index=round_index,
+                    evidence_mode=evidence_mode,
+                )
+                (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+                last_message_path = agent_dir / "last-message.txt"
+                result = run_command(
+                    [
+                        str(codex),
+                        "-C",
+                        str(workspace),
+                        "--sandbox",
+                        "workspace-write",
+                        "--ask-for-approval",
+                        "never",
+                        "exec",
+                        "--ephemeral",
+                        "--ignore-user-config",
+                        "--skip-git-repo-check",
+                        "-m",
+                        model,
+                        "-o",
+                        str(last_message_path),
+                        "-",
+                    ],
+                    cwd=workspace,
+                    timeout=per_agent_timeout_seconds,
+                    input_text=prompt,
+                )
+                (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
+                (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
+                run_records.append(
+                    {
+                        "agentId": config.agent_id,
+                        "round": round_index,
+                        "returncode": result.returncode,
+                        "lastMessagePath": str(last_message_path),
+                        "stdoutPath": str(agent_dir / "stdout.log"),
+                        "stderrPath": str(agent_dir / "stderr.log"),
+                    }
+                )
+            if (workspace / "submissions" / "final.json").exists():
+                break
+
+        if not (workspace / "submissions" / "final.json").exists():
+            agent_dir = output_dir / "coordinator"
+            agent_dir.mkdir(exist_ok=True)
+            prompt = coordinator_prompt(task, evidence_mode=evidence_mode)
             (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
             last_message_path = agent_dir / "last-message.txt"
             result = run_command(
@@ -624,60 +1214,17 @@ def run_codex_task(
             (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
             run_records.append(
                 {
-                    "agentId": config.agent_id,
-                    "round": round_index,
+                    "agentId": "coordinator",
+                    "round": max_rounds + 1,
                     "returncode": result.returncode,
                     "lastMessagePath": str(last_message_path),
                     "stdoutPath": str(agent_dir / "stdout.log"),
                     "stderrPath": str(agent_dir / "stderr.log"),
                 }
             )
-        if (workspace / "submissions" / "final.json").exists():
-            break
 
-    if not (workspace / "submissions" / "final.json").exists():
-        agent_dir = output_dir / "coordinator"
-        agent_dir.mkdir(exist_ok=True)
-        prompt = coordinator_prompt(task, evidence_mode=evidence_mode)
-        (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-        last_message_path = agent_dir / "last-message.txt"
-        result = run_command(
-            [
-                str(codex),
-                "-C",
-                str(workspace),
-                "--sandbox",
-                "workspace-write",
-                "--ask-for-approval",
-                "never",
-                "exec",
-                "--ephemeral",
-                "--ignore-user-config",
-                "--skip-git-repo-check",
-                "-m",
-                model,
-                "-o",
-                str(last_message_path),
-                "-",
-            ],
-            cwd=workspace,
-            timeout=per_agent_timeout_seconds,
-            input_text=prompt,
-        )
-        (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
-        (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
-        run_records.append(
-            {
-                "agentId": "coordinator",
-                "round": max_rounds + 1,
-                "returncode": result.returncode,
-                "lastMessagePath": str(last_message_path),
-                "stdoutPath": str(agent_dir / "stdout.log"),
-                "stderrPath": str(agent_dir / "stderr.log"),
-            }
-        )
-
-    predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+        native_postgres_metadata = native_postgres.__dict__
+        predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
     return {
         "system": "codex",
         "caseId": task.task_id,
@@ -687,6 +1234,7 @@ def run_codex_task(
         "agentRuns": run_records,
         "rawPrediction": raw_prediction,
         "score": score_task(task, predicted),
+        "nativePostgres": native_postgres_metadata,
     }
 
 
@@ -739,9 +1287,13 @@ def losangelex_agent_prompt(
         "- The workspace includes `diagnostics/schema.sql` and `diagnostics/observations.md`; the observations are label-free monitoring outputs from the published diagnostic surfaces.\n"
         if evidence_mode == "diagnostic-observations"
         else (
+        "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
+        if evidence_mode == "native-postgres"
+        else (
         "- The workspace includes `diagnostics/schema.sql`, copied from the published case environment without anomaly labels.\n"
         if evidence_mode == "schema"
         else "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
+        )
         )
     )
     coordinator = (
@@ -807,88 +1359,100 @@ def run_losangelex_task(
     rpc_timeout_seconds: int,
     output_dir: Path,
     evidence_mode: str,
+    marble_root: Path,
 ) -> dict[str, Any]:
     fresh_workspace(workspace, task, evidence_mode)
     output_dir.mkdir(parents=True, exist_ok=True)
     started = time.time()
     run_suffix = uuid.uuid4().hex[:6]
     room = f"repo/marble-db-{task.task_id}-{run_suffix}"
-    conn = JsonRpcWs(app_server_url, request_timeout=rpc_timeout_seconds)
     agents: list[HollywoodAgent] = []
     completed_rounds: list[dict[str, Any]] = []
     stopped_for_active_timeout = False
-    try:
-        initialize(conn)
-        for config in task.agents:
-            runtime_name = f"marble-db-{config.agent_id}-{run_suffix}"
-            thread_id = start_hollywood_agent(
-                conn,
-                workspace=workspace,
-                room=room,
-                runtime_name=runtime_name,
-                model=model,
-            )
-            agents.append(
-                HollywoodAgent(
-                    agent_id=config.agent_id,
+    with native_postgres_runtime(
+        enabled=evidence_mode == "native-postgres",
+        task=task,
+        marble_root=marble_root,
+        workspace=workspace,
+        output_dir=output_dir,
+    ) as native_postgres:
+        conn = JsonRpcWs(app_server_url, request_timeout=rpc_timeout_seconds)
+        try:
+            initialize(conn)
+            for config in task.agents:
+                runtime_name = f"marble-db-{config.agent_id}-{run_suffix}"
+                thread_id = start_hollywood_agent(
+                    conn,
+                    workspace=workspace,
+                    room=room,
                     runtime_name=runtime_name,
-                    thread_id=thread_id,
+                    model=model,
                 )
-            )
-        conn.drain(5)
-        for config, agent in zip(task.agents, agents, strict=True):
-            prompt = losangelex_agent_prompt(
-                task,
-                config,
-                runtime_name=agent.runtime_name,
-                evidence_mode=evidence_mode,
-            )
-            (output_dir / f"prompt-{config.agent_id}.txt").write_text(
-                prompt,
-                encoding="utf-8",
-            )
-            send_turn(conn, agent.thread_id, prompt)
+                agents.append(
+                    HollywoodAgent(
+                        agent_id=config.agent_id,
+                        runtime_name=runtime_name,
+                        thread_id=thread_id,
+                    )
+                )
+            conn.drain(5)
+            for config, agent in zip(task.agents, agents, strict=True):
+                prompt = losangelex_agent_prompt(
+                    task,
+                    config,
+                    runtime_name=agent.runtime_name,
+                    evidence_mode=evidence_mode,
+                )
+                (output_dir / f"prompt-{config.agent_id}.txt").write_text(
+                    prompt,
+                    encoding="utf-8",
+                )
+                send_turn(conn, agent.thread_id, prompt)
 
-        deadline = started + timeout_seconds
-        round_deadline = min(deadline, time.time() + round_timeout_seconds)
-        completed_once, states = wait_for_hollywood_round(
-            conn=conn,
-            agents=agents,
-            workspace=workspace,
-            deadline=round_deadline,
-            poll_seconds=poll_seconds,
-        )
-        active_threads = active_thread_count(states)
-        round_timed_out = time.time() >= round_deadline and not (
-            workspace / "submissions" / "final.json"
-        ).exists()
-        stopped_for_active_timeout = round_timed_out and active_threads > 0
-        completed_rounds.append(
-            {
-                "round": 1,
-                "completedInitialTurns": completed_once,
-                "activeThreads": active_threads,
-                "roundTimedOut": round_timed_out,
-                "finalExists": (workspace / "submissions" / "final.json").exists(),
+            deadline = started + timeout_seconds
+            round_deadline = min(deadline, time.time() + round_timeout_seconds)
+            completed_once, states = wait_for_hollywood_round(
+                conn=conn,
+                agents=agents,
+                workspace=workspace,
+                deadline=round_deadline,
+                poll_seconds=poll_seconds,
+            )
+            active_threads = active_thread_count(states)
+            round_timed_out = time.time() >= round_deadline and not (
+                workspace / "submissions" / "final.json"
+            ).exists()
+            stopped_for_active_timeout = round_timed_out and active_threads > 0
+            completed_rounds.append(
+                {
+                    "round": 1,
+                    "completedInitialTurns": completed_once,
+                    "activeThreads": active_threads,
+                    "roundTimedOut": round_timed_out,
+                    "finalExists": (workspace / "submissions" / "final.json").exists(),
+                }
+            )
+            final_states = {
+                agent.thread_id: read_thread_state(conn, agent.thread_id)
+                for agent in agents
             }
-        )
-        final_states = {agent.thread_id: read_thread_state(conn, agent.thread_id) for agent in agents}
-        summary = summarize_notifications(
-            conn.notifications,
-            {agent.thread_id for agent in agents},
-        )
-    finally:
-        conn.close()
+            summary = summarize_notifications(
+                conn.notifications,
+                {agent.thread_id for agent in agents},
+            )
+        finally:
+            conn.close()
 
-    (output_dir / "thread-states.json").write_text(
-        json.dumps(final_states, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    (output_dir / "notifications-summary.json").write_text(
-        json.dumps(summary, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+        (output_dir / "thread-states.json").write_text(
+            json.dumps(final_states, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (output_dir / "notifications-summary.json").write_text(
+            json.dumps(summary, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+        native_postgres_metadata = native_postgres.__dict__
     return {
         "system": "losangelex",
         "caseId": task.task_id,
@@ -911,6 +1475,7 @@ def run_losangelex_task(
         "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "threadStatesPath": str(output_dir / "thread-states.json"),
+        "nativePostgres": native_postgres_metadata,
     }
 
 
@@ -1023,7 +1588,7 @@ def main() -> int:
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument(
         "--evidence-mode",
-        choices=("prompt-only", "schema", "diagnostic-observations"),
+        choices=("prompt-only", "schema", "diagnostic-observations", "native-postgres"),
         default="prompt-only",
     )
     parser.add_argument(
@@ -1081,6 +1646,7 @@ def main() -> int:
                         per_agent_timeout_seconds=args.per_agent_timeout_seconds,
                         output_dir=run_dir,
                         evidence_mode=args.evidence_mode,
+                        marble_root=args.marble_root,
                     )
                 else:
                     if app_server_url is None:
@@ -1096,6 +1662,7 @@ def main() -> int:
                         rpc_timeout_seconds=args.rpc_timeout_seconds,
                         output_dir=run_dir,
                         evidence_mode=args.evidence_mode,
+                        marble_root=args.marble_root,
                     )
                 records.append(record)
                 (output_dir / "results.json").write_text(

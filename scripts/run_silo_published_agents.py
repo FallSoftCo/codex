@@ -532,6 +532,137 @@ def run_codex_task(
     }
 
 
+def codex_full_context_prompt(task: SiloTask, *, round_index: int) -> str:
+    private_prompts = "\n\n".join(
+        [
+            f"## Agent {config.agent_id}\n\n{config.user_prompt}"
+            for config in task.agent_configs
+        ]
+    )
+    submissions = "\n".join(
+        [
+            f"- `submissions/agent-{config.agent_id:03d}.json`: "
+            f'{{"agent_id": {config.agent_id}, "answer": <answer_for_agent_{config.agent_id}>}}'
+            for config in task.agent_configs
+        ]
+    )
+    return f"""We are running a published SILO-BENCH full-context oracle baseline.
+
+System under evaluation: codex-full-context
+Case: {task.case_id} ({task.case_name})
+Total agents in original task: {len(task.agent_configs)}
+Round: {round_index}
+
+You receive every private benchmark shard that would normally be distributed
+across the original agents. The expected answer key is not present.
+
+{private_prompts}
+
+Rules:
+- You may read and write only inside this workspace.
+- The full benchmark task JSON and answer key are not present in the workspace.
+- Do not inspect benchmark repositories, previous result directories, or any path
+  outside this workspace. A run that uses an answer key is invalid.
+- Write one JSON object per original agent:
+{submissions}
+- Do not put commentary in the submission JSON files.
+"""
+
+
+def codex_full_context_continue_prompt(task: SiloTask, *, round_index: int) -> str:
+    missing = "\n".join(
+        [
+            f"- `submissions/agent-{config.agent_id:03d}.json`"
+            for config in task.agent_configs
+        ]
+    )
+    return f"""Continue the published SILO-BENCH full-context case {task.case_id}, round {round_index}.
+
+Read the current workspace state and write any missing submission files.
+The expected answer key is not present. Required files:
+{missing}
+"""
+
+
+def run_codex_full_context_task(
+    *,
+    task: SiloTask,
+    workspace: Path,
+    codex: Path,
+    model: str,
+    max_rounds: int,
+    per_agent_timeout_seconds: int,
+    output_dir: Path,
+) -> dict[str, Any]:
+    fresh_workspace(workspace)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    run_records: list[dict[str, Any]] = []
+    for round_index in range(1, max_rounds + 1):
+        if all(
+            (workspace / "submissions" / f"agent-{config.agent_id:03d}.json").exists()
+            for config in task.agent_configs
+        ):
+            break
+        agent_dir = output_dir / f"round-{round_index:03d}"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        prompt = (
+            codex_full_context_prompt(task, round_index=round_index)
+            if round_index == 1
+            else codex_full_context_continue_prompt(task, round_index=round_index)
+        )
+        (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+        last_message_path = agent_dir / "last-message.txt"
+        result = run_command(
+            [
+                str(codex),
+                "-C",
+                str(workspace),
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "exec",
+                "--ephemeral",
+                "--ignore-user-config",
+                "--skip-git-repo-check",
+                "-m",
+                model,
+                "-o",
+                str(last_message_path),
+                "-",
+            ],
+            cwd=workspace,
+            timeout=per_agent_timeout_seconds,
+            input_text=prompt,
+        )
+        (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
+        (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
+        run_records.append(
+            {
+                "agentId": "full-context",
+                "round": round_index,
+                "returncode": result.returncode,
+                "lastMessagePath": str(last_message_path),
+                "stdoutPath": str(agent_dir / "stdout.log"),
+                "stderrPath": str(agent_dir / "stderr.log"),
+            }
+        )
+
+    submissions = read_submissions(workspace, len(task.agent_configs))
+    score = score_task(task, submissions)
+    return {
+        "system": "codex-full-context",
+        "caseId": task.case_id,
+        "taskFile": task.task_file.name,
+        "workspace": str(workspace),
+        "seconds": round(time.time() - started, 1),
+        "roundsExecuted": max((record["round"] for record in run_records), default=0),
+        "agentRuns": run_records,
+        "score": score,
+    }
+
+
 def start_hollywood_agent(
     conn: JsonRpcWs,
     *,
@@ -915,7 +1046,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--system",
-        choices=("codex", "losangelex"),
+        choices=("codex", "codex-full-context", "losangelex"),
         action="append",
         required=True,
     )
@@ -993,6 +1124,16 @@ def main() -> int:
                 run_dir = output_dir / "runs" / system / task.task_file.stem
                 if system == "codex":
                     record = run_codex_task(
+                        task=task,
+                        workspace=workspace,
+                        codex=args.codex,
+                        model=args.model,
+                        max_rounds=args.max_rounds,
+                        per_agent_timeout_seconds=args.per_agent_timeout_seconds,
+                        output_dir=run_dir,
+                    )
+                elif system == "codex-full-context":
+                    record = run_codex_full_context_task(
                         task=task,
                         workspace=workspace,
                         codex=args.codex,

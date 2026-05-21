@@ -1,6 +1,6 @@
 # Losangelex Published Benchmark Completion Ledger
 
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 ## Goal
 
@@ -148,6 +148,35 @@ The durable standard is:
   SESv2 with explicit `ContentTransferEncoding=BASE64` on every attachment.
   Redelivery SES message id:
   `0100019e4802159a-31672adc-0c3c-4f72-8a6d-c8219e26f9c2-000000`.
+
+### 2026-05-21
+
+- Added a paper-completion gate so future sessions do not present the current
+  papers as final/world-class until the evidence separates fixed-model runtime
+  effects, single-agent full-context oracle performance, and non-Silo benchmark
+  generality.
+- Started the full paired Codex n=5 Silo matrix:
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21`.
+  As of this ledger update it had completed the first five level I tasks with
+  five strict successes, average `353.5s`, and zero coordination-tool errors.
+  The run is still in progress and must be combined with the completed
+  Losangelex n=5 matrix only after all 30 tasks finish.
+- Added a `codex-full-context` Silo runner mode. It gives one Codex execution
+  all original private shards for a task, writes the same per-agent submission
+  files, and uses the existing deterministic Silo scorer. This is the planned
+  single-agent oracle needed for the coordination-effect gate.
+- Added a native MARBLE database evidence mode. `--evidence-mode
+  native-postgres` starts the published MARBLE Docker/PostgreSQL substrate with
+  a campaign-local compose override, avoids fixed host-port bindings, pins the
+  Postgres service to `postgres:16` for compatibility with the published volume
+  layout, prepares live root-cause workloads, and gives agents a workspace
+  `query_db.py` client backed by a temporary Unix socket query server.
+- Validated the native MARBLE substrate without a model run at
+  `tmp/research/published-agent-benchmarks/marble-native-postgres-smoke-2026-05-21`.
+  The smoke started Docker/PostgreSQL, injected the published `database-001`
+  workload, queried `pg_stat_statements` through the generated workspace client,
+  returned code `0`, and confirmed the live `INSERT` workload had `20000` rows
+  in query statistics. Teardown left no MARBLE containers running.
 
 ## Blocking Losangelex Work
 
