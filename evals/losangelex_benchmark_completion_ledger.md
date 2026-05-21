@@ -155,12 +155,17 @@ The durable standard is:
   papers as final/world-class until the evidence separates fixed-model runtime
   effects, single-agent full-context oracle performance, and non-Silo benchmark
   generality.
-- Started the full paired Codex n=5 Silo matrix:
+- Completed the full paired Codex n=5 Silo matrix:
   `tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21`.
-  As of this ledger update it had completed the first five level I tasks with
-  five strict successes, average `353.5s`, and zero coordination-tool errors.
-  The run is still in progress and must be combined with the completed
-  Losangelex n=5 matrix only after all 30 tasks finish.
+  Codex finished 20/30 strict successes, avg `S=0.700`, avg `P=0.714`,
+  mean `422.1s`, and zero coordination-tool errors. Combined with the completed
+  Losangelex n=5 matrix at
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-paired-2026-05-21`:
+  Losangelex finished 21/30 strict successes, avg `S=0.807`, avg `P=0.826`,
+  mean `113.0s`, and zero coordination-tool errors. Paired task deltas:
+  Losangelex had higher strict/partial score on four tasks, Codex on one task,
+  and 25 ties; Losangelex was faster on all 30 tasks with mean Codex/Losangelex
+  runtime ratio about `3.84x`.
 - Added a `codex-full-context` Silo runner mode. It gives one Codex execution
   all original private shards for a task, writes the same per-agent submission
   files, and uses the existing deterministic Silo scorer. This is the planned
