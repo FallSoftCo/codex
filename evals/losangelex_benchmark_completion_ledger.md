@@ -151,6 +151,51 @@ The durable standard is:
 
 ## Blocking Losangelex Work
 
+## World-Class Paper Completion Gate
+
+Do not present the current paper as final or world-class until the evidence
+separates at least three effects:
+
+1. **Runtime effect at fixed model.** Same published task set, same model, same
+   hidden-path rules, comparing ordinary Codex cohorts against Losangelex rooms.
+   Minimum bar: full paired Silo n=5 and n=10 matrices, not just the existing
+   n=2 matrix and n=5 balanced slice.
+2. **Coordination effect versus single-agent oracle.** Same model receives the
+   full Silo input in one prompt, scored by the same deterministic Silo scorer.
+   This tells us whether multi-agent coordination is adding value or only
+   recovering part of the single-agent full-context performance.
+3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
+   path is real, not adapted. The preferred target is native MARBLE database
+   execution with the benchmark's Docker/PostgreSQL substrate.
+
+The world-class paper should make only claims justified by those gates:
+
+- It may claim a **Silo-Bench small-to-medium scale frontier** if Losangelex
+  continues to exceed published same-scale Silo baselines and matched fixed-model
+  controls remain favorable.
+- It may claim **native runtime value** only if fixed-model paired Codex-vs-
+  Losangelex matrices show a meaningful correctness, time, or coordination-error
+  advantage.
+- It must not claim universal multi-agent SOTA until native MARBLE, broader
+  SWE-bench, and larger-scale Silo evidence support that.
+
+### Execution Plan Across Sessions
+
+1. Run full paired Codex n=5 Silo matrix with the same `gpt-5.4` model and hidden
+   benchmark paths; combine with the completed Losangelex n=5 matrix.
+2. Run full paired Codex n=10 Silo matrix; combine with the completed Losangelex
+   n=10 matrix.
+3. Add and run a single-agent Silo full-context baseline for n=2, n=5, and n=10.
+4. Repeat the most claim-sensitive Silo scales/tasks for variance, especially
+   n=5/n=10 and failure-prone tasks `II-12`, `III-25`, `III-27`, and `III-28`.
+5. Implement native MARBLE database execution and score recall, exact match,
+   precision, runtime errors, and coordination-tool errors.
+6. Expand SWE-bench from the current three-instance negative-control slice to a
+   stratified sample that includes multi-file and dependency-chain issues.
+7. Regenerate the papers only after the above results are complete, then email
+   through Ozzz production SES using explicit base64 attachment encoding and ZIP
+   fallback.
+
 ### L1. Benchmark-Safe Runtime Mode
 
 Done means:
