@@ -140,6 +140,14 @@ The durable standard is:
   `seo@fallsoft.co` with configuration set `fallsoftco-vc-access`; SES message
   id:
   `0100019e47feb474-4183351a-85d2-461e-b1e9-962cd749c6b6-000000`.
+- After the updated PDF attachments did not open in the recipient mail client,
+  validated both local PDFs with `pdfinfo`, packaged both PDFs plus
+  `SHA256SUMS.txt` into
+  `tmp/research/published-agent-benchmarks/email-redelivery-2026-05-21/losangelex-research-papers-2026-05-21.zip`,
+  verified the ZIP locally with `unzip -t`, and resent through Ozzz production
+  SESv2 with explicit `ContentTransferEncoding=BASE64` on every attachment.
+  Redelivery SES message id:
+  `0100019e4802159a-31672adc-0c3c-4f72-8a6d-c8219e26f9c2-000000`.
 
 ## Blocking Losangelex Work
 
