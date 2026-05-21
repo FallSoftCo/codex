@@ -22,7 +22,7 @@ The durable standard is:
 | --- | --- | --- | --- |
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
-| Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired fixed-model Codex baselines complete for n=5 and n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied accuracy, not simple correctness dominance |
+| Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired Codex baselines complete for n=5 and n=10; full-context oracle complete for n=2/n=5/n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied cohort accuracy, while full-context oracle bounds the coordination value |
 | MARBLE database | adapted diagnostic-observation packets, deterministic scoring | both systems 5/5 recall, 0/5 exact-set match | useful but not native MARBLE |
 
 ## Session Log
@@ -197,6 +197,23 @@ The durable standard is:
   not by itself support a broad SOTA claim: n=5 favors Losangelex on
   correctness and speed, while n=10 is essentially accuracy-tied with Codex one
   strict success ahead and Losangelex much faster.
+- Completed the single-agent full-context Silo oracle for n=2, n=5, and n=10:
+  `tmp/research/published-agent-benchmarks/silo-full-context-oracle-n2-2026-05-21`,
+  `tmp/research/published-agent-benchmarks/silo-full-context-oracle-n5-2026-05-21`,
+  and
+  `tmp/research/published-agent-benchmarks/silo-full-context-oracle-n10-2026-05-21`.
+  Results:
+  - n=2: 25/30 full successes, avg `S=0.833`, avg `P=0.845`, mean `27.2s`.
+  - n=5: 25/30 full successes, avg `S=0.833`, avg `P=0.846`, mean `39.2s`.
+  - n=10: 24/30 full successes, avg `S=0.800`, avg `P=0.814`, mean `52.8s`.
+  All runs recorded zero coordination-tool errors.
+- The oracle result sharply limits the coordination-value claim: for Silo, a
+  same-model single execution with all shards visible beats both Losangelex and
+  ordinary Codex cohorts on correctness at n=5 and n=10, while also being faster.
+  The meaningful current Losangelex result is therefore not "better than full
+  context"; it is that the native room runtime can match or improve ordinary
+  same-model Codex cohort accuracy while reducing wall-clock time by large
+  factors.
 
 ## Blocking Losangelex Work
 
@@ -212,7 +229,9 @@ separates at least three effects:
 2. **Coordination effect versus single-agent oracle.** Same model receives the
    full Silo input in one prompt, scored by the same deterministic Silo scorer.
    This tells us whether multi-agent coordination is adding value or only
-   recovering part of the single-agent full-context performance.
+   recovering part of the single-agent full-context performance. Status:
+   complete for Silo n=2, n=5, and n=10; the oracle currently outperforms both
+   cohort systems on correctness.
 3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
    path is real, not adapted. The preferred target is native MARBLE database
    execution with the benchmark's Docker/PostgreSQL substrate.
@@ -234,7 +253,8 @@ The world-class paper should make only claims justified by those gates:
    and hidden benchmark paths; combine with the completed Losangelex n=5 matrix.
 2. Done: run full paired Codex n=10 Silo matrix; combine with the completed
    Losangelex n=10 matrix.
-3. Add and run a single-agent Silo full-context baseline for n=2, n=5, and n=10.
+3. Done: add and run a single-agent Silo full-context baseline for n=2, n=5,
+   and n=10.
 4. Repeat the most claim-sensitive Silo scales/tasks for variance, especially
    n=5/n=10 and failure-prone tasks `II-12`, `III-25`, `III-27`, and `III-28`.
 5. Implement native MARBLE database execution and score recall, exact match,
@@ -344,9 +364,9 @@ Current status:
   n=20, all with managed app-server metadata, default hidden Silo repository
   paths, teardown, and zero coordination-tool errors.
 - Full paired fixed-model Codex comparisons are now available for n=5 and n=10.
-- Remaining work: run the single-agent full-context oracle for n=2/n=5/n=10,
-  repeat the highest-value scales/tasks for variance, and decide whether to
-  attempt n=50/n=100 despite cost/concurrency.
+- Full-context oracle baselines are now available for n=2, n=5, and n=10.
+- Remaining work: repeat the highest-value scales/tasks for variance and decide
+  whether to attempt n=50/n=100 despite cost/concurrency.
 
 ### L6. Stratified SWE-bench Expansion
 
