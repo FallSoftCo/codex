@@ -1119,6 +1119,7 @@ def run_codex_task(
     output_dir: Path,
     evidence_mode: str,
     marble_root: Path,
+    hidden_paths: list[Path],
 ) -> dict[str, Any]:
     fresh_workspace(workspace, task, evidence_mode)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1131,16 +1132,61 @@ def run_codex_task(
         workspace=workspace,
         output_dir=output_dir,
     ) as native_postgres:
-        for round_index in range(1, max_rounds + 1):
-            for config in task.agents:
-                agent_dir = output_dir / config.agent_id / f"round-{round_index:03d}"
-                agent_dir.mkdir(parents=True, exist_ok=True)
-                prompt = codex_agent_prompt(
-                    task,
-                    config,
-                    round_index=round_index,
-                    evidence_mode=evidence_mode,
-                )
+        with temporarily_hide_paths(hidden_paths):
+            for round_index in range(1, max_rounds + 1):
+                for config in task.agents:
+                    agent_dir = output_dir / config.agent_id / f"round-{round_index:03d}"
+                    agent_dir.mkdir(parents=True, exist_ok=True)
+                    prompt = codex_agent_prompt(
+                        task,
+                        config,
+                        round_index=round_index,
+                        evidence_mode=evidence_mode,
+                    )
+                    (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+                    last_message_path = agent_dir / "last-message.txt"
+                    result = run_command(
+                        [
+                            str(codex),
+                            "-C",
+                            str(workspace),
+                            "--sandbox",
+                            "workspace-write",
+                            "--ask-for-approval",
+                            "never",
+                            "exec",
+                            "--ephemeral",
+                            "--ignore-user-config",
+                            "--skip-git-repo-check",
+                            "-m",
+                            model,
+                            "-o",
+                            str(last_message_path),
+                            "-",
+                        ],
+                        cwd=workspace,
+                        timeout=per_agent_timeout_seconds,
+                        input_text=prompt,
+                    )
+                    (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
+                    (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
+                    run_records.append(
+                        {
+                            "agentId": config.agent_id,
+                            "round": round_index,
+                            "returncode": result.returncode,
+                            "lastMessagePath": str(last_message_path),
+                            "stdoutPath": str(agent_dir / "stdout.log"),
+                            "stderrPath": str(agent_dir / "stderr.log"),
+                        }
+                    )
+                if (workspace / "submissions" / "final.json").exists():
+                    break
+
+            if not (workspace / "submissions" / "final.json").exists():
+                agent_dir = output_dir / "coordinator"
+                agent_dir.mkdir(exist_ok=True)
+                prompt = coordinator_prompt(task, evidence_mode=evidence_mode)
                 (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
                 last_message_path = agent_dir / "last-message.txt"
                 result = run_command(
@@ -1170,58 +1216,14 @@ def run_codex_task(
                 (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
                 run_records.append(
                     {
-                        "agentId": config.agent_id,
-                        "round": round_index,
+                        "agentId": "coordinator",
+                        "round": max_rounds + 1,
                         "returncode": result.returncode,
                         "lastMessagePath": str(last_message_path),
                         "stdoutPath": str(agent_dir / "stdout.log"),
                         "stderrPath": str(agent_dir / "stderr.log"),
                     }
                 )
-            if (workspace / "submissions" / "final.json").exists():
-                break
-
-        if not (workspace / "submissions" / "final.json").exists():
-            agent_dir = output_dir / "coordinator"
-            agent_dir.mkdir(exist_ok=True)
-            prompt = coordinator_prompt(task, evidence_mode=evidence_mode)
-            (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-            last_message_path = agent_dir / "last-message.txt"
-            result = run_command(
-                [
-                    str(codex),
-                    "-C",
-                    str(workspace),
-                    "--sandbox",
-                    "workspace-write",
-                    "--ask-for-approval",
-                    "never",
-                    "exec",
-                    "--ephemeral",
-                    "--ignore-user-config",
-                    "--skip-git-repo-check",
-                    "-m",
-                    model,
-                    "-o",
-                    str(last_message_path),
-                    "-",
-                ],
-                cwd=workspace,
-                timeout=per_agent_timeout_seconds,
-                input_text=prompt,
-            )
-            (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
-            (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
-            run_records.append(
-                {
-                    "agentId": "coordinator",
-                    "round": max_rounds + 1,
-                    "returncode": result.returncode,
-                    "lastMessagePath": str(last_message_path),
-                    "stdoutPath": str(agent_dir / "stdout.log"),
-                    "stderrPath": str(agent_dir / "stderr.log"),
-                }
-            )
 
         native_postgres_metadata = native_postgres.__dict__
         predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
@@ -1360,6 +1362,7 @@ def run_losangelex_task(
     output_dir: Path,
     evidence_mode: str,
     marble_root: Path,
+    hidden_paths: list[Path],
 ) -> dict[str, Any]:
     fresh_workspace(workspace, task, evidence_mode)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1376,72 +1379,73 @@ def run_losangelex_task(
         workspace=workspace,
         output_dir=output_dir,
     ) as native_postgres:
-        conn = JsonRpcWs(app_server_url, request_timeout=rpc_timeout_seconds)
-        try:
-            initialize(conn)
-            for config in task.agents:
-                runtime_name = f"marble-db-{config.agent_id}-{run_suffix}"
-                thread_id = start_hollywood_agent(
-                    conn,
-                    workspace=workspace,
-                    room=room,
-                    runtime_name=runtime_name,
-                    model=model,
-                )
-                agents.append(
-                    HollywoodAgent(
-                        agent_id=config.agent_id,
+        with temporarily_hide_paths(hidden_paths):
+            conn = JsonRpcWs(app_server_url, request_timeout=rpc_timeout_seconds)
+            try:
+                initialize(conn)
+                for config in task.agents:
+                    runtime_name = f"marble-db-{config.agent_id}-{run_suffix}"
+                    thread_id = start_hollywood_agent(
+                        conn,
+                        workspace=workspace,
+                        room=room,
                         runtime_name=runtime_name,
-                        thread_id=thread_id,
+                        model=model,
                     )
-                )
-            conn.drain(5)
-            for config, agent in zip(task.agents, agents, strict=True):
-                prompt = losangelex_agent_prompt(
-                    task,
-                    config,
-                    runtime_name=agent.runtime_name,
-                    evidence_mode=evidence_mode,
-                )
-                (output_dir / f"prompt-{config.agent_id}.txt").write_text(
-                    prompt,
-                    encoding="utf-8",
-                )
-                send_turn(conn, agent.thread_id, prompt)
+                    agents.append(
+                        HollywoodAgent(
+                            agent_id=config.agent_id,
+                            runtime_name=runtime_name,
+                            thread_id=thread_id,
+                        )
+                    )
+                conn.drain(5)
+                for config, agent in zip(task.agents, agents, strict=True):
+                    prompt = losangelex_agent_prompt(
+                        task,
+                        config,
+                        runtime_name=agent.runtime_name,
+                        evidence_mode=evidence_mode,
+                    )
+                    (output_dir / f"prompt-{config.agent_id}.txt").write_text(
+                        prompt,
+                        encoding="utf-8",
+                    )
+                    send_turn(conn, agent.thread_id, prompt)
 
-            deadline = started + timeout_seconds
-            round_deadline = min(deadline, time.time() + round_timeout_seconds)
-            completed_once, states = wait_for_hollywood_round(
-                conn=conn,
-                agents=agents,
-                workspace=workspace,
-                deadline=round_deadline,
-                poll_seconds=poll_seconds,
-            )
-            active_threads = active_thread_count(states)
-            round_timed_out = time.time() >= round_deadline and not (
-                workspace / "submissions" / "final.json"
-            ).exists()
-            stopped_for_active_timeout = round_timed_out and active_threads > 0
-            completed_rounds.append(
-                {
-                    "round": 1,
-                    "completedInitialTurns": completed_once,
-                    "activeThreads": active_threads,
-                    "roundTimedOut": round_timed_out,
-                    "finalExists": (workspace / "submissions" / "final.json").exists(),
+                deadline = started + timeout_seconds
+                round_deadline = min(deadline, time.time() + round_timeout_seconds)
+                completed_once, states = wait_for_hollywood_round(
+                    conn=conn,
+                    agents=agents,
+                    workspace=workspace,
+                    deadline=round_deadline,
+                    poll_seconds=poll_seconds,
+                )
+                active_threads = active_thread_count(states)
+                round_timed_out = time.time() >= round_deadline and not (
+                    workspace / "submissions" / "final.json"
+                ).exists()
+                stopped_for_active_timeout = round_timed_out and active_threads > 0
+                completed_rounds.append(
+                    {
+                        "round": 1,
+                        "completedInitialTurns": completed_once,
+                        "activeThreads": active_threads,
+                        "roundTimedOut": round_timed_out,
+                        "finalExists": (workspace / "submissions" / "final.json").exists(),
+                    }
+                )
+                final_states = {
+                    agent.thread_id: read_thread_state(conn, agent.thread_id)
+                    for agent in agents
                 }
-            )
-            final_states = {
-                agent.thread_id: read_thread_state(conn, agent.thread_id)
-                for agent in agents
-            }
-            summary = summarize_notifications(
-                conn.notifications,
-                {agent.thread_id for agent in agents},
-            )
-        finally:
-            conn.close()
+                summary = summarize_notifications(
+                    conn.notifications,
+                    {agent.thread_id for agent in agents},
+                )
+            finally:
+                conn.close()
 
         (output_dir / "thread-states.json").write_text(
             json.dumps(final_states, indent=2) + "\n",
@@ -1619,6 +1623,12 @@ def main() -> int:
         marble_root=args.marble_root,
         include_defaults=not args.no_default_hide_paths,
     )
+    global_hidden_paths = (
+        [] if args.evidence_mode == "native-postgres" else hidden_paths
+    )
+    task_hidden_paths = (
+        hidden_paths if args.evidence_mode == "native-postgres" else []
+    )
     with benchmark_app_server(
         required="losangelex" in args.system,
         app_server_url=args.app_server_url,
@@ -1629,7 +1639,7 @@ def main() -> int:
         benchmark_codex_home=args.benchmark_codex_home,
         codex_home_source=args.codex_home_source,
         start_timeout_seconds=args.app_server_start_timeout_seconds,
-    ) as app_server, temporarily_hide_paths(hidden_paths):
+    ) as app_server, temporarily_hide_paths(global_hidden_paths):
         app_server_url = app_server.url if app_server is not None else None
         app_server_metadata = app_server.metadata() if app_server is not None else None
         for task in tasks:
@@ -1647,6 +1657,7 @@ def main() -> int:
                         output_dir=run_dir,
                         evidence_mode=args.evidence_mode,
                         marble_root=args.marble_root,
+                        hidden_paths=task_hidden_paths,
                     )
                 else:
                     if app_server_url is None:
@@ -1663,6 +1674,7 @@ def main() -> int:
                         output_dir=run_dir,
                         evidence_mode=args.evidence_mode,
                         marble_root=args.marble_root,
+                        hidden_paths=task_hidden_paths,
                     )
                 records.append(record)
                 (output_dir / "results.json").write_text(

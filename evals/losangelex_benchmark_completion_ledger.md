@@ -214,6 +214,18 @@ The durable standard is:
   context"; it is that the native room runtime can match or improve ordinary
   same-model Codex cohort accuracy while reducing wall-clock time by large
   factors.
+- Fixed native MARBLE hidden-path timing so the benchmark repository is hidden
+  during model execution but not while the harness starts or tears down the
+  Docker/PostgreSQL substrate. The failed pre-fix run was caused by chmod hiding
+  the published `db_env_docker` compose directory before Docker setup.
+- Completed the first paired native MARBLE model-in-the-loop smoke:
+  `tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-fix-2026-05-21`.
+  On `database-001`, both systems achieved root-cause recall `1.000`, both
+  missed strict exact-set match by over-predicting one extra label, and both
+  recorded zero coordination-tool errors. Codex predicted
+  `INSERT_LARGE_DATA,FETCH_LARGE_DATA` in `527.4s`; Losangelex predicted
+  `INSERT_LARGE_DATA,LOCK_CONTENTION` in `146.9s`. Docker/PostgreSQL teardown
+  left no MARBLE containers running.
 
 ## Blocking Losangelex Work
 
@@ -234,7 +246,9 @@ separates at least three effects:
    cohort systems on correctness.
 3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
    path is real, not adapted. The preferred target is native MARBLE database
-   execution with the benchmark's Docker/PostgreSQL substrate.
+   execution with the benchmark's Docker/PostgreSQL substrate. Status: substrate
+   smoke plus one paired native model smoke are complete; broaden beyond
+   `database-001` before paper regeneration.
 
 The world-class paper should make only claims justified by those gates:
 
@@ -343,9 +357,12 @@ Current status:
 
 - The native Docker/PostgreSQL substrate now starts from the harness and was
   validated without a model run on `database-001`.
-- Remaining work: run paired Codex and Losangelex model-in-the-loop campaigns
-  against the native substrate, then report recall, exact match, precision,
-  runtime errors, and coordination-tool errors.
+- One paired Codex/Losangelex model-in-the-loop smoke is complete on
+  `database-001` with recall `1.000` for both systems, strict exact-set miss for
+  both systems, zero coordination-tool errors, and clean Docker teardown.
+- Remaining work: expand paired native MARBLE beyond `database-001`, then
+  report recall, exact match, precision, runtime errors, and coordination-tool
+  errors across a meaningful sample.
 
 ### L5. Larger Objective Silo Matrix
 
