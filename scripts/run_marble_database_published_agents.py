@@ -699,9 +699,13 @@ def anomaly_settings(task: MarbleDatabaseTask, label: str) -> dict[str, int]:
     return {"nrow": 10000, "ncolumn": 8, "colsize": 32}
 
 
-def wide_table_sql(table_name: str, *, nrow: int, ncolumn: int) -> str:
+def wide_table_sql(table_name: str, *, nrow: int, ncolumn: int, colsize: int = 32) -> str:
     columns = ", ".join(f"name{i} text" for i in range(ncolumn))
-    values = ", ".join(f"md5((g + {i})::text)" for i in range(ncolumn))
+    repeat_count = max(1, (colsize + 31) // 32)
+    values = ", ".join(
+        f"substr(repeat(md5((g + {i})::text), {repeat_count}), 1, {colsize})"
+        for i in range(ncolumn)
+    )
     return (
         f"DROP TABLE IF EXISTS {table_name}; "
         f"CREATE TABLE {table_name} (id integer, {columns}); "
@@ -1020,6 +1024,12 @@ def score_task(task: MarbleDatabaseTask, predicted: list[str]) -> dict[str, Any]
     predicted_set = set(predicted)
     match_count = len(gold & predicted_set)
     recall = match_count / len(gold) if gold else 0.0
+    precision = match_count / len(predicted_set) if predicted_set else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall > 0
+        else 0.0
+    )
     exact = predicted_set == gold
     return {
         "success": recall == 1.0,
@@ -1028,6 +1038,8 @@ def score_task(task: MarbleDatabaseTask, predicted: list[str]) -> dict[str, Any]
         "gold": task.gold_root_causes,
         "metrics": {
             "rootCauseRecall": recall,
+            "rootCausePrecision": precision,
+            "rootCauseF1": f1,
             "matchCount": match_count,
             "goldCount": len(gold),
             "predictedCount": len(predicted_set),
@@ -1492,9 +1504,10 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         count = len(system_records)
         successes = sum(1 for record in system_records if record["score"]["success"])
         exact = sum(1 for record in system_records if record["score"]["exactSetMatch"])
-        avg_recall = sum(
-            record["score"]["metrics"]["rootCauseRecall"] for record in system_records
-        ) / count
+        metric_rows = [root_cause_metrics(record) for record in system_records]
+        avg_recall = sum(row["recall"] for row in metric_rows) / count
+        avg_precision = sum(row["precision"] for row in metric_rows) / count
+        avg_f1 = sum(row["f1"] for row in metric_rows) / count
         avg_seconds = sum(record["seconds"] for record in system_records) / count
         coordination_tool_errors = sum(
             coordination_error_total(record) for record in system_records
@@ -1506,10 +1519,33 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "exactSetMatches": exact,
             "exactSetMatchRate": exact / count,
             "avgRootCauseRecall": avg_recall,
+            "avgRootCausePrecision": avg_precision,
+            "avgRootCauseF1": avg_f1,
             "avgSeconds": avg_seconds,
             "coordinationToolErrors": coordination_tool_errors,
         }
     return {"systems": systems}
+
+
+def root_cause_metrics(record: dict[str, Any]) -> dict[str, float]:
+    metrics = record["score"]["metrics"]
+    recall = float(metrics["rootCauseRecall"])
+    precision = metrics.get("rootCausePrecision")
+    if precision is None:
+        predicted_count = int(metrics["predictedCount"])
+        precision = (
+            float(metrics["matchCount"]) / predicted_count
+            if predicted_count
+            else 0.0
+        )
+    f1 = metrics.get("rootCauseF1")
+    if f1 is None:
+        f1 = (
+            2 * float(precision) * recall / (float(precision) + recall)
+            if float(precision) + recall > 0
+            else 0.0
+        )
+    return {"recall": recall, "precision": float(precision), "f1": float(f1)}
 
 
 def coordination_error_total(record: dict[str, Any]) -> int:
@@ -1543,14 +1579,15 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Exact set matches | Avg recall | Avg seconds | Coordination errors |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| System | Tasks | Full successes | Exact set matches | Avg recall | Avg precision | Avg F1 | Avg seconds | Coordination errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
             f"| {system} | {row['tasks']} | {row['fullSuccesses']} "
             f"({row['fullSuccessRate']:.2%}) | {row['exactSetMatches']} "
             f"({row['exactSetMatchRate']:.2%}) | {row['avgRootCauseRecall']:.3f} | "
+            f"{row['avgRootCausePrecision']:.3f} | {row['avgRootCauseF1']:.3f} | "
             f"{row['avgSeconds']:.1f} | {row['coordinationToolErrors']} |"
         )
     lines.extend(["", "## Tasks", ""])

@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired Codex baselines complete for n=5 and n=10; full-context oracle complete for n=2/n=5/n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied cohort accuracy, while full-context oracle bounds the coordination value |
-| MARBLE database | adapted diagnostic-observation packets, deterministic scoring | both systems 5/5 recall, 0/5 exact-set match | useful but not native MARBLE |
+| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native ten-stratum sample: Codex 3/10 full recall, Losangelex 3/10 full recall, Losangelex avg recall/precision slightly higher and faster on all 10 | native evidence is mixed; useful for failure taxonomy and runtime, not SOTA correctness |
 
 ## Session Log
 
@@ -247,8 +247,8 @@ separates at least three effects:
 3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
    path is real, not adapted. The preferred target is native MARBLE database
    execution with the benchmark's Docker/PostgreSQL substrate. Status: substrate
-   smoke plus one paired native model smoke are complete; broaden beyond
-   `database-001` before paper regeneration.
+   smoke plus a ten-stratum paired native sample are complete; inspect failures
+   and broaden before paper regeneration.
 
 The world-class paper should make only claims justified by those gates:
 
@@ -360,9 +360,39 @@ Current status:
 - One paired Codex/Losangelex model-in-the-loop smoke is complete on
   `database-001` with recall `1.000` for both systems, strict exact-set miss for
   both systems, zero coordination-tool errors, and clean Docker teardown.
-- Remaining work: expand paired native MARBLE beyond `database-001`, then
-  report recall, exact match, precision, runtime errors, and coordination-tool
-  errors across a meaningful sample.
+- A ten-stratum paired native-postgres sample is now complete across one task
+  from each published database root-cause stratum. Combined artifacts:
+  - partial first campaign:
+    `tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21/results.json`
+  - remaining fixed campaign:
+    `tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-remaining-9-2026-05-21/results.json`
+  - sampled tasks: `database-001`, `database-003`, `database-005`,
+    `database-006`, `database-007`, `database-051`, `database-052`,
+    `database-056`, `database-058`, `database-059`.
+- Combined native MARBLE sample results:
+  - Codex: 10 tasks, 3 full-recall successes, 1 exact-set match, avg recall
+    `0.450`, avg precision `0.333`, mean seconds `403.6`, coordination-tool
+    errors `0`.
+  - Losangelex: 10 tasks, 3 full-recall successes, 0 exact-set matches, avg
+    recall `0.500`, avg precision `0.350`, mean seconds `143.7`,
+    coordination-tool errors `0`.
+  - Paired recall deltas: Losangelex higher on 3 tasks (`database-001`,
+    `database-005`, `database-052`), Codex higher on 3 tasks
+    (`database-003`, `database-058`, `database-059`), 4 ties
+    (`database-006`, `database-007`, `database-051`, `database-056`).
+  - Runtime: Losangelex faster on all 10 paired tasks; mean Codex/Losangelex
+    runtime ratio `2.84x`, median `2.62x`.
+  - Failure signal: both systems over-predict insert/fetch in several native DB
+    cases; redundant-index and vacuum detection need focused inspection before
+    the paper uses MARBLE as strong evidence.
+- Harness fixes made during the sample:
+  - `wide_table_sql` now accepts MARBLE `colsize` settings instead of failing
+    redundant/fetch/vacuum setup with `TypeError`.
+  - future result JSON/report summaries now include explicit root-cause
+    precision and F1 in addition to recall and exact set match.
+- Remaining work: inspect native MARBLE failure traces, improve prompts or
+  fixture observability only if justified without answer leakage, then expand
+  toward a larger stratified subset or full 100-task database run.
 
 ### L5. Larger Objective Silo Matrix
 
@@ -415,3 +445,86 @@ Done means:
    `git ls-remote fallsoftco refs/heads/hollywood-native-integration-clean`
    and `git ls-remote fork refs/heads/hollywood-native-integration-clean`.
 5. Continue from the first incomplete blocker above.
+
+## World-Class Paper Execution Contract
+
+This section is the durable plan for continuing the benchmark program across
+many sessions without restarting or relying on memory.
+
+### Research Objective
+
+Produce an empirically useful academic-style paper on Losangelex/Hollywood
+multi-agent coordination versus same-model Codex agent cohorts. The central
+question is not "is multi-agent always better?" but:
+
+- when does a coordinated Losangelex room improve same-model cohort behavior;
+- when does single-agent full-context execution dominate both cohort designs;
+- what latency/coordination/error tradeoffs appear under objective scoring;
+- which benchmark classes actually measure multi-agent value rather than
+  prompt decomposition alone.
+
+### Paper-Grade Standards
+
+- Use published or reproducible benchmark tasks wherever possible.
+- Keep answer keys, benchmark repositories, labels, and previous results hidden
+  from model workspaces during execution.
+- Use paired same-model comparisons on the same task instances.
+- Report exact task IDs, model, runner commit, hidden paths, runtime settings,
+  scoring script, and raw result artifact paths.
+- Report negative results and ceiling baselines. Full-context oracle results are
+  part of the paper, not a nuisance.
+- Separate claims by evidence strength:
+  - Supported now: Losangelex can match or improve ordinary same-model Codex
+    cohort accuracy on Silo while cutting wall-clock time substantially.
+  - Supported now: full-context single-agent oracle remains stronger on Silo
+    correctness, so Losangelex is not a universal replacement for context
+    aggregation.
+  - Not yet supported: SOTA claims on published leaderboards.
+  - Not yet supported: benchmark-general claims beyond Silo until native MARBLE
+    and SWE-bench expansion finish.
+- Regenerate PDFs only after benchmark tables are stable, then verify the PDFs
+  open before sending.
+- Send final paper artifacts through the existing Ozzz SES production path and
+  record SES message IDs in this ledger.
+
+### Current Evidence Snapshot
+
+- Silo hidden-path paired n=5 is complete: Losangelex has higher strict/partial
+  score on 4 tasks, Codex on 1, 25 ties, and Losangelex is faster on all 30.
+- Silo hidden-path paired n=10 is complete: Codex has one more strict success,
+  Losangelex has near-identical average S/P, and Losangelex is faster on all
+  30 tasks with about a 6.56x mean Codex/Losangelex runtime ratio.
+- Silo full-context oracle is complete for n=2/n=5/n=10 and is more accurate
+  and faster than both cohort systems, which sharply limits any simplistic
+  "multi-agent beats single-agent" claim.
+- Native MARBLE PostgreSQL execution now has a ten-stratum paired sample. Codex
+  and Losangelex both have 3/10 full-recall successes; Losangelex has slightly
+  higher average recall/precision and is faster on all 10, while Codex has the
+  only exact-set match. This is mixed evidence, not a correctness dominance
+  result.
+
+### Execution Queue
+
+1. Native MARBLE: inspect the ten-stratum native-postgres failure traces,
+   especially redundant-index, vacuum, and insert/fetch over-prediction cases.
+2. Native MARBLE: if the stratified sample is stable, expand toward the full
+   100-task database set or a power-justified larger stratified subset.
+3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
+   and estimate paired variance over correctness and runtime.
+4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
+   ownership, dependency-chain, and verifier-heavy tasks. Keep tiny single-file
+   tasks as negative controls.
+5. App-build/coordination evals: preserve them as ecological support, not as
+   the primary objective benchmark evidence.
+6. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
+   runtime distributions, coordination-tool error rates, and failure taxonomy.
+7. Paper: regenerate tables, figures, abstract, related work, threats to
+   validity, and conclusion from the frozen artifacts.
+8. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
+   message IDs here.
+
+### Current Next Step
+
+Inspect the native MARBLE stratified-sample failure traces, decide whether the
+fixture/prompt needs non-leaky improvements, then commit and push both
+configured Losangelex remotes to the same branch tip.
