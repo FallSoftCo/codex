@@ -744,6 +744,14 @@ question is not "is multi-agent always better?" but:
     for final SOTA claims, decide whether to preserve strict published scoring
     only, add a disclosed tolerance-normalized auxiliary metric, or rerun all
     systems with a benchmark-general numeric-output formatting contract.
+- Added disclosed auxiliary numeric-tolerance metrics to future Silo runner
+  outputs: `S_numeric_tolerance_success_rate` and
+  `P_numeric_tolerance_partial_correctness`. These do not replace the official
+  strict S/P fields; they separate exact-format misses from numerically close
+  distributed reasoning. Retrospective check on the observed n=5 Codex-subagent
+  slice: strict S/P aggregate was `0.333/0.457`, while numeric-tolerance S/P was
+  `1.000/1.000`, confirming that the level II/III failures in that slice were
+  primarily rounded-output mismatches.
 
 ### Execution Queue
 

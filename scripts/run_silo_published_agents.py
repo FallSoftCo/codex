@@ -277,6 +277,74 @@ def _normalize_value(value: Any) -> Any:
     return value
 
 
+def _numeric_values_close(actual: Any, expected: Any, *, tolerance: float = 0.01) -> bool:
+    actual_norm = _normalize_value(actual)
+    expected_norm = _normalize_value(expected)
+    if isinstance(actual_norm, (int, float)) and isinstance(expected_norm, (int, float)):
+        return abs(actual_norm - expected_norm) <= tolerance
+    if isinstance(actual_norm, list) and isinstance(expected_norm, list):
+        return len(actual_norm) == len(expected_norm) and all(
+            _numeric_values_close(left, right, tolerance=tolerance)
+            for left, right in zip(actual_norm, expected_norm)
+        )
+    return actual_norm == expected_norm
+
+
+def _numeric_partial_score(actual: Any, expected: Any, *, tolerance: float = 0.01) -> float:
+    actual_norm = _normalize_value(actual)
+    expected_norm = _normalize_value(expected)
+    if isinstance(actual_norm, list) and isinstance(expected_norm, list):
+        if not expected_norm:
+            return 1.0 if not actual_norm else 0.0
+        if not isinstance(actual_norm, list):
+            return 0.0
+        pair_count = min(len(actual_norm), len(expected_norm))
+        if pair_count == 0:
+            return 0.0
+        matched = sum(
+            _numeric_partial_score(left, right, tolerance=tolerance)
+            for left, right in zip(actual_norm, expected_norm)
+        )
+        return matched / len(expected_norm)
+    return 1.0 if _numeric_values_close(actual_norm, expected_norm, tolerance=tolerance) else 0.0
+
+
+def compute_numeric_tolerance_metrics(
+    submissions: list[dict[str, Any]],
+    expected_values: list[Any],
+    *,
+    tolerance: float = 0.01,
+) -> dict[str, float]:
+    count = len(expected_values)
+    if count == 0:
+        return {
+            "S_numeric_tolerance_success_rate": 0.0,
+            "P_numeric_tolerance_partial_correctness": 0.0,
+        }
+    submitted = {
+        int(item["agent_id"]): _normalize_value(item["answer"])
+        for item in submissions
+        if item.get("exists")
+    }
+    exactish = 0
+    partial_total = 0.0
+    for agent_id, expected in enumerate(expected_values):
+        if agent_id not in submitted:
+            continue
+        actual = submitted[agent_id]
+        if _numeric_values_close(actual, expected, tolerance=tolerance):
+            exactish += 1
+        partial_total += _numeric_partial_score(
+            actual,
+            expected,
+            tolerance=tolerance,
+        )
+    return {
+        "S_numeric_tolerance_success_rate": exactish / count,
+        "P_numeric_tolerance_partial_correctness": partial_total / count,
+    }
+
+
 def _canonical_sequence_key(value: Any) -> str:
     return json.dumps(_normalize_value(value), sort_keys=True, separators=(",", ":"))
 
@@ -354,6 +422,10 @@ def score_task(task: SiloTask, submissions: list[dict[str, Any]]) -> dict[str, A
         submissions=submissions,
         expected_values=expected_values,
     )
+    numeric_tolerance_metrics = compute_numeric_tolerance_metrics(
+        submissions,
+        expected_values,
+    )
     return {
         "caseId": task.case_id,
         "caseName": task.case_name,
@@ -363,6 +435,7 @@ def score_task(task: SiloTask, submissions: list[dict[str, Any]]) -> dict[str, A
         "metrics": {
             "S_success_rate": success_rate,
             "P_partial_correctness": partial,
+            **numeric_tolerance_metrics,
         },
         "submissions": records,
     }
@@ -1187,6 +1260,20 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             record["score"]["metrics"]["P_partial_correctness"]
             for record in record_group
         ) / count
+        avg_numeric_tolerance_success_rate = sum(
+            record["score"]["metrics"].get(
+                "S_numeric_tolerance_success_rate",
+                record["score"]["metrics"]["S_success_rate"],
+            )
+            for record in record_group
+        ) / count
+        avg_numeric_tolerance_partial = sum(
+            record["score"]["metrics"].get(
+                "P_numeric_tolerance_partial_correctness",
+                record["score"]["metrics"]["P_partial_correctness"],
+            )
+            for record in record_group
+        ) / count
         avg_seconds = sum(record["seconds"] for record in record_group) / count
         coordination_tool_errors = sum(
             coordination_error_total(record) for record in record_group
@@ -1197,6 +1284,8 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "fullSuccessRate": successes / count,
             "avgAgentSuccessRate": avg_success_rate,
             "avgPartialCorrectness": avg_partial,
+            "avgNumericToleranceSuccessRate": avg_numeric_tolerance_success_rate,
+            "avgNumericTolerancePartialCorrectness": avg_numeric_tolerance_partial,
             "avgSeconds": avg_seconds,
             "coordinationToolErrors": coordination_tool_errors,
         }
@@ -1246,14 +1335,17 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Avg S | Avg P | Avg seconds | Coordination errors |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Coordination errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
             f"| {system} | {row['tasks']} | {row['fullSuccesses']} "
             f"({row['fullSuccessRate']:.2%}) | {row['avgAgentSuccessRate']:.3f} | "
-            f"{row['avgPartialCorrectness']:.3f} | {row['avgSeconds']:.1f} | "
+            f"{row['avgPartialCorrectness']:.3f} | "
+            f"{row['avgNumericToleranceSuccessRate']:.3f} | "
+            f"{row['avgNumericTolerancePartialCorrectness']:.3f} | "
+            f"{row['avgSeconds']:.1f} | "
             f"{row['coordinationToolErrors']} |"
         )
     lines.extend(
@@ -1261,8 +1353,8 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
             "",
             "## By Level",
             "",
-            "| Level | System | Tasks | Full successes | Avg S | Avg P | Avg seconds | Coordination errors |",
-            "|---|---|---:|---:|---:|---:|---:|---:|",
+            "| Level | System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Coordination errors |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for level, level_summary in summary["levels"].items():
@@ -1270,7 +1362,10 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
             lines.append(
                 f"| {level} | {system} | {row['tasks']} | {row['fullSuccesses']} "
                 f"({row['fullSuccessRate']:.2%}) | {row['avgAgentSuccessRate']:.3f} | "
-                f"{row['avgPartialCorrectness']:.3f} | {row['avgSeconds']:.1f} | "
+                f"{row['avgPartialCorrectness']:.3f} | "
+                f"{row['avgNumericToleranceSuccessRate']:.3f} | "
+                f"{row['avgNumericTolerancePartialCorrectness']:.3f} | "
+                f"{row['avgSeconds']:.1f} | "
                 f"{row['coordinationToolErrors']} |"
             )
     lines.extend(["", "## Tasks", ""])
@@ -1281,6 +1376,8 @@ def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]
             f"success={record['score']['success']} "
             f"S={metrics['S_success_rate']:.3f} "
             f"P={metrics['P_partial_correctness']:.3f} "
+            f"S_tol={metrics.get('S_numeric_tolerance_success_rate', metrics['S_success_rate']):.3f} "
+            f"P_tol={metrics.get('P_numeric_tolerance_partial_correctness', metrics['P_partial_correctness']):.3f} "
             f"seconds={record['seconds']:.1f} "
             f"coordination_errors={coordination_error_total(record)}"
         )
