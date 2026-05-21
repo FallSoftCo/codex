@@ -244,6 +244,19 @@ def default_hidden_paths(marble_root: Path) -> list[Path]:
     return [marble_root]
 
 
+def previous_result_hidden_paths(out_root: Path, current_output_dir: Path) -> list[Path]:
+    if not out_root.exists():
+        return []
+    current = current_output_dir.resolve()
+    paths: list[Path] = []
+    for path in out_root.iterdir():
+        if path.resolve() == current:
+            continue
+        if path.is_dir():
+            paths.append(path)
+    return paths
+
+
 def effective_hidden_paths(
     *,
     explicit_paths: list[Path],
@@ -597,31 +610,26 @@ def postgres_env() -> dict[str, str]:
 
 def psql_args() -> list[str]:
     if ACTIVE_COMPOSE_FILES is not None:
-        command = ["docker", "compose"]
-        for compose_file in ACTIVE_COMPOSE_FILES:
-            command.extend(["-f", str(compose_file)])
-        command.extend(
-            [
-                "exec",
-                "-T",
-                "-e",
-                "PGPASSWORD=Test123_456",
-                "postgres_db",
-                "psql",
-                "-X",
-                "-v",
-                "ON_ERROR_STOP=1",
-                "-P",
-                "pager=off",
-                "-h",
-                "127.0.0.1",
-                "-U",
-                "test",
-                "-d",
-                "sysbench",
-            ]
-        )
-        return command
+        return [
+            "docker",
+            "exec",
+            "-i",
+            "-e",
+            "PGPASSWORD=Test123_456",
+            "db_env_docker-postgres_db-1",
+            "psql",
+            "-X",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-P",
+            "pager=off",
+            "-h",
+            "127.0.0.1",
+            "-U",
+            "test",
+            "-d",
+            "sysbench",
+        ]
     return [
         "psql",
         "-X",
@@ -1652,6 +1660,15 @@ def main() -> int:
         marble_root=args.marble_root,
         include_defaults=not args.no_default_hide_paths,
     )
+    if not args.no_default_hide_paths:
+        hidden_paths = effective_hidden_paths(
+            explicit_paths=[
+                *hidden_paths,
+                *previous_result_hidden_paths(args.out_root, output_dir),
+            ],
+            marble_root=args.marble_root,
+            include_defaults=False,
+        )
     global_hidden_paths = (
         [] if args.evidence_mode == "native-postgres" else hidden_paths
     )

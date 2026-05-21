@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired Codex baselines complete for n=5 and n=10; full-context oracle complete for n=2/n=5/n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied cohort accuracy, while full-context oracle bounds the coordination value |
-| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native file-query bridge verified on `database-001` for both systems after discovering socket access was blocked | native ten-stratum sample must be rerun with the fixed query bridge before paper use |
+| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native file-query bridge verified under hidden-path execution on `database-001` after finding socket and compose-path blockers | native ten-stratum sample must be rerun after query-bridge and previous-result hiding fixes before paper use |
 
 ## Session Log
 
@@ -412,9 +412,39 @@ Current status:
     `tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21/results.json`;
     `database-001`, recall `1.000`, precision `0.500`, F1 `0.667`, `415.8s`,
     zero coordination-tool errors, 13 logged SQL queries, no permission errors.
-- Remaining work: rerun the ten-stratum native MARBLE sample with the file-query
-  bridge, then inspect failure traces and expand toward a larger stratified
-  subset or full 100-task database run.
+- A second ten-stratum run with the first file-query bridge was attempted:
+  `tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-paired-stratified-10-2026-05-21/results.json`.
+  This run is also **invalid for paper claims**:
+  - agents could issue file-bridge requests, but the harness responder still
+    used `docker compose exec` while the MARBLE repo was hidden, causing query
+    responses such as `stat .../db_env_docker/.env: permission denied`;
+  - previous benchmark result directories remained readable, and at least one
+    Codex coordinator inspected sibling `database-003` submissions from a prior
+    campaign.
+- Follow-up harness fixes:
+  - active native PostgreSQL queries now use `docker exec` against the running
+    `db_env_docker-postgres_db-1` container, so the responder no longer needs
+    compose files while the MARBLE repo is hidden;
+  - default hidden paths now include prior campaign/result directories under
+    the benchmark output root, excluding only the current campaign directory.
+- Hidden-path bridge validation after the `docker exec` fix:
+  - deterministic hidden-path local smoke:
+    `tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-local-smoke-2026-05-21`;
+    `./query_db.py` returned live `pg_stat_statements` output while the MARBLE
+    repo was chmod-hidden.
+  - Losangelex hidden-path model smoke:
+    `tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-losangelex-smoke-2026-05-21/results.json`;
+    `database-001`, recall `1.000`, precision `0.500`, F1 `0.667`, `131.5s`,
+    zero coordination-tool errors, many logged SQL queries, and no compose
+    `.env` permission errors.
+- Previous-result hiding validation:
+  `tmp/research/published-agent-benchmarks/marble-native-hidden-results-losangelex-smoke-2026-05-21/results.json`;
+  `database-001`, recall `1.000`, precision `0.500`, F1 `0.667`, `161.7s`,
+  zero coordination-tool errors, 38 logged SQL queries, no compose `.env`
+  permission errors, and `46` hidden paths including prior result campaigns.
+- Remaining work: rerun the ten-stratum native MARBLE sample after both fixes,
+  then inspect failure traces and expand toward a larger stratified subset or
+  full 100-task database run.
 
 ### L5. Larger Objective Silo Matrix
 
@@ -520,9 +550,9 @@ question is not "is multi-agent always better?" but:
   and faster than both cohort systems, which sharply limits any simplistic
   "multi-agent beats single-agent" claim.
 - Native MARBLE PostgreSQL now has a validated file-query bridge for sandboxed
-  model runs. The earlier ten-stratum sample is invalid as DB-grounded evidence
-  because agents could not query the live database; rerun it before using MARBLE
-  in the paper.
+  model runs under hidden-path execution, and previous result directories are
+  hidden by default for future campaigns. Both attempted ten-stratum samples are
+  invalid as paper evidence; rerun after the latest query and hiding fixes.
 
 ### Execution Queue
 
