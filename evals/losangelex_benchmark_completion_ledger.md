@@ -752,6 +752,17 @@ question is not "is multi-agent always better?" but:
   slice: strict S/P aggregate was `0.333/0.457`, while numeric-tolerance S/P was
   `1.000/1.000`, confirming that the level II/III failures in that slice were
   primarily rounded-output mismatches.
+- Reran the same observed Silo n=5 Codex-subagent slice after adding the
+  auxiliary fields:
+  `tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-tolerance-2026-05-21/results.json`.
+  The emitted result JSON now records strict avg S/P `0.333/0.457` and numeric-
+  tolerance avg S/P `1.000/1.000`. This run also exposed a distinct
+  Codex-subagent reliability issue: `II-12_n5` produced the numerically correct
+  answer under tolerance but logged 11 coordination/tool router errors,
+  including small `wait_agent` timeouts, bad live-agent paths, blocked shell
+  cleanup, and failed patch attempts. `III-25_n5` produced all expected
+  submissions but missed two expected shared notes. These are substrate-quality
+  signals to report separately from task correctness.
 
 ### Execution Queue
 
