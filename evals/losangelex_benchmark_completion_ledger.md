@@ -22,7 +22,7 @@ The durable standard is:
 | --- | --- | --- | --- |
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
-| Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; all zero coordination-tool errors | strongest positive result; exceeds published open-model SR baselines for n=2/5/10/20 under non-identical harness |
+| Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired fixed-model Codex baselines complete for n=5 and n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied accuracy, not simple correctness dominance |
 | MARBLE database | adapted diagnostic-observation packets, deterministic scoring | both systems 5/5 recall, 0/5 exact-set match | useful but not native MARBLE |
 
 ## Session Log
@@ -182,6 +182,21 @@ The durable standard is:
   workload, queried `pg_stat_statements` through the generated workspace client,
   returned code `0`, and confirmed the live `INSERT` workload had `20000` rows
   in query statistics. Teardown left no MARBLE containers running.
+- Completed the full paired Codex n=10 Silo matrix:
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-codex-2026-05-21`.
+  Codex finished 21/30 strict successes, avg `S=0.727`, avg `P=0.780`,
+  mean `835.5s`, and zero coordination-tool errors. Combined with the completed
+  Losangelex n=10 matrix at
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-paired-2026-05-21`:
+  Losangelex finished 20/30 strict successes, avg `S=0.733`, avg `P=0.779`,
+  mean `133.6s`, and zero coordination-tool errors. Paired task deltas:
+  Losangelex had higher strict/partial score on three tasks, Codex on two tasks,
+  and 25 ties; Losangelex was faster on all 30 tasks with mean
+  Codex/Losangelex runtime ratio about `6.56x`.
+- The fixed-model paired Silo gate is now satisfied for n=5 and n=10. It does
+  not by itself support a broad SOTA claim: n=5 favors Losangelex on
+  correctness and speed, while n=10 is essentially accuracy-tied with Codex one
+  strict success ahead and Losangelex much faster.
 
 ## Blocking Losangelex Work
 
@@ -193,7 +208,7 @@ separates at least three effects:
 1. **Runtime effect at fixed model.** Same published task set, same model, same
    hidden-path rules, comparing ordinary Codex cohorts against Losangelex rooms.
    Minimum bar: full paired Silo n=5 and n=10 matrices, not just the existing
-   n=2 matrix and n=5 balanced slice.
+   n=2 matrix and n=5 balanced slice. Status: complete for Silo n=5 and n=10.
 2. **Coordination effect versus single-agent oracle.** Same model receives the
    full Silo input in one prompt, scored by the same deterministic Silo scorer.
    This tells us whether multi-agent coordination is adding value or only
@@ -215,10 +230,10 @@ The world-class paper should make only claims justified by those gates:
 
 ### Execution Plan Across Sessions
 
-1. Run full paired Codex n=5 Silo matrix with the same `gpt-5.4` model and hidden
-   benchmark paths; combine with the completed Losangelex n=5 matrix.
-2. Run full paired Codex n=10 Silo matrix; combine with the completed Losangelex
-   n=10 matrix.
+1. Done: run full paired Codex n=5 Silo matrix with the same `gpt-5.4` model
+   and hidden benchmark paths; combine with the completed Losangelex n=5 matrix.
+2. Done: run full paired Codex n=10 Silo matrix; combine with the completed
+   Losangelex n=10 matrix.
 3. Add and run a single-agent Silo full-context baseline for n=2, n=5, and n=10.
 4. Repeat the most claim-sensitive Silo scales/tasks for variance, especially
    n=5/n=10 and failure-prone tasks `II-12`, `III-25`, `III-27`, and `III-28`.
@@ -304,6 +319,14 @@ Done means:
 - scoring reports both published recall and strict exact-set/precision metrics;
 - runtime/log errors are included in the result JSON.
 
+Current status:
+
+- The native Docker/PostgreSQL substrate now starts from the harness and was
+  validated without a model run on `database-001`.
+- Remaining work: run paired Codex and Losangelex model-in-the-loop campaigns
+  against the native substrate, then report recall, exact match, precision,
+  runtime errors, and coordination-tool errors.
+
 ### L5. Larger Objective Silo Matrix
 
 Done means:
@@ -320,10 +343,10 @@ Current status:
 - Complete Losangelex hidden-path matrices are now available for n=5, n=10, and
   n=20, all with managed app-server metadata, default hidden Silo repository
   paths, teardown, and zero coordination-tool errors.
-- Remaining work: repeat the highest-value scales for variance; decide whether
-  to attempt n=50/n=100 despite cost/concurrency; run a full paired Codex n=5 or
-  n=10 matrix if matched substrate comparison is needed beyond the balanced
-  slice.
+- Full paired fixed-model Codex comparisons are now available for n=5 and n=10.
+- Remaining work: run the single-agent full-context oracle for n=2/n=5/n=10,
+  repeat the highest-value scales/tasks for variance, and decide whether to
+  attempt n=50/n=100 despite cost/concurrency.
 
 ### L6. Stratified SWE-bench Expansion
 
