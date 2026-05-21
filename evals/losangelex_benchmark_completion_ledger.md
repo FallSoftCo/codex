@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired Codex baselines complete for n=5 and n=10; full-context oracle complete for n=2/n=5/n=10; all zero coordination-tool errors | strongest positive result; fixed-model claim is speed plus near-tied cohort accuracy, while full-context oracle bounds the coordination value |
-| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native isolated ten-stratum sample: both systems 10/10 full recall, 0/10 exact-set, avg precision 0.583; Losangelex faster on all 10 | useful speed/coordination result, not exact-set SOTA; needs over-prediction analysis and broader sample |
+| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native isolated two-slice sample: Codex 19/20 full recall, Losangelex 20/20, both 0/20 exact-set; Losangelex faster on all 20 | useful same-model speed/coordination result under MARBLE's recall-style evaluator; needs full or power-justified native sample |
 
 ## Session Log
 
@@ -456,11 +456,50 @@ Current status:
   - Paired deltas: recall/precision/F1 ties on all 10 sampled tasks;
     Losangelex faster on all 10. Mean Codex/Losangelex runtime ratio `2.91x`,
     median `2.87x`.
-  - Failure signal: both systems systematically over-predict one extra label;
-    exact-set match remains `0/10` for both. The paper should report both full
-    recall and strict exact-set/precision, not only recall.
-- Remaining work: inspect the exact-set over-prediction pattern, then expand
-  toward a larger stratified subset or full 100-task database run.
+  - Exact-set caveat: the sampled MARBLE prompts request more labels than the
+    gold root-cause set contains (`number_of_labels_pred=2` for one-root cases
+    and `3` for two-root cases). Both systems followed the prompt, so strict
+    exact-set match remains `0/10` for both while recall is `10/10`. The paper
+    should report recall as the benchmark-aligned metric and exact-set/precision
+    as stricter secondary metrics.
+- Published evaluator check: `scripts/database/batch_eval.py` scores database
+  tasks as `match_count / len(gold_labels)` after extracting predicted labels,
+  so extra predicted labels are not penalized in MARBLE's scaled task score.
+  The native isolated sample is therefore `10/10` for both systems under the
+  benchmark-aligned recall-style metric; precision and exact-set remain stricter
+  auxiliary diagnostics.
+- Additional isolated ten-stratum native MARBLE sample:
+  `tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21/results.json`.
+  - Hidden paths: `48`, including prior result campaigns.
+  - Post-run hygiene scan found no permission errors, compose `.env` errors, or
+    previous-result leakage hits in run/workspace files. Docker/PostgreSQL
+    teardown left no MARBLE containers running.
+  - Codex: 10 tasks, 9 full-recall successes, 0 exact-set matches, avg recall
+    `0.900`, avg precision `0.533`, avg F1 `0.667`, mean seconds `397.8`,
+    coordination-tool errors `0`.
+  - Losangelex: 10 tasks, 10 full-recall successes, 0 exact-set matches, avg
+    recall `1.000`, avg precision `0.583`, avg F1 `0.733`, mean seconds
+    `148.3`, coordination-tool errors `0`.
+  - Paired deltas: Losangelex higher on 1 task (`database-012`), Codex higher
+    on 0, ties on 9; Losangelex faster on all 10. Mean Codex/Losangelex runtime
+    ratio `2.68x`, median `2.64x`.
+- Combined native MARBLE isolated two-slice evidence:
+  - Raw artifacts:
+    `tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21/results.json`
+    and
+    `tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21/results.json`.
+  - Codex: 20 tasks, 19 full-recall successes, 0 exact-set matches, avg recall
+    `0.950`, avg precision `0.558`, avg F1 `0.700`, mean seconds `409.9`,
+    coordination-tool errors `0`.
+  - Losangelex: 20 tasks, 20 full-recall successes, 0 exact-set matches, avg
+    recall `1.000`, avg precision `0.583`, avg F1 `0.733`, mean seconds
+    `148.2`, coordination-tool errors `0`.
+  - Paired deltas: Losangelex higher on 1 task (`database-012`), Codex higher
+    on 0, ties on 19; Losangelex faster on all 20. Mean Codex/Losangelex
+    runtime ratio `2.79x`, median `2.79x`.
+- Remaining work: expand toward a larger stratified subset or full 100-task
+  database run, and report the evaluator/auxiliary-metric distinction clearly in
+  the paper.
 
 ### L5. Larger Objective Silo Matrix
 
@@ -565,34 +604,35 @@ question is not "is multi-agent always better?" but:
 - Silo full-context oracle is complete for n=2/n=5/n=10 and is more accurate
   and faster than both cohort systems, which sharply limits any simplistic
   "multi-agent beats single-agent" claim.
-- Native MARBLE PostgreSQL now has an isolated ten-stratum paired sample. Codex
-  and Losangelex tie on full recall, precision, F1, exact-set rate, and
-  coordination-tool errors; Losangelex is faster on all 10. Both systems still
-  have 0/10 exact-set matches due extra-label over-prediction.
+- Native MARBLE PostgreSQL now has 20 isolated paired tasks across two
+  ten-stratum slices. Losangelex has 20/20 full recall, Codex has 19/20, both
+  have zero coordination-tool errors, and Losangelex is faster on all 20.
+  Exact-set is 0/20 for both because the sampled prompts request more labels
+  than the gold set.
+  MARBLE's published database batch evaluator uses recall over gold labels as
+  its task score, so exact-set should be presented only as a stricter auxiliary
+  metric.
 
 ### Execution Queue
 
-1. Native MARBLE: inspect the isolated ten-stratum over-prediction traces and
-   decide whether output-shape prompting or scoring should be tightened without
-   leaking answers.
-2. Native MARBLE: repeat or expand the isolated sample toward the full
+1. Native MARBLE: repeat or expand the isolated sample toward the full
    100-task database set or a power-justified larger stratified subset.
-3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
+2. Silo variance: repeat the highest-value n=10 tasks where systems disagree
    and estimate paired variance over correctness and runtime.
-4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
+3. SWE-bench: add a stratified sample that includes multi-file, ambiguous
    ownership, dependency-chain, and verifier-heavy tasks. Keep tiny single-file
    tasks as negative controls.
-5. App-build/coordination evals: preserve them as ecological support, not as
+4. App-build/coordination evals: preserve them as ecological support, not as
    the primary objective benchmark evidence.
-6. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
+5. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
    runtime distributions, coordination-tool error rates, and failure taxonomy.
-7. Paper: regenerate tables, figures, abstract, related work, threats to
+6. Paper: regenerate tables, figures, abstract, related work, threats to
    validity, and conclusion from the frozen artifacts.
-8. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
+7. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
    message IDs here.
 
 ### Current Next Step
 
-Inspect native MARBLE over-prediction on the isolated ten-stratum sample, then
-decide whether to run repeats, a larger stratified subset, or the full 100-task
-database set.
+Expand native MARBLE beyond the isolated ten-stratum sample, then decide whether
+the paper should use the full 100-task database set or a power-justified larger
+stratified subset.
