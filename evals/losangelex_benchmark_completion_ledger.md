@@ -705,24 +705,65 @@ question is not "is multi-agent always better?" but:
   20/20 full recall, avg precision `0.583`, avg F1 `0.733`, and mean
   `148.2s`; Codex-subagents were faster than the serial Codex cohort but slower
   than Losangelex on 19/20 tasks.
+- Locked a SOTA-without-overfit protocol in
+  `evals/losangelex_sota_protocol.md` and a task manifest in
+  `evals/losangelex_benchmark_manifest.json`. Previously observed MARBLE/Silo
+  tasks are now development/evidence tasks; MARBLE final-primary is a locked
+  30-task stratified unused holdout, and Silo n50 is the primary held-out scale
+  with n100 as the stretch scale.
+- Added true `codex-subagents` support to the Silo runner. The runner prepares
+  an isolated campaign-local `CODEX_HOME`, enables `features.multi_agent_v2`,
+  uses real `spawn_agent`/`wait_agent` calls, records parent stdout/stderr,
+  counts subagent tool calls/errors, records worker artifact completeness, and
+  hides the Silo repository plus previous result directories by default.
+  Validity caveat: because the Codex parent must pass worker prompts into
+  `spawn_agent`, this is a true Codex-subagent orchestration baseline, not a
+  strict parent-blind private-shard runtime. The existing full-context oracle
+  remains the ceiling control.
+- Silo true Codex-subagent smoke:
+  `tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-aggregate-2026-05-21/results.json`.
+  Task `I-01_n2` completed with S/P `1.000/1.000`, 2 `spawn_agent` calls, 1
+  `wait_agent` call, zero router errors, all worker notes/submissions present,
+  and no shell fallback or leakage hits in the post-run scan.
+- Silo true Codex-subagent observed-development n=5 slice:
+  `tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-2026-05-21/results.json`.
+  Tasks: `I-01_n5`, `II-12_n5`, `III-25_n5`.
+  - Codex-subagents: 1/3 strict successes, avg S `0.333`, avg P `0.457`,
+    mean `233.7s`, 15 `spawn_agent` calls, complete worker notes/submissions
+    in all three cases, and 2 coordination-tool router errors.
+  - Same-task prior baselines: serial Codex also 1/3, mean `483.0s`;
+    Losangelex also 1/3, mean `132.6s`; full-context oracle also 1/3, mean
+    `43.7s`.
+  - Interpretation: on this small Silo slice, true Codex-subagents preserve the
+    same correctness pattern as serial Codex/Losangelex/full-context, improve
+    materially over serial Codex runtime, and remain slower than Losangelex.
+    The `II-12_n5` and `III-25_n5` misses are not obviously reasoning failures:
+    all systems produced numerically correct-looking floating outputs at full
+    precision while the published expected values are rounded to two decimals
+    and the Silo verification logic uses exact list equality. Before using Silo
+    for final SOTA claims, decide whether to preserve strict published scoring
+    only, add a disclosed tolerance-normalized auxiliary metric, or rerun all
+    systems with a benchmark-general numeric-output formatting contract.
 
 ### Execution Queue
 
-1. Native MARBLE: repeat the true Codex-subagent baseline for variance, then
+1. Silo scoring/prompt gate: decide and document the numeric-output policy for
+   floating list/vector tasks before any held-out Silo n50 run.
+2. Native MARBLE: repeat the true Codex-subagent baseline for variance, then
    expand toward the full 100-task database set or a power-justified larger
    stratified subset.
-2. Silo variance: repeat the highest-value n=10 tasks where systems disagree
+3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
    and estimate paired variance over correctness and runtime.
-3. SWE-bench: add a stratified sample that includes multi-file, ambiguous
+4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
    ownership, dependency-chain, and verifier-heavy tasks. Keep tiny single-file
    tasks as negative controls.
-4. App-build/coordination evals: preserve them as ecological support, not as
+5. App-build/coordination evals: preserve them as ecological support, not as
    the primary objective benchmark evidence.
-5. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
+6. Analysis: compute paired deltas, confidence intervals or bootstrap intervals,
    runtime distributions, coordination-tool error rates, and failure taxonomy.
-6. Paper: regenerate tables, figures, abstract, related work, threats to
+7. Paper: regenerate tables, figures, abstract, related work, threats to
    validity, and conclusion from the frozen artifacts.
-7. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
+8. Delivery: build and open-check PDFs, send by SES through Ozzz, and record
    message IDs here.
 
 ### Current Next Step

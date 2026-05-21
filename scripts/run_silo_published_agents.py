@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -27,6 +28,7 @@ from typing import Any
 
 from benchmark_app_server import add_benchmark_app_server_args
 from benchmark_app_server import benchmark_app_server
+from benchmark_app_server import prepare_minimal_codex_home
 from eval_hollywood_app_builds import (
     DEFAULT_EVAL_MODEL_PROVIDER,
     active_thread_count,
@@ -108,11 +110,13 @@ def run_command(
     cwd: Path,
     timeout: int,
     input_text: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             command,
             cwd=str(cwd),
+            env=env,
             text=True,
             input=input_text,
             capture_output=True,
@@ -209,6 +213,20 @@ def discover_tasks(
 
 def default_hidden_paths(silo_root: Path) -> list[Path]:
     return [silo_root]
+
+
+def previous_result_hidden_paths(out_root: Path, current_output_dir: Path) -> list[Path]:
+    if not out_root.exists():
+        return []
+    current = current_output_dir.resolve()
+    hidden: list[Path] = []
+    for child in out_root.iterdir():
+        if not child.is_dir() or child.name == "repos":
+            continue
+        if child.resolve() == current:
+            continue
+        hidden.append(child)
+    return hidden
 
 
 def effective_hidden_paths(
@@ -452,6 +470,160 @@ Rules:
 """
 
 
+def codex_subagent_worker_prompt(task: SiloTask, config: SiloAgentConfig) -> str:
+    profile = f"\nPublished role/profile for this agent:\n{config.profile}\n" if config.profile else ""
+    return f"""You are Codex subagent for a published SILO-BENCH distributed coordination task.
+
+System under evaluation: codex-subagents
+Case: {task.case_id} ({task.case_name})
+Agent id: {config.agent_id}
+Total agents: {len(task.agent_configs)}
+{profile}
+Private benchmark prompt for this agent:
+{config.user_prompt}
+
+Rules:
+- Do not spawn any subagents. You are a worker, not an orchestrator.
+- You may read and write only inside this workspace.
+- The full benchmark task JSON and answer key are not present in the workspace.
+- Use `shared/` for coordination notes intended for other agents.
+- Do not overwrite another agent's files.
+- Do not inspect benchmark repositories, previous result directories, or any path
+  outside this workspace. A run that uses an answer key is invalid.
+- Always write `shared/agent-{config.agent_id:03d}.md` with the local facts you
+  computed from your private prompt.
+- If you know your final answer, write exactly one JSON object to
+  `submissions/agent-{config.agent_id:03d}.json` with this shape:
+  {{"agent_id": {config.agent_id}, "answer": <your answer>}}
+- If you do not know the answer yet, update `shared/agent-{config.agent_id:03d}.md`
+  with your local fact, what you learned from teammates, and what you still need.
+- Your final chat response is ignored by the scorer unless the required files
+  exist, so do not substitute chat output for the files.
+- Do not put commentary in the submission JSON file.
+
+When your submission or shared note is written, finish. Do not wait for other
+agents and do not delegate.
+"""
+
+
+def codex_subagent_parent_prompt(task: SiloTask) -> str:
+    worker_sections = "\n\n".join(
+        f"### Worker agent-{config.agent_id:03d}\n{codex_subagent_worker_prompt(task, config)}"
+        for config in task.agent_configs
+    )
+    return f"""We are running a published SILO-BENCH distributed coordination task.
+
+System under evaluation: codex-subagents
+Case: {task.case_id} ({task.case_name})
+Total agents: {len(task.agent_configs)}
+
+This is the Codex-subagents orchestration baseline. You must use real Codex
+subagents for the workers, not serial solo execution.
+
+Important validity note:
+- The worker prompts below contain private shards so you can pass each shard to
+  the corresponding spawned worker. Do not solve the task in the parent from
+  those shards.
+- The parent's job is to spawn workers, wait for them, read worker-produced
+  files/results, and aggregate those worker facts into the required submission
+  files when the workers did not already write them.
+
+Parent orchestration rules:
+- Spawn exactly one Codex subagent for each worker prompt below.
+- For each `spawn_agent` call, set `fork_turns` to exactly `none`.
+- Do not include `agent_type`, `model`, `reasoning_effort`, `service_tier`, or
+  `fork_context` in any `spawn_agent` call.
+- Spawn the workers before inspecting the workspace so their work can run in parallel.
+- Do not use Hollywood or Losangelex tools.
+- Do not run `codex`, `codex exec`, or any other shell fallback to simulate subagents.
+- Tell each worker exactly the corresponding prompt below.
+- Wait for all spawned workers to finish. When calling `wait_agent`, use
+  `timeout_ms` of at least `10000`; prefer `600000`.
+- Never call `wait_agent` with small timeout values such as `1`, `5`, `1000`,
+  or `5000`.
+- If any `spawn_agent` call fails, do not complete the task yourself. Return
+  `SPAWN_FAILED` with the error.
+- If a spawned worker starts but later fails or times out, record that fact and
+  continue with available worker files.
+- After workers finish, read `shared/agent-*.md`, existing
+  `submissions/agent-*.json`, and the worker completion messages.
+- If the worker-produced facts are sufficient to determine the task answer,
+  write or repair missing `submissions/agent-*.json` files for every original
+  agent using only those worker-produced facts. Do not use the private shard text
+  directly for the answer.
+- If the worker-produced facts are insufficient, leave missing submissions
+  missing and report the failure.
+- Return a concise final message naming completed and missing submissions.
+
+Worker prompts:
+
+{worker_sections}
+"""
+
+
+def codex_subagent_tool_summary(stdout: str, stderr: str) -> dict[str, Any]:
+    combined = stdout + "\n" + stderr
+    error_lines = [
+        line
+        for line in combined.splitlines()
+        if "codex_core::tools::router: error=" in line
+    ]
+    return {
+        "spawnAgentCalls": combined.count("collab: SpawnAgent"),
+        "waitAgentCalls": combined.count("collab: Wait"),
+        "sendInputCalls": combined.count("collab: SendInput"),
+        "errorCalls": {
+            "total": len(error_lines),
+            "examples": error_lines[:10],
+        },
+    }
+
+
+def codex_subagent_artifact_summary(workspace: Path, agent_count: int) -> dict[str, Any]:
+    submissions_dir = workspace / "submissions"
+    shared_dir = workspace / "shared"
+    expected = [f"agent-{agent_id:03d}" for agent_id in range(agent_count)]
+    submissions_present = [
+        agent_name
+        for agent_name in expected
+        if (submissions_dir / f"{agent_name}.json").exists()
+    ]
+    shared_present = [
+        agent_name for agent_name in expected if (shared_dir / f"{agent_name}.md").exists()
+    ]
+    return {
+        "expectedAgents": expected,
+        "submissionsPresent": submissions_present,
+        "sharedPresent": shared_present,
+        "missingSubmissions": [
+            agent_name for agent_name in expected if agent_name not in submissions_present
+        ],
+        "missingShared": [
+            agent_name for agent_name in expected if agent_name not in shared_present
+        ],
+    }
+
+
+def write_codex_subagents_config(codex_home: Path) -> None:
+    codex_home.mkdir(parents=True, exist_ok=True)
+    (codex_home / "config.toml").write_text(
+        "\n".join(
+            [
+                "[features.multi_agent_v2]",
+                "enabled = true",
+                "max_concurrent_threads_per_session = 128",
+                "default_wait_timeout_ms = 600000",
+                "hide_spawn_agent_metadata = true",
+                "",
+                f'[projects."{REPO_ROOT}"]',
+                'trust_level = "trusted"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def run_codex_task(
     *,
     task: SiloTask,
@@ -529,6 +701,79 @@ def run_codex_task(
         "roundsExecuted": max((record["round"] for record in run_records), default=0),
         "agentRuns": run_records,
         "score": score,
+    }
+
+
+def run_codex_subagents_task(
+    *,
+    task: SiloTask,
+    workspace: Path,
+    codex: Path,
+    model: str,
+    timeout_seconds: int,
+    output_dir: Path,
+    codex_home: Path,
+) -> dict[str, Any]:
+    fresh_workspace(workspace)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    prompt = codex_subagent_parent_prompt(task)
+    (output_dir / "parent-prompt.txt").write_text(prompt, encoding="utf-8")
+    last_message_path = output_dir / "parent-last-message.txt"
+    env = os.environ.copy()
+    env["CODEX_HOME"] = str(codex_home)
+    result = run_command(
+        [
+            str(codex),
+            "-C",
+            str(workspace),
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+            "exec",
+            "--skip-git-repo-check",
+            "-m",
+            model,
+            "-o",
+            str(last_message_path),
+            "-",
+        ],
+        cwd=workspace,
+        timeout=timeout_seconds,
+        input_text=prompt,
+        env=env,
+    )
+    (output_dir / "parent-stdout.log").write_text(result.stdout, encoding="utf-8")
+    (output_dir / "parent-stderr.log").write_text(result.stderr, encoding="utf-8")
+
+    submissions = read_submissions(workspace, len(task.agent_configs))
+    score = score_task(task, submissions)
+    return {
+        "system": "codex-subagents",
+        "caseId": task.case_id,
+        "taskFile": task.task_file.name,
+        "workspace": str(workspace),
+        "seconds": round(time.time() - started, 1),
+        "parentRun": {
+            "returncode": result.returncode,
+            "lastMessagePath": str(last_message_path),
+            "stdoutPath": str(output_dir / "parent-stdout.log"),
+            "stderrPath": str(output_dir / "parent-stderr.log"),
+        },
+        "score": score,
+        "coordinationToolSummary": codex_subagent_tool_summary(result.stdout, result.stderr),
+        "codexSubagentArtifacts": codex_subagent_artifact_summary(
+            workspace,
+            len(task.agent_configs),
+        ),
+        "baselineValidityNote": (
+            "The parent prompt contains worker private shards so the model can call "
+            "spawn_agent with the corresponding prompts. This is a true Codex-subagent "
+            "orchestration baseline, not a strict parent-blind private-shard runtime. "
+            "The parent may aggregate worker-produced facts into standardized "
+            "submission files."
+        ),
     }
 
 
@@ -1046,7 +1291,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--system",
-        choices=("codex", "codex-full-context", "losangelex"),
+        choices=("codex", "codex-subagents", "codex-full-context", "losangelex"),
         action="append",
         required=True,
     )
@@ -1099,12 +1344,30 @@ def main() -> int:
     )
     output_dir = args.out_root / args.campaign_name
     output_dir.mkdir(parents=True, exist_ok=True)
+    codex_subagents_home = None
+    if "codex-subagents" in args.system:
+        codex_subagents_home = (output_dir / "codex-subagents-home").resolve()
+        prepare_minimal_codex_home(
+            codex_home=codex_subagents_home,
+            source_home=args.codex_home_source,
+            output_dir=output_dir,
+        )
+        write_codex_subagents_config(codex_subagents_home)
     records: list[dict[str, Any]] = []
     hidden_paths = effective_hidden_paths(
         explicit_paths=args.hide_paths,
         silo_root=args.silo_root,
         include_defaults=not args.no_default_hide_paths,
     )
+    if not args.no_default_hide_paths:
+        hidden_paths = effective_hidden_paths(
+            explicit_paths=[
+                *hidden_paths,
+                *previous_result_hidden_paths(args.out_root, output_dir),
+            ],
+            silo_root=args.silo_root,
+            include_defaults=False,
+        )
     with benchmark_app_server(
         required="losangelex" in args.system,
         app_server_url=args.app_server_url,
@@ -1131,6 +1394,18 @@ def main() -> int:
                         max_rounds=args.max_rounds,
                         per_agent_timeout_seconds=args.per_agent_timeout_seconds,
                         output_dir=run_dir,
+                    )
+                elif system == "codex-subagents":
+                    if codex_subagents_home is None:
+                        raise RuntimeError("codex-subagents CODEX_HOME was not prepared")
+                    record = run_codex_subagents_task(
+                        task=task,
+                        workspace=workspace,
+                        codex=args.codex,
+                        model=args.model,
+                        timeout_seconds=args.timeout_seconds,
+                        output_dir=run_dir,
+                        codex_home=codex_subagents_home,
                     )
                 elif system == "codex-full-context":
                     record = run_codex_full_context_task(
@@ -1169,6 +1444,11 @@ def main() -> int:
                             "hiddenPaths": [str(path) for path in hidden_paths],
                             "defaultHiddenPathsEnabled": not args.no_default_hide_paths,
                             "appServer": app_server_metadata,
+                            "codexSubagentsHome": (
+                                str(codex_subagents_home)
+                                if codex_subagents_home is not None
+                                else None
+                            ),
                             "records": records,
                             "summary": aggregate(records),
                         },
