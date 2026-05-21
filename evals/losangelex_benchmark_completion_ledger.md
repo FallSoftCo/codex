@@ -633,6 +633,6 @@ question is not "is multi-agent always better?" but:
 
 ### Current Next Step
 
-Expand native MARBLE beyond the isolated ten-stratum sample, then decide whether
-the paper should use the full 100-task database set or a power-justified larger
-stratified subset.
+Expand native MARBLE beyond the current 20-task isolated paired sample, then
+decide whether the paper should use the full 100-task database set or a
+power-justified larger stratified subset.
