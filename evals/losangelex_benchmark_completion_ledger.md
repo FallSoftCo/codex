@@ -22,7 +22,7 @@ The durable standard is:
 | --- | --- | --- | --- |
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
-| Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | n=5 balanced hidden slice: Codex 2/3, Losangelex 3/3 | strongest positive result |
+| Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; all zero coordination-tool errors | strongest positive result; exceeds published open-model SR baselines for n=2/5/10/20 under non-identical harness |
 | MARBLE database | adapted diagnostic-observation packets, deterministic scoring | both systems 5/5 recall, 0/5 exact-set match | useful but not native MARBLE |
 
 ## Session Log
@@ -114,6 +114,32 @@ The durable standard is:
   `seo@fallsoft.co` with configuration set `fallsoftco-vc-access`; SES message
   id:
   `0100019e4722458d-038be9a5-2d32-45dc-97fb-b1be9cedc4b5-000000`.
+- Ran complete Losangelex hidden-path Silo matrices beyond the earlier balanced
+  slice:
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-losangelex-2026-05-20`,
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-losangelex-2026-05-20`,
+  and
+  `tmp/research/published-agent-benchmarks/silo-managed-hidden-n20-full-losangelex-2026-05-20`.
+  Results:
+  - n=5: 21/30 full successes, strict SR `70.0%`, avg `S=0.807`,
+    avg `P=0.826`, mean `113.0s`, zero coordination-tool errors.
+  - n=10: 20/30 full successes, strict SR `66.7%`, avg `S=0.733`,
+    avg `P=0.779`, mean `133.6s`, zero coordination-tool errors.
+  - n=20: 19/30 full successes, strict SR `63.3%`, avg `S=0.715`,
+    avg `P=0.759`, mean `211.1s`, zero coordination-tool errors.
+  Compared to the Silo-Bench paper's Table 12 public open-model baselines, these
+  exceed the strongest published same-scale SR values for n=5 (`48.5%`), n=10
+  (`39.9%`), and n=20 (`33.6%`); the prior n=2 Losangelex matrix also exceeds
+  the strongest published n=2 value (`73.3%` vs. `61.2%`). Claim language must
+  stay narrow: this is a Silo small-to-medium scale frontier result for
+  Losangelex+GPT-5.4 under our hardened harness, not an official universal SOTA
+  claim.
+- Regenerated the hardened published-benchmark paper with the full n=5/n=10/n=20
+  Silo matrices and public-baseline table, then emailed the updated paper and
+  coordination topology paper through the Ozzz production SESv2 path from
+  `seo@fallsoft.co` with configuration set `fallsoftco-vc-access`; SES message
+  id:
+  `0100019e47feb474-4183351a-85d2-461e-b1e9-962cd749c6b6-000000`.
 
 ## Blocking Losangelex Work
 
@@ -204,10 +230,13 @@ Current status:
 
 - The managed hidden-path n=2 sweep is complete across levels I/II/III and
   combined into one provenance-preserving artifact.
-- The balanced n=5 slice has been rerun under the hardened managed runner and
-  reproduces the prior positive Losangelex level-III result.
-- Remaining work: decide whether to start an n=10 attempt or spend the budget on
-  repeated n=5/n=2 variance runs.
+- Complete Losangelex hidden-path matrices are now available for n=5, n=10, and
+  n=20, all with managed app-server metadata, default hidden Silo repository
+  paths, teardown, and zero coordination-tool errors.
+- Remaining work: repeat the highest-value scales for variance; decide whether
+  to attempt n=50/n=100 despite cost/concurrency; run a full paired Codex n=5 or
+  n=10 matrix if matched substrate comparison is needed beyond the balanced
+  slice.
 
 ### L6. Stratified SWE-bench Expansion
 
