@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired serial Codex baselines complete for n=5 and n=10; true Codex-subagent baselines complete for n=5 at 24/30 strict and n=10 at 23/30 strict; full-context oracle complete for n=2/n=5/n=10 | strongest objective result; fixed-model claim is speed plus cohort reliability, while Codex-subagents and full-context oracle bound the coordination value |
-| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native 40-task all-system development evidence: serial Codex 39/40 recall successes, true Codex-subagents 40/40, Losangelex 40/40; Codex-subagents and Losangelex tie avg precision/F1 at `0.583/0.733`; mean runtime is serial Codex `406.6s`, Codex-subagents `215.8s`, Losangelex `153.8s`; coordination errors are `0/44/0` for serial/subagents/Losangelex | useful same-model speed/coordination result under MARBLE's recall-style evaluator; 40-task development evidence supports runtime/reliability claims, but held-out or larger-scale evidence is still needed before paper claims |
+| MARBLE database | native PostgreSQL/Docker execution, hidden benchmark paths, deterministic root-cause scoring | final-primary 30-task holdout complete: serial Codex 30/30 full-recall successes, true Codex-subagents 29/30, Losangelex 30/30; avg precision/F1 `0.583/0.733`, `0.617/0.742`, `0.594/0.740`; mean runtime `393.7s`, `184.0s`, `160.2s`; coordination errors `0`/`25`/`0` | held-out native result is included in the 2026-05-22 paper PDF and emailed through SES |
 
 ## Session Log
 
@@ -261,6 +261,53 @@ The durable standard is:
   `0.571/0.717`, `0.583/0.733`, and `0.583/0.733`; coordination errors
   `0`/`44`/`0`. Losangelex was faster than serial Codex on 40/40 tasks and
   faster than Codex-subagents on 39/40 tasks.
+- Completed the locked native MARBLE final-primary all-system holdout:
+  `tmp/research/published-agent-benchmarks/marble-native-final-primary-all-systems-2026-05-22/results.json`.
+  - Tasks: `database-010`, `database-016`, `database-017`, `database-018`,
+    `database-023`, `database-024`, `database-025`, `database-027`,
+    `database-031`, `database-032`, `database-034`, `database-035`,
+    `database-036`, `database-037`, `database-041`, `database-065`,
+    `database-068`, `database-069`, `database-071`, `database-072`,
+    `database-073`, `database-077`, `database-079`, `database-081`,
+    `database-082`, `database-083`, `database-087`, `database-088`,
+    `database-089`, and `database-091`.
+  - Post-run hygiene scan found no permission errors, answer-key/gold-label
+    leakage hits, published-repository references, `codex exec` leakage,
+    `SPAWN_FAILED` markers, or shell-fallback strings in run/workspace files.
+    Docker/PostgreSQL teardown left no MARBLE containers running.
+  - Serial Codex cohort: 30/30 full-recall successes, 0 exact-set matches, avg
+    recall `1.000`, avg precision `0.583`, avg F1 `0.733`, mean `393.7s`, and
+    zero coordination-tool errors.
+  - True Codex-subagents: 29/30 full-recall successes, 2 exact-set matches, avg
+    recall `0.983`, avg precision `0.617`, avg F1 `0.742`, mean `184.0s`, and
+    25 coordination-tool router errors. The only recall miss was `database-091`,
+    where the system predicted `REDUNDANT_INDEX` against gold
+    `REDUNDANT_INDEX,VACUUM`.
+  - Losangelex: 30/30 full-recall successes, 1 exact-set match, avg recall
+    `1.000`, avg precision `0.594`, avg F1 `0.740`, mean `160.2s`, and zero
+    coordination-tool errors.
+  - Paired runtime: Losangelex was faster than serial Codex on 30/30 tasks and
+    faster than Codex-subagents on 23/30 tasks. Mean paired runtime ratios were
+    serial-Codex/Losangelex `2.51x`, Codex-subagents/Losangelex `1.17x`, and
+    serial-Codex/Codex-subagents `2.18x`.
+  - Interpretation: this is the strongest native MARBLE evidence so far and is
+    no longer development-only. It supports a narrow same-model systems claim:
+    Losangelex preserves benchmark-aligned recall on the heldout MARBLE slice,
+    avoids the observed Codex-subagent recall miss and router-error profile, and
+    reduces mean wall-clock time. It does not support a broad SOTA claim because
+    Codex-subagents have slightly better precision/F1 on this same holdout and
+    all systems still over-predict extra root-cause labels.
+- Regenerated the hardened same-model agent-runtime paper at
+  `tmp/research/published-agent-benchmarks/paper-2026-05-22-final-primary-agent-runtime/losangelex-hardened-agent-runtime-evaluation-2026-05-22.pdf`.
+  The local PDF passed `pdfinfo` with 4 pages and was packaged with its TeX
+  source, the final-primary MARBLE report, and `SHA256SUMS.txt` into
+  `tmp/research/published-agent-benchmarks/email-delivery-2026-05-22-final-primary/losangelex-final-primary-agent-runtime-paper-2026-05-22.zip`.
+  `unzip -t` reported no errors.
+- Emailed the paper artifacts through SESv2 using from
+  `Ozzz Research <seo@fallsoft.co>`, configuration set
+  `fallsoftco-vc-access`, and explicit `ContentTransferEncoding=BASE64` for
+  every attachment. SES message id:
+  `0100019e50c88fb7-c5ed5de7-ab46-4acc-be62-3bb5e4617a1a-000000`.
 
 ## Blocking Losangelex Work
 
@@ -282,8 +329,9 @@ separates at least three effects:
 3. **Benchmark generality.** At least one native non-Silo multi-agent benchmark
    path is real, not adapted. The preferred target is native MARBLE database
    execution with the benchmark's Docker/PostgreSQL substrate. Status: substrate
-   smoke, bridge smokes, and an isolated ten-stratum native sample are complete.
-   Broaden or repeat before making strong MARBLE-general claims.
+   smoke, bridge smokes, development samples, and the locked 30-task
+   final-primary holdout are complete. Broader MARBLE or SWE-bench evidence is
+   still required before making benchmark-general claims.
 
 The world-class paper should make only claims justified by those gates:
 
@@ -306,8 +354,9 @@ The world-class paper should make only claims justified by those gates:
    and n=10.
 4. Repeat the most claim-sensitive Silo scales/tasks for variance, especially
    n=5/n=10 and failure-prone tasks `II-12`, `III-25`, `III-27`, and `III-28`.
-5. Implement native MARBLE database execution and score recall, exact match,
-   precision, runtime errors, and coordination-tool errors.
+5. Done: implement native MARBLE database execution and score recall, exact
+   match, precision, runtime, and coordination-tool errors; consume the locked
+   30-task final-primary holdout after freezing the candidate.
 6. Expand SWE-bench from the current three-instance negative-control slice to a
    stratified sample that includes multi-file and dependency-chain issues.
 7. Regenerate the papers only after the above results are complete, then email
@@ -709,7 +758,9 @@ Current status:
   paths, teardown, and zero coordination-tool errors.
 - Full paired fixed-model Codex comparisons are now available for n=5 and n=10.
 - Full-context oracle baselines are now available for n=2, n=5, and n=10.
-- Remaining work: repeat the highest-value scales/tasks for variance and decide
+- Remaining work: repeat the highest-value scales/tasks for variance, rerun
+  the observed n=5/n=10 comparison table with corrected tolerance metrics for
+  every system if auxiliary numeric-tolerance claims are used, and decide
   whether to attempt n=50/n=100 despite cost/concurrency.
 
 ### L6. Stratified SWE-bench Expansion
@@ -777,8 +828,10 @@ question is not "is multi-agent always better?" but:
     correctness, so Losangelex is not a universal replacement for context
     aggregation.
   - Not yet supported: SOTA claims on published leaderboards.
-  - Not yet supported: benchmark-general claims beyond Silo until native MARBLE
-    and SWE-bench expansion finish.
+  - Supported now: native MARBLE final-primary shows a narrow same-model runtime
+    and reliability result, but not a broad benchmark-general SOTA result.
+  - Not yet supported: benchmark-general claims beyond Silo/MARBLE until
+    SWE-bench expansion and larger-scale Silo evidence finish.
 - Regenerate PDFs only after benchmark tables are stable, then verify the PDFs
   open before sending.
 - Send final paper artifacts through the existing Ozzz SES production path and
@@ -794,41 +847,29 @@ question is not "is multi-agent always better?" but:
 - Silo full-context oracle is complete for n=2/n=5/n=10 and is more accurate
   and faster than both cohort systems, which sharply limits any simplistic
   "multi-agent beats single-agent" claim.
-- Native MARBLE PostgreSQL now has 20 isolated paired tasks across two
-  ten-stratum slices. Losangelex has 20/20 full recall, the serial Codex cohort
-  has 19/20, both have zero coordination-tool errors, and Losangelex is faster
-  on all 20.
-  Exact-set is 0/20 for both because the sampled prompts request more labels
-  than the gold set.
-  MARBLE's published database batch evaluator uses recall over gold labels as
-  its task score, so exact-set should be presented only as a stricter auxiliary
-  metric.
-- A true Codex-subagent native MARBLE baseline now exists for both ten-stratum
-  slices: 20/20 full recall, 1/20 exact-set, avg precision `0.600`, avg F1
-  `0.743`, mean `202.5s`, 17 coordination-tool router errors, and complete
-  expected worker submissions in 9/20 cases. On the same tasks Losangelex had
-  20/20 full recall, avg precision `0.583`, avg F1 `0.733`, and mean
-  `148.2s`; Codex-subagents were faster than the serial Codex cohort but slower
-  than Losangelex on 19/20 tasks.
-- A separate non-holdout native MARBLE development-extension all-system sample
-  is complete on 20 additional database tasks. Serial Codex, true
-  Codex-subagents, and Losangelex all reached 20/20 benchmark-aligned recall
-  with equal avg precision `0.583` and avg F1 `0.733`; mean runtime was
-  `403.3s`, `234.6s`, and `159.3s`, respectively. Codex-subagents recorded 31
-  router errors and a 763.3s tail-latency case; Losangelex recorded zero
-  coordination-tool errors and was faster than Codex-subagents on 19/20 tasks.
-- Combining the prior observed 20-task native MARBLE set with the 20-task
-  development extension yields a 40-task all-system development table: serial
-  Codex 39/40 recall successes, Codex-subagents 40/40, Losangelex 40/40;
-  Codex-subagents and Losangelex tie avg precision/F1 at `0.583/0.733`, while
-  Losangelex is faster than Codex-subagents on 39/40 tasks and has zero
-  observed coordination-tool errors versus 44 router errors for Codex-subagents.
+- Native MARBLE PostgreSQL has both development evidence and a locked
+  final-primary holdout. The 40-task development table is: serial Codex 39/40
+  recall successes, Codex-subagents 40/40, Losangelex 40/40; Codex-subagents
+  and Losangelex tie avg precision/F1 at `0.583/0.733`, while Losangelex is
+  faster than Codex-subagents on 39/40 tasks and has zero observed
+  coordination-tool errors versus 44 router errors for Codex-subagents.
+- The locked native MARBLE final-primary 30-task holdout is complete. Serial
+  Codex and Losangelex reached 30/30 full-recall successes; true
+  Codex-subagents reached 29/30 after missing `VACUUM` on `database-091`.
+  Average precision/F1 were serial Codex `0.583/0.733`, Codex-subagents
+  `0.617/0.742`, and Losangelex `0.594/0.740`. Mean runtimes were `393.7s`,
+  `184.0s`, and `160.2s`, respectively, with coordination errors `0`/`25`/`0`.
+  Losangelex was faster than serial Codex on 30/30 tasks and faster than
+  Codex-subagents on 23/30 tasks. MARBLE's evaluator emphasizes recall over
+  gold labels, so exact-set and precision/F1 are reported as stricter auxiliary
+  metrics and prevent overclaiming.
 - Locked a SOTA-without-overfit protocol in
   `evals/losangelex_sota_protocol.md` and a task manifest in
   `evals/losangelex_benchmark_manifest.json`. Previously observed MARBLE/Silo
-  tasks are now development/evidence tasks; MARBLE final-primary is a locked
-  30-task stratified unused holdout, and Silo n50 is the primary held-out scale
-  with n100 as the stretch scale.
+  tasks are now development/evidence tasks; MARBLE final-primary has been
+  consumed as the locked 30-task stratified holdout for the current frozen
+  candidate, and Silo n50 remains the primary held-out scale with n100 as the
+  stretch scale.
 - Added true `codex-subagents` support to the Silo runner. The runner prepares
   an isolated campaign-local `CODEX_HOME`, enables `features.multi_agent_v2`,
   uses real `spawn_agent`/`wait_agent` calls, records parent stdout/stderr,
@@ -938,9 +979,9 @@ question is not "is multi-agent always better?" but:
    report numeric tolerance only as a disclosed auxiliary metric; before any
    held-out Silo n50 run, rerun the full observed n=5 comparison table with
    corrected tolerance metrics for every system if auxiliary claims are used.
-2. Native MARBLE: expand beyond the repeated observed 20-task sample and the
-   20-task development-extension all-system sample toward the full 100-task
-   database set or a power-justified larger stratified subset.
+2. Native MARBLE: final-primary holdout is complete; optional next evidence is
+   the full 100-task database set or a power-justified larger stratified subset,
+   but do not retune Losangelex against the consumed holdout.
 3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
    and estimate paired variance over correctness and runtime.
 4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
@@ -957,8 +998,6 @@ question is not "is multi-agent always better?" but:
 
 ### Current Next Step
 
-Analyze the native MARBLE development-extension all-system campaign, then decide
-whether to run the full 100-task database development set or a larger
-power-justified stratified subset before consuming the locked MARBLE
-final-primary holdout. Do not consume final-primary for tuning-driven
-Losangelex changes.
+The final-primary MARBLE paper has been generated and emailed. Continue with
+held-out Silo n50 and SWE-bench expansion in later sessions if a broader
+benchmark-general paper claim is still desired.
