@@ -23,7 +23,7 @@ The durable standard is:
 | Coordination topology frontier | controlled model-in-the-loop synthetic coordination | 270 GPT-5.4 trials; topology changes calls/tokens/errors with success held constant | paper PDF generated and emailed |
 | SWE-bench Lite | official SWE-bench scoring | Codex 3/3, Losangelex 3/3; Losangelex slower | included as negative-control slice |
 | Silo-Bench | published task JSON, hidden-path model runs, deterministic scoring | Losangelex full hidden matrices: n=2 22/30, n=5 21/30, n=10 20/30, n=20 19/30; paired serial Codex baselines complete for n=5 and n=10; true Codex-subagent baselines complete for n=5 at 24/30 strict and n=10 at 23/30 strict; full-context oracle complete for n=2/n=5/n=10 | strongest objective result; fixed-model claim is speed plus cohort reliability, while Codex-subagents and full-context oracle bound the coordination value |
-| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native isolated two-slice sample: serial Codex cohort 19/20 full recall, Losangelex 20/20, true Codex-subagents 20/20; Losangelex mean 148.2s vs Codex-subagents 202.5s vs serial Codex 409.9s | useful same-model speed/coordination result under MARBLE's recall-style evaluator; true Codex-subagent baseline now exists but needs expansion/repeat before paper claims |
+| MARBLE database | adapted diagnostic packets plus native PostgreSQL/Docker execution | adapted packet run: both systems 5/5 recall, 0/5 exact-set; native isolated two-slice sample: serial Codex cohort 19/20 full recall, Losangelex 20/20, true Codex-subagents 20/20; true Codex-subagent 20-task repeat again 20/20 recall; Losangelex mean 148.2s vs Codex-subagents about 197-203s vs serial Codex 409.9s | useful same-model speed/coordination result under MARBLE's recall-style evaluator; true Codex-subagent baseline now has one repeat but needs larger scale before paper claims |
 
 ## Session Log
 
@@ -582,6 +582,25 @@ Current status:
     sample while running faster and without the observed subagent aggregation
     reliability issues. Codex-subagents may have a small auxiliary precision/F1
     edge on this sample, so paper language must report the full tradeoff.
+- Repeated the same observed-development 20-task native MARBLE true
+  Codex-subagent baseline for variance:
+  `tmp/research/published-agent-benchmarks/marble-native-codex-subagents-observed-20-repeat-2026-05-22/results.json`.
+  - Post-run hygiene scan found no permission errors, previous-result leakage
+    hits, answer-key/gold-label leakage hits, `SPAWN_FAILED` markers, or shell
+    fallback strings. Docker/PostgreSQL teardown left no MARBLE containers
+    running.
+  - Codex-subagents repeat: 20/20 full-recall successes, 0 exact-set matches,
+    avg recall `1.000`, avg precision `0.583`, avg F1 `0.733`, mean `197.0s`,
+    and 13 coordination-tool router errors.
+  - Compared with the first 20-task Codex-subagent evidence (`20/20` recall,
+    avg precision `0.600`, avg F1 `0.743`, mean `202.5s`, 17 router errors),
+    the recall result is stable, precision/F1 vary slightly by extra-label
+    choices, and runtime/error counts are similar.
+  - Interpretation: this repeat strengthens the narrow MARBLE claim that true
+    Codex subagents and Losangelex both recover all gold root-cause labels on
+    the observed native 20-task sample. It still does not support a broad SOTA
+    claim: exact-set match remains `0/20` in the repeat, and the observed sample
+    is development evidence rather than the locked MARBLE holdout.
 - Remaining work: expand toward a larger stratified subset or full 100-task
   database run, repeat true Codex-subagent runs for variance, and report the
   evaluator/auxiliary-metric distinction clearly in the paper.
@@ -820,9 +839,8 @@ question is not "is multi-agent always better?" but:
    report numeric tolerance only as a disclosed auxiliary metric; before any
    held-out Silo n50 run, rerun the full observed n=5 comparison table with
    corrected tolerance metrics for every system if auxiliary claims are used.
-2. Native MARBLE: repeat the true Codex-subagent baseline for variance, then
-   expand toward the full 100-task database set or a power-justified larger
-   stratified subset.
+2. Native MARBLE: expand beyond the repeated observed 20-task sample toward
+   the full 100-task database set or a power-justified larger stratified subset.
 3. Silo variance: repeat the highest-value n=10 tasks where systems disagree
    and estimate paired variance over correctness and runtime.
 4. SWE-bench: add a stratified sample that includes multi-file, ambiguous
@@ -839,6 +857,6 @@ question is not "is multi-agent always better?" but:
 
 ### Current Next Step
 
-Repeat the native MARBLE true Codex-subagent baseline for variance, then decide
-whether to scale MARBLE to the full 100-task database set or a larger
-power-justified stratified subset before regenerating the empirical paper.
+Decide and run the next native MARBLE scale-up: either the full 100-task
+database set or a larger power-justified stratified subset. Do not consume the
+locked MARBLE final-primary holdout for tuning-driven Losangelex changes.
