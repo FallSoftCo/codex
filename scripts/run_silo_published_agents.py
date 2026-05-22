@@ -274,6 +274,8 @@ def _normalize_value(value: Any) -> Any:
         return stripped
     if isinstance(value, list):
         return [_normalize_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _normalize_value(item) for key, item in value.items()}
     return value
 
 
@@ -286,6 +288,15 @@ def _numeric_values_close(actual: Any, expected: Any, *, tolerance: float = 0.01
         return len(actual_norm) == len(expected_norm) and all(
             _numeric_values_close(left, right, tolerance=tolerance)
             for left, right in zip(actual_norm, expected_norm)
+        )
+    if isinstance(actual_norm, dict) and isinstance(expected_norm, dict):
+        return actual_norm.keys() == expected_norm.keys() and all(
+            _numeric_values_close(
+                actual_norm[key],
+                expected_norm[key],
+                tolerance=tolerance,
+            )
+            for key in expected_norm
         )
     return actual_norm == expected_norm
 
@@ -304,6 +315,18 @@ def _numeric_partial_score(actual: Any, expected: Any, *, tolerance: float = 0.0
         matched = sum(
             _numeric_partial_score(left, right, tolerance=tolerance)
             for left, right in zip(actual_norm, expected_norm)
+        )
+        return matched / len(expected_norm)
+    if isinstance(actual_norm, dict) and isinstance(expected_norm, dict):
+        if not expected_norm:
+            return 1.0 if not actual_norm else 0.0
+        matched = sum(
+            _numeric_partial_score(
+                actual_norm.get(key),
+                expected_norm[key],
+                tolerance=tolerance,
+            )
+            for key in expected_norm
         )
         return matched / len(expected_norm)
     return 1.0 if _numeric_values_close(actual_norm, expected_norm, tolerance=tolerance) else 0.0
