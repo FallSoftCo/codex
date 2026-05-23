@@ -193,7 +193,23 @@ The current tracked research bundle is:
 - [Hardened Same-Model Evaluation of a Native Multi-Agent Runtime](./evals/research/2026-05-22-final-primary-agent-runtime/losangelex-hardened-agent-runtime-evaluation-2026-05-22.pdf)
 - [Paper source](./evals/research/2026-05-22-final-primary-agent-runtime/losangelex-hardened-agent-runtime-evaluation-2026-05-22.tex)
 - [Sanitized MARBLE final-primary results](./evals/research/2026-05-22-final-primary-agent-runtime/marble-final-primary-results.json)
+- [Sanitized Silo-Bench same-model results](./evals/research/2026-05-22-final-primary-agent-runtime/silo-same-model-results.json)
 - [MARBLE final-primary report](./evals/research/2026-05-22-final-primary-agent-runtime/marble-final-primary-report.md)
+
+Silo-Bench is the most meaningful coordination benchmark in the current bundle.
+It separates strict distributed-coordination correctness from runtime and
+coordination-tool reliability:
+
+| Scale | System | Strict success | Avg partial | Mean time | Coord. errors |
+| --- | --- | ---: | ---: | ---: | ---: |
+| n=5 | Serial Codex cohort | 20/30 | 0.714 | 422.1s | 0 |
+| n=5 | Codex subagents | 24/30 | 0.813 | 240.1s | 70 |
+| n=5 | Losangelex rooms | 21/30 | 0.826 | 113.0s | 0 |
+| n=5 | Full-context Codex oracle | 25/30 | 0.846 | 39.2s | 0 |
+| n=10 | Serial Codex cohort | 21/30 | 0.780 | 835.5s | 0 |
+| n=10 | Codex subagents | 23/30 | 0.780 | 328.6s | 182 |
+| n=10 | Losangelex rooms | 20/30 | 0.779 | 133.6s | 0 |
+| n=10 | Full-context Codex oracle | 24/30 | 0.814 | 52.8s | 0 |
 
 Headline MARBLE final-primary result, 30 native PostgreSQL/Docker database
 diagnosis tasks with hidden benchmark paths:
@@ -206,9 +222,15 @@ diagnosis tasks with hidden benchmark paths:
 
 This is a constrained systems result, not a universal SOTA claim. The paper
 argues that Losangelex preserves benchmark-aligned MARBLE recall while reducing
-runtime and coordination errors versus Codex subagents; it also reports the
-counterweight that Codex subagents have slightly higher precision/F1 on this
-holdout and the Silo full-context oracle remains a strong ceiling control.
+runtime and coordination errors versus Codex subagents. On Silo, Codex
+subagents are stronger on strict observed n=5/n=10 correctness, Losangelex is
+the lower-latency native-room baseline with fewer coordination errors, and the
+full-context Codex oracle remains a strong ceiling control.
+
+Token usage is not yet available for these Silo/MARBLE published-benchmark
+runs. The separate coordination-topology benchmark records `model_tokens` and
+supports token-efficiency claims there, but token comparisons should not be
+extrapolated to Silo or MARBLE until those runners record usage.
 
 ## Quickstart
 
