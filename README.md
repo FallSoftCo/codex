@@ -37,6 +37,7 @@ The current integration target is current upstream `main`, with Losangelex behav
 - [What Exists Today](#what-exists-today)
 - [Architecture](#architecture)
 - [Current Status](#current-status)
+- [Research Results](#research-results)
 - [Quickstart](#quickstart)
 - [Scheduled Tasks](#scheduled-tasks)
 - [Watchers](#watchers)
@@ -184,6 +185,30 @@ Not finished yet:
 - full workflow-engine semantics
 - adaptive policy selection across task shapes is still experimental and being benchmarked live
 - polished packaging/release flow for non-technical users
+
+## Research Results
+
+The current tracked research bundle is:
+
+- [Hardened Same-Model Evaluation of a Native Multi-Agent Runtime](./evals/research/2026-05-22-final-primary-agent-runtime/losangelex-hardened-agent-runtime-evaluation-2026-05-22.pdf)
+- [Paper source](./evals/research/2026-05-22-final-primary-agent-runtime/losangelex-hardened-agent-runtime-evaluation-2026-05-22.tex)
+- [Sanitized MARBLE final-primary results](./evals/research/2026-05-22-final-primary-agent-runtime/marble-final-primary-results.json)
+- [MARBLE final-primary report](./evals/research/2026-05-22-final-primary-agent-runtime/marble-final-primary-report.md)
+
+Headline MARBLE final-primary result, 30 native PostgreSQL/Docker database
+diagnosis tasks with hidden benchmark paths:
+
+| System | Full recall | Avg precision | Avg F1 | Mean time | Coord. errors |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Serial Codex cohort | 30/30 | 0.583 | 0.733 | 393.7s | 0 |
+| Codex subagents | 29/30 | 0.617 | 0.742 | 184.0s | 25 |
+| Losangelex rooms | 30/30 | 0.594 | 0.740 | 160.2s | 0 |
+
+This is a constrained systems result, not a universal SOTA claim. The paper
+argues that Losangelex preserves benchmark-aligned MARBLE recall while reducing
+runtime and coordination errors versus Codex subagents; it also reports the
+counterweight that Codex subagents have slightly higher precision/F1 on this
+holdout and the Silo full-context oracle remains a strong ceiling control.
 
 ## Quickstart
 
