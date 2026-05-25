@@ -88,8 +88,8 @@ where
         self.handler.tool_name()
     }
 
-    fn spec(&self) -> Option<ToolSpec> {
-        Some(self.spec.clone())
+    fn spec(&self) -> ToolSpec {
+        self.spec.clone()
     }
 
     fn exposure(&self) -> ToolExposure {
@@ -117,7 +117,7 @@ fn object_schema(
     JsonSchema::object(properties, required, Some(false.into()))
 }
 
-fn create_hollywood_status_tool() -> ToolSpec {
+pub(crate) fn create_hollywood_status_tool() -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_status".to_string(),
         description: "Check whether Hollywood is configured and reachable for this session. Use this first when the user asks you to work with teammates, peers, or other existing agents so you can coordinate with existing attached Losangelex agents before considering `spawn_agent`.".to_string(),
@@ -128,7 +128,7 @@ fn create_hollywood_status_tool() -> ToolSpec {
     })
 }
 
-fn create_coordination_act_tool() -> ToolSpec {
+pub(crate) fn create_coordination_act_tool() -> ToolSpec {
     let path_claim_schema = JsonSchema::object(
         BTreeMap::from([
             (
@@ -247,7 +247,7 @@ fn create_coordination_act_tool() -> ToolSpec {
     })
 }
 
-fn create_list_coordination_tasks_tool() -> ToolSpec {
+pub(crate) fn create_list_coordination_tasks_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "owner".to_string(),
@@ -288,7 +288,7 @@ fn create_list_coordination_tasks_tool() -> ToolSpec {
     })
 }
 
-fn create_restart_client_tool() -> ToolSpec {
+pub(crate) fn create_restart_client_tool() -> ToolSpec {
     let properties = BTreeMap::from([(
         "reason".to_string(),
         JsonSchema::string(Some(
@@ -305,7 +305,7 @@ fn create_restart_client_tool() -> ToolSpec {
     })
 }
 
-fn create_hollywood_read_tool() -> ToolSpec {
+pub(crate) fn create_hollywood_read_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "room".to_string(),
@@ -347,7 +347,7 @@ fn durable_coordination_tool_text(state_db_available: bool) -> &'static str {
     }
 }
 
-fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
+pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "text".to_string(),
@@ -397,7 +397,7 @@ fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
     })
 }
 
-fn create_hollywood_team_up_tool() -> ToolSpec {
+pub(crate) fn create_hollywood_team_up_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "purpose".to_string(),
@@ -438,7 +438,7 @@ fn create_hollywood_team_up_tool() -> ToolSpec {
     })
 }
 
-fn create_hollywood_team_status_tool() -> ToolSpec {
+pub(crate) fn create_hollywood_team_status_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
             "room".to_string(),
@@ -464,7 +464,7 @@ fn create_hollywood_team_status_tool() -> ToolSpec {
     })
 }
 
-fn create_hollywood_team_member_update_tool() -> ToolSpec {
+pub(crate) fn create_hollywood_team_member_update_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         ("team_id".to_string(), JsonSchema::string(Some("Team id to update.".to_string()))),
         (

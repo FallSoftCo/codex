@@ -116,7 +116,8 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     )?;
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let environment_manager = Arc::new(
-        EnvironmentManager::from_codex_home(config.codex_home.clone(), local_runtime_paths).await?,
+        EnvironmentManager::from_codex_home(config.codex_home.clone(), Some(local_runtime_paths))
+            .await?,
     );
     let installation_id = resolve_installation_id(&config.codex_home).await?;
     let thread_manager = ThreadManager::new(
@@ -270,7 +271,6 @@ fn new_config(model: Option<String>, arg0_paths: Arg0DispatchPaths) -> anyhow::R
         multi_agent_v2: MultiAgentV2Config::default(),
         features: Default::default(),
         suppress_unstable_features_warning: false,
-        active_profile: None,
         active_project: ProjectConfig { trust_level: None },
         notices: Notice::default(),
         check_for_update_on_startup: false,

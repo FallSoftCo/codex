@@ -5,9 +5,11 @@ use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::losangelex_spec::create_restart_client_tool;
 use crate::tools::registry::ToolExecutor;
 use codex_protocol::protocol::SessionSource;
 use codex_tools::ToolName;
+use codex_tools::ToolSpec;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -31,6 +33,10 @@ struct RestartClientResult {
 impl ToolExecutor<ToolInvocation> for RestartClientHandler {
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, RESTART_CLIENT_TOOL_NAME.to_string())
+    }
+
+    fn spec(&self) -> ToolSpec {
+        create_restart_client_tool()
     }
 
     async fn handle(

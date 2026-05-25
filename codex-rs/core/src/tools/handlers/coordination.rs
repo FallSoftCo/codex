@@ -12,12 +12,15 @@ use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::losangelex_spec::create_coordination_act_tool;
+use crate::tools::losangelex_spec::create_list_coordination_tasks_tool;
 use crate::tools::registry::ToolExecutor;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use codex_protocol::ThreadId;
 use codex_tools::ToolName;
+use codex_tools::ToolSpec;
 use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -142,6 +145,16 @@ fn default_notify_room() -> bool {
 impl ToolExecutor<ToolInvocation> for CoordinationHandler {
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
+    }
+
+    fn spec(&self) -> ToolSpec {
+        if self.tool_name.name == "coordination_act" {
+            create_coordination_act_tool()
+        } else if self.tool_name.name == "list_coordination_tasks" {
+            create_list_coordination_tasks_tool()
+        } else {
+            panic!("unsupported coordination tool {}", self.tool_name.name)
+        }
     }
 
     async fn handle(

@@ -6,10 +6,19 @@ use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::handlers::shell_spec::create_cancel_task_watch_tool;
+use crate::tools::handlers::shell_spec::create_cancel_watcher_tool;
+use crate::tools::handlers::shell_spec::create_list_task_watches_tool;
+use crate::tools::handlers::shell_spec::create_list_watchers_tool;
+use crate::tools::handlers::shell_spec::create_update_task_watch_tool;
+use crate::tools::handlers::shell_spec::create_watch_agent_completion_tool;
+use crate::tools::handlers::shell_spec::create_watch_process_exit_tool;
+use crate::tools::handlers::shell_spec::create_watch_task_periodically_tool;
 use crate::tools::registry::ToolExecutor;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::AgentStatus;
 use codex_tools::ToolName;
+use codex_tools::ToolSpec;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
@@ -123,6 +132,20 @@ fn default_requires_response() -> bool {
 impl ToolExecutor<ToolInvocation> for WatcherHandler {
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
+    }
+
+    fn spec(&self) -> ToolSpec {
+        match self.tool_name.name.as_str() {
+            "watch_process_exit" => create_watch_process_exit_tool(),
+            "watch_agent_completion" => create_watch_agent_completion_tool(),
+            "watch_task_periodically" => create_watch_task_periodically_tool(),
+            "list_watchers" => create_list_watchers_tool(),
+            "list_task_watches" => create_list_task_watches_tool(),
+            "update_task_watch" => create_update_task_watch_tool(),
+            "cancel_watcher" => create_cancel_watcher_tool(),
+            "cancel_task_watch" => create_cancel_task_watch_tool(),
+            other => panic!("unsupported watcher tool {other}"),
+        }
     }
 
     async fn handle(

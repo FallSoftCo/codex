@@ -4,6 +4,7 @@
 //! from JSONL rollouts and mirrors it into a local SQLite database. Backfill
 //! orchestration and rollout scanning live in `codex-core`.
 
+mod audit;
 mod extract;
 pub mod log_db;
 mod migrations;
@@ -42,6 +43,8 @@ pub use model::RunningTaskWatchRun;
 /// Preferred entrypoint: owns configuration and metrics.
 pub use runtime::StateRuntime;
 
+pub use audit::ThreadStateAuditRow;
+pub use audit::read_thread_state_audit_rows;
 /// Low-level storage engine: useful for focused tests.
 ///
 /// Most consumers should prefer [`StateRuntime`].
@@ -101,13 +104,13 @@ pub use model::WatcherRun;
 pub use model::WatcherRunStatus;
 pub use model::WatcherStatus;
 pub use model::WatcherTriggerKind;
+pub use runtime::GoalAccountingMode;
+pub use runtime::GoalAccountingOutcome;
 pub use runtime::GoalStore;
+pub use runtime::GoalUpdate;
 pub use runtime::RemoteControlEnrollmentRecord;
 pub use runtime::RuntimeDbPath;
 pub use runtime::ThreadFilterOptions;
-pub use runtime::ThreadGoalAccountingMode;
-pub use runtime::ThreadGoalAccountingOutcome;
-pub use runtime::ThreadGoalUpdate;
 pub use runtime::goals_db_filename;
 pub use runtime::goals_db_path;
 pub use runtime::logs_db_filename;

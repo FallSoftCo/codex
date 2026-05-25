@@ -14,6 +14,10 @@ pub(crate) struct HollywoodMessage {
 }
 
 impl HollywoodMessage {
+    pub(crate) const ROLE: &'static str = "developer";
+    const START_MARKER: &'static str = "<hollywood_message>";
+    const END_MARKER: &'static str = "</hollywood_message>";
+
     pub(crate) fn new(message: &HollywoodInputMessage) -> Self {
         Self {
             message_id: message.message_id,
@@ -27,9 +31,17 @@ impl HollywoodMessage {
 }
 
 impl ContextualUserFragment for HollywoodMessage {
-    const ROLE: &'static str = "developer";
-    const START_MARKER: &'static str = "<hollywood_message>";
-    const END_MARKER: &'static str = "</hollywood_message>";
+    fn role() -> &'static str {
+        Self::ROLE
+    }
+
+    fn markers(&self) -> (&'static str, &'static str) {
+        (Self::START_MARKER, Self::END_MARKER)
+    }
+
+    fn type_markers() -> (&'static str, &'static str) {
+        (Self::START_MARKER, Self::END_MARKER)
+    }
 
     fn body(&self) -> String {
         format!(

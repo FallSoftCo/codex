@@ -1075,6 +1075,29 @@ fn record_items_truncates_custom_tool_call_output_content() {
 }
 
 #[test]
+fn record_items_preserves_code_mode_custom_tool_output_content() {
+    let mut history = ContextManager::new();
+    let policy = TruncationPolicy::Tokens(10);
+    let long_output = "code mode output ".repeat(200);
+    let call = ResponseItem::CustomToolCall {
+        id: None,
+        status: None,
+        call_id: "call-1".to_string(),
+        name: "exec".to_string(),
+        input: "text('large output')".to_string(),
+    };
+    let output = ResponseItem::CustomToolCallOutput {
+        call_id: "call-1".to_string(),
+        name: None,
+        output: FunctionCallOutputPayload::from_text(long_output),
+    };
+
+    history.record_items([&call, &output], policy);
+
+    assert_eq!(history.raw_items(), vec![call, output]);
+}
+
+#[test]
 fn record_items_respects_custom_token_limit() {
     let mut history = ContextManager::new();
     let policy = TruncationPolicy::Tokens(10);
@@ -1752,6 +1775,26 @@ fn non_base64_image_urls_are_unchanged() {
         estimate_response_item_model_visible_bytes(&function_output_item),
         serde_json::to_string(&function_output_item).unwrap().len() as i64
     );
+}
+
+#[test]
+fn encrypted_function_output_uses_plaintext_byte_estimate() {
+    let encrypted_content = "A".repeat(1_868);
+    let item = ResponseItem::FunctionCallOutput {
+        call_id: "call-encrypted".to_string(),
+        output: FunctionCallOutputPayload::from_content_items(vec![
+            FunctionCallOutputContentItem::EncryptedContent {
+                encrypted_content: encrypted_content.clone(),
+            },
+        ]),
+    };
+
+    let raw_len = serde_json::to_string(&item).unwrap().len() as i64;
+    let estimated = estimate_response_item_model_visible_bytes(&item);
+    let expected = raw_len - encrypted_content.len() as i64
+        + estimate_encrypted_function_output_length(encrypted_content.len()) as i64;
+
+    assert_eq!(estimated, expected);
 }
 
 #[test]

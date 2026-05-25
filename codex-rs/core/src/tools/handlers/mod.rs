@@ -8,6 +8,8 @@ pub(crate) mod extension_tools;
 mod goal;
 pub(crate) mod goal_spec;
 pub(crate) mod hollywood;
+mod list_available_plugins_to_install;
+pub(crate) mod list_available_plugins_to_install_spec;
 mod mcp;
 mod mcp_resource;
 pub(crate) mod mcp_resource_spec;
@@ -65,6 +67,7 @@ pub use hollywood::HollywoodStatusHandler;
 pub use hollywood::HollywoodTeamMemberUpdateHandler;
 pub use hollywood::HollywoodTeamStatusHandler;
 pub use hollywood::HollywoodTeamUpHandler;
+pub use list_available_plugins_to_install::ListAvailablePluginsToInstallHandler;
 pub use mcp::McpHandler;
 pub use mcp_resource::ListMcpResourceTemplatesHandler;
 pub use mcp_resource::ListMcpResourcesHandler;
@@ -453,7 +456,7 @@ mod tests {
                         path: FileSystemPath::GlobPattern {
                             pattern: "**/*.env".to_string(),
                         },
-                        access: FileSystemAccessMode::None,
+                        access: FileSystemAccessMode::Deny,
                     },
                 ],
                 glob_scan_max_depth: None,

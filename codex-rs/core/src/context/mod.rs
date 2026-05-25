@@ -42,7 +42,7 @@ pub(crate) use environment_context::EnvironmentContext;
 pub use fragment::ContextualUserFragment;
 pub(crate) use fragment::FragmentRegistration;
 pub(crate) use fragment::FragmentRegistrationProxy;
-pub(crate) use goal_context::GoalContext;
+pub use goal_context::GoalContext;
 pub(crate) use guardian_followup_review_reminder::GuardianFollowupReviewReminder;
 pub(crate) use hollywood_message::HollywoodMessage;
 pub(crate) use hook_additional_context::HookAdditionalContext;

@@ -20,8 +20,15 @@ use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::parse_arguments;
+use crate::tools::losangelex_spec::create_hollywood_read_tool;
+use crate::tools::losangelex_spec::create_hollywood_send_tool;
+use crate::tools::losangelex_spec::create_hollywood_status_tool;
+use crate::tools::losangelex_spec::create_hollywood_team_member_update_tool;
+use crate::tools::losangelex_spec::create_hollywood_team_status_tool;
+use crate::tools::losangelex_spec::create_hollywood_team_up_tool;
 use crate::tools::registry::ToolExecutor;
 use codex_tools::ToolName;
+use codex_tools::ToolSpec;
 
 pub struct HollywoodStatusHandler;
 pub struct HollywoodReadHandler;
@@ -170,6 +177,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodStatusHandler {
         ToolName::new(None, "hollywood_status".to_string())
     }
 
+    fn spec(&self) -> ToolSpec {
+        create_hollywood_status_tool()
+    }
+
     async fn handle(
         &self,
         invocation: ToolInvocation,
@@ -260,6 +271,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
         ToolName::new(None, "hollywood_read".to_string())
     }
 
+    fn spec(&self) -> ToolSpec {
+        create_hollywood_read_tool()
+    }
+
     async fn handle(
         &self,
         invocation: ToolInvocation,
@@ -328,6 +343,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
 impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_send".to_string())
+    }
+
+    fn spec(&self) -> ToolSpec {
+        create_hollywood_send_tool(/*state_db_available*/ false)
     }
 
     async fn handle(
@@ -411,6 +430,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
 impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_up".to_string())
+    }
+
+    fn spec(&self) -> ToolSpec {
+        create_hollywood_team_up_tool()
     }
 
     async fn handle(
@@ -544,6 +567,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamStatusHandler {
         ToolName::new(None, "hollywood_team_status".to_string())
     }
 
+    fn spec(&self) -> ToolSpec {
+        create_hollywood_team_status_tool()
+    }
+
     async fn handle(
         &self,
         invocation: ToolInvocation,
@@ -602,6 +629,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamStatusHandler {
 impl ToolExecutor<ToolInvocation> for HollywoodTeamMemberUpdateHandler {
     fn tool_name(&self) -> ToolName {
         ToolName::new(None, "hollywood_team_member_update".to_string())
+    }
+
+    fn spec(&self) -> ToolSpec {
+        create_hollywood_team_member_update_tool()
     }
 
     async fn handle(
