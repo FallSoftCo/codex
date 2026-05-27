@@ -99,7 +99,6 @@ pub(crate) use agent_job::AgentJobRow;
 pub(crate) use coordination::CoordinationActRow;
 pub(crate) use coordination::CoordinationTaskRow;
 pub(crate) use coordination::epoch_seconds_to_datetime as coordination_epoch_seconds_to_datetime;
-pub(crate) use memories::Stage1OutputRow;
 pub(crate) use path_claim::PathClaimRow;
 pub(crate) use scheduled_task::ScheduledTaskRow;
 pub(crate) use scheduled_task::ScheduledTaskRunRow;

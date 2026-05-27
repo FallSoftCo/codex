@@ -1,4 +1,5 @@
 use super::augment_tool_spec_for_code_mode;
+use super::code_mode_name_for_tool_name;
 use super::tool_spec_to_code_mode_tool_definition;
 use crate::AdditionalProperties;
 use crate::FreeformTool;
@@ -10,6 +11,18 @@ use crate::ToolSpec;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::BTreeMap;
+
+#[test]
+fn code_mode_name_for_tool_name_preserves_app_and_mcp_conventions() {
+    assert_eq!(
+        code_mode_name_for_tool_name(&ToolName::namespaced("codex_app", "hidden_dynamic_tool")),
+        "codex_app_hidden_dynamic_tool"
+    );
+    assert_eq!(
+        code_mode_name_for_tool_name(&ToolName::namespaced("mcp__rmcp", "echo")),
+        "mcp__rmcp__echo"
+    );
+}
 
 #[test]
 fn augment_tool_spec_for_code_mode_augments_function_tools() {
