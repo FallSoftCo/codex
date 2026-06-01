@@ -652,20 +652,21 @@ fn turn_start_jsonrpc_span_parents_core_turn_spans() -> Result<()> {
                 ClientRequest::TurnStart {
                     request_id: RequestId::Integer(3),
                     params: TurnStartParams {
+                        environments: None,
                         thread_id,
+                        client_user_message_id: None,
                         input: vec![UserInput::Text {
                             text: "hello".to_string(),
                             text_elements: Vec::new(),
                         }],
                         responsesapi_client_metadata: None,
-                        environments: None,
                         additional_context: None,
                         cwd: None,
                         runtime_workspace_roots: None,
                         approval_policy: None,
                         sandbox_policy: None,
-                        approvals_reviewer: None,
                         permissions: None,
+                        approvals_reviewer: None,
                         model: None,
                         service_tier: None,
                         effort: None,

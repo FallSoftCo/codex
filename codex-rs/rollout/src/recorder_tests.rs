@@ -85,6 +85,7 @@ async fn state_db_init_backfills_before_returning() -> anyhow::Result<()> {
         meta: SessionMeta {
             id: thread_id,
             forked_from_id: None,
+            parent_thread_id: None,
             timestamp: "2026-01-27T12:34:56Z".to_string(),
             cwd: home.path().to_path_buf(),
             originator: "test".to_string(),
@@ -110,6 +111,7 @@ async fn state_db_init_backfills_before_returning() -> anyhow::Result<()> {
         RolloutLine {
             timestamp: "2026-01-27T12:34:57Z".to_string(),
             item: RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
+                client_id: None,
                 message: "hello from startup backfill".to_string(),
                 images: None,
                 local_images: Vec::new(),
@@ -369,6 +371,7 @@ async fn recorder_materializes_on_flush_with_pending_items() -> std::io::Result<
         RolloutRecorderParams::new(
             thread_id,
             /*forked_from_id*/ None,
+            /*parent_thread_id*/ None,
             SessionSource::Exec,
             /*thread_source*/ None,
             BaseInstructions::default(),
@@ -401,6 +404,7 @@ async fn recorder_materializes_on_flush_with_pending_items() -> std::io::Result<
     recorder
         .record_canonical_items(&[RolloutItem::EventMsg(EventMsg::UserMessage(
             UserMessageEvent {
+                client_id: None,
                 message: "first-user-message".to_string(),
                 images: None,
                 local_images: Vec::new(),
@@ -448,6 +452,7 @@ async fn persist_reports_filesystem_error_and_retries_buffered_items() -> std::i
         RolloutRecorderParams::new(
             thread_id,
             /*forked_from_id*/ None,
+            /*parent_thread_id*/ None,
             SessionSource::Exec,
             /*thread_source*/ None,
             BaseInstructions::default(),
@@ -973,6 +978,7 @@ fn fill_missing_thread_item_metadata_preserves_identity_and_prefers_state_git_fi
         git_sha: Some("filesystem-sha".to_string()),
         git_origin_url: Some("https://example.com/filesystem.git".to_string()),
         source: None,
+        parent_thread_id: None,
         agent_nickname: None,
         agent_role: None,
         model_provider: None,
@@ -990,6 +996,7 @@ fn fill_missing_thread_item_metadata_preserves_identity_and_prefers_state_git_fi
         git_sha: Some("state-sha".to_string()),
         git_origin_url: Some("https://example.com/state.git".to_string()),
         source: Some(SessionSource::Exec),
+        parent_thread_id: None,
         agent_nickname: Some("state-agent".to_string()),
         agent_role: Some("state-role".to_string()),
         model_provider: Some("state-provider".to_string()),
@@ -1055,8 +1062,8 @@ async fn list_threads_search_repairs_stale_state_db_hits_before_returning() -> s
     builder.model_provider = Some(config.model_provider_id.clone());
     builder.cwd = home.path().to_path_buf();
     let mut metadata = builder.build(config.model_provider_id.as_str());
-    metadata.title = "needle stale title".to_string();
-    metadata.first_user_message = Some("stale first user".to_string());
+    metadata.title = "needle stale first user".to_string();
+    metadata.first_user_message = Some(metadata.title.clone());
     metadata.preview = metadata.first_user_message.clone();
     runtime
         .upsert_thread(&metadata)
@@ -1128,6 +1135,7 @@ async fn resume_candidate_matches_cwd_reads_latest_turn_context() -> std::io::Re
         item: RolloutItem::TurnContext(TurnContextItem {
             turn_id: Some("turn-1".to_string()),
             cwd: latest_cwd.clone(),
+            workspace_roots: None,
             current_date: None,
             timezone: None,
             approval_policy: AskForApproval::Never,

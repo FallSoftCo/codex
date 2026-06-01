@@ -1,5 +1,6 @@
 use anyhow::Result;
 use app_test_support::McpProcess;
+use app_test_support::create_fake_parented_rollout_with_source;
 use app_test_support::create_fake_rollout;
 use app_test_support::create_fake_rollout_with_source;
 use app_test_support::create_final_assistant_message_sse_response;
@@ -228,6 +229,7 @@ async fn thread_list_reports_system_error_idle_flag_after_failed_turn() -> Resul
     let seed_turn_id = mcp
         .send_turn_start_request(TurnStartParams {
             thread_id: thread.id.clone(),
+            client_user_message_id: None,
             input: vec![UserInput::Text {
                 text: "seed history".to_string(),
                 text_elements: Vec::new(),
@@ -250,6 +252,7 @@ async fn thread_list_reports_system_error_idle_flag_after_failed_turn() -> Resul
     let failed_turn_id = mcp
         .send_turn_start_request(TurnStartParams {
             thread_id: thread.id.clone(),
+            client_user_message_id: None,
             input: vec![UserInput::Text {
                 text: "fail turn".to_string(),
                 text_elements: Vec::new(),
@@ -1048,7 +1051,7 @@ async fn thread_list_filters_by_subagent_variant() -> Result<()> {
 
     let parent_thread_id = ThreadId::from_string(&Uuid::new_v4().to_string())?;
 
-    let review_id = create_fake_rollout_with_source(
+    let review_id = create_fake_parented_rollout_with_source(
         codex_home.path(),
         "2025-02-02T09-00-00",
         "2025-02-02T09:00:00Z",
@@ -1056,6 +1059,7 @@ async fn thread_list_filters_by_subagent_variant() -> Result<()> {
         Some("mock_provider"),
         /*git_info*/ None,
         CoreSessionSource::SubAgent(SubAgentSource::Review),
+        parent_thread_id,
     )?;
     let compact_id = create_fake_rollout_with_source(
         codex_home.path(),
@@ -1108,6 +1112,10 @@ async fn thread_list_filters_by_subagent_variant() -> Result<()> {
         .map(|thread| thread.id.as_str())
         .collect();
     assert_eq!(review_ids, vec![review_id.as_str()]);
+    assert_eq!(
+        review.data[0].parent_thread_id,
+        Some(parent_thread_id.to_string())
+    );
 
     let compact = list_threads(
         &mut mcp,

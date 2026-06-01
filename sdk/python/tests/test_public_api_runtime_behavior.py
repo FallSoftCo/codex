@@ -15,11 +15,12 @@ from openai_codex.api import (
     AsyncThread,
     AsyncTurnHandle,
     Codex,
-    RunResult,
+    Sandbox,
     Thread,
     TurnHandle,
+    TurnResult,
 )
-from openai_codex.client import AppServerClient
+from openai_codex.client import CodexClient
 from openai_codex.generated.v2_all import (
     AgentMessageDeltaNotification,
     ItemCompletedNotification,
@@ -153,6 +154,25 @@ def _approval_settings(params: list[Any]) -> list[dict[str, object]]:
     ]
 
 
+def _completed_turn_result(
+    *,
+    final_response: str | None,
+    items: list[Any],
+    usage: Any,
+) -> TurnResult:
+    return TurnResult(
+        id="turn-1",
+        status=TurnStatus.completed,
+        error=None,
+        started_at=None,
+        completed_at=None,
+        duration_ms=None,
+        final_response=final_response,
+        items=items,
+        usage=usage,
+    )
+
+
 def test_codex_init_failure_closes_client(monkeypatch: pytest.MonkeyPatch) -> None:
     closed: list[bool] = []
 
@@ -170,7 +190,7 @@ def test_codex_init_failure_closes_client(monkeypatch: pytest.MonkeyPatch) -> No
             self._closed = True
             closed.append(True)
 
-    monkeypatch.setattr(public_api_module, "AppServerClient", FakeClient)
+    monkeypatch.setattr(public_api_module, "CodexClient", FakeClient)
 
     with pytest.raises(RuntimeError, match="missing required metadata"):
         Codex()
@@ -258,7 +278,7 @@ def _approval_mode_turn_params(approval_mode: ApprovalMode) -> TurnStartParams:
 
 
 def test_turn_stream_yields_routed_notifications() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     notifications: deque[Notification] = deque(
         [
             _delta_notification(turn_id="turn-1"),
@@ -308,7 +328,7 @@ def test_async_turn_stream_yields_routed_notifications() -> None:
 
 
 def test_turn_run_returns_completed_turn_payload() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     notifications: deque[Notification] = deque(
         [
             _completed_notification(),
@@ -324,7 +344,7 @@ def test_turn_run_returns_completed_turn_payload() -> None:
 
 
 def test_thread_run_accepts_string_input_and_returns_run_result() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     item_notification = _item_completed_notification(text="Hello.")
     usage_notification = _token_usage_notification()
     notifications: deque[Notification] = deque(
@@ -349,7 +369,7 @@ def test_thread_run_accepts_string_input_and_returns_run_result() -> None:
 
     assert seen["thread_id"] == "thread-1"
     assert seen["wire_input"] == [{"type": "text", "text": "hello"}]
-    assert result == RunResult(
+    assert result == _completed_turn_result(
         final_response="Hello.",
         items=[item_notification.payload.item],
         usage=usage_notification.payload.token_usage,
@@ -357,7 +377,7 @@ def test_thread_run_accepts_string_input_and_returns_run_result() -> None:
 
 
 def test_thread_realtime_methods_delegate_to_client() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     seen: list[tuple[str, object]] = []
 
     client.thread_realtime_start = lambda thread_id, prompt: seen.append(
@@ -429,7 +449,7 @@ def test_async_thread_realtime_methods_delegate_to_client() -> None:
 
 
 def test_thread_run_uses_last_completed_assistant_message_as_final_response() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     first_item_notification = _item_completed_notification(text="First message")
     second_item_notification = _item_completed_notification(text="Second message")
     notifications: deque[Notification] = deque(
@@ -454,7 +474,7 @@ def test_thread_run_uses_last_completed_assistant_message_as_final_response() ->
 
 
 def test_thread_run_preserves_empty_last_assistant_message() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     first_item_notification = _item_completed_notification(text="First message")
     second_item_notification = _item_completed_notification(text="")
     notifications: deque[Notification] = deque(
@@ -479,7 +499,7 @@ def test_thread_run_preserves_empty_last_assistant_message() -> None:
 
 
 def test_thread_run_prefers_explicit_final_answer_over_later_commentary() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     final_answer_notification = _item_completed_notification(
         text="Final answer",
         phase=MessagePhase.final_answer,
@@ -510,7 +530,7 @@ def test_thread_run_prefers_explicit_final_answer_over_later_commentary() -> Non
 
 
 def test_thread_run_returns_none_when_only_commentary_messages_complete() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     commentary_notification = _item_completed_notification(
         text="Commentary",
         phase=MessagePhase.commentary,
@@ -533,7 +553,7 @@ def test_thread_run_returns_none_when_only_commentary_messages_complete() -> Non
 
 
 def test_thread_run_raises_on_failed_turn() -> None:
-    client = AppServerClient()
+    client = CodexClient()
     notifications: deque[Notification] = deque(
         [
             _completed_notification(status="failed", error_message="boom"),
@@ -583,7 +603,7 @@ def test_async_thread_run_accepts_string_input_and_returns_run_result() -> None:
 
         assert seen["thread_id"] == "thread-1"
         assert seen["wire_input"] == [{"type": "text", "text": "hello"}]
-        assert result == RunResult(
+        assert result == _completed_turn_result(
             final_response="Hello async.",
             items=[item_notification.payload.item],
             usage=usage_notification.payload.token_usage,
@@ -684,6 +704,40 @@ def test_unknown_approval_mode_is_rejected() -> None:
     """Invalid approval modes should fail before params are constructed."""
     with pytest.raises(ValueError, match="deny_all, auto_review"):
         public_api_module._approval_mode_settings("allow_all")  # type: ignore[arg-type]
+
+
+def test_sandbox_presets_serialize_for_threads_and_turns() -> None:
+    """One public sandbox enum should map to both stable wire representations."""
+    assert {
+        sandbox.name: public_api_module._sandbox_mode(sandbox).value for sandbox in Sandbox
+    } == {
+        "read_only": "read-only",
+        "workspace_write": "workspace-write",
+        "full_access": "danger-full-access",
+    }
+    assert {
+        sandbox.name: public_api_module._sandbox_policy(sandbox).model_dump(
+            by_alias=True,
+            mode="json",
+        )
+        for sandbox in Sandbox
+    } == {
+        "read_only": {"networkAccess": False, "type": "readOnly"},
+        "workspace_write": {
+            "excludeSlashTmp": False,
+            "excludeTmpdirEnvVar": False,
+            "networkAccess": False,
+            "type": "workspaceWrite",
+            "writableRoots": [],
+        },
+        "full_access": {"type": "dangerFullAccess"},
+    }
+
+
+def test_raw_sandbox_strings_are_rejected() -> None:
+    """Callers should use the discoverable enum rather than memorizing values."""
+    with pytest.raises(ValueError, match="Sandbox\\.workspace_write"):
+        public_api_module._sandbox_mode("workspace")  # type: ignore[arg-type]
 
 
 def test_retry_examples_compare_status_with_enum() -> None:

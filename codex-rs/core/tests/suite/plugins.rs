@@ -6,7 +6,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Result;
-use anyhow::bail;
 use codex_features::Feature;
 use codex_login::CodexAuth;
 use codex_protocol::protocol::EventMsg;
@@ -21,7 +20,7 @@ use core_test_support::skip_if_no_network;
 use core_test_support::stdio_server_bin;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_with_timeout;
+use core_test_support::wait_for_mcp_server;
 use tempfile::TempDir;
 use wiremock::MockServer;
 
@@ -140,45 +139,6 @@ async fn build_apps_enabled_plugin_test_codex(
         .codex)
 }
 
-async fn wait_for_sample_mcp_ready(codex: &codex_core::CodexThread) -> Result<()> {
-    let startup_event = wait_for_event_with_timeout(
-        codex,
-        |ev| match ev {
-            EventMsg::McpStartupComplete(summary) => {
-                summary.ready.iter().any(|server| server == "sample")
-                    || summary
-                        .failed
-                        .iter()
-                        .any(|failure| failure.server == "sample")
-                    || summary.cancelled.iter().any(|server| server == "sample")
-            }
-            _ => false,
-        },
-        Duration::from_secs(70),
-    )
-    .await;
-    let EventMsg::McpStartupComplete(startup) = startup_event else {
-        unreachable!("event guard guarantees McpStartupComplete");
-    };
-    if let Some(failure) = startup
-        .failed
-        .iter()
-        .find(|failure| failure.server == "sample")
-    {
-        let error = &failure.error;
-        bail!("plugin MCP server failed to start: {error}");
-    }
-    if startup.cancelled.iter().any(|server| server == "sample") {
-        bail!("plugin MCP server startup was cancelled");
-    }
-    assert!(
-        startup.ready.iter().any(|server| server == "sample"),
-        "expected plugin MCP server to be ready; startup summary: {startup:?}"
-    );
-
-    Ok(())
-}
-
 fn tool_names(body: &serde_json::Value) -> Vec<String> {
     body.get("tools")
         .and_then(serde_json::Value::as_array)
@@ -293,13 +253,10 @@ async fn explicit_plugin_mentions_inject_plugin_guidance() -> Result<()> {
     write_plugin_mcp_plugin(codex_home.as_ref(), &rmcp_test_server_bin);
     write_plugin_app_plugin(codex_home.as_ref());
 
-    let codex = build_apps_enabled_plugin_test_codex(
-        &server,
-        Arc::clone(&codex_home),
-        apps_server.chatgpt_base_url,
-    )
-    .await?;
-    wait_for_sample_mcp_ready(&codex).await?;
+    let codex =
+        build_apps_enabled_plugin_test_codex(&server, codex_home, apps_server.chatgpt_base_url)
+            .await?;
+    wait_for_mcp_server(&codex, "sample").await?;
 
     codex
         .submit(Op::UserInput {

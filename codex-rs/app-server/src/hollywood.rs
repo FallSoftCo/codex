@@ -1460,6 +1460,7 @@ mod tests {
             id: "turn-live".to_string(),
             items: vec![codex_app_server_protocol::ThreadItem::UserMessage {
                 id: "item-1".to_string(),
+                client_id: None,
                 content: Vec::new(),
             }],
             items_view: codex_app_server_protocol::TurnItemsView::Full,
