@@ -42,7 +42,7 @@ pub(crate) struct SessionState {
     pub(crate) agent_task: Option<SessionAgentTask>,
     pub(crate) active_connector_selection: HashSet<String>,
     pub(crate) pending_session_start_sources: VecDeque<codex_hooks::SessionStartSource>,
-    granted_permissions: Option<AdditionalPermissionProfile>,
+    granted_permissions_by_environment_id: HashMap<String, AdditionalPermissionProfile>,
     next_turn_is_first: bool,
     hollywood_session_config: Option<HollywoodSessionConfig>,
     outstanding_hollywood_obligations: Vec<HollywoodObligation>,
@@ -75,7 +75,7 @@ impl SessionState {
             agent_task: None,
             active_connector_selection: HashSet::new(),
             pending_session_start_sources: VecDeque::new(),
-            granted_permissions: None,
+            granted_permissions_by_environment_id: HashMap::new(),
             next_turn_is_first: true,
             hollywood_session_config: None,
             outstanding_hollywood_obligations: Vec::new(),
@@ -268,13 +268,29 @@ impl SessionState {
         self.pending_session_start_sources.pop_front()
     }
 
-    pub(crate) fn record_granted_permissions(&mut self, permissions: AdditionalPermissionProfile) {
-        self.granted_permissions =
-            merge_permission_profiles(self.granted_permissions.as_ref(), Some(&permissions));
+    pub(crate) fn record_granted_permissions(
+        &mut self,
+        environment_id: &str,
+        permissions: AdditionalPermissionProfile,
+    ) {
+        let granted_permissions = merge_permission_profiles(
+            self.granted_permissions_by_environment_id
+                .get(environment_id),
+            Some(&permissions),
+        );
+        if let Some(granted_permissions) = granted_permissions {
+            self.granted_permissions_by_environment_id
+                .insert(environment_id.to_string(), granted_permissions);
+        }
     }
 
-    pub(crate) fn granted_permissions(&self) -> Option<AdditionalPermissionProfile> {
-        self.granted_permissions.clone()
+    pub(crate) fn granted_permissions(
+        &self,
+        environment_id: &str,
+    ) -> Option<AdditionalPermissionProfile> {
+        self.granted_permissions_by_environment_id
+            .get(environment_id)
+            .cloned()
     }
 
     pub(crate) fn hollywood_session_config(&self) -> Option<HollywoodSessionConfig> {
@@ -361,6 +377,9 @@ fn merge_rate_limit_fields(
     }
     if snapshot.credits.is_none() {
         snapshot.credits = previous.and_then(|prior| prior.credits.clone());
+    }
+    if snapshot.individual_limit.is_none() {
+        snapshot.individual_limit = previous.and_then(|prior| prior.individual_limit.clone());
     }
     if snapshot.plan_type.is_none() {
         snapshot.plan_type = previous.and_then(|prior| prior.plan_type);

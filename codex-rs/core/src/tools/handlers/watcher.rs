@@ -412,7 +412,7 @@ fn resolve_thread_id(
     match thread_id {
         Some(thread_id) => ThreadId::from_string(thread_id)
             .map_err(|err| FunctionCallError::RespondToModel(err.to_string())),
-        None => Ok(session.conversation_id),
+        None => Ok(session.thread_id()),
     }
 }
 

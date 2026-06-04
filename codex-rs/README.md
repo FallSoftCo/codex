@@ -2,6 +2,8 @@
 
 We provide Codex CLI as a standalone executable to ensure a zero-dependency install.
 
+Official Codex CLI documentation is published at [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli).
+
 ## Installing Codex
 
 Today, the easiest way to install Codex is via `npm`:

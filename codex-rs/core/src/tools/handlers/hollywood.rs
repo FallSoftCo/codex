@@ -189,7 +189,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodStatusHandler {
             let config = hollywood_config_for_session(invocation.session.as_ref()).await;
             let thread_name = invocation.session.thread_name().await;
             let identities =
-                hollywood_identities(invocation.session.conversation_id, thread_name.as_deref());
+                hollywood_identities(invocation.session.thread_id(), thread_name.as_deref());
             let result = if let Some(config) = config {
                 let health_url =
                     format!("{}/hollywood/v1/health", config.url.trim_end_matches('/'));
@@ -322,7 +322,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                 url: config.url,
                 room,
                 identities: hollywood_identities(
-                    invocation.session.conversation_id,
+                    invocation.session.thread_id(),
                     thread_name.as_deref(),
                 ),
                 messages: response,
@@ -366,7 +366,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
             let room = select_send_room(&config, &args, &target_identities)
                 .await
                 .map_err(FunctionCallError::RespondToModel)?;
-            let sender_id = invocation.session.conversation_id.to_string();
+            let sender_id = invocation.session.thread_id().to_string();
             let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
             let recipient_id = args.to.as_deref().and_then(canonicalize_hollywood_identity);
             let text = args.text.clone();
@@ -476,7 +476,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
                 "room": room,
                 "task_room": args.task_room,
                 "purpose": args.purpose,
-                "leader_session_id": invocation.session.conversation_id.to_string(),
+                "leader_session_id": invocation.session.thread_id().to_string(),
                 "members": members,
             }))
             .send()
@@ -650,7 +650,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamMemberUpdateHandler {
 
             let session_id = match args.session_id.as_deref() {
                 Some(value) => resolve_team_member_session_id(&config, value).await?,
-                None => invocation.session.conversation_id.to_string(),
+                None => invocation.session.thread_id().to_string(),
             };
 
             let url = format!(

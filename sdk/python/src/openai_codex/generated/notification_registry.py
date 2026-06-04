@@ -5,71 +5,70 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from .v2_all import (
-    AccountLoginCompletedNotification,
-    AccountRateLimitsUpdatedNotification,
-    AccountUpdatedNotification,
-    AgentMessageDeltaNotification,
-    AppListUpdatedNotification,
-    CommandExecOutputDeltaNotification,
-    CommandExecutionOutputDeltaNotification,
-    ConfigWarningNotification,
-    ContextCompactedNotification,
-    DeprecationNoticeNotification,
-    ErrorNotification,
-    ExternalAgentConfigImportCompletedNotification,
-    FileChangeOutputDeltaNotification,
-    FileChangePatchUpdatedNotification,
-    FsChangedNotification,
-    FuzzyFileSearchSessionCompletedNotification,
-    FuzzyFileSearchSessionUpdatedNotification,
-    GuardianWarningNotification,
-    HookCompletedNotification,
-    HookStartedNotification,
-    ItemCompletedNotification,
-    ItemGuardianApprovalReviewCompletedNotification,
-    ItemGuardianApprovalReviewStartedNotification,
-    ItemStartedNotification,
-    McpServerOauthLoginCompletedNotification,
-    McpServerStatusUpdatedNotification,
-    McpToolCallProgressNotification,
-    ModelReroutedNotification,
-    ModelVerificationNotification,
-    PlanDeltaNotification,
-    ProcessExitedNotification,
-    ProcessOutputDeltaNotification,
-    ReasoningSummaryPartAddedNotification,
-    ReasoningSummaryTextDeltaNotification,
-    ReasoningTextDeltaNotification,
-    RemoteControlStatusChangedNotification,
-    ServerRequestResolvedNotification,
-    SkillsChangedNotification,
-    TerminalInteractionNotification,
-    ThreadArchivedNotification,
-    ThreadClosedNotification,
-    ThreadGoalClearedNotification,
-    ThreadGoalUpdatedNotification,
-    ThreadNameUpdatedNotification,
-    ThreadRealtimeClosedNotification,
-    ThreadRealtimeErrorNotification,
-    ThreadRealtimeItemAddedNotification,
-    ThreadRealtimeOutputAudioDeltaNotification,
-    ThreadRealtimeSdpNotification,
-    ThreadRealtimeStartedNotification,
-    ThreadRealtimeTranscriptDeltaNotification,
-    ThreadRealtimeTranscriptDoneNotification,
-    ThreadStartedNotification,
-    ThreadStatusChangedNotification,
-    ThreadTokenUsageUpdatedNotification,
-    ThreadUnarchivedNotification,
-    TurnCompletedNotification,
-    TurnDiffUpdatedNotification,
-    TurnPlanUpdatedNotification,
-    TurnStartedNotification,
-    WarningNotification,
-    WindowsSandboxSetupCompletedNotification,
-    WindowsWorldWritableWarningNotification,
-)
+from .v2_all import AccountLoginCompletedNotification
+from .v2_all import AccountRateLimitsUpdatedNotification
+from .v2_all import AccountUpdatedNotification
+from .v2_all import AgentMessageDeltaNotification
+from .v2_all import AppListUpdatedNotification
+from .v2_all import CommandExecOutputDeltaNotification
+from .v2_all import CommandExecutionOutputDeltaNotification
+from .v2_all import ConfigWarningNotification
+from .v2_all import ContextCompactedNotification
+from .v2_all import DeprecationNoticeNotification
+from .v2_all import ErrorNotification
+from .v2_all import ExternalAgentConfigImportCompletedNotification
+from .v2_all import FileChangeOutputDeltaNotification
+from .v2_all import FileChangePatchUpdatedNotification
+from .v2_all import FsChangedNotification
+from .v2_all import FuzzyFileSearchSessionCompletedNotification
+from .v2_all import FuzzyFileSearchSessionUpdatedNotification
+from .v2_all import GuardianWarningNotification
+from .v2_all import HookCompletedNotification
+from .v2_all import HookStartedNotification
+from .v2_all import ItemCompletedNotification
+from .v2_all import ItemGuardianApprovalReviewCompletedNotification
+from .v2_all import ItemGuardianApprovalReviewStartedNotification
+from .v2_all import ItemStartedNotification
+from .v2_all import McpServerOauthLoginCompletedNotification
+from .v2_all import McpServerStatusUpdatedNotification
+from .v2_all import McpToolCallProgressNotification
+from .v2_all import ModelReroutedNotification
+from .v2_all import ModelVerificationNotification
+from .v2_all import PlanDeltaNotification
+from .v2_all import ProcessExitedNotification
+from .v2_all import ProcessOutputDeltaNotification
+from .v2_all import ReasoningSummaryPartAddedNotification
+from .v2_all import ReasoningSummaryTextDeltaNotification
+from .v2_all import ReasoningTextDeltaNotification
+from .v2_all import RemoteControlStatusChangedNotification
+from .v2_all import ServerRequestResolvedNotification
+from .v2_all import SkillsChangedNotification
+from .v2_all import TerminalInteractionNotification
+from .v2_all import ThreadArchivedNotification
+from .v2_all import ThreadClosedNotification
+from .v2_all import ThreadGoalClearedNotification
+from .v2_all import ThreadGoalUpdatedNotification
+from .v2_all import ThreadNameUpdatedNotification
+from .v2_all import ThreadRealtimeClosedNotification
+from .v2_all import ThreadRealtimeErrorNotification
+from .v2_all import ThreadRealtimeItemAddedNotification
+from .v2_all import ThreadRealtimeOutputAudioDeltaNotification
+from .v2_all import ThreadRealtimeSdpNotification
+from .v2_all import ThreadRealtimeStartedNotification
+from .v2_all import ThreadRealtimeTranscriptDeltaNotification
+from .v2_all import ThreadRealtimeTranscriptDoneNotification
+from .v2_all import ThreadSettingsUpdatedNotification
+from .v2_all import ThreadStartedNotification
+from .v2_all import ThreadStatusChangedNotification
+from .v2_all import ThreadTokenUsageUpdatedNotification
+from .v2_all import ThreadUnarchivedNotification
+from .v2_all import TurnCompletedNotification
+from .v2_all import TurnDiffUpdatedNotification
+from .v2_all import TurnPlanUpdatedNotification
+from .v2_all import TurnStartedNotification
+from .v2_all import WarningNotification
+from .v2_all import WindowsSandboxSetupCompletedNotification
+from .v2_all import WindowsWorldWritableWarningNotification
 
 NOTIFICATION_MODELS: dict[str, type[BaseModel]] = {
     "account/login/completed": AccountLoginCompletedNotification,
@@ -124,6 +123,7 @@ NOTIFICATION_MODELS: dict[str, type[BaseModel]] = {
     "thread/realtime/started": ThreadRealtimeStartedNotification,
     "thread/realtime/transcript/delta": ThreadRealtimeTranscriptDeltaNotification,
     "thread/realtime/transcript/done": ThreadRealtimeTranscriptDoneNotification,
+    "thread/settings/updated": ThreadSettingsUpdatedNotification,
     "thread/started": ThreadStartedNotification,
     "thread/status/changed": ThreadStatusChangedNotification,
     "thread/tokenUsage/updated": ThreadTokenUsageUpdatedNotification,

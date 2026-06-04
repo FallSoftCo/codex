@@ -100,6 +100,7 @@ async fn state_db_init_backfills_before_returning() -> anyhow::Result<()> {
             dynamic_tools: None,
             memory_mode: None,
             hollywood: None,
+            multi_agent_version: None,
         },
         git: None,
     };
@@ -1146,6 +1147,7 @@ async fn resume_candidate_matches_cwd_reads_latest_turn_context() -> std::io::Re
             model: "test-model".to_string(),
             personality: None,
             collaboration_mode: None,
+            multi_agent_version: None,
             realtime_active: None,
             effort: None,
             summary: codex_protocol::config_types::ReasoningSummary::Auto,

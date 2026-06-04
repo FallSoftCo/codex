@@ -53,11 +53,11 @@ async fn make_session_with_state_db() -> (
         .expect("sqlite state db should be available for coordination tests");
     session.services.state_db = Some(Arc::clone(&state_db));
     let mut metadata = codex_state::ThreadMetadataBuilder::new(
-        session.conversation_id,
+        session.thread_id(),
         turn.config
             .codex_home
             .as_path()
-            .join(format!("{}.jsonl", session.conversation_id)),
+            .join(format!("{}.jsonl", session.thread_id())),
         Utc::now(),
         SessionSource::Exec,
     )
@@ -404,12 +404,7 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
     owner_session.services.state_db = Some(Arc::clone(&state_db));
     let owner_session = Arc::new(owner_session);
     let owner_turn = Arc::new(owner_turn);
-    insert_thread_metadata(
-        &state_db,
-        owner_turn.as_ref(),
-        owner_session.conversation_id,
-    )
-    .await;
+    insert_thread_metadata(&state_db, owner_turn.as_ref(), owner_session.thread_id()).await;
     let reserved_path = turn.config.cwd.join("src/protocol.rs");
 
     let output = coordination_handler()
@@ -422,7 +417,7 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
                 "title": "Land protocol changes",
                 "details": "Update the protocol shape and keep ownership narrow.",
                 "kind": "implementation",
-                "owner": owner_session.conversation_id.to_string(),
+                "owner": owner_session.thread_id().to_string(),
                 "claim_paths": [{
                     "kind": "file",
                     "path": reserved_path.to_string_lossy()
@@ -460,7 +455,7 @@ async fn direct_awarded_implementation_accept_uses_reserved_claim_paths_by_defau
     );
 
     let owner_claims = state_db
-        .list_path_claims(Some(owner_session.conversation_id))
+        .list_path_claims(Some(owner_session.thread_id()))
         .await
         .expect("owner claims should list cleanly");
     assert_eq!(owner_claims.len(), 1);
@@ -489,12 +484,7 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
     owner_session.services.state_db = Some(Arc::clone(&state_db));
     let owner_session = Arc::new(owner_session);
     let owner_turn = Arc::new(owner_turn);
-    insert_thread_metadata(
-        &state_db,
-        owner_turn.as_ref(),
-        owner_session.conversation_id,
-    )
-    .await;
+    insert_thread_metadata(&state_db, owner_turn.as_ref(), owner_session.thread_id()).await;
     let reserved_path = turn.config.cwd.join("styles.css");
 
     let output = coordination_handler()
@@ -507,7 +497,7 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
                 "title": "Polish styles",
                 "details": "Own the CSS lane.",
                 "kind": "implementation",
-                "owner": owner_session.conversation_id.to_string(),
+                "owner": owner_session.thread_id().to_string(),
                 "claim_paths": [{
                     "kind": "file",
                     "path": reserved_path.to_string_lossy()
@@ -557,17 +547,17 @@ async fn creator_can_cancel_active_implementation_lane_and_release_claims() {
     assert_eq!(cancel_result["act"]["kind"], "cancel");
     assert_eq!(
         cancel_result["woken_threads"],
-        json!([owner_session.conversation_id.to_string()])
+        json!([owner_session.thread_id().to_string()])
     );
 
     let owner_claims = state_db
-        .list_path_claims(Some(owner_session.conversation_id))
+        .list_path_claims(Some(owner_session.thread_id()))
         .await
         .expect("owner claims should list cleanly");
     assert!(owner_claims.is_empty());
 
     let scheduled_tasks = state_db
-        .list_scheduled_tasks(Some(owner_session.conversation_id))
+        .list_scheduled_tasks(Some(owner_session.thread_id()))
         .await
         .expect("scheduled task query should succeed");
     assert_eq!(scheduled_tasks.len(), 1);
@@ -595,12 +585,7 @@ async fn accept_clears_pending_assigned_wake_for_owner() {
     owner_session.services.state_db = Some(Arc::clone(&state_db));
     let owner_session = Arc::new(owner_session);
     let owner_turn = Arc::new(owner_turn);
-    insert_thread_metadata(
-        &state_db,
-        owner_turn.as_ref(),
-        owner_session.conversation_id,
-    )
-    .await;
+    insert_thread_metadata(&state_db, owner_turn.as_ref(), owner_session.thread_id()).await;
 
     let output = coordination_handler()
         .handle(invocation(
@@ -612,7 +597,7 @@ async fn accept_clears_pending_assigned_wake_for_owner() {
                 "title": "Review patch",
                 "details": "Inspect the new patch and report regressions.",
                 "kind": "review",
-                "owner": owner_session.conversation_id.to_string(),
+                "owner": owner_session.thread_id().to_string(),
                 "notify_room": false,
             }),
         ))
@@ -626,7 +611,7 @@ async fn accept_clears_pending_assigned_wake_for_owner() {
 
     assert_eq!(
         state_db
-            .list_scheduled_tasks(Some(owner_session.conversation_id))
+            .list_scheduled_tasks(Some(owner_session.thread_id()))
             .await
             .expect("scheduled task query should succeed")
             .len(),
@@ -650,7 +635,7 @@ async fn accept_clears_pending_assigned_wake_for_owner() {
 
     assert_eq!(
         state_db
-            .list_scheduled_tasks(Some(owner_session.conversation_id))
+            .list_scheduled_tasks(Some(owner_session.thread_id()))
             .await
             .expect("scheduled task query should succeed")
             .len(),
@@ -1144,7 +1129,7 @@ async fn implementation_accept_rejects_conflicting_claim_paths() {
     assert_eq!(task.owner_thread_id, None);
     assert_eq!(
         state_db
-            .list_path_claims(Some(session.conversation_id))
+            .list_path_claims(Some(session.thread_id()))
             .await
             .expect("list claims should succeed"),
         Vec::<codex_state::PathClaim>::new()
@@ -1272,7 +1257,7 @@ async fn auto_execution_verifier_cannot_accept_unassigned_implementation_lane() 
                 "coordination_phase": "execution",
                 "coordination_epoch": 4,
                 "leader_session_id": leader_thread_id.to_string(),
-                "verifier_session_id": session.conversation_id.to_string(),
+                "verifier_session_id": session.thread_id().to_string(),
             }]
         })))
         .expect(1)
@@ -1353,7 +1338,7 @@ async fn auto_execution_verifier_can_accept_explicitly_awarded_implementation_la
                 "coordination_phase": "execution",
                 "coordination_epoch": 5,
                 "leader_session_id": leader_thread_id.to_string(),
-                "verifier_session_id": session.conversation_id.to_string(),
+                "verifier_session_id": session.thread_id().to_string(),
             }]
         })))
         .expect(1)
@@ -1380,7 +1365,7 @@ async fn auto_execution_verifier_can_accept_explicitly_awarded_implementation_la
         .create_coordination_task(codex_state::CoordinationTaskCreateParams {
             id: "task-auto-verifier-awarded".to_string(),
             creator_thread_id: leader_thread_id,
-            owner_thread_id: Some(session.conversation_id),
+            owner_thread_id: Some(session.thread_id()),
             reserved_path_claims: vec![codex_state::PathClaimSpec {
                 kind: codex_state::PathClaimKind::File,
                 path: reserved_path.to_path_buf(),
@@ -1420,7 +1405,7 @@ async fn auto_execution_verifier_can_accept_explicitly_awarded_implementation_la
     assert_eq!(result["task"]["status"], "active");
     assert_eq!(
         result["task"]["owner_thread_id"],
-        json!(session.conversation_id.to_string())
+        json!(session.thread_id().to_string())
     );
 }
 
@@ -1511,7 +1496,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
                 "title": "Land protocol changes",
                 "details": "Own the implementation lane for src/lib.rs.",
                 "kind": "implementation",
-                "owner": session.conversation_id.to_string(),
+                "owner": session.thread_id().to_string(),
                 "claim_paths": [{
                     "kind": "file",
                     "path": claimed_path.to_string_lossy()
@@ -1556,7 +1541,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
                 "title": "Duplicate implementation lane",
                 "details": "Re-state the same src/lib.rs ownership.",
                 "kind": "implementation",
-                "owner": session.conversation_id.to_string(),
+                "owner": session.thread_id().to_string(),
                 "claim_paths": [{
                     "kind": "file",
                     "path": claimed_path.to_string_lossy()
@@ -1579,7 +1564,7 @@ async fn implementation_open_task_dedupes_same_owner_same_scope() {
 
     let tasks = state_db
         .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
-            owner_thread_id: Some(session.conversation_id),
+            owner_thread_id: Some(session.thread_id()),
             creator_thread_id: None,
             room: Some("repo/ozzz".to_string()),
             statuses: Vec::new(),
@@ -1597,12 +1582,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
     owner_session.services.state_db = Some(Arc::clone(&state_db));
     let owner_session = Arc::new(owner_session);
     let owner_turn = Arc::new(owner_turn);
-    insert_thread_metadata(
-        &state_db,
-        owner_turn.as_ref(),
-        owner_session.conversation_id,
-    )
-    .await;
+    insert_thread_metadata(&state_db, owner_turn.as_ref(), owner_session.thread_id()).await;
 
     let initial_open = coordination_handler()
         .handle(invocation(
@@ -1614,7 +1594,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
                 "title": "Run final habit dashboard test gate",
                 "details": "Verify the room stays green before final close.",
                 "kind": "qa",
-                "owner": owner_session.conversation_id.to_string(),
+                "owner": owner_session.thread_id().to_string(),
                 "room": "repo/ozzz",
                 "notify_room": false,
             }),
@@ -1637,7 +1617,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
                 "title": "Run habit dashboard QA and final test gate",
                 "details": "Double-check the final gate before reporting done.",
                 "kind": "qa",
-                "owner": owner_session.conversation_id.to_string(),
+                "owner": owner_session.thread_id().to_string(),
                 "room": "repo/ozzz",
                 "notify_room": false,
             }),
@@ -1656,7 +1636,7 @@ async fn self_opened_qa_lane_dedupes_existing_award_for_owner() {
 
     let tasks = state_db
         .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
-            owner_thread_id: Some(owner_session.conversation_id),
+            owner_thread_id: Some(owner_session.thread_id()),
             creator_thread_id: None,
             room: Some("repo/ozzz".to_string()),
             statuses: Vec::new(),
@@ -2048,7 +2028,7 @@ async fn open_task_named_owner_resolves_fresh_named_thread_without_history() {
 #[tokio::test]
 async fn open_task_named_owner_resolves_current_thread_title() {
     let (session, turn, state_db) = make_session_with_state_db().await;
-    rename_thread_metadata(&state_db, session.conversation_id, "tony").await;
+    rename_thread_metadata(&state_db, session.thread_id(), "tony").await;
 
     let output = coordination_handler()
         .handle(invocation(
@@ -2069,7 +2049,7 @@ async fn open_task_named_owner_resolves_current_thread_title() {
     let result = parse_result(output);
     assert_eq!(
         result["task"]["owner_thread_id"],
-        json!(session.conversation_id.to_string())
+        json!(session.thread_id().to_string())
     );
 }
 
@@ -2297,10 +2277,7 @@ async fn open_task_notifies_room_using_live_session_hollywood_config() {
     let body: Value =
         serde_json::from_slice(&message_request.body).expect("room notify body should be json");
     assert_eq!(body["room"], json!("repo/losangelex"));
-    assert_eq!(
-        body["sender_id"],
-        json!(session.conversation_id.to_string())
-    );
+    assert_eq!(body["sender_id"], json!(session.thread_id().to_string()));
     assert_eq!(body["message_kind"], json!("broadcast"));
 
     let unresolved = session
@@ -2315,11 +2292,11 @@ async fn open_task_notifies_room_using_live_session_hollywood_config() {
 #[tokio::test]
 async fn self_authored_hollywood_message_does_not_create_obligation() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
-    let identities = crate::hollywood::identities(session.conversation_id, None);
+    let identities = crate::hollywood::identities(session.thread_id(), None);
     let sender_id = identities
         .get(1)
         .cloned()
-        .unwrap_or_else(|| session.conversation_id.to_string());
+        .unwrap_or_else(|| session.thread_id().to_string());
 
     session
         .add_hollywood_obligation(&HollywoodInputMessage {
@@ -2361,7 +2338,7 @@ async fn list_coordination_tasks_defaults_to_attached_room_scope() {
     state_db
         .create_coordination_task(codex_state::CoordinationTaskCreateParams {
             id: "task-current".to_string(),
-            creator_thread_id: session.conversation_id,
+            creator_thread_id: session.thread_id(),
             owner_thread_id: None,
             reserved_path_claims: Vec::new(),
             claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
@@ -2381,7 +2358,7 @@ async fn list_coordination_tasks_defaults_to_attached_room_scope() {
     state_db
         .create_coordination_task(codex_state::CoordinationTaskCreateParams {
             id: "task-other".to_string(),
-            creator_thread_id: session.conversation_id,
+            creator_thread_id: session.thread_id(),
             owner_thread_id: None,
             reserved_path_claims: Vec::new(),
             claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,

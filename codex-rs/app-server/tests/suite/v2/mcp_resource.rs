@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use app_test_support::ChatGptAuthFixture;
-use app_test_support::McpProcess;
-use app_test_support::run_current_thread_test_with_stack;
+use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_chatgpt_auth;
 use axum::Router;
@@ -21,7 +20,7 @@ use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_arg0::Arg0DispatchPaths;
-use codex_config::CloudRequirementsLoader;
+use codex_config::CloudConfigBundleLoader;
 use codex_config::LoaderOverrides;
 use codex_config::types::AuthCredentialsStoreMode;
 use codex_core::config::ConfigBuilder;
@@ -93,7 +92,7 @@ stream_max_retries = 0
         AuthCredentialsStoreMode::File,
     )?;
 
-    let mut mcp = McpProcess::new(codex_home.path()).await?;
+    let mut mcp = TestAppServer::new(codex_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
     let thread_start_id = mcp
@@ -158,7 +157,7 @@ apps = true
         AuthCredentialsStoreMode::File,
     )?;
 
-    let mut mcp = McpProcess::new(codex_home.path()).await?;
+    let mut mcp = TestAppServer::new(codex_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
     let read_request_id = mcp
@@ -184,71 +183,67 @@ apps = true
     Ok(())
 }
 
-#[test]
-fn mcp_resource_read_returns_error_for_unknown_thread() -> Result<()> {
-    run_current_thread_test_with_stack("mcp-resource-read-unknown-thread", async {
-        let codex_home = TempDir::new()?;
-        let loader_overrides = LoaderOverrides::without_managed_config_for_tests();
-        let config = ConfigBuilder::default()
-            .codex_home(codex_home.path().to_path_buf())
-            .fallback_cwd(Some(codex_home.path().to_path_buf()))
-            .loader_overrides(loader_overrides.clone())
-            .build()
-            .await?;
-        // This negative-path test does not need the stdio subprocess; keeping it
-        // in-process avoids child-process teardown timing in nextest leak detection.
-        let client = in_process::start(InProcessStartArgs {
-            arg0_paths: Arg0DispatchPaths::default(),
-            config: Arc::new(config),
-            cli_overrides: Vec::new(),
-            loader_overrides,
-            strict_config: false,
-            cloud_requirements: CloudRequirementsLoader::default(),
-            thread_config_loader: Arc::new(codex_config::NoopThreadConfigLoader),
-            feedback: CodexFeedback::new(),
-            log_db: None,
-            state_db: None,
-            environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
-            config_warnings: Vec::new(),
-            session_source: SessionSource::Cli,
-            enable_codex_api_key_env: false,
-            initialize: InitializeParams {
-                client_info: ClientInfo {
-                    name: "codex-app-server-tests".to_string(),
-                    title: None,
-                    version: "0.1.0".to_string(),
-                },
-                capabilities: None,
-            },
-            channel_capacity: in_process::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
-        })
+#[tokio::test]
+async fn mcp_resource_read_returns_error_for_unknown_thread() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let loader_overrides = LoaderOverrides::without_managed_config_for_tests();
+    let config = ConfigBuilder::default()
+        .codex_home(codex_home.path().to_path_buf())
+        .fallback_cwd(Some(codex_home.path().to_path_buf()))
+        .loader_overrides(loader_overrides.clone())
+        .build()
         .await?;
-
-        let response = client
-            .request(ClientRequest::McpResourceRead {
-                request_id: RequestId::Integer(1),
-                params: McpResourceReadParams {
-                    thread_id: Some("00000000-0000-4000-8000-000000000000".to_string()),
-                    server: "codex_apps".to_string(),
-                    uri: TEST_RESOURCE_URI.to_string(),
-                },
-            })
-            .await;
-        client.shutdown().await?;
-
-        let error = match response? {
-            Ok(result) => {
-                anyhow::bail!("expected thread-not-found error, got response: {result:?}")
-            }
-            Err(error) => error,
-        };
-        assert!(
-            error.message.contains("thread not found"),
-            "expected thread-not-found error, got: {error:?}"
-        );
-
-        Ok(())
+    // This negative-path test does not need the stdio subprocess; keeping it
+    // in-process avoids child-process teardown timing in nextest leak detection.
+    let client = in_process::start(InProcessStartArgs {
+        arg0_paths: Arg0DispatchPaths::default(),
+        config: Arc::new(config),
+        cli_overrides: Vec::new(),
+        loader_overrides,
+        strict_config: false,
+        cloud_config_bundle: CloudConfigBundleLoader::default(),
+        thread_config_loader: Arc::new(codex_config::NoopThreadConfigLoader),
+        feedback: CodexFeedback::new(),
+        log_db: None,
+        state_db: None,
+        environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
+        config_warnings: Vec::new(),
+        session_source: SessionSource::Cli,
+        enable_codex_api_key_env: false,
+        initialize: InitializeParams {
+            client_info: ClientInfo {
+                name: "codex-app-server-tests".to_string(),
+                title: None,
+                version: "0.1.0".to_string(),
+            },
+            capabilities: None,
+        },
+        channel_capacity: in_process::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
     })
+    .await?;
+
+    let response = client
+        .request(ClientRequest::McpResourceRead {
+            request_id: RequestId::Integer(1),
+            params: McpResourceReadParams {
+                thread_id: Some("00000000-0000-4000-8000-000000000000".to_string()),
+                server: "codex_apps".to_string(),
+                uri: TEST_RESOURCE_URI.to_string(),
+            },
+        })
+        .await;
+    client.shutdown().await?;
+
+    let error = match response? {
+        Ok(result) => anyhow::bail!("expected thread-not-found error, got response: {result:?}"),
+        Err(error) => error,
+    };
+    assert!(
+        error.message.contains("thread not found"),
+        "expected thread-not-found error, got: {error:?}"
+    );
+
+    Ok(())
 }
 
 async fn start_resource_apps_mcp_server() -> Result<(String, JoinHandle<()>)> {

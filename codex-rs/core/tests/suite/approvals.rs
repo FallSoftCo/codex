@@ -3001,7 +3001,7 @@ allow_local_binding = true
     let sandbox_policy_for_config = sandbox_policy.clone();
     let mut builder = test_codex()
         .with_home(home)
-        .with_cloud_requirements(managed_network_requirements_loader())
+        .with_cloud_config_bundle(managed_network_requirements_loader())
         .with_config(move |config| {
             config.permissions.approval_policy = Constrained::allow_any(approval_policy);
             config
@@ -3281,7 +3281,7 @@ allow_local_binding = true
     };
     let mut builder = test_codex()
         .with_home(home)
-        .with_cloud_requirements(managed_network_requirements_loader())
+        .with_cloud_config_bundle(managed_network_requirements_loader())
         .with_config(move |config| {
             config.permissions.approval_policy = Constrained::allow_any(approval_policy);
         });
@@ -3486,7 +3486,7 @@ allow_local_binding = true
     };
     let mut builder = test_codex()
         .with_home(home)
-        .with_cloud_requirements(managed_network_requirements_loader())
+        .with_cloud_config_bundle(managed_network_requirements_loader())
         .with_config(move |config| {
             config.permissions.approval_policy = Constrained::allow_any(approval_policy);
             let cwd = config.cwd.clone();

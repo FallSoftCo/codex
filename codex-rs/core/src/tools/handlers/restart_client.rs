@@ -73,7 +73,7 @@ impl ToolExecutor<ToolInvocation> for RestartClientHandler {
 
             let content = serde_json::to_string(&RestartClientResult {
                 status: "requested",
-                thread_id: session.conversation_id.to_string(),
+                thread_id: session.thread_id().to_string(),
                 reason: args.reason,
             })
             .map_err(|err| {

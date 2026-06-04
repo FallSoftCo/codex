@@ -9,6 +9,7 @@ use codex_exec_server::ReadDirectoryEntry;
 use codex_exec_server::RemoveOptions;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 use tokio::io;
 
@@ -31,6 +32,26 @@ impl<'a> ApplyPatchTurnFileSystem<'a> {
 
 #[async_trait]
 impl ExecutorFileSystem for ApplyPatchTurnFileSystem<'_> {
+    async fn canonicalize(
+        &self,
+        path: &AbsolutePathBuf,
+        sandbox: Option<&FileSystemSandboxContext>,
+    ) -> FileSystemResult<AbsolutePathBuf> {
+        self.inner.canonicalize(path, sandbox).await
+    }
+
+    async fn join(
+        &self,
+        base_path: &AbsolutePathBuf,
+        path: &Path,
+    ) -> FileSystemResult<AbsolutePathBuf> {
+        self.inner.join(base_path, path).await
+    }
+
+    async fn parent(&self, path: &AbsolutePathBuf) -> FileSystemResult<Option<AbsolutePathBuf>> {
+        self.inner.parent(path).await
+    }
+
     async fn read_file(
         &self,
         path: &AbsolutePathBuf,

@@ -259,7 +259,7 @@ async fn handle_coordination_act(
     db: &Arc<codex_state::StateRuntime>,
     args: CoordinationActArgs,
 ) -> Result<FunctionToolOutput, FunctionCallError> {
-    let actor_thread_id = session.conversation_id;
+    let actor_thread_id = session.thread_id();
     let action = args.action.as_str();
     match validate_coordination_act_summary(action, args.summary.as_deref()) {
         Ok(()) => {}
@@ -754,7 +754,7 @@ async fn finalize_coordination_act(
 
     let mut woken_threads = Vec::new();
     if let Some(owner_thread_id) = outcome.task.owner_thread_id.as_deref()
-        && owner_thread_id != session.conversation_id.to_string()
+        && owner_thread_id != session.thread_id().to_string()
     {
         let wake_reason = match outcome.task.status {
             codex_state::CoordinationTaskStatus::Awarded => Some("assigned"),
@@ -774,7 +774,7 @@ async fn finalize_coordination_act(
     }
     for task in &outcome.unblocked_tasks {
         if let Some(owner_thread_id) = task.owner_thread_id.as_deref()
-            && owner_thread_id != session.conversation_id.to_string()
+            && owner_thread_id != session.thread_id().to_string()
             && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded)
         {
             enqueue_coordination_notification(db, owner_thread_id, task, "unblocked")
@@ -1092,7 +1092,7 @@ async fn resolve_current_thread_target(
         return Ok(None);
     };
     let metadata = db
-        .get_thread(session.conversation_id)
+        .get_thread(session.thread_id())
         .await
         .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
     let Some(metadata) = metadata else {
@@ -1102,7 +1102,7 @@ async fn resolve_current_thread_target(
         return Ok(None);
     };
     if current_title == target_title {
-        Ok(Some(session.conversation_id))
+        Ok(Some(session.thread_id()))
     } else {
         Ok(None)
     }
@@ -1151,7 +1151,7 @@ async fn hollywood_config_for_session(
     }
 
     let metadata = db
-        .get_thread(session.conversation_id)
+        .get_thread(session.thread_id())
         .await
         .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
     let Some(hollywood) = metadata.and_then(|thread| thread.hollywood) else {
@@ -1243,7 +1243,7 @@ async fn load_coordination_room_policy_context(
         configured_policy,
         phase,
         epoch: room_state.coordination_epoch,
-        role: coordination_role_for_room_state(&room_state, session.conversation_id),
+        role: coordination_role_for_room_state(&room_state, session.thread_id()),
     }))
 }
 
@@ -2016,7 +2016,7 @@ async fn send_coordination_room_summary(
         .room
         .clone()
         .unwrap_or_else(|| config.room.clone());
-    let body = coordination_room_summary(session.conversation_id, outcome);
+    let body = coordination_room_summary(session.thread_id(), outcome);
     let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
     let client = Client::new();
 
@@ -2025,7 +2025,7 @@ async fn send_coordination_room_summary(
             .post(&url)
             .json(&json!({
                 "room": room,
-                "sender_id": session.conversation_id.to_string(),
+                "sender_id": session.thread_id().to_string(),
                 "message_kind": "broadcast",
                 "response_policy": "none",
                 "body": body,

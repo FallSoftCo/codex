@@ -60,7 +60,7 @@ async fn restart_client_rejects_subagent_threads() {
 #[tokio::test]
 async fn restart_client_emits_restart_event_and_returns_requested_status() {
     let (session, turn, rx_event) = make_session_and_context_with_rx().await;
-    let thread_id = session.conversation_id.to_string();
+    let thread_id = session.thread_id().to_string();
 
     let output = RestartClientHandler
         .handle(ToolInvocation {

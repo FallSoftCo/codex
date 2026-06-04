@@ -31,7 +31,7 @@ impl HollywoodMessage {
 }
 
 impl ContextualUserFragment for HollywoodMessage {
-    fn role() -> &'static str {
+    fn role(&self) -> &'static str {
         Self::ROLE
     }
 

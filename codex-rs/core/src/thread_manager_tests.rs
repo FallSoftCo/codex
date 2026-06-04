@@ -27,31 +27,11 @@ use core_test_support::PathBufExt;
 use core_test_support::PathExt;
 use core_test_support::responses::mount_models_once;
 use pretty_assertions::assert_eq;
-use std::future::Future;
 use std::time::Duration;
 use tempfile::tempdir;
 use wiremock::MockServer;
 
 const TEST_INSTALLATION_ID: &str = "11111111-1111-4111-8111-111111111111";
-
-fn run_thread_manager_test_with_stack<F>(name: &str, future: F)
-where
-    F: Future<Output = ()> + Send + 'static,
-{
-    std::thread::Builder::new()
-        .name(name.to_string())
-        .stack_size(64 * 1024 * 1024)
-        .spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("tokio runtime should build")
-                .block_on(Box::pin(future));
-        })
-        .expect("thread manager test thread should start")
-        .join()
-        .expect("thread manager test thread should finish");
-}
 
 fn user_msg(text: &str) -> ResponseItem {
     ResponseItem::Message {
@@ -192,7 +172,6 @@ fn fork_thread_accepts_legacy_usize_snapshot_argument() {
             config,
             path,
             /*thread_source*/ None,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         );
     }
@@ -348,7 +327,6 @@ async fn start_thread_rejects_explicit_local_environment_when_default_provider_i
             session_source: None,
             thread_source: None,
             dynamic_tools: Vec::new(),
-            persist_extended_history: false,
             metrics_service_name: None,
             parent_trace: None,
             environments: vec![TurnEnvironmentSelection {
@@ -482,7 +460,6 @@ async fn start_thread_keeps_internal_threads_hidden_from_normal_lookups() {
             )),
             thread_source: None,
             dynamic_tools: Vec::new(),
-            persist_extended_history: false,
             metrics_service_name: None,
             parent_trace: None,
             environments: Vec::new(),
@@ -502,121 +479,117 @@ async fn start_thread_keeps_internal_threads_hidden_from_normal_lookups() {
     assert!(manager.list_thread_ids().await.is_empty());
 }
 
-#[test]
-fn resume_and_fork_do_not_restore_thread_environments_from_rollout() {
-    run_thread_manager_test_with_stack("resume-and-fork-environments", async {
-        let temp_dir = tempdir().expect("tempdir");
-        let mut config = test_config().await;
-        config.codex_home = temp_dir.path().join("codex-home").abs();
-        config.cwd = config.codex_home.abs();
-        std::fs::create_dir_all(&config.codex_home).expect("create codex home");
+#[tokio::test]
+async fn resume_and_fork_do_not_restore_thread_environments_from_rollout() {
+    let temp_dir = tempdir().expect("tempdir");
+    let mut config = test_config().await;
+    config.codex_home = temp_dir.path().join("codex-home").abs();
+    config.cwd = config.codex_home.abs();
+    std::fs::create_dir_all(&config.codex_home).expect("create codex home");
 
-        let auth_manager =
-            AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-        let manager = ThreadManager::new(
-            &config,
-            auth_manager.clone(),
-            SessionSource::Exec,
-            Arc::new(codex_exec_server::EnvironmentManager::default_for_tests()),
-            empty_extension_registry(),
-            /*analytics_events_client*/ None,
-            thread_store_from_config(&config, /*state_db*/ None),
-            /*state_db*/ None,
-            TEST_INSTALLATION_ID.to_string(),
-            /*attestation_provider*/ None,
-        );
-        let selected_cwd = AbsolutePathBuf::try_from(config.cwd.as_path().join("selected"))
-            .expect("absolute path");
-        let environments = vec![TurnEnvironmentSelection {
-            environment_id: "local".to_string(),
-            cwd: selected_cwd.clone(),
-        }];
-        let default_cwd = config.cwd.clone();
-        let source = manager
-            .start_thread_with_options(StartThreadOptions {
-                config: config.clone(),
-                initial_history: InitialHistory::New,
-                session_source: None,
-                thread_source: None,
-                dynamic_tools: Vec::new(),
-                persist_extended_history: false,
-                metrics_service_name: None,
-                parent_trace: None,
-                environments: environments.clone(),
-            })
-            .await
-            .expect("start source thread");
-        source.thread.ensure_rollout_materialized().await;
-        source
-            .thread
-            .flush_rollout()
-            .await
-            .expect("flush source rollout");
-        let rollout_path = source
-            .thread
-            .rollout_path()
-            .expect("source rollout path should exist");
-        source
-            .thread
-            .shutdown_and_wait()
-            .await
-            .expect("shutdown source thread before resume");
-        let _ = manager.remove_thread(&source.thread_id).await;
+    let auth_manager =
+        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    let manager = ThreadManager::new(
+        &config,
+        auth_manager.clone(),
+        SessionSource::Exec,
+        Arc::new(codex_exec_server::EnvironmentManager::default_for_tests()),
+        empty_extension_registry(),
+        /*analytics_events_client*/ None,
+        thread_store_from_config(&config, /*state_db*/ None),
+        /*state_db*/ None,
+        TEST_INSTALLATION_ID.to_string(),
+        /*attestation_provider*/ None,
+    );
+    let selected_cwd =
+        AbsolutePathBuf::try_from(config.cwd.as_path().join("selected")).expect("absolute path");
+    let environments = vec![TurnEnvironmentSelection {
+        environment_id: "local".to_string(),
+        cwd: selected_cwd.clone(),
+    }];
+    let default_cwd = config.cwd.clone();
+    let source = manager
+        .start_thread_with_options(StartThreadOptions {
+            config: config.clone(),
+            initial_history: InitialHistory::New,
+            session_source: None,
+            thread_source: None,
+            dynamic_tools: Vec::new(),
+            metrics_service_name: None,
+            parent_trace: None,
+            environments: environments.clone(),
+        })
+        .await
+        .expect("start source thread");
+    source.thread.ensure_rollout_materialized().await;
+    source
+        .thread
+        .flush_rollout()
+        .await
+        .expect("flush source rollout");
+    let rollout_path = source
+        .thread
+        .rollout_path()
+        .expect("source rollout path should exist");
+    source
+        .thread
+        .shutdown_and_wait()
+        .await
+        .expect("shutdown source thread before resume");
+    let _ = manager.remove_thread(&source.thread_id).await;
 
-        let resumed = manager
-            .resume_thread_from_rollout(
-                config.clone(),
-                rollout_path.clone(),
-                auth_manager,
-                /*parent_trace*/ None,
-            )
-            .await
-            .expect("resume source thread");
-        let resumed_turn = resumed
-            .thread
-            .codex
-            .session
-            .new_turn_with_sub_id("resume-turn".to_string(), SessionSettingsUpdate::default())
-            .await
-            .expect("build resumed turn context");
-        assert_eq!(resumed_turn.environments.turn_environments.len(), 1);
-        assert_eq!(
-            resumed_turn.environments.turn_environments[0].cwd,
-            default_cwd
-        );
-        assert_ne!(
-            resumed_turn.environments.turn_environments[0].cwd,
-            selected_cwd
-        );
+    let resumed = manager
+        .resume_thread_from_rollout(
+            config.clone(),
+            rollout_path.clone(),
+            auth_manager,
+            /*parent_trace*/ None,
+        )
+        .await
+        .expect("resume source thread");
+    let resumed_turn = resumed
+        .thread
+        .codex
+        .session
+        .new_turn_with_sub_id("resume-turn".to_string(), SessionSettingsUpdate::default())
+        .await
+        .expect("build resumed turn context");
+    assert_eq!(resumed_turn.environments.turn_environments.len(), 1);
+    assert_eq!(
+        resumed_turn.environments.turn_environments[0].cwd,
+        default_cwd
+    );
+    assert_ne!(
+        resumed_turn.environments.turn_environments[0].cwd,
+        selected_cwd
+    );
 
-        let forked = manager
-            .fork_thread(
-                ForkSnapshot::Interrupted,
-                config,
-                rollout_path,
-                /*thread_source*/ None,
-                /*persist_extended_history*/ false,
-                /*parent_trace*/ None,
-            )
-            .await
-            .expect("fork source thread");
-        let forked_turn = forked
-            .thread
-            .codex
-            .session
-            .new_turn_with_sub_id("fork-turn".to_string(), SessionSettingsUpdate::default())
-            .await
-            .expect("build forked turn context");
-        assert_eq!(forked_turn.environments.turn_environments.len(), 1);
-        assert_eq!(
-            forked_turn.environments.turn_environments[0].cwd,
-            default_cwd
-        );
-        assert_ne!(
-            forked_turn.environments.turn_environments[0].cwd,
-            selected_cwd
-        );
-    });
+    let forked = manager
+        .fork_thread(
+            ForkSnapshot::Interrupted,
+            config,
+            rollout_path,
+            /*thread_source*/ None,
+            /*parent_trace*/ None,
+        )
+        .await
+        .expect("fork source thread");
+    let forked_turn = forked
+        .thread
+        .codex
+        .session
+        .new_turn_with_sub_id("fork-turn".to_string(), SessionSettingsUpdate::default())
+        .await
+        .expect("build forked turn context");
+    assert_eq!(forked_turn.environments.turn_environments.len(), 1);
+    assert_eq!(
+        forked_turn.environments.turn_environments[0].cwd,
+        default_cwd
+    );
+    assert_ne!(
+        forked_turn.environments.turn_environments[0].cwd,
+        selected_cwd
+    );
 }
 
 #[tokio::test]
@@ -812,7 +785,6 @@ async fn resume_stopped_thread_from_rollout_preserves_thread_source() {
             session_source: None,
             thread_source: Some(ThreadSource::User),
             dynamic_tools: Vec::new(),
-            persist_extended_history: false,
             metrics_service_name: None,
             parent_trace: None,
             environments: Vec::new(),
@@ -863,113 +835,109 @@ async fn resume_stopped_thread_from_rollout_preserves_thread_source() {
         .expect("shutdown resumed thread");
 }
 
-#[test]
-fn rollout_path_resume_and_fork_read_history_through_thread_store() {
-    run_thread_manager_test_with_stack("resume-and-fork-thread-store-history", async {
-        let temp_dir = tempdir().expect("tempdir");
-        let mut config = test_config().await;
-        config.codex_home = temp_dir.path().join("codex-home").abs();
-        config.cwd = config.codex_home.abs();
-        config.experimental_thread_store = ThreadStoreConfig::InMemory {
-            id: format!("thread-manager-{}", uuid::Uuid::new_v4()),
-        };
-        std::fs::create_dir_all(&config.codex_home).expect("create codex home");
+#[tokio::test]
+async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
+    let temp_dir = tempdir().expect("tempdir");
+    let mut config = test_config().await;
+    config.codex_home = temp_dir.path().join("codex-home").abs();
+    config.cwd = config.codex_home.abs();
+    config.experimental_thread_store = ThreadStoreConfig::InMemory {
+        id: format!("thread-manager-{}", uuid::Uuid::new_v4()),
+    };
+    std::fs::create_dir_all(&config.codex_home).expect("create codex home");
 
-        let auth_manager =
-            AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-        let state_db = init_state_db(&config).await;
-        let thread_store = thread_store_from_config(&config, state_db.clone());
-        let in_memory_store = thread_store
-            .as_any()
-            .downcast_ref::<InMemoryThreadStore>()
-            .expect("configured in-memory store");
-        let manager = ThreadManager::new(
-            &config,
+    let auth_manager =
+        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    let state_db = init_state_db(&config).await;
+    let thread_store = thread_store_from_config(&config, state_db.clone());
+    let in_memory_store = thread_store
+        .as_any()
+        .downcast_ref::<InMemoryThreadStore>()
+        .expect("configured in-memory store");
+    let manager = ThreadManager::new(
+        &config,
+        auth_manager.clone(),
+        SessionSource::Exec,
+        Arc::new(codex_exec_server::EnvironmentManager::default_for_tests()),
+        empty_extension_registry(),
+        /*analytics_events_client*/ None,
+        thread_store.clone(),
+        state_db,
+        TEST_INSTALLATION_ID.to_string(),
+        /*attestation_provider*/ None,
+    );
+
+    let source = manager
+        .start_thread(config.clone())
+        .await
+        .expect("start source thread");
+    source
+        .thread
+        .shutdown_and_wait()
+        .await
+        .expect("shutdown source thread");
+    let _ = manager.remove_thread(&source.thread_id).await;
+
+    let rollout_path = config
+        .codex_home
+        .join("rollouts/source.jsonl")
+        .to_path_buf();
+    let resumed = manager
+        .resume_thread_with_history(
+            config.clone(),
+            InitialHistory::Resumed(ResumedHistory {
+                conversation_id: source.thread_id,
+                history: vec![RolloutItem::ResponseItem(user_msg("hello"))],
+                rollout_path: Some(rollout_path.clone()),
+            }),
             auth_manager.clone(),
-            SessionSource::Exec,
-            Arc::new(codex_exec_server::EnvironmentManager::default_for_tests()),
-            empty_extension_registry(),
-            /*analytics_events_client*/ None,
-            thread_store.clone(),
-            state_db,
-            TEST_INSTALLATION_ID.to_string(),
-            /*attestation_provider*/ None,
-        );
+            /*parent_trace*/ None,
+        )
+        .await
+        .expect("seed rollout path in store");
+    resumed
+        .thread
+        .shutdown_and_wait()
+        .await
+        .expect("shutdown seeded resumed thread");
+    let _ = manager.remove_thread(&resumed.thread_id).await;
 
-        let source = manager
-            .start_thread(config.clone())
-            .await
-            .expect("start source thread");
-        source
-            .thread
-            .shutdown_and_wait()
-            .await
-            .expect("shutdown source thread");
-        let _ = manager.remove_thread(&source.thread_id).await;
+    let resumed_from_path = manager
+        .resume_thread_from_rollout(
+            config.clone(),
+            rollout_path.clone(),
+            auth_manager,
+            /*parent_trace*/ None,
+        )
+        .await
+        .expect("resume from rollout path");
+    assert_eq!(resumed_from_path.thread_id, resumed.thread_id);
 
-        let rollout_path = config
-            .codex_home
-            .join("rollouts/source.jsonl")
-            .to_path_buf();
-        let resumed = manager
-            .resume_thread_with_history(
-                config.clone(),
-                InitialHistory::Resumed(ResumedHistory {
-                    conversation_id: source.thread_id,
-                    history: vec![RolloutItem::ResponseItem(user_msg("hello"))],
-                    rollout_path: Some(rollout_path.clone()),
-                }),
-                auth_manager.clone(),
-                /*persist_extended_history*/ false,
-                /*parent_trace*/ None,
-            )
-            .await
-            .expect("seed rollout path in store");
-        resumed
-            .thread
-            .shutdown_and_wait()
-            .await
-            .expect("shutdown seeded resumed thread");
-        let _ = manager.remove_thread(&resumed.thread_id).await;
+    let forked = manager
+        .fork_thread(
+            ForkSnapshot::Interrupted,
+            config,
+            rollout_path,
+            /*thread_source*/ None,
+            /*parent_trace*/ None,
+        )
+        .await
+        .expect("fork from rollout path");
+    assert_ne!(forked.thread_id, resumed.thread_id);
 
-        let resumed_from_path = manager
-            .resume_thread_from_rollout(
-                config.clone(),
-                rollout_path.clone(),
-                auth_manager,
-                /*parent_trace*/ None,
-            )
-            .await
-            .expect("resume from rollout path");
-        assert_eq!(resumed_from_path.thread_id, resumed.thread_id);
+    let calls = in_memory_store.calls().await;
+    assert_eq!(calls.read_thread_by_rollout_path, 2);
 
-        let forked = manager
-            .fork_thread(
-                ForkSnapshot::Interrupted,
-                config,
-                rollout_path,
-                /*thread_source*/ None,
-                /*persist_extended_history*/ false,
-                /*parent_trace*/ None,
-            )
-            .await
-            .expect("fork from rollout path");
-        assert_ne!(forked.thread_id, resumed.thread_id);
-
-        let calls = in_memory_store.calls().await;
-        assert_eq!(calls.read_thread_by_rollout_path, 2);
-
-        resumed_from_path
-            .thread
-            .shutdown_and_wait()
-            .await
-            .expect("shutdown path-resumed thread");
-        forked
-            .thread
-            .shutdown_and_wait()
-            .await
-            .expect("shutdown forked thread");
-    });
+    resumed_from_path
+        .thread
+        .shutdown_and_wait()
+        .await
+        .expect("shutdown path-resumed thread");
+    forked
+        .thread
+        .shutdown_and_wait()
+        .await
+        .expect("shutdown forked thread");
 }
 
 #[tokio::test]
@@ -1228,7 +1196,6 @@ async fn interrupted_fork_snapshot_does_not_synthesize_turn_id_for_legacy_histor
                 RolloutItem::ResponseItem(assistant_msg("partial")),
             ]),
             auth_manager,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1251,7 +1218,6 @@ async fn interrupted_fork_snapshot_does_not_synthesize_turn_id_for_legacy_histor
             config.clone(),
             source_path,
             /*thread_source*/ None,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1343,7 +1309,6 @@ async fn interrupted_fork_snapshot_preserves_explicit_turn_id() {
                 RolloutItem::ResponseItem(assistant_msg("partial")),
             ]),
             auth_manager,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1371,7 +1336,6 @@ async fn interrupted_fork_snapshot_preserves_explicit_turn_id() {
             config.clone(),
             source_path,
             /*thread_source*/ None,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1434,7 +1398,6 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
                 RolloutItem::ResponseItem(assistant_msg("partial")),
             ]),
             auth_manager,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1455,7 +1418,6 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
             config.clone(),
             source_path,
             /*thread_source*/ None,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1496,7 +1458,6 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
             config.clone(),
             forked_path,
             /*thread_source*/ None,
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await
@@ -1574,7 +1535,6 @@ async fn resumed_thread_keeps_paused_goal_paused() -> anyhow::Result<()> {
             config.clone(),
             InitialHistory::Forked(vec![RolloutItem::ResponseItem(user_msg("keep working"))]),
             auth_manager.clone(),
-            /*persist_extended_history*/ false,
             /*parent_trace*/ None,
         )
         .await

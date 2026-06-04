@@ -127,11 +127,7 @@ async fn resume_restores_dynamic_tools_from_rollout_with_sqlite_enabled() -> Res
     let base_test = builder.build(&server).await?;
     let started = base_test
         .thread_manager
-        .start_thread_with_tools(
-            base_test.config.clone(),
-            vec![dynamic_tool.clone()],
-            /*persist_extended_history*/ false,
-        )
+        .start_thread_with_tools(base_test.config.clone(), vec![dynamic_tool.clone()])
         .await?;
     let rollout_path = started
         .session_configured
@@ -227,6 +223,7 @@ async fn backfill_scans_existing_rollouts() -> Result<()> {
                     dynamic_tools: None,
                     memory_mode: None,
                     hollywood: None,
+                    multi_agent_version: None,
                 },
                 git: None,
             };

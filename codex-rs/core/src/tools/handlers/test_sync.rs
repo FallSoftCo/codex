@@ -95,7 +95,7 @@ impl ToolExecutor<ToolInvocation> for TestSyncHandler {
         }
 
         if let Some(barrier) = args.barrier {
-            wait_on_barrier(invocation.session.conversation_id.to_string(), barrier).await?;
+            wait_on_barrier(invocation.session.thread_id().to_string(), barrier).await?;
         }
 
         if let Some(delay) = args.sleep_after_ms
