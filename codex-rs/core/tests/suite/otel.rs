@@ -1,11 +1,15 @@
 use codex_core::config::Constrained;
 use codex_features::Feature;
+use codex_otel::SessionTelemetry;
+use codex_otel::TelemetryAuthMode;
+use codex_protocol::ThreadId;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::ReviewDecision;
+use codex_protocol::protocol::SessionSource;
 use codex_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -27,6 +31,7 @@ use core_test_support::test_codex::TestCodex;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
 use std::sync::Mutex;
+use std::time::Duration;
 use tracing::Level;
 use tracing_test::traced_test;
 
@@ -115,7 +120,6 @@ async fn responses_api_emits_api_request_event() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -162,7 +166,6 @@ async fn process_sse_emits_tracing_for_output_item() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -209,7 +212,6 @@ async fn process_sse_emits_failed_event_on_parse_error() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -258,7 +260,6 @@ async fn process_sse_records_failed_event_when_stream_closes_without_completed()
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -326,7 +327,6 @@ async fn process_sse_failed_event_records_response_error_message() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -392,7 +392,6 @@ async fn process_sse_failed_event_logs_parse_error() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -446,7 +445,6 @@ async fn process_sse_failed_event_logs_missing_error() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -508,7 +506,6 @@ async fn process_sse_failed_event_logs_response_completed_parse_error() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -564,7 +561,6 @@ async fn process_sse_emits_completed_telemetry() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -644,7 +640,6 @@ async fn turn_and_completed_response_spans_record_token_usage() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -733,7 +728,6 @@ async fn handle_responses_span_records_response_kind_and_tool_name() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -828,7 +822,6 @@ async fn record_responses_sets_span_fields_for_response_events() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -918,7 +911,6 @@ async fn handle_response_item_records_tool_result_for_custom_tool_call() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -995,7 +987,6 @@ async fn handle_response_item_records_tool_result_for_function_call() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -1073,7 +1064,6 @@ async fn handle_response_item_records_tool_result_for_shell_command_call() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -1147,6 +1137,70 @@ fn tool_decision_assertion<'a>(
     }
 }
 
+fn sandbox_outcome_assertion<'a>(
+    call_id: &'a str,
+    expected_outcome: &'a str,
+) -> impl Fn(&[&str]) -> Result<(), String> + 'a {
+    let call_id = call_id.to_string();
+    let expected_outcome = expected_outcome.to_string();
+
+    move |lines: &[&str]| {
+        let line = lines
+            .iter()
+            .find(|line| {
+                line.contains("codex.sandbox_outcome")
+                    && line.contains(&format!("call_id={call_id}"))
+            })
+            .ok_or_else(|| format!("missing codex.sandbox_outcome event for {call_id}"))?;
+
+        let lower = line.to_lowercase();
+        if !lower.contains("tool_name=shell_command") {
+            return Err("missing tool_name for shell_command".to_string());
+        }
+        if !lower.contains(&format!("outcome={expected_outcome}")) {
+            return Err(format!("unexpected sandbox outcome for {call_id}"));
+        }
+        if !lower.contains("initial_duration_ms=12") {
+            return Err("missing initial_duration_ms field".to_string());
+        }
+        if !lower.contains("escalated_duration_ms=34") {
+            return Err("missing escalated_duration_ms field".to_string());
+        }
+
+        Ok(())
+    }
+}
+
+#[test]
+#[traced_test]
+fn sandbox_outcome_event_records_outcome() {
+    let telemetry = SessionTelemetry::new(
+        ThreadId::new(),
+        "gpt-5.5",
+        "gpt-5.5",
+        /*account_id*/ None,
+        /*account_email*/ None,
+        Some(TelemetryAuthMode::ApiKey),
+        "Codex_Desktop".to_string(),
+        /*log_user_prompts*/ false,
+        "tty".to_string(),
+        SessionSource::Cli,
+    );
+
+    telemetry.sandbox_outcome(
+        "shell_command",
+        "sandbox-outcome-call",
+        "escalated",
+        Duration::from_millis(/*millis*/ 12),
+        Some(Duration::from_millis(/*millis*/ 34)),
+    );
+
+    logs_assert(sandbox_outcome_assertion(
+        "sandbox-outcome-call",
+        "escalated",
+    ));
+}
+
 #[tokio::test]
 #[traced_test]
 async fn handle_shell_command_autoapprove_from_config_records_tool_decision() {
@@ -1183,7 +1237,6 @@ async fn handle_shell_command_autoapprove_from_config_records_tool_decision() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "hello".into(),
                 text_elements: Vec::new(),
@@ -1239,7 +1292,6 @@ async fn handle_shell_command_user_approved_records_tool_decision() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "approved".into(),
                 text_elements: Vec::new(),
@@ -1310,7 +1362,6 @@ async fn handle_shell_command_user_approved_for_session_records_tool_decision() 
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "persist".into(),
                 text_elements: Vec::new(),
@@ -1381,7 +1432,6 @@ async fn handle_sandbox_error_user_approves_retry_records_tool_decision() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "retry".into(),
                 text_elements: Vec::new(),
@@ -1452,7 +1502,6 @@ async fn handle_shell_command_user_denies_records_tool_decision() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "deny".into(),
                 text_elements: Vec::new(),
@@ -1523,7 +1572,6 @@ async fn handle_sandbox_error_user_approves_for_session_records_tool_decision() 
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "persist".into(),
                 text_elements: Vec::new(),
@@ -1595,7 +1643,6 @@ async fn handle_sandbox_error_user_denies_records_tool_decision() {
 
     codex
         .submit(Op::UserInput {
-            environments: None,
             items: vec![UserInput::Text {
                 text: "deny".into(),
                 text_elements: Vec::new(),

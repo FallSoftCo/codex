@@ -7,7 +7,6 @@ use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
-use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
@@ -141,7 +140,6 @@ fn default_notify_room() -> bool {
     true
 }
 
-#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for CoordinationHandler {
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
@@ -157,99 +155,99 @@ impl ToolExecutor<ToolInvocation> for CoordinationHandler {
         }
     }
 
-    async fn handle(
-        &self,
-        invocation: ToolInvocation,
-    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
-        let output = async {
-            let ToolInvocation {
-                session,
-                turn,
-                tool_name,
-                payload,
-                ..
-            } = invocation;
+    fn handle(&self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'_> {
+        Box::pin(async move {
+            let output = async {
+                let ToolInvocation {
+                    session,
+                    turn,
+                    tool_name,
+                    payload,
+                    ..
+                } = invocation;
 
-            let ToolPayload::Function { arguments } = payload else {
-                return Err(FunctionCallError::RespondToModel(
-                    "coordination handler received unsupported payload".to_string(),
-                ));
-            };
+                let ToolPayload::Function { arguments } = payload else {
+                    return Err(FunctionCallError::RespondToModel(
+                        "coordination handler received unsupported payload".to_string(),
+                    ));
+                };
 
-            let db = required_state_db(&session)?;
-            match tool_name.name.as_str() {
-                "coordination_act" => {
-                    let args: CoordinationActArgs = parse_arguments(&arguments)?;
-                    handle_coordination_act(&session, &turn, &db, args).await
-                }
-                "list_coordination_tasks" => {
-                    let args: ListCoordinationTasksArgs = parse_arguments(&arguments)?;
-                    let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
-                        Some(resolve_coordination_target(&session, &turn, &db, owner).await?)
-                    } else {
-                        None
-                    };
-                    let creator_thread_id = if let Some(creator) = args.creator.as_deref() {
-                        Some(resolve_coordination_target(&session, &turn, &db, creator).await?)
-                    } else {
-                        None
-                    };
-                    let statuses = args
-                        .statuses
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|status| parse_coordination_status(status.as_str()))
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(FunctionCallError::RespondToModel)?;
-                    let room = match args.room {
-                        Some(room) => Some(room),
-                        None => hollywood_config_for_session(&session, &db)
-                            .await?
-                            .map(|config| config.room),
-                    };
-                    let tasks = db
-                        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
-                            owner_thread_id,
-                            creator_thread_id,
-                            room,
-                            statuses,
-                        })
-                        .await
-                        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-                    let content = if args.include_history {
-                        let task_ids = tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
-                        let acts = db
-                            .list_coordination_acts(None)
+                let db = required_state_db(&session)?;
+                match tool_name.name.as_str() {
+                    "coordination_act" => {
+                        let args: CoordinationActArgs = parse_arguments(&arguments)?;
+                        handle_coordination_act(&session, &turn, &db, args).await
+                    }
+                    "list_coordination_tasks" => {
+                        let args: ListCoordinationTasksArgs = parse_arguments(&arguments)?;
+                        let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
+                            Some(resolve_coordination_target(&session, &turn, &db, owner).await?)
+                        } else {
+                            None
+                        };
+                        let creator_thread_id = if let Some(creator) = args.creator.as_deref() {
+                            Some(resolve_coordination_target(&session, &turn, &db, creator).await?)
+                        } else {
+                            None
+                        };
+                        let statuses = args
+                            .statuses
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|status| parse_coordination_status(status.as_str()))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(FunctionCallError::RespondToModel)?;
+                        let room = match args.room {
+                            Some(room) => Some(room),
+                            None => hollywood_config_for_session(&session, &db)
+                                .await?
+                                .map(|config| config.room),
+                        };
+                        let tasks = db
+                            .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+                                owner_thread_id,
+                                creator_thread_id,
+                                room,
+                                statuses,
+                            })
                             .await
                             .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-                        let acts = acts
-                            .into_iter()
-                            .filter(|act| {
-                                act.task_id
-                                    .as_ref()
-                                    .is_some_and(|task_id| task_ids.contains(task_id))
+                        let content = if args.include_history {
+                            let task_ids =
+                                tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
+                            let acts = db
+                                .list_coordination_acts(None)
+                                .await
+                                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+                            let acts = acts
+                                .into_iter()
+                                .filter(|act| {
+                                    act.task_id
+                                        .as_ref()
+                                        .is_some_and(|task_id| task_ids.contains(task_id))
+                                })
+                                .collect::<Vec<_>>();
+                            json!({
+                                "tasks": tasks,
+                                "acts": acts,
                             })
-                            .collect::<Vec<_>>();
-                        json!({
-                            "tasks": tasks,
-                            "acts": acts,
-                        })
-                    } else {
-                        json!({ "tasks": tasks })
-                    };
-                    Ok(FunctionToolOutput::from_text(
-                        serde_json::to_string_pretty(&content)
-                            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
-                        Some(true),
-                    ))
+                        } else {
+                            json!({ "tasks": tasks })
+                        };
+                        Ok(FunctionToolOutput::from_text(
+                            serde_json::to_string_pretty(&content)
+                                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                            Some(true),
+                        ))
+                    }
+                    other => Err(FunctionCallError::RespondToModel(format!(
+                        "unsupported coordination tool {other}"
+                    ))),
                 }
-                other => Err(FunctionCallError::RespondToModel(format!(
-                    "unsupported coordination tool {other}"
-                ))),
             }
-        }
-        .await?;
-        Ok(boxed_tool_output(output))
+            .await?;
+            Ok(boxed_tool_output(output))
+        })
     }
 }
 

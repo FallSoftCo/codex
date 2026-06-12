@@ -786,6 +786,7 @@ impl BottomPane {
             local_image_paths,
             mention_bindings,
         );
+        self.composer.move_cursor_to_end();
         self.request_redraw();
     }
 
@@ -824,6 +825,11 @@ impl BottomPane {
         self.composer.current_text()
     }
 
+    #[cfg(test)]
+    pub(crate) fn composer_cursor(&self) -> usize {
+        self.composer.cursor()
+    }
+
     pub(crate) fn composer_draft_snapshot(&self) -> chat_composer::ComposerDraftSnapshot {
         self.composer.draft_snapshot()
     }
@@ -850,10 +856,6 @@ impl BottomPane {
     /// Returns whether the composer currently accepts interactive draft edits.
     pub(crate) fn composer_input_enabled(&self) -> bool {
         self.composer.input_enabled()
-    }
-
-    pub(crate) fn composer_pending_pastes(&self) -> Vec<(String, String)> {
-        self.composer.pending_pastes()
     }
 
     pub(crate) fn apply_external_edit(&mut self, text: String) {

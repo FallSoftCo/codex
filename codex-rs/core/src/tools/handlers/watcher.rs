@@ -1,7 +1,6 @@
 use crate::function_tool::FunctionCallError;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
-use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use crate::tools::handlers::multi_agents::parse_agent_id_target;
@@ -128,7 +127,6 @@ fn default_requires_response() -> bool {
     true
 }
 
-#[async_trait::async_trait]
 impl ToolExecutor<ToolInvocation> for WatcherHandler {
     fn tool_name(&self) -> ToolName {
         self.tool_name.clone()
@@ -148,17 +146,15 @@ impl ToolExecutor<ToolInvocation> for WatcherHandler {
         }
     }
 
-    async fn handle(
-        &self,
-        invocation: ToolInvocation,
-    ) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
-        let output = async {
-        let ToolInvocation {
-            session,
-            tool_name,
-            payload,
-            ..
-        } = invocation;
+    fn handle(&self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'_> {
+        Box::pin(async move {
+            let output = async {
+                let ToolInvocation {
+                    session,
+                    tool_name,
+                    payload,
+                    ..
+                } = invocation;
 
         let ToolPayload::Function { arguments } = payload else {
             return Err(FunctionCallError::RespondToModel(
@@ -389,9 +385,10 @@ impl ToolExecutor<ToolInvocation> for WatcherHandler {
                 "unsupported watcher tool {other}"
             ))),
         }
-        }
-        .await?;
-        Ok(boxed_tool_output(output))
+            }
+            .await?;
+            Ok(boxed_tool_output(output))
+        })
     }
 }
 

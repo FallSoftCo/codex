@@ -1,5 +1,4 @@
 use crate::tools::context::ToolInvocation;
-use crate::tools::context::ToolOutput;
 use crate::tools::handlers::CoordinationHandler;
 use crate::tools::handlers::HollywoodReadHandler;
 use crate::tools::handlers::HollywoodSendHandler;
@@ -79,7 +78,6 @@ struct LosangelexToolRuntime<T> {
     spec: ToolSpec,
 }
 
-#[async_trait::async_trait]
 impl<T> ToolExecutor<ToolInvocation> for LosangelexToolRuntime<T>
 where
     T: ToolExecutor<ToolInvocation> + 'static,
@@ -100,11 +98,8 @@ where
         self.handler.supports_parallel_tool_calls()
     }
 
-    async fn handle(
-        &self,
-        invocation: ToolInvocation,
-    ) -> Result<Box<dyn ToolOutput>, crate::function_tool::FunctionCallError> {
-        self.handler.handle(invocation).await
+    fn handle(&self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'_> {
+        self.handler.handle(invocation)
     }
 }
 

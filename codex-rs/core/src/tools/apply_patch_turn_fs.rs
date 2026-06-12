@@ -1,15 +1,13 @@
-use async_trait::async_trait;
 use codex_exec_server::CopyOptions;
 use codex_exec_server::CreateDirectoryOptions;
 use codex_exec_server::ExecutorFileSystem;
+use codex_exec_server::ExecutorFileSystemFuture;
 use codex_exec_server::FileMetadata;
-use codex_exec_server::FileSystemResult;
 use codex_exec_server::FileSystemSandboxContext;
 use codex_exec_server::ReadDirectoryEntry;
 use codex_exec_server::RemoveOptions;
-use codex_utils_absolute_path::AbsolutePathBuf;
+use codex_utils_path_uri::PathUri;
 use std::collections::HashMap;
-use std::path::Path;
 use std::path::PathBuf;
 use tokio::io;
 
@@ -30,98 +28,86 @@ impl<'a> ApplyPatchTurnFileSystem<'a> {
     }
 }
 
-#[async_trait]
 impl ExecutorFileSystem for ApplyPatchTurnFileSystem<'_> {
-    async fn canonicalize(
-        &self,
-        path: &AbsolutePathBuf,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<AbsolutePathBuf> {
-        self.inner.canonicalize(path, sandbox).await
+    fn canonicalize<'a>(
+        &'a self,
+        path: &'a PathUri,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, PathUri> {
+        self.inner.canonicalize(path, sandbox)
     }
 
-    async fn join(
-        &self,
-        base_path: &AbsolutePathBuf,
-        path: &Path,
-    ) -> FileSystemResult<AbsolutePathBuf> {
-        self.inner.join(base_path, path).await
+    fn read_file<'a>(
+        &'a self,
+        path: &'a PathUri,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, Vec<u8>> {
+        Box::pin(async move {
+            match self.inner.read_file(path, sandbox).await {
+                Ok(bytes) => Ok(bytes),
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                    let resurrected = path.to_abs_path().ok().and_then(|path| {
+                        self.resurrected_deleted_files.get(path.as_path()).cloned()
+                    });
+                    resurrected.ok_or(err)
+                }
+                Err(err) => Err(err),
+            }
+        })
     }
 
-    async fn parent(&self, path: &AbsolutePathBuf) -> FileSystemResult<Option<AbsolutePathBuf>> {
-        self.inner.parent(path).await
-    }
-
-    async fn read_file(
-        &self,
-        path: &AbsolutePathBuf,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<Vec<u8>> {
-        match self.inner.read_file(path, sandbox).await {
-            Ok(bytes) => Ok(bytes),
-            Err(err) if err.kind() == io::ErrorKind::NotFound => self
-                .resurrected_deleted_files
-                .get(path.as_path())
-                .cloned()
-                .ok_or(err),
-            Err(err) => Err(err),
-        }
-    }
-
-    async fn write_file(
-        &self,
-        path: &AbsolutePathBuf,
+    fn write_file<'a>(
+        &'a self,
+        path: &'a PathUri,
         contents: Vec<u8>,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<()> {
-        self.inner.write_file(path, contents, sandbox).await
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
+        self.inner.write_file(path, contents, sandbox)
     }
 
-    async fn create_directory(
-        &self,
-        path: &AbsolutePathBuf,
+    fn create_directory<'a>(
+        &'a self,
+        path: &'a PathUri,
         create_directory_options: CreateDirectoryOptions,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<()> {
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
         self.inner
             .create_directory(path, create_directory_options, sandbox)
-            .await
     }
 
-    async fn get_metadata(
-        &self,
-        path: &AbsolutePathBuf,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<FileMetadata> {
-        self.inner.get_metadata(path, sandbox).await
+    fn get_metadata<'a>(
+        &'a self,
+        path: &'a PathUri,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, FileMetadata> {
+        self.inner.get_metadata(path, sandbox)
     }
 
-    async fn read_directory(
-        &self,
-        path: &AbsolutePathBuf,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<Vec<ReadDirectoryEntry>> {
-        self.inner.read_directory(path, sandbox).await
+    fn read_directory<'a>(
+        &'a self,
+        path: &'a PathUri,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, Vec<ReadDirectoryEntry>> {
+        self.inner.read_directory(path, sandbox)
     }
 
-    async fn remove(
-        &self,
-        path: &AbsolutePathBuf,
+    fn remove<'a>(
+        &'a self,
+        path: &'a PathUri,
         remove_options: RemoveOptions,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<()> {
-        self.inner.remove(path, remove_options, sandbox).await
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
+        self.inner.remove(path, remove_options, sandbox)
     }
 
-    async fn copy(
-        &self,
-        source_path: &AbsolutePathBuf,
-        destination_path: &AbsolutePathBuf,
+    fn copy<'a>(
+        &'a self,
+        source_path: &'a PathUri,
+        destination_path: &'a PathUri,
         copy_options: CopyOptions,
-        sandbox: Option<&FileSystemSandboxContext>,
-    ) -> FileSystemResult<()> {
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
         self.inner
             .copy(source_path, destination_path, copy_options, sandbox)
-            .await
     }
 }
