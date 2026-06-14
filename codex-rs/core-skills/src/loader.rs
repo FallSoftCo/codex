@@ -376,16 +376,7 @@ async fn repo_agents_skill_roots(
     let mut roots = Vec::new();
     for dir in dirs {
         let agents_skills = dir.join(AGENTS_DIR_NAME).join(SKILLS_DIR_NAME);
-        let agents_skills_uri = match PathUri::from_abs_path(&agents_skills) {
-            Ok(path) => path,
-            Err(err) => {
-                tracing::warn!(
-                    "failed to convert repo skills root {} to URI: {err:#}",
-                    agents_skills.display()
-                );
-                continue;
-            }
-        };
+        let agents_skills_uri = PathUri::from_abs_path(&agents_skills);
         match fs.get_metadata(&agents_skills_uri, /*sandbox*/ None).await {
             Ok(metadata) if metadata.is_directory => roots.push(SkillRoot {
                 path: agents_skills,
@@ -488,9 +479,7 @@ async fn canonicalize_for_skill_identity(
     fs: &dyn ExecutorFileSystem,
     path: &AbsolutePathBuf,
 ) -> AbsolutePathBuf {
-    let Ok(path_uri) = PathUri::from_abs_path(path) else {
-        return path.clone();
-    };
+    let path_uri = PathUri::from_abs_path(path);
     fs.canonicalize(&path_uri, /*sandbox*/ None)
         .await
         .and_then(|path| path.to_abs_path())
@@ -511,16 +500,7 @@ async fn discover_skills_under_root(
         None => None,
     };
 
-    let root_uri = match PathUri::from_abs_path(&root) {
-        Ok(path) => path,
-        Err(err) => {
-            tracing::warn!(
-                "failed to convert skills root {} to URI: {err:#}",
-                root.display()
-            );
-            return;
-        }
-    };
+    let root_uri = PathUri::from_abs_path(&root);
     match fs.get_metadata(&root_uri, /*sandbox*/ None).await {
         Ok(metadata) if metadata.is_directory => {}
         Ok(_) => return,
@@ -563,16 +543,7 @@ async fn discover_skills_under_root(
     let mut truncated_by_dir_limit = false;
 
     while let Some((dir, depth)) = queue.pop_front() {
-        let dir_uri = match PathUri::from_abs_path(&dir) {
-            Ok(path) => path,
-            Err(e) => {
-                tracing::warn!(
-                    "failed to convert skills dir {} to URI: {e:#}",
-                    dir.display()
-                );
-                continue;
-            }
-        };
+        let dir_uri = PathUri::from_abs_path(&dir);
         let entries = match fs.read_directory(&dir_uri, /*sandbox*/ None).await {
             Ok(entries) => entries,
             Err(e) => {
@@ -588,16 +559,7 @@ async fn discover_skills_under_root(
             }
 
             let path = dir.join(&file_name);
-            let path_uri = match PathUri::from_abs_path(&path) {
-                Ok(path) => path,
-                Err(e) => {
-                    tracing::warn!(
-                        "failed to convert skills path {} to URI: {e:#}",
-                        path.display()
-                    );
-                    continue;
-                }
-            };
+            let path_uri = PathUri::from_abs_path(&path);
             let metadata = match fs.get_metadata(&path_uri, /*sandbox*/ None).await {
                 Ok(metadata) => metadata,
                 Err(e) => {
@@ -682,7 +644,7 @@ async fn parse_skill_file(
     plugin_id: Option<&str>,
     plugin_root: Option<&AbsolutePathBuf>,
 ) -> Result<SkillMetadata, SkillParseError> {
-    let path_uri = PathUri::from_abs_path(path).map_err(SkillParseError::Read)?;
+    let path_uri = PathUri::from_abs_path(path);
     let contents = fs
         .read_file_text(&path_uri, /*sandbox*/ None)
         .await
@@ -778,17 +740,7 @@ async fn load_skill_metadata(
     let metadata_path = skill_dir
         .join(SKILLS_METADATA_DIR)
         .join(SKILLS_METADATA_FILENAME);
-    let metadata_path_uri = match PathUri::from_abs_path(&metadata_path) {
-        Ok(path) => path,
-        Err(error) => {
-            tracing::warn!(
-                "ignoring {path}: failed to convert {label} path to URI: {error}",
-                path = metadata_path.display(),
-                label = SKILLS_METADATA_FILENAME
-            );
-            return LoadedSkillMetadata::default();
-        }
-    };
+    let metadata_path_uri = PathUri::from_abs_path(&metadata_path);
     match fs.get_metadata(&metadata_path_uri, /*sandbox*/ None).await {
         Ok(metadata) if metadata.is_file => {}
         Ok(_) => return LoadedSkillMetadata::default(),

@@ -151,7 +151,9 @@ class SimulationState:
         return [agent for agent in self.scenario.agents if agent.name not in busy]
 
     def completed_success(self) -> bool:
-        return all(task_id in self.completed_tasks for task_id in self.scenario.success_tasks)
+        return all(
+            task_id in self.completed_tasks for task_id in self.scenario.success_tasks
+        )
 
     def available_probes(self) -> list[ProbeSpec]:
         in_progress = {
@@ -220,7 +222,9 @@ class SimulationState:
                 "target_id": item.target_id,
                 "ready_at": item.ready_at,
             }
-            for item in sorted(self.in_progress, key=lambda item: (item.ready_at, item.agent))
+            for item in sorted(
+                self.in_progress, key=lambda item: (item.ready_at, item.agent)
+            )
         ]
         return {
             "time": self.time,
@@ -245,7 +249,9 @@ class SimulationState:
         next_ready = min(item.ready_at for item in self.in_progress)
         self.time = next_ready
         finished = [item for item in self.in_progress if item.ready_at == next_ready]
-        self.in_progress = [item for item in self.in_progress if item.ready_at != next_ready]
+        self.in_progress = [
+            item for item in self.in_progress if item.ready_at != next_ready
+        ]
         for item in finished:
             if item.target_kind == "probe":
                 self.completed_probes.add(item.target_id)
@@ -427,7 +433,11 @@ SCENARIOS: dict[str, ScenarioSpec] = {
                 kind="review",
                 capabilities=("planning", "review", "coordination"),
                 duration=1,
-                depends_on=("task_cleanup_stale", "task_award_summary", "task_browser_lane"),
+                depends_on=(
+                    "task_cleanup_stale",
+                    "task_award_summary",
+                    "task_browser_lane",
+                ),
                 priority=5,
                 scope_group="room-summary",
             ),
@@ -648,7 +658,13 @@ MARKET_SCHEMA = {
                     "confidence": {"type": "number"},
                     "reason": {"type": "string"},
                 },
-                "required": ["agent", "target_kind", "target_id", "confidence", "reason"],
+                "required": [
+                    "agent",
+                    "target_kind",
+                    "target_id",
+                    "confidence",
+                    "reason",
+                ],
                 "additionalProperties": False,
             },
         }
@@ -737,7 +753,9 @@ def validate_scenario(scenario: ScenarioSpec) -> None:
                 f"scenario {scenario.id}: task {task.id} depends on unknown task(s): "
                 + ", ".join(unknown_deps)
             )
-    missing_success = sorted(task_id for task_id in scenario.success_tasks if task_id not in task_ids)
+    missing_success = sorted(
+        task_id for task_id in scenario.success_tasks if task_id not in task_ids
+    )
     if missing_success:
         raise ValueError(
             f"scenario {scenario.id}: success task(s) missing from task set: "
@@ -831,7 +849,10 @@ def heuristic_auto_match_with_rng(
     state: SimulationState, rng: random.Random
 ) -> list[ActionChoice]:
     available_tasks = shuffled(
-        sorted(state.available_tasks(), key=lambda task: (-task.priority, task.duration, task.id)),
+        sorted(
+            state.available_tasks(),
+            key=lambda task: (-task.priority, task.duration, task.id),
+        ),
         rng,
     )
     available_probes = shuffled(
@@ -851,7 +872,9 @@ def heuristic_auto_match_with_rng(
                 continue
             if not (set(agent.capabilities) & set(task.capabilities)):
                 continue
-            score = task.priority * 10 + len(set(agent.capabilities) & set(task.capabilities))
+            score = task.priority * 10 + len(
+                set(agent.capabilities) & set(task.capabilities)
+            )
             candidate = (score, rng.random(), "task", task.id)
             if best is None or candidate > best:
                 best = candidate
@@ -860,7 +883,9 @@ def heuristic_auto_match_with_rng(
                 continue
             if not (set(agent.capabilities) & set(probe.capabilities)):
                 continue
-            score = probe.priority * 10 + len(set(agent.capabilities) & set(probe.capabilities))
+            score = probe.priority * 10 + len(
+                set(agent.capabilities) & set(probe.capabilities)
+            )
             candidate = (score, rng.random(), "probe", probe.id)
             if best is None or candidate > best:
                 best = candidate
@@ -912,7 +937,9 @@ def prompt_state_view(
             "capabilities": list(perspective_agent.capabilities),
         }
         snapshot["other_idle_agents"] = [
-            agent for agent in snapshot["idle_agents"] if agent["name"] != perspective_agent.name
+            agent
+            for agent in snapshot["idle_agents"]
+            if agent["name"] != perspective_agent.name
         ]
     return snapshot
 
@@ -1086,7 +1113,9 @@ def parse_assignment_response(
     return parsed
 
 
-def parse_market_response(payload: dict[str, Any], scenario: ScenarioSpec) -> list[BidChoice]:
+def parse_market_response(
+    payload: dict[str, Any], scenario: ScenarioSpec
+) -> list[BidChoice]:
     bids = payload.get("bids", [])
     parsed: list[BidChoice] = []
     for raw in bids:
@@ -1115,7 +1144,9 @@ def parse_single_action_response(payload: dict[str, Any], agent: str) -> ActionC
     )
 
 
-def parse_single_agent_market_response(payload: dict[str, Any], agent: str) -> list[BidChoice]:
+def parse_single_agent_market_response(
+    payload: dict[str, Any], agent: str
+) -> list[BidChoice]:
     bids = payload.get("bids", [])
     parsed: list[BidChoice] = []
     for raw in bids:
@@ -1131,19 +1162,25 @@ def parse_single_agent_market_response(payload: dict[str, Any], agent: str) -> l
     return parsed
 
 
-def scope_group_for_target(scenario: ScenarioSpec, target_kind: str, target_id: str) -> str | None:
+def scope_group_for_target(
+    scenario: ScenarioSpec, target_kind: str, target_id: str
+) -> str | None:
     if target_kind == "probe":
         return probe_map(scenario)[target_id].scope_group
     return task_map(scenario)[target_id].scope_group
 
 
-def duration_for_target(scenario: ScenarioSpec, target_kind: str, target_id: str) -> int:
+def duration_for_target(
+    scenario: ScenarioSpec, target_kind: str, target_id: str
+) -> int:
     if target_kind == "probe":
         return probe_map(scenario)[target_id].duration
     return task_map(scenario)[target_id].duration
 
 
-def eligible_for_target(agent: AgentSpec, scenario: ScenarioSpec, target_kind: str, target_id: str) -> bool:
+def eligible_for_target(
+    agent: AgentSpec, scenario: ScenarioSpec, target_kind: str, target_id: str
+) -> bool:
     if target_kind == "probe":
         target = probe_map(scenario)[target_id]
         return bool(set(agent.capabilities) & set(target.capabilities))
@@ -1157,18 +1194,20 @@ def target_exists(state: SimulationState, target_kind: str, target_id: str) -> b
     return any(task.id == target_id for task in state.available_tasks())
 
 
-def pick_market_assignments(state: SimulationState, bids: list[BidChoice]) -> list[ActionChoice]:
+def pick_market_assignments(
+    state: SimulationState, bids: list[BidChoice]
+) -> list[ActionChoice]:
     by_agent: dict[str, list[BidChoice]] = {}
     for bid in bids:
         by_agent.setdefault(bid.agent, []).append(bid)
     for bid_list in by_agent.values():
         bid_list.sort(key=lambda bid: bid.confidence, reverse=True)
     candidates = list(
-        itertools.chain.from_iterable(
-            bid_list[:2] for bid_list in by_agent.values()
-        )
+        itertools.chain.from_iterable(bid_list[:2] for bid_list in by_agent.values())
     )
-    candidates.sort(key=lambda bid: (bid.confidence, bid.target_kind == "task"), reverse=True)
+    candidates.sort(
+        key=lambda bid: (bid.confidence, bid.target_kind == "task"), reverse=True
+    )
 
     chosen: list[ActionChoice] = []
     used_agents: set[str] = set()
@@ -1183,7 +1222,9 @@ def pick_market_assignments(state: SimulationState, bids: list[BidChoice]) -> li
             continue
         if not target_exists(state, bid.target_kind, bid.target_id):
             continue
-        scope_group = scope_group_for_target(state.scenario, bid.target_kind, bid.target_id)
+        scope_group = scope_group_for_target(
+            state.scenario, bid.target_kind, bid.target_id
+        )
         if scope_group and scope_group in used_scopes:
             continue
         chosen.append(
@@ -1223,7 +1264,11 @@ def enforce_strict_leader_award(
     enforced: list[ActionChoice] = []
     lead = state.scenario.lead_agent
     for choice in assignments:
-        if choice.action == "take" and choice.target_kind == "probe" and choice.agent != lead:
+        if (
+            choice.action == "take"
+            and choice.target_kind == "probe"
+            and choice.agent != lead
+        ):
             enforced.append(
                 ActionChoice(
                     agent=choice.agent,
@@ -1245,7 +1290,9 @@ def strict_leader_discovery_blocked(state: SimulationState) -> bool:
         return False
     available_tasks = state.available_tasks()
     for agent in state.idle_agents():
-        if any(set(agent.capabilities) & set(task.capabilities) for task in available_tasks):
+        if any(
+            set(agent.capabilities) & set(task.capabilities) for task in available_tasks
+        ):
             return False
     return any(
         probe.id in {available.id for available in state.available_probes()}
@@ -1319,7 +1366,9 @@ def decide_assignments(
         )
         state.model_calls += 1
         state.model_tokens += tokens
-        return pick_market_assignments(state, parse_market_response(payload, state.scenario))
+        return pick_market_assignments(
+            state, parse_market_response(payload, state.scenario)
+        )
     if policy == "independent_market":
         bids: list[BidChoice] = []
         for agent in shuffled(state.idle_agents(), rng):
@@ -1394,7 +1443,8 @@ def decide_assignments(
 def apply_assignments(state: SimulationState, assignments: list[ActionChoice]) -> None:
     idle_map = {agent.name: agent for agent in state.idle_agents()}
     actionable_for_idle = {
-        agent.name: bool(state.eligible_targets_for_agent(agent)) for agent in state.idle_agents()
+        agent.name: bool(state.eligible_targets_for_agent(agent))
+        for agent in state.idle_agents()
     }
     for agent_name, has_work in actionable_for_idle.items():
         state.idle_agents_total += 1
@@ -1407,7 +1457,11 @@ def apply_assignments(state: SimulationState, assignments: list[ActionChoice]) -
         agent = idle_map.get(choice.agent)
         if agent is None:
             continue
-        if choice.action == "wait" or choice.target_kind is None or choice.target_id is None:
+        if (
+            choice.action == "wait"
+            or choice.target_kind is None
+            or choice.target_id is None
+        ):
             valid_waits.append(choice)
             continue
         if choice.action != "take":
@@ -1422,7 +1476,9 @@ def apply_assignments(state: SimulationState, assignments: list[ActionChoice]) -
                 f"t={state.time}: {choice.agent} chose unavailable {choice.target_kind} {choice.target_id}"
             )
             continue
-        if not eligible_for_target(agent, state.scenario, choice.target_kind, choice.target_id):
+        if not eligible_for_target(
+            agent, state.scenario, choice.target_kind, choice.target_id
+        ):
             state.invalid_actions += 1
             state.execution_log.append(
                 f"t={state.time}: {choice.agent} is ineligible for {choice.target_kind} {choice.target_id}"
@@ -1606,7 +1662,9 @@ def aggregate(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     summary: list[dict[str, Any]] = []
     for (scenario, policy), runs in sorted(grouped.items()):
         successes = [run for run in runs if run["success"]]
-        completion_times = [run["completion_time"] for run in successes if run["completion_time"]]
+        completion_times = [
+            run["completion_time"] for run in successes if run["completion_time"]
+        ]
         summary.append(
             {
                 "scenario": scenario,
@@ -1620,10 +1678,16 @@ def aggregate(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "avg_duplicate_attempts": statistics.mean(
                     run["duplicate_attempts"] for run in runs
                 ),
-                "avg_scope_conflicts": statistics.mean(run["scope_conflicts"] for run in runs),
-                "avg_invalid_actions": statistics.mean(run["invalid_actions"] for run in runs),
+                "avg_scope_conflicts": statistics.mean(
+                    run["scope_conflicts"] for run in runs
+                ),
+                "avg_invalid_actions": statistics.mean(
+                    run["invalid_actions"] for run in runs
+                ),
                 "avg_model_calls": statistics.mean(run["model_calls"] for run in runs),
-                "avg_model_tokens": statistics.mean(run["model_tokens"] for run in runs),
+                "avg_model_tokens": statistics.mean(
+                    run["model_tokens"] for run in runs
+                ),
             }
         )
     return summary
@@ -1649,7 +1713,9 @@ def print_table(summary: list[dict[str, Any]]) -> None:
                 item["scenario"],
                 item["policy"],
                 f"{item['success_rate']:.2f}",
-                "-" if item["avg_completion_time"] is None else f"{item['avg_completion_time']:.2f}",
+                "-"
+                if item["avg_completion_time"] is None
+                else f"{item['avg_completion_time']:.2f}",
                 f"{item['avg_idle_ratio']:.2f}",
                 f"{item['avg_duplicate_attempts']:.2f}",
                 f"{item['avg_scope_conflicts']:.2f}",
@@ -1788,7 +1854,9 @@ def main() -> int:
                 result["repeat"] = repeat
                 results.append(result)
                 if args.output_json is not None:
-                    write_json_atomic(args.output_json, result_payload(args.model, results))
+                    write_json_atomic(
+                        args.output_json, result_payload(args.model, results)
+                    )
                 print(
                     f"completed scenario={scenario_id} policy={policy} repeat={repeat}",
                     file=sys.stderr,

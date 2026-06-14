@@ -50,7 +50,9 @@ class AppServerStartupError(RuntimeError):
 
 def add_benchmark_app_server_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--app-server-url")
-    parser.add_argument("--current-app-server", type=Path, default=DEFAULT_CURRENT_APP_SERVER)
+    parser.add_argument(
+        "--current-app-server", type=Path, default=DEFAULT_CURRENT_APP_SERVER
+    )
     parser.add_argument(
         "--reuse-current-app-server",
         action="store_true",
@@ -164,7 +166,9 @@ def prepare_minimal_codex_home(
             shutil.copy2(source, codex_home / name)
             copied_files.append(name)
     if "auth.json" not in copied_files:
-        raise AppServerStartupError(f"missing benchmark auth source: {source_home / 'auth.json'}")
+        raise AppServerStartupError(
+            f"missing benchmark auth source: {source_home / 'auth.json'}"
+        )
     (codex_home / "benchmark-codex-home.json").write_text(
         json.dumps(
             {
@@ -213,4 +217,6 @@ def terminate_process(process: subprocess.Popen[str]) -> None:
 def log_tail(path: Path, lines: int = 40) -> str:
     if not path.exists():
         return ""
-    return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
+    return "\n".join(
+        path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+    )

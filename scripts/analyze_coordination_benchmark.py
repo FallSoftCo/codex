@@ -102,14 +102,20 @@ def bootstrap_ci(
     }
 
 
-def wilson_ci(successes: int, total: int, z: float = 1.959963984540054) -> dict[str, float | None]:
+def wilson_ci(
+    successes: int, total: int, z: float = 1.959963984540054
+) -> dict[str, float | None]:
     if total == 0:
         return {"rate": None, "low": None, "high": None}
     phat = successes / total
     denom = 1 + z**2 / total
     center = (phat + z**2 / (2 * total)) / denom
     margin = z * math.sqrt((phat * (1 - phat) + z**2 / (4 * total)) / total) / denom
-    return {"rate": phat, "low": max(0.0, center - margin), "high": min(1.0, center + margin)}
+    return {
+        "rate": phat,
+        "low": max(0.0, center - margin),
+        "high": min(1.0, center + margin),
+    }
 
 
 def exact_two_sided_sign_p(values: list[float]) -> float | None:
@@ -149,7 +155,9 @@ def metric_value(run: dict[str, Any], metric: str) -> float | None:
     return float(value)
 
 
-def group_results(results: list[dict[str, Any]]) -> dict[tuple[str, str], list[dict[str, Any]]]:
+def group_results(
+    results: list[dict[str, Any]],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for run in results:
         grouped[(run["scenario"], run["policy"])].append(run)
@@ -186,8 +194,7 @@ def paired_comparisons(
     policy_b: str,
 ) -> list[dict[str, Any]]:
     by_key = {
-        (run["scenario"], run["policy"], int(run["repeat"])): run
-        for run in results
+        (run["scenario"], run["policy"], int(run["repeat"])): run for run in results
     }
     scenarios = sorted({run["scenario"] for run in results})
     rows = []
@@ -206,7 +213,8 @@ def paired_comparisons(
                 {
                     (run["scenario"], int(run["repeat"]))
                     for run in results
-                    if run["scenario"] == scenario and run["policy"] in {policy_a, policy_b}
+                    if run["scenario"] == scenario
+                    and run["policy"] in {policy_a, policy_b}
                 }
             )
 
@@ -238,25 +246,37 @@ def paired_comparisons(
                     "policy_b": policy_b,
                     "mean_a": mean(
                         [
-                            metric_value(by_key[(scenario_id, policy_a, repeat)], metric)
+                            metric_value(
+                                by_key[(scenario_id, policy_a, repeat)], metric
+                            )
                             for scenario_id, repeat in repeats
                             if (scenario_id, policy_a, repeat) in by_key
                             and (scenario_id, policy_b, repeat) in by_key
-                            and metric_value(by_key[(scenario_id, policy_a, repeat)], metric)
+                            and metric_value(
+                                by_key[(scenario_id, policy_a, repeat)], metric
+                            )
                             is not None
-                            and metric_value(by_key[(scenario_id, policy_b, repeat)], metric)
+                            and metric_value(
+                                by_key[(scenario_id, policy_b, repeat)], metric
+                            )
                             is not None
                         ]
                     ),
                     "mean_b": mean(
                         [
-                            metric_value(by_key[(scenario_id, policy_b, repeat)], metric)
+                            metric_value(
+                                by_key[(scenario_id, policy_b, repeat)], metric
+                            )
                             for scenario_id, repeat in repeats
                             if (scenario_id, policy_a, repeat) in by_key
                             and (scenario_id, policy_b, repeat) in by_key
-                            and metric_value(by_key[(scenario_id, policy_a, repeat)], metric)
+                            and metric_value(
+                                by_key[(scenario_id, policy_a, repeat)], metric
+                            )
                             is not None
-                            and metric_value(by_key[(scenario_id, policy_b, repeat)], metric)
+                            and metric_value(
+                                by_key[(scenario_id, policy_b, repeat)], metric
+                            )
                             is not None
                         ]
                     ),

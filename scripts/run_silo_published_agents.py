@@ -47,9 +47,7 @@ from replay_hollywood_operator import (
 REPO_ROOT = Path("/home/ai/Development/losangelex")
 DEFAULT_CODEX = REPO_ROOT / "codex-rs" / "target" / "debug" / "codex"
 DEFAULT_OUT_ROOT = REPO_ROOT / "tmp" / "research" / "published-agent-benchmarks"
-DEFAULT_SILO_ROOT = (
-    DEFAULT_OUT_ROOT / "repos" / "acl26-silo-bench"
-)
+DEFAULT_SILO_ROOT = DEFAULT_OUT_ROOT / "repos" / "acl26-silo-bench"
 DEFAULT_HOLLYWOOD_URL = "http://127.0.0.1:8765"
 
 
@@ -181,7 +179,9 @@ def discover_tasks(
             continue
         if levels and not any(path.stem.startswith(f"{level}-") for level in levels):
             continue
-        if agent_counts and not any(path.stem.endswith(f"_n{count}") for count in agent_counts):
+        if agent_counts and not any(
+            path.stem.endswith(f"_n{count}") for count in agent_counts
+        ):
             continue
         try:
             task = load_task(path)
@@ -215,7 +215,9 @@ def default_hidden_paths(silo_root: Path) -> list[Path]:
     return [silo_root]
 
 
-def previous_result_hidden_paths(out_root: Path, current_output_dir: Path) -> list[Path]:
+def previous_result_hidden_paths(
+    out_root: Path, current_output_dir: Path
+) -> list[Path]:
     if not out_root.exists():
         return []
     current = current_output_dir.resolve()
@@ -279,10 +281,14 @@ def _normalize_value(value: Any) -> Any:
     return value
 
 
-def _numeric_values_close(actual: Any, expected: Any, *, tolerance: float = 0.01) -> bool:
+def _numeric_values_close(
+    actual: Any, expected: Any, *, tolerance: float = 0.01
+) -> bool:
     actual_norm = _normalize_value(actual)
     expected_norm = _normalize_value(expected)
-    if isinstance(actual_norm, (int, float)) and isinstance(expected_norm, (int, float)):
+    if isinstance(actual_norm, (int, float)) and isinstance(
+        expected_norm, (int, float)
+    ):
         return abs(actual_norm - expected_norm) <= tolerance
     if isinstance(actual_norm, list) and isinstance(expected_norm, list):
         return len(actual_norm) == len(expected_norm) and all(
@@ -301,7 +307,9 @@ def _numeric_values_close(actual: Any, expected: Any, *, tolerance: float = 0.01
     return actual_norm == expected_norm
 
 
-def _numeric_partial_score(actual: Any, expected: Any, *, tolerance: float = 0.01) -> float:
+def _numeric_partial_score(
+    actual: Any, expected: Any, *, tolerance: float = 0.01
+) -> float:
     actual_norm = _normalize_value(actual)
     expected_norm = _normalize_value(expected)
     if isinstance(actual_norm, list) and isinstance(expected_norm, list):
@@ -329,7 +337,11 @@ def _numeric_partial_score(actual: Any, expected: Any, *, tolerance: float = 0.0
             for key in expected_norm
         )
         return matched / len(expected_norm)
-    return 1.0 if _numeric_values_close(actual_norm, expected_norm, tolerance=tolerance) else 0.0
+    return (
+        1.0
+        if _numeric_values_close(actual_norm, expected_norm, tolerance=tolerance)
+        else 0.0
+    )
 
 
 def compute_numeric_tolerance_metrics(
@@ -421,7 +433,9 @@ def score_task(task: SiloTask, submissions: list[dict[str, Any]]) -> dict[str, A
     records: list[dict[str, Any]] = []
     for submission in submissions:
         agent_id = int(submission["agent_id"])
-        expected = expected_values[agent_id] if agent_id < len(expected_values) else None
+        expected = (
+            expected_values[agent_id] if agent_id < len(expected_values) else None
+        )
         actual_norm = _normalize_value(submission["answer"])
         expected_norm = _normalize_value(expected)
         is_correct = actual_norm == expected_norm
@@ -475,8 +489,7 @@ def compute_partial_correctness(
     if count == 0:
         return 0.0
     submitted = {
-        int(item["agent_id"]): _normalize_value(item["answer"])
-        for item in submissions
+        int(item["agent_id"]): _normalize_value(item["answer"]) for item in submissions
     }
 
     if level == "I":
@@ -504,7 +517,9 @@ def compute_partial_correctness(
                 if not expected:
                     total += 1.0 if not actual else 0.0
                 else:
-                    matches = sum(1 for left, right in zip(actual, expected) if left == right)
+                    matches = sum(
+                        1 for left, right in zip(actual, expected) if left == right
+                    )
                     total += matches / len(expected)
             else:
                 total += 1.0 if actual == expected else 0.0
@@ -567,7 +582,11 @@ Rules:
 
 
 def codex_subagent_worker_prompt(task: SiloTask, config: SiloAgentConfig) -> str:
-    profile = f"\nPublished role/profile for this agent:\n{config.profile}\n" if config.profile else ""
+    profile = (
+        f"\nPublished role/profile for this agent:\n{config.profile}\n"
+        if config.profile
+        else ""
+    )
     return f"""You are Codex subagent for a published SILO-BENCH distributed coordination task.
 
 System under evaluation: codex-subagents
@@ -675,7 +694,9 @@ def codex_subagent_tool_summary(stdout: str, stderr: str) -> dict[str, Any]:
     }
 
 
-def codex_subagent_artifact_summary(workspace: Path, agent_count: int) -> dict[str, Any]:
+def codex_subagent_artifact_summary(
+    workspace: Path, agent_count: int
+) -> dict[str, Any]:
     submissions_dir = workspace / "submissions"
     shared_dir = workspace / "shared"
     expected = [f"agent-{agent_id:03d}" for agent_id in range(agent_count)]
@@ -685,14 +706,18 @@ def codex_subagent_artifact_summary(workspace: Path, agent_count: int) -> dict[s
         if (submissions_dir / f"{agent_name}.json").exists()
     ]
     shared_present = [
-        agent_name for agent_name in expected if (shared_dir / f"{agent_name}.md").exists()
+        agent_name
+        for agent_name in expected
+        if (shared_dir / f"{agent_name}.md").exists()
     ]
     return {
         "expectedAgents": expected,
         "submissionsPresent": submissions_present,
         "sharedPresent": shared_present,
         "missingSubmissions": [
-            agent_name for agent_name in expected if agent_name not in submissions_present
+            agent_name
+            for agent_name in expected
+            if agent_name not in submissions_present
         ],
         "missingShared": [
             agent_name for agent_name in expected if agent_name not in shared_present
@@ -736,10 +761,14 @@ def run_codex_task(
     run_records: list[dict[str, Any]] = []
     for round_index in range(1, max_rounds + 1):
         for config in task.agent_configs:
-            submission_path = workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+            submission_path = (
+                workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+            )
             if submission_path.exists():
                 continue
-            agent_dir = output_dir / f"agent-{config.agent_id:03d}" / f"round-{round_index:03d}"
+            agent_dir = (
+                output_dir / f"agent-{config.agent_id:03d}" / f"round-{round_index:03d}"
+            )
             agent_dir.mkdir(parents=True, exist_ok=True)
             prompt = codex_prompt(task, config, round_index=round_index)
             (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
@@ -858,7 +887,9 @@ def run_codex_subagents_task(
             "stderrPath": str(output_dir / "parent-stderr.log"),
         },
         "score": score,
-        "coordinationToolSummary": codex_subagent_tool_summary(result.stdout, result.stderr),
+        "coordinationToolSummary": codex_subagent_tool_summary(
+            result.stdout, result.stderr
+        ),
         "codexSubagentArtifacts": codex_subagent_artifact_summary(
             workspace,
             len(task.agent_configs),
@@ -1056,7 +1087,11 @@ def losangelex_prompt(
     runtime_name: str,
     round_index: int,
 ) -> str:
-    profile = f"\nPublished role/profile for this agent:\n{config.profile}\n" if config.profile else ""
+    profile = (
+        f"\nPublished role/profile for this agent:\n{config.profile}\n"
+        if config.profile
+        else ""
+    )
     return f"""We are running a published SILO-BENCH distributed coordination task.
 
 System under evaluation: losangelex-hollywood-room
@@ -1170,7 +1205,9 @@ def run_losangelex_task(
         deadline = started + timeout_seconds
         for round_index in range(1, max_rounds + 1):
             for config, agent in zip(task.agent_configs, agents, strict=True):
-                submission_path = workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+                submission_path = (
+                    workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+                )
                 if submission_path.exists():
                     continue
                 if round_index == 1:
@@ -1186,7 +1223,10 @@ def run_losangelex_task(
                         config,
                         round_index=round_index,
                     )
-                (output_dir / f"prompt-agent-{config.agent_id:03d}-round-{round_index:03d}.txt").write_text(
+                (
+                    output_dir
+                    / f"prompt-agent-{config.agent_id:03d}-round-{round_index:03d}.txt"
+                ).write_text(
                     prompt,
                     encoding="utf-8",
                 )
@@ -1201,7 +1241,9 @@ def run_losangelex_task(
             submitted = [
                 config.agent_id
                 for config in task.agent_configs
-                if (workspace / "submissions" / f"agent-{config.agent_id:03d}.json").exists()
+                if (
+                    workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+                ).exists()
             ]
             active_threads = active_thread_count(states)
             round_timed_out = time.time() >= round_deadline and len(submitted) < len(
@@ -1217,7 +1259,9 @@ def run_losangelex_task(
                 }
             )
             if all(
-                (workspace / "submissions" / f"agent-{config.agent_id:03d}.json").exists()
+                (
+                    workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+                ).exists()
                 for config in task.agent_configs
             ):
                 break
@@ -1275,28 +1319,37 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
     def summarize(record_group: list[dict[str, Any]]) -> dict[str, Any]:
         count = len(record_group)
         successes = sum(1 for record in record_group if record["score"]["success"])
-        avg_success_rate = sum(
-            record["score"]["metrics"]["S_success_rate"]
-            for record in record_group
-        ) / count
-        avg_partial = sum(
-            record["score"]["metrics"]["P_partial_correctness"]
-            for record in record_group
-        ) / count
-        avg_numeric_tolerance_success_rate = sum(
-            record["score"]["metrics"].get(
-                "S_numeric_tolerance_success_rate",
-                record["score"]["metrics"]["S_success_rate"],
+        avg_success_rate = (
+            sum(record["score"]["metrics"]["S_success_rate"] for record in record_group)
+            / count
+        )
+        avg_partial = (
+            sum(
+                record["score"]["metrics"]["P_partial_correctness"]
+                for record in record_group
             )
-            for record in record_group
-        ) / count
-        avg_numeric_tolerance_partial = sum(
-            record["score"]["metrics"].get(
-                "P_numeric_tolerance_partial_correctness",
-                record["score"]["metrics"]["P_partial_correctness"],
+            / count
+        )
+        avg_numeric_tolerance_success_rate = (
+            sum(
+                record["score"]["metrics"].get(
+                    "S_numeric_tolerance_success_rate",
+                    record["score"]["metrics"]["S_success_rate"],
+                )
+                for record in record_group
             )
-            for record in record_group
-        ) / count
+            / count
+        )
+        avg_numeric_tolerance_partial = (
+            sum(
+                record["score"]["metrics"].get(
+                    "P_numeric_tolerance_partial_correctness",
+                    record["score"]["metrics"]["P_partial_correctness"],
+                )
+                for record in record_group
+            )
+            / count
+        )
         avg_seconds = sum(record["seconds"] for record in record_group) / count
         coordination_tool_errors = sum(
             coordination_error_total(record) for record in record_group
@@ -1318,9 +1371,9 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
     for record in records:
         by_system.setdefault(record["system"], []).append(record)
         level = str(record["score"].get("level", "unknown"))
-        by_level_system.setdefault(level, {}).setdefault(
-            record["system"], []
-        ).append(record)
+        by_level_system.setdefault(level, {}).setdefault(record["system"], []).append(
+            record
+        )
     systems: dict[str, Any] = {}
     for system, system_records in sorted(by_system.items()):
         systems[system] = summarize(system_records)
@@ -1346,7 +1399,9 @@ def coordination_error_total(record: dict[str, Any]) -> int:
     return int(total) if isinstance(total, (int, float)) else 0
 
 
-def write_report(path: Path, *, campaign_name: str, records: list[dict[str, Any]]) -> None:
+def write_report(
+    path: Path, *, campaign_name: str, records: list[dict[str, Any]]
+) -> None:
     summary = aggregate(records)
     lines = [
         f"# Published SILO-BENCH Agent Comparison: {campaign_name}",
@@ -1488,17 +1543,20 @@ def main() -> int:
             silo_root=args.silo_root,
             include_defaults=False,
         )
-    with benchmark_app_server(
-        required="losangelex" in args.system,
-        app_server_url=args.app_server_url,
-        reuse_current_app_server=args.reuse_current_app_server,
-        current_app_server=args.current_app_server,
-        codex=args.codex,
-        output_dir=output_dir,
-        benchmark_codex_home=args.benchmark_codex_home,
-        codex_home_source=args.codex_home_source,
-        start_timeout_seconds=args.app_server_start_timeout_seconds,
-    ) as app_server, temporarily_hide_paths(hidden_paths):
+    with (
+        benchmark_app_server(
+            required="losangelex" in args.system,
+            app_server_url=args.app_server_url,
+            reuse_current_app_server=args.reuse_current_app_server,
+            current_app_server=args.current_app_server,
+            codex=args.codex,
+            output_dir=output_dir,
+            benchmark_codex_home=args.benchmark_codex_home,
+            codex_home_source=args.codex_home_source,
+            start_timeout_seconds=args.app_server_start_timeout_seconds,
+        ) as app_server,
+        temporarily_hide_paths(hidden_paths),
+    ):
         app_server_url = app_server.url if app_server is not None else None
         app_server_metadata = app_server.metadata() if app_server is not None else None
         for task in tasks:
@@ -1517,7 +1575,9 @@ def main() -> int:
                     )
                 elif system == "codex-subagents":
                     if codex_subagents_home is None:
-                        raise RuntimeError("codex-subagents CODEX_HOME was not prepared")
+                        raise RuntimeError(
+                            "codex-subagents CODEX_HOME was not prepared"
+                        )
                     record = run_codex_subagents_task(
                         task=task,
                         workspace=workspace,
@@ -1539,7 +1599,9 @@ def main() -> int:
                     )
                 else:
                     if app_server_url is None:
-                        raise RuntimeError("app server URL is required for Losangelex runs")
+                        raise RuntimeError(
+                            "app server URL is required for Losangelex runs"
+                        )
                     record = run_losangelex_task(
                         task=task,
                         workspace=workspace,

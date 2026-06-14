@@ -38,9 +38,13 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         count = len(system_records)
         successes = sum(1 for record in system_records if record["score"]["success"])
         exact = sum(1 for record in system_records if record["score"]["exactSetMatch"])
-        avg_recall = sum(
-            record["score"]["metrics"]["rootCauseRecall"] for record in system_records
-        ) / count
+        avg_recall = (
+            sum(
+                record["score"]["metrics"]["rootCauseRecall"]
+                for record in system_records
+            )
+            / count
+        )
         avg_seconds = sum(record["seconds"] for record in system_records) / count
         systems[system] = {
             "tasks": count,

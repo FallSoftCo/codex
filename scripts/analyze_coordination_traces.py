@@ -52,11 +52,7 @@ def mean(values: list[float]) -> float:
 
 
 def classify_tail_line(line: str) -> list[str]:
-    return [
-        category
-        for category, needle in TAIL_CATEGORIES.items()
-        if needle in line
-    ]
+    return [category for category, needle in TAIL_CATEGORIES.items() if needle in line]
 
 
 def run_trace(run: dict[str, Any]) -> dict[str, Any]:
@@ -90,18 +86,13 @@ def run_trace(run: dict[str, Any]) -> dict[str, Any]:
         "deadlock": bool(run["deadlock"]),
         "completion_time": run.get("completion_time"),
         "rounds": run.get("rounds"),
-        "counters": {
-            field: run.get(field, 0)
-            for field in COUNTER_FIELDS
-        },
+        "counters": {field: run.get(field, 0) for field in COUNTER_FIELDS},
         "idle_ratio": run.get("idle_ratio", 0.0),
         "model_calls": run.get("model_calls", 0),
         "model_tokens": run.get("model_tokens", 0),
         "tail_events": tail_events,
         "tail_examples": {
-            category: lines
-            for category, lines in examples.items()
-            if lines
+            category: lines for category, lines in examples.items() if lines
         },
         "modes": modes,
     }
@@ -124,15 +115,25 @@ def aggregate_traces(
         }
         row["runs"] = len(runs)
         row["success"] = wilson_ci(sum(1 for run in runs if run["success"]), len(runs))
-        row["deadlock"] = wilson_ci(sum(1 for run in runs if run["deadlock"]), len(runs))
-        row["failure"] = wilson_ci(sum(1 for run in runs if not run["success"]), len(runs))
+        row["deadlock"] = wilson_ci(
+            sum(1 for run in runs if run["deadlock"]), len(runs)
+        )
+        row["failure"] = wilson_ci(
+            sum(1 for run in runs if not run["success"]), len(runs)
+        )
         for field in COUNTER_FIELDS:
             row[f"avg_{field}"] = mean(
                 [float(run["counters"].get(field, 0)) for run in runs]
             )
-        row["avg_idle_ratio"] = mean([float(run.get("idle_ratio", 0.0)) for run in runs])
-        row["avg_model_calls"] = mean([float(run.get("model_calls", 0)) for run in runs])
-        row["avg_model_tokens"] = mean([float(run.get("model_tokens", 0)) for run in runs])
+        row["avg_idle_ratio"] = mean(
+            [float(run.get("idle_ratio", 0.0)) for run in runs]
+        )
+        row["avg_model_calls"] = mean(
+            [float(run.get("model_calls", 0)) for run in runs]
+        )
+        row["avg_model_tokens"] = mean(
+            [float(run.get("model_tokens", 0)) for run in runs]
+        )
         row["tail_events"] = {
             category: sum(run["tail_events"].get(category, 0) for run in runs)
             for category in TAIL_CATEGORIES
@@ -182,7 +183,9 @@ def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
-def report_rows(rows: list[dict[str, Any]], *, include_scenario: bool) -> list[list[str]]:
+def report_rows(
+    rows: list[dict[str, Any]], *, include_scenario: bool
+) -> list[list[str]]:
     output = []
     for row in rows:
         cells = []
@@ -207,7 +210,9 @@ def report_rows(rows: list[dict[str, Any]], *, include_scenario: bool) -> list[l
     return output
 
 
-def write_csv(path: pathlib.Path, rows: list[dict[str, Any]], *, include_scenario: bool) -> None:
+def write_csv(
+    path: pathlib.Path, rows: list[dict[str, Any]], *, include_scenario: bool
+) -> None:
     fields = []
     if include_scenario:
         fields.append("scenario")
@@ -386,7 +391,9 @@ def main() -> int:
         json.dumps(payload, indent=2) + "\n",
         encoding="utf-8",
     )
-    write_csv(args.out_dir / "trace-taxonomy-overall.csv", overall, include_scenario=False)
+    write_csv(
+        args.out_dir / "trace-taxonomy-overall.csv", overall, include_scenario=False
+    )
     write_csv(args.out_dir / "trace-taxonomy.csv", by_scenario, include_scenario=True)
     write_report(
         args.out_dir / "TRACE_TAXONOMY_REPORT.md",

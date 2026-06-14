@@ -197,7 +197,9 @@ def load_tasks(
     wanted = set(task_ids)
     for index, data in enumerate(rows, start=1):
         raw_task_id = str(data.get("task_id", index))
-        task_id = f"database-{int(raw_task_id):03d}" if raw_task_id.isdigit() else raw_task_id
+        task_id = (
+            f"database-{int(raw_task_id):03d}" if raw_task_id.isdigit() else raw_task_id
+        )
         if wanted and raw_task_id not in wanted and task_id not in wanted:
             continue
 
@@ -247,7 +249,9 @@ def default_hidden_paths(marble_root: Path) -> list[Path]:
     return [marble_root]
 
 
-def previous_result_hidden_paths(out_root: Path, current_output_dir: Path) -> list[Path]:
+def previous_result_hidden_paths(
+    out_root: Path, current_output_dir: Path
+) -> list[Path]:
     if not out_root.exists():
         return []
     current = current_output_dir.resolve()
@@ -287,7 +291,9 @@ def fresh_workspace(path: Path, task: MarbleDatabaseTask, evidence_mode: str) ->
     (path / "case.md").write_text(public_case_markdown(task), encoding="utf-8")
     if evidence_mode in {"schema", "diagnostic-observations"}:
         (path / "diagnostics").mkdir()
-        (path / "diagnostics" / "schema.sql").write_text(task.init_sql, encoding="utf-8")
+        (path / "diagnostics" / "schema.sql").write_text(
+            task.init_sql, encoding="utf-8"
+        )
     if evidence_mode == "diagnostic-observations":
         (path / "diagnostics" / "observations.md").write_text(
             diagnostic_observations(task),
@@ -561,7 +567,9 @@ def extract_labels_from_text(text: str) -> list[str]:
     return normalize_labels(loose_matches)
 
 
-def read_prediction(workspace: Path, requested_predictions: int) -> tuple[list[str], str]:
+def read_prediction(
+    workspace: Path, requested_predictions: int
+) -> tuple[list[str], str]:
     candidates = [
         workspace / "submissions" / "final.json",
         workspace / "submissions" / "agent1.json",
@@ -673,7 +681,9 @@ def run_psql(
     return result
 
 
-def run_psql_input(sql: str, *, timeout: int, log_path: Path) -> subprocess.CompletedProcess[str]:
+def run_psql_input(
+    sql: str, *, timeout: int, log_path: Path
+) -> subprocess.CompletedProcess[str]:
     append_log(log_path, f"\n$ psql < {len(sql)} bytes")
     result = subprocess.run(
         psql_args(),
@@ -720,7 +730,9 @@ def anomaly_settings(task: MarbleDatabaseTask, label: str) -> dict[str, int]:
     return {"nrow": 10000, "ncolumn": 8, "colsize": 32}
 
 
-def wide_table_sql(table_name: str, *, nrow: int, ncolumn: int, colsize: int = 32) -> str:
+def wide_table_sql(
+    table_name: str, *, nrow: int, ncolumn: int, colsize: int = 32
+) -> str:
     columns = ", ".join(f"name{i} text" for i in range(ncolumn))
     repeat_count = max(1, (colsize + 31) // 32)
     values = ", ".join(
@@ -741,19 +753,35 @@ def prepare_native_tables(task: MarbleDatabaseTask, log_path: Path) -> None:
     if "INSERT_LARGE_DATA" in roots:
         settings = anomaly_settings(task, "INSERT_LARGE_DATA")
         columns = ", ".join(f"name{i} text" for i in range(settings["ncolumn"]))
-        setup_sql.append(f"DROP TABLE IF EXISTS marble_insert; CREATE TABLE marble_insert (id integer, {columns});")
+        setup_sql.append(
+            f"DROP TABLE IF EXISTS marble_insert; CREATE TABLE marble_insert (id integer, {columns});"
+        )
     if "FETCH_LARGE_DATA" in roots:
-        setup_sql.append(wide_table_sql("marble_fetch", **anomaly_settings(task, "FETCH_LARGE_DATA")))
+        setup_sql.append(
+            wide_table_sql("marble_fetch", **anomaly_settings(task, "FETCH_LARGE_DATA"))
+        )
     if "MISSING_INDEXES" in roots:
-        setup_sql.append(wide_table_sql("marble_missing", **anomaly_settings(task, "MISSING_INDEXES")))
+        setup_sql.append(
+            wide_table_sql(
+                "marble_missing", **anomaly_settings(task, "MISSING_INDEXES")
+            )
+        )
     if "VACUUM" in roots:
         settings = anomaly_settings(task, "VACUUM")
         setup_sql.append(wide_table_sql("marble_vacuum", **settings))
-        setup_sql.append(f"DELETE FROM marble_vacuum WHERE id <= {int(settings['nrow'] * 0.8)};")
+        setup_sql.append(
+            f"DELETE FROM marble_vacuum WHERE id <= {int(settings['nrow'] * 0.8)};"
+        )
     if "REDUNDANT_INDEX" in roots:
-        setup_sql.append(wide_table_sql("marble_redundant", **anomaly_settings(task, "REDUNDANT_INDEX")))
+        setup_sql.append(
+            wide_table_sql(
+                "marble_redundant", **anomaly_settings(task, "REDUNDANT_INDEX")
+            )
+        )
     if "LOCK_CONTENTION" in roots:
-        setup_sql.append(wide_table_sql("marble_lock", **anomaly_settings(task, "LOCK_CONTENTION")))
+        setup_sql.append(
+            wide_table_sql("marble_lock", **anomaly_settings(task, "LOCK_CONTENTION"))
+        )
     if "POOR_JOIN_PERFORMANCE" in roots or "CPU_CONTENTION" in roots:
         setup_sql.append(wide_table_sql("marble_join_a", nrow=5000, ncolumn=4))
         setup_sql.append(wide_table_sql("marble_join_b", nrow=5000, ncolumn=4))
@@ -784,20 +812,31 @@ def start_lock_contention(log_path: Path) -> list[subprocess.Popen[str]]:
     time.sleep(2)
     for _ in range(3):
         waiter = subprocess.Popen(
-            [*psql_args(), "-c", "UPDATE marble_lock SET name0 = 'waiter' WHERE id = 1;"],
+            [
+                *psql_args(),
+                "-c",
+                "UPDATE marble_lock SET name0 = 'waiter' WHERE id = 1;",
+            ],
             env=postgres_env(),
             text=True,
             stdout=waiter_handle,
             stderr=waiter_handle,
         )
         processes.append(waiter)
-    append_log(log_path, f"started lock contention pids={[process.pid for process in processes]}")
+    append_log(
+        log_path,
+        f"started lock contention pids={[process.pid for process in processes]}",
+    )
     return processes
 
 
-def run_native_activities(task: MarbleDatabaseTask, log_path: Path) -> list[subprocess.Popen[str]]:
+def run_native_activities(
+    task: MarbleDatabaseTask, log_path: Path
+) -> list[subprocess.Popen[str]]:
     roots = set(task.gold_root_causes)
-    result = run_psql("SELECT pg_stat_statements_reset();", timeout=30, log_path=log_path)
+    result = run_psql(
+        "SELECT pg_stat_statements_reset();", timeout=30, log_path=log_path
+    )
     if result.returncode != 0:
         raise RuntimeError("failed to reset pg_stat_statements")
     background: list[subprocess.Popen[str]] = []
@@ -810,7 +849,12 @@ def run_native_activities(task: MarbleDatabaseTask, log_path: Path) -> list[subp
             log_path=log_path,
         )
     if "FETCH_LARGE_DATA" in roots:
-        run_psql("SELECT * FROM marble_fetch;", timeout=120, log_path=log_path, stdout=subprocess.DEVNULL)
+        run_psql(
+            "SELECT * FROM marble_fetch;",
+            timeout=120,
+            log_path=log_path,
+            stdout=subprocess.DEVNULL,
+        )
     if "MISSING_INDEXES" in roots:
         for index in range(20):
             run_psql(
@@ -819,7 +863,9 @@ def run_native_activities(task: MarbleDatabaseTask, log_path: Path) -> list[subp
                 log_path=log_path,
             )
     if "VACUUM" in roots:
-        run_psql("VACUUM (VERBOSE, ANALYZE) marble_vacuum;", timeout=120, log_path=log_path)
+        run_psql(
+            "VACUUM (VERBOSE, ANALYZE) marble_vacuum;", timeout=120, log_path=log_path
+        )
     if "REDUNDANT_INDEX" in roots:
         run_psql(
             "CREATE INDEX marble_redundant_name0_idx ON marble_redundant(name0); "
@@ -868,7 +914,10 @@ class FileQueryServer:
                 handled = True
                 request = self._read_request(request_path)
                 response = self._handle_request(request)
-                response_path = self.request_dir / f"{request.get('id', request_path.stem)}.response.json"
+                response_path = (
+                    self.request_dir
+                    / f"{request.get('id', request_path.stem)}.response.json"
+                )
                 tmp_path = response_path.with_suffix(".response.tmp")
                 tmp_path.write_text(json.dumps(response), encoding="utf-8")
                 tmp_path.replace(response_path)
@@ -892,7 +941,14 @@ class FileQueryServer:
             return {"returncode": 2, "stdout": "", "stderr": "empty SQL query\n"}
         try:
             result = subprocess.run(
-                [*psql_args(), "-A", "-F", "\t", "-c", f"SET statement_timeout TO '10s'; {sql}"],
+                [
+                    *psql_args(),
+                    "-A",
+                    "-F",
+                    "\t",
+                    "-c",
+                    f"SET statement_timeout TO '10s'; {sql}",
+                ],
                 env=postgres_env(),
                 text=True,
                 capture_output=True,
@@ -1029,9 +1085,7 @@ def score_task(task: MarbleDatabaseTask, predicted: list[str]) -> dict[str, Any]
     recall = match_count / len(gold) if gold else 0.0
     precision = match_count / len(predicted_set) if predicted_set else 0.0
     f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall > 0
-        else 0.0
+        2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
     )
     exact = predicted_set == gold
     return {
@@ -1061,14 +1115,14 @@ def codex_agent_prompt(
         "- The workspace includes `diagnostics/schema.sql` and `diagnostics/observations.md`; the observations are label-free monitoring outputs from the published diagnostic surfaces.\n"
         if evidence_mode == "diagnostic-observations"
         else (
-        "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
-        if evidence_mode == "native-postgres"
-        else (
-        "- The workspace includes `diagnostics/schema.sql`, copied from the published "
-        "case environment without anomaly labels.\n"
-        if evidence_mode == "schema"
-        else "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
-        )
+            "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
+            if evidence_mode == "native-postgres"
+            else (
+                "- The workspace includes `diagnostics/schema.sql`, copied from the published "
+                "case environment without anomaly labels.\n"
+                if evidence_mode == "schema"
+                else "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
+            )
         )
     )
     return f"""We are running a published MARBLE/MultiAgentBench database diagnosis task.
@@ -1103,13 +1157,13 @@ def coordinator_prompt(task: MarbleDatabaseTask, *, evidence_mode: str) -> str:
         "Use `diagnostics/observations.md` as the database monitoring evidence and `diagnostics/schema.sql` as schema context; neither file contains answer labels."
         if evidence_mode == "diagnostic-observations"
         else (
-        "Use `./query_db.py '<SQL query>'` when more live PostgreSQL evidence is needed."
-        if evidence_mode == "native-postgres"
-        else (
-        "Use `diagnostics/schema.sql` only as schema context; it contains no anomaly labels."
-        if evidence_mode == "schema"
-        else "This is a prompt-only diagnostic run with no live database fixture."
-        )
+            "Use `./query_db.py '<SQL query>'` when more live PostgreSQL evidence is needed."
+            if evidence_mode == "native-postgres"
+            else (
+                "Use `diagnostics/schema.sql` only as schema context; it contains no anomaly labels."
+                if evidence_mode == "schema"
+                else "This is a prompt-only diagnostic run with no live database fixture."
+            )
         )
     )
     return f"""Finalize MARBLE database case {task.task_id}.
@@ -1140,9 +1194,7 @@ def codex_subagent_worker_prompt(
             "to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
         )
     elif evidence_mode == "schema":
-        diagnostics = (
-            "- The workspace includes `diagnostics/schema.sql`, copied from the published case environment without anomaly labels.\n"
-        )
+        diagnostics = "- The workspace includes `diagnostics/schema.sql`, copied from the published case environment without anomaly labels.\n"
     else:
         diagnostics = "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
     return f"""You are Codex subagent `{config.agent_id}` in a MARBLE/MultiAgentBench database diagnosis benchmark.
@@ -1172,7 +1224,9 @@ When your two files are written, finish. Do not wait for other agents and do not
 """
 
 
-def codex_subagent_parent_prompt(task: MarbleDatabaseTask, *, evidence_mode: str) -> str:
+def codex_subagent_parent_prompt(
+    task: MarbleDatabaseTask, *, evidence_mode: str
+) -> str:
     worker_sections = "\n\n".join(
         f"### Worker {config.agent_id}\n{codex_subagent_worker_prompt(task, config, evidence_mode=evidence_mode)}"
         for config in task.agents
@@ -1184,7 +1238,9 @@ def codex_subagent_parent_prompt(task: MarbleDatabaseTask, *, evidence_mode: str
     elif evidence_mode == "schema":
         diagnostics = "Use `diagnostics/schema.sql` only as schema context; it contains no anomaly labels."
     else:
-        diagnostics = "This is a prompt-only diagnostic run with no live database fixture."
+        diagnostics = (
+            "This is a prompt-only diagnostic run with no live database fixture."
+        )
     return f"""We are running a published MARBLE/MultiAgentBench database diagnosis task.
 
 System under evaluation: codex-subagents
@@ -1316,7 +1372,9 @@ def run_codex_task(
         with temporarily_hide_paths(hidden_paths):
             for round_index in range(1, max_rounds + 1):
                 for config in task.agents:
-                    agent_dir = output_dir / config.agent_id / f"round-{round_index:03d}"
+                    agent_dir = (
+                        output_dir / config.agent_id / f"round-{round_index:03d}"
+                    )
                     agent_dir.mkdir(parents=True, exist_ok=True)
                     prompt = codex_agent_prompt(
                         task,
@@ -1349,8 +1407,12 @@ def run_codex_task(
                         timeout=per_agent_timeout_seconds,
                         input_text=prompt,
                     )
-                    (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
-                    (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
+                    (agent_dir / "stdout.log").write_text(
+                        result.stdout, encoding="utf-8"
+                    )
+                    (agent_dir / "stderr.log").write_text(
+                        result.stderr, encoding="utf-8"
+                    )
                     run_records.append(
                         {
                             "agentId": config.agent_id,
@@ -1407,7 +1469,9 @@ def run_codex_task(
                 )
 
         native_postgres_metadata = native_postgres.__dict__
-        predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+        predicted, raw_prediction = read_prediction(
+            workspace, task.requested_predictions
+        )
     return {
         "system": "codex",
         "caseId": task.task_id,
@@ -1472,11 +1536,17 @@ def run_codex_subagents_task(
                 input_text=prompt,
                 env=env,
             )
-            (output_dir / "parent-stdout.log").write_text(result.stdout, encoding="utf-8")
-            (output_dir / "parent-stderr.log").write_text(result.stderr, encoding="utf-8")
+            (output_dir / "parent-stdout.log").write_text(
+                result.stdout, encoding="utf-8"
+            )
+            (output_dir / "parent-stderr.log").write_text(
+                result.stderr, encoding="utf-8"
+            )
 
         native_postgres_metadata = native_postgres.__dict__
-        predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+        predicted, raw_prediction = read_prediction(
+            workspace, task.requested_predictions
+        )
     return {
         "system": "codex-subagents",
         "caseId": task.task_id,
@@ -1491,8 +1561,12 @@ def run_codex_subagents_task(
         },
         "rawPrediction": raw_prediction,
         "score": score_task(task, predicted),
-        "coordinationToolSummary": codex_subagent_tool_summary(result.stdout, result.stderr),
-        "codexSubagentArtifacts": codex_subagent_artifact_summary(workspace, task.agents),
+        "coordinationToolSummary": codex_subagent_tool_summary(
+            result.stdout, result.stderr
+        ),
+        "codexSubagentArtifacts": codex_subagent_artifact_summary(
+            workspace, task.agents
+        ),
         "nativePostgres": native_postgres_metadata,
     }
 
@@ -1546,13 +1620,13 @@ def losangelex_agent_prompt(
         "- The workspace includes `diagnostics/schema.sql` and `diagnostics/observations.md`; the observations are label-free monitoring outputs from the published diagnostic surfaces.\n"
         if evidence_mode == "diagnostic-observations"
         else (
-        "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
-        if evidence_mode == "native-postgres"
-        else (
-        "- The workspace includes `diagnostics/schema.sql`, copied from the published case environment without anomaly labels.\n"
-        if evidence_mode == "schema"
-        else "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
-        )
+            "- The workspace includes `database.md` and `query_db.py`; use `./query_db.py '<SQL query>'` to inspect the live PostgreSQL database prepared from the published MARBLE database substrate.\n"
+            if evidence_mode == "native-postgres"
+            else (
+                "- The workspace includes `diagnostics/schema.sql`, copied from the published case environment without anomaly labels.\n"
+                if evidence_mode == "schema"
+                else "- No live database or diagnostic fixture is provided in this run; rely only on the published case prompt and team reasoning.\n"
+            )
         )
     )
     coordinator = (
@@ -1598,7 +1672,10 @@ def wait_for_hollywood_round(
         completed_once = (
             completed_threads(conn.notifications, tracked_threads) >= tracked_threads
         )
-        states = {agent.thread_id: read_thread_state(conn, agent.thread_id) for agent in agents}
+        states = {
+            agent.thread_id: read_thread_state(conn, agent.thread_id)
+            for agent in agents
+        }
         if completed_once and all_threads_idle(states):
             break
         if (workspace / "submissions" / "final.json").exists():
@@ -1680,9 +1757,10 @@ def run_losangelex_task(
                     poll_seconds=poll_seconds,
                 )
                 active_threads = active_thread_count(states)
-                round_timed_out = time.time() >= round_deadline and not (
-                    workspace / "submissions" / "final.json"
-                ).exists()
+                round_timed_out = (
+                    time.time() >= round_deadline
+                    and not (workspace / "submissions" / "final.json").exists()
+                )
                 stopped_for_active_timeout = round_timed_out and active_threads > 0
                 completed_rounds.append(
                     {
@@ -1690,7 +1768,9 @@ def run_losangelex_task(
                         "completedInitialTurns": completed_once,
                         "activeThreads": active_threads,
                         "roundTimedOut": round_timed_out,
-                        "finalExists": (workspace / "submissions" / "final.json").exists(),
+                        "finalExists": (
+                            workspace / "submissions" / "final.json"
+                        ).exists(),
                     }
                 )
                 final_states = {
@@ -1712,7 +1792,9 @@ def run_losangelex_task(
             json.dumps(summary, indent=2) + "\n",
             encoding="utf-8",
         )
-        predicted, raw_prediction = read_prediction(workspace, task.requested_predictions)
+        predicted, raw_prediction = read_prediction(
+            workspace, task.requested_predictions
+        )
         native_postgres_metadata = native_postgres.__dict__
     return {
         "system": "losangelex",
@@ -1779,9 +1861,7 @@ def root_cause_metrics(record: dict[str, Any]) -> dict[str, float]:
     if precision is None:
         predicted_count = int(metrics["predictedCount"])
         precision = (
-            float(metrics["matchCount"]) / predicted_count
-            if predicted_count
-            else 0.0
+            float(metrics["matchCount"]) / predicted_count if predicted_count else 0.0
         )
     f1 = metrics.get("rootCauseF1")
     if f1 is None:
@@ -1870,7 +1950,9 @@ def main() -> int:
     parser.add_argument("--round-timeout-seconds", type=int, default=600)
     parser.add_argument("--poll-seconds", type=int, default=45)
     parser.add_argument("--rpc-timeout-seconds", type=int, default=300)
-    parser.add_argument("--campaign-name", default=f"marble-database-{int(time.time())}")
+    parser.add_argument(
+        "--campaign-name", default=f"marble-database-{int(time.time())}"
+    )
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument(
         "--evidence-mode",
@@ -1926,20 +2008,21 @@ def main() -> int:
     global_hidden_paths = (
         [] if args.evidence_mode == "native-postgres" else hidden_paths
     )
-    task_hidden_paths = (
-        hidden_paths if args.evidence_mode == "native-postgres" else []
-    )
-    with benchmark_app_server(
-        required="losangelex" in args.system,
-        app_server_url=args.app_server_url,
-        reuse_current_app_server=args.reuse_current_app_server,
-        current_app_server=args.current_app_server,
-        codex=args.codex,
-        output_dir=output_dir,
-        benchmark_codex_home=args.benchmark_codex_home,
-        codex_home_source=args.codex_home_source,
-        start_timeout_seconds=args.app_server_start_timeout_seconds,
-    ) as app_server, temporarily_hide_paths(global_hidden_paths):
+    task_hidden_paths = hidden_paths if args.evidence_mode == "native-postgres" else []
+    with (
+        benchmark_app_server(
+            required="losangelex" in args.system,
+            app_server_url=args.app_server_url,
+            reuse_current_app_server=args.reuse_current_app_server,
+            current_app_server=args.current_app_server,
+            codex=args.codex,
+            output_dir=output_dir,
+            benchmark_codex_home=args.benchmark_codex_home,
+            codex_home_source=args.codex_home_source,
+            start_timeout_seconds=args.app_server_start_timeout_seconds,
+        ) as app_server,
+        temporarily_hide_paths(global_hidden_paths),
+    ):
         app_server_url = app_server.url if app_server is not None else None
         app_server_metadata = app_server.metadata() if app_server is not None else None
         for task in tasks:
@@ -1961,7 +2044,9 @@ def main() -> int:
                     )
                 elif system == "codex-subagents":
                     if codex_subagents_home is None:
-                        raise RuntimeError("codex-subagents CODEX_HOME was not prepared")
+                        raise RuntimeError(
+                            "codex-subagents CODEX_HOME was not prepared"
+                        )
                     record = run_codex_subagents_task(
                         task=task,
                         workspace=workspace,
@@ -1976,7 +2061,9 @@ def main() -> int:
                     )
                 else:
                     if app_server_url is None:
-                        raise RuntimeError("app server URL is required for Losangelex runs")
+                        raise RuntimeError(
+                            "app server URL is required for Losangelex runs"
+                        )
                     record = run_losangelex_task(
                         task=task,
                         workspace=workspace,

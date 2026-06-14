@@ -41,8 +41,14 @@ TEAM = (
     ("ray", "QA, browser behavior, and final test verification"),
 )
 CHALLENGES = {
-    "habit_dashboard": REPO_ROOT / "evals" / "app_challenges" / "habit_dashboard_template",
-    "incident_console": REPO_ROOT / "evals" / "app_challenges" / "incident_console_template",
+    "habit_dashboard": REPO_ROOT
+    / "evals"
+    / "app_challenges"
+    / "habit_dashboard_template",
+    "incident_console": REPO_ROOT
+    / "evals"
+    / "app_challenges"
+    / "incident_console_template",
     "expense_board": REPO_ROOT / "evals" / "app_challenges" / "expense_board_template",
 }
 RUNTIME_ROOM_POLICIES = {"leader_award", "kanban_pull", "dual_command_lease", "auto"}
@@ -327,9 +333,9 @@ def changed_files(workspace: Path, challenge: str) -> list[str]:
         if "node_modules" in rel.parts:
             continue
         candidate = workspace / rel
-        if not candidate.exists() or path.read_text(errors="ignore") != candidate.read_text(
+        if not candidate.exists() or path.read_text(
             errors="ignore"
-        ):
+        ) != candidate.read_text(errors="ignore"):
             changed.append(str(rel))
     return changed
 
@@ -371,7 +377,9 @@ def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
             "synthetic coordination briefs; do not invent a private policy. Run tests before claiming the "
             "app is done. Only declare completion when `npm test -- --run` passes in this workspace."
         )
-    policy_block = POLICY_PROMPTS[policy].get(agent_name) or POLICY_PROMPTS[policy]["shared"]
+    policy_block = (
+        POLICY_PROMPTS[policy].get(agent_name) or POLICY_PROMPTS[policy]["shared"]
+    )
     return (
         f"You are {agent_name}. Your strongest lane is {specialty}. "
         f"The team roster is: {roster}. "
@@ -424,7 +432,9 @@ def apply_room_policy_state(
         ) from exc
 
 
-def estimate_failed_test_count(test_result: subprocess.CompletedProcess[str]) -> int | None:
+def estimate_failed_test_count(
+    test_result: subprocess.CompletedProcess[str],
+) -> int | None:
     if test_result.returncode == 0:
         return 0
 
@@ -593,10 +603,15 @@ def evaluate_policy(
 
         final_test = run_tests(workspace)
         thread_states = {
-            agent.thread_id: read_thread_state(conn, agent.thread_id) for agent in agents
+            agent.thread_id: read_thread_state(conn, agent.thread_id)
+            for agent in agents
         }
-        summary = summarize_notifications(conn.notifications, {agent.thread_id for agent in agents})
-        completed = completed_threads(conn.notifications, {agent.thread_id for agent in agents})
+        summary = summarize_notifications(
+            conn.notifications, {agent.thread_id for agent in agents}
+        )
+        completed = completed_threads(
+            conn.notifications, {agent.thread_id for agent in agents}
+        )
         changed = changed_files(workspace, challenge)
         active_threads_after_run = active_thread_count(thread_states)
         message_count = summary["notificationCounts"].get("thread/hollywood/message", 0)
@@ -652,7 +667,9 @@ def evaluate_policy(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--challenge", choices=sorted(CHALLENGES), default="habit_dashboard")
+    parser.add_argument(
+        "--challenge", choices=sorted(CHALLENGES), default="habit_dashboard"
+    )
     parser.add_argument(
         "--policy",
         choices=SUPPORTED_POLICIES,
@@ -669,8 +686,15 @@ def main() -> int:
     args = parser.parse_args()
 
     TMP_ROOT.mkdir(parents=True, exist_ok=True)
-    app_server_url = args.app_server_url or load_app_server_url(Path(args.current_app_server))
-    policies = args.policy or ["room_message", "leader_award", "semantic_market", "hybrid"]
+    app_server_url = args.app_server_url or load_app_server_url(
+        Path(args.current_app_server)
+    )
+    policies = args.policy or [
+        "room_message",
+        "leader_award",
+        "semantic_market",
+        "hybrid",
+    ]
 
     results = []
     for policy in policies:

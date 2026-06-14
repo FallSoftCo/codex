@@ -11,7 +11,13 @@ import statistics
 from collections import defaultdict
 from typing import Any
 
-from analyze_coordination_benchmark import METRICS, bootstrap_ci, fmt_ci, fmt_number, wilson_ci
+from analyze_coordination_benchmark import (
+    METRICS,
+    bootstrap_ci,
+    fmt_ci,
+    fmt_number,
+    wilson_ci,
+)
 from benchmark_coordination_policies import POLICY_DESCRIPTIONS, SCENARIOS, aggregate
 
 
@@ -40,7 +46,9 @@ def load_results(paths: list[pathlib.Path]) -> tuple[str | None, list[dict[str, 
     return model, [by_key[key] for key in sorted(by_key)]
 
 
-def grouped(results: list[dict[str, Any]]) -> dict[tuple[str, str], list[dict[str, Any]]]:
+def grouped(
+    results: list[dict[str, Any]],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for result in results:
         groups[(result["scenario"], result["policy"])].append(result)
@@ -71,32 +79,30 @@ def summarize(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def overall_policy_summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    expected_pairs = {
-        (result["scenario"], int(result["repeat"]))
-        for result in results
-    }
+    expected_pairs = {(result["scenario"], int(result["repeat"])) for result in results}
     expected_count = len(expected_pairs)
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for result in results:
         groups[result["policy"]].append(result)
     rows = []
     for policy, runs in sorted(groups.items()):
-        covered_pairs = {
-            (result["scenario"], int(result["repeat"]))
-            for result in runs
-        }
+        covered_pairs = {(result["scenario"], int(result["repeat"])) for result in runs}
         row: dict[str, Any] = {
             "scenario": "__all__",
             "policy": policy,
             "runs": len(runs),
             "coverage": len(covered_pairs),
             "expected_coverage": expected_count,
-            "coverage_rate": len(covered_pairs) / expected_count if expected_count else 0,
+            "coverage_rate": len(covered_pairs) / expected_count
+            if expected_count
+            else 0,
             "success": wilson_ci(sum(1 for run in runs if run["success"]), len(runs)),
         }
         for metric in METRICS:
             values = [float(run[metric]) for run in runs if run.get(metric) is not None]
-            row[metric] = bootstrap_ci(values, seed=f"frontier:__all__:{policy}:{metric}")
+            row[metric] = bootstrap_ci(
+                values, seed=f"frontier:__all__:{policy}:{metric}"
+            )
         rows.append(row)
     return rows
 
@@ -123,7 +129,9 @@ def dominates(a: dict[str, Any], b: dict[str, Any]) -> bool:
 def frontier(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     output = []
     for candidate in rows:
-        if not any(dominates(other, candidate) for other in rows if other is not candidate):
+        if not any(
+            dominates(other, candidate) for other in rows if other is not candidate
+        ):
             output.append(candidate)
     return sorted(
         output,
@@ -141,9 +149,7 @@ def primary_frontier(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return []
     best_success = max(row["success"]["rate"] or 0.0 for row in rows)
     successful_rows = [
-        row
-        for row in rows
-        if (row["success"]["rate"] or 0.0) == best_success
+        row for row in rows if (row["success"]["rate"] or 0.0) == best_success
     ]
     return frontier(successful_rows)
 
@@ -225,7 +231,9 @@ def write_report(
     ]
     overall_frontier = primary_frontier(complete_overall_rows)
     scenario_frontiers = {
-        scenario: primary_frontier([row for row in summary_rows if row["scenario"] == scenario])
+        scenario: primary_frontier(
+            [row for row in summary_rows if row["scenario"] == scenario]
+        )
         for scenario in scenarios
     }
 
@@ -259,14 +267,34 @@ def write_report(
         "## Overall Policy Summary",
         "",
         markdown_table(
-            ["Policy", "Runs", "Coverage", "Success", "Time", "Calls", "Tokens", "Scope", "Idle"],
+            [
+                "Policy",
+                "Runs",
+                "Coverage",
+                "Success",
+                "Time",
+                "Calls",
+                "Tokens",
+                "Scope",
+                "Idle",
+            ],
             report_rows(overall_rows),
         ),
         "",
         "## Overall Pareto Frontier",
         "",
         markdown_table(
-            ["Policy", "Runs", "Coverage", "Success", "Time", "Calls", "Tokens", "Scope", "Idle"],
+            [
+                "Policy",
+                "Runs",
+                "Coverage",
+                "Success",
+                "Time",
+                "Calls",
+                "Tokens",
+                "Scope",
+                "Idle",
+            ],
             report_rows(overall_frontier),
         ),
         "",
@@ -281,8 +309,20 @@ def write_report(
         lines.extend(
             [
                 markdown_table(
-                    ["Policy", "Runs", "Success", "Time", "Calls", "Tokens", "Scope", "Idle"],
-                    [row[0:2] + row[3:] for row in report_rows(scenario_frontiers[scenario])],
+                    [
+                        "Policy",
+                        "Runs",
+                        "Success",
+                        "Time",
+                        "Calls",
+                        "Tokens",
+                        "Scope",
+                        "Idle",
+                    ],
+                    [
+                        row[0:2] + row[3:]
+                        for row in report_rows(scenario_frontiers[scenario])
+                    ],
                 ),
                 "",
             ]

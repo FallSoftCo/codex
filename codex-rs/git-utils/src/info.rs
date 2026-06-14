@@ -65,7 +65,7 @@ pub async fn get_git_repo_root_with_fs(
     fs: &dyn ExecutorFileSystem,
     cwd: &AbsolutePathBuf,
 ) -> Option<AbsolutePathBuf> {
-    let cwd_uri = PathUri::from_abs_path(cwd).ok()?;
+    let cwd_uri = PathUri::from_abs_path(cwd);
     let base = match fs.get_metadata(&cwd_uri, /*sandbox*/ None).await {
         Ok(metadata) if metadata.is_directory => cwd.clone(),
         _ => cwd.parent()?,
@@ -823,7 +823,7 @@ pub async fn resolve_root_git_project_for_trust(
 ) -> Option<AbsolutePathBuf> {
     let repo_root = get_git_repo_root_with_fs(fs, cwd).await?;
     let dot_git = repo_root.join(".git");
-    let dot_git_uri = PathUri::from_abs_path(&dot_git).ok()?;
+    let dot_git_uri = PathUri::from_abs_path(&dot_git);
     if fs
         .get_metadata(&dot_git_uri, /*sandbox*/ None)
         .await
@@ -831,7 +831,7 @@ pub async fn resolve_root_git_project_for_trust(
         .is_directory
     {
         let head = dot_git.join("HEAD");
-        let head_uri = PathUri::from_abs_path(&head).ok()?;
+        let head_uri = PathUri::from_abs_path(&head);
         if fs
             .get_metadata(&head_uri, /*sandbox*/ None)
             .await
@@ -898,18 +898,14 @@ async fn is_valid_git_entry_with_fs(
     fs: &dyn ExecutorFileSystem,
     dot_git: &AbsolutePathBuf,
 ) -> bool {
-    let Ok(dot_git_uri) = PathUri::from_abs_path(dot_git) else {
-        return false;
-    };
+    let dot_git_uri = PathUri::from_abs_path(dot_git);
     let Ok(metadata) = fs.get_metadata(&dot_git_uri, /*sandbox*/ None).await else {
         return false;
     };
 
     if metadata.is_directory {
         let head = dot_git.join("HEAD");
-        let Ok(head_uri) = PathUri::from_abs_path(&head) else {
-            return false;
-        };
+        let head_uri = PathUri::from_abs_path(&head);
         return fs
             .get_metadata(&head_uri, /*sandbox*/ None)
             .await

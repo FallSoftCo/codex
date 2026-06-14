@@ -65,7 +65,9 @@ class JsonRpcWs:
     def close(self) -> None:
         self.ws.close()
 
-    def send_notification(self, method: str, params: dict[str, Any] | None = None) -> None:
+    def send_notification(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> None:
         message: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
         if params is not None:
             message["params"] = params
@@ -136,9 +138,13 @@ def load_scenario(path: Path) -> dict[str, Any]:
         if not isinstance(agent, dict):
             raise ValueError(f"scenario.agents[{index}] must be an object")
         if not isinstance(agent.get("name"), str) or not agent["name"]:
-            raise ValueError(f"scenario.agents[{index}].name must be a non-empty string")
+            raise ValueError(
+                f"scenario.agents[{index}].name must be a non-empty string"
+            )
         if not isinstance(agent.get("task"), str) or not agent["task"]:
-            raise ValueError(f"scenario.agents[{index}].task must be a non-empty string")
+            raise ValueError(
+                f"scenario.agents[{index}].task must be a non-empty string"
+            )
     return data
 
 
@@ -427,7 +433,9 @@ def main() -> int:
     args = parser.parse_args()
 
     scenario = load_scenario(Path(args.scenario_file))
-    app_server_url = args.app_server_url or load_app_server_url(Path(args.current_app_server))
+    app_server_url = args.app_server_url or load_app_server_url(
+        Path(args.current_app_server)
+    )
     workspace = str(scenario["workspace"])
     base_room = str(scenario["room"])
     room = base_room
@@ -442,7 +450,9 @@ def main() -> int:
         for configured_room in list(scenario.get("wakeRooms", []))
     ]
     startup_wait_seconds = float(scenario.get("startupWaitSeconds", 10))
-    wait_for_startup_completions = bool(scenario.get("waitForStartupCompletions", False))
+    wait_for_startup_completions = bool(
+        scenario.get("waitForStartupCompletions", False)
+    )
     startup_completion_timeout_seconds = float(
         scenario.get("startupCompletionTimeoutSeconds", startup_wait_seconds)
     )
@@ -472,8 +482,10 @@ def main() -> int:
         if wait_for_startup_completions:
             deadline = time.time() + startup_completion_timeout_seconds
             conn.drain_until(
-                lambda: completed_threads(conn.notifications, tracked_threads)
-                >= tracked_threads,
+                lambda: (
+                    completed_threads(conn.notifications, tracked_threads)
+                    >= tracked_threads
+                ),
                 deadline,
             )
         elif startup_wait_seconds > 0:
@@ -485,8 +497,10 @@ def main() -> int:
         if wait_for_turn_completions:
             deadline = time.time() + turn_completion_timeout_seconds
             conn.drain_until(
-                lambda: completed_threads(conn.notifications, tracked_threads)
-                >= tracked_threads,
+                lambda: (
+                    completed_threads(conn.notifications, tracked_threads)
+                    >= tracked_threads
+                ),
                 deadline,
             )
         else:
@@ -494,7 +508,8 @@ def main() -> int:
 
         summary = summarize_notifications(conn.notifications, tracked_threads)
         thread_states = {
-            agent.thread_id: read_thread_state(conn, agent.thread_id) for agent in agents
+            agent.thread_id: read_thread_state(conn, agent.thread_id)
+            for agent in agents
         }
         result = {
             "appServerUrl": app_server_url,

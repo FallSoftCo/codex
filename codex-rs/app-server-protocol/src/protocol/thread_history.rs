@@ -243,6 +243,7 @@ impl ThreadHistoryBuilder {
             RolloutItem::ResponseItem(item) => self.handle_response_item(item),
             RolloutItem::TurnContext(_)
             | RolloutItem::SessionMeta(_)
+            | RolloutItem::InterAgentCommunication(_)
             | RolloutItem::SessionState(_) => {}
         }
     }

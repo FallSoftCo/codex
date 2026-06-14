@@ -32,9 +32,7 @@ from collections import Counter, defaultdict
 from typing import Any
 
 
-AUTONOMOUS_WAKE_BODY = (
-    "Autonomous Hollywood follow-up: room activity happened after your last turn started."
-)
+AUTONOMOUS_WAKE_BODY = "Autonomous Hollywood follow-up: room activity happened after your last turn started."
 
 NOOP_PATTERNS = (
     "no new",
@@ -122,7 +120,9 @@ class TurnRecord:
     scheduled_contexts: list[dict[str, str]] = dataclasses.field(default_factory=list)
     incoming_messages: list[HollywoodMessage] = dataclasses.field(default_factory=list)
     tool_calls: dict[str, str] = dataclasses.field(default_factory=dict)
-    list_tasks_outputs: list[list[dict[str, Any]]] = dataclasses.field(default_factory=list)
+    list_tasks_outputs: list[list[dict[str, Any]]] = dataclasses.field(
+        default_factory=list
+    )
     assistant_output: str = ""
 
 
@@ -136,7 +136,9 @@ class SimulatedWake:
     task_snapshot: list[dict[str, Any]]
 
 
-def load_current_tasks_map(state_db: str, task_ids: set[str]) -> dict[str, dict[str, Any]]:
+def load_current_tasks_map(
+    state_db: str, task_ids: set[str]
+) -> dict[str, dict[str, Any]]:
     if not task_ids:
         return {}
     conn = sqlite3.connect(state_db)
@@ -246,9 +248,7 @@ def choose_sessions(
     duplicates: dict[str, list[str]] = {}
     for name in requested_names:
         matches = [
-            entry
-            for entry in entries
-            if entry.attached and name in entry.identities
+            entry for entry in entries if entry.attached and name in entry.identities
         ]
         duplicates[name] = [entry.session_id for entry in matches]
         if matches:
@@ -257,9 +257,13 @@ def choose_sessions(
 
 
 def find_rollout_path(sessions_root: str, session_id: str) -> str:
-    matches = glob.glob(os.path.join(sessions_root, f"**/*{session_id}.jsonl"), recursive=True)
+    matches = glob.glob(
+        os.path.join(sessions_root, f"**/*{session_id}.jsonl"), recursive=True
+    )
     if not matches:
-        raise FileNotFoundError(f"no rollout found for {session_id} under {sessions_root}")
+        raise FileNotFoundError(
+            f"no rollout found for {session_id} under {sessions_root}"
+        )
     matches.sort()
     return matches[-1]
 
@@ -329,11 +333,14 @@ def load_turns(rollout_path: str, session_id: str, agent_name: str) -> list[Turn
                             elif message.sender_id != "hollywood-system":
                                 current.incoming_messages.append(message)
                     elif role == "user":
-                        scheduled = parse_key_value_block("scheduled_task_context", combined)
+                        scheduled = parse_key_value_block(
+                            "scheduled_task_context", combined
+                        )
                         if scheduled:
-                            coordination = parse_key_value_block(
-                                "coordination_context", combined
-                            ) or {}
+                            coordination = (
+                                parse_key_value_block("coordination_context", combined)
+                                or {}
+                            )
                             merged = dict(scheduled)
                             merged.update(
                                 {
@@ -413,7 +420,11 @@ def classify_turn(turn: TurnRecord, previous_label: str | None) -> SimulatedWake
 
     if any(pattern in lower for pattern in NO_LANE_PATTERNS):
         should_wake = previous_label != "blocked_no_lane"
-        rationale = "first blocked/no-lane state change" if should_wake else "same blocked/no-lane state repeated"
+        rationale = (
+            "first blocked/no-lane state change"
+            if should_wake
+            else "same blocked/no-lane state repeated"
+        )
         return SimulatedWake(
             turn=turn,
             label="blocked_no_lane",
@@ -527,7 +538,9 @@ def print_summary(simulations_by_agent: dict[str, list[SimulatedWake]]) -> None:
         total_should_wake += should_wake
         total_noop += noops
         counts = Counter(sim.label for sim in sims)
-        label_summary = ", ".join(f"{label}={count}" for label, count in sorted(counts.items()))
+        label_summary = ", ".join(
+            f"{label}={count}" for label, count in sorted(counts.items())
+        )
         print(
             f"- {agent}: actual_wakes={actual} prototype_wakes={should_wake} suppressed={actual - should_wake} "
             f"obvious_noop_outputs={noops} labels=[{label_summary}]"
@@ -538,7 +551,11 @@ def print_summary(simulations_by_agent: dict[str, list[SimulatedWake]]) -> None:
     )
 
 
-def print_identity_audit(entries: list[RegistryEntry], chosen: dict[str, RegistryEntry], duplicates: dict[str, list[str]]) -> None:
+def print_identity_audit(
+    entries: list[RegistryEntry],
+    chosen: dict[str, RegistryEntry],
+    duplicates: dict[str, list[str]],
+) -> None:
     print("\nIdentity audit")
     print("==============")
     for name in sorted(duplicates):

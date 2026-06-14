@@ -105,7 +105,9 @@ def load_instances(
             break
     missing = sorted(wanted - {row.instance_id for row in rows})
     if missing:
-        raise ValueError(f"instance id(s) not found in {dataset_name}/{split}: {missing}")
+        raise ValueError(
+            f"instance id(s) not found in {dataset_name}/{split}: {missing}"
+        )
     if not rows:
         raise ValueError("no SWE-bench instances selected")
     return rows
@@ -408,7 +410,8 @@ def run_losangelex_prediction(
         while time.time() < deadline:
             conn.drain(min(poll_seconds, max(0.1, deadline - time.time())))
             completed_once = (
-                completed_threads(conn.notifications, tracked_threads) >= tracked_threads
+                completed_threads(conn.notifications, tracked_threads)
+                >= tracked_threads
             )
             thread_states = {
                 agent.thread_id: read_thread_state(conn, agent.thread_id)
@@ -430,7 +433,9 @@ def run_losangelex_prediction(
 
     patch = collect_patch(workspace)
     notifications_path = output_dir / "notifications-summary.json"
-    notifications_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    notifications_path.write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
     states_path = output_dir / "thread-states.json"
     states_path.write_text(json.dumps(final_states, indent=2) + "\n", encoding="utf-8")
     return {
@@ -486,7 +491,9 @@ def main() -> int:
     parser.add_argument("--model", default="gpt-5.4")
     parser.add_argument("--codex", type=Path, default=DEFAULT_CODEX)
     parser.add_argument("--app-server-url")
-    parser.add_argument("--current-app-server", type=Path, default=DEFAULT_CURRENT_APP_SERVER)
+    parser.add_argument(
+        "--current-app-server", type=Path, default=DEFAULT_CURRENT_APP_SERVER
+    )
     parser.add_argument("--hollywood-url", default=DEFAULT_HOLLYWOOD_URL)
     parser.add_argument("--policy", default="dual_command_lease")
     parser.add_argument("--timeout-seconds", type=int, default=1800)

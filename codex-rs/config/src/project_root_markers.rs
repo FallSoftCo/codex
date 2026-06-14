@@ -57,7 +57,7 @@ pub async fn project_root_marker_exists(
     marker_path: &AbsolutePathBuf,
     marker: &str,
 ) -> io::Result<bool> {
-    let marker_path_uri = PathUri::from_abs_path(marker_path)?;
+    let marker_path_uri = PathUri::from_abs_path(marker_path);
     let metadata = fs.get_metadata(&marker_path_uri, /*sandbox*/ None).await?;
     if marker != ".git" {
         return Ok(true);
@@ -65,7 +65,7 @@ pub async fn project_root_marker_exists(
 
     if metadata.is_directory {
         let head_path = marker_path.join("HEAD");
-        let head_path_uri = PathUri::from_abs_path(&head_path)?;
+        let head_path_uri = PathUri::from_abs_path(&head_path);
         return match fs.get_metadata(&head_path_uri, /*sandbox*/ None).await {
             Ok(head_metadata) => Ok(head_metadata.is_file),
             Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),

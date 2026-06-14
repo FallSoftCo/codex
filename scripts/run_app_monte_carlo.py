@@ -46,7 +46,11 @@ def summarize(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "runs": len(runs),
                 "passRate": sum(1 for run in runs if run["passed"]) / len(runs),
                 "avgPassSeconds": (
-                    statistics.mean(run["passedAtSeconds"] for run in passed if run["passedAtSeconds"])
+                    statistics.mean(
+                        run["passedAtSeconds"]
+                        for run in passed
+                        if run["passedAtSeconds"]
+                    )
                     if passed
                     else None
                 ),
@@ -58,7 +62,8 @@ def summarize(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     active_thread_count(run) for run in runs
                 ),
                 "avgChangedFiles": statistics.mean(
-                    run.get("changedFilesCount", len(run["changedFiles"])) for run in runs
+                    run.get("changedFilesCount", len(run["changedFiles"]))
+                    for run in runs
                 ),
                 "quiescenceRate": sum(
                     1 for run in runs if run.get("eventuallyQuiesced", False)
@@ -92,7 +97,11 @@ def overall_summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "runs": len(runs),
                 "passRate": sum(1 for run in runs if run["passed"]) / len(runs),
                 "avgPassSeconds": (
-                    statistics.mean(run["passedAtSeconds"] for run in passed if run["passedAtSeconds"])
+                    statistics.mean(
+                        run["passedAtSeconds"]
+                        for run in passed
+                        if run["passedAtSeconds"]
+                    )
                     if passed
                     else None
                 ),
@@ -104,7 +113,8 @@ def overall_summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     active_thread_count(run) for run in runs
                 ),
                 "avgChangedFiles": statistics.mean(
-                    run.get("changedFilesCount", len(run["changedFiles"])) for run in runs
+                    run.get("changedFilesCount", len(run["changedFiles"]))
+                    for run in runs
                 ),
                 "quiescenceRate": sum(
                     1 for run in runs if run.get("eventuallyQuiesced", False)
@@ -170,7 +180,9 @@ def render_markdown(
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in overall:
-        avg_time = "-" if row["avgPassSeconds"] is None else f"{row['avgPassSeconds']:.1f}s"
+        avg_time = (
+            "-" if row["avgPassSeconds"] is None else f"{row['avgPassSeconds']:.1f}s"
+        )
         avg_quiescence = (
             "-"
             if row["avgQuiescenceLagSeconds"] is None
@@ -191,7 +203,9 @@ def render_markdown(
         ]
     )
     for row in summary:
-        avg_time = "-" if row["avgPassSeconds"] is None else f"{row['avgPassSeconds']:.1f}s"
+        avg_time = (
+            "-" if row["avgPassSeconds"] is None else f"{row['avgPassSeconds']:.1f}s"
+        )
         avg_quiescence = (
             "-"
             if row["avgQuiescenceLagSeconds"] is None

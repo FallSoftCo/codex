@@ -410,7 +410,7 @@ async fn apply_hunks_to_files(
     for hunk in hunks {
         let affected_path = hunk.path().to_path_buf();
         let path_abs = hunk.resolve_path(cwd);
-        let path_uri = PathUri::from_abs_path(&path_abs)?;
+        let path_uri = PathUri::from_abs_path(&path_abs);
         match hunk {
             Hunk::AddFile { contents, .. } => {
                 let overwritten_content =
@@ -575,7 +575,7 @@ async fn ensure_not_directory(
     fs: &dyn ExecutorFileSystem,
     sandbox: Option<&FileSystemSandboxContext>,
 ) -> io::Result<()> {
-    let path_uri = PathUri::from_abs_path(path)?;
+    let path_uri = PathUri::from_abs_path(path);
     let metadata = fs.get_metadata(&path_uri, sandbox).await?;
     if metadata.is_directory {
         return Err(io::Error::new(
@@ -592,9 +592,7 @@ async fn remove_failure_was_side_effect_free(
     fs: &dyn ExecutorFileSystem,
     sandbox: Option<&FileSystemSandboxContext>,
 ) -> bool {
-    let Ok(path_uri) = PathUri::from_abs_path(path) else {
-        return false;
-    };
+    let path_uri = PathUri::from_abs_path(path);
     match expected_content {
         Some(expected_content) => fs
             .read_file_text(&path_uri, sandbox)
@@ -611,13 +609,7 @@ async fn read_optional_file_text_for_delta(
     exact: &mut bool,
 ) -> Option<String> {
     note_existing_path_delta_support(path, fs, sandbox, exact).await;
-    let path_uri = match PathUri::from_abs_path(path) {
-        Ok(path_uri) => path_uri,
-        Err(_) => {
-            *exact = false;
-            return None;
-        }
-    };
+    let path_uri = PathUri::from_abs_path(path);
     match fs.read_file_text(&path_uri, sandbox).await {
         Ok(content) => Some(content),
         Err(source) if source.kind() == io::ErrorKind::NotFound => None,
@@ -634,10 +626,7 @@ async fn note_existing_path_delta_support(
     sandbox: Option<&FileSystemSandboxContext>,
     exact: &mut bool,
 ) {
-    let Ok(path_uri) = PathUri::from_abs_path(path) else {
-        *exact = false;
-        return;
-    };
+    let path_uri = PathUri::from_abs_path(path);
     match fs.get_metadata(&path_uri, sandbox).await {
         Ok(metadata) if metadata.is_file && !metadata.is_symlink => {}
         Ok(_) => *exact = false,
@@ -652,12 +641,12 @@ async fn write_file_with_missing_parent_retry(
     contents: Vec<u8>,
     sandbox: Option<&FileSystemSandboxContext>,
 ) -> anyhow::Result<()> {
-    let path_uri = PathUri::from_abs_path(path_abs)?;
+    let path_uri = PathUri::from_abs_path(path_abs);
     match fs.write_file(&path_uri, contents.clone(), sandbox).await {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             if let Some(parent_abs) = path_abs.parent() {
-                let parent_uri = PathUri::from_abs_path(&parent_abs)?;
+                let parent_uri = PathUri::from_abs_path(&parent_abs);
                 fs.create_directory(
                     &parent_uri,
                     CreateDirectoryOptions { recursive: true },
@@ -819,7 +808,7 @@ async fn derive_new_contents_from_chunks(
     fs: &dyn ExecutorFileSystem,
     sandbox: Option<&FileSystemSandboxContext>,
 ) -> std::result::Result<AppliedPatch, ApplyPatchError> {
-    let path_uri = PathUri::from_abs_path(path_abs)?;
+    let path_uri = PathUri::from_abs_path(path_abs);
     let original_contents = fs.read_file_text(&path_uri, sandbox).await.map_err(|err| {
         ApplyPatchError::IoError(IoError {
             context: format!("Failed to read file to update {}", path_abs.display()),
