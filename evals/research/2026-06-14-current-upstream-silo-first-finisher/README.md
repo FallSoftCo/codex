@@ -1,13 +1,16 @@
 # Current-Upstream SILO First-Finisher Pilot, 2026-06-14
 
-This directory contains a small current-upstream SILO-BENCH refresh run after
-merging the FallSoftCo Losangelex fork with upstream Codex changes through
-June 2026.
+This directory contains a small current-upstream SILO-BENCH check after merging
+the FallSoftCo Losangelex fork with upstream Codex changes through June 2026.
 
 The run is a matched four-task pilot, not a replacement for the June 2 full
-30-task token-cost study. Its purpose is to check how the current upstream
-Codex subagent implementation compares with normal Losangelex/Hollywood rooms
-and an experimental first-finisher Hollywood coordination pattern.
+30-task token-cost study and not a statistically powered benchmark rerun. The
+four tasks were chosen during investigation to compare the same n=5 SILO task
+files across systems; they should not be treated as a random or representative
+sample. Its purpose is to check how the current upstream Codex subagent
+implementation compares with normal Losangelex/Hollywood rooms and an
+experimental first-finisher Hollywood coordination pattern on those same task
+files.
 
 ## Files
 
@@ -39,9 +42,13 @@ Hollywood token usage materially while giving up the latency advantage.
 ## Interpretation
 
 This is evidence for a coordination-design tradeoff, not a broad benchmark
-win. The first-finisher pattern is useful when the system wants a bounded fan-in
-phase and compact shared notes, but it can add wait time and should not replace
-normal Hollywood room coordination purely to improve a benchmark aggregate.
+win. Combining these same-format result shards is mechanically valid because
+the tasks, model family, scoring path, and token normalization are the same and
+the combined JSON preserves `sourceResults`; the limitation is evidentiary
+weight, not file format. The first-finisher pattern is useful when the system
+wants a bounded fan-in phase and compact shared notes, but it can add wait time
+and should not replace normal Hollywood room coordination purely to improve a
+benchmark aggregate.
 
 The primary public evidence remains the June 2 30-task SILO and MARBLE
 token-cost study. This bundle is a current-upstream check and a design probe for

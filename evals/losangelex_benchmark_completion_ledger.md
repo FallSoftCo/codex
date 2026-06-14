@@ -1006,10 +1006,13 @@ benchmark-general paper claim is still desired.
 
 - After merging current upstream Codex changes, ran a four-task matched SILO
   n=5 pilot across current Codex subagents, normal Losangelex/Hollywood rooms,
-  and an experimental `losangelex-first-finisher` coordination pattern.
+  and an experimental `losangelex-first-finisher` coordination pattern. This is
+  a same-format design probe, not a statistically powered benchmark rerun.
 - Frozen artifact bundle:
   `evals/research/2026-06-14-current-upstream-silo-first-finisher/`.
 - Task files: `I-01_n5`, `I-02_n5`, `II-11_n5`, and `III-21_n5`.
+  These task files were selected during investigation and should not be treated
+  as a random or representative SILO sample.
 - All three systems reached `4/4` strict full success on this small sample.
 - Mean runtime and token summary:
   - Codex subagents: `154.3s`, `827,710` avg total tokens, `118,558`
