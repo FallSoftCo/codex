@@ -26,6 +26,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from benchmark_token_usage import changed_rollout_files
+from benchmark_token_usage import has_token_usage
+from benchmark_token_usage import normalize_token_usage
+from benchmark_token_usage import parse_codex_exec_jsonl_token_usage
+from benchmark_token_usage import run_codex_exec_with_retries
+from benchmark_token_usage import snapshot_rollout_files
+from benchmark_token_usage import sum_token_usage
+from benchmark_token_usage import summarize_codex_exec_collab_tools
+from benchmark_token_usage import summarize_rollout_token_usage
 from benchmark_app_server import add_benchmark_app_server_args
 from benchmark_app_server import benchmark_app_server
 from benchmark_app_server import prepare_minimal_codex_home
@@ -677,21 +686,7 @@ Worker prompts:
 
 
 def codex_subagent_tool_summary(stdout: str, stderr: str) -> dict[str, Any]:
-    combined = stdout + "\n" + stderr
-    error_lines = [
-        line
-        for line in combined.splitlines()
-        if "codex_core::tools::router: error=" in line
-    ]
-    return {
-        "spawnAgentCalls": combined.count("collab: SpawnAgent"),
-        "waitAgentCalls": combined.count("collab: Wait"),
-        "sendInputCalls": combined.count("collab: SendInput"),
-        "errorCalls": {
-            "total": len(error_lines),
-            "examples": error_lines[:10],
-        },
-    }
+    return summarize_codex_exec_collab_tools(stdout, stderr)
 
 
 def codex_subagent_artifact_summary(
@@ -773,31 +768,35 @@ def run_codex_task(
             prompt = codex_prompt(task, config, round_index=round_index)
             (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
             last_message_path = agent_dir / "last-message.txt"
-            result = run_command(
-                [
-                    str(codex),
-                    "-C",
-                    str(workspace),
-                    "--sandbox",
-                    "workspace-write",
-                    "--ask-for-approval",
-                    "never",
-                    "exec",
-                    "--ephemeral",
-                    "--ignore-user-config",
-                    "--skip-git-repo-check",
-                    "-m",
-                    model,
-                    "-o",
-                    str(last_message_path),
-                    "-",
-                ],
-                cwd=workspace,
-                timeout=per_agent_timeout_seconds,
-                input_text=prompt,
+            result, transient_retries = run_codex_exec_with_retries(
+                lambda: run_command(
+                    [
+                        str(codex),
+                        "-C",
+                        str(workspace),
+                        "--sandbox",
+                        "workspace-write",
+                        "--ask-for-approval",
+                        "never",
+                        "exec",
+                        "--json",
+                        "--ephemeral",
+                        "--ignore-user-config",
+                        "--skip-git-repo-check",
+                        "-m",
+                        model,
+                        "-o",
+                        str(last_message_path),
+                        "-",
+                    ],
+                    cwd=workspace,
+                    timeout=per_agent_timeout_seconds,
+                    input_text=prompt,
+                )
             )
             (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
             (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
+            token_usage = parse_codex_exec_jsonl_token_usage(result.stdout)
             run_records.append(
                 {
                     "agentId": config.agent_id,
@@ -806,6 +805,8 @@ def run_codex_task(
                     "lastMessagePath": str(last_message_path),
                     "stdoutPath": str(agent_dir / "stdout.log"),
                     "stderrPath": str(agent_dir / "stderr.log"),
+                    "tokenUsage": token_usage,
+                    "transientRetries": transient_retries,
                     "submissionExists": submission_path.exists(),
                 }
             )
@@ -825,6 +826,9 @@ def run_codex_task(
         "seconds": round(time.time() - started, 1),
         "roundsExecuted": max((record["round"] for record in run_records), default=0),
         "agentRuns": run_records,
+        "tokenUsage": sum_token_usage(
+            [record.get("tokenUsage") for record in run_records]
+        ),
         "score": score,
     }
 
@@ -847,30 +851,43 @@ def run_codex_subagents_task(
     last_message_path = output_dir / "parent-last-message.txt"
     env = os.environ.copy()
     env["CODEX_HOME"] = str(codex_home)
-    result = run_command(
-        [
-            str(codex),
-            "-C",
-            str(workspace),
-            "--sandbox",
-            "workspace-write",
-            "--ask-for-approval",
-            "never",
-            "exec",
-            "--skip-git-repo-check",
-            "-m",
-            model,
-            "-o",
-            str(last_message_path),
-            "-",
-        ],
-        cwd=workspace,
-        timeout=timeout_seconds,
-        input_text=prompt,
-        env=env,
+    rollout_snapshot = snapshot_rollout_files(codex_home)
+    result, transient_retries = run_codex_exec_with_retries(
+        lambda: run_command(
+            [
+                str(codex),
+                "-C",
+                str(workspace),
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "exec",
+                "--json",
+                "--skip-git-repo-check",
+                "-m",
+                model,
+                "-o",
+                str(last_message_path),
+                "-",
+            ],
+            cwd=workspace,
+            timeout=timeout_seconds,
+            input_text=prompt,
+            env=env,
+        )
     )
     (output_dir / "parent-stdout.log").write_text(result.stdout, encoding="utf-8")
     (output_dir / "parent-stderr.log").write_text(result.stderr, encoding="utf-8")
+    parent_token_usage = parse_codex_exec_jsonl_token_usage(result.stdout)
+    rollout_token_usage = summarize_rollout_token_usage(
+        changed_rollout_files(codex_home, rollout_snapshot),
+    )
+    token_usage = (
+        rollout_token_usage["tokenUsage"]
+        if rollout_token_usage["fileCount"] > 0
+        else parent_token_usage
+    )
 
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
@@ -885,6 +902,18 @@ def run_codex_subagents_task(
             "lastMessagePath": str(last_message_path),
             "stdoutPath": str(output_dir / "parent-stdout.log"),
             "stderrPath": str(output_dir / "parent-stderr.log"),
+            "tokenUsage": parent_token_usage,
+            "transientRetries": transient_retries,
+        },
+        "tokenUsage": token_usage,
+        "tokenUsageSummary": {
+            "source": (
+                "codex-session-rollouts"
+                if rollout_token_usage["fileCount"] > 0
+                else "codex-exec-jsonl"
+            ),
+            "rollouts": rollout_token_usage,
+            "parentExecJsonl": parent_token_usage,
         },
         "score": score,
         "coordinationToolSummary": codex_subagent_tool_summary(
@@ -985,31 +1014,35 @@ def run_codex_full_context_task(
         )
         (agent_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
         last_message_path = agent_dir / "last-message.txt"
-        result = run_command(
-            [
-                str(codex),
-                "-C",
-                str(workspace),
-                "--sandbox",
-                "workspace-write",
-                "--ask-for-approval",
-                "never",
-                "exec",
-                "--ephemeral",
-                "--ignore-user-config",
-                "--skip-git-repo-check",
-                "-m",
-                model,
-                "-o",
-                str(last_message_path),
-                "-",
-            ],
-            cwd=workspace,
-            timeout=per_agent_timeout_seconds,
-            input_text=prompt,
+        result, transient_retries = run_codex_exec_with_retries(
+            lambda: run_command(
+                [
+                    str(codex),
+                    "-C",
+                    str(workspace),
+                    "--sandbox",
+                    "workspace-write",
+                    "--ask-for-approval",
+                    "never",
+                    "exec",
+                    "--json",
+                    "--ephemeral",
+                    "--ignore-user-config",
+                    "--skip-git-repo-check",
+                    "-m",
+                    model,
+                    "-o",
+                    str(last_message_path),
+                    "-",
+                ],
+                cwd=workspace,
+                timeout=per_agent_timeout_seconds,
+                input_text=prompt,
+            )
         )
         (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
         (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
+        token_usage = parse_codex_exec_jsonl_token_usage(result.stdout)
         run_records.append(
             {
                 "agentId": "full-context",
@@ -1018,6 +1051,8 @@ def run_codex_full_context_task(
                 "lastMessagePath": str(last_message_path),
                 "stdoutPath": str(agent_dir / "stdout.log"),
                 "stderrPath": str(agent_dir / "stderr.log"),
+                "tokenUsage": token_usage,
+                "transientRetries": transient_retries,
             }
         )
 
@@ -1031,6 +1066,9 @@ def run_codex_full_context_task(
         "seconds": round(time.time() - started, 1),
         "roundsExecuted": max((record["round"] for record in run_records), default=0),
         "agentRuns": run_records,
+        "tokenUsage": sum_token_usage(
+            [record.get("tokenUsage") for record in run_records]
+        ),
         "score": score,
     }
 
@@ -1120,6 +1158,57 @@ Losangelex/Hollywood rules:
 """
 
 
+def losangelex_first_finisher_prompt(
+    task: SiloTask,
+    config: SiloAgentConfig,
+    *,
+    runtime_name: str,
+    round_index: int,
+) -> str:
+    profile = (
+        f"\nPublished role/profile for this agent:\n{config.profile}\n"
+        if config.profile
+        else ""
+    )
+    return f"""We are running a published SILO-BENCH distributed coordination task.
+
+System under evaluation: losangelex-hollywood-first-finisher
+Case: {task.case_id} ({task.case_name})
+Hollywood runtime identity: {runtime_name}
+Agent id: {config.agent_id}
+Total agents: {len(task.agent_configs)}
+Round: {round_index}
+{profile}
+Private benchmark prompt for this agent:
+{config.user_prompt}
+
+Losangelex/Hollywood first-finisher rules:
+- Treat your private prompt as your only private data shard.
+- First compute the compact local fact your shard contributes to the task.
+- Create `shared/` and `submissions/` if needed.
+- Always write `shared/agent-{config.agent_id:03d}.md` with only compact structured local facts.
+- Do not wait for teammates before writing your local shared note.
+- After writing your local shared note, attempt to become the one finisher by
+  atomically creating `shared/finisher.lock` using `mkdir`.
+- If `mkdir shared/finisher.lock` fails, another agent is finisher. Stop after
+  your shared note is written; do not synthesize the final answer yourself.
+- If you create `shared/finisher.lock`, write `shared/finisher.lock/owner.txt`,
+  then wait up to 90 seconds for all `shared/agent-*.md` notes to exist.
+- The finisher must read only worker-produced shared notes and existing
+  submissions, aggregate the final answer once, and write or repair every
+  `submissions/agent-XXX.json` file for the original agents.
+- The finisher must write each final submission as exactly one JSON object with
+  this shape: `{{"agent_id": N, "answer": <final answer>}}`, where `N` is the
+  numeric agent id for that file.
+- Never write a bare number, string, list, markdown, or commentary to a
+  `submissions/agent-XXX.json` file.
+- Do not inspect benchmark repositories, previous result directories, or any path
+  outside this workspace. A run that uses an answer key is invalid.
+- Do not overwrite another agent's shared note.
+- Do not put commentary in the submission JSON files.
+"""
+
+
 def continue_losangelex_prompt(
     task: SiloTask,
     config: SiloAgentConfig,
@@ -1172,6 +1261,7 @@ def run_losangelex_task(
     poll_seconds: int,
     rpc_timeout_seconds: int,
     output_dir: Path,
+    first_finisher: bool = False,
 ) -> dict[str, Any]:
     fresh_workspace(workspace)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1211,12 +1301,20 @@ def run_losangelex_task(
                 if submission_path.exists():
                     continue
                 if round_index == 1:
-                    prompt = losangelex_prompt(
-                        task,
-                        config,
-                        runtime_name=agent.runtime_name,
-                        round_index=round_index,
-                    )
+                    if first_finisher:
+                        prompt = losangelex_first_finisher_prompt(
+                            task,
+                            config,
+                            runtime_name=agent.runtime_name,
+                            round_index=round_index,
+                        )
+                    else:
+                        prompt = losangelex_prompt(
+                            task,
+                            config,
+                            runtime_name=agent.runtime_name,
+                            round_index=round_index,
+                        )
                 else:
                     prompt = continue_losangelex_prompt(
                         task,
@@ -1292,7 +1390,9 @@ def run_losangelex_task(
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
     return {
-        "system": "losangelex",
+        "system": (
+            "losangelex-first-finisher" if first_finisher else "losangelex"
+        ),
         "caseId": task.case_id,
         "taskFile": task.task_file.name,
         "workspace": str(workspace),
@@ -1309,6 +1409,8 @@ def run_losangelex_task(
             for agent in agents
         ],
         "score": score,
+        "tokenUsage": summary.get("tokenUsage", {}),
+        "tokenUsageSummary": summary.get("tokenUsageSummary", {}),
         "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "threadStatesPath": str(output_dir / "thread-states.json"),
@@ -1354,6 +1456,31 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         coordination_tool_errors = sum(
             coordination_error_total(record) for record in record_group
         )
+        token_usage_records = [
+            normalize_token_usage(record.get("tokenUsage"))
+            for record in record_group
+            if has_token_usage(record.get("tokenUsage"))
+        ]
+        token_usage_count = len(token_usage_records)
+        total_token_usage = sum_token_usage(token_usage_records)
+        avg_total_tokens = (
+            total_token_usage["totalTokens"] / token_usage_count
+            if token_usage_count
+            else None
+        )
+        avg_uncached_plus_output_tokens = (
+            total_token_usage["uncachedPlusOutputTokens"] / token_usage_count
+            if token_usage_count
+            else None
+        )
+        total_tokens_per_full_success = (
+            total_token_usage["totalTokens"] / successes if successes else None
+        )
+        uncached_plus_output_tokens_per_full_success = (
+            total_token_usage["uncachedPlusOutputTokens"] / successes
+            if successes
+            else None
+        )
         return {
             "tasks": count,
             "fullSuccesses": successes,
@@ -1364,6 +1491,14 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "avgNumericTolerancePartialCorrectness": avg_numeric_tolerance_partial,
             "avgSeconds": avg_seconds,
             "coordinationToolErrors": coordination_tool_errors,
+            "tokenUsageTaskCount": token_usage_count,
+            "totalTokenUsage": total_token_usage,
+            "avgTotalTokens": avg_total_tokens,
+            "avgUncachedPlusOutputTokens": avg_uncached_plus_output_tokens,
+            "totalTokensPerFullSuccess": total_tokens_per_full_success,
+            "uncachedPlusOutputTokensPerFullSuccess": (
+                uncached_plus_output_tokens_per_full_success
+            ),
         }
 
     by_system: dict[str, list[dict[str, Any]]] = {}
@@ -1413,8 +1548,8 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Coordination errors |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
@@ -1424,6 +1559,9 @@ def write_report(
             f"{row['avgNumericToleranceSuccessRate']:.3f} | "
             f"{row['avgNumericTolerancePartialCorrectness']:.3f} | "
             f"{row['avgSeconds']:.1f} | "
+            f"{format_token_value(row['avgTotalTokens'])} | "
+            f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
+            f"{format_token_value(row['totalTokensPerFullSuccess'])} | "
             f"{row['coordinationToolErrors']} |"
         )
     lines.extend(
@@ -1431,8 +1569,8 @@ def write_report(
             "",
             "## By Level",
             "",
-            "| Level | System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Coordination errors |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| Level | System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for level, level_summary in summary["levels"].items():
@@ -1444,11 +1582,15 @@ def write_report(
                 f"{row['avgNumericToleranceSuccessRate']:.3f} | "
                 f"{row['avgNumericTolerancePartialCorrectness']:.3f} | "
                 f"{row['avgSeconds']:.1f} | "
+                f"{format_token_value(row['avgTotalTokens'])} | "
+                f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
+                f"{format_token_value(row['totalTokensPerFullSuccess'])} | "
                 f"{row['coordinationToolErrors']} |"
             )
     lines.extend(["", "## Tasks", ""])
     for record in records:
         metrics = record["score"]["metrics"]
+        token_usage = normalize_token_usage(record.get("tokenUsage"))
         lines.append(
             f"- {record['system']} `{record['taskFile']}`: "
             f"success={record['score']['success']} "
@@ -1457,16 +1599,30 @@ def write_report(
             f"S_tol={metrics.get('S_numeric_tolerance_success_rate', metrics['S_success_rate']):.3f} "
             f"P_tol={metrics.get('P_numeric_tolerance_partial_correctness', metrics['P_partial_correctness']):.3f} "
             f"seconds={record['seconds']:.1f} "
+            f"total_tokens={format_token_value(token_usage['totalTokens'])} "
+            f"uncached_plus_output_tokens={format_token_value(token_usage['uncachedPlusOutputTokens'])} "
             f"coordination_errors={coordination_error_total(record)}"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def format_token_value(value: float | int | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:,.0f}"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--system",
-        choices=("codex", "codex-subagents", "codex-full-context", "losangelex"),
+        choices=(
+            "codex",
+            "codex-subagents",
+            "codex-full-context",
+            "losangelex",
+            "losangelex-first-finisher",
+        ),
         action="append",
         required=True,
     )
@@ -1545,7 +1701,7 @@ def main() -> int:
         )
     with (
         benchmark_app_server(
-            required="losangelex" in args.system,
+            required=any(system.startswith("losangelex") for system in args.system),
             app_server_url=args.app_server_url,
             reuse_current_app_server=args.reuse_current_app_server,
             current_app_server=args.current_app_server,
@@ -1613,6 +1769,7 @@ def main() -> int:
                         poll_seconds=args.poll_seconds,
                         rpc_timeout_seconds=args.rpc_timeout_seconds,
                         output_dir=run_dir,
+                        first_finisher=system == "losangelex-first-finisher",
                     )
                 records.append(record)
                 (output_dir / "results.json").write_text(
@@ -1645,11 +1802,13 @@ def main() -> int:
                     records=records,
                 )
                 metrics = record["score"]["metrics"]
+                token_usage = normalize_token_usage(record.get("tokenUsage"))
                 print(
                     f"completed system={system} task={task.task_file.stem} "
                     f"S={metrics['S_success_rate']:.3f} "
                     f"P={metrics['P_partial_correctness']:.3f} "
-                    f"seconds={record['seconds']}",
+                    f"seconds={record['seconds']} "
+                    f"total_tokens={token_usage['totalTokens']}",
                     flush=True,
                 )
 

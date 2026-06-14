@@ -1001,3 +1001,24 @@ question is not "is multi-agent always better?" but:
 The final-primary MARBLE paper has been generated and emailed. Continue with
 held-out Silo n50 and SWE-bench expansion in later sessions if a broader
 benchmark-general paper claim is still desired.
+
+## 2026-06-14 Current-Upstream SILO Pilot
+
+- After merging current upstream Codex changes, ran a four-task matched SILO
+  n=5 pilot across current Codex subagents, normal Losangelex/Hollywood rooms,
+  and an experimental `losangelex-first-finisher` coordination pattern.
+- Frozen artifact bundle:
+  `evals/research/2026-06-14-current-upstream-silo-first-finisher/`.
+- Task files: `I-01_n5`, `I-02_n5`, `II-11_n5`, and `III-21_n5`.
+- All three systems reached `4/4` strict full success on this small sample.
+- Mean runtime and token summary:
+  - Codex subagents: `154.3s`, `827,710` avg total tokens, `118,558`
+    avg uncached+output.
+  - Losangelex: `113.6s`, `1,104,493` avg total tokens, `166,893`
+    avg uncached+output.
+  - Losangelex first-finisher: `157.9s`, `912,785` avg total tokens,
+    `120,209` avg uncached+output.
+- Interpretation: current upstream Codex subagents are much more token-efficient
+  than the older June 1 subagent runs, normal Hollywood remains the latency
+  leader on this sample, and the first-finisher pattern is a useful
+  coordination-design probe rather than an across-the-board replacement.

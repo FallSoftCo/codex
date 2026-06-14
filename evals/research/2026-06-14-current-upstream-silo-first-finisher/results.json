@@ -1,0 +1,4057 @@
+{
+  "benchmark": "SILO-BENCH",
+  "campaignName": "silo-current-upstream-first-finisher-pilot-2026-06-14",
+  "sourceResults": [
+    {
+      "path": "tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14/results.json",
+      "campaignName": "silo-current-losangelex-i01-n5-post-upstream-2026-06-14",
+      "systems": [
+        "losangelex"
+      ],
+      "appServer": {
+        "url": "<local-app-server>",
+        "managed": true,
+        "source": "managed",
+        "codexHome": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14/codex-home",
+        "logPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14/app-server.log",
+        "pid": "<process-id>"
+      },
+      "hiddenPaths": [
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-06-02-token-costs-human-level",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-repaired-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-observed-20-repeat-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-repair-codex-subagents-II-17-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-delivery-2026-05-22-final-primary",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-registry-upsert-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-tail-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-hardened-published-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-heartbeat-validity-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-hidden-results-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-token-costs-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-development-extension-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-redelivery-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-clean-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-aggregate-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-managed-l1-smoke-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/dry-discovery",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n5-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n20-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n5-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-diagnostic-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-3-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-hidden-comparison-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-smoke-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-I01-n5-losangelex-bounded-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-remaining-III29-III30-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-published-agent-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2-losangelex",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/codex-home-silo",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-fix-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-tolerance-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-combined-20-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-completed-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n10-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-remaining-9-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-named-registry-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-22-final-primary-agent-runtime"
+      ],
+      "defaultHiddenPathsEnabled": true,
+      "summary": {
+        "systems": {
+          "losangelex": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 101.8,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 1024938,
+              "cachedInputTokens": 859136,
+              "nonCachedInputTokens": 165802,
+              "outputTokens": 9244,
+              "reasoningOutputTokens": 1986,
+              "totalTokens": 1034182,
+              "uncachedPlusOutputTokens": 175046
+            },
+            "avgTotalTokens": 1034182.0,
+            "avgUncachedPlusOutputTokens": 175046.0,
+            "totalTokensPerFullSuccess": 1034182.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 175046.0
+          }
+        },
+        "levels": {
+          "I": {
+            "systems": {
+              "losangelex": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 101.8,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 1024938,
+                  "cachedInputTokens": 859136,
+                  "nonCachedInputTokens": 165802,
+                  "outputTokens": 9244,
+                  "reasoningOutputTokens": 1986,
+                  "totalTokens": 1034182,
+                  "uncachedPlusOutputTokens": 175046
+                },
+                "avgTotalTokens": 1034182.0,
+                "avgUncachedPlusOutputTokens": 175046.0,
+                "totalTokensPerFullSuccess": 1034182.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 175046.0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14/results.json",
+      "campaignName": "silo-current-subagents-i01-n5-post-upstream-2026-06-14",
+      "systems": [
+        "codex-subagents"
+      ],
+      "appServer": null,
+      "hiddenPaths": [
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-06-02-token-costs-human-level",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-repaired-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-observed-20-repeat-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-repair-codex-subagents-II-17-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-delivery-2026-05-22-final-primary",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-registry-upsert-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-tail-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-hardened-published-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-heartbeat-validity-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-hidden-results-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-token-costs-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-development-extension-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-redelivery-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-clean-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-aggregate-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-managed-l1-smoke-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/dry-discovery",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n5-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n20-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n5-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-diagnostic-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-3-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-hidden-comparison-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-smoke-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-I01-n5-losangelex-bounded-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-remaining-III29-III30-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-published-agent-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2-losangelex",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/codex-home-silo",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-fix-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-tolerance-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-combined-20-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-completed-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n10-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-remaining-9-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-named-registry-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-22-final-primary-agent-runtime"
+      ],
+      "defaultHiddenPathsEnabled": true,
+      "summary": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 145.6,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 892848,
+              "cachedInputTokens": 754688,
+              "nonCachedInputTokens": 138160,
+              "outputTokens": 10376,
+              "reasoningOutputTokens": 1182,
+              "totalTokens": 903224,
+              "uncachedPlusOutputTokens": 148536
+            },
+            "avgTotalTokens": 903224.0,
+            "avgUncachedPlusOutputTokens": 148536.0,
+            "totalTokensPerFullSuccess": 903224.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 148536.0
+          }
+        },
+        "levels": {
+          "I": {
+            "systems": {
+              "codex-subagents": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 145.6,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 892848,
+                  "cachedInputTokens": 754688,
+                  "nonCachedInputTokens": 138160,
+                  "outputTokens": 10376,
+                  "reasoningOutputTokens": 1182,
+                  "totalTokens": 903224,
+                  "uncachedPlusOutputTokens": 148536
+                },
+                "avgTotalTokens": 903224.0,
+                "avgUncachedPlusOutputTokens": 148536.0,
+                "totalTokensPerFullSuccess": 903224.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 148536.0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14/results.json",
+      "campaignName": "silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14",
+      "systems": [
+        "losangelex-first-finisher"
+      ],
+      "appServer": {
+        "url": "<local-app-server>",
+        "managed": true,
+        "source": "managed",
+        "codexHome": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14/codex-home",
+        "logPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14/app-server.log",
+        "pid": "<process-id>"
+      },
+      "hiddenPaths": [
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-06-02-token-costs-human-level",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-repaired-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-observed-20-repeat-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-repair-codex-subagents-II-17-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-delivery-2026-05-22-final-primary",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-registry-upsert-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-tail-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-hardened-published-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-heartbeat-validity-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-hidden-results-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-token-costs-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-development-extension-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-redelivery-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-clean-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-aggregate-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-managed-l1-smoke-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/dry-discovery",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n5-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n20-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n5-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-diagnostic-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-3-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-hidden-comparison-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-smoke-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-I01-n5-losangelex-bounded-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-remaining-III29-III30-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-published-agent-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2-losangelex",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/codex-home-silo",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-fix-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-tolerance-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-combined-20-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-completed-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n10-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-remaining-9-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-named-registry-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-22-final-primary-agent-runtime"
+      ],
+      "defaultHiddenPathsEnabled": true,
+      "summary": {
+        "systems": {
+          "losangelex-first-finisher": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 101.7,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 787186,
+              "cachedInputTokens": 709632,
+              "nonCachedInputTokens": 77554,
+              "outputTokens": 8381,
+              "reasoningOutputTokens": 2168,
+              "totalTokens": 795567,
+              "uncachedPlusOutputTokens": 85935
+            },
+            "avgTotalTokens": 795567.0,
+            "avgUncachedPlusOutputTokens": 85935.0,
+            "totalTokensPerFullSuccess": 795567.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 85935.0
+          }
+        },
+        "levels": {
+          "I": {
+            "systems": {
+              "losangelex-first-finisher": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 101.7,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 787186,
+                  "cachedInputTokens": 709632,
+                  "nonCachedInputTokens": 77554,
+                  "outputTokens": 8381,
+                  "reasoningOutputTokens": 2168,
+                  "totalTokens": 795567,
+                  "uncachedPlusOutputTokens": 85935
+                },
+                "avgTotalTokens": 795567.0,
+                "avgUncachedPlusOutputTokens": 85935.0,
+                "totalTokensPerFullSuccess": 795567.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 85935.0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/results.json",
+      "campaignName": "silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14",
+      "systems": [
+        "losangelex",
+        "losangelex-first-finisher"
+      ],
+      "appServer": {
+        "url": "<local-app-server>",
+        "managed": true,
+        "source": "managed",
+        "codexHome": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/codex-home",
+        "logPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/app-server.log",
+        "pid": "<process-id>"
+      },
+      "hiddenPaths": [
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-06-02-token-costs-human-level",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-repaired-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-observed-20-repeat-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-repair-codex-subagents-II-17-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-delivery-2026-05-22-final-primary",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-registry-upsert-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-tail-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-hardened-published-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-heartbeat-validity-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-hidden-results-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-token-costs-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-development-extension-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-redelivery-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-clean-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-aggregate-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-managed-l1-smoke-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/dry-discovery",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n5-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n20-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n5-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-diagnostic-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-3-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-hidden-comparison-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-smoke-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-I01-n5-losangelex-bounded-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-remaining-III29-III30-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-published-agent-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2-losangelex",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/codex-home-silo",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-fix-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-tolerance-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-combined-20-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-completed-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n10-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-remaining-9-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-named-registry-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-22-final-primary-agent-runtime"
+      ],
+      "defaultHiddenPathsEnabled": true,
+      "summary": {
+        "systems": {
+          "losangelex": {
+            "tasks": 3,
+            "fullSuccesses": 3,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 117.5,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 3,
+            "totalTokenUsage": {
+              "inputTokens": 3342868,
+              "cachedInputTokens": 2891264,
+              "nonCachedInputTokens": 451604,
+              "outputTokens": 40921,
+              "reasoningOutputTokens": 7057,
+              "totalTokens": 3383789,
+              "uncachedPlusOutputTokens": 492525
+            },
+            "avgTotalTokens": 1127929.6666666667,
+            "avgUncachedPlusOutputTokens": 164175.0,
+            "totalTokensPerFullSuccess": 1127929.6666666667,
+            "uncachedPlusOutputTokensPerFullSuccess": 164175.0
+          },
+          "losangelex-first-finisher": {
+            "tasks": 3,
+            "fullSuccesses": 3,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 176.6,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 3,
+            "totalTokenUsage": {
+              "inputTokens": 2822441,
+              "cachedInputTokens": 2460672,
+              "nonCachedInputTokens": 361769,
+              "outputTokens": 33131,
+              "reasoningOutputTokens": 9491,
+              "totalTokens": 2855572,
+              "uncachedPlusOutputTokens": 394900
+            },
+            "avgTotalTokens": 951857.3333333334,
+            "avgUncachedPlusOutputTokens": 131633.33333333334,
+            "totalTokensPerFullSuccess": 951857.3333333334,
+            "uncachedPlusOutputTokensPerFullSuccess": 131633.33333333334
+          }
+        },
+        "levels": {
+          "I": {
+            "systems": {
+              "losangelex": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 101.7,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 1014882,
+                  "cachedInputTokens": 885248,
+                  "nonCachedInputTokens": 129634,
+                  "outputTokens": 9738,
+                  "reasoningOutputTokens": 2540,
+                  "totalTokens": 1024620,
+                  "uncachedPlusOutputTokens": 139372
+                },
+                "avgTotalTokens": 1024620.0,
+                "avgUncachedPlusOutputTokens": 139372.0,
+                "totalTokensPerFullSuccess": 1024620.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 139372.0
+              },
+              "losangelex-first-finisher": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 236.5,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 1067869,
+                  "cachedInputTokens": 962176,
+                  "nonCachedInputTokens": 105693,
+                  "outputTokens": 10651,
+                  "reasoningOutputTokens": 2909,
+                  "totalTokens": 1078520,
+                  "uncachedPlusOutputTokens": 116344
+                },
+                "avgTotalTokens": 1078520.0,
+                "avgUncachedPlusOutputTokens": 116344.0,
+                "totalTokensPerFullSuccess": 1078520.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 116344.0
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "losangelex": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 101.2,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 1168010,
+                  "cachedInputTokens": 1033216,
+                  "nonCachedInputTokens": 134794,
+                  "outputTokens": 13007,
+                  "reasoningOutputTokens": 2502,
+                  "totalTokens": 1181017,
+                  "uncachedPlusOutputTokens": 147801
+                },
+                "avgTotalTokens": 1181017.0,
+                "avgUncachedPlusOutputTokens": 147801.0,
+                "totalTokensPerFullSuccess": 1181017.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 147801.0
+              },
+              "losangelex-first-finisher": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 147.0,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 880972,
+                  "cachedInputTokens": 740480,
+                  "nonCachedInputTokens": 140492,
+                  "outputTokens": 11088,
+                  "reasoningOutputTokens": 2783,
+                  "totalTokens": 892060,
+                  "uncachedPlusOutputTokens": 151580
+                },
+                "avgTotalTokens": 892060.0,
+                "avgUncachedPlusOutputTokens": 151580.0,
+                "totalTokensPerFullSuccess": 892060.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 151580.0
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "losangelex": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 149.6,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 1159976,
+                  "cachedInputTokens": 972800,
+                  "nonCachedInputTokens": 187176,
+                  "outputTokens": 18176,
+                  "reasoningOutputTokens": 2015,
+                  "totalTokens": 1178152,
+                  "uncachedPlusOutputTokens": 205352
+                },
+                "avgTotalTokens": 1178152.0,
+                "avgUncachedPlusOutputTokens": 205352.0,
+                "totalTokensPerFullSuccess": 1178152.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 205352.0
+              },
+              "losangelex-first-finisher": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 146.3,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 873600,
+                  "cachedInputTokens": 758016,
+                  "nonCachedInputTokens": 115584,
+                  "outputTokens": 11392,
+                  "reasoningOutputTokens": 3799,
+                  "totalTokens": 884992,
+                  "uncachedPlusOutputTokens": 126976
+                },
+                "avgTotalTokens": 884992.0,
+                "avgUncachedPlusOutputTokens": 126976.0,
+                "totalTokensPerFullSuccess": 884992.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 126976.0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/results.json",
+      "campaignName": "silo-current-codex-subagents-paired-3x-n5-2026-06-14",
+      "systems": [
+        "codex-subagents"
+      ],
+      "appServer": null,
+      "hiddenPaths": [
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-06-02-token-costs-human-level",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-repaired-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-observed-20-repeat-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-repair-codex-subagents-II-17-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-codex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-delivery-2026-05-22-final-primary",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-registry-upsert-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-paired-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-tail-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-hardened-published-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-heartbeat-validity-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-hidden-results-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-balanced-n5-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-final-primary-token-costs-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-development-extension-all-systems-2026-05-22",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/email-redelivery-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-clean-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-aggregate-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-managed-l1-smoke-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-stratified-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-losangelex-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/dry-discovery",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n5-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n5-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n20-full-losangelex-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n5-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n5-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-diagnostic-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-isolated-paired-stratified-additional-10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-3-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-hidden-comparison-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-smoke-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-I01-n5-losangelex-bounded-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-bridge-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-remaining-III29-III30-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-validity-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-2026-06-14",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-codex-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-20-published-agent-benchmarks",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-pilot-2026-05-20-I01n2-losangelex",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/codex-home-silo",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-database-001-fix-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-tolerance-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-file-query-hidden-path-local-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n2-combined-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-combined-20-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-full-context-oracle-n10-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-dev-n5-slice-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-completed-2026-06-02",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-published-balanced-n5-codex-rest-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-codex-subagents-smoke-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-managed-hidden-n10-full-paired-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-n10-full-observed-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-native-postgres-paired-stratified-remaining-9-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/marble-db-validity-l2-named-registry-2026-05-20",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-codex-subagents-smoke-I01-n2-2026-05-21",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-token-costs-n10-full-2026-06-01",
+        "<losangelex-repo>/tmp/research/published-agent-benchmarks/paper-2026-05-22-final-primary-agent-runtime"
+      ],
+      "defaultHiddenPathsEnabled": true,
+      "summary": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 3,
+            "fullSuccesses": 3,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 157.16666666666666,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 3,
+            "totalTokenUsage": {
+              "inputTokens": 2374417,
+              "cachedInputTokens": 2081920,
+              "nonCachedInputTokens": 292497,
+              "outputTokens": 33199,
+              "reasoningOutputTokens": 5131,
+              "totalTokens": 2407616,
+              "uncachedPlusOutputTokens": 325696
+            },
+            "avgTotalTokens": 802538.6666666666,
+            "avgUncachedPlusOutputTokens": 108565.33333333333,
+            "totalTokensPerFullSuccess": 802538.6666666666,
+            "uncachedPlusOutputTokensPerFullSuccess": 108565.33333333333
+          }
+        },
+        "levels": {
+          "I": {
+            "systems": {
+              "codex-subagents": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 125.7,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 602112,
+                  "cachedInputTokens": 527360,
+                  "nonCachedInputTokens": 74752,
+                  "outputTokens": 9772,
+                  "reasoningOutputTokens": 1636,
+                  "totalTokens": 611884,
+                  "uncachedPlusOutputTokens": 84524
+                },
+                "avgTotalTokens": 611884.0,
+                "avgUncachedPlusOutputTokens": 84524.0,
+                "totalTokensPerFullSuccess": 611884.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 84524.0
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex-subagents": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 137.4,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 694041,
+                  "cachedInputTokens": 612480,
+                  "nonCachedInputTokens": 81561,
+                  "outputTokens": 9513,
+                  "reasoningOutputTokens": 1526,
+                  "totalTokens": 703554,
+                  "uncachedPlusOutputTokens": 91074
+                },
+                "avgTotalTokens": 703554.0,
+                "avgUncachedPlusOutputTokens": 91074.0,
+                "totalTokensPerFullSuccess": 703554.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 91074.0
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex-subagents": {
+                "tasks": 1,
+                "fullSuccesses": 1,
+                "fullSuccessRate": 1.0,
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgSeconds": 208.4,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 1,
+                "totalTokenUsage": {
+                  "inputTokens": 1078264,
+                  "cachedInputTokens": 942080,
+                  "nonCachedInputTokens": 136184,
+                  "outputTokens": 13914,
+                  "reasoningOutputTokens": 1969,
+                  "totalTokens": 1092178,
+                  "uncachedPlusOutputTokens": 150098
+                },
+                "avgTotalTokens": 1092178.0,
+                "avgUncachedPlusOutputTokens": 150098.0,
+                "totalTokensPerFullSuccess": 1092178.0,
+                "uncachedPlusOutputTokensPerFullSuccess": 150098.0
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "records": [
+    {
+      "system": "losangelex",
+      "caseId": "I-01",
+      "taskFile": "I-01_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14/workspaces/losangelex/I-01_n5",
+      "room": "repo/silo-I-01-n5-4b51cd",
+      "seconds": 101.8,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-4b51cd"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-4b51cd"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-4b51cd"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-4b51cd"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-4b51cd"
+        }
+      ],
+      "score": {
+        "caseId": "I-01",
+        "caseName": "Global Max",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1024938,
+        "cachedInputTokens": 859136,
+        "nonCachedInputTokens": 165802,
+        "outputTokens": 9244,
+        "reasoningOutputTokens": 1986,
+        "totalTokens": 1034182,
+        "uncachedPlusOutputTokens": 175046
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1024938,
+          "cachedInputTokens": 859136,
+          "nonCachedInputTokens": 165802,
+          "outputTokens": 9244,
+          "reasoningOutputTokens": 1986,
+          "totalTokens": 1034182,
+          "uncachedPlusOutputTokens": 175046
+        },
+        "eventCount": 44,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14/runs/losangelex/I-01_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-i01-n5-post-upstream-2026-06-14/runs/losangelex/I-01_n5/thread-states.json"
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "I-01",
+      "taskFile": "I-01_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14/workspaces/codex-subagents/I-01_n5",
+      "seconds": 145.6,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14/runs/codex-subagents/I-01_n5/parent-last-message.txt",
+        "stdoutPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14/runs/codex-subagents/I-01_n5/parent-stdout.log",
+        "stderrPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-subagents-i01-n5-post-upstream-2026-06-14/runs/codex-subagents/I-01_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 307942,
+          "cachedInputTokens": 261120,
+          "nonCachedInputTokens": 46822,
+          "outputTokens": 4104,
+          "reasoningOutputTokens": 245,
+          "totalTokens": 312046,
+          "uncachedPlusOutputTokens": 50926
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 892848,
+        "cachedInputTokens": 754688,
+        "nonCachedInputTokens": 138160,
+        "outputTokens": 10376,
+        "reasoningOutputTokens": 1182,
+        "totalTokens": 903224,
+        "uncachedPlusOutputTokens": 148536
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": null,
+        "eventCount": null,
+        "threadCount": null
+      },
+      "score": {
+        "caseId": "I-01",
+        "caseName": "Global Max",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 4,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 4,
+          "byTool": {
+            "wait": 4
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    },
+    {
+      "system": "losangelex-first-finisher",
+      "caseId": "I-01",
+      "taskFile": "I-01_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14/workspaces/losangelex-first-finisher/I-01_n5",
+      "room": "repo/silo-I-01-n5-917abe",
+      "seconds": 101.7,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-917abe"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-917abe"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-917abe"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-917abe"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-917abe"
+        }
+      ],
+      "score": {
+        "caseId": "I-01",
+        "caseName": "Global Max",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 787186,
+        "cachedInputTokens": 709632,
+        "nonCachedInputTokens": 77554,
+        "outputTokens": 8381,
+        "reasoningOutputTokens": 2168,
+        "totalTokens": 795567,
+        "uncachedPlusOutputTokens": 85935
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 787186,
+          "cachedInputTokens": 709632,
+          "nonCachedInputTokens": 77554,
+          "outputTokens": 8381,
+          "reasoningOutputTokens": 2168,
+          "totalTokens": 795567,
+          "uncachedPlusOutputTokens": 85935
+        },
+        "eventCount": 36,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14/runs/losangelex-first-finisher/I-01_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-i01-n5-json-refined-2026-06-14/runs/losangelex-first-finisher/I-01_n5/thread-states.json"
+    },
+    {
+      "system": "losangelex",
+      "caseId": "I-02",
+      "taskFile": "I-02_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/workspaces/losangelex/I-02_n5",
+      "room": "repo/silo-I-02-n5-2e41b2",
+      "seconds": 101.7,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-2e41b2"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-2e41b2"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-2e41b2"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-2e41b2"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-2e41b2"
+        }
+      ],
+      "score": {
+        "caseId": "I-02",
+        "caseName": "Word Frequency",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1014882,
+        "cachedInputTokens": 885248,
+        "nonCachedInputTokens": 129634,
+        "outputTokens": 9738,
+        "reasoningOutputTokens": 2540,
+        "totalTokens": 1024620,
+        "uncachedPlusOutputTokens": 139372
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1014882,
+          "cachedInputTokens": 885248,
+          "nonCachedInputTokens": 129634,
+          "outputTokens": 9738,
+          "reasoningOutputTokens": 2540,
+          "totalTokens": 1024620,
+          "uncachedPlusOutputTokens": 139372
+        },
+        "eventCount": 44,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex/I-02_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex/I-02_n5/thread-states.json"
+    },
+    {
+      "system": "losangelex-first-finisher",
+      "caseId": "I-02",
+      "taskFile": "I-02_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/workspaces/losangelex-first-finisher/I-02_n5",
+      "room": "repo/silo-I-02-n5-4e6bcd",
+      "seconds": 236.5,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-4e6bcd"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-4e6bcd"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-4e6bcd"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-4e6bcd"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-4e6bcd"
+        }
+      ],
+      "score": {
+        "caseId": "I-02",
+        "caseName": "Word Frequency",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1067869,
+        "cachedInputTokens": 962176,
+        "nonCachedInputTokens": 105693,
+        "outputTokens": 10651,
+        "reasoningOutputTokens": 2909,
+        "totalTokens": 1078520,
+        "uncachedPlusOutputTokens": 116344
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1067869,
+          "cachedInputTokens": 962176,
+          "nonCachedInputTokens": 105693,
+          "outputTokens": 10651,
+          "reasoningOutputTokens": 2909,
+          "totalTokens": 1078520,
+          "uncachedPlusOutputTokens": 116344
+        },
+        "eventCount": 48,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex-first-finisher/I-02_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex-first-finisher/I-02_n5/thread-states.json"
+    },
+    {
+      "system": "losangelex",
+      "caseId": "II-11",
+      "taskFile": "II-11_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/workspaces/losangelex/II-11_n5",
+      "room": "repo/silo-II-11-n5-2eec43",
+      "seconds": 101.2,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-2eec43"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-2eec43"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-2eec43"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-2eec43"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-2eec43"
+        }
+      ],
+      "score": {
+        "caseId": "II-11",
+        "caseName": "Prefix Sum",
+        "level": "II",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "expected": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "expected": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "expected": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "expected": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "expected": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1168010,
+        "cachedInputTokens": 1033216,
+        "nonCachedInputTokens": 134794,
+        "outputTokens": 13007,
+        "reasoningOutputTokens": 2502,
+        "totalTokens": 1181017,
+        "uncachedPlusOutputTokens": 147801
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1168010,
+          "cachedInputTokens": 1033216,
+          "nonCachedInputTokens": 134794,
+          "outputTokens": 13007,
+          "reasoningOutputTokens": 2502,
+          "totalTokens": 1181017,
+          "uncachedPlusOutputTokens": 147801
+        },
+        "eventCount": 48,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex/II-11_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex/II-11_n5/thread-states.json"
+    },
+    {
+      "system": "losangelex-first-finisher",
+      "caseId": "II-11",
+      "taskFile": "II-11_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/workspaces/losangelex-first-finisher/II-11_n5",
+      "room": "repo/silo-II-11-n5-c039d9",
+      "seconds": 147.0,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-c039d9"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-c039d9"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-c039d9"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-c039d9"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-c039d9"
+        }
+      ],
+      "score": {
+        "caseId": "II-11",
+        "caseName": "Prefix Sum",
+        "level": "II",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "expected": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "expected": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "expected": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "expected": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "expected": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 880972,
+        "cachedInputTokens": 740480,
+        "nonCachedInputTokens": 140492,
+        "outputTokens": 11088,
+        "reasoningOutputTokens": 2783,
+        "totalTokens": 892060,
+        "uncachedPlusOutputTokens": 151580
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 880972,
+          "cachedInputTokens": 740480,
+          "nonCachedInputTokens": 140492,
+          "outputTokens": 11088,
+          "reasoningOutputTokens": 2783,
+          "totalTokens": 892060,
+          "uncachedPlusOutputTokens": 151580
+        },
+        "eventCount": 39,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex-first-finisher/II-11_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex-first-finisher/II-11_n5/thread-states.json"
+    },
+    {
+      "system": "losangelex",
+      "caseId": "III-21",
+      "taskFile": "III-21_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/workspaces/losangelex/III-21_n5",
+      "room": "repo/silo-III-21-n5-59f330",
+      "seconds": 149.6,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-59f330"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-59f330"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-59f330"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-59f330"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-59f330"
+        }
+      ],
+      "score": {
+        "caseId": "III-21",
+        "caseName": "Distributed Sort",
+        "level": "III",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "expected": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "expected": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "expected": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "expected": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "expected": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1159976,
+        "cachedInputTokens": 972800,
+        "nonCachedInputTokens": 187176,
+        "outputTokens": 18176,
+        "reasoningOutputTokens": 2015,
+        "totalTokens": 1178152,
+        "uncachedPlusOutputTokens": 205352
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1159976,
+          "cachedInputTokens": 972800,
+          "nonCachedInputTokens": 187176,
+          "outputTokens": 18176,
+          "reasoningOutputTokens": 2015,
+          "totalTokens": 1178152,
+          "uncachedPlusOutputTokens": 205352
+        },
+        "eventCount": 48,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex/III-21_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex/III-21_n5/thread-states.json"
+    },
+    {
+      "system": "losangelex-first-finisher",
+      "caseId": "III-21",
+      "taskFile": "III-21_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/workspaces/losangelex-first-finisher/III-21_n5",
+      "room": "repo/silo-III-21-n5-2ef48a",
+      "seconds": 146.3,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-2ef48a"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-2ef48a"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-2ef48a"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-2ef48a"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-2ef48a"
+        }
+      ],
+      "score": {
+        "caseId": "III-21",
+        "caseName": "Distributed Sort",
+        "level": "III",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "expected": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "expected": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "expected": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "expected": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "expected": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 873600,
+        "cachedInputTokens": 758016,
+        "nonCachedInputTokens": 115584,
+        "outputTokens": 11392,
+        "reasoningOutputTokens": 3799,
+        "totalTokens": 884992,
+        "uncachedPlusOutputTokens": 126976
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 873600,
+          "cachedInputTokens": 758016,
+          "nonCachedInputTokens": 115584,
+          "outputTokens": 11392,
+          "reasoningOutputTokens": 3799,
+          "totalTokens": 884992,
+          "uncachedPlusOutputTokens": 126976
+        },
+        "eventCount": 38,
+        "threadCount": 5
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex-first-finisher/III-21_n5/notifications-summary.json",
+      "threadStatesPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-losangelex-first-finisher-paired-3x-n5-2026-06-14/runs/losangelex-first-finisher/III-21_n5/thread-states.json"
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "I-02",
+      "taskFile": "I-02_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/workspaces/codex-subagents/I-02_n5",
+      "seconds": 125.7,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/I-02_n5/parent-last-message.txt",
+        "stdoutPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/I-02_n5/parent-stdout.log",
+        "stderrPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/I-02_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 155187,
+          "cachedInputTokens": 128768,
+          "nonCachedInputTokens": 26419,
+          "outputTokens": 4107,
+          "reasoningOutputTokens": 93,
+          "totalTokens": 159294,
+          "uncachedPlusOutputTokens": 30526
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 602112,
+        "cachedInputTokens": 527360,
+        "nonCachedInputTokens": 74752,
+        "outputTokens": 9772,
+        "reasoningOutputTokens": 1636,
+        "totalTokens": 611884,
+        "uncachedPlusOutputTokens": 84524
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": null,
+        "eventCount": null,
+        "threadCount": null
+      },
+      "score": {
+        "caseId": "I-02",
+        "caseName": "Word Frequency",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 28,
+            "expected": 28,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 1,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 1,
+          "byTool": {
+            "wait": 1
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "II-11",
+      "taskFile": "II-11_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/workspaces/codex-subagents/II-11_n5",
+      "seconds": 137.4,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/II-11_n5/parent-last-message.txt",
+        "stdoutPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/II-11_n5/parent-stdout.log",
+        "stderrPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/II-11_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 328592,
+          "cachedInputTokens": 285568,
+          "nonCachedInputTokens": 43024,
+          "outputTokens": 4208,
+          "reasoningOutputTokens": 219,
+          "totalTokens": 332800,
+          "uncachedPlusOutputTokens": 47232
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 694041,
+        "cachedInputTokens": 612480,
+        "nonCachedInputTokens": 81561,
+        "outputTokens": 9513,
+        "reasoningOutputTokens": 1526,
+        "totalTokens": 703554,
+        "uncachedPlusOutputTokens": 91074
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": null,
+        "eventCount": null,
+        "threadCount": null
+      },
+      "score": {
+        "caseId": "II-11",
+        "caseName": "Prefix Sum",
+        "level": "II",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "expected": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "expected": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "expected": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "expected": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "expected": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 3,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 3,
+          "byTool": {
+            "wait": 3
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "III-21",
+      "taskFile": "III-21_n5.json",
+      "workspace": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/workspaces/codex-subagents/III-21_n5",
+      "seconds": 208.4,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/III-21_n5/parent-last-message.txt",
+        "stdoutPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/III-21_n5/parent-stdout.log",
+        "stderrPath": "<losangelex-repo>/tmp/research/published-agent-benchmarks/silo-current-codex-subagents-paired-3x-n5-2026-06-14/runs/codex-subagents/III-21_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 266382,
+          "cachedInputTokens": 221952,
+          "nonCachedInputTokens": 44430,
+          "outputTokens": 4550,
+          "reasoningOutputTokens": 241,
+          "totalTokens": 270932,
+          "uncachedPlusOutputTokens": 48980
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 1078264,
+        "cachedInputTokens": 942080,
+        "nonCachedInputTokens": 136184,
+        "outputTokens": 13914,
+        "reasoningOutputTokens": 1969,
+        "totalTokens": 1092178,
+        "uncachedPlusOutputTokens": 150098
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": null,
+        "eventCount": null,
+        "threadCount": null
+      },
+      "score": {
+        "caseId": "III-21",
+        "caseName": "Distributed Sort",
+        "level": "III",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "expected": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "expected": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "expected": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "expected": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "expected": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 4,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 4,
+          "byTool": {
+            "wait": 4
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    }
+  ],
+  "summary": {
+    "systems": {
+      "codex-subagents": {
+        "tasks": 4,
+        "fullSuccesses": 4,
+        "fullSuccessRate": 1.0,
+        "avgAgentSuccessRate": 1.0,
+        "avgPartialCorrectness": 1.0,
+        "avgNumericToleranceSuccessRate": 1.0,
+        "avgNumericTolerancePartialCorrectness": 1.0,
+        "avgSeconds": 154.275,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 4,
+        "totalTokenUsage": {
+          "inputTokens": 3267265,
+          "cachedInputTokens": 2836608,
+          "nonCachedInputTokens": 430657,
+          "outputTokens": 43575,
+          "reasoningOutputTokens": 6313,
+          "totalTokens": 3310840,
+          "uncachedPlusOutputTokens": 474232
+        },
+        "avgTotalTokens": 827710.0,
+        "avgUncachedPlusOutputTokens": 118558.0,
+        "totalTokensPerFullSuccess": 827710.0,
+        "uncachedPlusOutputTokensPerFullSuccess": 118558.0
+      },
+      "losangelex": {
+        "tasks": 4,
+        "fullSuccesses": 4,
+        "fullSuccessRate": 1.0,
+        "avgAgentSuccessRate": 1.0,
+        "avgPartialCorrectness": 1.0,
+        "avgNumericToleranceSuccessRate": 1.0,
+        "avgNumericTolerancePartialCorrectness": 1.0,
+        "avgSeconds": 113.575,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 4,
+        "totalTokenUsage": {
+          "inputTokens": 4367806,
+          "cachedInputTokens": 3750400,
+          "nonCachedInputTokens": 617406,
+          "outputTokens": 50165,
+          "reasoningOutputTokens": 9043,
+          "totalTokens": 4417971,
+          "uncachedPlusOutputTokens": 667571
+        },
+        "avgTotalTokens": 1104492.75,
+        "avgUncachedPlusOutputTokens": 166892.75,
+        "totalTokensPerFullSuccess": 1104492.75,
+        "uncachedPlusOutputTokensPerFullSuccess": 166892.75
+      },
+      "losangelex-first-finisher": {
+        "tasks": 4,
+        "fullSuccesses": 4,
+        "fullSuccessRate": 1.0,
+        "avgAgentSuccessRate": 1.0,
+        "avgPartialCorrectness": 1.0,
+        "avgNumericToleranceSuccessRate": 1.0,
+        "avgNumericTolerancePartialCorrectness": 1.0,
+        "avgSeconds": 157.875,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 4,
+        "totalTokenUsage": {
+          "inputTokens": 3609627,
+          "cachedInputTokens": 3170304,
+          "nonCachedInputTokens": 439323,
+          "outputTokens": 41512,
+          "reasoningOutputTokens": 11659,
+          "totalTokens": 3651139,
+          "uncachedPlusOutputTokens": 480835
+        },
+        "avgTotalTokens": 912784.75,
+        "avgUncachedPlusOutputTokens": 120208.75,
+        "totalTokensPerFullSuccess": 912784.75,
+        "uncachedPlusOutputTokensPerFullSuccess": 120208.75
+      }
+    },
+    "levels": {
+      "I": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 2,
+            "fullSuccesses": 2,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 135.65,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 2,
+            "totalTokenUsage": {
+              "inputTokens": 1494960,
+              "cachedInputTokens": 1282048,
+              "nonCachedInputTokens": 212912,
+              "outputTokens": 20148,
+              "reasoningOutputTokens": 2818,
+              "totalTokens": 1515108,
+              "uncachedPlusOutputTokens": 233060
+            },
+            "avgTotalTokens": 757554.0,
+            "avgUncachedPlusOutputTokens": 116530.0,
+            "totalTokensPerFullSuccess": 757554.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 116530.0
+          },
+          "losangelex": {
+            "tasks": 2,
+            "fullSuccesses": 2,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 101.75,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 2,
+            "totalTokenUsage": {
+              "inputTokens": 2039820,
+              "cachedInputTokens": 1744384,
+              "nonCachedInputTokens": 295436,
+              "outputTokens": 18982,
+              "reasoningOutputTokens": 4526,
+              "totalTokens": 2058802,
+              "uncachedPlusOutputTokens": 314418
+            },
+            "avgTotalTokens": 1029401.0,
+            "avgUncachedPlusOutputTokens": 157209.0,
+            "totalTokensPerFullSuccess": 1029401.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 157209.0
+          },
+          "losangelex-first-finisher": {
+            "tasks": 2,
+            "fullSuccesses": 2,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 169.1,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 2,
+            "totalTokenUsage": {
+              "inputTokens": 1855055,
+              "cachedInputTokens": 1671808,
+              "nonCachedInputTokens": 183247,
+              "outputTokens": 19032,
+              "reasoningOutputTokens": 5077,
+              "totalTokens": 1874087,
+              "uncachedPlusOutputTokens": 202279
+            },
+            "avgTotalTokens": 937043.5,
+            "avgUncachedPlusOutputTokens": 101139.5,
+            "totalTokensPerFullSuccess": 937043.5,
+            "uncachedPlusOutputTokensPerFullSuccess": 101139.5
+          }
+        }
+      },
+      "II": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 137.4,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 694041,
+              "cachedInputTokens": 612480,
+              "nonCachedInputTokens": 81561,
+              "outputTokens": 9513,
+              "reasoningOutputTokens": 1526,
+              "totalTokens": 703554,
+              "uncachedPlusOutputTokens": 91074
+            },
+            "avgTotalTokens": 703554.0,
+            "avgUncachedPlusOutputTokens": 91074.0,
+            "totalTokensPerFullSuccess": 703554.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 91074.0
+          },
+          "losangelex": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 101.2,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 1168010,
+              "cachedInputTokens": 1033216,
+              "nonCachedInputTokens": 134794,
+              "outputTokens": 13007,
+              "reasoningOutputTokens": 2502,
+              "totalTokens": 1181017,
+              "uncachedPlusOutputTokens": 147801
+            },
+            "avgTotalTokens": 1181017.0,
+            "avgUncachedPlusOutputTokens": 147801.0,
+            "totalTokensPerFullSuccess": 1181017.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 147801.0
+          },
+          "losangelex-first-finisher": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 147.0,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 880972,
+              "cachedInputTokens": 740480,
+              "nonCachedInputTokens": 140492,
+              "outputTokens": 11088,
+              "reasoningOutputTokens": 2783,
+              "totalTokens": 892060,
+              "uncachedPlusOutputTokens": 151580
+            },
+            "avgTotalTokens": 892060.0,
+            "avgUncachedPlusOutputTokens": 151580.0,
+            "totalTokensPerFullSuccess": 892060.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 151580.0
+          }
+        }
+      },
+      "III": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 208.4,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 1078264,
+              "cachedInputTokens": 942080,
+              "nonCachedInputTokens": 136184,
+              "outputTokens": 13914,
+              "reasoningOutputTokens": 1969,
+              "totalTokens": 1092178,
+              "uncachedPlusOutputTokens": 150098
+            },
+            "avgTotalTokens": 1092178.0,
+            "avgUncachedPlusOutputTokens": 150098.0,
+            "totalTokensPerFullSuccess": 1092178.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 150098.0
+          },
+          "losangelex": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 149.6,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 1159976,
+              "cachedInputTokens": 972800,
+              "nonCachedInputTokens": 187176,
+              "outputTokens": 18176,
+              "reasoningOutputTokens": 2015,
+              "totalTokens": 1178152,
+              "uncachedPlusOutputTokens": 205352
+            },
+            "avgTotalTokens": 1178152.0,
+            "avgUncachedPlusOutputTokens": 205352.0,
+            "totalTokensPerFullSuccess": 1178152.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 205352.0
+          },
+          "losangelex-first-finisher": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 146.3,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 873600,
+              "cachedInputTokens": 758016,
+              "nonCachedInputTokens": 115584,
+              "outputTokens": 11392,
+              "reasoningOutputTokens": 3799,
+              "totalTokens": 884992,
+              "uncachedPlusOutputTokens": 126976
+            },
+            "avgTotalTokens": 884992.0,
+            "avgUncachedPlusOutputTokens": 126976.0,
+            "totalTokensPerFullSuccess": 884992.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 126976.0
+          }
+        }
+      }
+    }
+  }
+}

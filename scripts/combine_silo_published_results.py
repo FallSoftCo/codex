@@ -24,13 +24,34 @@ def main() -> int:
     parser.add_argument("results", type=Path, nargs="+")
     parser.add_argument("--campaign-name", required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument(
+        "--replace-duplicates",
+        action="store_true",
+        help=(
+            "Replace earlier records with later records that have the same "
+            "system, caseId, and taskFile."
+        ),
+    )
     args = parser.parse_args()
 
     combined_records: list[dict[str, Any]] = []
+    record_keys: list[tuple[Any, Any, Any]] = []
+    records_by_key: dict[tuple[Any, Any, Any], dict[str, Any]] = {}
     source_results: list[dict[str, Any]] = []
     for path in args.results:
         data, records = load_records(path)
-        combined_records.extend(records)
+        if args.replace_duplicates:
+            for record in records:
+                key = (
+                    record.get("system"),
+                    record.get("caseId"),
+                    record.get("taskFile"),
+                )
+                if key not in records_by_key:
+                    record_keys.append(key)
+                records_by_key[key] = record
+        else:
+            combined_records.extend(records)
         source_results.append(
             {
                 "path": str(path),
@@ -42,6 +63,9 @@ def main() -> int:
                 "summary": data.get("summary"),
             }
         )
+
+    if args.replace_duplicates:
+        combined_records = [records_by_key[key] for key in record_keys]
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     combined = {

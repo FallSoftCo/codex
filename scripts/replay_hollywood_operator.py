@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 import uuid
 from collections import Counter, defaultdict
@@ -15,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 import websocket
+
+from benchmark_token_usage import summarize_app_server_token_usage
 
 
 DEFAULT_CURRENT_APP_SERVER = Path.home() / ".codex/losangelex/current-app-server.json"
@@ -294,12 +295,17 @@ def summarize_notifications(
                     }
                 )
 
+    token_usage_summary = summarize_app_server_token_usage(
+        notifications, tracked_threads
+    )
     return {
         "notificationCounts": dict(method_counts),
         "turnStartedByThread": dict(turn_started),
         "turnCompletedByThread": dict(turn_completed),
         "lastAgentMessagesByThread": dict(by_thread),
         "hollywoodMessages": hollywood_messages,
+        "tokenUsage": token_usage_summary["tokenUsage"],
+        "tokenUsageSummary": token_usage_summary,
         "coordinationToolSummary": summarize_coordination_tools(
             notifications,
             tracked_threads,

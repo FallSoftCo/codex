@@ -8,6 +8,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from benchmark_token_usage import has_token_usage
+from benchmark_token_usage import normalize_token_usage
+from benchmark_token_usage import sum_token_usage
+
 
 def load_records(paths: list[Path]) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
@@ -46,6 +50,13 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             / count
         )
         avg_seconds = sum(record["seconds"] for record in system_records) / count
+        token_usage_records = [
+            normalize_token_usage(record.get("tokenUsage"))
+            for record in system_records
+            if has_token_usage(record.get("tokenUsage"))
+        ]
+        token_usage_count = len(token_usage_records)
+        total_token_usage = sum_token_usage(token_usage_records)
         systems[system] = {
             "tasks": count,
             "fullSuccesses": successes,
@@ -54,6 +65,21 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "exactSetMatchRate": exact / count,
             "avgRootCauseRecall": avg_recall,
             "avgSeconds": avg_seconds,
+            "tokenUsageTaskCount": token_usage_count,
+            "totalTokenUsage": total_token_usage,
+            "avgTotalTokens": (
+                total_token_usage["totalTokens"] / token_usage_count
+                if token_usage_count
+                else None
+            ),
+            "avgUncachedPlusOutputTokens": (
+                total_token_usage["uncachedPlusOutputTokens"] / token_usage_count
+                if token_usage_count
+                else None
+            ),
+            "totalTokensPerFullSuccess": (
+                total_token_usage["totalTokens"] / successes if successes else None
+            ),
         }
     return {"systems": systems}
 
@@ -75,15 +101,18 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Exact set matches | Avg recall | Avg seconds |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| System | Tasks | Full successes | Exact set matches | Avg recall | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
             f"| {system} | {row['tasks']} | {row['fullSuccesses']} "
             f"({row['fullSuccessRate']:.2%}) | {row['exactSetMatches']} "
             f"({row['exactSetMatchRate']:.2%}) | {row['avgRootCauseRecall']:.3f} | "
-            f"{row['avgSeconds']:.1f} |"
+            f"{row['avgSeconds']:.1f} | "
+            f"{format_token_value(row['avgTotalTokens'])} | "
+            f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
+            f"{format_token_value(row['totalTokensPerFullSuccess'])} |"
         )
     if notes:
         lines.extend(["", "## Notes", ""])
@@ -91,6 +120,7 @@ def write_report(
     lines.extend(["", "## Records", ""])
     for record in records:
         metrics = record["score"]["metrics"]
+        token_usage = normalize_token_usage(record.get("tokenUsage"))
         lines.append(
             f"- {record['campaignName']} / {record['system']} `{record['caseId']}` "
             f"mode={record.get('evidenceMode')} "
@@ -99,9 +129,17 @@ def write_report(
             f"recall={metrics['rootCauseRecall']:.3f} "
             f"predicted={record['score']['predicted']} "
             f"gold={record['score']['gold']} "
-            f"seconds={record['seconds']:.1f}"
+            f"seconds={record['seconds']:.1f} "
+            f"total_tokens={format_token_value(token_usage['totalTokens'])} "
+            f"uncached_plus_output_tokens={format_token_value(token_usage['uncachedPlusOutputTokens'])}"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def format_token_value(value: float | int | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:,.0f}"
 
 
 def main() -> int:
