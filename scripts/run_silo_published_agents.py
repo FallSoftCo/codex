@@ -6,6 +6,9 @@ switches the agent substrate under test:
 
 - codex: independent Codex CLI agents coordinating through a shared workspace.
 - losangelex: native Hollywood/app-server agents coordinating through a room.
+- losangelex-selector: native Hollywood/app-server agents with a frozen
+  topology selector. The current selector uses first-finisher for SILO Level I
+  global-reduction task families and normal room coordination otherwise.
 
 The runner intentionally does not place the full task JSON or expected answer in
 the agent workspace before execution. Each agent receives only its private shard
@@ -83,6 +86,31 @@ class HollywoodAgent:
     agent_id: int
     runtime_name: str
     thread_id: str
+
+
+FOREMAN_SELECTOR_ID = "silo-topology-v1-2026-06-14"
+
+
+def losangelex_selector_decision(task: SiloTask) -> dict[str, str]:
+    """Return the frozen Hollywood coordination strategy for a SILO task.
+
+    This selector intentionally uses only task topology visible before the run,
+    not expected outputs or previous system outcomes. In SILO, Level I tasks are
+    stateless global reductions where every agent should receive the same final
+    aggregate. Levels II and III are order-dependent, iterative, graph-like, or
+    per-agent distribution tasks where normal room coordination is safer.
+    """
+    if task.level == "I":
+        return {
+            "selector": FOREMAN_SELECTOR_ID,
+            "strategy": "first-finisher",
+            "reason": "level-i-global-reduction-identical-final-answer",
+        }
+    return {
+        "selector": FOREMAN_SELECTOR_ID,
+        "strategy": "room",
+        "reason": "level-ii-iii-order-dependent-or-per-agent-output",
+    }
 
 
 @contextmanager
@@ -1262,6 +1290,8 @@ def run_losangelex_task(
     rpc_timeout_seconds: int,
     output_dir: Path,
     first_finisher: bool = False,
+    system_name: str = "losangelex",
+    selector_decision: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     fresh_workspace(workspace)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1389,10 +1419,9 @@ def run_losangelex_task(
     )
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
-    return {
-        "system": (
-            "losangelex-first-finisher" if first_finisher else "losangelex"
-        ),
+    record = {
+        "system": system_name,
+        "coordinationStrategy": "first-finisher" if first_finisher else "room",
         "caseId": task.case_id,
         "taskFile": task.task_file.name,
         "workspace": str(workspace),
@@ -1415,6 +1444,9 @@ def run_losangelex_task(
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "threadStatesPath": str(output_dir / "thread-states.json"),
     }
+    if selector_decision is not None:
+        record["selectorDecision"] = selector_decision
+    return record
 
 
 def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1622,6 +1654,7 @@ def main() -> int:
             "codex-full-context",
             "losangelex",
             "losangelex-first-finisher",
+            "losangelex-selector",
         ),
         action="append",
         required=True,
@@ -1758,6 +1791,13 @@ def main() -> int:
                         raise RuntimeError(
                             "app server URL is required for Losangelex runs"
                         )
+                    selector_decision = None
+                    first_finisher = system == "losangelex-first-finisher"
+                    if system == "losangelex-selector":
+                        selector_decision = losangelex_selector_decision(task)
+                        first_finisher = (
+                            selector_decision["strategy"] == "first-finisher"
+                        )
                     record = run_losangelex_task(
                         task=task,
                         workspace=workspace,
@@ -1769,7 +1809,9 @@ def main() -> int:
                         poll_seconds=args.poll_seconds,
                         rpc_timeout_seconds=args.rpc_timeout_seconds,
                         output_dir=run_dir,
-                        first_finisher=system == "losangelex-first-finisher",
+                        first_finisher=first_finisher,
+                        system_name=system,
+                        selector_decision=selector_decision,
                     )
                 records.append(record)
                 (output_dir / "results.json").write_text(
