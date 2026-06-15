@@ -17,7 +17,8 @@ import textwrap
 
 
 REPO_ROOT = pathlib.Path("/home/ai/Development/losangelex")
-DEFAULT_CODEX = REPO_ROOT / "codex-rs/target/debug/codex"
+DEFAULT_CODEX_TARGET_DIR = REPO_ROOT / "codex-rs/target/losangelex-launcher"
+DEFAULT_CODEX = DEFAULT_CODEX_TARGET_DIR / "debug/codex"
 OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -116,6 +117,26 @@ def run_scenario(codex: pathlib.Path, scenario: str) -> dict[str, object]:
     return json.loads(output_path.read_text(encoding="utf-8"))
 
 
+def ensure_default_codex(codex: pathlib.Path) -> None:
+    if codex != DEFAULT_CODEX or codex.exists():
+        return
+    subprocess.run(
+        [
+            "cargo",
+            "+stable",
+            "build",
+            "--target-dir",
+            str(DEFAULT_CODEX_TARGET_DIR),
+            "-p",
+            "codex-cli",
+            "--bin",
+            "codex",
+        ],
+        cwd=REPO_ROOT / "codex-rs",
+        check=True,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -132,6 +153,7 @@ def main() -> int:
     args = parser.parse_args()
 
     codex = pathlib.Path(args.codex)
+    ensure_default_codex(codex)
     scenarios = args.scenario or list(SCENARIOS)
     results = {name: run_scenario(codex, name) for name in scenarios}
     json.dump(results, sys.stdout, indent=2)

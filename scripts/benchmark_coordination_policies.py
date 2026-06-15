@@ -48,7 +48,8 @@ from typing import Any
 
 
 REPO_ROOT = pathlib.Path("/home/ai/Development/losangelex")
-DEFAULT_CODEX = REPO_ROOT / "codex-rs/target/debug/codex"
+DEFAULT_CODEX_TARGET_DIR = REPO_ROOT / "codex-rs/target/losangelex-launcher"
+DEFAULT_CODEX = DEFAULT_CODEX_TARGET_DIR / "debug/codex"
 DEFAULT_MODEL = "gpt-5.4"
 
 
@@ -1749,6 +1750,26 @@ def write_json_atomic(path: pathlib.Path, payload: dict[str, Any]) -> None:
     tmp_path.replace(path)
 
 
+def ensure_default_codex(codex: pathlib.Path) -> None:
+    if codex != DEFAULT_CODEX or codex.exists():
+        return
+    subprocess.run(
+        [
+            "cargo",
+            "+stable",
+            "build",
+            "--target-dir",
+            str(DEFAULT_CODEX_TARGET_DIR),
+            "-p",
+            "codex-cli",
+            "--bin",
+            "codex",
+        ],
+        cwd=REPO_ROOT / "codex-rs",
+        check=True,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1829,6 +1850,7 @@ def main() -> int:
         parser.error("--model-call-retries must be non-negative")
 
     codex = pathlib.Path(args.codex)
+    ensure_default_codex(codex)
     model_call_timeout = args.model_call_timeout or None
     scenarios = args.scenario or sorted(SCENARIOS)
     policies = args.policy or sorted(POLICY_DESCRIPTIONS)

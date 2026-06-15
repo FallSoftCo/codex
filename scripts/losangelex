@@ -2,7 +2,10 @@
 set -euo pipefail
 
 repo_root="/home/ai/Development/losangelex/codex-rs"
-binary_path="$repo_root/target/debug/codex"
+default_cargo_target_dir="$repo_root/target/losangelex-launcher"
+cargo_target_dir="${LOSANGELEX_CARGO_TARGET_DIR:-$default_cargo_target_dir}"
+default_binary_path="$cargo_target_dir/debug/codex"
+binary_path="${LOSANGELEX_CODEX_BIN:-$default_binary_path}"
 launch_cwd="${PWD}"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
 migration_dir="$codex_home/losangelex"
@@ -19,6 +22,42 @@ app_server_generations_dir="$migration_dir/app-servers"
 app_server_start_timeout_seconds="${LOSANGELEX_APP_SERVER_START_TIMEOUT_SECONDS:-20}"
 restart_handoff_file="$migration_dir/restart-handoff.json"
 restart_exit_code="${LOSANGELEX_CLIENT_RESTART_EXIT_CODE:-85}"
+
+resolve_binary_path() {
+  local requested="$1"
+  if [[ "$requested" == */* ]]; then
+    printf '%s\n' "$requested"
+    return
+  fi
+  command -v "$requested"
+}
+
+ensure_losangelex_binary() {
+  if [[ -n "${LOSANGELEX_CODEX_BIN:-}" ]]; then
+    if ! binary_path="$(resolve_binary_path "$LOSANGELEX_CODEX_BIN")"; then
+      printf 'losangelex configured binary could not be resolved: %s\n' "$LOSANGELEX_CODEX_BIN" >&2
+      return 1
+    fi
+    if [[ ! -x "$binary_path" ]]; then
+      printf 'losangelex configured binary is not executable: %s\n' "$binary_path" >&2
+      return 1
+    fi
+    return
+  fi
+
+  if [[ "${LOSANGELEX_AUTO_BUILD:-1}" != "0" ]]; then
+    (
+      cd "$repo_root"
+      cargo +stable build --target-dir "$cargo_target_dir" -p codex-cli --bin codex
+    )
+  fi
+
+  if [[ ! -x "$binary_path" ]]; then
+    printf 'losangelex binary is not executable: %s\n' "$binary_path" >&2
+    printf 'run with LOSANGELEX_AUTO_BUILD=1 or set LOSANGELEX_CODEX_BIN to an executable codex binary\n' >&2
+    return 1
+  fi
+}
 
 if [[ -z "${AWS_ACCESS_KEY_ID:-}" && -z "${AWS_PROFILE:-}" && -z "${AWS_DEFAULT_PROFILE:-}" && -f "$losangelex_email_env" ]]; then
   set -a
@@ -415,6 +454,8 @@ JSON
   fi
 fi
 
+ensure_losangelex_binary
+
 if [[ "$app_server_mode" == "daemon" ]]; then
   if [[ -z "$app_server_url" ]]; then
     app_server_url="$(start_losangelex_app_server "$app_server_start_timeout_seconds")"
@@ -427,16 +468,8 @@ run_args=("$@")
 while true; do
   rm -f "$restart_handoff_file"
   set +e
-  if [[ -x "$binary_path" ]]; then
-    "$binary_path" --enable tui_app_server "${extra_args[@]}" "${run_args[@]}"
-    exit_code=$?
-  else
-    (
-      cd "$repo_root"
-      cargo +stable run -p codex-cli --bin codex -- --enable tui_app_server "${extra_args[@]}" "${run_args[@]}"
-    )
-    exit_code=$?
-  fi
+  "$binary_path" --enable tui_app_server "${extra_args[@]}" "${run_args[@]}"
+  exit_code=$?
   set -e
 
   if [[ "$exit_code" == "$restart_exit_code" ]]; then
