@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="/home/ai/Development/losangelex/codex-rs"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 default_cargo_target_dir="$repo_root/target/losangelex-launcher"
 cargo_target_dir="${LOSANGELEX_CARGO_TARGET_DIR:-$default_cargo_target_dir}"
 default_binary_path="$cargo_target_dir/debug/codex"
@@ -22,6 +23,10 @@ app_server_generations_dir="$migration_dir/app-servers"
 app_server_start_timeout_seconds="${LOSANGELEX_APP_SERVER_START_TIMEOUT_SECONDS:-20}"
 restart_handoff_file="$migration_dir/restart-handoff.json"
 restart_exit_code="${LOSANGELEX_CLIENT_RESTART_EXIT_CODE:-85}"
+is_team_command=0
+if [[ "${1:-}" == "team" ]]; then
+  is_team_command=1
+fi
 
 resolve_binary_path() {
   local requested="$1"
@@ -456,12 +461,32 @@ fi
 
 ensure_losangelex_binary
 
-if [[ "$app_server_mode" == "daemon" ]]; then
+if [[ "$app_server_mode" == "daemon" || $is_team_command -eq 1 ]]; then
   if [[ -z "$app_server_url" ]]; then
     app_server_url="$(start_losangelex_app_server "$app_server_start_timeout_seconds")"
     export LOSANGELEX_APP_SERVER_STATE_FILE="$app_server_state_file"
   fi
-  extra_args+=(--remote "$app_server_url")
+  if [[ "$app_server_mode" == "daemon" ]]; then
+    extra_args+=(--remote "$app_server_url")
+  fi
+fi
+
+if [[ $is_team_command -eq 1 ]]; then
+  shift
+  team_args=(
+    --app-server-url "$app_server_url"
+    --workspace "$launch_cwd"
+    --hollywood-url "$HOLLYWOOD_URL"
+    --room "$HOLLYWOOD_ROOM"
+    --attention-mode "$HOLLYWOOD_ATTENTION_MODE"
+  )
+  if [[ -n "$HOLLYWOOD_OBSERVED_ROOMS" ]]; then
+    team_args+=(--observed-rooms "$HOLLYWOOD_OBSERVED_ROOMS")
+  fi
+  if [[ -n "$HOLLYWOOD_WAKE_ROOMS" ]]; then
+    team_args+=(--wake-rooms "$HOLLYWOOD_WAKE_ROOMS")
+  fi
+  exec python3 "$script_dir/losangelex_team.py" "${team_args[@]}" "$@"
 fi
 
 run_args=("$@")

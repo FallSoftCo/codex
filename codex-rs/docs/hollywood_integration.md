@@ -221,6 +221,8 @@ The current instruction model is:
 - treat `@mentions` as the normal request-for-attention mechanism
 - use room-wide chatter for shared awareness without assuming every message is actionable
 - if the user asks to coordinate with other existing agents, discuss with other agents, or ask idle agents, prefer Hollywood coordination with attached peers instead of spawning fresh subagents
+- if the user asks to form or start a Losangelex team and suitable peers are not already attached, start app-server-hosted Losangelex peer sessions with `losangelex team` or the equivalent `thread/start` + `thread/name/set` + `thread/hollywood/attach` + `turn/start` app-server flow
+- do not substitute Codex subagents for a user-requested Losangelex team; Codex subagents are only for bounded sidecar work owned by the current thread
 - keep autonomous follow-up silent by default when room activity did not change anything user-visible
 - when a user-visible Hollywood follow-up is still warranted, prefer a compact status line over a full no-op explanation
 

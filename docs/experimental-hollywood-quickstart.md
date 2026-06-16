@@ -29,6 +29,7 @@ What is expected to work:
 - model-visible Hollywood context
 - bundled-launcher auto-attach in the TUI flow
 - per-workspace Hollywood room setup in the TUI
+- app-server-hosted peer team launch with `losangelex team`
 
 What is not yet guaranteed:
 
@@ -154,7 +155,26 @@ losangelex name Analyst
 
 That gives you two sessions attached to the same room.
 
-### 6. Confirm the Integration
+### 6. Start a Team From One Terminal
+
+For user requests such as "make a team of Losangelex agents", use the native
+app-server team launcher:
+
+```bash
+losangelex team \
+  --agent 'tony=Lead planning, decomposition, integration, and final release judgment.' \
+  --agent 'james=Own the frontend implementation lane and report exact file scope.' \
+  --agent 'chris=Own backend, data, or scoring contracts and report exact file scope.' \
+  --agent 'ray=Own QA, browser validation, performance checks, and shutdown criteria.'
+```
+
+This command creates independent app-server-hosted Losangelex threads, gives
+each thread its durable coordination name, attaches every thread to the current
+Hollywood room, and starts the first turn with its assignment. It is the native
+team-formation path. Do not treat Codex subagents as a substitute when the user
+has asked for Losangelex agents or a Hollywood-coordinated team.
+
+### 7. Confirm the Integration
 
 Expected behavior:
 

@@ -89,6 +89,7 @@ Current shipped pieces:
 - policy-aware Hollywood synthetic briefs compiled by the app-server instead of prompt-only policy selection
 - supported room policies today: `leader_award`, `kanban_pull`, `dual_command_lease`, and adaptive `auto`
 - launch-time agent naming via `losangelex name <NAME>` / `--agent-name <NAME>`, with a durable Hollywood coordination identity derived from that name
+- app-server-hosted peer launch via `losangelex team`, which starts named Losangelex threads, attaches them to Hollywood, and assigns their first turns
 - bundled launcher support for automatic Hollywood bootstrap
 
 See:
@@ -324,11 +325,31 @@ Hollywood room while remaining independently runnable Codex threads. Human names
 such as `Scout` and `Analyst` remain additive identities for coordination; they
 do not replace the thread UUID or `sid-...` alias.
 
-### 6. Learn the stack surface
+### 6. Start a Team From One Session
+
+When the user asks for a Losangelex team, use the app-server-hosted team path
+instead of Codex subagents:
+
+```bash
+losangelex team \
+  --agent 'tony=Lead planning, decomposition, integration, and final release judgment.' \
+  --agent 'james=Own the frontend implementation lane and report exact file scope.' \
+  --agent 'chris=Own backend, data, or scoring contracts and report exact file scope.' \
+  --agent 'ray=Own QA, browser validation, performance checks, and shutdown criteria.'
+```
+
+The launcher starts or reuses the local app-server daemon, creates independent
+Losangelex threads, sets their names, attaches them to the current Hollywood
+room, and starts their first turns. This is the native way to form a Losangelex
+team from an existing session; Codex subagents are only for bounded sidecar work
+owned by the current thread.
+
+### 7. Learn the stack surface
 
 After bootstrap, the main entry points are:
 
 - `scripts/losangelex` for the opinionated local launcher
+- `scripts/losangelex team ...` for app-server-hosted Losangelex peer teams
 - `codex app-server` for the runtime host
 - `codex schedule ...` for persisted wakeups
 - `codex watcher ...` for persisted process-exit watchers
