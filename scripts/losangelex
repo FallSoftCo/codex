@@ -463,9 +463,18 @@ ensure_losangelex_binary
 
 if [[ "$app_server_mode" == "daemon" || $is_team_command -eq 1 ]]; then
   if [[ -z "$app_server_url" ]]; then
-    app_server_url="$(start_losangelex_app_server "$app_server_start_timeout_seconds")"
-    export LOSANGELEX_APP_SERVER_STATE_FILE="$app_server_state_file"
+    if [[ $is_team_command -eq 1 ]]; then
+      current_app_server_url="$(read_app_server_json_websocket_url "$app_server_state_file")"
+      if [[ -n "$current_app_server_url" ]] && app_server_ready "$current_app_server_url"; then
+        app_server_url="$current_app_server_url"
+      fi
+    fi
+    if [[ -z "$app_server_url" ]]; then
+      app_server_url="$(start_losangelex_app_server "$app_server_start_timeout_seconds")"
+    fi
   fi
+  export LOSANGELEX_APP_SERVER_STATE_FILE="$app_server_state_file"
+  export LOSANGELEX_APP_SERVER_URL="$app_server_url"
   if [[ "$app_server_mode" == "daemon" ]]; then
     extra_args+=(--remote "$app_server_url")
   fi
