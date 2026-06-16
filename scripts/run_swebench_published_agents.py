@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from datasets import load_dataset
+from losangelex_codex_bin import DEFAULT_CODEX
+from losangelex_codex_bin import ensure_default_codex
 
 from eval_hollywood_app_builds import (
     DEFAULT_EVAL_MODEL_PROVIDER,
@@ -38,7 +40,6 @@ from replay_hollywood_operator import (
 
 
 REPO_ROOT = Path("/home/ai/Development/losangelex")
-DEFAULT_CODEX = REPO_ROOT / "codex-rs" / "target" / "debug" / "codex"
 DEFAULT_OUT_ROOT = REPO_ROOT / "tmp" / "research" / "swebench-published"
 DEFAULT_HOLLYWOOD_URL = "http://127.0.0.1:8765"
 DEFAULT_DATASET = "SWE-bench/SWE-bench_Lite"
@@ -488,7 +489,7 @@ def main() -> int:
         action="append",
         required=True,
     )
-    parser.add_argument("--model", default="gpt-5.4")
+    parser.add_argument("--model", default="gpt-5.5")
     parser.add_argument("--codex", type=Path, default=DEFAULT_CODEX)
     parser.add_argument("--app-server-url")
     parser.add_argument(
@@ -502,6 +503,7 @@ def main() -> int:
     parser.add_argument("--campaign-name", default=f"swebench-{int(time.time())}")
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     args = parser.parse_args()
+    ensure_default_codex(args.codex)
 
     instances = load_instances(
         dataset_name=args.dataset_name,

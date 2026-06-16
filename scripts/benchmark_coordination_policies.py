@@ -46,11 +46,12 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
+from losangelex_codex_bin import DEFAULT_CODEX
+from losangelex_codex_bin import ensure_default_codex
+
 
 REPO_ROOT = pathlib.Path("/home/ai/Development/losangelex")
-DEFAULT_CODEX_TARGET_DIR = REPO_ROOT / "codex-rs/target/losangelex-launcher"
-DEFAULT_CODEX = DEFAULT_CODEX_TARGET_DIR / "debug/codex"
-DEFAULT_MODEL = "gpt-5.4"
+DEFAULT_MODEL = "gpt-5.5"
 
 
 @dataclass(frozen=True)
@@ -1748,26 +1749,6 @@ def write_json_atomic(path: pathlib.Path, payload: dict[str, Any]) -> None:
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     tmp_path.replace(path)
-
-
-def ensure_default_codex(codex: pathlib.Path) -> None:
-    if codex != DEFAULT_CODEX or codex.exists():
-        return
-    subprocess.run(
-        [
-            "cargo",
-            "+stable",
-            "build",
-            "--target-dir",
-            str(DEFAULT_CODEX_TARGET_DIR),
-            "-p",
-            "codex-cli",
-            "--bin",
-            "codex",
-        ],
-        cwd=REPO_ROOT / "codex-rs",
-        check=True,
-    )
 
 
 def main() -> int:

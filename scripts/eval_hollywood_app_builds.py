@@ -32,7 +32,7 @@ from replay_hollywood_operator import (
 REPO_ROOT = Path("/home/ai/Development/losangelex")
 TMP_ROOT = REPO_ROOT / "tmp" / "app_build_eval"
 DEFAULT_HOLLYWOOD_URL = "http://127.0.0.1:8765"
-DEFAULT_EVAL_MODEL = "gpt-5.4"
+DEFAULT_EVAL_MODEL = "gpt-5.5"
 DEFAULT_EVAL_MODEL_PROVIDER = "openai"
 TEAM = (
     ("tony", "planning, architecture, integration, release verification"),

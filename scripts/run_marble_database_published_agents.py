@@ -32,6 +32,8 @@ from benchmark_token_usage import snapshot_rollout_files
 from benchmark_token_usage import sum_token_usage
 from benchmark_token_usage import summarize_codex_exec_collab_tools
 from benchmark_token_usage import summarize_rollout_token_usage
+from losangelex_codex_bin import DEFAULT_CODEX
+from losangelex_codex_bin import ensure_default_codex
 from benchmark_app_server import add_benchmark_app_server_args
 from benchmark_app_server import benchmark_app_server
 from benchmark_app_server import prepare_minimal_codex_home
@@ -51,7 +53,6 @@ from replay_hollywood_operator import (
 
 
 REPO_ROOT = Path("/home/ai/Development/losangelex")
-DEFAULT_CODEX = REPO_ROOT / "codex-rs" / "target" / "debug" / "codex"
 DEFAULT_OUT_ROOT = REPO_ROOT / "tmp" / "research" / "published-agent-benchmarks"
 DEFAULT_MARBLE_ROOT = DEFAULT_OUT_ROOT / "repos" / "MARBLE"
 DATABASE_JSONL = "multiagentbench/database/database_main.jsonl"
@@ -2024,7 +2025,7 @@ def main() -> int:
     parser.add_argument("--marble-root", type=Path, default=DEFAULT_MARBLE_ROOT)
     parser.add_argument("--task-id", action="append", dest="task_ids", default=[])
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--model", default="gpt-5.4")
+    parser.add_argument("--model", default="gpt-5.5")
     parser.add_argument("--codex", type=Path, default=DEFAULT_CODEX)
     add_benchmark_app_server_args(parser)
     parser.add_argument("--max-rounds", type=int, default=1)
@@ -2056,6 +2057,7 @@ def main() -> int:
         help="Do not hide the published benchmark repository during agent execution.",
     )
     args = parser.parse_args()
+    ensure_default_codex(args.codex)
 
     tasks = load_tasks(
         marble_root=args.marble_root,

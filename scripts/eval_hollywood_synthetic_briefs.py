@@ -15,10 +15,11 @@ import sys
 import tempfile
 import textwrap
 
+from losangelex_codex_bin import DEFAULT_CODEX
+from losangelex_codex_bin import ensure_default_codex
+
 
 REPO_ROOT = pathlib.Path("/home/ai/Development/losangelex")
-DEFAULT_CODEX_TARGET_DIR = REPO_ROOT / "codex-rs/target/losangelex-launcher"
-DEFAULT_CODEX = DEFAULT_CODEX_TARGET_DIR / "debug/codex"
 OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -115,26 +116,6 @@ def run_scenario(codex: pathlib.Path, scenario: str) -> dict[str, object]:
             f"{scenario}: codex exec failed with rc={result.returncode}\n{result.stderr}"
         )
     return json.loads(output_path.read_text(encoding="utf-8"))
-
-
-def ensure_default_codex(codex: pathlib.Path) -> None:
-    if codex != DEFAULT_CODEX or codex.exists():
-        return
-    subprocess.run(
-        [
-            "cargo",
-            "+stable",
-            "build",
-            "--target-dir",
-            str(DEFAULT_CODEX_TARGET_DIR),
-            "-p",
-            "codex-cli",
-            "--bin",
-            "codex",
-        ],
-        cwd=REPO_ROOT / "codex-rs",
-        check=True,
-    )
 
 
 def main() -> int:
