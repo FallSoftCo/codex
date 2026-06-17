@@ -113,7 +113,20 @@ struct HollywoodReadResult {
     url: String,
     room: String,
     identities: Vec<String>,
+    peers: Vec<HollywoodPeerSummary>,
+    peer_registry_error: Option<String>,
     messages: serde_json::Value,
+}
+
+#[derive(Serialize)]
+struct HollywoodPeerSummary {
+    session_id: String,
+    identities: Vec<String>,
+    status: Option<String>,
+    session_kind: Option<String>,
+    attention_mode: Option<String>,
+    updated_at: Option<String>,
+    last_heartbeat_at: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -155,11 +168,14 @@ struct HollywoodRegistryListResponse {
     entries: Vec<HollywoodRegistryEntry>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct HollywoodRegistryEntry {
     session_id: String,
     attached: bool,
     identities: Vec<String>,
+    status: Option<String>,
+    session_kind: Option<String>,
+    attention_mode: Option<String>,
     updated_at: Option<String>,
     last_heartbeat_at: Option<String>,
 }
@@ -314,6 +330,27 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                         ))
                     })?;
                 let thread_name = invocation.session.thread_name().await;
+                let self_session_id = invocation.session.thread_id().to_string();
+                let (peers, peer_registry_error) =
+                    match fetch_registry_entries(&config, &room).await {
+                        Ok(entries) => (
+                            entries
+                                .into_iter()
+                                .filter(|entry| entry.session_id != self_session_id)
+                                .map(|entry| HollywoodPeerSummary {
+                                    session_id: entry.session_id,
+                                    identities: entry.identities,
+                                    status: entry.status,
+                                    session_kind: entry.session_kind,
+                                    attention_mode: entry.attention_mode,
+                                    updated_at: entry.updated_at,
+                                    last_heartbeat_at: entry.last_heartbeat_at,
+                                })
+                                .collect(),
+                            None,
+                        ),
+                        Err(err) => (Vec::new(), Some(err)),
+                    };
 
                 let result = HollywoodReadResult {
                     url: config.url,
@@ -322,6 +359,8 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                         invocation.session.thread_id(),
                         thread_name.as_deref(),
                     ),
+                    peers,
+                    peer_registry_error,
                     messages: response,
                 };
 
@@ -925,6 +964,7 @@ mod tests {
                 identities: vec!["sid-agor-cp2j-755r-fcup-xtau-5phv-we".to_string()],
                 updated_at: None,
                 last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+                ..Default::default()
             },
             HollywoodRegistryEntry {
                 session_id: "019d0000-0000-7000-8000-000000000000".to_string(),
@@ -932,6 +972,7 @@ mod tests {
                 identities: vec![],
                 updated_at: None,
                 last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+                ..Default::default()
             },
         ];
 
@@ -953,6 +994,7 @@ mod tests {
             identities: vec!["james-7c45ba".to_string()],
             updated_at: None,
             last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+            ..Default::default()
         }];
 
         assert_eq!(
@@ -969,6 +1011,7 @@ mod tests {
             identities: vec!["marble-db-agent1-7c45ba".to_string()],
             updated_at: None,
             last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+            ..Default::default()
         }];
 
         assert_eq!(
@@ -987,6 +1030,7 @@ mod tests {
                 identities: vec!["james-7c45ba".to_string()],
                 updated_at: None,
                 last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+                ..Default::default()
             },
             HollywoodRegistryEntry {
                 session_id: "019d0000-0000-7000-8000-000000000000".to_string(),
@@ -994,6 +1038,7 @@ mod tests {
                 identities: vec!["james-91ab22".to_string()],
                 updated_at: None,
                 last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+                ..Default::default()
             },
         ];
 
@@ -1011,6 +1056,7 @@ mod tests {
                 identities: vec!["marble-db-agent1-7c45ba".to_string()],
                 updated_at: None,
                 last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+                ..Default::default()
             },
             HollywoodRegistryEntry {
                 session_id: "019d0000-0000-7000-8000-000000000000".to_string(),
@@ -1018,6 +1064,7 @@ mod tests {
                 identities: vec!["silo-agent1-91ab22".to_string()],
                 updated_at: None,
                 last_heartbeat_at: Some(Utc::now().to_rfc3339()),
+                ..Default::default()
             },
         ];
 
@@ -1035,6 +1082,7 @@ mod tests {
             identities: vec!["sid-fresh".to_string()],
             updated_at: None,
             last_heartbeat_at: Some((now - Duration::seconds(15)).to_rfc3339()),
+            ..Default::default()
         };
         let stale = HollywoodRegistryEntry {
             session_id: "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
@@ -1042,6 +1090,7 @@ mod tests {
             identities: vec!["sid-stale".to_string()],
             updated_at: None,
             last_heartbeat_at: Some((now - Duration::minutes(10)).to_rfc3339()),
+            ..Default::default()
         };
 
         assert!(registry_entry_is_fresh(&fresh, &now));

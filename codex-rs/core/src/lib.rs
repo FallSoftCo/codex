@@ -119,6 +119,7 @@ pub use codex_protocol::config_types::ModelProviderAuthInfo;
 pub use hollywood::coordination_identity_from_thread_name;
 pub use hollywood::default_hollywood_observed_rooms;
 pub use hollywood::default_hollywood_room_for_cwd;
+pub use hollywood::live_identity_matches_target;
 pub use hollywood::parse_agent_mentions;
 mod event_mapping;
 pub mod review_format;

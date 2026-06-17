@@ -1,4 +1,7 @@
+use super::hollywood_polling::collaboration_first_debug_enabled;
+use super::hollywood_polling::poll_hollywood_for_thread;
 use super::*;
+use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
 use crate::hollywood::HOLLYWOOD_REGISTRY_SYNC_INTERVAL;
 use crate::hollywood::publish_registry_snapshot;
 use crate::hollywood::thread_status_name;
@@ -281,6 +284,9 @@ pub(super) async fn ensure_listener_task_running(
     let registry_client = Client::new();
     let mut registry_sync_interval = tokio::time::interval(HOLLYWOOD_REGISTRY_SYNC_INTERVAL);
     registry_sync_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let hollywood_poll_enabled = collaboration_first_debug_enabled();
+    let mut hollywood_poll_interval = tokio::time::interval(HOLLYWOOD_POLL_INTERVAL);
+    hollywood_poll_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -380,6 +386,16 @@ pub(super) async fn ensure_listener_task_running(
                 }
                 _ = registry_sync_interval.tick() => {
                     sync_hollywood_registry_for_thread(
+                        &registry_client,
+                        conversation_id,
+                        &conversation,
+                        &thread_state,
+                        &thread_watch_manager,
+                    )
+                    .await;
+                }
+                _ = hollywood_poll_interval.tick(), if hollywood_poll_enabled => {
+                    poll_hollywood_for_thread(
                         &registry_client,
                         conversation_id,
                         &conversation,

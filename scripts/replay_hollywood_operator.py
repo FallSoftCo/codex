@@ -178,6 +178,7 @@ def start_agent(
     conn: JsonRpcWs,
     *,
     workspace: str,
+    hollywood_url: str | None = None,
     room: str,
     observed_rooms: list[str],
     wake_rooms: list[str],
@@ -207,20 +208,20 @@ def start_agent(
             "name": name,
         },
     )
-    conn.send_request(
-        "thread/hollywood/attach",
-        {
-            "threadId": thread_id,
-            "room": room,
-            "observedRooms": observed_rooms,
-            "wakeRooms": wake_rooms,
-            "attention": {
-                "mode": "focused",
-                "includeAtAll": True,
-                "includeAtRoom": True,
-            },
+    attach_params: dict[str, Any] = {
+        "threadId": thread_id,
+        "room": room,
+        "observedRooms": observed_rooms,
+        "wakeRooms": wake_rooms,
+        "attention": {
+            "mode": "focused",
+            "includeAtAll": True,
+            "includeAtRoom": True,
         },
-    )
+    }
+    if hollywood_url is not None:
+        attach_params["url"] = hollywood_url
+    conn.send_request("thread/hollywood/attach", attach_params)
     return thread_id
 
 
@@ -332,7 +333,7 @@ def summarize_coordination_tools(
         item = params.get("item")
         if not isinstance(item, dict):
             continue
-        tool = item.get("tool")
+        tool = item.get("tool") or item.get("name")
         if not isinstance(tool, str) or tool not in COORDINATION_TOOL_NAMES:
             continue
 

@@ -1146,10 +1146,33 @@ impl Session {
     }
 
     pub(crate) async fn submit_hollywood_followup(
-        &self,
+        self: &Arc<Self>,
         message: codex_protocol::protocol::HollywoodInputMessage,
     ) -> CodexResult<()> {
-        let _ = message;
+        self.add_hollywood_obligation(&message).await;
+        let mut text = String::new();
+        if let Some(instruction) = crate::session_prefix::hollywood_obligation_instruction(&message)
+        {
+            text.push_str(&instruction);
+            text.push_str("\n\n");
+        }
+        text.push_str(&crate::session_prefix::format_hollywood_message(&message));
+        handlers::user_input_or_turn_inner(
+            self,
+            format!("hollywood-{}", message.message_id),
+            Op::UserInput {
+                items: vec![UserInput::Text {
+                    text,
+                    text_elements: Vec::new(),
+                }],
+                final_output_json_schema: None,
+                responsesapi_client_metadata: None,
+                additional_context: Default::default(),
+                thread_settings: Default::default(),
+            },
+            /*client_user_message_id*/ None,
+        )
+        .await;
         Ok(())
     }
 
@@ -1158,20 +1181,13 @@ impl Session {
         state.mark_hollywood_send_for_turn(turn_id, room);
     }
 
+    #[cfg(test)]
     pub(crate) async fn resolve_hollywood_obligations_for_turn(
         &self,
         turn_id: &str,
     ) -> Vec<crate::state::HollywoodObligation> {
         let mut state = self.state.lock().await;
         state.resolve_hollywood_obligations_for_turn(turn_id)
-    }
-
-    pub(crate) async fn prepare_hollywood_obligation_retry(
-        &self,
-        max_attempts: u32,
-    ) -> Vec<crate::state::HollywoodObligation> {
-        let mut state = self.state.lock().await;
-        state.prepare_hollywood_obligation_retry(max_attempts)
     }
 
     pub(crate) async fn hollywood_obligation_count(&self) -> usize {

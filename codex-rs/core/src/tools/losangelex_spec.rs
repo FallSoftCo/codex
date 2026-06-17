@@ -326,7 +326,7 @@ pub(crate) fn create_hollywood_read_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_read".to_string(),
-        description: "Read messages from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream.".to_string(),
+        description: "Read messages and attached peer sessions from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream, and before deciding to work solo when collaboration may help.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(Vec::new())),

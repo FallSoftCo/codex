@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::hollywood::HollywoodConfig;
 use crate::hollywood::hollywood_identities;
 use crate::hollywood::hollywood_session_status_from_thread_status;
@@ -74,6 +76,7 @@ struct HollywoodRegistryEntry {
     last_heartbeat_at: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn assess_rolling_deploy(
     state_db: &StateDbHandle,
     thread_state_manager: &ThreadStateManager,

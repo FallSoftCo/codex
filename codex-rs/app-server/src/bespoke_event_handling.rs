@@ -115,6 +115,7 @@ use codex_shell_command::parse_command::shlex_join;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use tokio::sync::Mutex;
@@ -157,7 +158,8 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .note_turn_started(&conversation_id.to_string())
                 .await;
             let turn = {
-                let state = thread_state.lock().await;
+                let mut state = thread_state.lock().await;
+                state.hollywood.note_turn_started(Instant::now());
                 let mut turn = state.active_turn_snapshot().unwrap_or_else(|| Turn {
                     id: payload.turn_id.clone(),
                     items: Vec::new(),
@@ -196,6 +198,7 @@ pub(crate) async fn apply_bespoke_event_handling(
             thread_watch_manager
                 .note_turn_completed(&conversation_id.to_string(), turn_failed)
                 .await;
+            thread_state.lock().await.hollywood.note_turn_finished();
             handle_turn_complete(
                 conversation_id,
                 event_turn_id,

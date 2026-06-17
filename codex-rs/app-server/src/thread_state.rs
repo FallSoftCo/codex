@@ -98,10 +98,6 @@ impl ThreadState {
             .is_some_and(|existing| Arc::ptr_eq(&existing, conversation))
     }
 
-    pub(crate) fn listener_thread(&self) -> Option<Arc<CodexThread>> {
-        self.listener_thread.as_ref().and_then(Weak::upgrade)
-    }
-
     pub(crate) fn set_listener(
         &mut self,
         cancel_tx: oneshot::Sender<()>,

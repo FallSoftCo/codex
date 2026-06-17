@@ -12,6 +12,8 @@ use uuid::Uuid;
 
 const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
+#[cfg(test)]
+const COLLABORATION_FIRST_DEBUG_ENV_VAR: &str = "LOSANGELEX_COLLABORATION_FIRST_DEBUG";
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 
 static HOLLYWOOD_SESSION_CONFIG_OVERRIDE: LazyLock<RwLock<Option<Option<HollywoodSessionConfig>>>> =
@@ -54,11 +56,11 @@ pub(crate) struct HollywoodEnvironmentContext {
 
 impl HollywoodSessionConfig {
     pub(crate) fn from_env() -> Option<Self> {
-        if let Some(override_config) = HOLLYWOOD_SESSION_CONFIG_OVERRIDE
+        let override_config = HOLLYWOOD_SESSION_CONFIG_OVERRIDE
             .read()
-            .expect("hollywood override lock poisoned")
-            .clone()
-        {
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if let Some(override_config) = override_config {
             return override_config;
         }
 
@@ -101,7 +103,7 @@ impl HollywoodSessionConfig {
 pub(crate) fn disable_hollywood_from_env_for_tests() {
     *HOLLYWOOD_SESSION_CONFIG_OVERRIDE
         .write()
-        .expect("hollywood override lock poisoned") = Some(None);
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(None);
 }
 
 pub fn default_hollywood_room_for_cwd(cwd: &Path) -> String {
@@ -150,19 +152,7 @@ impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
     }
 }
 
-pub(crate) fn environment_context_from_config(
-    config: Option<&HollywoodSessionConfig>,
-    thread_id: ThreadId,
-    thread_name: Option<&str>,
-    state_db_available: bool,
-) -> Option<HollywoodEnvironmentContext> {
-    let config = config?;
-    Some(HollywoodEnvironmentContext {
-        semantic: semantic_context(config, thread_id, thread_name),
-        runtime: runtime_context(config, state_db_available),
-    })
-}
-
+#[cfg(test)]
 fn semantic_context(
     config: &HollywoodSessionConfig,
     thread_id: ThreadId,
@@ -185,6 +175,7 @@ fn semantic_context(
     }
 }
 
+#[cfg(test)]
 fn durable_coordination_guidance(state_db_available: bool) -> String {
     if state_db_available {
         "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so Losangelex can survive idle gaps, restart, and rolling deploy.".to_string()
@@ -193,6 +184,7 @@ fn durable_coordination_guidance(state_db_available: bool) -> String {
     }
 }
 
+#[cfg(test)]
 fn runtime_context(
     config: &HollywoodSessionConfig,
     state_db_available: bool,
@@ -213,6 +205,36 @@ fn runtime_context(
         "do_not_substitute_codex_subagents_for_losangelex_team".to_string(),
         "reserve_subagents_for_parallelizing_owned_work".to_string(),
     ]);
+    let collaboration_first_debug = env_flag_enabled(COLLABORATION_FIRST_DEBUG_ENV_VAR);
+    if collaboration_first_debug {
+        startup_protocol.extend([
+            "evaluate_peer_collaboration_before_substantive_work".to_string(),
+            "inspect_attached_peers_with_hollywood_read_before_solo_decision".to_string(),
+            "collaborate_when_peer_help_reduces_effort_risk_or_uncertainty".to_string(),
+            "self_owned_coordination_is_not_peer_collaboration".to_string(),
+            "solo_execution_is_for_small_local_or_unsplittable_work".to_string(),
+        ]);
+    }
+    let mut broadcast_guidance = vec![
+        "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
+        "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
+        "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
+        "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
+        "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.".to_string(),
+        "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, start app-server-hosted Losangelex peer sessions with `losangelex team` or the equivalent `thread/start` + `thread/name/set` + `thread/hollywood/attach` + `turn/start` app-server flow; do not substitute Codex subagents for that team request.".to_string(),
+        "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
+        durable_coordination_guidance(state_db_available),
+    ];
+    if collaboration_first_debug {
+        broadcast_guidance.extend([
+            "Debug collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified.".to_string(),
+            "Debug collaboration-first policy: collaboration is peer-to-peer and role-flexible; any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader.".to_string(),
+            "Debug collaboration-first policy: for work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help.".to_string(),
+            "Debug collaboration-first policy: a self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself; for cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign a narrow durable task to a specific peer before claiming all scope yourself.".to_string(),
+            "Debug collaboration-first policy: if peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback.".to_string(),
+            "Debug collaboration-first policy: prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers.".to_string(),
+        ]);
+    }
     HollywoodRuntimeContext {
         tools: vec![
             "hollywood_status".to_string(),
@@ -223,17 +245,16 @@ fn runtime_context(
             "hollywood_team_member_update".to_string(),
         ],
         startup_protocol,
-        broadcast_guidance: vec![
-            "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
-            "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
-            "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
-            "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
-            "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.".to_string(),
-            "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, start app-server-hosted Losangelex peer sessions with `losangelex team` or the equivalent `thread/start` + `thread/name/set` + `thread/hollywood/attach` + `turn/start` app-server flow; do not substitute Codex subagents for that team request.".to_string(),
-            "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
-            durable_coordination_guidance(state_db_available),
-        ],
+        broadcast_guidance,
     }
+}
+
+#[cfg(test)]
+fn env_flag_enabled(name: &str) -> bool {
+    env::var(name)
+        .as_deref()
+        .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(false)
 }
 
 fn parse_room_list(value: Option<String>) -> Vec<String> {
@@ -264,6 +285,7 @@ fn hollywood_room_slug(value: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
+#[cfg(test)]
 fn effective_wake_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
     if config.wake_rooms.is_empty() {
         vec![config.room.clone()]

@@ -468,11 +468,6 @@ impl EnvironmentContext {
         self
     }
 
-    pub(crate) fn with_hollywood(mut self, hollywood: Option<HollywoodEnvironmentContext>) -> Self {
-        self.hollywood = hollywood;
-        self
-    }
-
     fn network_from_turn_context(turn_context: &TurnContext) -> Option<NetworkContext> {
         let network = turn_context
             .config

@@ -22,6 +22,7 @@ use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::AdditionalContextEntry;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::Event;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SandboxPolicy;
@@ -261,6 +262,14 @@ impl CodexThread {
         self.codex
             .submit_user_input_with_client_user_message_id(op, trace, client_user_message_id)
             .await
+    }
+
+    #[doc(hidden)]
+    pub async fn submit_hollywood_followup(
+        &self,
+        message: HollywoodInputMessage,
+    ) -> CodexResult<()> {
+        self.codex.session.submit_hollywood_followup(message).await
     }
 
     /// Persist whether this thread is eligible for future memory generation.

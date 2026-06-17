@@ -55,7 +55,6 @@ pub(crate) struct HollywoodObligation {
     pub(crate) room: String,
     pub(crate) sender_id: String,
     pub(crate) body: String,
-    pub(crate) attempts: u32,
 }
 
 impl SessionState {
@@ -345,7 +344,6 @@ impl SessionState {
                 room: message.room.clone(),
                 sender_id: message.sender_id.clone(),
                 body: message.body.clone(),
-                attempts: 0,
             });
     }
 
@@ -356,6 +354,7 @@ impl SessionState {
             .insert(room.to_string());
     }
 
+    #[cfg(test)]
     pub(crate) fn resolve_hollywood_obligations_for_turn(
         &mut self,
         turn_id: &str,
@@ -366,20 +365,6 @@ impl SessionState {
         self.outstanding_hollywood_obligations
             .retain(|obligation| !handled_rooms.contains(&obligation.room));
         self.outstanding_hollywood_obligations.clone()
-    }
-
-    pub(crate) fn prepare_hollywood_obligation_retry(
-        &mut self,
-        max_attempts: u32,
-    ) -> Vec<HollywoodObligation> {
-        let mut retry = Vec::new();
-        for obligation in &mut self.outstanding_hollywood_obligations {
-            if obligation.attempts < max_attempts {
-                obligation.attempts += 1;
-                retry.push(obligation.clone());
-            }
-        }
-        retry
     }
 
     pub(crate) fn hollywood_obligation_count(&self) -> usize {
