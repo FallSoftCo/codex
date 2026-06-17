@@ -67,6 +67,7 @@ pub use hollywood::HollywoodStatusHandler;
 pub use hollywood::HollywoodTeamMemberUpdateHandler;
 pub use hollywood::HollywoodTeamStatusHandler;
 pub use hollywood::HollywoodTeamUpHandler;
+pub use hollywood::LosangelexTeamLaunchHandler;
 pub use list_available_plugins_to_install::ListAvailablePluginsToInstallHandler;
 pub use mcp::McpHandler;
 pub use mcp_resource::ListMcpResourceTemplatesHandler;

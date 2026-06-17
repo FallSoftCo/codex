@@ -6,6 +6,7 @@ use crate::tools::handlers::HollywoodStatusHandler;
 use crate::tools::handlers::HollywoodTeamMemberUpdateHandler;
 use crate::tools::handlers::HollywoodTeamStatusHandler;
 use crate::tools::handlers::HollywoodTeamUpHandler;
+use crate::tools::handlers::LosangelexTeamLaunchHandler;
 use crate::tools::handlers::RestartClientHandler;
 use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::ToolExecutor;
@@ -46,6 +47,10 @@ pub(crate) fn append_losangelex_tool_executors(
         executors.push(losangelex_tool(
             HollywoodReadHandler,
             create_hollywood_read_tool(),
+        ));
+        executors.push(losangelex_tool(
+            LosangelexTeamLaunchHandler,
+            create_losangelex_team_launch_tool(),
         ));
         executors.push(losangelex_tool(
             HollywoodSendHandler,
@@ -330,6 +335,111 @@ pub(crate) fn create_hollywood_read_tool() -> ToolSpec {
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(Vec::new())),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_losangelex_team_launch_tool() -> ToolSpec {
+    let agent_schema = JsonSchema::object(
+        BTreeMap::from([
+            (
+                "name".to_string(),
+                JsonSchema::string(Some(
+                    "Short human-readable peer name, for example `reviewer` or `qa`."
+                        .to_string(),
+                )),
+            ),
+            (
+                "task".to_string(),
+                JsonSchema::string(Some(
+                    "Concrete initial assignment for this peer. Include exact scope, expected output, and coordination expectations."
+                        .to_string(),
+                )),
+            ),
+        ]),
+        Some(vec!["name".to_string(), "task".to_string()]),
+        Some(false.into()),
+    );
+    let properties = BTreeMap::from([
+        (
+            "agents".to_string(),
+            JsonSchema::array(
+                agent_schema,
+                Some(
+                    "Peers to launch. Keep this small and purposeful; at most eight peers are accepted."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "workspace".to_string(),
+            JsonSchema::string(Some(
+                "Optional absolute workspace path. Defaults to this session's current local workspace."
+                    .to_string(),
+            )),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood room to attach peers to. Defaults to this session's configured room."
+                    .to_string(),
+            )),
+        ),
+        (
+            "observed_rooms".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Additional room to observe.".to_string())),
+                Some(
+                    "Optional observed rooms for launched peers. Defaults to this session's observed rooms."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "wake_rooms".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Room that may wake the peer.".to_string())),
+                Some(
+                    "Optional wake rooms for launched peers. Defaults to this session's wake rooms."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "attention_mode".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood attention mode for peers: `focused`, `ambient`, or `broad`. Defaults to this session's mode."
+                    .to_string(),
+            )),
+        ),
+        (
+            "model".to_string(),
+            JsonSchema::string(Some(
+                "Optional model override for launched peers. Omit to let app-server use its configured default."
+                    .to_string(),
+            )),
+        ),
+        (
+            "model_provider".to_string(),
+            JsonSchema::string(Some(
+                "Optional model provider override for launched peers.".to_string(),
+            )),
+        ),
+        (
+            "start_turns".to_string(),
+            JsonSchema::boolean(Some(
+                "When false, create and attach peers without starting their initial task turns. Defaults to true."
+                    .to_string(),
+            )),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "losangelex_team_launch".to_string(),
+        description: "Start app-server-hosted Losangelex peer sessions and attach them to the current Hollywood room. Use this when the user asks to form/start a Losangelex team, or when collaboration would materially help and no suitable attached peers already exist. Prefer this native tool over shelling out to `losangelex team`; it launches real Losangelex peer sessions, not Codex subagents.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(vec!["agents".to_string()])),
         output_schema: None,
     })
 }

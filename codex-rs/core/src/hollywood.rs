@@ -201,7 +201,8 @@ fn runtime_context(
         "claim_exact_paths_or_modules_before_editing".to_string(),
         "avoid_overlapping_edits_until_resolved".to_string(),
         "use_hollywood_first_for_peer_coordination".to_string(),
-        "start_app_server_hosted_peers_for_user_requested_team".to_string(),
+        "start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team"
+            .to_string(),
         "do_not_substitute_codex_subagents_for_losangelex_team".to_string(),
         "reserve_subagents_for_parallelizing_owned_work".to_string(),
     ]);
@@ -221,7 +222,7 @@ fn runtime_context(
         "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
         "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
         "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.".to_string(),
-        "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, start app-server-hosted Losangelex peer sessions with `losangelex team` or the equivalent `thread/start` + `thread/name/set` + `thread/hollywood/attach` + `turn/start` app-server flow; do not substitute Codex subagents for that team request.".to_string(),
+        "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.".to_string(),
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
         durable_coordination_guidance(state_db_available),
     ];
@@ -239,6 +240,7 @@ fn runtime_context(
         tools: vec![
             "hollywood_status".to_string(),
             "hollywood_read".to_string(),
+            "losangelex_team_launch".to_string(),
             "hollywood_send".to_string(),
             "hollywood_team_up".to_string(),
             "hollywood_team_status".to_string(),
@@ -611,7 +613,10 @@ mod tests {
             context
                 .runtime
                 .startup_protocol
-                .contains(&"start_app_server_hosted_peers_for_user_requested_team".to_string())
+                .contains(
+                    &"start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team"
+                        .to_string()
+                )
         );
         assert!(
             context

@@ -1,11 +1,23 @@
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
+use futures::SinkExt;
+use futures::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use serde_json::json;
 use std::collections::HashSet;
+use std::env;
+use std::fs;
+use std::time::Duration as StdDuration;
+use tokio::net::TcpStream;
+use tokio::time::timeout;
+use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
 
 use crate::function_tool::FunctionCallError;
 use crate::hollywood::HollywoodSessionConfig;
@@ -25,6 +37,7 @@ use crate::tools::losangelex_spec::create_hollywood_status_tool;
 use crate::tools::losangelex_spec::create_hollywood_team_member_update_tool;
 use crate::tools::losangelex_spec::create_hollywood_team_status_tool;
 use crate::tools::losangelex_spec::create_hollywood_team_up_tool;
+use crate::tools::losangelex_spec::create_losangelex_team_launch_tool;
 use crate::tools::registry::ToolExecutor;
 use codex_tools::ToolName;
 use codex_tools::ToolSpec;
@@ -35,9 +48,16 @@ pub struct HollywoodSendHandler;
 pub struct HollywoodTeamUpHandler;
 pub struct HollywoodTeamStatusHandler;
 pub struct HollywoodTeamMemberUpdateHandler;
+pub struct LosangelexTeamLaunchHandler;
 
 const HOLLYWOOD_REGISTRY_STALE_AFTER: Duration = Duration::seconds(90);
 const HOLLYWOOD_ROOM_CONTRACT_VERSION: &str = "losangelex-room/v2";
+const LOSANGELEX_APP_SERVER_URL_ENV_VAR: &str = "LOSANGELEX_APP_SERVER_URL";
+const LOSANGELEX_APP_SERVER_STATE_FILE_ENV_VAR: &str = "LOSANGELEX_APP_SERVER_STATE_FILE";
+const MAX_TEAM_LAUNCH_AGENTS: usize = 8;
+const MAX_TEAM_LAUNCH_AGENT_NAME_CHARS: usize = 80;
+const MAX_TEAM_LAUNCH_TASK_CHARS: usize = 8_000;
+const APP_SERVER_REQUEST_TIMEOUT: StdDuration = StdDuration::from_secs(120);
 
 #[derive(Deserialize)]
 struct HollywoodReadArgs {
@@ -79,6 +99,25 @@ struct HollywoodTeamMemberUpdateArgs {
     joined_room: Option<String>,
     task: Option<String>,
     scope: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct LosangelexTeamLaunchArgs {
+    agents: Vec<LosangelexPeerLaunchSpec>,
+    workspace: Option<String>,
+    room: Option<String>,
+    observed_rooms: Option<Vec<String>>,
+    wake_rooms: Option<Vec<String>>,
+    attention_mode: Option<String>,
+    model: Option<String>,
+    model_provider: Option<String>,
+    start_turns: Option<bool>,
+}
+
+#[derive(Clone, Deserialize)]
+struct LosangelexPeerLaunchSpec {
+    name: String,
+    task: String,
 }
 
 #[derive(Serialize)]
@@ -161,6 +200,38 @@ struct HollywoodTeamStatusResult {
 struct HollywoodTeamMemberUpdateResult {
     url: String,
     member: serde_json::Value,
+}
+
+#[derive(Serialize)]
+struct LosangelexTeamLaunchResult {
+    ok: bool,
+    error: Option<String>,
+    app_server_url: String,
+    workspace: String,
+    hollywood: LosangelexTeamLaunchHollywoodResult,
+    start_turns: bool,
+    agents: Vec<LaunchedLosangelexPeer>,
+}
+
+#[derive(Serialize)]
+struct LosangelexTeamLaunchHollywoodResult {
+    url: String,
+    room: String,
+    observed_rooms: Vec<String>,
+    wake_rooms: Vec<String>,
+    attention_mode: String,
+}
+
+#[derive(Serialize)]
+struct LaunchedLosangelexPeer {
+    name: String,
+    thread_id: String,
+    turn_started: bool,
+}
+
+#[derive(Deserialize)]
+struct AppServerStateFile {
+    websocket_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -368,6 +439,119 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                     serde_json::to_string_pretty(&result)
                         .unwrap_or_else(|err| format!("failed to serialize hollywood read: {err}")),
                     Some(true),
+                ))
+            }
+            .await?;
+            Ok(boxed_tool_output(output))
+        })
+    }
+}
+
+impl ToolExecutor<ToolInvocation> for LosangelexTeamLaunchHandler {
+    fn tool_name(&self) -> ToolName {
+        ToolName::new(None, "losangelex_team_launch".to_string())
+    }
+
+    fn spec(&self) -> ToolSpec {
+        create_losangelex_team_launch_tool()
+    }
+
+    fn handle(&self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'_> {
+        Box::pin(async move {
+            let output = async {
+                let mut args =
+                    parse_function_args::<LosangelexTeamLaunchArgs>(&invocation.payload)?;
+                let Some(config) = hollywood_config_for_session(invocation.session.as_ref()).await
+                else {
+                    return Err(FunctionCallError::RespondToModel(
+                        "Hollywood is not configured for this session.".to_string(),
+                    ));
+                };
+
+                validate_peer_launch_specs(&args.agents)
+                    .map_err(FunctionCallError::RespondToModel)?;
+                let app_server_url = resolve_losangelex_app_server_url()
+                    .map_err(FunctionCallError::RespondToModel)?;
+                let workspace = args.workspace.take().unwrap_or_else(|| {
+                    invocation
+                        .turn
+                        .environments
+                        .single_local_environment_cwd()
+                        .unwrap_or(&invocation.turn.config.cwd)
+                        .to_string_lossy()
+                        .into_owned()
+                });
+                let room = args.room.take().unwrap_or_else(|| config.room.clone());
+                let observed_rooms = args
+                    .observed_rooms
+                    .take()
+                    .unwrap_or_else(|| config.observed_rooms.clone());
+                let wake_rooms = args
+                    .wake_rooms
+                    .take()
+                    .unwrap_or_else(|| config.wake_rooms.clone());
+                let attention_mode =
+                    normalize_attention_mode(args.attention_mode.as_deref(), &config)
+                        .map_err(FunctionCallError::RespondToModel)?;
+                let start_turns = args.start_turns.unwrap_or(true);
+                let mut client = AppServerJsonRpcClient::connect(&app_server_url)
+                    .await
+                    .map_err(FunctionCallError::RespondToModel)?;
+                client
+                    .initialize()
+                    .await
+                    .map_err(FunctionCallError::RespondToModel)?;
+
+                let mut launched = Vec::with_capacity(args.agents.len());
+                let mut error = None;
+                for peer in &args.agents {
+                    match launch_losangelex_peer(
+                        &mut client,
+                        PeerLaunchRequest {
+                            peer,
+                            workspace: &workspace,
+                            hollywood_url: &config.url,
+                            room: &room,
+                            observed_rooms: &observed_rooms,
+                            wake_rooms: &wake_rooms,
+                            attention_mode: &attention_mode,
+                            model: args.model.as_deref(),
+                            model_provider: args.model_provider.as_deref(),
+                            start_turns,
+                        },
+                    )
+                    .await
+                    {
+                        Ok(peer) => launched.push(peer),
+                        Err(err) => {
+                            error = Some(err);
+                            break;
+                        }
+                    }
+                }
+
+                let ok = error.is_none();
+                let result = LosangelexTeamLaunchResult {
+                    ok,
+                    error,
+                    app_server_url,
+                    workspace,
+                    hollywood: LosangelexTeamLaunchHollywoodResult {
+                        url: config.url,
+                        room,
+                        observed_rooms,
+                        wake_rooms,
+                        attention_mode,
+                    },
+                    start_turns,
+                    agents: launched,
+                };
+
+                Ok(FunctionToolOutput::from_text(
+                    serde_json::to_string_pretty(&result).unwrap_or_else(|err| {
+                        format!("failed to serialize losangelex team launch: {err}")
+                    }),
+                    Some(ok),
                 ))
             }
             .await?;
@@ -740,6 +924,285 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamMemberUpdateHandler {
     }
 }
 
+struct PeerLaunchRequest<'a> {
+    peer: &'a LosangelexPeerLaunchSpec,
+    workspace: &'a str,
+    hollywood_url: &'a str,
+    room: &'a str,
+    observed_rooms: &'a [String],
+    wake_rooms: &'a [String],
+    attention_mode: &'a str,
+    model: Option<&'a str>,
+    model_provider: Option<&'a str>,
+    start_turns: bool,
+}
+
+struct AppServerJsonRpcClient {
+    websocket: WebSocketStream<MaybeTlsStream<TcpStream>>,
+    next_id: u64,
+}
+
+impl AppServerJsonRpcClient {
+    async fn connect(app_server_url: &str) -> Result<Self, String> {
+        let (websocket, _) = connect_async(app_server_url)
+            .await
+            .map_err(|err| format!("failed to connect to Losangelex app-server: {err}"))?;
+        Ok(Self {
+            websocket,
+            next_id: 1,
+        })
+    }
+
+    async fn initialize(&mut self) -> Result<(), String> {
+        self.request(
+            "initialize",
+            json!({
+                "clientInfo": {
+                    "name": "losangelex-team-launch",
+                    "title": "Losangelex Team Launch Tool",
+                    "version": "0.1",
+                },
+                "capabilities": {
+                    "experimentalApi": true,
+                },
+            }),
+        )
+        .await?;
+        self.notification("initialized", json!({})).await
+    }
+
+    async fn notification(&mut self, method: &str, params: Value) -> Result<(), String> {
+        self.send_json(json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        }))
+        .await
+    }
+
+    async fn request(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        let request_id = self.next_id;
+        self.next_id += 1;
+        self.send_json(json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params,
+        }))
+        .await?;
+
+        loop {
+            let message = timeout(APP_SERVER_REQUEST_TIMEOUT, self.websocket.next())
+                .await
+                .map_err(|_| {
+                    format!("timed out waiting for Losangelex app-server response to {method}")
+                })?
+                .ok_or_else(|| {
+                    format!("Losangelex app-server websocket closed before {method} completed")
+                })?
+                .map_err(|err| format!("Losangelex app-server websocket read failed: {err}"))?;
+            let Some(text) = websocket_message_text(message)? else {
+                continue;
+            };
+            let response = serde_json::from_str::<Value>(&text).map_err(|err| {
+                format!("Losangelex app-server returned invalid JSON for {method}: {err}")
+            })?;
+            if response.get("id") != Some(&json!(request_id)) {
+                continue;
+            }
+            if let Some(error) = response.get("error") {
+                return Err(format!("{method} failed: {error}"));
+            }
+            return Ok(response.get("result").cloned().unwrap_or(Value::Null));
+        }
+    }
+
+    async fn send_json(&mut self, value: Value) -> Result<(), String> {
+        self.websocket
+            .send(Message::Text(value.to_string().into()))
+            .await
+            .map_err(|err| format!("Losangelex app-server websocket write failed: {err}"))
+    }
+}
+
+async fn launch_losangelex_peer(
+    client: &mut AppServerJsonRpcClient,
+    request: PeerLaunchRequest<'_>,
+) -> Result<LaunchedLosangelexPeer, String> {
+    let thread = client
+        .request("thread/start", thread_start_params(&request))
+        .await?;
+    let thread_id = thread
+        .pointer("/thread/id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "thread/start response did not include thread.id".to_string())?
+        .to_string();
+
+    client
+        .request(
+            "thread/name/set",
+            json!({
+                "threadId": thread_id.as_str(),
+                "name": request.peer.name.as_str(),
+            }),
+        )
+        .await?;
+    client
+        .request(
+            "thread/hollywood/attach",
+            json!({
+                "threadId": thread_id.as_str(),
+                "url": request.hollywood_url,
+                "room": request.room,
+                "observedRooms": request.observed_rooms,
+                "wakeRooms": request.wake_rooms,
+                "attention": {
+                    "mode": request.attention_mode,
+                    "includeAtAll": true,
+                    "includeAtRoom": true,
+                },
+            }),
+        )
+        .await?;
+    if request.start_turns {
+        client
+            .request(
+                "turn/start",
+                json!({
+                    "threadId": thread_id.as_str(),
+                    "input": [
+                        {
+                            "type": "text",
+                            "text": request.peer.task.as_str(),
+                        }
+                    ],
+                }),
+            )
+            .await?;
+    }
+
+    Ok(LaunchedLosangelexPeer {
+        name: request.peer.name.clone(),
+        thread_id,
+        turn_started: request.start_turns,
+    })
+}
+
+fn thread_start_params(request: &PeerLaunchRequest<'_>) -> Value {
+    let mut params = json!({
+        "cwd": request.workspace,
+        "approvalPolicy": "never",
+        "sandbox": "danger-full-access",
+        "serviceName": "losangelex-team",
+    });
+    if let Some(model) = request.model {
+        params["model"] = Value::String(model.to_string());
+    }
+    if let Some(model_provider) = request.model_provider {
+        params["modelProvider"] = Value::String(model_provider.to_string());
+    }
+    params
+}
+
+fn websocket_message_text(message: Message) -> Result<Option<String>, String> {
+    match message {
+        Message::Text(text) => Ok(Some(text.to_string())),
+        Message::Binary(bytes) => String::from_utf8(bytes.to_vec())
+            .map(Some)
+            .map_err(|err| format!("Losangelex app-server returned non-UTF8 binary JSON: {err}")),
+        Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => Ok(None),
+        Message::Close(_) => Err("Losangelex app-server websocket closed".to_string()),
+    }
+}
+
+fn validate_peer_launch_specs(peers: &[LosangelexPeerLaunchSpec]) -> Result<(), String> {
+    if peers.is_empty() {
+        return Err("losangelex_team_launch requires at least one agent.".to_string());
+    }
+    if peers.len() > MAX_TEAM_LAUNCH_AGENTS {
+        return Err(format!(
+            "losangelex_team_launch accepts at most {MAX_TEAM_LAUNCH_AGENTS} agents per call."
+        ));
+    }
+    for peer in peers {
+        if peer.name.trim().is_empty() {
+            return Err("losangelex_team_launch agent names must be non-empty.".to_string());
+        }
+        if peer.name.chars().count() > MAX_TEAM_LAUNCH_AGENT_NAME_CHARS {
+            return Err(format!(
+                "losangelex_team_launch agent name `{}` is too long; max is {MAX_TEAM_LAUNCH_AGENT_NAME_CHARS} characters.",
+                peer.name
+            ));
+        }
+        if peer.task.trim().is_empty() {
+            return Err(format!(
+                "losangelex_team_launch task for `{}` must be non-empty.",
+                peer.name
+            ));
+        }
+        if peer.task.chars().count() > MAX_TEAM_LAUNCH_TASK_CHARS {
+            return Err(format!(
+                "losangelex_team_launch task for `{}` is too long; max is {MAX_TEAM_LAUNCH_TASK_CHARS} characters.",
+                peer.name
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn normalize_attention_mode(
+    requested: Option<&str>,
+    config: &HollywoodSessionConfig,
+) -> Result<String, String> {
+    let mode = requested
+        .unwrap_or(config.attention_mode.as_str())
+        .to_lowercase();
+    match mode.as_str() {
+        "focused" | "ambient" | "broad" => Ok(mode),
+        _ => Err(format!(
+            "invalid Hollywood attention mode `{mode}`; expected focused, ambient, or broad."
+        )),
+    }
+}
+
+fn resolve_losangelex_app_server_url() -> Result<String, String> {
+    if let Ok(value) = env::var(LOSANGELEX_APP_SERVER_URL_ENV_VAR)
+        && !value.trim().is_empty()
+    {
+        return Ok(value);
+    }
+
+    let state_file = match env::var(LOSANGELEX_APP_SERVER_STATE_FILE_ENV_VAR) {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => codex_utils_home_dir::find_codex_home()
+            .map_err(|err| format!("failed to resolve CODEX_HOME for app-server state: {err}"))?
+            .join("losangelex")
+            .join("current-app-server.json")
+            .into(),
+    };
+    let text = fs::read_to_string(&state_file).map_err(|err| {
+        format!(
+            "{LOSANGELEX_APP_SERVER_URL_ENV_VAR} is not set and app-server state file {} could not be read: {err}",
+            state_file.display()
+        )
+    })?;
+    let state = serde_json::from_str::<AppServerStateFile>(&text).map_err(|err| {
+        format!(
+            "failed to parse app-server state file {}: {err}",
+            state_file.display()
+        )
+    })?;
+    state
+        .websocket_url
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            format!(
+                "app-server state file {} does not contain websocket_url",
+                state_file.display()
+            )
+        })
+}
+
 fn resolve_target_identities(args: &HollywoodSendArgs) -> Vec<String> {
     let mut identities = Vec::new();
     let mut seen = HashSet::new();
@@ -928,6 +1391,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     fn send_args(text: &str, to: Option<&str>) -> HollywoodSendArgs {
         HollywoodSendArgs {
@@ -1113,5 +1577,76 @@ mod tests {
             .expect("room selection should succeed");
 
         assert_eq!(room, "repo/losangelex");
+    }
+
+    #[test]
+    fn validate_peer_launch_specs_enforces_bounds() {
+        assert!(validate_peer_launch_specs(&[]).is_err());
+
+        let valid_peer = LosangelexPeerLaunchSpec {
+            name: "reviewer".to_string(),
+            task: "Review the patch and report issues in Hollywood.".to_string(),
+        };
+        assert_eq!(
+            validate_peer_launch_specs(std::slice::from_ref(&valid_peer)),
+            Ok(())
+        );
+
+        let too_many = vec![valid_peer; MAX_TEAM_LAUNCH_AGENTS + 1];
+        let err = validate_peer_launch_specs(&too_many).expect_err("too many peers should fail");
+        assert!(err.contains("at most"));
+    }
+
+    #[test]
+    fn normalize_attention_mode_defaults_to_current_config() {
+        let config = HollywoodSessionConfig {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: vec!["repo/losangelex".to_string()],
+            attention_mode: "Focused".to_string(),
+        };
+
+        assert_eq!(
+            normalize_attention_mode(None, &config).expect("default attention mode"),
+            "focused"
+        );
+        assert_eq!(
+            normalize_attention_mode(Some("BROAD"), &config).expect("explicit attention mode"),
+            "broad"
+        );
+        assert!(normalize_attention_mode(Some("loud"), &config).is_err());
+    }
+
+    #[test]
+    fn thread_start_params_match_losangelex_team_launcher_defaults() {
+        let peer = LosangelexPeerLaunchSpec {
+            name: "qa".to_string(),
+            task: "Run focused verification.".to_string(),
+        };
+        let request = PeerLaunchRequest {
+            peer: &peer,
+            workspace: "/workspace/losangelex",
+            hollywood_url: "http://127.0.0.1:8765",
+            room: "repo/losangelex",
+            observed_rooms: &["main".to_string()],
+            wake_rooms: &["repo/losangelex".to_string()],
+            attention_mode: "focused",
+            model: Some("gpt-5.5"),
+            model_provider: Some("openai"),
+            start_turns: true,
+        };
+
+        assert_eq!(
+            thread_start_params(&request),
+            json!({
+                "cwd": "/workspace/losangelex",
+                "approvalPolicy": "never",
+                "sandbox": "danger-full-access",
+                "serviceName": "losangelex-team",
+                "model": "gpt-5.5",
+                "modelProvider": "openai",
+            })
+        );
     }
 }
