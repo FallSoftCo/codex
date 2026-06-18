@@ -206,7 +206,7 @@ fn runtime_context(
         "ask_user_for_tasking_when_unassigned".to_string(),
         "relay_assigned_scope_to_room".to_string(),
         "check_existing_scope_claims_before_editing".to_string(),
-        "claim_exact_paths_or_modules_before_editing".to_string(),
+        "claim_exact_paths_or_modules_before_peer_coordinated_or_overlap_prone_editing".to_string(),
         "avoid_overlapping_edits_until_resolved".to_string(),
         "prefer_task_rooms_for_bounded_parallel_slices".to_string(),
         "keep_repo_room_observed_for_status_handoffs_and_integration".to_string(),
@@ -235,6 +235,7 @@ fn runtime_context(
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.".to_string(),
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
         "For bounded task slices, use a `task/<repo>/<task>` working room and keep the repo room observed for status, handoffs, and integration.".to_string(),
+        "Avoid coordination churn for trivial local edits; use peers, task rooms, and durable path claims when the work is meaningfully splittable, blocked, risky, or overlap-prone.".to_string(),
         durable_coordination_guidance(state_db_available),
     ];
     if collaboration_first_debug {
