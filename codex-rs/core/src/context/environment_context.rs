@@ -17,6 +17,10 @@ use std::path::PathBuf;
 
 use super::ContextualUserFragment;
 
+const HOLLYWOOD_CONTEXT_ROOM_LIMIT: usize = 8;
+const HOLLYWOOD_CONTEXT_PROTOCOL_LIMIT: usize = 16;
+const HOLLYWOOD_CONTEXT_TOOL_LIMIT: usize = 12;
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct EnvironmentContext {
     pub(crate) environments: EnvironmentContextEnvironments,
@@ -466,6 +470,11 @@ impl EnvironmentContext {
         self
     }
 
+    pub(crate) fn with_hollywood(mut self, hollywood: HollywoodEnvironmentContext) -> Self {
+        self.hollywood = Some(hollywood);
+        self
+    }
+
     fn network_from_turn_context(turn_context: &TurnContext) -> Option<NetworkContext> {
         let network = turn_context
             .config
@@ -519,6 +528,40 @@ fn workspace_roots_from_turn_context_item(
     }
 
     vec![turn_context_item.cwd.clone()]
+}
+
+fn escape_xml_text(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn push_limited_hollywood_values(
+    lines: &mut Vec<String>,
+    wrapper_tag: &str,
+    item_tag: &str,
+    values: &[String],
+    limit: usize,
+) {
+    if values.is_empty() {
+        return;
+    }
+
+    lines.push(format!("    <{wrapper_tag}>"));
+    for value in values.iter().take(limit) {
+        lines.push(format!(
+            "      <{item_tag}>{}</{item_tag}>",
+            escape_xml_text(value)
+        ));
+    }
+    if values.len() > limit {
+        lines.push(format!(
+            "      <truncated>{}</truncated>",
+            values.len() - limit
+        ));
+    }
+    lines.push(format!("    </{wrapper_tag}>"));
 }
 
 impl ContextualUserFragment for EnvironmentContext {
@@ -587,34 +630,69 @@ impl ContextualUserFragment for EnvironmentContext {
                 "    <attached>{}</attached>",
                 hollywood.semantic.attached
             ));
-            lines.push(format!("    <url>{}</url>", hollywood.semantic.url));
-            lines.push(format!("    <room>{}</room>", hollywood.semantic.room));
+            lines.push(format!(
+                "    <url>{}</url>",
+                escape_xml_text(&hollywood.semantic.url)
+            ));
+            lines.push(format!(
+                "    <room>{}</room>",
+                escape_xml_text(&hollywood.semantic.room)
+            ));
+            push_limited_hollywood_values(
+                &mut lines,
+                "observed_rooms",
+                "room",
+                &hollywood.semantic.observed_rooms,
+                HOLLYWOOD_CONTEXT_ROOM_LIMIT,
+            );
+            push_limited_hollywood_values(
+                &mut lines,
+                "wake_rooms",
+                "room",
+                &hollywood.semantic.wake_rooms,
+                HOLLYWOOD_CONTEXT_ROOM_LIMIT,
+            );
+            lines.push(
+                "    <task_room_convention>task/repo-slug/task-slug</task_room_convention>"
+                    .to_string(),
+            );
             lines.push(format!(
                 "    <attention_mode>{}</attention_mode>",
-                hollywood.semantic.attention_mode
+                escape_xml_text(&hollywood.semantic.attention_mode)
             ));
             if let Some(agent_name) = &hollywood.semantic.agent_name {
-                lines.push(format!("    <agent_name>{agent_name}</agent_name>"));
+                lines.push(format!(
+                    "    <agent_name>{}</agent_name>",
+                    escape_xml_text(agent_name)
+                ));
             }
             if let Some(coordination_identity) = &hollywood.semantic.coordination_identity {
                 lines.push(format!(
-                    "    <coordination_identity>{coordination_identity}</coordination_identity>"
+                    "    <coordination_identity>{}</coordination_identity>",
+                    escape_xml_text(coordination_identity)
                 ));
             }
-            if !hollywood.semantic.identities.is_empty() {
-                lines.push("    <identities>".to_string());
-                for identity in &hollywood.semantic.identities {
-                    lines.push(format!("      <identity>{identity}</identity>"));
-                }
-                lines.push("    </identities>".to_string());
-            }
-            if !hollywood.runtime.tools.is_empty() {
-                lines.push("    <tools>".to_string());
-                for tool in &hollywood.runtime.tools {
-                    lines.push(format!("      <tool>{tool}</tool>"));
-                }
-                lines.push("    </tools>".to_string());
-            }
+            push_limited_hollywood_values(
+                &mut lines,
+                "identities",
+                "identity",
+                &hollywood.semantic.identities,
+                HOLLYWOOD_CONTEXT_ROOM_LIMIT,
+            );
+            push_limited_hollywood_values(
+                &mut lines,
+                "startup_protocol",
+                "step",
+                &hollywood.runtime.startup_protocol,
+                HOLLYWOOD_CONTEXT_PROTOCOL_LIMIT,
+            );
+            push_limited_hollywood_values(
+                &mut lines,
+                "tools",
+                "tool",
+                &hollywood.runtime.tools,
+                HOLLYWOOD_CONTEXT_TOOL_LIMIT,
+            );
             lines.push("  </hollywood>".to_string());
         }
         format!("\n{}\n", lines.join("\n"))

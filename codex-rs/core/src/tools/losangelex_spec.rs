@@ -381,7 +381,7 @@ pub(crate) fn create_losangelex_team_launch_tool() -> ToolSpec {
         (
             "room".to_string(),
             JsonSchema::string(Some(
-                "Optional Hollywood room to attach peers to. Defaults to this session's configured room."
+                "Optional Hollywood room to attach peers to. Defaults to this session's configured room. For bounded parallel slices, prefer a `task/<repo>/<task>` room and keep the repo room observed for status and handoffs."
                     .to_string(),
             )),
         ),
@@ -464,7 +464,7 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
         (
             "room".to_string(),
             JsonSchema::string(Some(
-                "Optional room override. Defaults to the current attached Hollywood room.".to_string(),
+                "Optional room override. Defaults to the current attached Hollywood room. For bounded task slices, use a `task/<repo>/<task>` room instead of broad repo-room traffic.".to_string(),
             )),
         ),
         (
@@ -524,7 +524,8 @@ pub(crate) fn create_hollywood_team_up_tool() -> ToolSpec {
         (
             "task_room".to_string(),
             JsonSchema::string(Some(
-                "Optional working room members should join after accepting.".to_string(),
+                "Optional working room members should join after accepting. Use `task/<repo>/<task>` for bounded collaborative slices."
+                    .to_string(),
             )),
         ),
         (
@@ -535,7 +536,7 @@ pub(crate) fn create_hollywood_team_up_tool() -> ToolSpec {
 
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_team_up".to_string(),
-        description: "Create a structured Hollywood team with a leader, purpose, and invited member sessions.".to_string(),
+        description: "Create a structured Hollywood collaboration with a purpose and invited member sessions. Roles are flexible; use member state updates for the current owner, reviewer, verifier, integrator, or handoff role instead of assuming a permanent leader.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(vec!["purpose".to_string(), "targets".to_string()])),

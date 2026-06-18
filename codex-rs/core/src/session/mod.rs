@@ -3185,11 +3185,20 @@ impl Session {
                 .agent_control
                 .format_environment_context_subagents(self.thread_id)
                 .await;
-            contextual_user_sections.push(
+            let mut environment_context =
                 crate::context::EnvironmentContext::from_turn_context(turn_context, shell.as_ref())
-                    .with_subagents(subagents)
-                    .render(),
-            );
+                    .with_subagents(subagents);
+            if let Some(config) = self.hollywood_session_config().await {
+                let thread_name = self.thread_name().await;
+                environment_context =
+                    environment_context.with_hollywood(crate::hollywood::environment_context(
+                        &config,
+                        self.thread_id(),
+                        thread_name.as_deref(),
+                        self.state_db().is_some(),
+                    ));
+            }
+            contextual_user_sections.push(environment_context.render());
         }
 
         let multi_agent_v2_usage_hint_text =

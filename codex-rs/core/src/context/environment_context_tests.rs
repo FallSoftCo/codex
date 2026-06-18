@@ -453,3 +453,40 @@ fn serialize_environment_context_prefers_environment_shell_when_present() {
 
     assert_eq!(context.render(), expected);
 }
+
+#[test]
+fn serialize_environment_context_with_hollywood_contract() {
+    let thread_id = codex_protocol::ThreadId::from_string("019d113f-49ff-7b12-8a8f-bcc14ebcf5b1")
+        .expect("valid thread id");
+    let config = crate::hollywood::HollywoodSessionConfig {
+        url: "http://127.0.0.1:8765?x=<room>".to_string(),
+        room: "repo/losangelex".to_string(),
+        observed_rooms: (0..10)
+            .map(|idx| format!("task/losangelex/{idx}"))
+            .collect(),
+        wake_rooms: Vec::new(),
+        attention_mode: "focused".to_string(),
+    };
+    let hollywood =
+        crate::hollywood::environment_context(&config, thread_id, Some("Scout Agent"), true);
+    let rendered = EnvironmentContext::new(
+        Vec::new(),
+        /*current_date*/ None,
+        /*timezone*/ None,
+        /*network*/ None,
+        /*subagents*/ None,
+    )
+    .with_hollywood(hollywood)
+    .render();
+
+    assert!(rendered.contains("<url>http://127.0.0.1:8765?x=&lt;room&gt;</url>"));
+    assert!(
+        rendered.contains("<task_room_convention>task/repo-slug/task-slug</task_room_convention>")
+    );
+    assert!(rendered.contains("<coordination_identity>scout-agent</coordination_identity>"));
+    assert!(rendered.contains("<observed_rooms>"));
+    assert!(rendered.contains("<truncated>2</truncated>"));
+    assert!(rendered.contains("<wake_rooms>"));
+    assert!(rendered.contains("<step>prefer_task_rooms_for_bounded_parallel_slices</step>"));
+    assert!(rendered.contains("<tool>losangelex_team_launch</tool>"));
+}

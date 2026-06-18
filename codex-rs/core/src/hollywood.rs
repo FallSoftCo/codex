@@ -12,7 +12,6 @@ use uuid::Uuid;
 
 const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
-#[cfg(test)]
 const COLLABORATION_FIRST_DEBUG_ENV_VAR: &str = "LOSANGELEX_COLLABORATION_FIRST_DEBUG";
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 
@@ -152,7 +151,18 @@ impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
     }
 }
 
-#[cfg(test)]
+pub(crate) fn environment_context(
+    config: &HollywoodSessionConfig,
+    thread_id: ThreadId,
+    thread_name: Option<&str>,
+    state_db_available: bool,
+) -> HollywoodEnvironmentContext {
+    HollywoodEnvironmentContext {
+        semantic: semantic_context(config, thread_id, thread_name),
+        runtime: runtime_context(config, state_db_available),
+    }
+}
+
 fn semantic_context(
     config: &HollywoodSessionConfig,
     thread_id: ThreadId,
@@ -175,7 +185,6 @@ fn semantic_context(
     }
 }
 
-#[cfg(test)]
 fn durable_coordination_guidance(state_db_available: bool) -> String {
     if state_db_available {
         "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so Losangelex can survive idle gaps, restart, and rolling deploy.".to_string()
@@ -184,7 +193,6 @@ fn durable_coordination_guidance(state_db_available: bool) -> String {
     }
 }
 
-#[cfg(test)]
 fn runtime_context(
     config: &HollywoodSessionConfig,
     state_db_available: bool,
@@ -200,6 +208,8 @@ fn runtime_context(
         "check_existing_scope_claims_before_editing".to_string(),
         "claim_exact_paths_or_modules_before_editing".to_string(),
         "avoid_overlapping_edits_until_resolved".to_string(),
+        "prefer_task_rooms_for_bounded_parallel_slices".to_string(),
+        "keep_repo_room_observed_for_status_handoffs_and_integration".to_string(),
         "use_hollywood_first_for_peer_coordination".to_string(),
         "start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team"
             .to_string(),
@@ -224,6 +234,7 @@ fn runtime_context(
         "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.".to_string(),
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.".to_string(),
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
+        "For bounded task slices, use a `task/<repo>/<task>` working room and keep the repo room observed for status, handoffs, and integration.".to_string(),
         durable_coordination_guidance(state_db_available),
     ];
     if collaboration_first_debug {
@@ -251,7 +262,6 @@ fn runtime_context(
     }
 }
 
-#[cfg(test)]
 fn env_flag_enabled(name: &str) -> bool {
     env::var(name)
         .as_deref()
@@ -287,7 +297,6 @@ fn hollywood_room_slug(value: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
-#[cfg(test)]
 fn effective_wake_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
     if config.wake_rooms.is_empty() {
         vec![config.room.clone()]
