@@ -15,6 +15,7 @@ use codex_tools::ResponsesApiTool;
 use codex_tools::ToolExposure;
 use codex_tools::ToolName;
 use codex_tools::ToolSpec;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -250,6 +251,12 @@ pub(crate) fn create_coordination_act_tool() -> ToolSpec {
 pub(crate) fn create_list_coordination_tasks_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
+            "task_id".to_string(),
+            JsonSchema::string(Some(
+                "Optional exact task id. Use with `view: \"full\"` for task-local details or `view: \"subtree\"` for dependency/dependent context.".to_string(),
+            )),
+        ),
+        (
             "owner".to_string(),
             JsonSchema::string(Some("Optional owner agent thread id or alias filter.".to_string())),
         ),
@@ -274,13 +281,29 @@ pub(crate) fn create_list_coordination_tasks_tool() -> ToolSpec {
         (
             "include_history".to_string(),
             JsonSchema::boolean(Some(
-                "When true, include durable coordination acts alongside the task list.".to_string(),
+                "When true, include durable coordination acts alongside the task list. This implies the heavier `full` view unless `view` is set explicitly.".to_string(),
+            )),
+        ),
+        (
+            "view".to_string(),
+            JsonSchema::string_enum(
+                vec![json!("compact"), json!("full"), json!("subtree")],
+                Some(
+                    "Result shape. `compact` is the default token-efficient work queue; `full` returns exact task details; `subtree` returns a compact task-local dependency/dependent slice for `task_id`.".to_string(),
+                ),
+            ),
+        ),
+        (
+            "limit".to_string(),
+            JsonSchema::integer(Some(
+                "Maximum number of tasks to return. Defaults to 24 and caps at 100."
+                    .to_string(),
             )),
         ),
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "list_coordination_tasks".to_string(),
-        description: "Inspect durable Losangelex coordination tasks and, optionally, their act history. When this session is attached to Hollywood, the current attached room is the default scope unless overridden.".to_string(),
+        description: "Inspect durable Losangelex coordination task state. Use this before `hollywood_read` for team coordination: the default compact view is a token-efficient work queue, `view:\"full\"` gives exact task details, and `view:\"subtree\"` gives task-local dependency/dependent context. When this session is attached to Hollywood, the current attached room is the default scope unless overridden.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(Vec::new())),
@@ -345,7 +368,7 @@ pub(crate) fn create_hollywood_read_tool() -> ToolSpec {
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_read".to_string(),
-        description: "Read messages and attached peer sessions from the configured Hollywood room. Prefer cursor reads with `after_id` and `actionable_only` for efficient peer coordination; the output includes `cursor.next_after_id` for the next read.".to_string(),
+        description: "Read message deltas and attached peer sessions from the configured Hollywood room. For coordination state, prefer `list_coordination_tasks` first; this read also returns a bounded `task_state` sidecar when available. Use cursor reads with `after_id` and `actionable_only` for direct mentions, blockers, handoffs, final answers, and other message-level deltas; the output includes `cursor.next_after_id` for the next read.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(Vec::new())),

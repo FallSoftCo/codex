@@ -1987,6 +1987,180 @@ async fn list_coordination_tasks_accepts_proposed_status_alias_for_open() {
 }
 
 #[tokio::test]
+async fn list_coordination_tasks_defaults_to_compact_view_and_full_details_are_opt_in() {
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+    let long_details = "Long implementation detail with exact context. ".repeat(40);
+
+    let open_output = coordination_handler()
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Compact task state should omit full details",
+                "details": long_details,
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+    let open_result = parse_result(open_output);
+    let task_id = open_result["task"]["id"]
+        .as_str()
+        .expect("task id should exist")
+        .to_string();
+
+    let compact_output = coordination_handler()
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({ "task_id": task_id }),
+        ))
+        .await
+        .expect("compact task list should succeed");
+    let compact_result = parse_result(compact_output);
+    let preview = compact_result["tasks"][0]["details_preview"]
+        .as_str()
+        .expect("compact task should include a bounded preview");
+
+    assert_eq!(compact_result["view"], json!("compact"));
+    assert_eq!(compact_result["tasks"][0]["details"], Value::Null);
+    assert!(preview.len() < long_details.len());
+    assert_eq!(compact_result["tasks"][0]["full_details_available"], true);
+
+    let full_output = coordination_handler()
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({
+                "task_id": task_id,
+                "view": "full",
+            }),
+        ))
+        .await
+        .expect("full task list should succeed");
+    let full_result = parse_result(full_output);
+
+    assert_eq!(full_result["view"], json!("full"));
+    assert_eq!(full_result["tasks"][0]["details"], json!(long_details));
+}
+
+#[tokio::test]
+async fn list_coordination_tasks_subtree_returns_task_local_dependency_slice() {
+    let (session, turn, state_db) = make_session_with_state_db().await;
+
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-dependency".to_string(),
+            creator_thread_id: session.thread_id(),
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/subtree".to_string()),
+            kind: codex_state::CoordinationTaskKind::Investigation,
+            summary: "Dependency investigation".to_string(),
+            details: "Dependency details.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-dependency".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("dependency task should be created");
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-root".to_string(),
+            creator_thread_id: session.thread_id(),
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/subtree".to_string()),
+            kind: codex_state::CoordinationTaskKind::Implementation,
+            summary: "Root implementation".to_string(),
+            details: "Root details.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: vec!["task-dependency".to_string()],
+            act_id: "act-root".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("root task should be created");
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-dependent".to_string(),
+            creator_thread_id: session.thread_id(),
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/subtree".to_string()),
+            kind: codex_state::CoordinationTaskKind::Qa,
+            summary: "Dependent QA".to_string(),
+            details: "QA depends on root.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: vec!["task-root".to_string()],
+            act_id: "act-dependent".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("dependent task should be created");
+    state_db
+        .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+            id: "task-unrelated".to_string(),
+            creator_thread_id: session.thread_id(),
+            owner_thread_id: None,
+            reserved_path_claims: Vec::new(),
+            claim_lease_seconds: codex_state::DEFAULT_COORDINATION_LEASE_SECONDS,
+            team_id: None,
+            room: Some("repo/subtree".to_string()),
+            kind: codex_state::CoordinationTaskKind::Review,
+            summary: "Unrelated review".to_string(),
+            details: "Should not be returned.".to_string(),
+            requested_capability: None,
+            dependency_task_ids: Vec::new(),
+            act_id: "act-unrelated".to_string(),
+            act_summary: None,
+            act_payload_json: "{}".to_string(),
+        })
+        .await
+        .expect("unrelated task should be created");
+
+    let output = coordination_handler()
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "list_coordination_tasks",
+            json!({
+                "task_id": "task-root",
+                "view": "subtree",
+            }),
+        ))
+        .await
+        .expect("subtree task list should succeed");
+    let result = parse_result(output);
+    let ids = result["tasks"]
+        .as_array()
+        .expect("tasks should be an array")
+        .iter()
+        .map(|task| task["id"].as_str().expect("task id should exist"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(result["view"], json!("subtree"));
+    assert_eq!(ids[0], "task-root");
+    assert!(ids.contains(&"task-dependency"));
+    assert!(ids.contains(&"task-dependent"));
+    assert!(!ids.contains(&"task-unrelated"));
+}
+
+#[tokio::test]
 async fn open_task_named_owner_resolves_fresh_named_thread_without_history() {
     let (session, turn, state_db) = make_session_with_state_db().await;
 

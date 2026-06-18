@@ -1,3 +1,6 @@
+#[path = "coordination_task_list.rs"]
+mod coordination_task_list;
+
 use crate::function_tool::FunctionCallError;
 use crate::hollywood::HollywoodSessionConfig;
 use crate::hollywood::canonicalize_agent_identity;
@@ -61,16 +64,6 @@ struct CoordinationActArgs {
     claim_paths: Option<Vec<PathClaimArg>>,
     release_paths: Option<Vec<PathClaimArg>>,
     lease_seconds: Option<i64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ListCoordinationTasksArgs {
-    owner: Option<String>,
-    creator: Option<String>,
-    statuses: Option<Vec<String>>,
-    room: Option<String>,
-    #[serde(default)]
-    include_history: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -180,66 +173,12 @@ impl ToolExecutor<ToolInvocation> for CoordinationHandler {
                         handle_coordination_act(&session, &turn, &db, args).await
                     }
                     "list_coordination_tasks" => {
-                        let args: ListCoordinationTasksArgs = parse_arguments(&arguments)?;
-                        let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
-                            Some(resolve_coordination_target(&session, &turn, &db, owner).await?)
-                        } else {
-                            None
-                        };
-                        let creator_thread_id = if let Some(creator) = args.creator.as_deref() {
-                            Some(resolve_coordination_target(&session, &turn, &db, creator).await?)
-                        } else {
-                            None
-                        };
-                        let statuses = args
-                            .statuses
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|status| parse_coordination_status(status.as_str()))
-                            .collect::<Result<Vec<_>, _>>()
-                            .map_err(FunctionCallError::RespondToModel)?;
-                        let room = match args.room {
-                            Some(room) => Some(room),
-                            None => hollywood_config_for_session(&session, &db)
-                                .await?
-                                .map(|config| config.room),
-                        };
-                        let tasks = db
-                            .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
-                                owner_thread_id,
-                                creator_thread_id,
-                                room,
-                                statuses,
-                            })
-                            .await
-                            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-                        let content = if args.include_history {
-                            let task_ids =
-                                tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
-                            let acts = db
-                                .list_coordination_acts(None)
-                                .await
-                                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
-                            let acts = acts
-                                .into_iter()
-                                .filter(|act| {
-                                    act.task_id
-                                        .as_ref()
-                                        .is_some_and(|task_id| task_ids.contains(task_id))
-                                })
-                                .collect::<Vec<_>>();
-                            json!({
-                                "tasks": tasks,
-                                "acts": acts,
-                            })
-                        } else {
-                            json!({ "tasks": tasks })
-                        };
-                        Ok(FunctionToolOutput::from_text(
-                            serde_json::to_string_pretty(&content)
-                                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
-                            Some(true),
-                        ))
+                        let args: coordination_task_list::ListCoordinationTasksArgs =
+                            parse_arguments(&arguments)?;
+                        coordination_task_list::handle_list_coordination_tasks(
+                            &session, &turn, &db, args,
+                        )
+                        .await
                     }
                     other => Err(FunctionCallError::RespondToModel(format!(
                         "unsupported coordination tool {other}"

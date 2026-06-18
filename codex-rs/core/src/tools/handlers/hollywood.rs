@@ -60,6 +60,8 @@ const MAX_TEAM_LAUNCH_AGENTS: usize = 8;
 const MAX_TEAM_LAUNCH_AGENT_NAME_CHARS: usize = 80;
 const MAX_TEAM_LAUNCH_TASK_CHARS: usize = 8_000;
 const APP_SERVER_REQUEST_TIMEOUT: StdDuration = StdDuration::from_secs(120);
+const HOLLYWOOD_READ_TASK_STATE_LIMIT: usize = 12;
+const HOLLYWOOD_READ_TASK_DETAILS_PREVIEW_CHARS: usize = 240;
 
 #[derive(Deserialize)]
 struct HollywoodReadArgs {
@@ -162,6 +164,7 @@ struct HollywoodReadResult {
     cursor: HollywoodReadCursor,
     filter: HollywoodReadFilter,
     room_state: Option<Value>,
+    task_state: Option<HollywoodReadTaskState>,
     messages: Vec<HollywoodReadMessage>,
 }
 
@@ -210,6 +213,32 @@ struct HollywoodReadFilter {
     include_self: bool,
     returned: usize,
     dropped: usize,
+}
+
+#[derive(Serialize)]
+struct HollywoodReadTaskState {
+    room: String,
+    returned: usize,
+    total_matching: usize,
+    truncated: bool,
+    error: Option<String>,
+    guidance: Vec<&'static str>,
+    tasks: Vec<HollywoodReadTaskSummary>,
+}
+
+#[derive(Serialize)]
+struct HollywoodReadTaskSummary {
+    id: String,
+    status: String,
+    kind: String,
+    summary: String,
+    details_preview: Option<String>,
+    owner_thread_id: Option<String>,
+    owned_by_this_session: bool,
+    blocked_reason: Option<String>,
+    blocked_dependency_task_ids: Vec<String>,
+    updated_at: i64,
+    needs_accept: bool,
 }
 
 #[derive(Serialize)]
@@ -476,6 +505,8 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                     .max(after_id);
                 let actionable_only = args.actionable_only.unwrap_or(false);
                 let include_self = args.include_self.unwrap_or(false);
+                let task_state =
+                    hollywood_read_task_state(invocation.session.as_ref(), room.as_str()).await;
                 let messages = response
                     .messages
                     .into_iter()
@@ -527,6 +558,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                         dropped: raw_message_count.saturating_sub(messages.len()),
                     },
                     room_state: response.room_state,
+                    task_state,
                     messages,
                 };
 
@@ -1485,6 +1517,97 @@ fn all_targets_present(target_identities: &[String], entries: &[HollywoodRegistr
             .ok()
             .flatten()
             .is_some()
+    })
+}
+
+async fn hollywood_read_task_state(
+    session: &crate::session::session::Session,
+    room: &str,
+) -> Option<HollywoodReadTaskState> {
+    let db = session.state_db()?;
+    let current_thread_id = session.thread_id().to_string();
+    let statuses = vec![
+        codex_state::CoordinationTaskStatus::Open,
+        codex_state::CoordinationTaskStatus::Awarded,
+        codex_state::CoordinationTaskStatus::Active,
+        codex_state::CoordinationTaskStatus::Blocked,
+    ];
+    let tasks = match db
+        .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+            owner_thread_id: None,
+            creator_thread_id: None,
+            room: Some(room.to_string()),
+            statuses,
+        })
+        .await
+    {
+        Ok(tasks) => tasks,
+        Err(err) => {
+            return Some(HollywoodReadTaskState {
+                room: room.to_string(),
+                returned: 0,
+                total_matching: 0,
+                truncated: false,
+                error: Some(err.to_string()),
+                guidance: vec!["Task-state lookup failed; use message results only for this read."],
+                tasks: Vec::new(),
+            });
+        }
+    };
+    let total_matching = tasks.len();
+    let tasks = tasks
+        .into_iter()
+        .take(HOLLYWOOD_READ_TASK_STATE_LIMIT)
+        .map(|task| {
+            let normalized_details = task
+                .details
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            let details_preview = if normalized_details.is_empty() {
+                None
+            } else if normalized_details.chars().count()
+                <= HOLLYWOOD_READ_TASK_DETAILS_PREVIEW_CHARS
+            {
+                Some(normalized_details)
+            } else {
+                let mut preview = normalized_details
+                    .chars()
+                    .take(HOLLYWOOD_READ_TASK_DETAILS_PREVIEW_CHARS)
+                    .collect::<String>();
+                preview.push_str("...");
+                Some(preview)
+            };
+            let owned_by_this_session =
+                task.owner_thread_id.as_deref() == Some(current_thread_id.as_str());
+            HollywoodReadTaskSummary {
+                id: task.id,
+                status: task.status.as_str().to_string(),
+                kind: task.kind.as_str().to_string(),
+                summary: task.summary,
+                details_preview,
+                owner_thread_id: task.owner_thread_id,
+                owned_by_this_session,
+                blocked_reason: task.blocked_reason,
+                blocked_dependency_task_ids: task.blocked_dependency_task_ids,
+                updated_at: task.updated_at.timestamp(),
+                needs_accept: owned_by_this_session
+                    && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Some(HollywoodReadTaskState {
+        room: room.to_string(),
+        returned: tasks.len(),
+        total_matching,
+        truncated: total_matching > tasks.len(),
+        error: None,
+        guidance: vec![
+            "Prefer this structured task state over scanning broad room chatter.",
+            "Call list_coordination_tasks for compact/full/subtree task-local views.",
+        ],
+        tasks,
     })
 }
 

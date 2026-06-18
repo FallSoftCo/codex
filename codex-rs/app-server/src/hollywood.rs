@@ -670,7 +670,7 @@ pub(crate) async fn publish_registry_snapshot(
 
 fn durable_coordination_guidance(state_db_available: bool) -> &'static str {
     if state_db_available {
-        "When room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with coordination_act so Losangelex can survive idle gaps, restart, and rolling deploy."
+        "Use list_coordination_tasks as the first coordination read, and record real assignments, acceptance, handoff, dependencies, or completion with coordination_act so Losangelex can survive idle gaps, restart, and rolling deploy."
     } else {
         "This session does not currently expose durable coordination tools, so do not call coordination_act; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
     }
@@ -679,7 +679,7 @@ fn durable_coordination_guidance(state_db_available: bool) -> &'static str {
 #[allow(dead_code)]
 fn durable_coordination_handshake_guidance(state_db_available: bool) -> &'static str {
     if state_db_available {
-        "When a room discussion becomes a real assignment, acceptance, handoff, dependency, or completion, record that durable commitment with `coordination_act` so the coordination survives idle gaps, restart, and rolling deploy."
+        "Use compact `list_coordination_tasks` before broad message reads, and record real assignments, acceptance, handoff, dependencies, or completion with `coordination_act` so the coordination survives idle gaps, restart, and rolling deploy."
     } else {
         "This session does not currently expose durable coordination tools, so do not call `coordination_act`; keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
     }
@@ -720,8 +720,7 @@ pub(crate) fn format_hollywood_context_message(
     let mut lines = vec![
         HOLLYWOOD_CONTEXT_OPEN_TAG.to_string(),
         "attached: true".to_string(),
-        "meaning: Hollywood is the local inter-agent room and messaging system in this runtime."
-            .to_string(),
+        "meaning: Hollywood is the local inter-agent durable task ledger and message-delta system in this runtime.".to_string(),
         format!("url: {}", config.url),
         format!("room: {}", config.room),
         format!("observed_rooms: {observed_rooms}"),
@@ -739,7 +738,9 @@ pub(crate) fn format_hollywood_context_message(
         "message_envelopes: STATUS, BLOCKER, HANDOFF, FINAL_ANSWER".to_string(),
         "startup_protocol:".to_string(),
         format!("- announce_presence: {announce_presence}"),
-        "- read recent room context with cursor/actionable filters before coordinating"
+        "- inspect compact durable task state with list_coordination_tasks before coordinating"
+            .to_string(),
+        "- use hollywood_read cursor/actionable filters only for direct message deltas"
             .to_string(),
         "- relay assigned scope and material conclusions to the room".to_string(),
         "- claim exact paths only for peer-coordinated or overlap-prone editing".to_string(),
@@ -764,8 +765,9 @@ pub(crate) fn format_hollywood_context_message(
             "- decide whether existing or new peers make substantive work easier, faster, safer, or better verified".to_string(),
             "- collaboration is peer-to-peer and role-flexible; no permanent leader/follower split"
                 .to_string(),
-            "- for work not clearly tiny/local, call hollywood_read before claiming or editing"
+            "- for work not clearly tiny/local, call list_coordination_tasks before claiming or editing"
                 .to_string(),
+            "- use hollywood_read after compact task state only when direct messages, blockers, handoffs, or final answers are needed".to_string(),
             "- self-owned coordination_act is not peer collaboration by itself".to_string(),
             "- if peers do not respond after a brief wait, continue solo on unblocked scope and leave a concise room update".to_string(),
         ]);
@@ -803,17 +805,17 @@ pub(crate) fn startup_handshake_message(
         )
     };
     let startup_guidance = if announce_presence {
-        "Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then read recent room traffic once with cursor/actionable filtering to orient yourself and check for existing scope claims."
+        "Before doing substantive work, send one short explicit room-wide broadcast announcing that you are online, your current repo or cwd if known, and whether you are available or already assigned. Then inspect compact durable task state with `list_coordination_tasks`; use `hollywood_read` with cursor/actionable filtering only if you need direct message deltas or recent blockers, handoffs, or final answers."
     } else {
-        "Before doing substantive work, read recent room traffic once with cursor/actionable filtering to orient yourself and check for existing scope claims. In focused mode, do not send a startup presence broadcast by default. If you already own active scope, need to re-establish a handoff after reconnect or rolling deploy, or receive concrete user tasking, send one concise room update naming the exact scope or status that changed."
+        "Before doing substantive work, inspect compact durable task state with `list_coordination_tasks`; use `hollywood_read` with cursor/actionable filtering only if you need direct message deltas or recent blockers, handoffs, or final answers. In focused mode, do not send a startup presence broadcast by default. If you already own active scope, need to re-establish a handoff after reconnect or rolling deploy, or receive concrete user tasking, send one concise room update naming the exact scope or status that changed."
     };
     let collaboration_first_guidance = if env_flag_enabled(COLLABORATION_FIRST_DEBUG_ENV_VAR) {
-        " Debug collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified. Collaboration is peer-to-peer and role-flexible: any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader. For work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help. A self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself. For cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign a narrow durable task to a specific peer before claiming all scope yourself. If peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback. Prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers."
+        " Debug collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified. Collaboration is peer-to-peer and role-flexible: any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader. For work that is not clearly tiny and local, call `list_coordination_tasks` before claiming or editing; use compact task state plus the attached peer roster from `hollywood_read` only when message-level context is needed to decide whether to request peer help. A self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself. For cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign a narrow durable task to a specific peer before claiming all scope yourself. If peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback. Prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers."
     } else {
         ""
     };
     format!(
-        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate.{} Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. For bounded collaborative slices, prefer a `task/<repo>/<task>` working room and keep the repo room observed for integration updates. When the user asks you to work with teammates, peers, or other existing agents, coordinate with already attached Hollywood sessions first. If the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request. Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar subtasks. {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. Use compact message envelopes for peer-parsed updates when applicable: STATUS, BLOCKER, HANDOFF, FINAL_ANSWER. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, inspect compact `list_coordination_tasks` state and send one concise room update relaying your assigned scope or ownership so other agents can coordinate.{} Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. For bounded collaborative slices, prefer a `task/<repo>/<task>` working room and keep the repo room observed for integration updates. When the user asks you to work with teammates, peers, or other existing agents, coordinate with already attached Hollywood sessions first. If the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request. Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar subtasks. {} Use compact `list_coordination_tasks` as the first coordination read; use `view:\"full\"` or `task_id` only for task-local details, and use `hollywood_read` only for actionable message deltas, blockers, handoffs, and final answers. When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. Use compact message envelopes for peer-parsed updates when applicable: STATUS, BLOCKER, HANDOFF, FINAL_ANSWER. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
         config.room,
         identities,
         observed,
@@ -1695,6 +1697,8 @@ mod tests {
         assert!(message.contains("announce_presence: false"));
         assert!(message.contains("task_room_convention: task/<repo-slug>/<task-slug>"));
         assert!(message.contains("message_envelopes: STATUS, BLOCKER, HANDOFF, FINAL_ANSWER"));
+        assert!(message.contains("list_coordination_tasks before coordinating"));
+        assert!(message.contains("hollywood_read cursor/actionable filters only"));
         assert!(message.contains("use losangelex_team_launch for user-requested Losangelex teams"));
         assert!(message.contains("do not substitute Codex subagents"));
         assert!(!message.contains("debug_collaboration_first:"));
@@ -1721,13 +1725,15 @@ mod tests {
 
         assert!(message.contains("debug_collaboration_first:"));
         assert!(message.contains("role-flexible"));
-        assert!(message.contains("call hollywood_read before claiming or editing"));
+        assert!(message.contains("call list_coordination_tasks before claiming or editing"));
+        assert!(message.contains("use hollywood_read after compact task state"));
         assert!(message.contains("is not peer collaboration by itself"));
         assert!(handshake.contains("Debug collaboration-first policy"));
         assert!(
             handshake.contains("without treating the current respondent as a permanent leader")
         );
-        assert!(handshake.contains("call `hollywood_read` before claiming or editing"));
+        assert!(handshake.contains("call `list_coordination_tasks` before claiming or editing"));
+        assert!(handshake.contains("Use compact `list_coordination_tasks`"));
         assert!(handshake.contains("is not peer collaboration by itself"));
     }
 
