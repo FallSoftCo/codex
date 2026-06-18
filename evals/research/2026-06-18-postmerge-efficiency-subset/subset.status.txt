@@ -1,0 +1,6 @@
+status=complete
+commit=a89a1e472c75812412241797b66544d633af6626
+silo_campaign=2026-06-18-postmerge-efficiency-silo-n5-stratified
+marble_campaign=2026-06-18-postmerge-efficiency-marble-db
+silo_results_written=2026-06-18T13:44:10Z
+marble_results_written=2026-06-18T13:59:17Z

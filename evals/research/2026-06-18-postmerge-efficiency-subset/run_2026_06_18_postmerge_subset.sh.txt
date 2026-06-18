@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="/home/ai/Development/losangelex-ledger-efficient-messaging"
+SOURCE_REPOS="/home/ai/Development/losangelex/tmp/research/published-agent-benchmarks/repos"
+OUT="$ROOT/tmp/research/published-agent-benchmarks"
+CODEX="$ROOT/codex-rs/target/debug/codex"
+MODEL="gpt-5.5"
+SILO_CAMPAIGN="2026-06-18-postmerge-efficiency-silo-n5-stratified"
+MARBLE_CAMPAIGN="2026-06-18-postmerge-efficiency-marble-db"
+
+cd "$ROOT" || exit 1
+
+python3 scripts/run_silo_published_agents.py \
+  --system codex-subagents \
+  --system losangelex-selector \
+  --silo-root "$SOURCE_REPOS/acl26-silo-bench" \
+  --task-id I-01_n5 \
+  --task-id II-11_n5 \
+  --task-id III-21_n5 \
+  --model "$MODEL" \
+  --codex "$CODEX" \
+  --out-root "$OUT" \
+  --campaign-name "$SILO_CAMPAIGN" \
+  --timeout-seconds 1200 \
+  --per-agent-timeout-seconds 600 \
+  --round-timeout-seconds 600 \
+  --poll-seconds 30
+
+python3 scripts/run_marble_database_published_agents.py \
+  --system codex-subagents \
+  --system losangelex \
+  --marble-root "$SOURCE_REPOS/MARBLE" \
+  --task-id database-001 \
+  --task-id database-032 \
+  --model "$MODEL" \
+  --codex "$CODEX" \
+  --out-root "$OUT" \
+  --campaign-name "$MARBLE_CAMPAIGN" \
+  --evidence-mode native-postgres \
+  --timeout-seconds 1200 \
+  --per-agent-timeout-seconds 600 \
+  --round-timeout-seconds 600 \
+  --poll-seconds 30
