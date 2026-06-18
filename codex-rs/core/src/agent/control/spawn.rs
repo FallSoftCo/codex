@@ -4,7 +4,7 @@ use super::*;
 const AGENT_NAMES: &str = include_str!("../agent_names.txt");
 
 struct SpawnAgentThreadInheritance {
-    shell_snapshot: Option<Arc<ShellSnapshot>>,
+    environments: Option<TurnEnvironmentSnapshot>,
     exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
 }
 
@@ -51,7 +51,7 @@ fn keep_forked_rollout_item(item: &RolloutItem, preserve_reference_context_item:
             | ResponseItem::WebSearchCall { .. }
             | ResponseItem::ImageGenerationCall { .. }
             | ResponseItem::Compaction { .. }
-            | ResponseItem::CompactionTrigger
+            | ResponseItem::CompactionTrigger { .. }
             | ResponseItem::ContextCompaction { .. }
             | ResponseItem::Other,
         ) => false,
@@ -157,8 +157,8 @@ impl AgentControl {
         let parent_thread_id = initial_history
             .get_resumed_parent_thread_id()
             .or(stored_parent_thread_id);
-        let inherited_shell_snapshot = self
-            .inherited_shell_snapshot_for_source(&state, Some(&session_source))
+        let inherited_environments = self
+            .inherited_environments_for_source(&state, Some(&session_source))
             .await;
         let inherited_exec_policy = self
             .inherited_exec_policy_for_source(&state, Some(&session_source), &config)
@@ -171,7 +171,7 @@ impl AgentControl {
                 agent_control: self.clone(),
                 session_source,
                 parent_thread_id,
-                inherited_shell_snapshot,
+                inherited_environments,
                 inherited_exec_policy,
             })
             .await
@@ -232,8 +232,8 @@ impl AgentControl {
         };
         let mut reservation = self.state.reserve_spawn_slot(reservation_max_threads)?;
         let inheritance = SpawnAgentThreadInheritance {
-            shell_snapshot: self
-                .inherited_shell_snapshot_for_source(&state, session_source.as_ref())
+            environments: self
+                .inherited_environments_for_source(&state, session_source.as_ref())
                 .await,
             exec_policy: self
                 .inherited_exec_policy_for_source(&state, session_source.as_ref(), &config)
@@ -284,7 +284,7 @@ impl AgentControl {
                     /*forked_from_thread_id*/ None,
                     /*thread_source*/ Some(ThreadSource::Subagent),
                     /*metrics_service_name*/ None,
-                    inheritance.shell_snapshot,
+                    inheritance.environments,
                     inheritance.exec_policy,
                     options.environments.clone(),
                 ))
@@ -387,7 +387,7 @@ impl AgentControl {
         multi_agent_version: MultiAgentVersion,
     ) -> CodexResult<crate::thread_manager::NewThread> {
         let SpawnAgentThreadInheritance {
-            shell_snapshot: inherited_shell_snapshot,
+            environments: inherited_environments,
             exec_policy: inherited_exec_policy,
         } = inheritance;
         if options.fork_parent_spawn_call_id.is_none() {
@@ -514,7 +514,7 @@ impl AgentControl {
                 /*thread_source*/ Some(ThreadSource::Subagent),
                 /*parent_thread_id*/ Some(parent_thread_id),
                 /*forked_from_thread_id*/ Some(parent_thread_id),
-                inherited_shell_snapshot,
+                inherited_environments,
                 inherited_exec_policy,
                 options.environments.clone(),
             )
@@ -666,8 +666,8 @@ impl AgentControl {
             other => (other, AgentMetadata::default()),
         };
         let notification_source = session_source.clone();
-        let inherited_shell_snapshot = self
-            .inherited_shell_snapshot_for_source(&state, Some(&session_source))
+        let inherited_environments = self
+            .inherited_environments_for_source(&state, Some(&session_source))
             .await;
         let inherited_exec_policy = self
             .inherited_exec_policy_for_source(&state, Some(&session_source), &config)
@@ -680,7 +680,7 @@ impl AgentControl {
                 agent_control: self.clone(),
                 session_source,
                 parent_thread_id,
-                inherited_shell_snapshot,
+                inherited_environments,
                 inherited_exec_policy,
             })
             .await?;

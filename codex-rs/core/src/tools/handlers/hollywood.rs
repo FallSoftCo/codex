@@ -477,7 +477,7 @@ impl ToolExecutor<ToolInvocation> for LosangelexTeamLaunchHandler {
                         .turn
                         .environments
                         .single_local_environment_cwd()
-                        .unwrap_or(&invocation.turn.config.cwd)
+                        .unwrap_or_else(|| invocation.turn.config.cwd.clone())
                         .to_string_lossy()
                         .into_owned()
                 });

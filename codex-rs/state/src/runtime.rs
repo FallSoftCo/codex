@@ -60,6 +60,7 @@ use tracing::warn;
 mod agent_jobs;
 mod backfill;
 mod coordination;
+mod external_agent_config_imports;
 mod goals;
 mod logs;
 mod memories;
@@ -74,6 +75,10 @@ mod testers;
 mod threads;
 mod watchers;
 
+pub use external_agent_config_imports::ExternalAgentConfigImportDetailsRecord;
+pub use external_agent_config_imports::ExternalAgentConfigImportFailureRecord;
+pub use external_agent_config_imports::ExternalAgentConfigImportHistoryRecord;
+pub use external_agent_config_imports::ExternalAgentConfigImportSuccessRecord;
 pub use goals::GoalAccountingMode;
 pub use goals::GoalAccountingOutcome;
 pub use goals::GoalStore;
@@ -475,6 +480,7 @@ async fn reconcile_legacy_state_migration_versions(pool: &SqlitePool) -> anyhow:
     // the current upstream-first numbering so SQLx can apply only the missing
     // migrations.
     for (from_version, description, to_version) in [
+        (38_i64, "external agent config imports", 48_i64),
         (42_i64, "coordination tasks", 44_i64),
         (41_i64, "path claims", 43_i64),
         (40_i64, "task watches", 42_i64),

@@ -3,6 +3,7 @@ use codex_exec_server::CreateDirectoryOptions;
 use codex_exec_server::ExecutorFileSystem;
 use codex_exec_server::ExecutorFileSystemFuture;
 use codex_exec_server::FileMetadata;
+use codex_exec_server::FileSystemReadStream;
 use codex_exec_server::FileSystemSandboxContext;
 use codex_exec_server::ReadDirectoryEntry;
 use codex_exec_server::RemoveOptions;
@@ -10,6 +11,7 @@ use codex_utils_path_uri::PathUri;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::io;
+use tokio_util::bytes::Bytes;
 
 pub(crate) struct ApplyPatchTurnFileSystem<'a> {
     inner: &'a dyn ExecutorFileSystem,
@@ -50,6 +52,30 @@ impl ExecutorFileSystem for ApplyPatchTurnFileSystem<'_> {
                         self.resurrected_deleted_files.get(path.as_path()).cloned()
                     });
                     resurrected.ok_or(err)
+                }
+                Err(err) => Err(err),
+            }
+        })
+    }
+
+    fn read_file_stream<'a>(
+        &'a self,
+        path: &'a PathUri,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, FileSystemReadStream> {
+        Box::pin(async move {
+            match self.inner.read_file_stream(path, sandbox).await {
+                Ok(stream) => Ok(stream),
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                    let resurrected = path.to_abs_path().ok().and_then(|path| {
+                        self.resurrected_deleted_files.get(path.as_path()).cloned()
+                    });
+                    resurrected
+                        .map(|bytes| {
+                            let stream = futures::stream::iter([Ok(Bytes::from(bytes))]);
+                            FileSystemReadStream::new(stream)
+                        })
+                        .ok_or(err)
                 }
                 Err(err) => Err(err),
             }
