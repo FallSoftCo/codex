@@ -23,8 +23,10 @@ use crate::function_tool::FunctionCallError;
 use crate::hollywood::HollywoodSessionConfig;
 use crate::hollywood::canonicalize_agent_identity;
 use crate::hollywood::canonicalize_hollywood_identity;
+use crate::hollywood::derived_hollywood_task_room;
 use crate::hollywood::identities as hollywood_identities;
 use crate::hollywood::live_identity_matches_target;
+use crate::hollywood::normalize_identity;
 use crate::hollywood::parse_agent_mentions;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
@@ -64,6 +66,8 @@ struct HollywoodReadArgs {
     room: Option<String>,
     after_id: Option<i64>,
     limit: Option<u32>,
+    actionable_only: Option<bool>,
+    include_self: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +77,7 @@ struct HollywoodSendArgs {
     to: Option<String>,
     broadcast: Option<bool>,
     response_policy: Option<String>,
+    message_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -154,7 +159,57 @@ struct HollywoodReadResult {
     identities: Vec<String>,
     peers: Vec<HollywoodPeerSummary>,
     peer_registry_error: Option<String>,
-    messages: serde_json::Value,
+    cursor: HollywoodReadCursor,
+    filter: HollywoodReadFilter,
+    room_state: Option<Value>,
+    messages: Vec<HollywoodReadMessage>,
+}
+
+#[derive(Deserialize)]
+struct HollywoodReadResponse {
+    #[serde(default)]
+    messages: Vec<HollywoodReadMessage>,
+    #[serde(default)]
+    last_id: i64,
+    #[serde(default)]
+    room_state: Option<Value>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+struct HollywoodReadMessage {
+    #[serde(default)]
+    id: i64,
+    #[serde(default)]
+    room: String,
+    #[serde(default)]
+    sender_id: Option<String>,
+    #[serde(default)]
+    recipient_id: Option<String>,
+    #[serde(default)]
+    message_kind: Option<String>,
+    #[serde(default)]
+    response_policy: Option<String>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    mentions: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct HollywoodReadCursor {
+    after_id: i64,
+    last_id: i64,
+    next_after_id: i64,
+}
+
+#[derive(Serialize)]
+struct HollywoodReadFilter {
+    actionable_only: bool,
+    include_self: bool,
+    returned: usize,
+    dropped: usize,
 }
 
 #[derive(Serialize)]
@@ -176,6 +231,7 @@ struct HollywoodSendResult {
     recipient_id: Option<String>,
     message_kind: String,
     response_policy: Option<String>,
+    message_type: Option<String>,
     text: String,
     ok: bool,
 }
@@ -184,6 +240,7 @@ struct HollywoodSendResult {
 struct HollywoodTeamUpResult {
     url: String,
     room: String,
+    task_room: Option<String>,
     team: serde_json::Value,
     ok: bool,
     error: Option<String>,
@@ -377,7 +434,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                 let limit = args.limit.unwrap_or(20).clamp(1, 100);
                 let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
 
-                let response = Client::new()
+                let mut response = Client::new()
                     .get(&url)
                     .query(&[
                         ("room", room.as_str()),
@@ -393,7 +450,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                     .map_err(|err| {
                         FunctionCallError::RespondToModel(format!("Hollywood read failed: {err}"))
                     })?
-                    .json::<serde_json::Value>()
+                    .json::<HollywoodReadResponse>()
                     .await
                     .map_err(|err| {
                         FunctionCallError::RespondToModel(format!(
@@ -401,6 +458,35 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                         ))
                     })?;
                 let thread_name = invocation.session.thread_name().await;
+                let identities =
+                    hollywood_identities(invocation.session.thread_id(), thread_name.as_deref());
+                let raw_message_count = response.messages.len();
+                for message in &mut response.messages {
+                    if message.mentions.is_empty() {
+                        message.mentions = parse_agent_mentions(&message.body);
+                    }
+                }
+                let last_id = response
+                    .messages
+                    .iter()
+                    .map(|message| message.id)
+                    .max()
+                    .unwrap_or(after_id)
+                    .max(response.last_id)
+                    .max(after_id);
+                let actionable_only = args.actionable_only.unwrap_or(false);
+                let include_self = args.include_self.unwrap_or(false);
+                let messages = response
+                    .messages
+                    .into_iter()
+                    .filter(|message| {
+                        if !include_self && hollywood_read_message_from_self(message, &identities) {
+                            return false;
+                        }
+                        !actionable_only
+                            || hollywood_read_message_is_actionable(message, &identities)
+                    })
+                    .collect::<Vec<_>>();
                 let self_session_id = invocation.session.thread_id().to_string();
                 let (peers, peer_registry_error) =
                     match fetch_registry_entries(&config, &room).await {
@@ -426,13 +512,22 @@ impl ToolExecutor<ToolInvocation> for HollywoodReadHandler {
                 let result = HollywoodReadResult {
                     url: config.url,
                     room,
-                    identities: hollywood_identities(
-                        invocation.session.thread_id(),
-                        thread_name.as_deref(),
-                    ),
+                    identities,
                     peers,
                     peer_registry_error,
-                    messages: response,
+                    cursor: HollywoodReadCursor {
+                        after_id,
+                        last_id,
+                        next_after_id: last_id,
+                    },
+                    filter: HollywoodReadFilter {
+                        actionable_only,
+                        include_self,
+                        returned: messages.len(),
+                        dropped: raw_message_count.saturating_sub(messages.len()),
+                    },
+                    room_state: response.room_state,
+                    messages,
                 };
 
                 Ok(FunctionToolOutput::from_text(
@@ -587,7 +682,9 @@ impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
                 let sender_id = invocation.session.thread_id().to_string();
                 let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
                 let recipient_id = args.to.as_deref().and_then(canonicalize_hollywood_identity);
-                let text = args.text.clone();
+                let (text, message_type) =
+                    format_hollywood_message_body(args.text.as_str(), args.message_type.as_deref())
+                        .map_err(FunctionCallError::RespondToModel)?;
                 let response_policy = args.response_policy.clone();
                 let message_kind = if args.broadcast.unwrap_or(false) {
                     "broadcast".to_string()
@@ -629,6 +726,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodSendHandler {
                     recipient_id,
                     message_kind,
                     response_policy,
+                    message_type,
                     text,
                     ok: true,
                 };
@@ -670,7 +768,10 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
             ));
         }
 
-        let room = args.room.unwrap_or_else(|| "main".to_string());
+        let room = args.room.unwrap_or_else(|| config.room.clone());
+        let task_room = args
+            .task_room
+            .unwrap_or_else(|| derived_hollywood_task_room(&room, &args.purpose));
         let members = args
             .targets
             .iter()
@@ -690,7 +791,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
             .json(&json!({
                 "team_id": args.team_id,
                 "room": room,
-                "task_room": args.task_room,
+                "task_room": task_room.clone(),
                 "purpose": args.purpose,
                 "leader_session_id": invocation.session.thread_id().to_string(),
                 "members": members,
@@ -703,6 +804,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
                 let result = HollywoodTeamUpResult {
                     url: config.url,
                     room,
+                    task_room: Some(task_room),
                     team: json!(null),
                     ok: false,
                     error: Some(format!("Hollywood team create failed: {err}")),
@@ -723,6 +825,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
                 let result = HollywoodTeamUpResult {
                     url: config.url,
                     room,
+                    task_room: Some(task_room),
                     team: json!(null),
                     ok: false,
                     error: Some(format!("Hollywood team create failed: {err}")),
@@ -743,6 +846,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
                 let result = HollywoodTeamUpResult {
                     url: config.url,
                     room,
+                    task_room: Some(task_room),
                     team: json!(null),
                     ok: false,
                     error: Some(format!("Hollywood team response parse failed: {err}")),
@@ -761,6 +865,7 @@ impl ToolExecutor<ToolInvocation> for HollywoodTeamUpHandler {
         let result = HollywoodTeamUpResult {
             url: config.url,
             room,
+            task_room: Some(task_room),
             team: response,
             ok: true,
             error: None,
@@ -1221,6 +1326,87 @@ fn resolve_target_identities(args: &HollywoodSendArgs) -> Vec<String> {
     identities
 }
 
+fn hollywood_read_message_from_self(message: &HollywoodReadMessage, identities: &[String]) -> bool {
+    let Some(sender_id) = message.sender_id.as_deref() else {
+        return false;
+    };
+    identities.iter().any(|identity| {
+        live_identity_matches_target(sender_id, identity)
+            || live_identity_matches_target(identity, sender_id)
+    })
+}
+
+fn hollywood_read_message_is_actionable(
+    message: &HollywoodReadMessage,
+    identities: &[String],
+) -> bool {
+    if hollywood_read_message_from_self(message, identities) {
+        return false;
+    }
+    if hollywood_read_message_targets_identity(message, identities) {
+        return true;
+    }
+    if message
+        .mentions
+        .iter()
+        .any(|mention| hollywood_mention_matches_identity(mention, identities))
+    {
+        return true;
+    }
+
+    let response_policy = message
+        .response_policy
+        .as_deref()
+        .map(str::to_ascii_lowercase);
+    if response_policy.as_deref() == Some("required") {
+        return true;
+    }
+
+    let message_kind = message.message_kind.as_deref().map(str::to_ascii_lowercase);
+    message_kind.as_deref() == Some("broadcast") && response_policy.as_deref() != Some("none")
+}
+
+fn hollywood_read_message_targets_identity(
+    message: &HollywoodReadMessage,
+    identities: &[String],
+) -> bool {
+    message.recipient_id.as_deref().is_some_and(|recipient| {
+        identities.iter().any(|identity| {
+            live_identity_matches_target(recipient, identity)
+                || live_identity_matches_target(identity, recipient)
+        })
+    })
+}
+
+fn hollywood_mention_matches_identity(mention: &str, identities: &[String]) -> bool {
+    let mention = normalize_identity(mention);
+    if matches!(mention.as_str(), "all" | "room") {
+        return true;
+    }
+    identities.iter().any(|identity| {
+        live_identity_matches_target(mention.as_str(), identity)
+            || live_identity_matches_target(identity, mention.as_str())
+    })
+}
+
+fn format_hollywood_message_body(
+    text: &str,
+    message_type: Option<&str>,
+) -> Result<(String, Option<String>), String> {
+    let Some(message_type) = message_type else {
+        return Ok((text.to_string(), None));
+    };
+    let normalized_type = message_type.trim().replace('-', "_").to_ascii_uppercase();
+    match normalized_type.as_str() {
+        "STATUS" | "BLOCKER" | "HANDOFF" | "FINAL_ANSWER" => {
+            Ok((format!("{normalized_type}:\n{text}"), Some(normalized_type)))
+        }
+        _ => Err(format!(
+            "invalid Hollywood message_type `{message_type}`; expected status, blocker, handoff, or final_answer"
+        )),
+    }
+}
+
 async fn select_room_for_targets(
     config: &HollywoodSessionConfig,
     target_identities: &[String],
@@ -1400,6 +1586,27 @@ mod tests {
             to: to.map(ToOwned::to_owned),
             broadcast: None,
             response_policy: None,
+            message_type: None,
+        }
+    }
+
+    fn read_message(
+        sender_id: &str,
+        recipient_id: Option<&str>,
+        message_kind: Option<&str>,
+        response_policy: Option<&str>,
+        body: &str,
+    ) -> HollywoodReadMessage {
+        HollywoodReadMessage {
+            id: 1,
+            room: "repo/losangelex".to_string(),
+            sender_id: Some(sender_id.to_string()),
+            recipient_id: recipient_id.map(ToOwned::to_owned),
+            message_kind: message_kind.map(ToOwned::to_owned),
+            response_policy: response_policy.map(ToOwned::to_owned),
+            body: body.to_string(),
+            created_at: None,
+            mentions: parse_agent_mentions(body),
         }
     }
 
@@ -1416,6 +1623,77 @@ mod tests {
                 "scout-agent".to_string(),
                 "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn hollywood_read_message_actionable_keeps_direct_mentions_and_required_messages() {
+        let identities = vec![
+            "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1".to_string(),
+            "scout-agent".to_string(),
+        ];
+
+        assert!(hollywood_read_message_is_actionable(
+            &read_message(
+                "peer",
+                Some("019d113f-49ff-7b12-8a8f-bcc14ebcf5b1"),
+                Some("direct"),
+                None,
+                "direct"
+            ),
+            &identities
+        ));
+        assert!(hollywood_read_message_is_actionable(
+            &read_message("peer", None, Some("ambient"), None, "ping @scout-agent"),
+            &identities
+        ));
+        assert!(hollywood_read_message_is_actionable(
+            &read_message(
+                "peer",
+                None,
+                Some("ambient"),
+                Some("required"),
+                "please respond"
+            ),
+            &identities
+        ));
+        assert!(hollywood_read_message_is_actionable(
+            &read_message("peer", None, Some("broadcast"), Some("optional"), "status"),
+            &identities
+        ));
+        assert!(!hollywood_read_message_is_actionable(
+            &read_message("peer", None, Some("ambient"), None, "ambient note"),
+            &identities
+        ));
+        assert!(!hollywood_read_message_is_actionable(
+            &read_message(
+                "019d113f-49ff-7b12-8a8f-bcc14ebcf5b1",
+                None,
+                Some("broadcast"),
+                Some("required"),
+                "my update"
+            ),
+            &identities
+        ));
+    }
+
+    #[test]
+    fn format_hollywood_message_body_adds_compact_type_prefix() {
+        assert_eq!(
+            format_hollywood_message_body("done", Some("final-answer")),
+            Ok((
+                "FINAL_ANSWER:\ndone".to_string(),
+                Some("FINAL_ANSWER".to_string())
+            ))
+        );
+        assert_eq!(
+            format_hollywood_message_body("working", None),
+            Ok(("working".to_string(), None))
+        );
+        assert!(
+            format_hollywood_message_body("maybe", Some("thought"))
+                .expect_err("invalid type should be rejected")
+                .contains("invalid Hollywood message_type")
         );
     }
 

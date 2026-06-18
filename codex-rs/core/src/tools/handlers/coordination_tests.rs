@@ -2290,6 +2290,49 @@ async fn open_task_notifies_room_using_live_session_hollywood_config() {
 }
 
 #[tokio::test]
+async fn non_general_open_task_derives_task_room_from_hollywood_room() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/hollywood/v1/rooms"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "rooms": [] })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let (session, turn, _state_db) = make_session_with_state_db().await;
+    session
+        .set_hollywood_session_config(Some(crate::hollywood::HollywoodSessionConfig {
+            url: server.uri(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: Vec::new(),
+            attention_mode: "focused".to_string(),
+        }))
+        .await;
+
+    let output = coordination_handler()
+        .handle(invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            "coordination_act",
+            json!({
+                "action": "open_task",
+                "title": "Review Hollywood read filters",
+                "kind": "review",
+                "notify_room": false,
+            }),
+        ))
+        .await
+        .expect("open_task should succeed");
+
+    let result = parse_result(output);
+    assert_eq!(
+        result["task"]["room"],
+        json!("task/losangelex/review-hollywood-read-filters")
+    );
+}
+
+#[tokio::test]
 async fn self_authored_hollywood_message_does_not_create_obligation() {
     let (session, turn, _state_db) = make_session_with_state_db().await;
     let identities = crate::hollywood::identities(session.thread_id(), None);

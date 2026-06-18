@@ -1,0 +1,279 @@
+{
+  "benchmark": "MARBLE/MultiAgentBench database",
+  "benchmarkRepository": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE",
+  "campaignName": "2026-06-18-ledger-efficient-marble-smoke",
+  "model": "gpt-5.5",
+  "systems": [
+    "losangelex"
+  ],
+  "evidenceMode": "native-postgres",
+  "hiddenPaths": [
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE",
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos",
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-smoke"
+  ],
+  "defaultHiddenPathsEnabled": true,
+  "appServer": {
+    "url": "ws://127.0.0.1:56249",
+    "managed": true,
+    "source": "managed",
+    "codexHome": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/codex-home",
+    "logPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/app-server.log",
+    "pid": 706004
+  },
+  "codexSubagentsHome": null,
+  "records": [
+    {
+      "system": "losangelex",
+      "caseId": "database-001",
+      "sourceIndex": 1,
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/workspaces/losangelex/database-001",
+      "room": "repo/marble-db-database-001-74be22",
+      "seconds": 135.6,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": false,
+          "activeThreads": 4,
+          "roundTimedOut": false,
+          "finalExists": true
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": "agent1",
+          "runtimeName": "marble-db-agent1-74be22",
+          "threadId": "019ed90a-498d-7a73-b66b-b72984ddd077"
+        },
+        {
+          "agentId": "agent2",
+          "runtimeName": "marble-db-agent2-74be22",
+          "threadId": "019ed90a-4f69-7323-8c00-4303ebf60dc2"
+        },
+        {
+          "agentId": "agent3",
+          "runtimeName": "marble-db-agent3-74be22",
+          "threadId": "019ed90a-54b2-7e12-967c-4a7119cd1f2e"
+        },
+        {
+          "agentId": "agent4",
+          "runtimeName": "marble-db-agent4-74be22",
+          "threadId": "019ed90a-5a34-7c70-8074-88e1381e8376"
+        },
+        {
+          "agentId": "agent5",
+          "runtimeName": "marble-db-agent5-74be22",
+          "threadId": "019ed90a-5fa0-72e2-acb8-48446319fa77"
+        }
+      ],
+      "rawPrediction": "{\"predicted_root_causes\":[\"INSERT_LARGE_DATA\",\"VACUUM\"],\"rationale\":\"pg_stat_statements is dominated by a single INSERT INTO marble_insert SELECT ... generate_series workload that inserted 20000 rows in about 565 ms; pg_stat_user_tables also shows marble_insert with 20000 inserted/live rows and the table is much larger than the normal app tables. Peer and direct checks found no lock waits, no redundant indexes, and no large application SELECT/FETCH workload. The only remaining observed secondary signal is one recent autovacuum/analyze on marble_insert after the bulk insert, so VACUUM is selected as the forced second label with lower confidence.\"}\n",
+      "score": {
+        "success": true,
+        "exactSetMatch": false,
+        "predicted": [
+          "INSERT_LARGE_DATA",
+          "VACUUM"
+        ],
+        "gold": [
+          "INSERT_LARGE_DATA"
+        ],
+        "metrics": {
+          "rootCauseRecall": 1.0,
+          "rootCausePrecision": 0.5,
+          "rootCauseF1": 0.6666666666666666,
+          "matchCount": 1,
+          "goldCount": 1,
+          "predictedCount": 2
+        }
+      },
+      "tokenUsage": {
+        "inputTokens": 1708782,
+        "cachedInputTokens": 1404160,
+        "nonCachedInputTokens": 304622,
+        "outputTokens": 22557,
+        "reasoningOutputTokens": 4142,
+        "totalTokens": 1731339,
+        "uncachedPlusOutputTokens": 327179
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1708782,
+          "cachedInputTokens": 1404160,
+          "nonCachedInputTokens": 304622,
+          "outputTokens": 22557,
+          "reasoningOutputTokens": 4142,
+          "totalTokens": 1731339,
+          "uncachedPlusOutputTokens": 327179
+        },
+        "eventCount": 58,
+        "threadCount": 5,
+        "byThread": {
+          "019ed90a-54b2-7e12-967c-4a7119cd1f2e": {
+            "turnId": "019ed90a-788e-7cf2-b1f1-ccfea60da9f6",
+            "total": {
+              "inputTokens": 363171,
+              "cachedInputTokens": 275968,
+              "nonCachedInputTokens": 87203,
+              "outputTokens": 4464,
+              "reasoningOutputTokens": 877,
+              "totalTokens": 367635,
+              "uncachedPlusOutputTokens": 91667
+            },
+            "last": {
+              "inputTokens": 41151,
+              "cachedInputTokens": 37248,
+              "nonCachedInputTokens": 3903,
+              "outputTokens": 301,
+              "reasoningOutputTokens": 118,
+              "totalTokens": 41452,
+              "uncachedPlusOutputTokens": 4204
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed90a-4f69-7323-8c00-4303ebf60dc2": {
+            "turnId": "019ed90a-7882-7ff2-9f88-ed54a5bbfc73",
+            "total": {
+              "inputTokens": 366931,
+              "cachedInputTokens": 332160,
+              "nonCachedInputTokens": 34771,
+              "outputTokens": 4611,
+              "reasoningOutputTokens": 1151,
+              "totalTokens": 371542,
+              "uncachedPlusOutputTokens": 39382
+            },
+            "last": {
+              "inputTokens": 33921,
+              "cachedInputTokens": 33152,
+              "nonCachedInputTokens": 769,
+              "outputTokens": 657,
+              "reasoningOutputTokens": 441,
+              "totalTokens": 34578,
+              "uncachedPlusOutputTokens": 1426
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed90a-5fa0-72e2-acb8-48446319fa77": {
+            "turnId": "019ed90a-78cc-7113-bf79-2bde60066410",
+            "total": {
+              "inputTokens": 322426,
+              "cachedInputTokens": 285312,
+              "nonCachedInputTokens": 37114,
+              "outputTokens": 4459,
+              "reasoningOutputTokens": 644,
+              "totalTokens": 326885,
+              "uncachedPlusOutputTokens": 41573
+            },
+            "last": {
+              "inputTokens": 37842,
+              "cachedInputTokens": 34688,
+              "nonCachedInputTokens": 3154,
+              "outputTokens": 836,
+              "reasoningOutputTokens": 287,
+              "totalTokens": 38678,
+              "uncachedPlusOutputTokens": 3990
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed90a-498d-7a73-b66b-b72984ddd077": {
+            "turnId": "019ed90a-7879-7653-a924-adfb0d367449",
+            "total": {
+              "inputTokens": 348172,
+              "cachedInputTokens": 270976,
+              "nonCachedInputTokens": 77196,
+              "outputTokens": 4797,
+              "reasoningOutputTokens": 1050,
+              "totalTokens": 352969,
+              "uncachedPlusOutputTokens": 81993
+            },
+            "last": {
+              "inputTokens": 41327,
+              "cachedInputTokens": 2432,
+              "nonCachedInputTokens": 38895,
+              "outputTokens": 660,
+              "reasoningOutputTokens": 424,
+              "totalTokens": 41987,
+              "uncachedPlusOutputTokens": 39555
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed90a-5a34-7c70-8074-88e1381e8376": {
+            "turnId": "019ed90a-7897-7ad1-9757-67c97e2b892f",
+            "total": {
+              "inputTokens": 308082,
+              "cachedInputTokens": 239744,
+              "nonCachedInputTokens": 68338,
+              "outputTokens": 4226,
+              "reasoningOutputTokens": 420,
+              "totalTokens": 312308,
+              "uncachedPlusOutputTokens": 72564
+            },
+            "last": {
+              "inputTokens": 37568,
+              "cachedInputTokens": 28032,
+              "nonCachedInputTokens": 9536,
+              "outputTokens": 102,
+              "reasoningOutputTokens": 9,
+              "totalTokens": 37670,
+              "uncachedPlusOutputTokens": 9638
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/runs/losangelex/database-001/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/runs/losangelex/database-001/thread-states.json",
+      "nativePostgres": {
+        "enabled": true,
+        "docker_compose_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE/marble/environments/db_env_docker",
+        "query_socket": null,
+        "query_request_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/workspaces/losangelex/database-001/query_requests",
+        "setup_log": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-smoke/runs/losangelex/database-001/native-postgres-setup.log",
+        "background_pids": []
+      }
+    }
+  ],
+  "summary": {
+    "systems": {
+      "losangelex": {
+        "tasks": 1,
+        "fullSuccesses": 1,
+        "fullSuccessRate": 1.0,
+        "exactSetMatches": 0,
+        "exactSetMatchRate": 0.0,
+        "avgRootCauseRecall": 1.0,
+        "avgRootCausePrecision": 0.5,
+        "avgRootCauseF1": 0.6666666666666666,
+        "avgSeconds": 135.6,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 1,
+        "totalTokenUsage": {
+          "inputTokens": 1708782,
+          "cachedInputTokens": 1404160,
+          "nonCachedInputTokens": 304622,
+          "outputTokens": 22557,
+          "reasoningOutputTokens": 4142,
+          "totalTokens": 1731339,
+          "uncachedPlusOutputTokens": 327179
+        },
+        "avgTotalTokens": 1731339.0,
+        "avgUncachedPlusOutputTokens": 327179.0,
+        "totalTokensPerFullSuccess": 1731339.0,
+        "uncachedPlusOutputTokensPerFullSuccess": 327179.0
+      }
+    }
+  }
+}

@@ -189,7 +189,7 @@ pub(crate) fn create_coordination_act_tool() -> ToolSpec {
         ),
         (
             "room".to_string(),
-            JsonSchema::string(Some("Optional Hollywood room associated with the task.".to_string())),
+            JsonSchema::string(Some("Optional Hollywood room associated with the task. If omitted for non-general `open_task`, Losangelex derives a bounded `task/<repo>/<task>` room from the current Hollywood room and task title.".to_string())),
         ),
         (
             "capability".to_string(),
@@ -328,10 +328,24 @@ pub(crate) fn create_hollywood_read_tool() -> ToolSpec {
                     .to_string(),
             )),
         ),
+        (
+            "actionable_only".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, return only messages likely to require this agent's attention: direct recipients, @mentions, required replies, and broadcasts."
+                    .to_string(),
+            )),
+        ),
+        (
+            "include_self".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, include messages sent by this agent. Defaults to false so cursor reads avoid self-echo."
+                    .to_string(),
+            )),
+        ),
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_read".to_string(),
-        description: "Read messages and attached peer sessions from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream, and before deciding to work solo when collaboration may help.".to_string(),
+        description: "Read messages and attached peer sessions from the configured Hollywood room. Prefer cursor reads with `after_id` and `actionable_only` for efficient peer coordination; the output includes `cursor.next_after_id` for the next read.".to_string(),
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(Vec::new())),
@@ -488,6 +502,13 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
                     .to_string(),
             )),
         ),
+        (
+            "message_type".to_string(),
+            JsonSchema::string(Some(
+                "Optional compact envelope type: `status`, `blocker`, `handoff`, or `final_answer`. When provided, Losangelex prefixes the body with `STATUS:`, `BLOCKER:`, `HANDOFF:`, or `FINAL_ANSWER:` for easier peer parsing."
+                    .to_string(),
+            )),
+        ),
     ]);
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
@@ -518,13 +539,14 @@ pub(crate) fn create_hollywood_team_up_tool() -> ToolSpec {
         (
             "room".to_string(),
             JsonSchema::string(Some(
-                "Optional control room for the team record. Defaults to main.".to_string(),
+                "Optional control room for the team record. Defaults to this session's configured Hollywood room."
+                    .to_string(),
             )),
         ),
         (
             "task_room".to_string(),
             JsonSchema::string(Some(
-                "Optional working room members should join after accepting. Use `task/<repo>/<task>` for bounded collaborative slices."
+                "Optional working room members should join after accepting. If omitted, Losangelex derives `task/<repo>/<task>` from the room and purpose."
                     .to_string(),
             )),
         ),

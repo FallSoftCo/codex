@@ -1,0 +1,237 @@
+{
+  "benchmark": "SILO-BENCH",
+  "benchmarkRepository": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+  "campaignName": "2026-06-18-ledger-efficient-silo-smoke",
+  "model": "gpt-5.5",
+  "systems": [
+    "losangelex-selector"
+  ],
+  "hiddenPaths": [
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench"
+  ],
+  "defaultHiddenPathsEnabled": true,
+  "appServer": {
+    "url": "ws://127.0.0.1:52047",
+    "managed": true,
+    "source": "managed",
+    "codexHome": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-smoke/codex-home",
+    "logPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-smoke/app-server.log",
+    "pid": 702224
+  },
+  "codexSubagentsHome": null,
+  "records": [
+    {
+      "system": "losangelex-selector",
+      "coordinationStrategy": "first-finisher",
+      "caseId": "I-01",
+      "taskFile": "I-01_n2.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-smoke/workspaces/losangelex-selector/I-01_n2",
+      "room": "repo/silo-I-01-n2-1532c4",
+      "seconds": 43.9,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-1532c4",
+          "threadId": "019ed909-3d48-74b1-85f6-cd1b975d4a6a"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-1532c4",
+          "threadId": "019ed909-43d6-7382-99e2-f6606d62fc06"
+        }
+      ],
+      "score": {
+        "caseId": "I-01",
+        "caseName": "Global Max",
+        "level": "I",
+        "agentCount": 2,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 827,
+            "expected": 827,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 827,
+            "expected": 827,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 210949,
+        "cachedInputTokens": 143744,
+        "nonCachedInputTokens": 67205,
+        "outputTokens": 1651,
+        "reasoningOutputTokens": 341,
+        "totalTokens": 212600,
+        "uncachedPlusOutputTokens": 68856
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 210949,
+          "cachedInputTokens": 143744,
+          "nonCachedInputTokens": 67205,
+          "outputTokens": 1651,
+          "reasoningOutputTokens": 341,
+          "totalTokens": 212600,
+          "uncachedPlusOutputTokens": 68856
+        },
+        "eventCount": 9,
+        "threadCount": 2,
+        "byThread": {
+          "019ed909-43d6-7382-99e2-f6606d62fc06": {
+            "turnId": "019ed909-5cd0-74f2-ac75-1b6f624676ed",
+            "total": {
+              "inputTokens": 141724,
+              "cachedInputTokens": 116480,
+              "nonCachedInputTokens": 25244,
+              "outputTokens": 1178,
+              "reasoningOutputTokens": 187,
+              "totalTokens": 142902,
+              "uncachedPlusOutputTokens": 26422
+            },
+            "last": {
+              "inputTokens": 24588,
+              "cachedInputTokens": 23936,
+              "nonCachedInputTokens": 652,
+              "outputTokens": 5,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 24593,
+              "uncachedPlusOutputTokens": 657
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed909-3d48-74b1-85f6-cd1b975d4a6a": {
+            "turnId": "019ed909-5cc4-7471-b3a8-4ae33ba4ca11",
+            "total": {
+              "inputTokens": 69225,
+              "cachedInputTokens": 27264,
+              "nonCachedInputTokens": 41961,
+              "outputTokens": 473,
+              "reasoningOutputTokens": 154,
+              "totalTokens": 69698,
+              "uncachedPlusOutputTokens": 42434
+            },
+            "last": {
+              "inputTokens": 23491,
+              "cachedInputTokens": 2432,
+              "nonCachedInputTokens": 21059,
+              "outputTokens": 125,
+              "reasoningOutputTokens": 60,
+              "totalTokens": 23616,
+              "uncachedPlusOutputTokens": 21184
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-smoke/runs/losangelex-selector/I-01_n2/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-smoke/runs/losangelex-selector/I-01_n2/thread-states.json",
+      "selectorDecision": {
+        "selector": "silo-topology-v1-2026-06-14",
+        "strategy": "first-finisher",
+        "reason": "level-i-global-reduction-identical-final-answer"
+      }
+    }
+  ],
+  "summary": {
+    "systems": {
+      "losangelex-selector": {
+        "tasks": 1,
+        "fullSuccesses": 1,
+        "fullSuccessRate": 1.0,
+        "avgAgentSuccessRate": 1.0,
+        "avgPartialCorrectness": 1.0,
+        "avgNumericToleranceSuccessRate": 1.0,
+        "avgNumericTolerancePartialCorrectness": 1.0,
+        "avgSeconds": 43.9,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 1,
+        "totalTokenUsage": {
+          "inputTokens": 210949,
+          "cachedInputTokens": 143744,
+          "nonCachedInputTokens": 67205,
+          "outputTokens": 1651,
+          "reasoningOutputTokens": 341,
+          "totalTokens": 212600,
+          "uncachedPlusOutputTokens": 68856
+        },
+        "avgTotalTokens": 212600.0,
+        "avgUncachedPlusOutputTokens": 68856.0,
+        "totalTokensPerFullSuccess": 212600.0,
+        "uncachedPlusOutputTokensPerFullSuccess": 68856.0
+      }
+    },
+    "levels": {
+      "I": {
+        "systems": {
+          "losangelex-selector": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 43.9,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 210949,
+              "cachedInputTokens": 143744,
+              "nonCachedInputTokens": 67205,
+              "outputTokens": 1651,
+              "reasoningOutputTokens": 341,
+              "totalTokens": 212600,
+              "uncachedPlusOutputTokens": 68856
+            },
+            "avgTotalTokens": 212600.0,
+            "avgUncachedPlusOutputTokens": 68856.0,
+            "totalTokensPerFullSuccess": 212600.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 68856.0
+          }
+        }
+      }
+    }
+  }
+}

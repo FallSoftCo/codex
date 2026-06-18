@@ -1,0 +1,52 @@
+[
+  {
+    "scenarioId": "attention_no_action",
+    "legacyPromptChars": 2019,
+    "candidatePromptChars": 3626,
+    "legacyPromptApproxTokens": 505,
+    "candidatePromptApproxTokens": 907,
+    "promptApproxTokenDelta": 402,
+    "legacyMessageChars": 697,
+    "candidateMessageChars": 702,
+    "legacyMessageApproxTokens": 175,
+    "candidateMessageApproxTokens": 176,
+    "messageApproxTokenDelta": 1
+  },
+  {
+    "scenarioId": "direct_handoff_task_room",
+    "legacyPromptChars": 2236,
+    "candidatePromptChars": 3871,
+    "legacyPromptApproxTokens": 559,
+    "candidatePromptApproxTokens": 968,
+    "promptApproxTokenDelta": 409,
+    "legacyMessageChars": 869,
+    "candidateMessageChars": 902,
+    "legacyMessageApproxTokens": 218,
+    "candidateMessageApproxTokens": 226,
+    "messageApproxTokenDelta": 8
+  },
+  {
+    "scenarioId": "splittable_team_task_room",
+    "legacyPromptChars": 1450,
+    "candidatePromptChars": 3052,
+    "legacyPromptApproxTokens": 363,
+    "candidatePromptApproxTokens": 763,
+    "promptApproxTokenDelta": 400
+  },
+  {
+    "scenarioId": "tiny_local_edit",
+    "legacyPromptChars": 1320,
+    "candidatePromptChars": 2922,
+    "legacyPromptApproxTokens": 330,
+    "candidatePromptApproxTokens": 731,
+    "promptApproxTokenDelta": 401
+  },
+  {
+    "scenarioId": "long_unbounded_message_fragment",
+    "legacyMessageChars": 459482,
+    "candidateMessageChars": 6480,
+    "legacyMessageApproxTokens": 114871,
+    "candidateMessageApproxTokens": 1620,
+    "messageApproxTokenDelta": -113251
+  }
+]

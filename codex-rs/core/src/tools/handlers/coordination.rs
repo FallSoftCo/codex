@@ -2,6 +2,7 @@ use crate::function_tool::FunctionCallError;
 use crate::hollywood::HollywoodSessionConfig;
 use crate::hollywood::canonicalize_agent_identity;
 use crate::hollywood::canonicalize_hollywood_identity;
+use crate::hollywood::derived_hollywood_task_room;
 use crate::hollywood::live_identity_matches_target;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
@@ -284,6 +285,16 @@ async fn handle_coordination_act(
                 .transpose()
                 .map_err(|err| FunctionCallError::RespondToModel(err.to_string()))?
                 .unwrap_or(codex_state::CoordinationTaskKind::General);
+            let task_room =
+                if let Some(room) = args.room.clone().filter(|room| !room.trim().is_empty()) {
+                    Some(room)
+                } else if matches!(kind, codex_state::CoordinationTaskKind::General) {
+                    None
+                } else {
+                    hollywood_config_for_session(session, db)
+                        .await?
+                        .map(|config| derived_hollywood_task_room(&config.room, &title))
+                };
             let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
                 if coordination_target_is_unassigned(owner) {
                     None
@@ -294,7 +305,7 @@ async fn handle_coordination_act(
                 None
             };
             let room_policy =
-                load_coordination_room_policy_context(session, db, args.room.as_deref()).await?;
+                load_coordination_room_policy_context(session, db, task_room.as_deref()).await?;
             if let Err(err) = enforce_open_task_room_policy(
                 &actor_thread_id,
                 room_policy.as_ref(),
@@ -352,7 +363,7 @@ async fn handle_coordination_act(
                 "owner": args.owner,
                 "claim_paths": reserved_claim_paths_json,
                 "team_id": args.team_id,
-                "room": args.room,
+                "room": task_room.clone(),
                 "capability": args.capability,
                 "depends_on": args.depends_on,
             }))
@@ -367,7 +378,7 @@ async fn handle_coordination_act(
                         .lease_seconds
                         .unwrap_or(codex_state::DEFAULT_COORDINATION_LEASE_SECONDS),
                     team_id: args.team_id.clone(),
-                    room: args.room.clone(),
+                    room: task_room.clone(),
                     kind,
                     summary: title,
                     details,

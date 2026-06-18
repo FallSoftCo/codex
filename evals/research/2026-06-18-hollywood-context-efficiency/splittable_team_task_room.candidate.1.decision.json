@@ -1,0 +1,1 @@
+{"action":"hollywood_team_up","speak":true,"initiate_collaboration":true,"room":"task/losangelex/reconnect-jitter","reason":"The task spans client retry behavior, server wording, and verification notes, and two idle attached peers are available. A bounded task-room team-up is the right first move to split implementation and verification while avoiding broad repo-room churn."}

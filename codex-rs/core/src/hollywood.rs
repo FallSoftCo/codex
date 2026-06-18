@@ -137,6 +137,25 @@ pub fn default_hollywood_observed_rooms(
     rooms
 }
 
+pub fn derived_hollywood_task_room(parent_room: &str, task: &str) -> String {
+    let parent_room = parent_room.trim();
+    let parent_slug = parent_room
+        .strip_prefix("repo/")
+        .and_then(|room| room.split('/').find(|segment| !segment.is_empty()))
+        .or_else(|| {
+            parent_room.strip_prefix("task/").and_then(|room| {
+                room.split('/')
+                    .find(|segment| !segment.is_empty() && *segment != "task")
+            })
+        })
+        .or_else(|| parent_room.rsplit('/').find(|segment| !segment.is_empty()))
+        .map(bounded_hollywood_room_slug)
+        .filter(|slug| !slug.is_empty())
+        .unwrap_or_else(|| "workspace".to_string());
+    let task_slug = bounded_hollywood_room_slug(task);
+    format!("task/{parent_slug}/{task_slug}")
+}
+
 impl From<HollywoodSessionConfig> for HollywoodSessionMeta {
     fn from(value: HollywoodSessionConfig) -> Self {
         Self {
@@ -209,6 +228,9 @@ fn runtime_context(
         "claim_exact_paths_or_modules_before_peer_coordinated_or_overlap_prone_editing".to_string(),
         "avoid_overlapping_edits_until_resolved".to_string(),
         "prefer_task_rooms_for_bounded_parallel_slices".to_string(),
+        "use_hollywood_read_cursors_and_actionable_filters".to_string(),
+        "use_compact_hollywood_message_envelopes_for_status_blocker_handoff_final_answer"
+            .to_string(),
         "keep_repo_room_observed_for_status_handoffs_and_integration".to_string(),
         "use_hollywood_first_for_peer_coordination".to_string(),
         "start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team"
@@ -235,6 +257,8 @@ fn runtime_context(
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.".to_string(),
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
         "For bounded task slices, use a `task/<repo>/<task>` working room and keep the repo room observed for status, handoffs, and integration.".to_string(),
+        "Use `hollywood_read` with `after_id`, `actionable_only`, and `cursor.next_after_id` for repeated reads so room coordination advances by deltas instead of rereading the room.".to_string(),
+        "Use compact `hollywood_send` `message_type` values for peer-parsed updates: status, blocker, handoff, or final_answer.".to_string(),
         "Avoid coordination churn for trivial local edits; use peers, task rooms, and durable path claims when the work is meaningfully splittable, blocked, risky, or overlap-prone.".to_string(),
         durable_coordination_guidance(state_db_available),
     ];
@@ -296,6 +320,21 @@ fn hollywood_room_slug(value: &str) -> String {
     }
 
     slug.trim_matches('-').to_string()
+}
+
+fn bounded_hollywood_room_slug(value: &str) -> String {
+    const MAX_SLUG_CHARS: usize = 48;
+
+    let mut slug = hollywood_room_slug(value);
+    if slug.chars().count() > MAX_SLUG_CHARS {
+        slug = slug.chars().take(MAX_SLUG_CHARS).collect::<String>();
+        slug = slug.trim_matches('-').to_string();
+    }
+    if slug.is_empty() {
+        "task".to_string()
+    } else {
+        slug
+    }
 }
 
 fn effective_wake_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
@@ -570,6 +609,25 @@ mod tests {
     }
 
     #[test]
+    fn derived_hollywood_task_room_uses_parent_repo_and_bounded_task_slug() {
+        assert_eq!(
+            derived_hollywood_task_room("repo/Los Angeles Lex", "Fix polling/retry waste now"),
+            "task/los-angeles-lex/fix-polling-retry-waste-now"
+        );
+        assert_eq!(
+            derived_hollywood_task_room("task/losangelex/existing", "   "),
+            "task/losangelex/task"
+        );
+        assert_eq!(
+            derived_hollywood_task_room(
+                "main",
+                "This task title is intentionally much longer than the room slug budget"
+            ),
+            "task/main/this-task-title-is-intentionally-much-longer-tha"
+        );
+    }
+
+    #[test]
     fn environment_context_splits_semantic_and_runtime_lanes() {
         let config = HollywoodSessionConfig {
             url: "http://127.0.0.1:8765".to_string(),
@@ -645,6 +703,18 @@ mod tests {
                 .runtime
                 .startup_protocol
                 .contains(&"avoid_overlapping_edits_until_resolved".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"use_hollywood_read_cursors_and_actionable_filters".to_string())
+        );
+        assert!(
+            context.runtime.startup_protocol.contains(
+                &"use_compact_hollywood_message_envelopes_for_status_blocker_handoff_final_answer"
+                    .to_string()
+            )
         );
     }
 
