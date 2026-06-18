@@ -1,0 +1,929 @@
+{
+  "benchmark": "MARBLE/MultiAgentBench database",
+  "benchmarkRepository": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE",
+  "campaignName": "2026-06-18-ledger-efficient-marble-db-current",
+  "model": "gpt-5.5",
+  "systems": [
+    "losangelex",
+    "codex-subagents"
+  ],
+  "evidenceMode": "native-postgres",
+  "hiddenPaths": [
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE",
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos",
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current",
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/logs"
+  ],
+  "defaultHiddenPathsEnabled": true,
+  "appServer": {
+    "url": "ws://127.0.0.1:56453",
+    "managed": true,
+    "source": "managed",
+    "codexHome": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-home",
+    "logPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/app-server.log",
+    "pid": 978411
+  },
+  "codexSubagentsHome": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home",
+  "records": [
+    {
+      "system": "losangelex",
+      "caseId": "database-001",
+      "sourceIndex": 1,
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/losangelex/database-001",
+      "room": "repo/marble-db-database-001-f10bb0",
+      "seconds": 168.6,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": false,
+          "activeThreads": 1,
+          "roundTimedOut": false,
+          "finalExists": true
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": "agent1",
+          "runtimeName": "marble-db-agent1-f10bb0",
+          "threadId": "019ed94e-6eee-72e1-b9c9-6d89f6d124c6"
+        },
+        {
+          "agentId": "agent2",
+          "runtimeName": "marble-db-agent2-f10bb0",
+          "threadId": "019ed94e-74b1-7490-b104-89ba925c955f"
+        },
+        {
+          "agentId": "agent3",
+          "runtimeName": "marble-db-agent3-f10bb0",
+          "threadId": "019ed94e-7a12-7290-b2bb-687918e70086"
+        },
+        {
+          "agentId": "agent4",
+          "runtimeName": "marble-db-agent4-f10bb0",
+          "threadId": "019ed94e-7f74-7eb2-8dbd-c59a1a492c61"
+        },
+        {
+          "agentId": "agent5",
+          "runtimeName": "marble-db-agent5-f10bb0",
+          "threadId": "019ed94e-84cc-7c53-98cc-8006e26a2e3e"
+        }
+      ],
+      "rawPrediction": "{\"predicted_root_causes\":[\"INSERT_LARGE_DATA\",\"VACUUM\"],\"rationale\":\"INSERT_LARGE_DATA is strongly supported: pg_stat_statements is dominated by a single INSERT INTO marble_insert SELECT ... generate_series(...) with 20000 rows and 577.658 ms, and pg_stat_user_tables shows marble_insert has 20000 inserted/live tuples while normal app tables have only 2-3 rows. VACUUM is the weak required second label: peers ruled out lock contention, redundant indexes, and large fetches; marble_insert did show one autovacuum/autoanalyze after the large insert, making it the closest remaining signal.\"}\n",
+      "score": {
+        "success": true,
+        "exactSetMatch": false,
+        "predicted": [
+          "INSERT_LARGE_DATA",
+          "VACUUM"
+        ],
+        "gold": [
+          "INSERT_LARGE_DATA"
+        ],
+        "metrics": {
+          "rootCauseRecall": 1.0,
+          "rootCausePrecision": 0.5,
+          "rootCauseF1": 0.6666666666666666,
+          "matchCount": 1,
+          "goldCount": 1,
+          "predictedCount": 2
+        }
+      },
+      "tokenUsage": {
+        "inputTokens": 1977937,
+        "cachedInputTokens": 1579648,
+        "nonCachedInputTokens": 398289,
+        "outputTokens": 23225,
+        "reasoningOutputTokens": 4910,
+        "totalTokens": 2001162,
+        "uncachedPlusOutputTokens": 421514
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1977937,
+          "cachedInputTokens": 1579648,
+          "nonCachedInputTokens": 398289,
+          "outputTokens": 23225,
+          "reasoningOutputTokens": 4910,
+          "totalTokens": 2001162,
+          "uncachedPlusOutputTokens": 421514
+        },
+        "eventCount": 63,
+        "threadCount": 5,
+        "byThread": {
+          "019ed94e-6eee-72e1-b9c9-6d89f6d124c6": {
+            "turnId": "019ed94e-9da4-7bd3-869a-19d165164c28",
+            "total": {
+              "inputTokens": 508334,
+              "cachedInputTokens": 419456,
+              "nonCachedInputTokens": 88878,
+              "outputTokens": 5267,
+              "reasoningOutputTokens": 1093,
+              "totalTokens": 513601,
+              "uncachedPlusOutputTokens": 94145
+            },
+            "last": {
+              "inputTokens": 45474,
+              "cachedInputTokens": 42880,
+              "nonCachedInputTokens": 2594,
+              "outputTokens": 202,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 45676,
+              "uncachedPlusOutputTokens": 2796
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94e-7a12-7290-b2bb-687918e70086": {
+            "turnId": "019ed94e-9db8-71b1-88b8-0d5659fef8ac",
+            "total": {
+              "inputTokens": 426169,
+              "cachedInputTokens": 326912,
+              "nonCachedInputTokens": 99257,
+              "outputTokens": 4310,
+              "reasoningOutputTokens": 1086,
+              "totalTokens": 430479,
+              "uncachedPlusOutputTokens": 103567
+            },
+            "last": {
+              "inputTokens": 39216,
+              "cachedInputTokens": 37248,
+              "nonCachedInputTokens": 1968,
+              "outputTokens": 521,
+              "reasoningOutputTokens": 398,
+              "totalTokens": 39737,
+              "uncachedPlusOutputTokens": 2489
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94e-84cc-7c53-98cc-8006e26a2e3e": {
+            "turnId": "019ed94e-9dfe-7573-901b-cc57e60b59c3",
+            "total": {
+              "inputTokens": 433923,
+              "cachedInputTokens": 359168,
+              "nonCachedInputTokens": 74755,
+              "outputTokens": 4931,
+              "reasoningOutputTokens": 971,
+              "totalTokens": 438854,
+              "uncachedPlusOutputTokens": 79686
+            },
+            "last": {
+              "inputTokens": 38947,
+              "cachedInputTokens": 37760,
+              "nonCachedInputTokens": 1187,
+              "outputTokens": 139,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 39086,
+              "uncachedPlusOutputTokens": 1326
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94e-74b1-7490-b104-89ba925c955f": {
+            "turnId": "019ed94e-9dac-7572-9e2e-d7800296c758",
+            "total": {
+              "inputTokens": 233571,
+              "cachedInputTokens": 156544,
+              "nonCachedInputTokens": 77027,
+              "outputTokens": 2680,
+              "reasoningOutputTokens": 466,
+              "totalTokens": 236251,
+              "uncachedPlusOutputTokens": 79707
+            },
+            "last": {
+              "inputTokens": 28492,
+              "cachedInputTokens": 27520,
+              "nonCachedInputTokens": 972,
+              "outputTokens": 415,
+              "reasoningOutputTokens": 259,
+              "totalTokens": 28907,
+              "uncachedPlusOutputTokens": 1387
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94e-7f74-7eb2-8dbd-c59a1a492c61": {
+            "turnId": "019ed94e-9dc7-7ac2-b64e-ef6748586842",
+            "total": {
+              "inputTokens": 375940,
+              "cachedInputTokens": 317568,
+              "nonCachedInputTokens": 58372,
+              "outputTokens": 6037,
+              "reasoningOutputTokens": 1294,
+              "totalTokens": 381977,
+              "uncachedPlusOutputTokens": 64409
+            },
+            "last": {
+              "inputTokens": 45397,
+              "cachedInputTokens": 43904,
+              "nonCachedInputTokens": 1493,
+              "outputTokens": 193,
+              "reasoningOutputTokens": 34,
+              "totalTokens": 45590,
+              "uncachedPlusOutputTokens": 1686
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/losangelex/database-001/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/losangelex/database-001/thread-states.json",
+      "nativePostgres": {
+        "enabled": true,
+        "docker_compose_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE/marble/environments/db_env_docker",
+        "query_socket": null,
+        "query_request_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/losangelex/database-001/query_requests",
+        "setup_log": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/losangelex/database-001/native-postgres-setup.log",
+        "background_pids": []
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "database-001",
+      "sourceIndex": 1,
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/codex-subagents/database-001",
+      "seconds": 190.1,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-001/parent-last-message.txt",
+        "stdoutPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-001/parent-stdout.log",
+        "stderrPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-001/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 407914,
+          "cachedInputTokens": 299648,
+          "nonCachedInputTokens": 108266,
+          "outputTokens": 4301,
+          "reasoningOutputTokens": 475,
+          "totalTokens": 412215,
+          "uncachedPlusOutputTokens": 112567
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 1347553,
+        "cachedInputTokens": 1057920,
+        "nonCachedInputTokens": 289633,
+        "outputTokens": 19631,
+        "reasoningOutputTokens": 3089,
+        "totalTokens": 1367184,
+        "uncachedPlusOutputTokens": 309264
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 1347553,
+            "cachedInputTokens": 1057920,
+            "nonCachedInputTokens": 289633,
+            "outputTokens": 19631,
+            "reasoningOutputTokens": 3089,
+            "totalTokens": 1367184,
+            "uncachedPlusOutputTokens": 309264
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-00-26-019ed951-0778-79a0-b266-664caa6a9cda.jsonl",
+              "tokenUsage": {
+                "inputTokens": 407914,
+                "cachedInputTokens": 299648,
+                "nonCachedInputTokens": 108266,
+                "outputTokens": 4301,
+                "reasoningOutputTokens": 475,
+                "totalTokens": 412215,
+                "uncachedPlusOutputTokens": 112567
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-00-37-019ed951-3076-77b1-a057-0431f54f6318.jsonl",
+              "tokenUsage": {
+                "inputTokens": 176561,
+                "cachedInputTokens": 136832,
+                "nonCachedInputTokens": 39729,
+                "outputTokens": 2466,
+                "reasoningOutputTokens": 157,
+                "totalTokens": 179027,
+                "uncachedPlusOutputTokens": 42195
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-00-45-019ed951-514d-7df1-aa47-f691e2a11577.jsonl",
+              "tokenUsage": {
+                "inputTokens": 178604,
+                "cachedInputTokens": 119936,
+                "nonCachedInputTokens": 58668,
+                "outputTokens": 2933,
+                "reasoningOutputTokens": 579,
+                "totalTokens": 181537,
+                "uncachedPlusOutputTokens": 61601
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-00-55-019ed951-7750-72d0-8376-4588c374d130.jsonl",
+              "tokenUsage": {
+                "inputTokens": 209863,
+                "cachedInputTokens": 171520,
+                "nonCachedInputTokens": 38343,
+                "outputTokens": 3070,
+                "reasoningOutputTokens": 378,
+                "totalTokens": 212933,
+                "uncachedPlusOutputTokens": 41413
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-01-04-019ed951-9a2c-7973-83c0-45e9683a90af.jsonl",
+              "tokenUsage": {
+                "inputTokens": 211980,
+                "cachedInputTokens": 188928,
+                "nonCachedInputTokens": 23052,
+                "outputTokens": 3849,
+                "reasoningOutputTokens": 841,
+                "totalTokens": 215829,
+                "uncachedPlusOutputTokens": 26901
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-01-12-019ed951-bb5e-70d0-aafe-6f9e137c62a1.jsonl",
+              "tokenUsage": {
+                "inputTokens": 162631,
+                "cachedInputTokens": 141056,
+                "nonCachedInputTokens": 21575,
+                "outputTokens": 3012,
+                "reasoningOutputTokens": 659,
+                "totalTokens": 165643,
+                "uncachedPlusOutputTokens": 24587
+              }
+            }
+          ],
+          "fileCount": 6
+        },
+        "parentExecJsonl": {
+          "inputTokens": 407914,
+          "cachedInputTokens": 299648,
+          "nonCachedInputTokens": 108266,
+          "outputTokens": 4301,
+          "reasoningOutputTokens": 475,
+          "totalTokens": 412215,
+          "uncachedPlusOutputTokens": 112567
+        }
+      },
+      "rawPrediction": "{\"predicted_root_causes\":[\"INSERT_LARGE_DATA\",\"VACUUM\"],\"rationale\":\"A single INSERT INTO marble_insert SELECT ... generate_series(...) inserted 20000 rows, dominated pg_stat_statements execution time, dirtied/wrote about 1820 blocks, and generated 14.38 MB of WAL. The only secondary anomaly among the remaining labels is autovacuum on marble_insert after that bulk load; pg_locks has no waits, indexes are only small distinct constraints, and no large application SELECT fetch is evident.\"}\n",
+      "score": {
+        "success": true,
+        "exactSetMatch": false,
+        "predicted": [
+          "INSERT_LARGE_DATA",
+          "VACUUM"
+        ],
+        "gold": [
+          "INSERT_LARGE_DATA"
+        ],
+        "metrics": {
+          "rootCauseRecall": 1.0,
+          "rootCausePrecision": 0.5,
+          "rootCauseF1": 0.6666666666666666,
+          "matchCount": 1,
+          "goldCount": 1,
+          "predictedCount": 2
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 5,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 5,
+          "byTool": {
+            "wait": 5
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent1",
+          "agent2",
+          "agent3",
+          "agent4",
+          "agent5"
+        ],
+        "sharedPresent": [
+          "agent1",
+          "agent2",
+          "agent3",
+          "agent4",
+          "agent5"
+        ],
+        "submissionsPresent": [
+          "agent1",
+          "agent2",
+          "agent3",
+          "agent4",
+          "agent5"
+        ],
+        "missingShared": [],
+        "missingSubmissions": [],
+        "finalExists": true
+      },
+      "nativePostgres": {
+        "enabled": true,
+        "docker_compose_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE/marble/environments/db_env_docker",
+        "query_socket": null,
+        "query_request_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/codex-subagents/database-001/query_requests",
+        "setup_log": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-001/native-postgres-setup.log",
+        "background_pids": []
+      }
+    },
+    {
+      "system": "losangelex",
+      "caseId": "database-032",
+      "sourceIndex": 32,
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/losangelex/database-032",
+      "room": "repo/marble-db-database-032-580c34",
+      "seconds": 133.0,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": false,
+          "activeThreads": 4,
+          "roundTimedOut": false,
+          "finalExists": true
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": "agent1",
+          "runtimeName": "marble-db-agent1-580c34",
+          "threadId": "019ed953-eb6d-7c12-9304-f66988b2ac5d"
+        },
+        {
+          "agentId": "agent2",
+          "runtimeName": "marble-db-agent2-580c34",
+          "threadId": "019ed953-f0da-7430-92ae-23f11a0d2fab"
+        },
+        {
+          "agentId": "agent3",
+          "runtimeName": "marble-db-agent3-580c34",
+          "threadId": "019ed953-f631-7ce3-835c-081809fa23cc"
+        },
+        {
+          "agentId": "agent4",
+          "runtimeName": "marble-db-agent4-580c34",
+          "threadId": "019ed953-fb84-76e2-9644-739fad2b21ec"
+        },
+        {
+          "agentId": "agent5",
+          "runtimeName": "marble-db-agent5-580c34",
+          "threadId": "019ed954-00ef-73e3-ab88-9a35803adb5d"
+        }
+      ],
+      "rawPrediction": "{\"predicted_root_causes\":[\"REDUNDANT_INDEX\",\"INSERT_LARGE_DATA\"],\"rationale\":\"pg_stat_statements is dominated by CREATE INDEX work on marble_redundant, and pg_indexes/pg_index show three duplicate btree indexes on marble_redundant(name0), all unused in pg_stat_user_indexes. The same anomalous table has 20,000 inserted/live rows and is far larger than the normal domain tables, making INSERT_LARGE_DATA the most plausible second cause. Peer checks found no waiting locks, no active/recorded vacuum problem, and no large SELECT fetch workload.\"}\n",
+      "score": {
+        "success": true,
+        "exactSetMatch": false,
+        "predicted": [
+          "REDUNDANT_INDEX",
+          "INSERT_LARGE_DATA"
+        ],
+        "gold": [
+          "REDUNDANT_INDEX"
+        ],
+        "metrics": {
+          "rootCauseRecall": 1.0,
+          "rootCausePrecision": 0.5,
+          "rootCauseF1": 0.6666666666666666,
+          "matchCount": 1,
+          "goldCount": 1,
+          "predictedCount": 2
+        }
+      },
+      "tokenUsage": {
+        "inputTokens": 1826112,
+        "cachedInputTokens": 1494784,
+        "nonCachedInputTokens": 331328,
+        "outputTokens": 21325,
+        "reasoningOutputTokens": 2983,
+        "totalTokens": 1847437,
+        "uncachedPlusOutputTokens": 352653
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1826112,
+          "cachedInputTokens": 1494784,
+          "nonCachedInputTokens": 331328,
+          "outputTokens": 21325,
+          "reasoningOutputTokens": 2983,
+          "totalTokens": 1847437,
+          "uncachedPlusOutputTokens": 352653
+        },
+        "eventCount": 62,
+        "threadCount": 5,
+        "byThread": {
+          "019ed953-eb6d-7c12-9304-f66988b2ac5d": {
+            "turnId": "019ed954-19b0-7933-b081-ebef52353baf",
+            "total": {
+              "inputTokens": 404770,
+              "cachedInputTokens": 308608,
+              "nonCachedInputTokens": 96162,
+              "outputTokens": 4189,
+              "reasoningOutputTokens": 464,
+              "totalTokens": 408959,
+              "uncachedPlusOutputTokens": 100351
+            },
+            "last": {
+              "inputTokens": 37901,
+              "cachedInputTokens": 33664,
+              "nonCachedInputTokens": 4237,
+              "outputTokens": 153,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 38054,
+              "uncachedPlusOutputTokens": 4390
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed954-00ef-73e3-ab88-9a35803adb5d": {
+            "turnId": "019ed954-1a08-7f11-8c8a-1e0b164b04f9",
+            "total": {
+              "inputTokens": 333458,
+              "cachedInputTokens": 263296,
+              "nonCachedInputTokens": 70162,
+              "outputTokens": 4424,
+              "reasoningOutputTokens": 531,
+              "totalTokens": 337882,
+              "uncachedPlusOutputTokens": 74586
+            },
+            "last": {
+              "inputTokens": 38381,
+              "cachedInputTokens": 35712,
+              "nonCachedInputTokens": 2669,
+              "outputTokens": 241,
+              "reasoningOutputTokens": 12,
+              "totalTokens": 38622,
+              "uncachedPlusOutputTokens": 2910
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed953-f631-7ce3-835c-081809fa23cc": {
+            "turnId": "019ed954-19c2-7182-83d2-a30e589bbada",
+            "total": {
+              "inputTokens": 412903,
+              "cachedInputTokens": 372480,
+              "nonCachedInputTokens": 40423,
+              "outputTokens": 4007,
+              "reasoningOutputTokens": 428,
+              "totalTokens": 416910,
+              "uncachedPlusOutputTokens": 44430
+            },
+            "last": {
+              "inputTokens": 38905,
+              "cachedInputTokens": 37760,
+              "nonCachedInputTokens": 1145,
+              "outputTokens": 132,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 39037,
+              "uncachedPlusOutputTokens": 1277
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed953-f0da-7430-92ae-23f11a0d2fab": {
+            "turnId": "019ed954-19ba-73b2-8ed5-e97fc6f5d432",
+            "total": {
+              "inputTokens": 332870,
+              "cachedInputTokens": 263168,
+              "nonCachedInputTokens": 69702,
+              "outputTokens": 4450,
+              "reasoningOutputTokens": 653,
+              "totalTokens": 337320,
+              "uncachedPlusOutputTokens": 74152
+            },
+            "last": {
+              "inputTokens": 35338,
+              "cachedInputTokens": 32640,
+              "nonCachedInputTokens": 2698,
+              "outputTokens": 339,
+              "reasoningOutputTokens": 12,
+              "totalTokens": 35677,
+              "uncachedPlusOutputTokens": 3037
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed953-fb84-76e2-9644-739fad2b21ec": {
+            "turnId": "019ed954-19cf-75b0-a76f-9eea437b7966",
+            "total": {
+              "inputTokens": 342111,
+              "cachedInputTokens": 287232,
+              "nonCachedInputTokens": 54879,
+              "outputTokens": 4255,
+              "reasoningOutputTokens": 907,
+              "totalTokens": 346366,
+              "uncachedPlusOutputTokens": 59134
+            },
+            "last": {
+              "inputTokens": 33453,
+              "cachedInputTokens": 32640,
+              "nonCachedInputTokens": 813,
+              "outputTokens": 630,
+              "reasoningOutputTokens": 431,
+              "totalTokens": 34083,
+              "uncachedPlusOutputTokens": 1443
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/losangelex/database-032/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/losangelex/database-032/thread-states.json",
+      "nativePostgres": {
+        "enabled": true,
+        "docker_compose_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE/marble/environments/db_env_docker",
+        "query_socket": null,
+        "query_request_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/losangelex/database-032/query_requests",
+        "setup_log": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/losangelex/database-032/native-postgres-setup.log",
+        "background_pids": []
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "database-032",
+      "sourceIndex": 32,
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/codex-subagents/database-032",
+      "seconds": 187.5,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-032/parent-last-message.txt",
+        "stdoutPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-032/parent-stdout.log",
+        "stderrPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-032/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 305040,
+          "cachedInputTokens": 261120,
+          "nonCachedInputTokens": 43920,
+          "outputTokens": 2857,
+          "reasoningOutputTokens": 145,
+          "totalTokens": 307897,
+          "uncachedPlusOutputTokens": 46777
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 1319251,
+        "cachedInputTokens": 1152128,
+        "nonCachedInputTokens": 167123,
+        "outputTokens": 20121,
+        "reasoningOutputTokens": 3216,
+        "totalTokens": 1339372,
+        "uncachedPlusOutputTokens": 187244
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 1319251,
+            "cachedInputTokens": 1152128,
+            "nonCachedInputTokens": 167123,
+            "outputTokens": 20121,
+            "reasoningOutputTokens": 3216,
+            "totalTokens": 1339372,
+            "uncachedPlusOutputTokens": 187244
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-05-49-019ed955-f5bf-79f1-b6eb-cb69ac7779ce.jsonl",
+              "tokenUsage": {
+                "inputTokens": 305040,
+                "cachedInputTokens": 261120,
+                "nonCachedInputTokens": 43920,
+                "outputTokens": 2857,
+                "reasoningOutputTokens": 145,
+                "totalTokens": 307897,
+                "uncachedPlusOutputTokens": 46777
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-06-03-019ed956-2a79-7de3-9931-47f8f9034891.jsonl",
+              "tokenUsage": {
+                "inputTokens": 239444,
+                "cachedInputTokens": 211328,
+                "nonCachedInputTokens": 28116,
+                "outputTokens": 4130,
+                "reasoningOutputTokens": 979,
+                "totalTokens": 243574,
+                "uncachedPlusOutputTokens": 32246
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-06-12-019ed956-4d52-7362-ab3a-28c0ad24bea6.jsonl",
+              "tokenUsage": {
+                "inputTokens": 190609,
+                "cachedInputTokens": 178176,
+                "nonCachedInputTokens": 12433,
+                "outputTokens": 3283,
+                "reasoningOutputTokens": 926,
+                "totalTokens": 193892,
+                "uncachedPlusOutputTokens": 15716
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-06-21-019ed956-721a-7ae0-b9f5-7bb7496fb145.jsonl",
+              "tokenUsage": {
+                "inputTokens": 178115,
+                "cachedInputTokens": 162944,
+                "nonCachedInputTokens": 15171,
+                "outputTokens": 3183,
+                "reasoningOutputTokens": 336,
+                "totalTokens": 181298,
+                "uncachedPlusOutputTokens": 18354
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-06-30-019ed956-927d-74b0-bf91-4729ac61cef2.jsonl",
+              "tokenUsage": {
+                "inputTokens": 171457,
+                "cachedInputTokens": 134272,
+                "nonCachedInputTokens": 37185,
+                "outputTokens": 2969,
+                "reasoningOutputTokens": 336,
+                "totalTokens": 174426,
+                "uncachedPlusOutputTokens": 40154
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T02-06-38-019ed956-b2d4-75e3-9563-01ee09d7b477.jsonl",
+              "tokenUsage": {
+                "inputTokens": 234586,
+                "cachedInputTokens": 204288,
+                "nonCachedInputTokens": 30298,
+                "outputTokens": 3699,
+                "reasoningOutputTokens": 494,
+                "totalTokens": 238285,
+                "uncachedPlusOutputTokens": 33997
+              }
+            }
+          ],
+          "fileCount": 6
+        },
+        "parentExecJsonl": {
+          "inputTokens": 305040,
+          "cachedInputTokens": 261120,
+          "nonCachedInputTokens": 43920,
+          "outputTokens": 2857,
+          "reasoningOutputTokens": 145,
+          "totalTokens": 307897,
+          "uncachedPlusOutputTokens": 46777
+        }
+      },
+      "rawPrediction": "{\"predicted_root_causes\":[\"REDUNDANT_INDEX\",\"INSERT_LARGE_DATA\"],\"rationale\":\"Workers found three duplicate unused btree indexes on marble_redundant(name0), with CREATE INDEX statements dominating WAL/time. The same anomalous table has 20000 inserted/live rows while normal business tables are tiny; lock contention, vacuum, and large fetch evidence were not supported.\"}\n",
+      "score": {
+        "success": true,
+        "exactSetMatch": false,
+        "predicted": [
+          "REDUNDANT_INDEX",
+          "INSERT_LARGE_DATA"
+        ],
+        "gold": [
+          "REDUNDANT_INDEX"
+        ],
+        "metrics": {
+          "rootCauseRecall": 1.0,
+          "rootCausePrecision": 0.5,
+          "rootCauseF1": 0.6666666666666666,
+          "matchCount": 1,
+          "goldCount": 1,
+          "predictedCount": 2
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 3,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 3,
+          "byTool": {
+            "wait": 3
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent1",
+          "agent2",
+          "agent3",
+          "agent4",
+          "agent5"
+        ],
+        "sharedPresent": [
+          "agent1",
+          "agent2",
+          "agent3",
+          "agent4",
+          "agent5"
+        ],
+        "submissionsPresent": [
+          "agent1",
+          "agent2",
+          "agent3",
+          "agent4",
+          "agent5"
+        ],
+        "missingShared": [],
+        "missingSubmissions": [],
+        "finalExists": true
+      },
+      "nativePostgres": {
+        "enabled": true,
+        "docker_compose_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/MARBLE/marble/environments/db_env_docker",
+        "query_socket": null,
+        "query_request_dir": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/workspaces/codex-subagents/database-032/query_requests",
+        "setup_log": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-marble-db-current/runs/codex-subagents/database-032/native-postgres-setup.log",
+        "background_pids": []
+      }
+    }
+  ],
+  "summary": {
+    "systems": {
+      "codex-subagents": {
+        "tasks": 2,
+        "fullSuccesses": 2,
+        "fullSuccessRate": 1.0,
+        "exactSetMatches": 0,
+        "exactSetMatchRate": 0.0,
+        "avgRootCauseRecall": 1.0,
+        "avgRootCausePrecision": 0.5,
+        "avgRootCauseF1": 0.6666666666666666,
+        "avgSeconds": 188.8,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 2,
+        "totalTokenUsage": {
+          "inputTokens": 2666804,
+          "cachedInputTokens": 2210048,
+          "nonCachedInputTokens": 456756,
+          "outputTokens": 39752,
+          "reasoningOutputTokens": 6305,
+          "totalTokens": 2706556,
+          "uncachedPlusOutputTokens": 496508
+        },
+        "avgTotalTokens": 1353278.0,
+        "avgUncachedPlusOutputTokens": 248254.0,
+        "totalTokensPerFullSuccess": 1353278.0,
+        "uncachedPlusOutputTokensPerFullSuccess": 248254.0
+      },
+      "losangelex": {
+        "tasks": 2,
+        "fullSuccesses": 2,
+        "fullSuccessRate": 1.0,
+        "exactSetMatches": 0,
+        "exactSetMatchRate": 0.0,
+        "avgRootCauseRecall": 1.0,
+        "avgRootCausePrecision": 0.5,
+        "avgRootCauseF1": 0.6666666666666666,
+        "avgSeconds": 150.8,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 2,
+        "totalTokenUsage": {
+          "inputTokens": 3804049,
+          "cachedInputTokens": 3074432,
+          "nonCachedInputTokens": 729617,
+          "outputTokens": 44550,
+          "reasoningOutputTokens": 7893,
+          "totalTokens": 3848599,
+          "uncachedPlusOutputTokens": 774167
+        },
+        "avgTotalTokens": 1924299.5,
+        "avgUncachedPlusOutputTokens": 387083.5,
+        "totalTokensPerFullSuccess": 1924299.5,
+        "uncachedPlusOutputTokensPerFullSuccess": 387083.5
+      }
+    }
+  }
+}

@@ -1,0 +1,2448 @@
+{
+  "benchmark": "SILO-BENCH",
+  "benchmarkRepository": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+  "campaignName": "2026-06-18-ledger-efficient-silo-n5-stratified-current",
+  "model": "gpt-5.5",
+  "systems": [
+    "losangelex-selector",
+    "codex-subagents"
+  ],
+  "hiddenPaths": [
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/repos/acl26-silo-bench",
+    "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/logs"
+  ],
+  "defaultHiddenPathsEnabled": true,
+  "appServer": {
+    "url": "ws://127.0.0.1:34279",
+    "managed": true,
+    "source": "managed",
+    "codexHome": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-home",
+    "logPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/app-server.log",
+    "pid": 928022
+  },
+  "codexSubagentsHome": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home",
+  "records": [
+    {
+      "system": "losangelex-selector",
+      "coordinationStrategy": "first-finisher",
+      "caseId": "I-01",
+      "taskFile": "I-01_n5.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/workspaces/losangelex-selector/I-01_n5",
+      "room": "repo/silo-I-01-n5-368777",
+      "seconds": 60.7,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-368777",
+          "threadId": "019ed943-0336-7532-9f6e-8e7434b1b66a"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-368777",
+          "threadId": "019ed943-0931-7390-8244-3a1ffc711ab5"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-368777",
+          "threadId": "019ed943-0ee5-7a42-93de-72fe138ea458"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-368777",
+          "threadId": "019ed943-1429-7f12-b1cc-cc99ce9fc9a1"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-368777",
+          "threadId": "019ed943-1996-74e0-ac17-4560b8174a4b"
+        }
+      ],
+      "score": {
+        "caseId": "I-01",
+        "caseName": "Global Max",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 525064,
+        "cachedInputTokens": 369920,
+        "nonCachedInputTokens": 155144,
+        "outputTokens": 3802,
+        "reasoningOutputTokens": 1103,
+        "totalTokens": 528866,
+        "uncachedPlusOutputTokens": 158946
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 525064,
+          "cachedInputTokens": 369920,
+          "nonCachedInputTokens": 155144,
+          "outputTokens": 3802,
+          "reasoningOutputTokens": 1103,
+          "totalTokens": 528866,
+          "uncachedPlusOutputTokens": 158946
+        },
+        "eventCount": 22,
+        "threadCount": 5,
+        "byThread": {
+          "019ed943-1429-7f12-b1cc-cc99ce9fc9a1": {
+            "turnId": "019ed943-328b-70d0-a15b-c093770049cc",
+            "total": {
+              "inputTokens": 70184,
+              "cachedInputTokens": 48256,
+              "nonCachedInputTokens": 21928,
+              "outputTokens": 429,
+              "reasoningOutputTokens": 131,
+              "totalTokens": 70613,
+              "uncachedPlusOutputTokens": 22357
+            },
+            "last": {
+              "inputTokens": 23938,
+              "cachedInputTokens": 23424,
+              "nonCachedInputTokens": 514,
+              "outputTokens": 145,
+              "reasoningOutputTokens": 72,
+              "totalTokens": 24083,
+              "uncachedPlusOutputTokens": 659
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed943-0ee5-7a42-93de-72fe138ea458": {
+            "turnId": "019ed943-327c-72c1-a6ad-d675ac67d3b3",
+            "total": {
+              "inputTokens": 70087,
+              "cachedInputTokens": 28288,
+              "nonCachedInputTokens": 41799,
+              "outputTokens": 369,
+              "reasoningOutputTokens": 151,
+              "totalTokens": 70456,
+              "uncachedPlusOutputTokens": 42168
+            },
+            "last": {
+              "inputTokens": 23858,
+              "cachedInputTokens": 23424,
+              "nonCachedInputTokens": 434,
+              "outputTokens": 161,
+              "reasoningOutputTokens": 99,
+              "totalTokens": 24019,
+              "uncachedPlusOutputTokens": 595
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed943-0336-7532-9f6e-8e7434b1b66a": {
+            "turnId": "019ed943-326b-7503-9b1f-8d27cbc64962",
+            "total": {
+              "inputTokens": 171290,
+              "cachedInputTokens": 125056,
+              "nonCachedInputTokens": 46234,
+              "outputTokens": 1634,
+              "reasoningOutputTokens": 274,
+              "totalTokens": 172924,
+              "uncachedPlusOutputTokens": 47868
+            },
+            "last": {
+              "inputTokens": 25939,
+              "cachedInputTokens": 25472,
+              "nonCachedInputTokens": 467,
+              "outputTokens": 5,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 25944,
+              "uncachedPlusOutputTokens": 472
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed943-0931-7390-8244-3a1ffc711ab5": {
+            "turnId": "019ed943-3273-7af1-8f7a-1e8bdd6ca04e",
+            "total": {
+              "inputTokens": 70164,
+              "cachedInputTokens": 48256,
+              "nonCachedInputTokens": 21908,
+              "outputTokens": 482,
+              "reasoningOutputTokens": 186,
+              "totalTokens": 70646,
+              "uncachedPlusOutputTokens": 22390
+            },
+            "last": {
+              "inputTokens": 23934,
+              "cachedInputTokens": 23424,
+              "nonCachedInputTokens": 510,
+              "outputTokens": 194,
+              "reasoningOutputTokens": 125,
+              "totalTokens": 24128,
+              "uncachedPlusOutputTokens": 704
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed943-1996-74e0-ac17-4560b8174a4b": {
+            "turnId": "019ed943-32c3-79c0-888d-00868eff098e",
+            "total": {
+              "inputTokens": 143339,
+              "cachedInputTokens": 120064,
+              "nonCachedInputTokens": 23275,
+              "outputTokens": 888,
+              "reasoningOutputTokens": 361,
+              "totalTokens": 144227,
+              "uncachedPlusOutputTokens": 24163
+            },
+            "last": {
+              "inputTokens": 24500,
+              "cachedInputTokens": 23936,
+              "nonCachedInputTokens": 564,
+              "outputTokens": 153,
+              "reasoningOutputTokens": 95,
+              "totalTokens": 24653,
+              "uncachedPlusOutputTokens": 717
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/losangelex-selector/I-01_n5/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/losangelex-selector/I-01_n5/thread-states.json",
+      "selectorDecision": {
+        "selector": "silo-topology-v1-2026-06-14",
+        "strategy": "first-finisher",
+        "reason": "level-i-global-reduction-identical-final-answer"
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "I-01",
+      "taskFile": "I-01_n5.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/workspaces/codex-subagents/I-01_n5",
+      "seconds": 134.0,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/I-01_n5/parent-last-message.txt",
+        "stdoutPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/I-01_n5/parent-stdout.log",
+        "stderrPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/I-01_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 350824,
+          "cachedInputTokens": 317824,
+          "nonCachedInputTokens": 33000,
+          "outputTokens": 4405,
+          "reasoningOutputTokens": 132,
+          "totalTokens": 355229,
+          "uncachedPlusOutputTokens": 37405
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 768077,
+        "cachedInputTokens": 712192,
+        "nonCachedInputTokens": 55885,
+        "outputTokens": 9463,
+        "reasoningOutputTokens": 1413,
+        "totalTokens": 777540,
+        "uncachedPlusOutputTokens": 65348
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 768077,
+            "cachedInputTokens": 712192,
+            "nonCachedInputTokens": 55885,
+            "outputTokens": 9463,
+            "reasoningOutputTokens": 1413,
+            "totalTokens": 777540,
+            "uncachedPlusOutputTokens": 65348
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-46-09-019ed943-f373-73a3-8830-7a78ddc7b6d1.jsonl",
+              "tokenUsage": {
+                "inputTokens": 350824,
+                "cachedInputTokens": 317824,
+                "nonCachedInputTokens": 33000,
+                "outputTokens": 4405,
+                "reasoningOutputTokens": 132,
+                "totalTokens": 355229,
+                "uncachedPlusOutputTokens": 37405
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-46-24-019ed944-2c06-7141-b8a9-1b0bd7c77946.jsonl",
+              "tokenUsage": {
+                "inputTokens": 64851,
+                "cachedInputTokens": 55936,
+                "nonCachedInputTokens": 8915,
+                "outputTokens": 688,
+                "reasoningOutputTokens": 199,
+                "totalTokens": 65539,
+                "uncachedPlusOutputTokens": 9603
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-46-35-019ed944-595f-7ff1-9a39-14659358659d.jsonl",
+              "tokenUsage": {
+                "inputTokens": 87887,
+                "cachedInputTokens": 84480,
+                "nonCachedInputTokens": 3407,
+                "outputTokens": 1159,
+                "reasoningOutputTokens": 289,
+                "totalTokens": 89046,
+                "uncachedPlusOutputTokens": 4566
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-46-47-019ed944-8741-7941-956f-a2164097e42a.jsonl",
+              "tokenUsage": {
+                "inputTokens": 87641,
+                "cachedInputTokens": 84480,
+                "nonCachedInputTokens": 3161,
+                "outputTokens": 944,
+                "reasoningOutputTokens": 188,
+                "totalTokens": 88585,
+                "uncachedPlusOutputTokens": 4105
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-46-59-019ed944-b80b-7f01-b86a-a6d4dcdea794.jsonl",
+              "tokenUsage": {
+                "inputTokens": 88423,
+                "cachedInputTokens": 84480,
+                "nonCachedInputTokens": 3943,
+                "outputTokens": 1179,
+                "reasoningOutputTokens": 402,
+                "totalTokens": 89602,
+                "uncachedPlusOutputTokens": 5122
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-47-11-019ed944-e540-7413-8437-e33025e1a1e8.jsonl",
+              "tokenUsage": {
+                "inputTokens": 88451,
+                "cachedInputTokens": 84992,
+                "nonCachedInputTokens": 3459,
+                "outputTokens": 1088,
+                "reasoningOutputTokens": 203,
+                "totalTokens": 89539,
+                "uncachedPlusOutputTokens": 4547
+              }
+            }
+          ],
+          "fileCount": 6
+        },
+        "parentExecJsonl": {
+          "inputTokens": 350824,
+          "cachedInputTokens": 317824,
+          "nonCachedInputTokens": 33000,
+          "outputTokens": 4405,
+          "reasoningOutputTokens": 132,
+          "totalTokens": 355229,
+          "uncachedPlusOutputTokens": 37405
+        }
+      },
+      "score": {
+        "caseId": "I-01",
+        "caseName": "Global Max",
+        "level": "I",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": 988,
+            "expected": 988,
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 2,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 2,
+          "byTool": {
+            "wait": 2
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    },
+    {
+      "system": "losangelex-selector",
+      "coordinationStrategy": "room",
+      "caseId": "II-11",
+      "taskFile": "II-11_n5.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/workspaces/losangelex-selector/II-11_n5",
+      "room": "repo/silo-II-11-n5-76c46b",
+      "seconds": 118.4,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-76c46b",
+          "threadId": "019ed945-f7da-7462-a57c-84cc5c8e59bf"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-76c46b",
+          "threadId": "019ed945-fd1f-7582-8b66-272014132ff8"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-76c46b",
+          "threadId": "019ed946-0262-7123-9050-303927b4f680"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-76c46b",
+          "threadId": "019ed946-07be-7b82-b552-03d0c410a8aa"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-76c46b",
+          "threadId": "019ed946-0d06-7101-a4a3-ecd964918447"
+        }
+      ],
+      "score": {
+        "caseId": "II-11",
+        "caseName": "Prefix Sum",
+        "level": "II",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "expected": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "expected": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "expected": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "expected": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "expected": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1548459,
+        "cachedInputTokens": 1336832,
+        "nonCachedInputTokens": 211627,
+        "outputTokens": 11240,
+        "reasoningOutputTokens": 2166,
+        "totalTokens": 1559699,
+        "uncachedPlusOutputTokens": 222867
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1548459,
+          "cachedInputTokens": 1336832,
+          "nonCachedInputTokens": 211627,
+          "outputTokens": 11240,
+          "reasoningOutputTokens": 2166,
+          "totalTokens": 1559699,
+          "uncachedPlusOutputTokens": 222867
+        },
+        "eventCount": 56,
+        "threadCount": 5,
+        "byThread": {
+          "019ed945-f7da-7462-a57c-84cc5c8e59bf": {
+            "turnId": "019ed946-25d4-72a3-a65c-07236bc2ff39",
+            "total": {
+              "inputTokens": 172234,
+              "cachedInputTokens": 146560,
+              "nonCachedInputTokens": 25674,
+              "outputTokens": 1144,
+              "reasoningOutputTokens": 200,
+              "totalTokens": 173378,
+              "uncachedPlusOutputTokens": 26818
+            },
+            "last": {
+              "inputTokens": 26817,
+              "cachedInputTokens": 25984,
+              "nonCachedInputTokens": 833,
+              "outputTokens": 91,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 26908,
+              "uncachedPlusOutputTokens": 924
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed945-fd1f-7582-8b66-272014132ff8": {
+            "turnId": "019ed946-25e2-7b51-a6d1-837157353ef5",
+            "total": {
+              "inputTokens": 228811,
+              "cachedInputTokens": 177024,
+              "nonCachedInputTokens": 51787,
+              "outputTokens": 1620,
+              "reasoningOutputTokens": 289,
+              "totalTokens": 230431,
+              "uncachedPlusOutputTokens": 53407
+            },
+            "last": {
+              "inputTokens": 27831,
+              "cachedInputTokens": 27008,
+              "nonCachedInputTokens": 823,
+              "outputTokens": 81,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 27912,
+              "uncachedPlusOutputTokens": 904
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed946-0262-7123-9050-303927b4f680": {
+            "turnId": "019ed946-25f1-7c50-924b-ba3411c0a89a",
+            "total": {
+              "inputTokens": 315140,
+              "cachedInputTokens": 271360,
+              "nonCachedInputTokens": 43780,
+              "outputTokens": 2343,
+              "reasoningOutputTokens": 399,
+              "totalTokens": 317483,
+              "uncachedPlusOutputTokens": 46123
+            },
+            "last": {
+              "inputTokens": 30109,
+              "cachedInputTokens": 29056,
+              "nonCachedInputTokens": 1053,
+              "outputTokens": 99,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 30208,
+              "uncachedPlusOutputTokens": 1152
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed946-0d06-7101-a4a3-ecd964918447": {
+            "turnId": "019ed946-2631-7610-bc80-47079a1ee036",
+            "total": {
+              "inputTokens": 527378,
+              "cachedInputTokens": 497536,
+              "nonCachedInputTokens": 29842,
+              "outputTokens": 3290,
+              "reasoningOutputTokens": 726,
+              "totalTokens": 530668,
+              "uncachedPlusOutputTokens": 33132
+            },
+            "last": {
+              "inputTokens": 38341,
+              "cachedInputTokens": 37760,
+              "nonCachedInputTokens": 581,
+              "outputTokens": 81,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 38422,
+              "uncachedPlusOutputTokens": 662
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed946-07be-7b82-b552-03d0c410a8aa": {
+            "turnId": "019ed946-2601-7f13-a77b-f6408a1a117b",
+            "total": {
+              "inputTokens": 304896,
+              "cachedInputTokens": 244352,
+              "nonCachedInputTokens": 60544,
+              "outputTokens": 2843,
+              "reasoningOutputTokens": 552,
+              "totalTokens": 307739,
+              "uncachedPlusOutputTokens": 63387
+            },
+            "last": {
+              "inputTokens": 31592,
+              "cachedInputTokens": 30080,
+              "nonCachedInputTokens": 1512,
+              "outputTokens": 122,
+              "reasoningOutputTokens": 20,
+              "totalTokens": 31714,
+              "uncachedPlusOutputTokens": 1634
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/losangelex-selector/II-11_n5/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/losangelex-selector/II-11_n5/thread-states.json",
+      "selectorDecision": {
+        "selector": "silo-topology-v1-2026-06-14",
+        "strategy": "room",
+        "reason": "level-ii-iii-order-dependent-or-per-agent-output"
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "II-11",
+      "taskFile": "II-11_n5.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/workspaces/codex-subagents/II-11_n5",
+      "seconds": 144.5,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/II-11_n5/parent-last-message.txt",
+        "stdoutPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/II-11_n5/parent-stdout.log",
+        "stderrPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/II-11_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 356958,
+          "cachedInputTokens": 298368,
+          "nonCachedInputTokens": 58590,
+          "outputTokens": 4751,
+          "reasoningOutputTokens": 260,
+          "totalTokens": 361709,
+          "uncachedPlusOutputTokens": 63341
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 776601,
+        "cachedInputTokens": 640512,
+        "nonCachedInputTokens": 136089,
+        "outputTokens": 10789,
+        "reasoningOutputTokens": 1763,
+        "totalTokens": 787390,
+        "uncachedPlusOutputTokens": 146878
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 776601,
+            "cachedInputTokens": 640512,
+            "nonCachedInputTokens": 136089,
+            "outputTokens": 10789,
+            "reasoningOutputTokens": 1763,
+            "totalTokens": 787390,
+            "uncachedPlusOutputTokens": 146878
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-50-20-019ed947-c7ec-7ff1-b481-61bf463becd1.jsonl",
+              "tokenUsage": {
+                "inputTokens": 356958,
+                "cachedInputTokens": 298368,
+                "nonCachedInputTokens": 58590,
+                "outputTokens": 4751,
+                "reasoningOutputTokens": 260,
+                "totalTokens": 361709,
+                "uncachedPlusOutputTokens": 63341
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-50-35-019ed948-013b-7943-aeba-228e78a65405.jsonl",
+              "tokenUsage": {
+                "inputTokens": 87861,
+                "cachedInputTokens": 28672,
+                "nonCachedInputTokens": 59189,
+                "outputTokens": 948,
+                "reasoningOutputTokens": 67,
+                "totalTokens": 88809,
+                "uncachedPlusOutputTokens": 60137
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-50-48-019ed948-3413-7d60-9599-7169e0ce668f.jsonl",
+              "tokenUsage": {
+                "inputTokens": 64896,
+                "cachedInputTokens": 62080,
+                "nonCachedInputTokens": 2816,
+                "outputTokens": 615,
+                "reasoningOutputTokens": 108,
+                "totalTokens": 65511,
+                "uncachedPlusOutputTokens": 3431
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-51-01-019ed948-6616-7580-911c-9de7587e2c04.jsonl",
+              "tokenUsage": {
+                "inputTokens": 89168,
+                "cachedInputTokens": 84480,
+                "nonCachedInputTokens": 4688,
+                "outputTokens": 1580,
+                "reasoningOutputTokens": 503,
+                "totalTokens": 90748,
+                "uncachedPlusOutputTokens": 6268
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-51-14-019ed948-9861-77d2-ac96-85565bef2860.jsonl",
+              "tokenUsage": {
+                "inputTokens": 88627,
+                "cachedInputTokens": 84480,
+                "nonCachedInputTokens": 4147,
+                "outputTokens": 1475,
+                "reasoningOutputTokens": 424,
+                "totalTokens": 90102,
+                "uncachedPlusOutputTokens": 5622
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-51-26-019ed948-c943-7050-889c-656c8b02c426.jsonl",
+              "tokenUsage": {
+                "inputTokens": 89091,
+                "cachedInputTokens": 82432,
+                "nonCachedInputTokens": 6659,
+                "outputTokens": 1420,
+                "reasoningOutputTokens": 401,
+                "totalTokens": 90511,
+                "uncachedPlusOutputTokens": 8079
+              }
+            }
+          ],
+          "fileCount": 6
+        },
+        "parentExecJsonl": {
+          "inputTokens": 356958,
+          "cachedInputTokens": 298368,
+          "nonCachedInputTokens": 58590,
+          "outputTokens": 4751,
+          "reasoningOutputTokens": 260,
+          "totalTokens": 361709,
+          "uncachedPlusOutputTokens": 63341
+        }
+      },
+      "score": {
+        "caseId": "II-11",
+        "caseName": "Prefix Sum",
+        "level": "II",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "expected": [
+              25,
+              69,
+              104,
+              126,
+              151,
+              200,
+              248,
+              257,
+              302,
+              349,
+              355,
+              388,
+              436,
+              459,
+              463
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "expected": [
+              470,
+              498,
+              513,
+              518,
+              540,
+              579,
+              629,
+              669,
+              708,
+              734,
+              784,
+              805,
+              807,
+              848,
+              866
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "expected": [
+              895,
+              927,
+              942,
+              965,
+              1001,
+              1026,
+              1054,
+              1066,
+              1110,
+              1148,
+              1191,
+              1216,
+              1222,
+              1272,
+              1312
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "expected": [
+              1331,
+              1347,
+              1393,
+              1398,
+              1404,
+              1422,
+              1432,
+              1457,
+              1503,
+              1544,
+              1554,
+              1602,
+              1627,
+              1648,
+              1672
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "expected": [
+              1679,
+              1685,
+              1686,
+              1706,
+              1735,
+              1759,
+              1808,
+              1826,
+              1833,
+              1842,
+              1848,
+              1860,
+              1888,
+              1917,
+              1953
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 3,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 3,
+          "byTool": {
+            "wait": 3
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    },
+    {
+      "system": "losangelex-selector",
+      "coordinationStrategy": "room",
+      "caseId": "III-21",
+      "taskFile": "III-21_n5.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/workspaces/losangelex-selector/III-21_n5",
+      "room": "repo/silo-III-21-n5-fa853b",
+      "seconds": 85.9,
+      "rounds": [
+        {
+          "round": 1,
+          "completedInitialTurns": true,
+          "activeThreads": 0,
+          "roundTimedOut": false,
+          "submitted": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "stoppedForActiveTimeout": false,
+      "agents": [
+        {
+          "agentId": 0,
+          "runtimeName": "silo-agent-000-fa853b",
+          "threadId": "019ed949-fad3-7ae1-b05e-aa02ec57cab7"
+        },
+        {
+          "agentId": 1,
+          "runtimeName": "silo-agent-001-fa853b",
+          "threadId": "019ed94a-001e-7f80-af1e-d36ed61de274"
+        },
+        {
+          "agentId": 2,
+          "runtimeName": "silo-agent-002-fa853b",
+          "threadId": "019ed94a-0595-7691-ba98-8521ab7d2dc6"
+        },
+        {
+          "agentId": 3,
+          "runtimeName": "silo-agent-003-fa853b",
+          "threadId": "019ed94a-0af3-7bf3-9780-0d069cd8182f"
+        },
+        {
+          "agentId": 4,
+          "runtimeName": "silo-agent-004-fa853b",
+          "threadId": "019ed94a-1068-7520-83f7-617b10012078"
+        }
+      ],
+      "score": {
+        "caseId": "III-21",
+        "caseName": "Distributed Sort",
+        "level": "III",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "expected": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "expected": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "expected": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "expected": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "expected": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "tokenUsage": {
+        "inputTokens": 1230344,
+        "cachedInputTokens": 1006080,
+        "nonCachedInputTokens": 224264,
+        "outputTokens": 9504,
+        "reasoningOutputTokens": 920,
+        "totalTokens": 1239848,
+        "uncachedPlusOutputTokens": 233768
+      },
+      "tokenUsageSummary": {
+        "tokenUsage": {
+          "inputTokens": 1230344,
+          "cachedInputTokens": 1006080,
+          "nonCachedInputTokens": 224264,
+          "outputTokens": 9504,
+          "reasoningOutputTokens": 920,
+          "totalTokens": 1239848,
+          "uncachedPlusOutputTokens": 233768
+        },
+        "eventCount": 48,
+        "threadCount": 5,
+        "byThread": {
+          "019ed949-fad3-7ae1-b05e-aa02ec57cab7": {
+            "turnId": "019ed94a-294a-7b72-8a65-a79c5835015d",
+            "total": {
+              "inputTokens": 255916,
+              "cachedInputTokens": 202496,
+              "nonCachedInputTokens": 53420,
+              "outputTokens": 1758,
+              "reasoningOutputTokens": 178,
+              "totalTokens": 257674,
+              "uncachedPlusOutputTokens": 55178
+            },
+            "last": {
+              "inputTokens": 28426,
+              "cachedInputTokens": 27008,
+              "nonCachedInputTokens": 1418,
+              "outputTokens": 91,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 28517,
+              "uncachedPlusOutputTokens": 1509
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94a-0af3-7bf3-9780-0d069cd8182f": {
+            "turnId": "019ed94a-2971-7920-9118-66ccee99e665",
+            "total": {
+              "inputTokens": 256919,
+              "cachedInputTokens": 215296,
+              "nonCachedInputTokens": 41623,
+              "outputTokens": 2112,
+              "reasoningOutputTokens": 209,
+              "totalTokens": 259031,
+              "uncachedPlusOutputTokens": 43735
+            },
+            "last": {
+              "inputTokens": 28669,
+              "cachedInputTokens": 28032,
+              "nonCachedInputTokens": 637,
+              "outputTokens": 94,
+              "reasoningOutputTokens": 8,
+              "totalTokens": 28763,
+              "uncachedPlusOutputTokens": 731
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94a-001e-7f80-af1e-d36ed61de274": {
+            "turnId": "019ed94a-2955-76e0-9475-81eec160b40a",
+            "total": {
+              "inputTokens": 207832,
+              "cachedInputTokens": 158720,
+              "nonCachedInputTokens": 49112,
+              "outputTokens": 2155,
+              "reasoningOutputTokens": 205,
+              "totalTokens": 209987,
+              "uncachedPlusOutputTokens": 51267
+            },
+            "last": {
+              "inputTokens": 28971,
+              "cachedInputTokens": 28032,
+              "nonCachedInputTokens": 939,
+              "outputTokens": 84,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 29055,
+              "uncachedPlusOutputTokens": 1023
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94a-0595-7691-ba98-8521ab7d2dc6": {
+            "turnId": "019ed94a-2962-7b53-a82c-6912f2d4f734",
+            "total": {
+              "inputTokens": 256712,
+              "cachedInputTokens": 204544,
+              "nonCachedInputTokens": 52168,
+              "outputTokens": 2034,
+              "reasoningOutputTokens": 209,
+              "totalTokens": 258746,
+              "uncachedPlusOutputTokens": 54202
+            },
+            "last": {
+              "inputTokens": 28393,
+              "cachedInputTokens": 27520,
+              "nonCachedInputTokens": 873,
+              "outputTokens": 92,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 28485,
+              "uncachedPlusOutputTokens": 965
+            },
+            "modelContextWindow": 258400
+          },
+          "019ed94a-1068-7520-83f7-617b10012078": {
+            "turnId": "019ed94a-29a9-7990-bf07-573fdf0180a8",
+            "total": {
+              "inputTokens": 252965,
+              "cachedInputTokens": 225024,
+              "nonCachedInputTokens": 27941,
+              "outputTokens": 1445,
+              "reasoningOutputTokens": 119,
+              "totalTokens": 254410,
+              "uncachedPlusOutputTokens": 29386
+            },
+            "last": {
+              "inputTokens": 28015,
+              "cachedInputTokens": 27520,
+              "nonCachedInputTokens": 495,
+              "outputTokens": 68,
+              "reasoningOutputTokens": 0,
+              "totalTokens": 28083,
+              "uncachedPlusOutputTokens": 563
+            },
+            "modelContextWindow": 258400
+          }
+        }
+      },
+      "coordinationToolSummary": {
+        "toolCalls": {
+          "total": 0,
+          "byTool": {}
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "byThread": {},
+          "byCategory": {}
+        },
+        "examples": []
+      },
+      "notificationsSummaryPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/losangelex-selector/III-21_n5/notifications-summary.json",
+      "threadStatesPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/losangelex-selector/III-21_n5/thread-states.json",
+      "selectorDecision": {
+        "selector": "silo-topology-v1-2026-06-14",
+        "strategy": "room",
+        "reason": "level-ii-iii-order-dependent-or-per-agent-output"
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "caseId": "III-21",
+      "taskFile": "III-21_n5.json",
+      "workspace": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/workspaces/codex-subagents/III-21_n5",
+      "seconds": 200.3,
+      "parentRun": {
+        "returncode": 0,
+        "lastMessagePath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/III-21_n5/parent-last-message.txt",
+        "stdoutPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/III-21_n5/parent-stdout.log",
+        "stderrPath": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/runs/codex-subagents/III-21_n5/parent-stderr.log",
+        "tokenUsage": {
+          "inputTokens": 395998,
+          "cachedInputTokens": 296192,
+          "nonCachedInputTokens": 99806,
+          "outputTokens": 5788,
+          "reasoningOutputTokens": 288,
+          "totalTokens": 401786,
+          "uncachedPlusOutputTokens": 105594
+        },
+        "transientRetries": []
+      },
+      "tokenUsage": {
+        "inputTokens": 944246,
+        "cachedInputTokens": 758016,
+        "nonCachedInputTokens": 186230,
+        "outputTokens": 12459,
+        "reasoningOutputTokens": 1105,
+        "totalTokens": 956705,
+        "uncachedPlusOutputTokens": 198689
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 944246,
+            "cachedInputTokens": 758016,
+            "nonCachedInputTokens": 186230,
+            "outputTokens": 12459,
+            "reasoningOutputTokens": 1105,
+            "totalTokens": 956705,
+            "uncachedPlusOutputTokens": 198689
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-54-11-019ed94b-4c1b-79c1-bdb5-c99e6193d613.jsonl",
+              "tokenUsage": {
+                "inputTokens": 395998,
+                "cachedInputTokens": 296192,
+                "nonCachedInputTokens": 99806,
+                "outputTokens": 5788,
+                "reasoningOutputTokens": 288,
+                "totalTokens": 401786,
+                "uncachedPlusOutputTokens": 105594
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-54-25-019ed94b-8610-7e43-8643-aa3176c9487b.jsonl",
+              "tokenUsage": {
+                "inputTokens": 65240,
+                "cachedInputTokens": 55936,
+                "nonCachedInputTokens": 9304,
+                "outputTokens": 771,
+                "reasoningOutputTokens": 119,
+                "totalTokens": 66011,
+                "uncachedPlusOutputTokens": 10075
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-54-40-019ed94b-bd43-7b50-a928-9644e9f5b543.jsonl",
+              "tokenUsage": {
+                "inputTokens": 89200,
+                "cachedInputTokens": 65024,
+                "nonCachedInputTokens": 24176,
+                "outputTokens": 1274,
+                "reasoningOutputTokens": 122,
+                "totalTokens": 90474,
+                "uncachedPlusOutputTokens": 25450
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-54-53-019ed94b-f016-7cd3-8906-daa660b439ac.jsonl",
+              "tokenUsage": {
+                "inputTokens": 87974,
+                "cachedInputTokens": 76288,
+                "nonCachedInputTokens": 11686,
+                "outputTokens": 946,
+                "reasoningOutputTokens": 198,
+                "totalTokens": 88920,
+                "uncachedPlusOutputTokens": 12632
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-55-06-019ed94c-22c0-7a00-a2f3-f50029bceec0.jsonl",
+              "tokenUsage": {
+                "inputTokens": 88646,
+                "cachedInputTokens": 82944,
+                "nonCachedInputTokens": 5702,
+                "outputTokens": 1230,
+                "reasoningOutputTokens": 156,
+                "totalTokens": 89876,
+                "uncachedPlusOutputTokens": 6932
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex-ledger-efficient-messaging/tmp/research/published-agent-benchmarks/2026-06-18-ledger-efficient-silo-n5-stratified-current/codex-subagents-home/sessions/2026/06/18/rollout-2026-06-18T01-55-19-019ed94c-55b1-7373-9dc9-3e0af7da3c55.jsonl",
+              "tokenUsage": {
+                "inputTokens": 217188,
+                "cachedInputTokens": 181632,
+                "nonCachedInputTokens": 35556,
+                "outputTokens": 2450,
+                "reasoningOutputTokens": 222,
+                "totalTokens": 219638,
+                "uncachedPlusOutputTokens": 38006
+              }
+            }
+          ],
+          "fileCount": 6
+        },
+        "parentExecJsonl": {
+          "inputTokens": 395998,
+          "cachedInputTokens": 296192,
+          "nonCachedInputTokens": 99806,
+          "outputTokens": 5788,
+          "reasoningOutputTokens": 288,
+          "totalTokens": 401786,
+          "uncachedPlusOutputTokens": 105594
+        }
+      },
+      "score": {
+        "caseId": "III-21",
+        "caseName": "Distributed Sort",
+        "level": "III",
+        "agentCount": 5,
+        "success": true,
+        "metrics": {
+          "S_success_rate": 1.0,
+          "P_partial_correctness": 1.0,
+          "S_numeric_tolerance_success_rate": 1.0,
+          "P_numeric_tolerance_partial_correctness": 1.0
+        },
+        "submissions": [
+          {
+            "agent_id": 0,
+            "answer": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "expected": [
+              12,
+              13,
+              15,
+              18,
+              41,
+              57,
+              60,
+              62,
+              68,
+              70,
+              75,
+              81,
+              85,
+              86,
+              89,
+              119,
+              123,
+              130,
+              141,
+              157
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 1,
+            "answer": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "expected": [
+              160,
+              168,
+              171,
+              180,
+              209,
+              221,
+              245,
+              251,
+              266,
+              269,
+              276,
+              285,
+              294,
+              317,
+              318,
+              318,
+              335,
+              356,
+              381,
+              401
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 2,
+            "answer": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "expected": [
+              408,
+              412,
+              426,
+              434,
+              445,
+              448,
+              465,
+              483,
+              509,
+              514,
+              519,
+              524,
+              530,
+              536,
+              550,
+              550,
+              551,
+              601,
+              602,
+              624
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 3,
+            "answer": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "expected": [
+              627,
+              631,
+              644,
+              650,
+              656,
+              659,
+              666,
+              674,
+              683,
+              698,
+              716,
+              719,
+              719,
+              725,
+              730,
+              739,
+              748,
+              751,
+              759,
+              760
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          },
+          {
+            "agent_id": 4,
+            "answer": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "expected": [
+              768,
+              782,
+              786,
+              789,
+              800,
+              802,
+              809,
+              828,
+              843,
+              855,
+              867,
+              895,
+              944,
+              945,
+              947,
+              972,
+              976,
+              977,
+              978,
+              998
+            ],
+            "correct": true,
+            "exists": true,
+            "parse_error": null
+          }
+        ]
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 3,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 3,
+          "byTool": {
+            "wait": 3
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "codexSubagentArtifacts": {
+        "expectedAgents": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "submissionsPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "sharedPresent": [
+          "agent-000",
+          "agent-001",
+          "agent-002",
+          "agent-003",
+          "agent-004"
+        ],
+        "missingSubmissions": [],
+        "missingShared": []
+      },
+      "baselineValidityNote": "The parent prompt contains worker private shards so the model can call spawn_agent with the corresponding prompts. This is a true Codex-subagent orchestration baseline, not a strict parent-blind private-shard runtime. The parent may aggregate worker-produced facts into standardized submission files."
+    }
+  ],
+  "summary": {
+    "systems": {
+      "codex-subagents": {
+        "tasks": 3,
+        "fullSuccesses": 3,
+        "fullSuccessRate": 1.0,
+        "avgAgentSuccessRate": 1.0,
+        "avgPartialCorrectness": 1.0,
+        "avgNumericToleranceSuccessRate": 1.0,
+        "avgNumericTolerancePartialCorrectness": 1.0,
+        "avgSeconds": 159.6,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 3,
+        "totalTokenUsage": {
+          "inputTokens": 2488924,
+          "cachedInputTokens": 2110720,
+          "nonCachedInputTokens": 378204,
+          "outputTokens": 32711,
+          "reasoningOutputTokens": 4281,
+          "totalTokens": 2521635,
+          "uncachedPlusOutputTokens": 410915
+        },
+        "avgTotalTokens": 840545.0,
+        "avgUncachedPlusOutputTokens": 136971.66666666666,
+        "totalTokensPerFullSuccess": 840545.0,
+        "uncachedPlusOutputTokensPerFullSuccess": 136971.66666666666
+      },
+      "losangelex-selector": {
+        "tasks": 3,
+        "fullSuccesses": 3,
+        "fullSuccessRate": 1.0,
+        "avgAgentSuccessRate": 1.0,
+        "avgPartialCorrectness": 1.0,
+        "avgNumericToleranceSuccessRate": 1.0,
+        "avgNumericTolerancePartialCorrectness": 1.0,
+        "avgSeconds": 88.33333333333333,
+        "coordinationToolErrors": 0,
+        "tokenUsageTaskCount": 3,
+        "totalTokenUsage": {
+          "inputTokens": 3303867,
+          "cachedInputTokens": 2712832,
+          "nonCachedInputTokens": 591035,
+          "outputTokens": 24546,
+          "reasoningOutputTokens": 4189,
+          "totalTokens": 3328413,
+          "uncachedPlusOutputTokens": 615581
+        },
+        "avgTotalTokens": 1109471.0,
+        "avgUncachedPlusOutputTokens": 205193.66666666666,
+        "totalTokensPerFullSuccess": 1109471.0,
+        "uncachedPlusOutputTokensPerFullSuccess": 205193.66666666666
+      }
+    },
+    "levels": {
+      "I": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 134.0,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 768077,
+              "cachedInputTokens": 712192,
+              "nonCachedInputTokens": 55885,
+              "outputTokens": 9463,
+              "reasoningOutputTokens": 1413,
+              "totalTokens": 777540,
+              "uncachedPlusOutputTokens": 65348
+            },
+            "avgTotalTokens": 777540.0,
+            "avgUncachedPlusOutputTokens": 65348.0,
+            "totalTokensPerFullSuccess": 777540.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 65348.0
+          },
+          "losangelex-selector": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 60.7,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 525064,
+              "cachedInputTokens": 369920,
+              "nonCachedInputTokens": 155144,
+              "outputTokens": 3802,
+              "reasoningOutputTokens": 1103,
+              "totalTokens": 528866,
+              "uncachedPlusOutputTokens": 158946
+            },
+            "avgTotalTokens": 528866.0,
+            "avgUncachedPlusOutputTokens": 158946.0,
+            "totalTokensPerFullSuccess": 528866.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 158946.0
+          }
+        }
+      },
+      "II": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 144.5,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 776601,
+              "cachedInputTokens": 640512,
+              "nonCachedInputTokens": 136089,
+              "outputTokens": 10789,
+              "reasoningOutputTokens": 1763,
+              "totalTokens": 787390,
+              "uncachedPlusOutputTokens": 146878
+            },
+            "avgTotalTokens": 787390.0,
+            "avgUncachedPlusOutputTokens": 146878.0,
+            "totalTokensPerFullSuccess": 787390.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 146878.0
+          },
+          "losangelex-selector": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 118.4,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 1548459,
+              "cachedInputTokens": 1336832,
+              "nonCachedInputTokens": 211627,
+              "outputTokens": 11240,
+              "reasoningOutputTokens": 2166,
+              "totalTokens": 1559699,
+              "uncachedPlusOutputTokens": 222867
+            },
+            "avgTotalTokens": 1559699.0,
+            "avgUncachedPlusOutputTokens": 222867.0,
+            "totalTokensPerFullSuccess": 1559699.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 222867.0
+          }
+        }
+      },
+      "III": {
+        "systems": {
+          "codex-subagents": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 200.3,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 944246,
+              "cachedInputTokens": 758016,
+              "nonCachedInputTokens": 186230,
+              "outputTokens": 12459,
+              "reasoningOutputTokens": 1105,
+              "totalTokens": 956705,
+              "uncachedPlusOutputTokens": 198689
+            },
+            "avgTotalTokens": 956705.0,
+            "avgUncachedPlusOutputTokens": 198689.0,
+            "totalTokensPerFullSuccess": 956705.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 198689.0
+          },
+          "losangelex-selector": {
+            "tasks": 1,
+            "fullSuccesses": 1,
+            "fullSuccessRate": 1.0,
+            "avgAgentSuccessRate": 1.0,
+            "avgPartialCorrectness": 1.0,
+            "avgNumericToleranceSuccessRate": 1.0,
+            "avgNumericTolerancePartialCorrectness": 1.0,
+            "avgSeconds": 85.9,
+            "coordinationToolErrors": 0,
+            "tokenUsageTaskCount": 1,
+            "totalTokenUsage": {
+              "inputTokens": 1230344,
+              "cachedInputTokens": 1006080,
+              "nonCachedInputTokens": 224264,
+              "outputTokens": 9504,
+              "reasoningOutputTokens": 920,
+              "totalTokens": 1239848,
+              "uncachedPlusOutputTokens": 233768
+            },
+            "avgTotalTokens": 1239848.0,
+            "avgUncachedPlusOutputTokens": 233768.0,
+            "totalTokensPerFullSuccess": 1239848.0,
+            "uncachedPlusOutputTokensPerFullSuccess": 233768.0
+          }
+        }
+      }
+    }
+  }
+}

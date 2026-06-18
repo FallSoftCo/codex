@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="/home/ai/Development/losangelex-ledger-efficient-messaging"
+OUT="$ROOT/tmp/research/published-agent-benchmarks"
+CODEX="$ROOT/codex-rs/target/losangelex-ledger-eval/debug/codex"
+MODEL="gpt-5.5"
+SILO_CAMPAIGN="2026-06-18-ledger-efficient-silo-n5-stratified-current"
+MARBLE_CAMPAIGN="2026-06-18-ledger-efficient-marble-db-current"
+
+mkdir -p "$OUT/logs"
+cd "$ROOT" || exit 1
+
+date -u +"started_at=%Y-%m-%dT%H:%M:%SZ" | tee "$OUT/logs/subset.status.log"
+
+python3 scripts/run_silo_published_agents.py \
+  --system losangelex-selector \
+  --system codex-subagents \
+  --silo-root "$OUT/repos/acl26-silo-bench" \
+  --out-root "$OUT" \
+  --campaign-name "$SILO_CAMPAIGN" \
+  --codex "$CODEX" \
+  --model "$MODEL" \
+  --task-id I-01_n5 \
+  --task-id II-11_n5 \
+  --task-id III-21_n5 \
+  --max-rounds 2 \
+  --per-agent-timeout-seconds 300 \
+  --timeout-seconds 1200 \
+  --round-timeout-seconds 300 \
+  --poll-seconds 2 \
+  --app-server-start-timeout-seconds 60 \
+  > "$OUT/logs/silo-n5-stratified-current.log" 2>&1
+silo_status=$?
+echo "silo_status=$silo_status" | tee -a "$OUT/logs/subset.status.log"
+
+python3 scripts/run_marble_database_published_agents.py \
+  --system losangelex \
+  --system codex-subagents \
+  --marble-root "$OUT/repos/MARBLE" \
+  --out-root "$OUT" \
+  --campaign-name "$MARBLE_CAMPAIGN" \
+  --codex "$CODEX" \
+  --model "$MODEL" \
+  --task-id database-001 \
+  --task-id database-032 \
+  --max-rounds 1 \
+  --per-agent-timeout-seconds 300 \
+  --timeout-seconds 1200 \
+  --round-timeout-seconds 300 \
+  --poll-seconds 2 \
+  --app-server-start-timeout-seconds 60 \
+  --evidence-mode native-postgres \
+  > "$OUT/logs/marble-db-current.log" 2>&1
+marble_status=$?
+echo "marble_status=$marble_status" | tee -a "$OUT/logs/subset.status.log"
+
+date -u +"finished_at=%Y-%m-%dT%H:%M:%SZ" | tee -a "$OUT/logs/subset.status.log"
+exit $((silo_status != 0 || marble_status != 0))
