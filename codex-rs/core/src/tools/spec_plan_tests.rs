@@ -46,6 +46,8 @@ struct ToolPlanInputs {
     tool_suggest_candidates: Option<ToolSuggestCandidates>,
     extension_tool_executors: Vec<Arc<dyn ToolExecutor<ExtensionToolCall>>>,
     dynamic_tools: Vec<DynamicToolSpec>,
+    state_db_available: bool,
+    hollywood_tools_available: bool,
 }
 
 struct ToolPlanProbe {
@@ -184,8 +186,8 @@ async fn probe_with(
             tool_suggest_candidates: inputs.tool_suggest_candidates,
             mcp_tools: inputs.mcp_tools,
             deferred_mcp_tools: inputs.deferred_mcp_tools,
-            state_db_available: false,
-            hollywood_tools_available: false,
+            state_db_available: inputs.state_db_available,
+            hollywood_tools_available: inputs.hollywood_tools_available,
             extension_tool_executors: inputs.extension_tool_executors,
             dynamic_tools: inputs.dynamic_tools.as_slice(),
         },
@@ -468,6 +470,43 @@ async fn request_user_input_stays_direct_in_code_mode_only() {
         panic!("expected code mode exec tool");
     };
     assert!(!exec.description.contains("request_user_input"));
+}
+
+#[tokio::test]
+async fn losangelex_coordination_tools_stay_direct_in_code_mode_only() {
+    let plan = probe_with(
+        |turn| {
+            set_features(turn, &[Feature::CodeMode, Feature::CodeModeOnly]);
+        },
+        ToolPlanInputs {
+            state_db_available: true,
+            hollywood_tools_available: true,
+            ..ToolPlanInputs::default()
+        },
+    )
+    .await;
+
+    plan.assert_visible_contains(&[
+        "coordination_act",
+        "list_coordination_tasks",
+        "hollywood_read",
+        "hollywood_send",
+        codex_code_mode::PUBLIC_TOOL_NAME,
+    ]);
+    for name in [
+        "coordination_act",
+        "list_coordination_tasks",
+        "hollywood_read",
+        "hollywood_send",
+    ] {
+        assert_eq!(plan.exposure(name), ToolExposure::DirectModelOnly);
+    }
+
+    let ToolSpec::Freeform(exec) = plan.visible_spec(codex_code_mode::PUBLIC_TOOL_NAME) else {
+        panic!("expected code mode exec tool");
+    };
+    assert!(!exec.description.contains("coordination_act"));
+    assert!(!exec.description.contains("hollywood_send"));
 }
 
 #[tokio::test]

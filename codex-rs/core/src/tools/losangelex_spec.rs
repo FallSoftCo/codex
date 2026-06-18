@@ -97,7 +97,7 @@ where
     }
 
     fn exposure(&self) -> ToolExposure {
-        self.handler.exposure()
+        ToolExposure::DirectModelOnly
     }
 
     fn supports_parallel_tool_calls(&self) -> bool {

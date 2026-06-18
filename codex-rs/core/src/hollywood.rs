@@ -221,11 +221,13 @@ fn runtime_context(
         startup_protocol.push("announce_presence".to_string());
     }
     startup_protocol.extend([
-        "read_recent_room_context".to_string(),
+        "inspect_compact_coordination_tasks_before_message_reads".to_string(),
         "ask_user_for_tasking_when_unassigned".to_string(),
         "relay_assigned_scope_to_room".to_string(),
         "check_existing_scope_claims_before_editing".to_string(),
         "claim_exact_paths_or_modules_before_peer_coordinated_or_overlap_prone_editing".to_string(),
+        "read_only_verification_lanes_do_not_claim_edit_paths".to_string(),
+        "gating_peer_verification_uses_required_response_and_waits_for_result".to_string(),
         "avoid_overlapping_edits_until_resolved".to_string(),
         "prefer_task_rooms_for_bounded_parallel_slices".to_string(),
         "use_hollywood_read_cursors_and_actionable_filters".to_string(),
@@ -242,8 +244,12 @@ fn runtime_context(
     if collaboration_first_debug {
         startup_protocol.extend([
             "evaluate_peer_collaboration_before_substantive_work".to_string(),
-            "inspect_attached_peers_with_hollywood_read_before_solo_decision".to_string(),
+            "inspect_compact_coordination_tasks_before_solo_decision".to_string(),
             "collaborate_when_peer_help_reduces_effort_risk_or_uncertainty".to_string(),
+            "do_not_treat_multi_surface_or_verification_heavy_work_as_tiny_due_to_file_count"
+                .to_string(),
+            "request_at_least_one_peer_lane_for_multi_surface_work_when_idle_peers_are_available"
+                .to_string(),
             "self_owned_coordination_is_not_peer_collaboration".to_string(),
             "solo_execution_is_for_small_local_or_unsplittable_work".to_string(),
         ]);
@@ -257,6 +263,9 @@ fn runtime_context(
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.".to_string(),
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
         "For bounded task slices, use a `task/<repo>/<task>` working room and keep the repo room observed for status, handoffs, and integration.".to_string(),
+        "Read-only review or verification lanes should record task acceptance without path claims, and claim paths only if they take ownership of edits.".to_string(),
+        "If peer verification gates your final answer, request it with `response_policy:\"required\"` and wait for a final answer, blocker, handoff, or task-done signal; use optional only for non-gating FYI review.".to_string(),
+        "Use `list_coordination_tasks` as the first coordination read; use `view:\"full\"` or `task_id` only for task-local details.".to_string(),
         "Use `hollywood_read` with `after_id`, `actionable_only`, and `cursor.next_after_id` for repeated reads so room coordination advances by deltas instead of rereading the room.".to_string(),
         "Use compact `hollywood_send` `message_type` values for peer-parsed updates: status, blocker, handoff, or final_answer.".to_string(),
         "Avoid coordination churn for trivial local edits; use peers, task rooms, and durable path claims when the work is meaningfully splittable, blocked, risky, or overlap-prone.".to_string(),
@@ -266,14 +275,19 @@ fn runtime_context(
         broadcast_guidance.extend([
             "Debug collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified.".to_string(),
             "Debug collaboration-first policy: collaboration is peer-to-peer and role-flexible; any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader.".to_string(),
-            "Debug collaboration-first policy: for work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help.".to_string(),
-            "Debug collaboration-first policy: a self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself; for cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign a narrow durable task to a specific peer before claiming all scope yourself.".to_string(),
+            "Debug collaboration-first policy: for work that is not clearly tiny and local, call `list_coordination_tasks` before claiming or editing; use compact task state plus Hollywood peer context to decide whether to request peer help.".to_string(),
+            "Debug collaboration-first policy: a self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself. Do not classify multi-surface, implementation-plus-verification, or shared-file work as tiny/local only because the repo or file count is small.".to_string(),
+            "Debug collaboration-first policy: when idle peers are available for cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign one peer-owned durable task before editing.".to_string(),
+            "Debug collaboration-first policy: read-only review or verification lanes should record task acceptance without path claims, and claim paths only if they take ownership of edits.".to_string(),
+            "Debug collaboration-first policy: if peer verification gates your final answer, request it with `response_policy:\"required\"` and wait for a final answer, blocker, handoff, or task-done signal; use optional only for non-gating FYI review.".to_string(),
             "Debug collaboration-first policy: if peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback.".to_string(),
             "Debug collaboration-first policy: prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers.".to_string(),
         ]);
     }
     HollywoodRuntimeContext {
         tools: vec![
+            "coordination_act".to_string(),
+            "list_coordination_tasks".to_string(),
             "hollywood_status".to_string(),
             "hollywood_read".to_string(),
             "losangelex_team_launch".to_string(),
@@ -666,6 +680,18 @@ mod tests {
                 .contains(&"hollywood_send".to_string())
         );
         assert!(
+            context
+                .runtime
+                .tools
+                .contains(&"coordination_act".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .tools
+                .contains(&"list_coordination_tasks".to_string())
+        );
+        assert!(
             !context
                 .runtime
                 .startup_protocol
@@ -676,6 +702,12 @@ mod tests {
                 .runtime
                 .startup_protocol
                 .contains(&"use_hollywood_first_for_peer_coordination".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"inspect_compact_coordination_tasks_before_message_reads".to_string())
         );
         assert!(
             context
@@ -715,6 +747,29 @@ mod tests {
                 &"use_compact_hollywood_message_envelopes_for_status_blocker_handoff_final_answer"
                     .to_string()
             )
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"read_only_verification_lanes_do_not_claim_edit_paths".to_string())
+        );
+        assert!(context.runtime.startup_protocol.contains(
+            &"gating_peer_verification_uses_required_response_and_waits_for_result".to_string()
+        ));
+        assert!(
+            context
+                .runtime
+                .broadcast_guidance
+                .iter()
+                .any(|guidance| { guidance.contains("Read-only review or verification lanes") })
+        );
+        assert!(
+            context
+                .runtime
+                .broadcast_guidance
+                .iter()
+                .any(|guidance| { guidance.contains("response_policy:\"required\"") })
         );
     }
 
