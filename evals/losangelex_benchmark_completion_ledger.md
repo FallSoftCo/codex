@@ -1,6 +1,6 @@
 # Losangelex Published Benchmark Completion Ledger
 
-Last updated: 2026-05-22
+Last updated: 2026-06-18
 
 ## Goal
 
@@ -1025,3 +1025,50 @@ benchmark-general paper claim is still desired.
   than the older June 1 subagent runs, normal Hollywood remains the latency
   leader on this sample, and the first-finisher pattern is a useful
   coordination-design probe rather than an across-the-board replacement.
+
+## 2026-06-16 GPT-5.5 Current-Upstream Appendix
+
+- Ran a GPT-5.5 benchmark campaign across SILO n=5, SILO n=10, and MARBLE
+  native-postgres. The launcher log
+  `tmp/research/benchmark-logs/gpt55-full-benchmarks-2026-06-16.log` completed
+  on `2026-06-17T15:03:04-04:00`.
+- Frozen artifact bundle:
+  `evals/research/2026-06-16-gpt55-upstream-subagent-messaging/`.
+- Upstream Codex materially changed multi-agent/subagent messaging during this
+  catch-up window:
+  - `8f2d6416ce41be54551185c640f83e22f061eccd` on June 12 added
+    plaintext/typed agent-message history support.
+  - `5b22a8e5b13bd4bc3b331e7a1392569107b7bccf` on June 16 added typed
+    envelopes for `NEW_TASK`, `MESSAGE`, and `FINAL_ANSWER`.
+  - `1b24ba912ac4c56ef936364deb1c3e294b0ef9fa` on June 16 surfaced terminal
+    subagent errors to parents.
+  - `45f603302c45269737db97443612bb4876365798` on June 17 added
+    `source_call_id` join keys for multi-agent v2 inter-agent messages.
+- SILO n=5 was complete with 120 rows and full token coverage:
+  - Codex: `23/30`, avg S/P `0.800/0.818`, mean `841.0s`,
+    `1,173,682` avg total tokens.
+  - Full-context Codex: `25/30`, avg S/P `0.833/0.846`, mean `41.4s`,
+    `84,428` avg total tokens.
+  - Codex subagents: `24/30`, avg S/P `0.800/0.812`, mean `220.8s`,
+    `954,987` avg total tokens.
+  - Losangelex: `25/30`, avg S/P `0.833/0.846`, mean `170.9s`,
+    `1,679,657` avg total tokens.
+- SILO n=10 was complete with 120 rows and full token coverage:
+  - Codex: `21/30`, avg S/P `0.727/0.746`, mean `1670.0s`,
+    `2,555,300` avg total tokens.
+  - Full-context Codex: `25/30`, avg S/P `0.833/0.847`, mean `62.8s`,
+    `106,320` avg total tokens.
+  - Codex subagents: `23/30`, avg S/P `0.767/0.780`, mean `289.4s`,
+    `1,698,260` avg total tokens.
+  - Losangelex: `23/30`, avg S/P `0.793/0.813`, mean `177.6s`,
+    `3,737,636` avg total tokens.
+- Interpretation for SILO: current Codex subagents are the token-efficiency
+  leader among real multi-agent systems; Losangelex ties Codex subagents on
+  n=10 strict success and is materially faster, but it is much more token
+  expensive. This supports a task-conditional runtime tradeoff, not a universal
+  Losangelex win.
+- The MARBLE native-postgres 100-case file is recorded only as an exploratory
+  cutoff artifact. It reached normal scored rows through database-032, then the
+  account hit a usage limit and database-033 onward produced empty predictions
+  and zero-token rows. The June 2 30-case MARBLE run remains the primary public
+  MARBLE evidence.

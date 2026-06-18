@@ -1,0 +1,319 @@
+# Published MARBLE Database Agent Comparison: marble-native-gpt55-full-all-systems-2026-06-16
+
+This run evaluates the published MARBLE/MultiAgentBench database diagnosis
+cases with Codex agent cohorts and Losangelex Hollywood rooms. The runner
+keeps root-cause labels and anomaly trigger fields outside the agent
+workspace; they are used only after execution for deterministic scoring.
+
+Evidence mode: `native-postgres`
+
+## Summary
+
+| System | Tasks | Full successes | Exact set matches | Avg recall | Avg precision | Avg F1 | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| codex | 100 | 32 (32.00%) | 0 (0.00%) | 0.320 | 0.160 | 0.213 | 159.6 | 906,202 | 240,554 | 906,202 | 0 |
+| codex-subagents | 100 | 32 (32.00%) | 0 (0.00%) | 0.320 | 0.160 | 0.213 | 71.4 | 1,364,638 | 232,046 | 1,364,638 | 0 |
+| losangelex | 100 | 32 (32.00%) | 0 (0.00%) | 0.320 | 0.160 | 0.213 | 104.4 | 2,011,101 | 380,788 | 2,073,948 | 0 |
+
+## Tasks
+
+- codex `database-001`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=504.1 total_tokens=884,946 uncached_plus_output_tokens=258,514 coordination_errors=0
+- codex-subagents `database-001`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['INSERT_LARGE_DATA'] seconds=209.8 total_tokens=1,295,342 uncached_plus_output_tokens=270,318 coordination_errors=0
+- losangelex `database-001`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=153.5 total_tokens=1,260,994 uncached_plus_output_tokens=425,794 coordination_errors=0
+- codex `database-002`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=449.2 total_tokens=1,127,709 uncached_plus_output_tokens=290,973 coordination_errors=0
+- codex-subagents `database-002`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=202.7 total_tokens=1,464,929 uncached_plus_output_tokens=287,585 coordination_errors=0
+- losangelex `database-002`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['INSERT_LARGE_DATA'] seconds=155.8 total_tokens=1,915,388 uncached_plus_output_tokens=397,308 coordination_errors=0
+- codex `database-003`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=445.0 total_tokens=913,337 uncached_plus_output_tokens=256,569 coordination_errors=0
+- codex-subagents `database-003`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=199.6 total_tokens=1,475,431 uncached_plus_output_tokens=226,919 coordination_errors=0
+- losangelex `database-003`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=159.7 total_tokens=1,881,128 uncached_plus_output_tokens=369,064 coordination_errors=0
+- codex `database-004`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=413.9 total_tokens=911,725 uncached_plus_output_tokens=271,853 coordination_errors=0
+- codex-subagents `database-004`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=201.7 total_tokens=1,465,094 uncached_plus_output_tokens=238,726 coordination_errors=0
+- losangelex `database-004`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=198.7 total_tokens=3,047,727 uncached_plus_output_tokens=369,199 coordination_errors=0
+- codex `database-005`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=366.3 total_tokens=708,849 uncached_plus_output_tokens=236,145 coordination_errors=0
+- codex-subagents `database-005`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=176.3 total_tokens=1,372,193 uncached_plus_output_tokens=214,049 coordination_errors=0
+- losangelex `database-005`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=156.0 total_tokens=1,833,693 uncached_plus_output_tokens=376,285 coordination_errors=0
+- codex `database-006`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=411.9 total_tokens=893,827 uncached_plus_output_tokens=215,555 coordination_errors=0
+- codex-subagents `database-006`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=184.4 total_tokens=1,517,706 uncached_plus_output_tokens=252,682 coordination_errors=0
+- losangelex `database-006`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=154.5 total_tokens=1,694,674 uncached_plus_output_tokens=405,586 coordination_errors=0
+- codex `database-007`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=410.4 total_tokens=900,224 uncached_plus_output_tokens=218,112 coordination_errors=0
+- codex-subagents `database-007`: success=True recall=1.000 predicted=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=159.3 total_tokens=1,263,604 uncached_plus_output_tokens=180,852 coordination_errors=0
+- losangelex `database-007`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=155.9 total_tokens=2,233,227 uncached_plus_output_tokens=414,859 coordination_errors=0
+- codex `database-008`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=445.4 total_tokens=968,383 uncached_plus_output_tokens=237,887 coordination_errors=0
+- codex-subagents `database-008`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['INSERT_LARGE_DATA'] seconds=182.2 total_tokens=1,394,651 uncached_plus_output_tokens=184,411 coordination_errors=0
+- losangelex `database-008`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=153.5 total_tokens=1,815,671 uncached_plus_output_tokens=412,791 coordination_errors=0
+- codex `database-009`: success=True recall=1.000 predicted=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=396.5 total_tokens=772,940 uncached_plus_output_tokens=211,404 coordination_errors=0
+- codex-subagents `database-009`: success=True recall=1.000 predicted=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=142.2 total_tokens=1,209,576 uncached_plus_output_tokens=169,064 coordination_errors=0
+- losangelex `database-009`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=155.3 total_tokens=1,786,810 uncached_plus_output_tokens=300,090 coordination_errors=0
+- codex `database-010`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=419.7 total_tokens=1,002,413 uncached_plus_output_tokens=241,197 coordination_errors=0
+- codex-subagents `database-010`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=235.9 total_tokens=1,434,908 uncached_plus_output_tokens=240,668 coordination_errors=0
+- losangelex `database-010`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=198.7 total_tokens=2,316,861 uncached_plus_output_tokens=326,461 coordination_errors=0
+- codex `database-011`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=417.7 total_tokens=943,756 uncached_plus_output_tokens=272,140 coordination_errors=0
+- codex-subagents `database-011`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=254.9 total_tokens=1,581,085 uncached_plus_output_tokens=258,333 coordination_errors=0
+- losangelex `database-011`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=154.0 total_tokens=1,586,219 uncached_plus_output_tokens=319,787 coordination_errors=0
+- codex `database-012`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=400.3 total_tokens=826,906 uncached_plus_output_tokens=215,450 coordination_errors=0
+- codex-subagents `database-012`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=192.7 total_tokens=1,406,624 uncached_plus_output_tokens=251,168 coordination_errors=0
+- losangelex `database-012`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=156.1 total_tokens=1,891,363 uncached_plus_output_tokens=317,603 coordination_errors=0
+- codex `database-013`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=410.7 total_tokens=835,049 uncached_plus_output_tokens=222,057 coordination_errors=0
+- codex-subagents `database-013`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=199.4 total_tokens=1,177,769 uncached_plus_output_tokens=244,265 coordination_errors=0
+- losangelex `database-013`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=156.2 total_tokens=1,737,059 uncached_plus_output_tokens=404,579 coordination_errors=0
+- codex `database-014`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=441.7 total_tokens=866,119 uncached_plus_output_tokens=214,727 coordination_errors=0
+- codex-subagents `database-014`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=206.1 total_tokens=1,369,070 uncached_plus_output_tokens=263,150 coordination_errors=0
+- losangelex `database-014`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=154.4 total_tokens=1,954,610 uncached_plus_output_tokens=329,138 coordination_errors=0
+- codex `database-015`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=392.5 total_tokens=812,108 uncached_plus_output_tokens=218,188 coordination_errors=0
+- codex-subagents `database-015`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=201.1 total_tokens=1,295,988 uncached_plus_output_tokens=232,436 coordination_errors=0
+- losangelex `database-015`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=200.4 total_tokens=1,915,150 uncached_plus_output_tokens=387,214 coordination_errors=0
+- codex `database-016`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=440.1 total_tokens=899,461 uncached_plus_output_tokens=297,989 coordination_errors=0
+- codex-subagents `database-016`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=214.7 total_tokens=1,258,272 uncached_plus_output_tokens=158,496 coordination_errors=0
+- losangelex `database-016`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=201.6 total_tokens=2,109,548 uncached_plus_output_tokens=410,220 coordination_errors=0
+- codex `database-017`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=411.5 total_tokens=881,186 uncached_plus_output_tokens=222,370 coordination_errors=0
+- codex-subagents `database-017`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=197.7 total_tokens=1,361,416 uncached_plus_output_tokens=203,272 coordination_errors=0
+- losangelex `database-017`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=198.7 total_tokens=2,517,432 uncached_plus_output_tokens=499,128 coordination_errors=0
+- codex `database-018`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=409.6 total_tokens=851,034 uncached_plus_output_tokens=255,706 coordination_errors=0
+- codex-subagents `database-018`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=195.4 total_tokens=1,320,850 uncached_plus_output_tokens=240,146 coordination_errors=0
+- losangelex `database-018`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=201.3 total_tokens=2,561,778 uncached_plus_output_tokens=518,642 coordination_errors=0
+- codex `database-019`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=376.2 total_tokens=874,566 uncached_plus_output_tokens=183,494 coordination_errors=0
+- codex-subagents `database-019`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=178.9 total_tokens=1,424,432 uncached_plus_output_tokens=219,952 coordination_errors=0
+- losangelex `database-019`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=199.3 total_tokens=2,420,809 uncached_plus_output_tokens=431,561 coordination_errors=0
+- codex `database-020`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=427.5 total_tokens=934,650 uncached_plus_output_tokens=307,322 coordination_errors=0
+- codex-subagents `database-020`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=190.7 total_tokens=1,169,590 uncached_plus_output_tokens=228,278 coordination_errors=0
+- losangelex `database-020`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=199.7 total_tokens=2,046,295 uncached_plus_output_tokens=398,679 coordination_errors=0
+- codex `database-021`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=443.5 total_tokens=991,600 uncached_plus_output_tokens=233,584 coordination_errors=0
+- codex-subagents `database-021`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=180.3 total_tokens=1,267,640 uncached_plus_output_tokens=268,856 coordination_errors=0
+- losangelex `database-021`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=154.8 total_tokens=1,892,732 uncached_plus_output_tokens=371,196 coordination_errors=0
+- codex `database-022`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=391.3 total_tokens=804,228 uncached_plus_output_tokens=210,692 coordination_errors=0
+- codex-subagents `database-022`: success=True recall=1.000 predicted=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=180.2 total_tokens=1,313,380 uncached_plus_output_tokens=241,636 coordination_errors=0
+- losangelex `database-022`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=202.8 total_tokens=2,013,228 uncached_plus_output_tokens=409,004 coordination_errors=0
+- codex `database-023`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=450.0 total_tokens=963,182 uncached_plus_output_tokens=219,758 coordination_errors=0
+- codex-subagents `database-023`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['INSERT_LARGE_DATA'] seconds=234.5 total_tokens=1,411,871 uncached_plus_output_tokens=209,183 coordination_errors=0
+- losangelex `database-023`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['INSERT_LARGE_DATA'] seconds=200.7 total_tokens=2,147,392 uncached_plus_output_tokens=351,680 coordination_errors=0
+- codex `database-024`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=447.3 total_tokens=953,680 uncached_plus_output_tokens=266,960 coordination_errors=0
+- codex-subagents `database-024`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=195.5 total_tokens=1,410,577 uncached_plus_output_tokens=326,417 coordination_errors=0
+- losangelex `database-024`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=203.8 total_tokens=2,351,802 uncached_plus_output_tokens=425,786 coordination_errors=0
+- codex `database-025`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'VACUUM'] gold=['VACUUM'] seconds=442.7 total_tokens=1,123,107 uncached_plus_output_tokens=323,875 coordination_errors=0
+- codex-subagents `database-025`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=208.4 total_tokens=1,219,088 uncached_plus_output_tokens=190,096 coordination_errors=0
+- losangelex `database-025`: success=True recall=1.000 predicted=['VACUUM', 'INSERT_LARGE_DATA'] gold=['VACUUM'] seconds=158.5 total_tokens=1,751,771 uncached_plus_output_tokens=402,395 coordination_errors=0
+- codex `database-026`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'FETCH_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=450.3 total_tokens=958,673 uncached_plus_output_tokens=224,209 coordination_errors=0
+- codex-subagents `database-026`: success=True recall=1.000 predicted=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=215.0 total_tokens=1,217,679 uncached_plus_output_tokens=196,367 coordination_errors=0
+- losangelex `database-026`: success=True recall=1.000 predicted=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] gold=['FETCH_LARGE_DATA'] seconds=260.9 total_tokens=2,158,535 uncached_plus_output_tokens=379,463 coordination_errors=0
+- codex `database-027`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=426.1 total_tokens=881,588 uncached_plus_output_tokens=217,140 coordination_errors=0
+- codex-subagents `database-027`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=179.5 total_tokens=1,177,552 uncached_plus_output_tokens=214,480 coordination_errors=0
+- losangelex `database-027`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=206.5 total_tokens=1,916,843 uncached_plus_output_tokens=382,763 coordination_errors=0
+- codex `database-028`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=466.9 total_tokens=940,195 uncached_plus_output_tokens=249,379 coordination_errors=0
+- codex-subagents `database-028`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=205.8 total_tokens=1,332,822 uncached_plus_output_tokens=199,510 coordination_errors=0
+- losangelex `database-028`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=206.2 total_tokens=2,520,921 uncached_plus_output_tokens=399,321 coordination_errors=0
+- codex `database-029`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=446.4 total_tokens=913,184 uncached_plus_output_tokens=236,960 coordination_errors=0
+- codex-subagents `database-029`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=183.9 total_tokens=1,732,940 uncached_plus_output_tokens=325,068 coordination_errors=0
+- losangelex `database-029`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=202.6 total_tokens=2,106,528 uncached_plus_output_tokens=318,112 coordination_errors=0
+- codex `database-030`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=430.7 total_tokens=877,712 uncached_plus_output_tokens=272,784 coordination_errors=0
+- codex-subagents `database-030`: success=True recall=1.000 predicted=['LOCK_CONTENTION', 'INSERT_LARGE_DATA'] gold=['LOCK_CONTENTION'] seconds=174.1 total_tokens=1,277,225 uncached_plus_output_tokens=211,625 coordination_errors=0
+- losangelex `database-030`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] gold=['LOCK_CONTENTION'] seconds=205.9 total_tokens=1,763,768 uncached_plus_output_tokens=365,880 coordination_errors=0
+- codex `database-031`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=454.9 total_tokens=925,889 uncached_plus_output_tokens=225,089 coordination_errors=0
+- codex-subagents `database-031`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=253.9 total_tokens=1,695,476 uncached_plus_output_tokens=293,236 coordination_errors=0
+- losangelex `database-031`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=246.4 total_tokens=3,112,351 uncached_plus_output_tokens=538,015 coordination_errors=0
+- codex `database-032`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=434.3 total_tokens=856,250 uncached_plus_output_tokens=169,658 coordination_errors=0
+- codex-subagents `database-032`: success=True recall=1.000 predicted=['REDUNDANT_INDEX', 'INSERT_LARGE_DATA'] gold=['REDUNDANT_INDEX'] seconds=180.3 total_tokens=1,353,636 uncached_plus_output_tokens=184,228 coordination_errors=0
+- losangelex `database-032`: success=True recall=1.000 predicted=['INSERT_LARGE_DATA', 'REDUNDANT_INDEX'] gold=['REDUNDANT_INDEX'] seconds=155.2 total_tokens=1,812,998 uncached_plus_output_tokens=352,006 coordination_errors=0
+- codex `database-033`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=327.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-033`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=9.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-033`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=63.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-034`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=27.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-034`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=9.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-034`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=63.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-035`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=26.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-035`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=9.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-035`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=63.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-036`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=27.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-036`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=11.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-036`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=65.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-037`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=33.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-037`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=11.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-037`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=66.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-038`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=32.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-038`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=11.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-038`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=64.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-039`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=27.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-039`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=11.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-039`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=64.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-040`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=26.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-040`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=14.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-040`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=68.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-041`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=29.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-041`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=11.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-041`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=65.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-042`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=30.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-042`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=16.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-042`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=68.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-043`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=28.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-043`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=11.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-043`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=65.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-044`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=24.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-044`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=15.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-044`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=62.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-045`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=25.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-045`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=9.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-045`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=63.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-046`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=25.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-046`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=9.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-046`: success=False recall=0.000 predicted=[] gold=['VACUUM'] seconds=63.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-047`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=24.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-047`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=8.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-047`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA'] seconds=62.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-048`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION'] seconds=27.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-048`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION'] seconds=11.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-048`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION'] seconds=65.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-049`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=27.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-049`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=11.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-049`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA'] seconds=65.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-050`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=26.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-050`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=9.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-050`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX'] seconds=64.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-051`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=32.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-051`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=12.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-051`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=66.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-052`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=31.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-052`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=13.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-052`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=67.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-053`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=33.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-053`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=12.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-053`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=66.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-054`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=28.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-054`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=12.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-054`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=66.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-055`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=28.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-055`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=12.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-055`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=66.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-056`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=27.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-056`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-056`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-057`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=27.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-057`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=12.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-057`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=66.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-058`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=32.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-058`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=11.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-058`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=65.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-059`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=29.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-059`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=13.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-059`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=65.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-060`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=29.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-060`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=12.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-060`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=66.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-061`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=39.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-061`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-061`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-062`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=27.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-062`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-062`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=65.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-063`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=29.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-063`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-063`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=65.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-064`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=28.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-064`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=12.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-064`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=66.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-065`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=28.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-065`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=12.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-065`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=66.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-066`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=30.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-066`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-066`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=66.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-067`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=27.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-067`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-067`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-068`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=27.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-068`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-068`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=65.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-069`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=28.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-069`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=12.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-069`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=67.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-070`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=34.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-070`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=13.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-070`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=68.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-071`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=29.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-071`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-071`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=66.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-072`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=31.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-072`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=13.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-072`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=67.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-073`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=37.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-073`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=15.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-073`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=66.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-074`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=27.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-074`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=13.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-074`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=66.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-075`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=29.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-075`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=11.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-075`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=65.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-076`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=28.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-076`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=17.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-076`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=67.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-077`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=27.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-077`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-077`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=66.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-078`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=31.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-078`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=13.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-078`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=67.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-079`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=29.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-079`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=12.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-079`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=65.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-080`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=35.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-080`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-080`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-081`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=28.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-081`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=12.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-081`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=66.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-082`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=27.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-082`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=11.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-082`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=65.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-083`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=27.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-083`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=11.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-083`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=66.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-084`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=27.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-084`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=11.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-084`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=65.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-085`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=27.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-085`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-085`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=66.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-086`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=27.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-086`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-086`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=66.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-087`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=26.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-087`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-087`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-088`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=26.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-088`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-088`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-089`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=28.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-089`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=12.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-089`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=67.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-090`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=29.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-090`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=11.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-090`: success=False recall=0.000 predicted=[] gold=['INSERT_LARGE_DATA', 'LOCK_CONTENTION'] seconds=66.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-091`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=30.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-091`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=12.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-091`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-092`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=27.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-092`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-092`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-093`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=28.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-093`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=10.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-093`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-094`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=27.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-094`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=11.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-094`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=66.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-095`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=29.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-095`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=13.0 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-095`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=157.1 total_tokens=291,019 uncached_plus_output_tokens=56,395 coordination_errors=0
+- codex `database-096`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=32.1 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-096`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=13.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-096`: success=False recall=0.000 predicted=[] gold=['LOCK_CONTENTION', 'REDUNDANT_INDEX'] seconds=67.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-097`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=34.6 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-097`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=11.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-097`: success=False recall=0.000 predicted=[] gold=['REDUNDANT_INDEX', 'VACUUM'] seconds=65.8 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-098`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=29.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-098`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=13.4 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-098`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=67.2 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-099`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=30.3 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-099`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=12.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-099`: success=False recall=0.000 predicted=[] gold=['FETCH_LARGE_DATA', 'INSERT_LARGE_DATA'] seconds=66.9 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex `database-100`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=33.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- codex-subagents `database-100`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=13.7 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
+- losangelex `database-100`: success=False recall=0.000 predicted=[] gold=['VACUUM', 'FETCH_LARGE_DATA'] seconds=67.5 total_tokens=0 uncached_plus_output_tokens=0 coordination_errors=0
