@@ -40,7 +40,8 @@ from replay_hollywood_operator import summarize_notifications
 REPO_ROOT = Path("/home/ai/Development/losangelex")
 HOLLYWOOD_SCRIPT = Path("/home/ai/Development/hollywood/hollywood.py")
 DEFAULT_OUT_ROOT = REPO_ROOT / "tmp/research/collaboration-first-debug"
-COLLABORATION_FIRST_ENV_VAR = "LOSANGELEX_COLLABORATION_FIRST_DEBUG"
+COLLABORATION_FIRST_ENV_VAR = "LOSANGELEX_COLLABORATION_FIRST"
+COLLABORATION_FIRST_DEBUG_ENV_VAR = "LOSANGELEX_COLLABORATION_FIRST_DEBUG"
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class Scenario:
     respondent_prompt: str
     peer_prompt: str
     expect_collaboration: bool
+    expected_file_substrings: dict[str, tuple[str, ...]]
 
 
 SCENARIOS = {
@@ -62,6 +64,14 @@ SCENARIOS = {
         respondent_name="Responder",
         peer_names=("ClientPeer", "VerifierPeer"),
         expect_collaboration=True,
+        expected_file_substrings={
+            "client/live_client.js": ("Math.random",),
+            "server/turn_handler.js": ("reconnect",),
+            "tests/reconnect_notes.md": (
+                "client/live_client.js",
+                "server/turn_handler.js",
+            ),
+        },
         files={
             "README.md": """# Debug Eval App
 
@@ -110,12 +120,63 @@ The work may touch client retry behavior, server reconnect wording, and verifica
 Keep changes minimal and inspect the repo before editing. Complete the work as you normally would.
 """,
     ),
+    "review_heavy_permissions": Scenario(
+        scenario_id="review_heavy_permissions",
+        description="Cross-surface permission change where review or split verification should help.",
+        respondent_name="Responder",
+        peer_names=("ServerPeer", "ReviewPeer"),
+        expect_collaboration=True,
+        expected_file_substrings={
+            "server/permissions.js": ("canExportAudit", "admin"),
+            "ui/permissions_panel.js": ("Audit export",),
+            "tests/permissions_notes.md": (
+                "Audit export",
+                "admin",
+            ),
+        },
+        files={
+            "README.md": """# Permission Debug App
+
+Scratch project for a Losangelex collaboration evaluation.
+""",
+            "server/permissions.js": """export function canViewDashboard(role) {
+  return role === "admin" || role === "operator";
+}
+""",
+            "ui/permissions_panel.js": """export function permissionRows() {
+  return ["Dashboard view"];
+}
+""",
+            "tests/permissions_notes.md": """# Permission Notes
+
+- Server permission helper should stay minimal.
+- UI copy should mention user-visible capability changes.
+""",
+        },
+        peer_prompt="""You are an attached Losangelex peer in a debug collaboration evaluation.
+
+Stay available in this Hollywood room. Do not start implementation on your own.
+If another session asks for help, accept only one narrow lane that fits the request,
+announce the exact files you will inspect or edit, avoid overlapping claims, and
+send a concise completion or blocker update when done.
+""",
+        respondent_prompt="""Add audit export permission support in this scratch repo.
+
+The change should touch the server permission helper, the small UI permissions
+panel, and verification notes. Because this crosses server/UI/verification
+surfaces, coordinate with an attached peer for a narrow implementation or review
+lane before claiming all scope yourself. Keep the change minimal.
+""",
+    ),
     "tiny_readme": Scenario(
         scenario_id="tiny_readme",
         description="Tiny local README edit where peer collaboration is unnecessary churn.",
         respondent_name="Responder",
         peer_names=("IdlePeer",),
         expect_collaboration=False,
+        expected_file_substrings={
+            "README.md": ("# Debug Eval Scratch App",),
+        },
         files={
             "README.md": """# Debug Eval App
 
@@ -218,8 +279,10 @@ def managed_debug_app_server(
     env["HOLLYWOOD_URL"] = hollywood_url
     if candidate:
         env[COLLABORATION_FIRST_ENV_VAR] = "1"
+        env.pop(COLLABORATION_FIRST_DEBUG_ENV_VAR, None)
     else:
-        env.pop(COLLABORATION_FIRST_ENV_VAR, None)
+        env[COLLABORATION_FIRST_ENV_VAR] = "0"
+        env.pop(COLLABORATION_FIRST_DEBUG_ENV_VAR, None)
     log_handle = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(
         [str(codex.resolve()), "app-server", "--listen", url],
@@ -332,6 +395,7 @@ def run_single_eval(
     turn_timeout_seconds: int,
 ) -> dict[str, Any]:
     candidate = system == "candidate"
+    started = time.time()
     run_id = uuid.uuid4().hex[:8]
     run_dir = output_dir / system / scenario.scenario_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -426,6 +490,7 @@ def run_single_eval(
     score = score_run(
         scenario=scenario,
         agents=agents,
+        workspace=workspace,
         room_messages=room_messages,
         notification_summary=notification_summary,
         diff=diff,
@@ -434,9 +499,10 @@ def run_single_eval(
         "system": system,
         "scenarioId": scenario.scenario_id,
         "description": scenario.description,
-        "candidateEnv": candidate,
+        "collaborationFirstEnabled": candidate,
         "model": model,
         "runId": run_id,
+        "seconds": round(time.time() - started, 1),
         "workspace": str(workspace),
         "room": room,
         "appServer": app_server.metadata(),
@@ -476,6 +542,7 @@ def score_run(
     *,
     scenario: Scenario,
     agents: list[StartedAgent],
+    workspace: Path,
     room_messages: list[dict[str, Any]],
     notification_summary: dict[str, Any],
     diff: str,
@@ -485,6 +552,11 @@ def score_run(
     message_counts_by_role: Counter[str] = Counter()
     request_count = 0
     peer_response_count = 0
+    peer_message_count = 0
+    required_peer_request_count = 0
+    direct_message_count = 0
+    required_direct_message_count = 0
+    seen_required_peer_request = False
     peer_names_lower = [agent.name.lower() for agent in agents if agent.role == "peer"]
     request_terms = (
         "can you",
@@ -510,21 +582,33 @@ def score_run(
         recipient = str(message.get("recipient_id") or message.get("recipientId") or "")
         body = str(message.get("body") or "")
         body_lower = body.lower()
+        message_kind = str(
+            message.get("message_kind") or message.get("messageKind") or ""
+        ).lower()
         response_policy = str(
             message.get("response_policy") or message.get("responsePolicy") or ""
         ).lower()
         role = thread_roles.get(sender, "unknown")
         message_counts_by_role[role] += 1
         if role == "respondent":
+            if message_kind == "direct":
+                direct_message_count += 1
+                if response_policy == "required":
+                    required_direct_message_count += 1
             mentions_peer = any(peer in body_lower for peer in peer_names_lower)
             has_request_term = any(term in body_lower for term in request_terms)
             requests_response = response_policy == "required"
             if recipient or mentions_peer or requests_response or has_request_term:
                 request_count += 1
+            if requests_response and (recipient or mentions_peer):
+                required_peer_request_count += 1
+                seen_required_peer_request = True
             if any(term in body_lower for term in collaboration_decision_terms):
                 collaboration_decision_count += 1
         elif role == "peer":
-            peer_response_count += 1
+            peer_message_count += 1
+            if seen_required_peer_request:
+                peer_response_count += 1
 
     tool_calls = (
         notification_summary.get("coordinationToolSummary", {})
@@ -537,26 +621,55 @@ def score_run(
         .get("total", 0)
     )
     hollywood_send_calls = int(tool_calls.get("hollywood_send", 0))
-    passed = (
-        request_count > 0 and peer_response_count > 0
+    expected_content_matches = expected_file_content_matches(
+        workspace, scenario.expected_file_substrings
+    )
+    collaboration_requirement_met = (
+        required_peer_request_count > 0 and peer_response_count > 0
         if scenario.expect_collaboration
-        else request_count == 0 and peer_response_count == 0
+        else request_count == 0
+    )
+    passed = (
+        collaboration_requirement_met
+        and expected_content_matches
+        and bool(diff.strip())
     )
     if tool_errors:
         passed = False
     return {
         "passed": passed,
+        "collaborationRequirementMet": collaboration_requirement_met,
         "expectedCollaboration": scenario.expect_collaboration,
+        "expectedContentMatches": expected_content_matches,
         "roomMessageCount": len(room_messages),
         "messageCountsByRole": dict(message_counts_by_role),
         "peerRequestCount": request_count,
+        "requiredPeerRequestCount": required_peer_request_count,
+        "peerMessageCount": peer_message_count,
         "peerResponseCount": peer_response_count,
+        "directMessageCount": direct_message_count,
+        "requiredDirectMessageCount": required_direct_message_count,
         "collaborationDecisionMessageCount": collaboration_decision_count,
         "hollywoodSendCalls": hollywood_send_calls,
         "coordinationToolErrors": tool_errors,
         "workspaceChanged": bool(diff.strip()),
         "threadNames": thread_names,
     }
+
+
+def expected_file_content_matches(
+    workspace: Path,
+    expected_file_substrings: dict[str, tuple[str, ...]],
+) -> bool:
+    for relative, substrings in expected_file_substrings.items():
+        path = workspace / relative
+        if not path.exists():
+            return False
+        text = path.read_text(encoding="utf-8")
+        text_folded = text.casefold()
+        if any(substring.casefold() not in text_folded for substring in substrings):
+            return False
+    return True
 
 
 def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
@@ -573,23 +686,22 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
         "",
         "## Summary",
         "",
-        "| System | Runs | Passed | Peer requests | Peer responses | Hollywood sends | Tool errors |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| System | Runs | Passed | Required peer requests | Peer responses | Tool errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for system, system_results in sorted(by_system.items()):
         passed = sum(1 for result in system_results if result["score"]["passed"])
-        peer_requests = sum(
-            result["score"]["peerRequestCount"] for result in system_results
+        required_requests = sum(
+            result["score"]["requiredPeerRequestCount"] for result in system_results
         )
         peer_responses = sum(
             result["score"]["peerResponseCount"] for result in system_results
         )
-        sends = sum(result["score"]["hollywoodSendCalls"] for result in system_results)
         errors = sum(
             result["score"]["coordinationToolErrors"] for result in system_results
         )
         lines.append(
-            f"| {system} | {len(system_results)} | {passed} | {peer_requests} | {peer_responses} | {sends} | {errors} |"
+            f"| {system} | {len(system_results)} | {passed} | {required_requests} | {peer_responses} | {errors} |"
         )
 
     lines.extend(["", "## Runs", ""])
@@ -601,9 +713,15 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
                 "",
                 f"- Passed: `{score['passed']}`",
                 f"- Expected collaboration: `{score['expectedCollaboration']}`",
+                f"- Collaboration requirement met: `{score['collaborationRequirementMet']}`",
+                f"- Expected content matches: `{score['expectedContentMatches']}`",
                 f"- Peer requests: `{score['peerRequestCount']}`",
+                f"- Required peer requests: `{score['requiredPeerRequestCount']}`",
+                f"- Peer messages: `{score['peerMessageCount']}`",
                 f"- Peer responses: `{score['peerResponseCount']}`",
-                f"- Hollywood send calls: `{score['hollywoodSendCalls']}`",
+                f"- Direct messages: `{score['directMessageCount']}`",
+                f"- Required direct messages: `{score['requiredDirectMessageCount']}`",
+                f"- Notification-derived hollywood_send calls: `{score['hollywoodSendCalls']}`",
                 f"- Coordination tool errors: `{score['coordinationToolErrors']}`",
                 f"- Workspace changed: `{score['workspaceChanged']}`",
                 f"- Result: `{result['system']}/{result['scenarioId']}/{result['runId']}/result.json`",

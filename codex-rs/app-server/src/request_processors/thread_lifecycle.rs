@@ -1,4 +1,4 @@
-use super::hollywood_polling::collaboration_first_debug_enabled;
+use super::hollywood_polling::hollywood_polling_enabled;
 use super::hollywood_polling::poll_hollywood_for_thread;
 use super::*;
 use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
@@ -284,7 +284,7 @@ pub(super) async fn ensure_listener_task_running(
     let registry_client = Client::new();
     let mut registry_sync_interval = tokio::time::interval(HOLLYWOOD_REGISTRY_SYNC_INTERVAL);
     registry_sync_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
-    let hollywood_poll_enabled = collaboration_first_debug_enabled();
+    let hollywood_poll_enabled = hollywood_polling_enabled();
     let mut hollywood_poll_interval = tokio::time::interval(HOLLYWOOD_POLL_INTERVAL);
     hollywood_poll_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     tokio::spawn(async move {

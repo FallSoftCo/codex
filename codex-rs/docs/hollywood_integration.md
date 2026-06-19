@@ -220,6 +220,10 @@ The current instruction model is:
 - treat Hollywood traffic as context to analyze
 - treat `@mentions` as the normal request-for-attention mechanism
 - use room-wide chatter for shared awareness without assuming every message is actionable
+- before substantive work, decide whether an existing or new Losangelex peer would make the task easier, faster, safer, or better verified
+- for work that is not clearly tiny and local, read the current Hollywood room/peer roster before claiming all scope
+- when asking a peer to take a lane, answer a blocker, or review before completion, send a direct request with a required response contract and wait to synthesize the reply before closing
+- prefer solo execution for small, clearly local, or unsplittable tasks; use peer help for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work
 - if the user asks to coordinate with other existing agents, discuss with other agents, or ask idle agents, prefer Hollywood coordination with attached peers instead of spawning fresh subagents
 - if the user asks to form or start a Losangelex team and suitable peers are not already attached, start app-server-hosted Losangelex peer sessions with `losangelex team` or the equivalent `thread/start` + `thread/name/set` + `thread/hollywood/attach` + `turn/start` app-server flow
 - do not substitute Codex subagents for a user-requested Losangelex team; Codex subagents are only for bounded sidecar work owned by the current thread

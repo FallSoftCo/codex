@@ -1,5 +1,6 @@
 use crate::hollywood::HollywoodClassifiedMessage;
 use crate::hollywood::HollywoodPendingSemanticWake;
+use crate::hollywood::collaboration_first_policy_enabled;
 use crate::hollywood::poll_messages;
 use crate::thread_state::ThreadState;
 use crate::thread_status::ThreadWatchManager;
@@ -16,17 +17,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
 
-const COLLABORATION_FIRST_DEBUG_ENV_VAR: &str = "LOSANGELEX_COLLABORATION_FIRST_DEBUG";
-
-pub(super) fn collaboration_first_debug_enabled() -> bool {
-    env_flag_enabled(COLLABORATION_FIRST_DEBUG_ENV_VAR)
-}
-
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var(name)
-        .as_deref()
-        .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
-        .unwrap_or(false)
+pub(super) fn hollywood_polling_enabled() -> bool {
+    collaboration_first_policy_enabled()
 }
 
 pub(super) async fn poll_hollywood_for_thread(

@@ -1,0 +1,2308 @@
+{
+  "benchmark": "Hollywood coordination",
+  "campaignName": "hollywood-coordination-postfix-2026-06-18-c",
+  "model": "gpt-5.5",
+  "systems": [
+    "codex",
+    "codex-subagents",
+    "losangelex-baseline",
+    "losangelex"
+  ],
+  "records": [
+    {
+      "system": "codex",
+      "scenarioId": "review_heavy_permissions",
+      "description": "Cross-surface permission change where review or split verification should help.",
+      "model": "gpt-5.5",
+      "runId": "69ce6695",
+      "seconds": 50.0,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/review_heavy_permissions/69ce6695/workspace",
+      "promptPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/review_heavy_permissions/69ce6695/prompt.txt",
+      "stdoutPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/review_heavy_permissions/69ce6695/stdout.log",
+      "stderrPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/review_heavy_permissions/69ce6695/stderr.log",
+      "lastMessagePath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/review_heavy_permissions/69ce6695/last-message.txt",
+      "returncode": 0,
+      "transientRetries": [],
+      "tokenUsage": {
+        "inputTokens": 101250,
+        "cachedInputTokens": 72832,
+        "nonCachedInputTokens": 28418,
+        "outputTokens": 1865,
+        "reasoningOutputTokens": 382,
+        "totalTokens": 103115,
+        "uncachedPlusOutputTokens": 30283
+      },
+      "tokenUsageSummary": {
+        "source": "codex-exec-jsonl",
+        "parentExecJsonl": {
+          "inputTokens": 101250,
+          "cachedInputTokens": 72832,
+          "nonCachedInputTokens": 28418,
+          "outputTokens": 1865,
+          "reasoningOutputTokens": 382,
+          "totalTokens": 103115,
+          "uncachedPlusOutputTokens": 30283
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 0,
+          "byTool": {
+            "spawn_agent": 0,
+            "wait": 0,
+            "send_input": 0
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "examples": []
+        }
+      },
+      "workspaceDiff": "diff --git a/server/permissions.js b/server/permissions.js\nindex 38cc305..9b123b5 100644\n--- a/server/permissions.js\n+++ b/server/permissions.js\n@@ -1,3 +1,7 @@\n export function canViewDashboard(role) {\n   return role === \"admin\" || role === \"operator\";\n }\n+\n+export function canExportAudit(role) {\n+  return role === \"admin\";\n+}\ndiff --git a/tests/permissions_notes.md b/tests/permissions_notes.md\nindex fc6c374..2d974c1 100644\n--- a/tests/permissions_notes.md\n+++ b/tests/permissions_notes.md\n@@ -2,3 +2,4 @@\n \n - Server permission helper should stay minimal.\n - UI copy should mention user-visible capability changes.\n+- Audit export should remain admin-only in server checks and visible in the UI permissions list.\ndiff --git a/ui/permissions_panel.js b/ui/permissions_panel.js\nindex 61033c4..f4522d0 100644\n--- a/ui/permissions_panel.js\n+++ b/ui/permissions_panel.js\n@@ -1,3 +1,3 @@\n export function permissionRows() {\n-  return [\"Dashboard view\"];\n+  return [\"Dashboard view\", \"Audit export\"];\n }\n",
+      "score": {
+        "passed": true,
+        "expectedCollaboration": true,
+        "coordinationRequirementMet": true,
+        "expectedContentMatches": true,
+        "workspaceChanged": true,
+        "coordinationToolErrors": 0,
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "scenarioId": "review_heavy_permissions",
+      "description": "Cross-surface permission change where review or split verification should help.",
+      "model": "gpt-5.5",
+      "runId": "543b5d6d",
+      "seconds": 101.2,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/workspace",
+      "promptPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/prompt.txt",
+      "stdoutPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/stdout.log",
+      "stderrPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/stderr.log",
+      "lastMessagePath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/last-message.txt",
+      "returncode": 0,
+      "transientRetries": [],
+      "tokenUsage": {
+        "inputTokens": 294788,
+        "cachedInputTokens": 248064,
+        "nonCachedInputTokens": 46724,
+        "outputTokens": 4782,
+        "reasoningOutputTokens": 599,
+        "totalTokens": 299570,
+        "uncachedPlusOutputTokens": 51506
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 294788,
+            "cachedInputTokens": 248064,
+            "nonCachedInputTokens": 46724,
+            "outputTokens": 4782,
+            "reasoningOutputTokens": 599,
+            "totalTokens": 299570,
+            "uncachedPlusOutputTokens": 51506
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/codex-home/sessions/2026/06/18/rollout-2026-06-18T13-46-31-019edbd7-77cc-7ae2-b2be-9a0b643a9074.jsonl",
+              "tokenUsage": {
+                "inputTokens": 186582,
+                "cachedInputTokens": 151168,
+                "nonCachedInputTokens": 35414,
+                "outputTokens": 3088,
+                "reasoningOutputTokens": 343,
+                "totalTokens": 189670,
+                "uncachedPlusOutputTokens": 38502
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/review_heavy_permissions/543b5d6d/codex-home/sessions/2026/06/18/rollout-2026-06-18T13-46-49-019edbd7-bcbf-7c51-96ca-19320b7e6018.jsonl",
+              "tokenUsage": {
+                "inputTokens": 108206,
+                "cachedInputTokens": 96896,
+                "nonCachedInputTokens": 11310,
+                "outputTokens": 1694,
+                "reasoningOutputTokens": 256,
+                "totalTokens": 109900,
+                "uncachedPlusOutputTokens": 13004
+              }
+            }
+          ],
+          "fileCount": 2
+        },
+        "parentExecJsonl": {
+          "inputTokens": 186582,
+          "cachedInputTokens": 151168,
+          "nonCachedInputTokens": 35414,
+          "outputTokens": 3088,
+          "reasoningOutputTokens": 343,
+          "totalTokens": 189670,
+          "uncachedPlusOutputTokens": 38502
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 1,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 1,
+          "byTool": {
+            "wait": 1
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "workspaceDiff": "diff --git a/server/permissions.js b/server/permissions.js\nindex 38cc305..9b123b5 100644\n--- a/server/permissions.js\n+++ b/server/permissions.js\n@@ -1,3 +1,7 @@\n export function canViewDashboard(role) {\n   return role === \"admin\" || role === \"operator\";\n }\n+\n+export function canExportAudit(role) {\n+  return role === \"admin\";\n+}\ndiff --git a/tests/permissions_notes.md b/tests/permissions_notes.md\nindex fc6c374..d39e66c 100644\n--- a/tests/permissions_notes.md\n+++ b/tests/permissions_notes.md\n@@ -2,3 +2,4 @@\n \n - Server permission helper should stay minimal.\n - UI copy should mention user-visible capability changes.\n+- Audit export should be allowed for admins only and listed in the UI panel.\ndiff --git a/ui/permissions_panel.js b/ui/permissions_panel.js\nindex 61033c4..f4522d0 100644\n--- a/ui/permissions_panel.js\n+++ b/ui/permissions_panel.js\n@@ -1,3 +1,3 @@\n export function permissionRows() {\n-  return [\"Dashboard view\"];\n+  return [\"Dashboard view\", \"Audit export\"];\n }\n",
+      "score": {
+        "passed": true,
+        "expectedCollaboration": true,
+        "coordinationRequirementMet": false,
+        "expectedContentMatches": true,
+        "workspaceChanged": true,
+        "coordinationToolErrors": 0,
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 1
+      }
+    },
+    {
+      "system": "losangelex-baseline",
+      "scenarioId": "review_heavy_permissions",
+      "description": "Cross-surface permission change where review or split verification should help.",
+      "collaborationFirstEnabled": false,
+      "model": "gpt-5.5",
+      "runId": "4d9eecef",
+      "seconds": 155.0,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/review_heavy_permissions/4d9eecef/workspace",
+      "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+      "appServer": {
+        "url": "ws://127.0.0.1:33309",
+        "managed": true,
+        "source": "baseline",
+        "codexHome": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/review_heavy_permissions/4d9eecef/codex-home",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/review_heavy_permissions/4d9eecef/app-server.log",
+        "pid": 3890156
+      },
+      "hollywood": {
+        "url": "http://127.0.0.1:42165",
+        "dbPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/review_heavy_permissions/4d9eecef/hollywood.db",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/review_heavy_permissions/4d9eecef/hollywood.log",
+        "pid": 3890136
+      },
+      "agents": [
+        {
+          "name": "Responder",
+          "threadId": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "role": "respondent"
+        },
+        {
+          "name": "ServerPeer",
+          "threadId": "019edbd9-02ad-7792-b3d0-066b73e99676",
+          "role": "peer"
+        },
+        {
+          "name": "ReviewPeer",
+          "threadId": "019edbd9-07ec-7593-ad62-5b3f0aa9a26c",
+          "role": "peer"
+        }
+      ],
+      "threadStates": {
+        "019edbd8-fce8-7942-adbf-5e6a8275b4d7": {
+          "id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "name": "Responder-4d9eecef",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781804891,
+          "hollywood": null
+        },
+        "019edbd9-02ad-7792-b3d0-066b73e99676": {
+          "id": "019edbd9-02ad-7792-b3d0-066b73e99676",
+          "name": "ServerPeer-4d9eecef",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781804892,
+          "hollywood": null
+        },
+        "019edbd9-07ec-7593-ad62-5b3f0aa9a26c": {
+          "id": "019edbd9-07ec-7593-ad62-5b3f0aa9a26c",
+          "name": "ReviewPeer-4d9eecef",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781804894,
+          "hollywood": null
+        }
+      },
+      "notificationSummary": {
+        "notificationCounts": {
+          "configWarning": 1,
+          "remoteControl/status/changed": 1,
+          "thread/started": 3,
+          "mcpServer/startupStatus/updated": 8,
+          "thread/name/updated": 3,
+          "thread/status/changed": 6,
+          "turn/started": 3,
+          "item/started": 48,
+          "item/completed": 48,
+          "item/agentMessage/delta": 760,
+          "thread/tokenUsage/updated": 28,
+          "account/rateLimits/updated": 28,
+          "turn/completed": 3,
+          "turn/diff/updated": 17
+        },
+        "turnStartedByThread": {
+          "019edbd9-02ad-7792-b3d0-066b73e99676": 1,
+          "019edbd9-07ec-7593-ad62-5b3f0aa9a26c": 1,
+          "019edbd8-fce8-7942-adbf-5e6a8275b4d7": 1
+        },
+        "turnCompletedByThread": {
+          "019edbd9-02ad-7792-b3d0-066b73e99676": 1,
+          "019edbd9-07ec-7593-ad62-5b3f0aa9a26c": 1,
+          "019edbd8-fce8-7942-adbf-5e6a8275b4d7": 1
+        },
+        "lastAgentMessagesByThread": {},
+        "hollywoodMessages": [],
+        "tokenUsage": {
+          "inputTokens": 611050,
+          "cachedInputTokens": 512000,
+          "nonCachedInputTokens": 99050,
+          "outputTokens": 4312,
+          "reasoningOutputTokens": 757,
+          "totalTokens": 615362,
+          "uncachedPlusOutputTokens": 103362
+        },
+        "tokenUsageSummary": {
+          "tokenUsage": {
+            "inputTokens": 611050,
+            "cachedInputTokens": 512000,
+            "nonCachedInputTokens": 99050,
+            "outputTokens": 4312,
+            "reasoningOutputTokens": 757,
+            "totalTokens": 615362,
+            "uncachedPlusOutputTokens": 103362
+          },
+          "eventCount": 28,
+          "threadCount": 3,
+          "byThread": {
+            "019edbd9-07ec-7593-ad62-5b3f0aa9a26c": {
+              "turnId": "019edbd9-18c5-70e3-ba3b-5f2faf31443d",
+              "total": {
+                "inputTokens": 29602,
+                "cachedInputTokens": 25856,
+                "nonCachedInputTokens": 3746,
+                "outputTokens": 81,
+                "reasoningOutputTokens": 23,
+                "totalTokens": 29683,
+                "uncachedPlusOutputTokens": 3827
+              },
+              "last": {
+                "inputTokens": 15159,
+                "cachedInputTokens": 14208,
+                "nonCachedInputTokens": 951,
+                "outputTokens": 36,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15195,
+                "uncachedPlusOutputTokens": 987
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbd9-02ad-7792-b3d0-066b73e99676": {
+              "turnId": "019edbd9-18bf-7090-a8f9-533282d7bb64",
+              "total": {
+                "inputTokens": 29647,
+                "cachedInputTokens": 16640,
+                "nonCachedInputTokens": 13007,
+                "outputTokens": 131,
+                "reasoningOutputTokens": 29,
+                "totalTokens": 29778,
+                "uncachedPlusOutputTokens": 13138
+              },
+              "last": {
+                "inputTokens": 15208,
+                "cachedInputTokens": 14208,
+                "nonCachedInputTokens": 1000,
+                "outputTokens": 35,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15243,
+                "uncachedPlusOutputTokens": 1035
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbd8-fce8-7942-adbf-5e6a8275b4d7": {
+              "turnId": "019edbd9-32ff-7873-be9c-0e2c1b710bb9",
+              "total": {
+                "inputTokens": 551801,
+                "cachedInputTokens": 469504,
+                "nonCachedInputTokens": 82297,
+                "outputTokens": 4100,
+                "reasoningOutputTokens": 705,
+                "totalTokens": 555901,
+                "uncachedPlusOutputTokens": 86397
+              },
+              "last": {
+                "inputTokens": 32057,
+                "cachedInputTokens": 30080,
+                "nonCachedInputTokens": 1977,
+                "outputTokens": 427,
+                "reasoningOutputTokens": 75,
+                "totalTokens": 32484,
+                "uncachedPlusOutputTokens": 2404
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        },
+        "coordinationToolSummary": {
+          "toolCalls": {
+            "total": 0,
+            "byTool": {}
+          },
+          "errorCalls": {
+            "total": 0,
+            "byTool": {},
+            "byThread": {},
+            "byCategory": {}
+          },
+          "examples": []
+        }
+      },
+      "notificationsPath": "notifications.json",
+      "roomMessages": [
+        {
+          "id": 1,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbd8-fce8-7942-adbf-5e6a8275b4d7: open_task `Review audit export permission support` [62ac1be6-a953-49c8-8c19-965ff04a8681] owner=019edbd9-07ec-7593-ad62-5b3f0aa9a26c",
+          "created_at": "2026-06-18T17:48:35Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 2,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": "reviewpeer-4d9eecef",
+          "body": "@reviewpeer-4d9eecef I\u2019m taking implementation for audit export permission support and opened you a narrow review lane. I\u2019ll post exact files once identified; please review server helper, UI panel, and verification notes after my change.",
+          "created_at": "2026-06-18T17:48:38Z",
+          "message_kind": "direct",
+          "response_policy": "optional"
+        },
+        {
+          "id": 3,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbd8-fce8-7942-adbf-5e6a8275b4d7: open_task `Implement audit export permission support` [140ae03f-b072-4a91-be98-17a23b927801] owner=019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "created_at": "2026-06-18T17:48:56Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 4,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbd8-fce8-7942-adbf-5e6a8275b4d7: accept `Implement audit export permission support` [140ae03f-b072-4a91-be98-17a23b927801] owner=019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "created_at": "2026-06-18T17:49:00Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 5,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbd8-fce8-7942-adbf-5e6a8275b4d7: done `Implement audit export permission support` [140ae03f-b072-4a91-be98-17a23b927801] owner=019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "created_at": "2026-06-18T17:49:33Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 6,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": "reviewpeer-4d9eecef",
+          "body": "@reviewpeer-4d9eecef Implementation is ready for your narrow review. Files changed: server/permissions.js adds canExportAudit(role) admin-only; ui/permissions_panel.js adds Audit export row; tests/permissions_notes.md records admin-only/panel verification. Local node import/behavior check passed, with an existing module-type warning. Please review and report any findings.",
+          "created_at": "2026-06-18T17:49:37Z",
+          "message_kind": "direct",
+          "response_policy": "required"
+        },
+        {
+          "id": 7,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": "serverpeer-4d9eecef",
+          "body": "@serverpeer-4d9eecef FYI implementation for audit export permission support is done and reviewpeer has the review lane. If you spot any server-helper issue in server/permissions.js, please call it out; otherwise no action needed.",
+          "created_at": "2026-06-18T17:49:58Z",
+          "message_kind": "direct",
+          "response_policy": "optional"
+        },
+        {
+          "id": 8,
+          "room": "repo/collab-debug-review_heavy_permissions-4d9eecef",
+          "sender_id": "019edbd8-fce8-7942-adbf-5e6a8275b4d7",
+          "recipient_id": null,
+          "body": "@reviewpeer-4d9eecef Required review check is still pending for audit export permission support. Please reply green or with findings on server/permissions.js, ui/permissions_panel.js, and tests/permissions_notes.md.",
+          "created_at": "2026-06-18T17:50:17Z",
+          "message_kind": "broadcast",
+          "response_policy": "required"
+        }
+      ],
+      "workspaceDiff": "diff --git a/server/permissions.js b/server/permissions.js\nindex 38cc305..9b123b5 100644\n--- a/server/permissions.js\n+++ b/server/permissions.js\n@@ -1,3 +1,7 @@\n export function canViewDashboard(role) {\n   return role === \"admin\" || role === \"operator\";\n }\n+\n+export function canExportAudit(role) {\n+  return role === \"admin\";\n+}\ndiff --git a/tests/permissions_notes.md b/tests/permissions_notes.md\nindex fc6c374..4655c25 100644\n--- a/tests/permissions_notes.md\n+++ b/tests/permissions_notes.md\n@@ -2,3 +2,4 @@\n \n - Server permission helper should stay minimal.\n - UI copy should mention user-visible capability changes.\n+- Audit export should be limited to admins and shown in the permissions panel.\ndiff --git a/ui/permissions_panel.js b/ui/permissions_panel.js\nindex 61033c4..f4522d0 100644\n--- a/ui/permissions_panel.js\n+++ b/ui/permissions_panel.js\n@@ -1,3 +1,3 @@\n export function permissionRows() {\n-  return [\"Dashboard view\"];\n+  return [\"Dashboard view\", \"Audit export\"];\n }\n",
+      "score": {
+        "passed": false,
+        "collaborationRequirementMet": false,
+        "expectedCollaboration": true,
+        "expectedContentMatches": true,
+        "roomMessageCount": 8,
+        "messageCountsByRole": {
+          "respondent": 8
+        },
+        "peerRequestCount": 4,
+        "requiredPeerRequestCount": 2,
+        "peerMessageCount": 0,
+        "peerResponseCount": 0,
+        "directMessageCount": 3,
+        "requiredDirectMessageCount": 1,
+        "collaborationDecisionMessageCount": 4,
+        "hollywoodSendCalls": 0,
+        "coordinationToolErrors": 0,
+        "workspaceChanged": true,
+        "threadNames": {
+          "019edbd8-fce8-7942-adbf-5e6a8275b4d7": "Responder",
+          "019edbd9-02ad-7792-b3d0-066b73e99676": "ServerPeer",
+          "019edbd9-07ec-7593-ad62-5b3f0aa9a26c": "ReviewPeer"
+        },
+        "coordinationRequirementMet": false
+      },
+      "sourceSystem": "baseline",
+      "resultPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/review_heavy_permissions/4d9eecef/result.json",
+      "tokenUsage": {
+        "inputTokens": 611050,
+        "cachedInputTokens": 512000,
+        "nonCachedInputTokens": 99050,
+        "outputTokens": 4312,
+        "reasoningOutputTokens": 757,
+        "totalTokens": 615362,
+        "uncachedPlusOutputTokens": 103362
+      }
+    },
+    {
+      "system": "losangelex",
+      "scenarioId": "review_heavy_permissions",
+      "description": "Cross-surface permission change where review or split verification should help.",
+      "collaborationFirstEnabled": true,
+      "model": "gpt-5.5",
+      "runId": "09c196fe",
+      "seconds": 196.8,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/review_heavy_permissions/09c196fe/workspace",
+      "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+      "appServer": {
+        "url": "ws://127.0.0.1:54211",
+        "managed": true,
+        "source": "collaboration-first-debug-candidate",
+        "codexHome": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/review_heavy_permissions/09c196fe/codex-home",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/review_heavy_permissions/09c196fe/app-server.log",
+        "pid": 3897302
+      },
+      "hollywood": {
+        "url": "http://127.0.0.1:56145",
+        "dbPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/review_heavy_permissions/09c196fe/hollywood.db",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/review_heavy_permissions/09c196fe/hollywood.log",
+        "pid": 3897284
+      },
+      "agents": [
+        {
+          "name": "Responder",
+          "threadId": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "role": "respondent"
+        },
+        {
+          "name": "ServerPeer",
+          "threadId": "019edbdb-5f3f-7232-987e-d17b38f91ac3",
+          "role": "peer"
+        },
+        {
+          "name": "ReviewPeer",
+          "threadId": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "role": "peer"
+        }
+      ],
+      "threadStates": {
+        "019edbdb-5916-7a00-9bb4-9cffa9bd77e2": {
+          "id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "name": "Responder-09c196fe",
+          "status": {
+            "type": "active",
+            "activeFlags": []
+          },
+          "updatedAt": 1781805046,
+          "hollywood": null
+        },
+        "019edbdb-5f3f-7232-987e-d17b38f91ac3": {
+          "id": "019edbdb-5f3f-7232-987e-d17b38f91ac3",
+          "name": "ServerPeer-09c196fe",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805047,
+          "hollywood": null
+        },
+        "019edbdb-64f2-7c02-8904-cb03de813e24": {
+          "id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "name": "ReviewPeer-09c196fe",
+          "status": {
+            "type": "active",
+            "activeFlags": []
+          },
+          "updatedAt": 1781805049,
+          "hollywood": null
+        }
+      },
+      "notificationSummary": {
+        "notificationCounts": {
+          "configWarning": 1,
+          "remoteControl/status/changed": 1,
+          "mcpServer/startupStatus/updated": 8,
+          "thread/started": 3,
+          "thread/name/updated": 3,
+          "thread/status/changed": 12,
+          "turn/started": 7,
+          "item/started": 75,
+          "item/completed": 74,
+          "thread/tokenUsage/updated": 44,
+          "account/rateLimits/updated": 44,
+          "item/agentMessage/delta": 1014,
+          "turn/completed": 5,
+          "turn/diff/updated": 20,
+          "error": 1
+        },
+        "turnStartedByThread": {
+          "019edbdb-64f2-7c02-8904-cb03de813e24": 4,
+          "019edbdb-5f3f-7232-987e-d17b38f91ac3": 1,
+          "019edbdb-5916-7a00-9bb4-9cffa9bd77e2": 2
+        },
+        "turnCompletedByThread": {
+          "019edbdb-5f3f-7232-987e-d17b38f91ac3": 1,
+          "019edbdb-64f2-7c02-8904-cb03de813e24": 3,
+          "019edbdb-5916-7a00-9bb4-9cffa9bd77e2": 1
+        },
+        "lastAgentMessagesByThread": {},
+        "hollywoodMessages": [],
+        "tokenUsage": {
+          "inputTokens": 906529,
+          "cachedInputTokens": 778368,
+          "nonCachedInputTokens": 128161,
+          "outputTokens": 6042,
+          "reasoningOutputTokens": 634,
+          "totalTokens": 912571,
+          "uncachedPlusOutputTokens": 134203
+        },
+        "tokenUsageSummary": {
+          "tokenUsage": {
+            "inputTokens": 906529,
+            "cachedInputTokens": 778368,
+            "nonCachedInputTokens": 128161,
+            "outputTokens": 6042,
+            "reasoningOutputTokens": 634,
+            "totalTokens": 912571,
+            "uncachedPlusOutputTokens": 134203
+          },
+          "eventCount": 44,
+          "threadCount": 3,
+          "byThread": {
+            "019edbdb-5f3f-7232-987e-d17b38f91ac3": {
+              "turnId": "019edbdb-75f7-7112-8591-02694b5c3bf1",
+              "total": {
+                "inputTokens": 30272,
+                "cachedInputTokens": 14080,
+                "nonCachedInputTokens": 16192,
+                "outputTokens": 74,
+                "reasoningOutputTokens": 27,
+                "totalTokens": 30346,
+                "uncachedPlusOutputTokens": 16266
+              },
+              "last": {
+                "inputTokens": 15497,
+                "cachedInputTokens": 2432,
+                "nonCachedInputTokens": 13065,
+                "outputTokens": 25,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15522,
+                "uncachedPlusOutputTokens": 13090
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbdb-64f2-7c02-8904-cb03de813e24": {
+              "turnId": "hollywood-5",
+              "total": {
+                "inputTokens": 266306,
+                "cachedInputTokens": 225536,
+                "nonCachedInputTokens": 40770,
+                "outputTokens": 2284,
+                "reasoningOutputTokens": 251,
+                "totalTokens": 268590,
+                "uncachedPlusOutputTokens": 43054
+              },
+              "last": {
+                "inputTokens": 23507,
+                "cachedInputTokens": 22400,
+                "nonCachedInputTokens": 1107,
+                "outputTokens": 59,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 23566,
+                "uncachedPlusOutputTokens": 1166
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbdb-5916-7a00-9bb4-9cffa9bd77e2": {
+              "turnId": "hollywood-2",
+              "total": {
+                "inputTokens": 609951,
+                "cachedInputTokens": 538752,
+                "nonCachedInputTokens": 71199,
+                "outputTokens": 3684,
+                "reasoningOutputTokens": 356,
+                "totalTokens": 613635,
+                "uncachedPlusOutputTokens": 74883
+              },
+              "last": {
+                "inputTokens": 29808,
+                "cachedInputTokens": 14720,
+                "nonCachedInputTokens": 15088,
+                "outputTokens": 236,
+                "reasoningOutputTokens": 139,
+                "totalTokens": 30044,
+                "uncachedPlusOutputTokens": 15324
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        },
+        "coordinationToolSummary": {
+          "toolCalls": {
+            "total": 0,
+            "byTool": {}
+          },
+          "errorCalls": {
+            "total": 0,
+            "byTool": {},
+            "byThread": {},
+            "byCategory": {}
+          },
+          "examples": []
+        }
+      },
+      "notificationsPath": "notifications.json",
+      "roomMessages": [
+        {
+          "id": 1,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "recipient_id": "reviewpeer-09c196fe",
+          "body": "@reviewpeer-09c196fe Please take a narrow review lane for audit export permission support after my minimal implementation. Scope to verify server permission helper, UI permissions panel, and verification notes for consistency/regressions. I will claim exact files once identified and will ping when ready.",
+          "created_at": "2026-06-18T17:51:08Z",
+          "message_kind": "direct",
+          "response_policy": "required"
+        },
+        {
+          "id": 2,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "recipient_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "body": "@responder-09c196fe Acknowledged. I\u2019ll take that narrow review lane when you ping ready; I won\u2019t claim files or inspect/edit until your exact implementation scope is identified.",
+          "created_at": "2026-06-18T17:51:14Z",
+          "message_kind": "direct",
+          "response_policy": "none"
+        },
+        {
+          "id": 3,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbdb-5916-7a00-9bb4-9cffa9bd77e2: open_task `Add audit export permission support` [f4204d26-59ee-4a5a-a129-b08fb5d12457] owner=019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "created_at": "2026-06-18T17:51:22Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 4,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbdb-5916-7a00-9bb4-9cffa9bd77e2: accept `Add audit export permission support` [f4204d26-59ee-4a5a-a129-b08fb5d12457] owner=019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "created_at": "2026-06-18T17:51:26Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 5,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "recipient_id": "reviewpeer-09c196fe",
+          "body": "@reviewpeer-09c196fe Ready for your narrow review. Changes: server/permissions.js adds canExportAudit(role) returning true only for admin; ui/permissions_panel.js adds \"Audit export\" row; tests/permissions_notes.md notes admin-only audit export appears in panel. Please check consistency/regression risk.",
+          "created_at": "2026-06-18T17:52:11Z",
+          "message_kind": "direct",
+          "response_policy": "required"
+        },
+        {
+          "id": 6,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbdb-64f2-7c02-8904-cb03de813e24: open_task `Review audit export permission changes` [0420ddff-2e1a-4ac5-95c6-bbff4f4d5db5] owner=019edbdb-64f2-7c02-8904-cb03de813e24",
+          "created_at": "2026-06-18T17:52:29Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 7,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbdb-64f2-7c02-8904-cb03de813e24: accept `Review audit export permission changes` [0420ddff-2e1a-4ac5-95c6-bbff4f4d5db5] owner=019edbdb-64f2-7c02-8904-cb03de813e24",
+          "created_at": "2026-06-18T17:52:33Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 8,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "recipient_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "body": "@responder-09c196fe Accepted the narrow review lane as read-only. Your task claims overlap the files, so I\u2019m not claiming them; I\u2019ll inspect server/permissions.js, ui/permissions_panel.js, and tests/permissions_notes.md and report findings/blockers.",
+          "created_at": "2026-06-18T17:52:42Z",
+          "message_kind": "direct",
+          "response_policy": "none"
+        },
+        {
+          "id": 9,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "recipient_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "body": "@responder-09c196fe Review complete. No consistency/regression issues found in the requested lane. server/permissions.js exports canExportAudit(role) as admin-only and leaves canViewDashboard unchanged; ui/permissions_panel.js adds the visible Audit export row; tests/permissions_notes.md matches both behaviors. Repo has no executable tests/package harness, so verification was static grep/diff review only.",
+          "created_at": "2026-06-18T17:53:16Z",
+          "message_kind": "direct",
+          "response_policy": "none"
+        },
+        {
+          "id": 10,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbdb-64f2-7c02-8904-cb03de813e24: done `Review audit export permission changes` [0420ddff-2e1a-4ac5-95c6-bbff4f4d5db5] owner=019edbdb-64f2-7c02-8904-cb03de813e24",
+          "created_at": "2026-06-18T17:53:20Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 11,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbdb-5916-7a00-9bb4-9cffa9bd77e2: done `Add audit export permission support` [f4204d26-59ee-4a5a-a129-b08fb5d12457] owner=019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "created_at": "2026-06-18T17:53:29Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 12,
+          "room": "repo/collab-debug-review_heavy_permissions-09c196fe",
+          "sender_id": "019edbdb-5916-7a00-9bb4-9cffa9bd77e2",
+          "recipient_id": "019edbdb-64f2-7c02-8904-cb03de813e24",
+          "body": "@reviewpeer-09c196fe Closing the loop on your earlier acknowledgment: I identified and claimed the exact implementation scope, pinged you when ready, and incorporated your clean review result. No further action needed on that acknowledgment.",
+          "created_at": "2026-06-18T17:53:48Z",
+          "message_kind": "direct",
+          "response_policy": "none"
+        }
+      ],
+      "workspaceDiff": "diff --git a/server/permissions.js b/server/permissions.js\nindex 38cc305..9b123b5 100644\n--- a/server/permissions.js\n+++ b/server/permissions.js\n@@ -1,3 +1,7 @@\n export function canViewDashboard(role) {\n   return role === \"admin\" || role === \"operator\";\n }\n+\n+export function canExportAudit(role) {\n+  return role === \"admin\";\n+}\ndiff --git a/tests/permissions_notes.md b/tests/permissions_notes.md\nindex fc6c374..7b491a4 100644\n--- a/tests/permissions_notes.md\n+++ b/tests/permissions_notes.md\n@@ -2,3 +2,4 @@\n \n - Server permission helper should stay minimal.\n - UI copy should mention user-visible capability changes.\n+- Audit export is limited to admins and appears in the permissions panel.\ndiff --git a/ui/permissions_panel.js b/ui/permissions_panel.js\nindex 61033c4..f4522d0 100644\n--- a/ui/permissions_panel.js\n+++ b/ui/permissions_panel.js\n@@ -1,3 +1,3 @@\n export function permissionRows() {\n-  return [\"Dashboard view\"];\n+  return [\"Dashboard view\", \"Audit export\"];\n }\n",
+      "score": {
+        "passed": true,
+        "collaborationRequirementMet": true,
+        "expectedCollaboration": true,
+        "expectedContentMatches": true,
+        "roomMessageCount": 12,
+        "messageCountsByRole": {
+          "respondent": 6,
+          "peer": 6
+        },
+        "peerRequestCount": 3,
+        "requiredPeerRequestCount": 2,
+        "peerMessageCount": 6,
+        "peerResponseCount": 6,
+        "directMessageCount": 3,
+        "requiredDirectMessageCount": 2,
+        "collaborationDecisionMessageCount": 3,
+        "hollywoodSendCalls": 0,
+        "coordinationToolErrors": 0,
+        "workspaceChanged": true,
+        "threadNames": {
+          "019edbdb-5916-7a00-9bb4-9cffa9bd77e2": "Responder",
+          "019edbdb-5f3f-7232-987e-d17b38f91ac3": "ServerPeer",
+          "019edbdb-64f2-7c02-8904-cb03de813e24": "ReviewPeer"
+        },
+        "coordinationRequirementMet": true
+      },
+      "sourceSystem": "candidate",
+      "resultPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/review_heavy_permissions/09c196fe/result.json",
+      "tokenUsage": {
+        "inputTokens": 906529,
+        "cachedInputTokens": 778368,
+        "nonCachedInputTokens": 128161,
+        "outputTokens": 6042,
+        "reasoningOutputTokens": 634,
+        "totalTokens": 912571,
+        "uncachedPlusOutputTokens": 134203
+      }
+    },
+    {
+      "system": "codex",
+      "scenarioId": "splittable_reconnect",
+      "description": "Cross-surface reconnect work with useful implementation and verification lanes.",
+      "model": "gpt-5.5",
+      "runId": "36378464",
+      "seconds": 59.4,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/splittable_reconnect/36378464/workspace",
+      "promptPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/splittable_reconnect/36378464/prompt.txt",
+      "stdoutPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/splittable_reconnect/36378464/stdout.log",
+      "stderrPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/splittable_reconnect/36378464/stderr.log",
+      "lastMessagePath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/splittable_reconnect/36378464/last-message.txt",
+      "returncode": 0,
+      "transientRetries": [],
+      "tokenUsage": {
+        "inputTokens": 93560,
+        "cachedInputTokens": 81024,
+        "nonCachedInputTokens": 12536,
+        "outputTokens": 2400,
+        "reasoningOutputTokens": 545,
+        "totalTokens": 95960,
+        "uncachedPlusOutputTokens": 14936
+      },
+      "tokenUsageSummary": {
+        "source": "codex-exec-jsonl",
+        "parentExecJsonl": {
+          "inputTokens": 93560,
+          "cachedInputTokens": 81024,
+          "nonCachedInputTokens": 12536,
+          "outputTokens": 2400,
+          "reasoningOutputTokens": 545,
+          "totalTokens": 95960,
+          "uncachedPlusOutputTokens": 14936
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 0,
+          "byTool": {
+            "spawn_agent": 0,
+            "wait": 0,
+            "send_input": 0
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "examples": []
+        }
+      },
+      "workspaceDiff": "diff --git a/client/live_client.js b/client/live_client.js\nindex 90900ad..09209c5 100644\n--- a/client/live_client.js\n+++ b/client/live_client.js\n@@ -1,11 +1,13 @@\n-export function reconnectDelay(attempt) {\n-  const capped = Math.min(attempt, 4);\n-  return 250 * capped;\n+export function reconnectDelay(attempt, random = Math.random) {\n+  const capped = Math.min(Math.max(attempt, 1), 4);\n+  const baseDelay = 250 * capped;\n+  const jitter = baseDelay * 0.2 * (random() * 2 - 1);\n+  return Math.round(baseDelay + jitter);\n }\n \n export function statusCopy(state) {\n   if (state === \"reconnecting\") {\n-    return \"Trying again\";\n+    return \"Reconnecting\";\n   }\n   return \"Connected\";\n }\ndiff --git a/server/turn_handler.js b/server/turn_handler.js\nindex 91f5e15..9b8edc9 100644\n--- a/server/turn_handler.js\n+++ b/server/turn_handler.js\n@@ -6,5 +6,5 @@ export function shouldAcceptTurn({ connected, pendingTurn }) {\n }\n \n export function reconnectNotice() {\n-  return \"waiting for connection\";\n+  return \"waiting for reconnect\";\n }\ndiff --git a/tests/reconnect_notes.md b/tests/reconnect_notes.md\nindex d175c4d..c49ded5 100644\n--- a/tests/reconnect_notes.md\n+++ b/tests/reconnect_notes.md\n@@ -1,5 +1,6 @@\n # Reconnect Notes\n \n - Client retry copy should be clear during reconnect.\n+- Client retry delay should include bounded jitter so reconnects do not align.\n - Server turn acceptance should reject disconnected turns.\n-- Verification should mention the files checked.\n+- Verification checked `client/live_client.js`, `server/turn_handler.js`, and these notes.\n",
+      "score": {
+        "passed": true,
+        "expectedCollaboration": true,
+        "coordinationRequirementMet": true,
+        "expectedContentMatches": true,
+        "workspaceChanged": true,
+        "coordinationToolErrors": 0,
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "scenarioId": "splittable_reconnect",
+      "description": "Cross-surface reconnect work with useful implementation and verification lanes.",
+      "model": "gpt-5.5",
+      "runId": "341cd80d",
+      "seconds": 196.4,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/workspace",
+      "promptPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/prompt.txt",
+      "stdoutPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/stdout.log",
+      "stderrPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/stderr.log",
+      "lastMessagePath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/last-message.txt",
+      "returncode": 0,
+      "transientRetries": [],
+      "tokenUsage": {
+        "inputTokens": 446163,
+        "cachedInputTokens": 360192,
+        "nonCachedInputTokens": 85971,
+        "outputTokens": 9955,
+        "reasoningOutputTokens": 1810,
+        "totalTokens": 456118,
+        "uncachedPlusOutputTokens": 95926
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 446163,
+            "cachedInputTokens": 360192,
+            "nonCachedInputTokens": 85971,
+            "outputTokens": 9955,
+            "reasoningOutputTokens": 1810,
+            "totalTokens": 456118,
+            "uncachedPlusOutputTokens": 95926
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/codex-home/sessions/2026/06/18/rollout-2026-06-18T13-55-01-019edbdf-4056-7730-8bd3-4001a53a79c0.jsonl",
+              "tokenUsage": {
+                "inputTokens": 237238,
+                "cachedInputTokens": 186240,
+                "nonCachedInputTokens": 50998,
+                "outputTokens": 4998,
+                "reasoningOutputTokens": 1083,
+                "totalTokens": 242236,
+                "uncachedPlusOutputTokens": 55996
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/codex-home/sessions/2026/06/18/rollout-2026-06-18T13-55-46-019edbdf-f068-79e3-9bd8-3b0f1956b71f.jsonl",
+              "tokenUsage": {
+                "inputTokens": 76967,
+                "cachedInputTokens": 54656,
+                "nonCachedInputTokens": 22311,
+                "outputTokens": 1850,
+                "reasoningOutputTokens": 329,
+                "totalTokens": 78817,
+                "uncachedPlusOutputTokens": 24161
+              }
+            },
+            {
+              "path": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/splittable_reconnect/341cd80d/codex-home/sessions/2026/06/18/rollout-2026-06-18T13-55-55-019edbe0-1226-7c91-bb45-4c635e7520fb.jsonl",
+              "tokenUsage": {
+                "inputTokens": 131958,
+                "cachedInputTokens": 119296,
+                "nonCachedInputTokens": 12662,
+                "outputTokens": 3107,
+                "reasoningOutputTokens": 398,
+                "totalTokens": 135065,
+                "uncachedPlusOutputTokens": 15769
+              }
+            }
+          ],
+          "fileCount": 3
+        },
+        "parentExecJsonl": {
+          "inputTokens": 237238,
+          "cachedInputTokens": 186240,
+          "nonCachedInputTokens": 50998,
+          "outputTokens": 4998,
+          "reasoningOutputTokens": 1083,
+          "totalTokens": 242236,
+          "uncachedPlusOutputTokens": 55996
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 2,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 2,
+          "byTool": {
+            "wait": 2
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "byTool": {},
+          "examples": []
+        }
+      },
+      "workspaceDiff": "diff --git a/client/live_client.js b/client/live_client.js\nindex 90900ad..5bd9aec 100644\n--- a/client/live_client.js\n+++ b/client/live_client.js\n@@ -1,6 +1,8 @@\n export function reconnectDelay(attempt) {\n   const capped = Math.min(attempt, 4);\n-  return 250 * capped;\n+  const baseDelay = 250 * capped;\n+  const jitterMultiplier = 0.8 + Math.random() * 0.4;\n+  return Math.round(baseDelay * jitterMultiplier);\n }\n \n export function statusCopy(state) {\ndiff --git a/server/turn_handler.js b/server/turn_handler.js\nindex 91f5e15..a49999e 100644\n--- a/server/turn_handler.js\n+++ b/server/turn_handler.js\n@@ -6,5 +6,5 @@ export function shouldAcceptTurn({ connected, pendingTurn }) {\n }\n \n export function reconnectNotice() {\n-  return \"waiting for connection\";\n+  return \"Reconnecting; waiting for connection\";\n }\ndiff --git a/tests/reconnect_notes.md b/tests/reconnect_notes.md\nindex d175c4d..557db2d 100644\n--- a/tests/reconnect_notes.md\n+++ b/tests/reconnect_notes.md\n@@ -1,5 +1,8 @@\n # Reconnect Notes\n \n-- Client retry copy should be clear during reconnect.\n-- Server turn acceptance should reject disconnected turns.\n-- Verification should mention the files checked.\n+- Client retry delay now uses bounded jitter around the capped base delay: attempts cap at 4, with delays from 80% to 120% of `250 * capped`.\n+- Client retry copy remains clear during reconnect: `statusCopy(\"reconnecting\")` returns `Trying again`.\n+- Server turn acceptance still rejects disconnected turns through `shouldAcceptTurn({ connected: false, ... })`.\n+- Server reconnect wording is explicit during reconnect: `reconnectNotice()` returns `Reconnecting; waiting for connection`.\n+- Verification checked `client/live_client.js`, `server/turn_handler.js`, and this notes file.\n+- Manual verification: ran a Node probe against `reconnectDelay` with mocked `Math.random` values at the low/high jitter edges for attempts `0`, `1`, `4`, and `99`; all expected bounds passed. Node emitted a module-type warning because this scratch repo has no `package.json` declaring ESM.\n",
+      "score": {
+        "passed": true,
+        "expectedCollaboration": true,
+        "coordinationRequirementMet": false,
+        "expectedContentMatches": true,
+        "workspaceChanged": true,
+        "coordinationToolErrors": 0,
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 2
+      }
+    },
+    {
+      "system": "losangelex-baseline",
+      "scenarioId": "splittable_reconnect",
+      "description": "Cross-surface reconnect work with useful implementation and verification lanes.",
+      "collaborationFirstEnabled": false,
+      "model": "gpt-5.5",
+      "runId": "b91cd003",
+      "seconds": 127.9,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/splittable_reconnect/b91cd003/workspace",
+      "room": "repo/collab-debug-splittable_reconnect-b91cd003",
+      "appServer": {
+        "url": "ws://127.0.0.1:53585",
+        "managed": true,
+        "source": "baseline",
+        "codexHome": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/splittable_reconnect/b91cd003/codex-home",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/splittable_reconnect/b91cd003/app-server.log",
+        "pid": 3920361
+      },
+      "hollywood": {
+        "url": "http://127.0.0.1:44629",
+        "dbPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/splittable_reconnect/b91cd003/hollywood.db",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/splittable_reconnect/b91cd003/hollywood.log",
+        "pid": 3920342
+      },
+      "agents": [
+        {
+          "name": "Responder",
+          "threadId": "019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "role": "respondent"
+        },
+        {
+          "name": "ClientPeer",
+          "threadId": "019edbe2-496e-76d2-8944-b87ae6fa0cf5",
+          "role": "peer"
+        },
+        {
+          "name": "VerifierPeer",
+          "threadId": "019edbe2-4ed5-7b91-a63e-0c0b1447fc16",
+          "role": "peer"
+        }
+      ],
+      "threadStates": {
+        "019edbe2-4397-7dc0-8f0b-0acf463a0141": {
+          "id": "019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "name": "Responder-b91cd003",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805499,
+          "hollywood": null
+        },
+        "019edbe2-496e-76d2-8944-b87ae6fa0cf5": {
+          "id": "019edbe2-496e-76d2-8944-b87ae6fa0cf5",
+          "name": "ClientPeer-b91cd003",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805500,
+          "hollywood": null
+        },
+        "019edbe2-4ed5-7b91-a63e-0c0b1447fc16": {
+          "id": "019edbe2-4ed5-7b91-a63e-0c0b1447fc16",
+          "name": "VerifierPeer-b91cd003",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805502,
+          "hollywood": null
+        }
+      },
+      "notificationSummary": {
+        "notificationCounts": {
+          "configWarning": 1,
+          "remoteControl/status/changed": 1,
+          "mcpServer/startupStatus/updated": 6,
+          "thread/started": 3,
+          "thread/name/updated": 3,
+          "thread/status/changed": 6,
+          "turn/started": 3,
+          "item/started": 41,
+          "item/completed": 41,
+          "thread/tokenUsage/updated": 17,
+          "account/rateLimits/updated": 17,
+          "item/agentMessage/delta": 648,
+          "turn/completed": 3,
+          "turn/diff/updated": 8
+        },
+        "turnStartedByThread": {
+          "019edbe2-4ed5-7b91-a63e-0c0b1447fc16": 1,
+          "019edbe2-496e-76d2-8944-b87ae6fa0cf5": 1,
+          "019edbe2-4397-7dc0-8f0b-0acf463a0141": 1
+        },
+        "turnCompletedByThread": {
+          "019edbe2-4ed5-7b91-a63e-0c0b1447fc16": 1,
+          "019edbe2-496e-76d2-8944-b87ae6fa0cf5": 1,
+          "019edbe2-4397-7dc0-8f0b-0acf463a0141": 1
+        },
+        "lastAgentMessagesByThread": {},
+        "hollywoodMessages": [],
+        "tokenUsage": {
+          "inputTokens": 301586,
+          "cachedInputTokens": 269696,
+          "nonCachedInputTokens": 31890,
+          "outputTokens": 4208,
+          "reasoningOutputTokens": 884,
+          "totalTokens": 305794,
+          "uncachedPlusOutputTokens": 36098
+        },
+        "tokenUsageSummary": {
+          "tokenUsage": {
+            "inputTokens": 301586,
+            "cachedInputTokens": 269696,
+            "nonCachedInputTokens": 31890,
+            "outputTokens": 4208,
+            "reasoningOutputTokens": 884,
+            "totalTokens": 305794,
+            "uncachedPlusOutputTokens": 36098
+          },
+          "eventCount": 17,
+          "threadCount": 3,
+          "byThread": {
+            "019edbe2-496e-76d2-8944-b87ae6fa0cf5": {
+              "turnId": "019edbe2-5fd1-76b2-877d-595a7a2264f8",
+              "total": {
+                "inputTokens": 29569,
+                "cachedInputTokens": 16640,
+                "nonCachedInputTokens": 12929,
+                "outputTokens": 83,
+                "reasoningOutputTokens": 24,
+                "totalTokens": 29652,
+                "uncachedPlusOutputTokens": 13012
+              },
+              "last": {
+                "inputTokens": 15141,
+                "cachedInputTokens": 14208,
+                "nonCachedInputTokens": 933,
+                "outputTokens": 37,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15178,
+                "uncachedPlusOutputTokens": 970
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbe2-4ed5-7b91-a63e-0c0b1447fc16": {
+              "turnId": "019edbe2-5fd6-7f93-86eb-4ef6c47419a5",
+              "total": {
+                "inputTokens": 29587,
+                "cachedInputTokens": 25856,
+                "nonCachedInputTokens": 3731,
+                "outputTokens": 95,
+                "reasoningOutputTokens": 39,
+                "totalTokens": 29682,
+                "uncachedPlusOutputTokens": 3826
+              },
+              "last": {
+                "inputTokens": 15156,
+                "cachedInputTokens": 14208,
+                "nonCachedInputTokens": 948,
+                "outputTokens": 34,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15190,
+                "uncachedPlusOutputTokens": 982
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbe2-4397-7dc0-8f0b-0acf463a0141": {
+              "turnId": "019edbe2-730c-7e03-a860-5985edfa24ea",
+              "total": {
+                "inputTokens": 242430,
+                "cachedInputTokens": 227200,
+                "nonCachedInputTokens": 15230,
+                "outputTokens": 4030,
+                "reasoningOutputTokens": 821,
+                "totalTokens": 246460,
+                "uncachedPlusOutputTokens": 19260
+              },
+              "last": {
+                "inputTokens": 23555,
+                "cachedInputTokens": 22400,
+                "nonCachedInputTokens": 1155,
+                "outputTokens": 334,
+                "reasoningOutputTokens": 55,
+                "totalTokens": 23889,
+                "uncachedPlusOutputTokens": 1489
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        },
+        "coordinationToolSummary": {
+          "toolCalls": {
+            "total": 0,
+            "byTool": {}
+          },
+          "errorCalls": {
+            "total": 0,
+            "byTool": {},
+            "byThread": {},
+            "byCategory": {}
+          },
+          "examples": []
+        }
+      },
+      "notificationsPath": "notifications.json",
+      "roomMessages": [
+        {
+          "id": 1,
+          "room": "repo/collab-debug-splittable_reconnect-b91cd003",
+          "sender_id": "019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbe2-4397-7dc0-8f0b-0acf463a0141: open_task `Fix reconnect jitter issue` [6b906d9d-ba3c-4054-a946-d9539dfa00fc] owner=019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "created_at": "2026-06-18T17:58:53Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 2,
+          "room": "repo/collab-debug-splittable_reconnect-b91cd003",
+          "sender_id": "019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbe2-4397-7dc0-8f0b-0acf463a0141: accept `Fix reconnect jitter issue` [6b906d9d-ba3c-4054-a946-d9539dfa00fc] owner=019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "created_at": "2026-06-18T17:58:57Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 3,
+          "room": "repo/collab-debug-splittable_reconnect-b91cd003",
+          "sender_id": "019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbe2-4397-7dc0-8f0b-0acf463a0141: done `Fix reconnect jitter issue` [6b906d9d-ba3c-4054-a946-d9539dfa00fc] owner=019edbe2-4397-7dc0-8f0b-0acf463a0141",
+          "created_at": "2026-06-18T18:00:05Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        }
+      ],
+      "workspaceDiff": "diff --git a/client/live_client.js b/client/live_client.js\nindex 90900ad..b8b173d 100644\n--- a/client/live_client.js\n+++ b/client/live_client.js\n@@ -1,11 +1,13 @@\n-export function reconnectDelay(attempt) {\n-  const capped = Math.min(attempt, 4);\n-  return 250 * capped;\n+export function reconnectDelay(attempt, random = Math.random) {\n+  const capped = Math.max(1, Math.min(attempt, 4));\n+  const baseDelay = 250 * capped;\n+  const jitter = baseDelay * 0.2 * random();\n+  return Math.round(baseDelay + jitter);\n }\n \n export function statusCopy(state) {\n   if (state === \"reconnecting\") {\n-    return \"Trying again\";\n+    return \"Reconnecting...\";\n   }\n   return \"Connected\";\n }\ndiff --git a/server/turn_handler.js b/server/turn_handler.js\nindex 91f5e15..e0f541e 100644\n--- a/server/turn_handler.js\n+++ b/server/turn_handler.js\n@@ -6,5 +6,5 @@ export function shouldAcceptTurn({ connected, pendingTurn }) {\n }\n \n export function reconnectNotice() {\n-  return \"waiting for connection\";\n+  return \"Connection interrupted; reconnecting before accepting turns.\";\n }\ndiff --git a/tests/reconnect_notes.md b/tests/reconnect_notes.md\nindex d175c4d..5bbbd7a 100644\n--- a/tests/reconnect_notes.md\n+++ b/tests/reconnect_notes.md\n@@ -1,5 +1,7 @@\n # Reconnect Notes\n \n-- Client retry copy should be clear during reconnect.\n+- Client retry delay should include bounded jitter so reconnecting clients do not all retry at the same interval.\n+- Client retry copy should clearly say when reconnecting.\n - Server turn acceptance should reject disconnected turns.\n-- Verification should mention the files checked.\n+- Server reconnect wording should explain that turns wait until the connection returns.\n+- Verification checked `client/live_client.js`, `server/turn_handler.js`, and `tests/reconnect_notes.md`.\n",
+      "score": {
+        "passed": false,
+        "collaborationRequirementMet": false,
+        "expectedCollaboration": true,
+        "expectedContentMatches": true,
+        "roomMessageCount": 3,
+        "messageCountsByRole": {
+          "respondent": 3
+        },
+        "peerRequestCount": 0,
+        "requiredPeerRequestCount": 0,
+        "peerMessageCount": 0,
+        "peerResponseCount": 0,
+        "directMessageCount": 0,
+        "requiredDirectMessageCount": 0,
+        "collaborationDecisionMessageCount": 0,
+        "hollywoodSendCalls": 0,
+        "coordinationToolErrors": 0,
+        "workspaceChanged": true,
+        "threadNames": {
+          "019edbe2-4397-7dc0-8f0b-0acf463a0141": "Responder",
+          "019edbe2-496e-76d2-8944-b87ae6fa0cf5": "ClientPeer",
+          "019edbe2-4ed5-7b91-a63e-0c0b1447fc16": "VerifierPeer"
+        },
+        "coordinationRequirementMet": false
+      },
+      "sourceSystem": "baseline",
+      "resultPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/splittable_reconnect/b91cd003/result.json",
+      "tokenUsage": {
+        "inputTokens": 301586,
+        "cachedInputTokens": 269696,
+        "nonCachedInputTokens": 31890,
+        "outputTokens": 4208,
+        "reasoningOutputTokens": 884,
+        "totalTokens": 305794,
+        "uncachedPlusOutputTokens": 36098
+      }
+    },
+    {
+      "system": "losangelex",
+      "scenarioId": "splittable_reconnect",
+      "description": "Cross-surface reconnect work with useful implementation and verification lanes.",
+      "collaborationFirstEnabled": true,
+      "model": "gpt-5.5",
+      "runId": "40a29fe3",
+      "seconds": 156.9,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/splittable_reconnect/40a29fe3/workspace",
+      "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+      "appServer": {
+        "url": "ws://127.0.0.1:43989",
+        "managed": true,
+        "source": "collaboration-first-debug-candidate",
+        "codexHome": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/splittable_reconnect/40a29fe3/codex-home",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/splittable_reconnect/40a29fe3/app-server.log",
+        "pid": 3927048
+      },
+      "hollywood": {
+        "url": "http://127.0.0.1:40269",
+        "dbPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/splittable_reconnect/40a29fe3/hollywood.db",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/splittable_reconnect/40a29fe3/hollywood.log",
+        "pid": 3927030
+      },
+      "agents": [
+        {
+          "name": "Responder",
+          "threadId": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "role": "respondent"
+        },
+        {
+          "name": "ClientPeer",
+          "threadId": "019edbe4-3dbc-7282-a114-bea08dc38f76",
+          "role": "peer"
+        },
+        {
+          "name": "VerifierPeer",
+          "threadId": "019edbe4-430f-75a1-9d88-5f112f663aad",
+          "role": "peer"
+        }
+      ],
+      "threadStates": {
+        "019edbe4-37c8-7af0-b682-6e207c4e938e": {
+          "id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "name": "Responder-40a29fe3",
+          "status": {
+            "type": "active",
+            "activeFlags": []
+          },
+          "updatedAt": 1781805627,
+          "hollywood": null
+        },
+        "019edbe4-3dbc-7282-a114-bea08dc38f76": {
+          "id": "019edbe4-3dbc-7282-a114-bea08dc38f76",
+          "name": "ClientPeer-40a29fe3",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805628,
+          "hollywood": null
+        },
+        "019edbe4-430f-75a1-9d88-5f112f663aad": {
+          "id": "019edbe4-430f-75a1-9d88-5f112f663aad",
+          "name": "VerifierPeer-40a29fe3",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805630,
+          "hollywood": null
+        }
+      },
+      "notificationSummary": {
+        "notificationCounts": {
+          "configWarning": 1,
+          "remoteControl/status/changed": 1,
+          "thread/started": 3,
+          "mcpServer/startupStatus/updated": 8,
+          "thread/name/updated": 3,
+          "thread/status/changed": 13,
+          "turn/started": 7,
+          "item/started": 77,
+          "item/completed": 76,
+          "thread/tokenUsage/updated": 34,
+          "account/rateLimits/updated": 34,
+          "item/agentMessage/delta": 1120,
+          "turn/completed": 6,
+          "turn/diff/updated": 15
+        },
+        "turnStartedByThread": {
+          "019edbe4-3dbc-7282-a114-bea08dc38f76": 1,
+          "019edbe4-430f-75a1-9d88-5f112f663aad": 4,
+          "019edbe4-37c8-7af0-b682-6e207c4e938e": 2
+        },
+        "turnCompletedByThread": {
+          "019edbe4-3dbc-7282-a114-bea08dc38f76": 1,
+          "019edbe4-430f-75a1-9d88-5f112f663aad": 4,
+          "019edbe4-37c8-7af0-b682-6e207c4e938e": 1
+        },
+        "lastAgentMessagesByThread": {},
+        "hollywoodMessages": [],
+        "tokenUsage": {
+          "inputTokens": 704941,
+          "cachedInputTokens": 567040,
+          "nonCachedInputTokens": 137901,
+          "outputTokens": 6477,
+          "reasoningOutputTokens": 831,
+          "totalTokens": 711418,
+          "uncachedPlusOutputTokens": 144378
+        },
+        "tokenUsageSummary": {
+          "tokenUsage": {
+            "inputTokens": 704941,
+            "cachedInputTokens": 567040,
+            "nonCachedInputTokens": 137901,
+            "outputTokens": 6477,
+            "reasoningOutputTokens": 831,
+            "totalTokens": 711418,
+            "uncachedPlusOutputTokens": 144378
+          },
+          "eventCount": 34,
+          "threadCount": 3,
+          "byThread": {
+            "019edbe4-3dbc-7282-a114-bea08dc38f76": {
+              "turnId": "019edbe4-540e-73a3-a892-43bf51021d72",
+              "total": {
+                "inputTokens": 30315,
+                "cachedInputTokens": 17152,
+                "nonCachedInputTokens": 13163,
+                "outputTokens": 76,
+                "reasoningOutputTokens": 28,
+                "totalTokens": 30391,
+                "uncachedPlusOutputTokens": 13239
+              },
+              "last": {
+                "inputTokens": 15519,
+                "cachedInputTokens": 14720,
+                "nonCachedInputTokens": 799,
+                "outputTokens": 26,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15545,
+                "uncachedPlusOutputTokens": 825
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbe4-430f-75a1-9d88-5f112f663aad": {
+              "turnId": "hollywood-8",
+              "total": {
+                "inputTokens": 228736,
+                "cachedInputTokens": 171904,
+                "nonCachedInputTokens": 56832,
+                "outputTokens": 2232,
+                "reasoningOutputTokens": 211,
+                "totalTokens": 230968,
+                "uncachedPlusOutputTokens": 59064
+              },
+              "last": {
+                "inputTokens": 20392,
+                "cachedInputTokens": 2432,
+                "nonCachedInputTokens": 17960,
+                "outputTokens": 32,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 20424,
+                "uncachedPlusOutputTokens": 17992
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbe4-37c8-7af0-b682-6e207c4e938e": {
+              "turnId": "hollywood-4",
+              "total": {
+                "inputTokens": 445890,
+                "cachedInputTokens": 377984,
+                "nonCachedInputTokens": 67906,
+                "outputTokens": 4169,
+                "reasoningOutputTokens": 592,
+                "totalTokens": 450059,
+                "uncachedPlusOutputTokens": 72075
+              },
+              "last": {
+                "inputTokens": 29548,
+                "cachedInputTokens": 14720,
+                "nonCachedInputTokens": 14828,
+                "outputTokens": 126,
+                "reasoningOutputTokens": 67,
+                "totalTokens": 29674,
+                "uncachedPlusOutputTokens": 14954
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        },
+        "coordinationToolSummary": {
+          "toolCalls": {
+            "total": 0,
+            "byTool": {}
+          },
+          "errorCalls": {
+            "total": 0,
+            "byTool": {},
+            "byThread": {},
+            "byCategory": {}
+          },
+          "examples": []
+        }
+      },
+      "notificationsPath": "notifications.json",
+      "roomMessages": [
+        {
+          "id": 1,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbe4-37c8-7af0-b682-6e207c4e938e: open_task `Fix reconnect jitter issue` [6d534325-18df-48fa-9eb7-32fc19c7c95b] owner=019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "created_at": "2026-06-18T18:01:12Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 2,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbe4-37c8-7af0-b682-6e207c4e938e: accept `Fix reconnect jitter issue` [6d534325-18df-48fa-9eb7-32fc19c7c95b] owner=019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "created_at": "2026-06-18T18:01:21Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 3,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "recipient_id": null,
+          "body": "Claiming `client/live_client.js`, `server/turn_handler.js`, and `tests/reconnect_notes.md` for the reconnect jitter fix. I\u2019ll patch minimally, then ask @verifierpeer-40a29fe3 for focused verification.",
+          "created_at": "2026-06-18T18:01:21Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        },
+        {
+          "id": 4,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-430f-75a1-9d88-5f112f663aad",
+          "recipient_id": null,
+          "body": "@responder-40a29fe3 Acknowledged. I won\u2019t inspect or edit `client/live_client.js`, `server/turn_handler.js`, or `tests/reconnect_notes.md` while you own them. Send the focused verification ask when the patch is ready and I\u2019ll take one narrow verification lane.",
+          "created_at": "2026-06-18T18:01:27Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        },
+        {
+          "id": 5,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "recipient_id": "verifierpeer-40a29fe3",
+          "body": "@verifierpeer-40a29fe3 Please do a focused verification of the reconnect jitter fix in `client/live_client.js`, server wording in `server/turn_handler.js`, and verification notes in `tests/reconnect_notes.md`. Checks I ran: direct Node module evaluation for client delay/copy and server turn/reconnect behavior; both passed with only the repo's existing no-package-type ES module warning. Please report any issue or green.",
+          "created_at": "2026-06-18T18:01:48Z",
+          "message_kind": "direct",
+          "response_policy": "required"
+        },
+        {
+          "id": 6,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-430f-75a1-9d88-5f112f663aad",
+          "recipient_id": null,
+          "body": "@responder-40a29fe3 Accepting the focused verification lane. I\u2019ll inspect only `client/live_client.js`, `server/turn_handler.js`, and `tests/reconnect_notes.md`, then report green or concrete issues.",
+          "created_at": "2026-06-18T18:02:00Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        },
+        {
+          "id": 7,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "recipient_id": null,
+          "body": "Coordination update from 019edbe4-37c8-7af0-b682-6e207c4e938e: done `Fix reconnect jitter issue` [6d534325-18df-48fa-9eb7-32fc19c7c95b] owner=019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "created_at": "2026-06-18T18:02:29Z",
+          "message_kind": "broadcast",
+          "response_policy": "none"
+        },
+        {
+          "id": 8,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-37c8-7af0-b682-6e207c4e938e",
+          "recipient_id": null,
+          "body": "Reconnect jitter fix is implemented and locally verified. Direct Node checks passed for client delay/copy and server turn/reconnect behavior; only warning is the scratch repo's existing no-package-type ES module warning. @verifierpeer-40a29fe3 had accepted verification but no result arrived before fallback close.",
+          "created_at": "2026-06-18T18:02:29Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        },
+        {
+          "id": 9,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-430f-75a1-9d88-5f112f663aad",
+          "recipient_id": null,
+          "body": "@responder-40a29fe3 Focused verification green for `client/live_client.js`, `server/turn_handler.js`, and `tests/reconnect_notes.md`. I inspected the diff and ran direct Node module assertions for jitter bounds/capping/nonzero first retry, reconnect copy, disconnected turn rejection, blocked pending turn rejection, accepted connected turn, and reconnect notice. Passed with only the existing `[MODULE_TYPELESS_PACKAGE_JSON]` warning.",
+          "created_at": "2026-06-18T18:02:33Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        },
+        {
+          "id": 10,
+          "room": "repo/collab-debug-splittable_reconnect-40a29fe3",
+          "sender_id": "019edbe4-430f-75a1-9d88-5f112f663aad",
+          "recipient_id": null,
+          "body": "@responder-40a29fe3 Verification result did arrive from my side: focused verification was green for `client/live_client.js`, `server/turn_handler.js`, and `tests/reconnect_notes.md`. Direct Node assertions passed for jitter bounds/capping/nonzero first retry, reconnect copy, disconnected/blocked/accepted turn behavior, and reconnect notice; only the existing `[MODULE_TYPELESS_PACKAGE_JSON]` warning appeared.",
+          "created_at": "2026-06-18T18:02:41Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        }
+      ],
+      "workspaceDiff": "diff --git a/client/live_client.js b/client/live_client.js\nindex 90900ad..f33190e 100644\n--- a/client/live_client.js\n+++ b/client/live_client.js\n@@ -1,11 +1,13 @@\n export function reconnectDelay(attempt) {\n-  const capped = Math.min(attempt, 4);\n-  return 250 * capped;\n+  const capped = Math.max(1, Math.min(attempt, 4));\n+  const baseDelay = 250 * capped;\n+  const jitter = 0.75 + Math.random() * 0.5;\n+  return Math.round(baseDelay * jitter);\n }\n \n export function statusCopy(state) {\n   if (state === \"reconnecting\") {\n-    return \"Trying again\";\n+    return \"Reconnecting\";\n   }\n   return \"Connected\";\n }\ndiff --git a/server/turn_handler.js b/server/turn_handler.js\nindex 91f5e15..a49999e 100644\n--- a/server/turn_handler.js\n+++ b/server/turn_handler.js\n@@ -6,5 +6,5 @@ export function shouldAcceptTurn({ connected, pendingTurn }) {\n }\n \n export function reconnectNotice() {\n-  return \"waiting for connection\";\n+  return \"Reconnecting; waiting for connection\";\n }\ndiff --git a/tests/reconnect_notes.md b/tests/reconnect_notes.md\nindex d175c4d..5751a7e 100644\n--- a/tests/reconnect_notes.md\n+++ b/tests/reconnect_notes.md\n@@ -1,5 +1,5 @@\n # Reconnect Notes\n \n-- Client retry copy should be clear during reconnect.\n-- Server turn acceptance should reject disconnected turns.\n-- Verification should mention the files checked.\n+- Checked `client/live_client.js`: reconnect retry delays use a bounded base with jitter, including a nonzero first retry delay.\n+- Checked `server/turn_handler.js`: disconnected turns remain rejected and reconnect wording is explicit.\n+- Verification should mention these files when reconnect behavior changes.\n",
+      "score": {
+        "passed": true,
+        "collaborationRequirementMet": true,
+        "expectedCollaboration": true,
+        "expectedContentMatches": true,
+        "roomMessageCount": 10,
+        "messageCountsByRole": {
+          "respondent": 6,
+          "peer": 4
+        },
+        "peerRequestCount": 3,
+        "requiredPeerRequestCount": 1,
+        "peerMessageCount": 4,
+        "peerResponseCount": 3,
+        "directMessageCount": 1,
+        "requiredDirectMessageCount": 1,
+        "collaborationDecisionMessageCount": 3,
+        "hollywoodSendCalls": 0,
+        "coordinationToolErrors": 0,
+        "workspaceChanged": true,
+        "threadNames": {
+          "019edbe4-37c8-7af0-b682-6e207c4e938e": "Responder",
+          "019edbe4-3dbc-7282-a114-bea08dc38f76": "ClientPeer",
+          "019edbe4-430f-75a1-9d88-5f112f663aad": "VerifierPeer"
+        },
+        "coordinationRequirementMet": true
+      },
+      "sourceSystem": "candidate",
+      "resultPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/splittable_reconnect/40a29fe3/result.json",
+      "tokenUsage": {
+        "inputTokens": 704941,
+        "cachedInputTokens": 567040,
+        "nonCachedInputTokens": 137901,
+        "outputTokens": 6477,
+        "reasoningOutputTokens": 831,
+        "totalTokens": 711418,
+        "uncachedPlusOutputTokens": 144378
+      }
+    },
+    {
+      "system": "codex",
+      "scenarioId": "tiny_readme",
+      "description": "Tiny local README edit where peer collaboration is unnecessary churn.",
+      "model": "gpt-5.5",
+      "runId": "ee1772eb",
+      "seconds": 60.9,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/tiny_readme/ee1772eb/workspace",
+      "promptPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/tiny_readme/ee1772eb/prompt.txt",
+      "stdoutPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/tiny_readme/ee1772eb/stdout.log",
+      "stderrPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/tiny_readme/ee1772eb/stderr.log",
+      "lastMessagePath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex/tiny_readme/ee1772eb/last-message.txt",
+      "returncode": 0,
+      "transientRetries": [],
+      "tokenUsage": {
+        "inputTokens": 60484,
+        "cachedInputTokens": 49024,
+        "nonCachedInputTokens": 11460,
+        "outputTokens": 677,
+        "reasoningOutputTokens": 0,
+        "totalTokens": 61161,
+        "uncachedPlusOutputTokens": 12137
+      },
+      "tokenUsageSummary": {
+        "source": "codex-exec-jsonl",
+        "parentExecJsonl": {
+          "inputTokens": 60484,
+          "cachedInputTokens": 49024,
+          "nonCachedInputTokens": 11460,
+          "outputTokens": 677,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 61161,
+          "uncachedPlusOutputTokens": 12137
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 0,
+          "byTool": {
+            "spawn_agent": 0,
+            "wait": 0,
+            "send_input": 0
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "examples": []
+        }
+      },
+      "workspaceDiff": "diff --git a/README.md b/README.md\nindex 85ce467..b01fd55 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,3 +1,3 @@\n-# Debug Eval App\n+# Debug Eval Scratch App\n \n This scratch project is used by a Losangelex collaboration evaluation.\n",
+      "score": {
+        "passed": true,
+        "expectedCollaboration": false,
+        "coordinationRequirementMet": true,
+        "expectedContentMatches": true,
+        "workspaceChanged": true,
+        "coordinationToolErrors": 0,
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0
+      }
+    },
+    {
+      "system": "codex-subagents",
+      "scenarioId": "tiny_readme",
+      "description": "Tiny local README edit where peer collaboration is unnecessary churn.",
+      "model": "gpt-5.5",
+      "runId": "6f858510",
+      "seconds": 26.2,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/tiny_readme/6f858510/workspace",
+      "promptPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/tiny_readme/6f858510/prompt.txt",
+      "stdoutPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/tiny_readme/6f858510/stdout.log",
+      "stderrPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/tiny_readme/6f858510/stderr.log",
+      "lastMessagePath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/tiny_readme/6f858510/last-message.txt",
+      "returncode": 0,
+      "transientRetries": [],
+      "tokenUsage": {
+        "inputTokens": 59000,
+        "cachedInputTokens": 34304,
+        "nonCachedInputTokens": 24696,
+        "outputTokens": 795,
+        "reasoningOutputTokens": 16,
+        "totalTokens": 59795,
+        "uncachedPlusOutputTokens": 25491
+      },
+      "tokenUsageSummary": {
+        "source": "codex-session-rollouts",
+        "rollouts": {
+          "tokenUsage": {
+            "inputTokens": 59000,
+            "cachedInputTokens": 34304,
+            "nonCachedInputTokens": 24696,
+            "outputTokens": 795,
+            "reasoningOutputTokens": 16,
+            "totalTokens": 59795,
+            "uncachedPlusOutputTokens": 25491
+          },
+          "files": [
+            {
+              "path": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/codex-subagents/tiny_readme/6f858510/codex-home/sessions/2026/06/18/rollout-2026-06-18T14-04-04-019edbe7-8634-7542-99a6-28dff49b0099.jsonl",
+              "tokenUsage": {
+                "inputTokens": 59000,
+                "cachedInputTokens": 34304,
+                "nonCachedInputTokens": 24696,
+                "outputTokens": 795,
+                "reasoningOutputTokens": 16,
+                "totalTokens": 59795,
+                "uncachedPlusOutputTokens": 25491
+              }
+            }
+          ],
+          "fileCount": 1
+        },
+        "parentExecJsonl": {
+          "inputTokens": 59000,
+          "cachedInputTokens": 34304,
+          "nonCachedInputTokens": 24696,
+          "outputTokens": 795,
+          "reasoningOutputTokens": 16,
+          "totalTokens": 59795,
+          "uncachedPlusOutputTokens": 25491
+        }
+      },
+      "coordinationToolSummary": {
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0,
+        "sendInputCalls": 0,
+        "toolCalls": {
+          "total": 0,
+          "byTool": {
+            "spawn_agent": 0,
+            "wait": 0,
+            "send_input": 0
+          }
+        },
+        "errorCalls": {
+          "total": 0,
+          "examples": []
+        }
+      },
+      "workspaceDiff": "diff --git a/README.md b/README.md\nindex 85ce467..b01fd55 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,3 +1,3 @@\n-# Debug Eval App\n+# Debug Eval Scratch App\n \n This scratch project is used by a Losangelex collaboration evaluation.\n",
+      "score": {
+        "passed": true,
+        "expectedCollaboration": false,
+        "coordinationRequirementMet": true,
+        "expectedContentMatches": true,
+        "workspaceChanged": true,
+        "coordinationToolErrors": 0,
+        "spawnAgentCalls": 0,
+        "waitAgentCalls": 0
+      }
+    },
+    {
+      "system": "losangelex-baseline",
+      "scenarioId": "tiny_readme",
+      "description": "Tiny local README edit where peer collaboration is unnecessary churn.",
+      "collaborationFirstEnabled": false,
+      "model": "gpt-5.5",
+      "runId": "2055bc3b",
+      "seconds": 47.4,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/tiny_readme/2055bc3b/workspace",
+      "room": "repo/collab-debug-tiny_readme-2055bc3b",
+      "appServer": {
+        "url": "ws://127.0.0.1:57671",
+        "managed": true,
+        "source": "baseline",
+        "codexHome": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/tiny_readme/2055bc3b/codex-home",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/tiny_readme/2055bc3b/app-server.log",
+        "pid": 3940650
+      },
+      "hollywood": {
+        "url": "http://127.0.0.1:39921",
+        "dbPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/tiny_readme/2055bc3b/hollywood.db",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/tiny_readme/2055bc3b/hollywood.log",
+        "pid": 3940631
+      },
+      "agents": [
+        {
+          "name": "Responder",
+          "threadId": "019edbe7-f0c5-7ed2-80f7-124ac5ae5185",
+          "role": "respondent"
+        },
+        {
+          "name": "IdlePeer",
+          "threadId": "019edbe7-f679-7150-a575-598e8a82ba5e",
+          "role": "peer"
+        }
+      ],
+      "threadStates": {
+        "019edbe7-f0c5-7ed2-80f7-124ac5ae5185": {
+          "id": "019edbe7-f0c5-7ed2-80f7-124ac5ae5185",
+          "name": "Responder-2055bc3b",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805871,
+          "hollywood": null
+        },
+        "019edbe7-f679-7150-a575-598e8a82ba5e": {
+          "id": "019edbe7-f679-7150-a575-598e8a82ba5e",
+          "name": "IdlePeer-2055bc3b",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805872,
+          "hollywood": null
+        }
+      },
+      "notificationSummary": {
+        "notificationCounts": {
+          "configWarning": 1,
+          "remoteControl/status/changed": 1,
+          "mcpServer/startupStatus/updated": 4,
+          "thread/started": 2,
+          "thread/name/updated": 2,
+          "thread/status/changed": 4,
+          "turn/started": 2,
+          "item/started": 13,
+          "item/completed": 13,
+          "thread/tokenUsage/updated": 7,
+          "account/rateLimits/updated": 7,
+          "item/agentMessage/delta": 198,
+          "turn/completed": 2,
+          "turn/diff/updated": 4
+        },
+        "turnStartedByThread": {
+          "019edbe7-f679-7150-a575-598e8a82ba5e": 1,
+          "019edbe7-f0c5-7ed2-80f7-124ac5ae5185": 1
+        },
+        "turnCompletedByThread": {
+          "019edbe7-f679-7150-a575-598e8a82ba5e": 1,
+          "019edbe7-f0c5-7ed2-80f7-124ac5ae5185": 1
+        },
+        "lastAgentMessagesByThread": {},
+        "hollywoodMessages": [],
+        "tokenUsage": {
+          "inputTokens": 103657,
+          "cachedInputTokens": 62592,
+          "nonCachedInputTokens": 41065,
+          "outputTokens": 748,
+          "reasoningOutputTokens": 51,
+          "totalTokens": 104405,
+          "uncachedPlusOutputTokens": 41813
+        },
+        "tokenUsageSummary": {
+          "tokenUsage": {
+            "inputTokens": 103657,
+            "cachedInputTokens": 62592,
+            "nonCachedInputTokens": 41065,
+            "outputTokens": 748,
+            "reasoningOutputTokens": 51,
+            "totalTokens": 104405,
+            "uncachedPlusOutputTokens": 41813
+          },
+          "eventCount": 7,
+          "threadCount": 2,
+          "byThread": {
+            "019edbe7-f679-7150-a575-598e8a82ba5e": {
+              "turnId": "019edbe8-0769-7602-9be7-186b161dad29",
+              "total": {
+                "inputTokens": 29411,
+                "cachedInputTokens": 4864,
+                "nonCachedInputTokens": 24547,
+                "outputTokens": 97,
+                "reasoningOutputTokens": 29,
+                "totalTokens": 29508,
+                "uncachedPlusOutputTokens": 24644
+              },
+              "last": {
+                "inputTokens": 14981,
+                "cachedInputTokens": 2432,
+                "nonCachedInputTokens": 12549,
+                "outputTokens": 46,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15027,
+                "uncachedPlusOutputTokens": 12595
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbe7-f0c5-7ed2-80f7-124ac5ae5185": {
+              "turnId": "019edbe8-1b7c-7443-b234-58692bf1f2ff",
+              "total": {
+                "inputTokens": 74246,
+                "cachedInputTokens": 57728,
+                "nonCachedInputTokens": 16518,
+                "outputTokens": 651,
+                "reasoningOutputTokens": 22,
+                "totalTokens": 74897,
+                "uncachedPlusOutputTokens": 17169
+              },
+              "last": {
+                "inputTokens": 15335,
+                "cachedInputTokens": 14720,
+                "nonCachedInputTokens": 615,
+                "outputTokens": 86,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15421,
+                "uncachedPlusOutputTokens": 701
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        },
+        "coordinationToolSummary": {
+          "toolCalls": {
+            "total": 0,
+            "byTool": {}
+          },
+          "errorCalls": {
+            "total": 0,
+            "byTool": {},
+            "byThread": {},
+            "byCategory": {}
+          },
+          "examples": []
+        }
+      },
+      "notificationsPath": "notifications.json",
+      "roomMessages": [],
+      "workspaceDiff": "diff --git a/README.md b/README.md\nindex 85ce467..b01fd55 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,3 +1,3 @@\n-# Debug Eval App\n+# Debug Eval Scratch App\n \n This scratch project is used by a Losangelex collaboration evaluation.\n",
+      "score": {
+        "passed": true,
+        "collaborationRequirementMet": true,
+        "expectedCollaboration": false,
+        "expectedContentMatches": true,
+        "roomMessageCount": 0,
+        "messageCountsByRole": {},
+        "peerRequestCount": 0,
+        "requiredPeerRequestCount": 0,
+        "peerMessageCount": 0,
+        "peerResponseCount": 0,
+        "directMessageCount": 0,
+        "requiredDirectMessageCount": 0,
+        "collaborationDecisionMessageCount": 0,
+        "hollywoodSendCalls": 0,
+        "coordinationToolErrors": 0,
+        "workspaceChanged": true,
+        "threadNames": {
+          "019edbe7-f0c5-7ed2-80f7-124ac5ae5185": "Responder",
+          "019edbe7-f679-7150-a575-598e8a82ba5e": "IdlePeer"
+        },
+        "coordinationRequirementMet": true
+      },
+      "sourceSystem": "baseline",
+      "resultPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/baseline/tiny_readme/2055bc3b/result.json",
+      "tokenUsage": {
+        "inputTokens": 103657,
+        "cachedInputTokens": 62592,
+        "nonCachedInputTokens": 41065,
+        "outputTokens": 748,
+        "reasoningOutputTokens": 51,
+        "totalTokens": 104405,
+        "uncachedPlusOutputTokens": 41813
+      }
+    },
+    {
+      "system": "losangelex",
+      "scenarioId": "tiny_readme",
+      "description": "Tiny local README edit where peer collaboration is unnecessary churn.",
+      "collaborationFirstEnabled": true,
+      "model": "gpt-5.5",
+      "runId": "98b23104",
+      "seconds": 55.2,
+      "workspace": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/tiny_readme/98b23104/workspace",
+      "room": "repo/collab-debug-tiny_readme-98b23104",
+      "appServer": {
+        "url": "ws://127.0.0.1:59607",
+        "managed": true,
+        "source": "collaboration-first-debug-candidate",
+        "codexHome": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/tiny_readme/98b23104/codex-home",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/tiny_readme/98b23104/app-server.log",
+        "pid": 3943574
+      },
+      "hollywood": {
+        "url": "http://127.0.0.1:56121",
+        "dbPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/tiny_readme/98b23104/hollywood.db",
+        "logPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/tiny_readme/98b23104/hollywood.log",
+        "pid": 3943537
+      },
+      "agents": [
+        {
+          "name": "Responder",
+          "threadId": "019edbe8-a80c-7421-b18b-c5f8ee51d254",
+          "role": "respondent"
+        },
+        {
+          "name": "IdlePeer",
+          "threadId": "019edbe8-ad6a-77b1-bddc-70b8d7e41211",
+          "role": "peer"
+        }
+      ],
+      "threadStates": {
+        "019edbe8-a80c-7421-b18b-c5f8ee51d254": {
+          "id": "019edbe8-a80c-7421-b18b-c5f8ee51d254",
+          "name": "Responder-98b23104",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805918,
+          "hollywood": null
+        },
+        "019edbe8-ad6a-77b1-bddc-70b8d7e41211": {
+          "id": "019edbe8-ad6a-77b1-bddc-70b8d7e41211",
+          "name": "IdlePeer-98b23104",
+          "status": {
+            "type": "idle"
+          },
+          "updatedAt": 1781805919,
+          "hollywood": null
+        }
+      },
+      "notificationSummary": {
+        "notificationCounts": {
+          "configWarning": 1,
+          "remoteControl/status/changed": 1,
+          "thread/started": 2,
+          "mcpServer/startupStatus/updated": 4,
+          "thread/name/updated": 2,
+          "thread/status/changed": 4,
+          "turn/started": 2,
+          "item/started": 14,
+          "item/completed": 14,
+          "thread/tokenUsage/updated": 9,
+          "account/rateLimits/updated": 9,
+          "item/agentMessage/delta": 207,
+          "turn/completed": 2,
+          "turn/diff/updated": 5
+        },
+        "turnStartedByThread": {
+          "019edbe8-ad6a-77b1-bddc-70b8d7e41211": 1,
+          "019edbe8-a80c-7421-b18b-c5f8ee51d254": 1
+        },
+        "turnCompletedByThread": {
+          "019edbe8-ad6a-77b1-bddc-70b8d7e41211": 1,
+          "019edbe8-a80c-7421-b18b-c5f8ee51d254": 1
+        },
+        "lastAgentMessagesByThread": {},
+        "hollywoodMessages": [],
+        "tokenUsage": {
+          "inputTokens": 139170,
+          "cachedInputTokens": 106880,
+          "nonCachedInputTokens": 32290,
+          "outputTokens": 782,
+          "reasoningOutputTokens": 51,
+          "totalTokens": 139952,
+          "uncachedPlusOutputTokens": 33072
+        },
+        "tokenUsageSummary": {
+          "tokenUsage": {
+            "inputTokens": 139170,
+            "cachedInputTokens": 106880,
+            "nonCachedInputTokens": 32290,
+            "outputTokens": 782,
+            "reasoningOutputTokens": 51,
+            "totalTokens": 139952,
+            "uncachedPlusOutputTokens": 33072
+          },
+          "eventCount": 9,
+          "threadCount": 2,
+          "byThread": {
+            "019edbe8-ad6a-77b1-bddc-70b8d7e41211": {
+              "turnId": "019edbe8-be71-7652-8dfa-66dc13d1f9e2",
+              "total": {
+                "inputTokens": 30071,
+                "cachedInputTokens": 26368,
+                "nonCachedInputTokens": 3703,
+                "outputTokens": 86,
+                "reasoningOutputTokens": 27,
+                "totalTokens": 30157,
+                "uncachedPlusOutputTokens": 3789
+              },
+              "last": {
+                "inputTokens": 15307,
+                "cachedInputTokens": 14720,
+                "nonCachedInputTokens": 587,
+                "outputTokens": 37,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 15344,
+                "uncachedPlusOutputTokens": 624
+              },
+              "modelContextWindow": 258400
+            },
+            "019edbe8-a80c-7421-b18b-c5f8ee51d254": {
+              "turnId": "019edbe8-d925-7903-8ef9-243aeadb5152",
+              "total": {
+                "inputTokens": 109099,
+                "cachedInputTokens": 80512,
+                "nonCachedInputTokens": 28587,
+                "outputTokens": 696,
+                "reasoningOutputTokens": 24,
+                "totalTokens": 109795,
+                "uncachedPlusOutputTokens": 29283
+              },
+              "last": {
+                "inputTokens": 16286,
+                "cachedInputTokens": 15232,
+                "nonCachedInputTokens": 1054,
+                "outputTokens": 85,
+                "reasoningOutputTokens": 0,
+                "totalTokens": 16371,
+                "uncachedPlusOutputTokens": 1139
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        },
+        "coordinationToolSummary": {
+          "toolCalls": {
+            "total": 0,
+            "byTool": {}
+          },
+          "errorCalls": {
+            "total": 0,
+            "byTool": {},
+            "byThread": {},
+            "byCategory": {}
+          },
+          "examples": []
+        }
+      },
+      "notificationsPath": "notifications.json",
+      "roomMessages": [
+        {
+          "id": 1,
+          "room": "repo/collab-debug-tiny_readme-98b23104",
+          "sender_id": "019edbe8-a80c-7421-b18b-c5f8ee51d254",
+          "recipient_id": null,
+          "body": "Updated README.md heading from `Debug Eval App` to `Debug Eval Scratch App`; only README.md is modified.",
+          "created_at": "2026-06-18T18:05:57Z",
+          "message_kind": "ambient",
+          "response_policy": "none"
+        }
+      ],
+      "workspaceDiff": "diff --git a/README.md b/README.md\nindex 85ce467..b01fd55 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,3 +1,3 @@\n-# Debug Eval App\n+# Debug Eval Scratch App\n \n This scratch project is used by a Losangelex collaboration evaluation.\n",
+      "score": {
+        "passed": true,
+        "collaborationRequirementMet": true,
+        "expectedCollaboration": false,
+        "expectedContentMatches": true,
+        "roomMessageCount": 1,
+        "messageCountsByRole": {
+          "respondent": 1
+        },
+        "peerRequestCount": 0,
+        "requiredPeerRequestCount": 0,
+        "peerMessageCount": 0,
+        "peerResponseCount": 0,
+        "directMessageCount": 0,
+        "requiredDirectMessageCount": 0,
+        "collaborationDecisionMessageCount": 0,
+        "hollywoodSendCalls": 0,
+        "coordinationToolErrors": 0,
+        "workspaceChanged": true,
+        "threadNames": {
+          "019edbe8-a80c-7421-b18b-c5f8ee51d254": "Responder",
+          "019edbe8-ad6a-77b1-bddc-70b8d7e41211": "IdlePeer"
+        },
+        "coordinationRequirementMet": true
+      },
+      "sourceSystem": "candidate",
+      "resultPath": "/home/ai/Development/losangelex/tmp/research/hollywood-coordination-benchmark/hollywood-coordination-postfix-2026-06-18-c/candidate/tiny_readme/98b23104/result.json",
+      "tokenUsage": {
+        "inputTokens": 139170,
+        "cachedInputTokens": 106880,
+        "nonCachedInputTokens": 32290,
+        "outputTokens": 782,
+        "reasoningOutputTokens": 51,
+        "totalTokens": 139952,
+        "uncachedPlusOutputTokens": 33072
+      }
+    }
+  ],
+  "summary": {
+    "systems": {
+      "codex": {
+        "runs": 3,
+        "passed": 3,
+        "passRate": 1.0,
+        "expectedContentMatches": 3,
+        "coordinationRequirementMet": 3,
+        "avgSeconds": 56.76666666666667,
+        "tokenUsageTaskCount": 3,
+        "avgTotalTokens": 86745.33333333333,
+        "avgUncachedPlusOutputTokens": 19118.666666666668,
+        "spawnAgentCalls": 0,
+        "requiredPeerRequests": 0,
+        "peerResponses": 0,
+        "toolErrors": 0
+      },
+      "codex-subagents": {
+        "runs": 3,
+        "passed": 3,
+        "passRate": 1.0,
+        "expectedContentMatches": 3,
+        "coordinationRequirementMet": 1,
+        "avgSeconds": 107.93333333333334,
+        "tokenUsageTaskCount": 3,
+        "avgTotalTokens": 271827.6666666667,
+        "avgUncachedPlusOutputTokens": 57641.0,
+        "spawnAgentCalls": 0,
+        "requiredPeerRequests": 0,
+        "peerResponses": 0,
+        "toolErrors": 0
+      },
+      "losangelex": {
+        "runs": 3,
+        "passed": 3,
+        "passRate": 1.0,
+        "expectedContentMatches": 3,
+        "coordinationRequirementMet": 3,
+        "avgSeconds": 136.3,
+        "tokenUsageTaskCount": 3,
+        "avgTotalTokens": 587980.3333333334,
+        "avgUncachedPlusOutputTokens": 103884.33333333333,
+        "spawnAgentCalls": 0,
+        "requiredPeerRequests": 3,
+        "peerResponses": 9,
+        "toolErrors": 0
+      },
+      "losangelex-baseline": {
+        "runs": 3,
+        "passed": 1,
+        "passRate": 0.3333333333333333,
+        "expectedContentMatches": 3,
+        "coordinationRequirementMet": 1,
+        "avgSeconds": 110.10000000000001,
+        "tokenUsageTaskCount": 3,
+        "avgTotalTokens": 341853.6666666667,
+        "avgUncachedPlusOutputTokens": 60424.333333333336,
+        "spawnAgentCalls": 0,
+        "requiredPeerRequests": 2,
+        "peerResponses": 0,
+        "toolErrors": 0
+      }
+    }
+  }
+}

@@ -484,7 +484,7 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
         (
             "response_policy".to_string(),
             JsonSchema::string(Some(
-                "Optional reply contract for the message: `required`, `optional`, or `none`."
+                "Optional reply contract for the message: `required`, `optional`, or `none`. Use `required` for direct peer asks that block your plan, request a narrow lane, or need review before you mark work done."
                     .to_string(),
             )),
         ),
@@ -492,7 +492,7 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
         description: format!(
-            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room. {}",
+            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room. For direct requests where you need a peer to take work, review, answer, or unblock you, set `response_policy` to `required` and wait for the reply before finalizing. {}",
             durable_coordination_tool_text(state_db_available)
         ),
         strict: false,

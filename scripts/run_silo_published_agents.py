@@ -90,6 +90,10 @@ class HollywoodAgent:
 
 
 FOREMAN_SELECTOR_ID = "silo-topology-v1-2026-06-14"
+MODEL_BACKEND_FAILURE_PATTERNS = (
+    ("usage-limit", "you've hit your usage limit"),
+    ("unsupported-model", "requires a newer version of codex"),
+)
 
 
 def losangelex_selector_decision(task: SiloTask) -> dict[str, str]:
@@ -172,6 +176,130 @@ def run_command(
             stdout,
             stderr + f"\nTimed out after {timeout} seconds.\n",
         )
+
+
+def compact_text(value: str, *, limit: int = 500) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def codex_exec_invalid_reason(
+    *,
+    returncode: int,
+    stdout: str,
+    stderr: str,
+) -> dict[str, str] | None:
+    combined = f"{stdout}\n{stderr}"
+    combined_lower = combined.lower()
+    for reason, pattern in MODEL_BACKEND_FAILURE_PATTERNS:
+        if pattern in combined_lower:
+            detail = next(
+                (
+                    line
+                    for line in combined.splitlines()
+                    if pattern in line.lower()
+                ),
+                combined,
+            )
+            return {
+                "reason": reason,
+                "detail": compact_text(detail),
+            }
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "turn.failed":
+            continue
+        error = event.get("error")
+        message = (
+            error.get("message")
+            if isinstance(error, dict) and isinstance(error.get("message"), str)
+            else compact_text(str(error))
+        )
+        return {
+            "reason": "turn-failed",
+            "detail": compact_text(message),
+        }
+    if returncode == 124:
+        return {
+            "reason": "process-timeout",
+            "detail": "codex exec timed out before producing a valid attempt",
+        }
+    if returncode != 0:
+        return {
+            "reason": f"codex-exec-returncode-{returncode}",
+            "detail": compact_text(combined),
+        }
+    return None
+
+
+def mark_invalid_attempt(
+    record: dict[str, Any],
+    *,
+    reason: str,
+    detail: str,
+) -> None:
+    record["validAttempt"] = False
+    record["invalidReason"] = reason
+    record["invalidDetail"] = detail
+
+
+def record_valid(record: dict[str, Any]) -> bool:
+    return record.get("validAttempt", True) is not False
+
+
+def notification_error_messages(notifications: list[dict[str, Any]]) -> list[str]:
+    messages: list[str] = []
+    for message in notifications:
+        if message.get("method") != "error":
+            continue
+        params = message.get("params")
+        if isinstance(params, dict):
+            error_message = params.get("message")
+            if isinstance(error_message, str):
+                messages.append(error_message)
+    return messages
+
+
+def losangelex_invalid_reason(
+    *,
+    summary: dict[str, Any],
+    final_states: dict[str, Any],
+    notifications: list[dict[str, Any]],
+) -> dict[str, str] | None:
+    if has_token_usage(summary.get("tokenUsage")):
+        return None
+    statuses = [
+        state.get("status")
+        for state in final_states.values()
+        if isinstance(state, dict)
+    ]
+    system_error_count = sum(
+        1
+        for status in statuses
+        if isinstance(status, dict) and status.get("type") == "systemError"
+    )
+    error_count = int(summary.get("notificationCounts", {}).get("error", 0))
+    if system_error_count == 0 and error_count == 0:
+        return None
+
+    messages = notification_error_messages(notifications)
+    detail = compact_text(" | ".join(messages)) if messages else "systemError"
+    detail_lower = detail.lower()
+    for reason, pattern in MODEL_BACKEND_FAILURE_PATTERNS:
+        if pattern in detail_lower:
+            return {"reason": reason, "detail": detail}
+    return {
+        "reason": "losangelex-system-error-without-token-usage",
+        "detail": detail,
+    }
 
 
 def load_task(path: Path) -> SiloTask:
@@ -826,6 +954,11 @@ def run_codex_task(
             (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
             (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
             token_usage = parse_codex_exec_jsonl_token_usage(result.stdout)
+            invalid_attempt = codex_exec_invalid_reason(
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
             run_records.append(
                 {
                     "agentId": config.agent_id,
@@ -837,6 +970,7 @@ def run_codex_task(
                     "tokenUsage": token_usage,
                     "transientRetries": transient_retries,
                     "submissionExists": submission_path.exists(),
+                    "invalidAttempt": invalid_attempt,
                 }
             )
         if all(
@@ -847,7 +981,7 @@ def run_codex_task(
 
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
-    return {
+    record = {
         "system": "codex",
         "caseId": task.case_id,
         "taskFile": task.task_file.name,
@@ -860,6 +994,16 @@ def run_codex_task(
         ),
         "score": score,
     }
+    invalid_attempts = [
+        item["invalidAttempt"] for item in run_records if item.get("invalidAttempt")
+    ]
+    if invalid_attempts:
+        mark_invalid_attempt(
+            record,
+            reason=str(invalid_attempts[0]["reason"]),
+            detail=str(invalid_attempts[0]["detail"]),
+        )
+    return record
 
 
 def run_codex_subagents_task(
@@ -908,6 +1052,11 @@ def run_codex_subagents_task(
     )
     (output_dir / "parent-stdout.log").write_text(result.stdout, encoding="utf-8")
     (output_dir / "parent-stderr.log").write_text(result.stderr, encoding="utf-8")
+    invalid_attempt = codex_exec_invalid_reason(
+        returncode=result.returncode,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
     parent_token_usage = parse_codex_exec_jsonl_token_usage(result.stdout)
     rollout_token_usage = summarize_rollout_token_usage(
         changed_rollout_files(codex_home, rollout_snapshot),
@@ -920,7 +1069,7 @@ def run_codex_subagents_task(
 
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
-    return {
+    record = {
         "system": "codex-subagents",
         "caseId": task.case_id,
         "taskFile": task.task_file.name,
@@ -933,6 +1082,7 @@ def run_codex_subagents_task(
             "stderrPath": str(output_dir / "parent-stderr.log"),
             "tokenUsage": parent_token_usage,
             "transientRetries": transient_retries,
+            "invalidAttempt": invalid_attempt,
         },
         "tokenUsage": token_usage,
         "tokenUsageSummary": {
@@ -960,6 +1110,13 @@ def run_codex_subagents_task(
             "submission files."
         ),
     }
+    if invalid_attempt is not None:
+        mark_invalid_attempt(
+            record,
+            reason=invalid_attempt["reason"],
+            detail=invalid_attempt["detail"],
+        )
+    return record
 
 
 def codex_full_context_prompt(task: SiloTask, *, round_index: int) -> str:
@@ -1072,6 +1229,11 @@ def run_codex_full_context_task(
         (agent_dir / "stdout.log").write_text(result.stdout, encoding="utf-8")
         (agent_dir / "stderr.log").write_text(result.stderr, encoding="utf-8")
         token_usage = parse_codex_exec_jsonl_token_usage(result.stdout)
+        invalid_attempt = codex_exec_invalid_reason(
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
         run_records.append(
             {
                 "agentId": "full-context",
@@ -1082,12 +1244,13 @@ def run_codex_full_context_task(
                 "stderrPath": str(agent_dir / "stderr.log"),
                 "tokenUsage": token_usage,
                 "transientRetries": transient_retries,
+                "invalidAttempt": invalid_attempt,
             }
         )
 
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
-    return {
+    record = {
         "system": "codex-full-context",
         "caseId": task.case_id,
         "taskFile": task.task_file.name,
@@ -1100,6 +1263,16 @@ def run_codex_full_context_task(
         ),
         "score": score,
     }
+    invalid_attempts = [
+        item["invalidAttempt"] for item in run_records if item.get("invalidAttempt")
+    ]
+    if invalid_attempts:
+        mark_invalid_attempt(
+            record,
+            reason=str(invalid_attempts[0]["reason"]),
+            detail=str(invalid_attempts[0]["detail"]),
+        )
+    return record
 
 
 def start_hollywood_agent(
@@ -1260,6 +1433,7 @@ def wait_for_hollywood_round(
     agents: list[HollywoodAgent],
     deadline: float,
     poll_seconds: int,
+    completion_paths: list[Path],
 ) -> tuple[bool, dict[str, dict[str, Any]]]:
     tracked_threads = {agent.thread_id for agent in agents}
     completed_once = False
@@ -1273,7 +1447,8 @@ def wait_for_hollywood_round(
             agent.thread_id: read_thread_state(conn, agent.thread_id)
             for agent in agents
         }
-        if completed_once and all_threads_idle(states):
+        completion_paths_done = all(path.exists() for path in completion_paths)
+        if completed_once and (all_threads_idle(states) or completion_paths_done):
             break
     return completed_once, states
 
@@ -1303,6 +1478,7 @@ def run_losangelex_task(
     agents: list[HollywoodAgent] = []
     completed_rounds: list[dict[str, Any]] = []
     stopped_for_active_timeout = False
+    notifications: list[dict[str, Any]] = []
     try:
         initialize(conn)
         for config in task.agent_configs:
@@ -1361,11 +1537,16 @@ def run_losangelex_task(
                 )
                 send_turn(conn, agent.thread_id, prompt)
             round_deadline = min(deadline, time.time() + round_timeout_seconds)
+            completion_paths = [
+                workspace / "submissions" / f"agent-{config.agent_id:03d}.json"
+                for config in task.agent_configs
+            ]
             completed_once, states = wait_for_hollywood_round(
                 conn=conn,
                 agents=agents,
                 deadline=round_deadline,
                 poll_seconds=poll_seconds,
+                completion_paths=completion_paths,
             )
             submitted = [
                 config.agent_id
@@ -1407,6 +1588,7 @@ def run_losangelex_task(
             conn.notifications,
             {agent.thread_id for agent in agents},
         )
+        notifications = list(conn.notifications)
     finally:
         conn.close()
 
@@ -1447,21 +1629,54 @@ def run_losangelex_task(
     }
     if selector_decision is not None:
         record["selectorDecision"] = selector_decision
+    invalid_attempt = losangelex_invalid_reason(
+        summary=summary,
+        final_states=final_states,
+        notifications=notifications,
+    )
+    if invalid_attempt is not None:
+        mark_invalid_attempt(
+            record,
+            reason=invalid_attempt["reason"],
+            detail=invalid_attempt["detail"],
+        )
     return record
 
 
 def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
     def summarize(record_group: list[dict[str, Any]]) -> dict[str, Any]:
-        count = len(record_group)
-        successes = sum(1 for record in record_group if record["score"]["success"])
+        invalid_records = sum(1 for record in record_group if not record_valid(record))
+        valid_records = [record for record in record_group if record_valid(record)]
+        count = len(valid_records)
+        if count == 0:
+            return {
+                "tasks": 0,
+                "attemptedRecords": len(record_group),
+                "invalidRecords": invalid_records,
+                "fullSuccesses": 0,
+                "fullSuccessRate": None,
+                "avgAgentSuccessRate": None,
+                "avgPartialCorrectness": None,
+                "avgNumericToleranceSuccessRate": None,
+                "avgNumericTolerancePartialCorrectness": None,
+                "avgSeconds": None,
+                "coordinationToolErrors": 0,
+                "tokenUsageTaskCount": 0,
+                "totalTokenUsage": sum_token_usage([]),
+                "avgTotalTokens": None,
+                "avgUncachedPlusOutputTokens": None,
+                "totalTokensPerFullSuccess": None,
+                "uncachedPlusOutputTokensPerFullSuccess": None,
+            }
+        successes = sum(1 for record in valid_records if record["score"]["success"])
         avg_success_rate = (
-            sum(record["score"]["metrics"]["S_success_rate"] for record in record_group)
+            sum(record["score"]["metrics"]["S_success_rate"] for record in valid_records)
             / count
         )
         avg_partial = (
             sum(
                 record["score"]["metrics"]["P_partial_correctness"]
-                for record in record_group
+                for record in valid_records
             )
             / count
         )
@@ -1471,7 +1686,7 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
                     "S_numeric_tolerance_success_rate",
                     record["score"]["metrics"]["S_success_rate"],
                 )
-                for record in record_group
+                for record in valid_records
             )
             / count
         )
@@ -1481,17 +1696,17 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
                     "P_numeric_tolerance_partial_correctness",
                     record["score"]["metrics"]["P_partial_correctness"],
                 )
-                for record in record_group
+                for record in valid_records
             )
             / count
         )
-        avg_seconds = sum(record["seconds"] for record in record_group) / count
+        avg_seconds = sum(record["seconds"] for record in valid_records) / count
         coordination_tool_errors = sum(
-            coordination_error_total(record) for record in record_group
+            coordination_error_total(record) for record in valid_records
         )
         token_usage_records = [
             normalize_token_usage(record.get("tokenUsage"))
-            for record in record_group
+            for record in valid_records
             if has_token_usage(record.get("tokenUsage"))
         ]
         token_usage_count = len(token_usage_records)
@@ -1516,6 +1731,8 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         )
         return {
             "tasks": count,
+            "attemptedRecords": len(record_group),
+            "invalidRecords": invalid_records,
             "fullSuccesses": successes,
             "fullSuccessRate": successes / count,
             "avgAgentSuccessRate": avg_success_rate,
@@ -1581,17 +1798,18 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| System | Valid tasks | Invalid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
-            f"| {system} | {row['tasks']} | {row['fullSuccesses']} "
-            f"({row['fullSuccessRate']:.2%}) | {row['avgAgentSuccessRate']:.3f} | "
-            f"{row['avgPartialCorrectness']:.3f} | "
-            f"{row['avgNumericToleranceSuccessRate']:.3f} | "
-            f"{row['avgNumericTolerancePartialCorrectness']:.3f} | "
-            f"{row['avgSeconds']:.1f} | "
+            f"| {system} | {row['tasks']} | {row['invalidRecords']} | "
+            f"{row['fullSuccesses']} ({format_percent_value(row['fullSuccessRate'])}) | "
+            f"{format_float_value(row['avgAgentSuccessRate'])} | "
+            f"{format_float_value(row['avgPartialCorrectness'])} | "
+            f"{format_float_value(row['avgNumericToleranceSuccessRate'])} | "
+            f"{format_float_value(row['avgNumericTolerancePartialCorrectness'])} | "
+            f"{format_float_value(row['avgSeconds'], digits=1)} | "
             f"{format_token_value(row['avgTotalTokens'])} | "
             f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
             f"{format_token_value(row['totalTokensPerFullSuccess'])} | "
@@ -1602,19 +1820,20 @@ def write_report(
             "",
             "## By Level",
             "",
-            "| Level | System | Tasks | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| Level | System | Valid tasks | Invalid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for level, level_summary in summary["levels"].items():
         for system, row in level_summary["systems"].items():
             lines.append(
-                f"| {level} | {system} | {row['tasks']} | {row['fullSuccesses']} "
-                f"({row['fullSuccessRate']:.2%}) | {row['avgAgentSuccessRate']:.3f} | "
-                f"{row['avgPartialCorrectness']:.3f} | "
-                f"{row['avgNumericToleranceSuccessRate']:.3f} | "
-                f"{row['avgNumericTolerancePartialCorrectness']:.3f} | "
-                f"{row['avgSeconds']:.1f} | "
+                f"| {level} | {system} | {row['tasks']} | {row['invalidRecords']} | "
+                f"{row['fullSuccesses']} ({format_percent_value(row['fullSuccessRate'])}) | "
+                f"{format_float_value(row['avgAgentSuccessRate'])} | "
+                f"{format_float_value(row['avgPartialCorrectness'])} | "
+                f"{format_float_value(row['avgNumericToleranceSuccessRate'])} | "
+                f"{format_float_value(row['avgNumericTolerancePartialCorrectness'])} | "
+                f"{format_float_value(row['avgSeconds'], digits=1)} | "
                 f"{format_token_value(row['avgTotalTokens'])} | "
                 f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
                 f"{format_token_value(row['totalTokensPerFullSuccess'])} | "
@@ -1624,8 +1843,17 @@ def write_report(
     for record in records:
         metrics = record["score"]["metrics"]
         token_usage = normalize_token_usage(record.get("tokenUsage"))
+        validity = (
+            "valid"
+            if record_valid(record)
+            else (
+                f"INVALID reason={record.get('invalidReason', 'unknown')} "
+                f"detail={record.get('invalidDetail', '')}"
+            )
+        )
         lines.append(
             f"- {record['system']} `{record['taskFile']}`: "
+            f"{validity} "
             f"success={record['score']['success']} "
             f"S={metrics['S_success_rate']:.3f} "
             f"P={metrics['P_partial_correctness']:.3f} "
@@ -1643,6 +1871,18 @@ def format_token_value(value: float | int | None) -> str:
     if value is None:
         return "n/a"
     return f"{value:,.0f}"
+
+
+def format_float_value(value: float | int | None, *, digits: int = 3) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.{digits}f}"
+
+
+def format_percent_value(value: float | int | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.2%}"
 
 
 def main() -> int:
@@ -1847,12 +2087,18 @@ def main() -> int:
                 )
                 metrics = record["score"]["metrics"]
                 token_usage = normalize_token_usage(record.get("tokenUsage"))
+                invalid_suffix = (
+                    ""
+                    if record_valid(record)
+                    else f" INVALID={record.get('invalidReason', 'unknown')}"
+                )
                 print(
                     f"completed system={system} task={task.task_file.stem} "
                     f"S={metrics['S_success_rate']:.3f} "
                     f"P={metrics['P_partial_correctness']:.3f} "
                     f"seconds={record['seconds']} "
-                    f"total_tokens={token_usage['totalTokens']}",
+                    f"total_tokens={token_usage['totalTokens']}"
+                    f"{invalid_suffix}",
                     flush=True,
                 )
 

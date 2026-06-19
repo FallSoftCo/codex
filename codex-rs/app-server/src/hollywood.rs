@@ -41,6 +41,7 @@ pub(crate) const HOLLYWOOD_AUTONOMOUS_COOLDOWN: Duration = Duration::from_secs(2
 #[allow(dead_code)]
 pub(crate) const HOLLYWOOD_STARTUP_GRACE_PERIOD: Duration = Duration::from_secs(5);
 pub(crate) const HOLLYWOOD_REGISTRY_SYNC_INTERVAL: Duration = Duration::from_secs(15);
+const COLLABORATION_FIRST_ENV_VAR: &str = "LOSANGELEX_COLLABORATION_FIRST";
 const COLLABORATION_FIRST_DEBUG_ENV_VAR: &str = "LOSANGELEX_COLLABORATION_FIRST_DEBUG";
 const HOLLYWOOD_PAGE_LIMIT: i64 = 100;
 const HOLLYWOOD_PENDING_WAKE_LIMIT: usize = 8;
@@ -696,6 +697,22 @@ fn env_flag_enabled(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn env_flag_disabled(name: &str) -> bool {
+    env::var(name)
+        .as_deref()
+        .map(|value| matches!(value, "0" | "false" | "FALSE" | "no" | "off"))
+        .unwrap_or(false)
+}
+
+pub(crate) fn collaboration_first_policy_enabled() -> bool {
+    if env_flag_enabled(COLLABORATION_FIRST_DEBUG_ENV_VAR)
+        || env_flag_enabled(COLLABORATION_FIRST_ENV_VAR)
+    {
+        return true;
+    }
+    !env_flag_disabled(COLLABORATION_FIRST_ENV_VAR)
+}
+
 pub(crate) fn format_hollywood_context_message(
     thread_id: ThreadId,
     thread_name: Option<&str>,
@@ -711,7 +728,7 @@ pub(crate) fn format_hollywood_context_message(
         .into_iter()
         .collect::<Vec<_>>();
     let announce_presence = startup_announces_presence(config);
-    let collaboration_first_debug = env_flag_enabled(COLLABORATION_FIRST_DEBUG_ENV_VAR);
+    let collaboration_first_enabled = collaboration_first_policy_enabled();
     let mut broadcast_guidance = vec![
         "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.",
         "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.",
@@ -726,14 +743,15 @@ pub(crate) fn format_hollywood_context_message(
         "If another agent posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify. End your current turn promptly instead.",
         "If autonomous Hollywood follow-up finds no new state to report, prefer no user-facing follow-up at all; if one is needed, keep it to a compact status tag rather than a full explanation.",
     ];
-    if collaboration_first_debug {
+    if collaboration_first_enabled {
         broadcast_guidance.extend([
-            "Debug collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified.",
-            "Debug collaboration-first policy: collaboration is peer-to-peer and role-flexible; any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader.",
-            "Debug collaboration-first policy: for work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help.",
-            "Debug collaboration-first policy: a self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself; for cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign a narrow durable task to a specific peer before claiming all scope yourself.",
-            "Debug collaboration-first policy: if peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback.",
-            "Debug collaboration-first policy: prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers.",
+            "Collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified.",
+            "Collaboration-first policy: collaboration is peer-to-peer and role-flexible; any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader.",
+            "Collaboration-first policy: for work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help.",
+            "Collaboration-first policy: a self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself; for cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request using `response_policy: \"required\"`, or assign a narrow durable task to a specific peer, before claiming all scope yourself.",
+            "Collaboration-first policy: when peer input is required for the chosen plan, do not mark the task done or give a final answer until the peer responds, you have incorporated or explicitly rejected that response, or you have stated a timeout/fallback and limited yourself to unblocked scope.",
+            "Collaboration-first policy: if peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback.",
+            "Collaboration-first policy: prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers.",
         ]);
     }
     let payload_json = serde_json::json!({
@@ -760,11 +778,11 @@ pub(crate) fn format_hollywood_context_message(
             "relay_material_conclusions_to_room": true,
             "start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team": true,
             "do_not_substitute_codex_subagents_for_losangelex_team": true,
-            "evaluate_peer_collaboration_before_substantive_work": collaboration_first_debug,
-            "inspect_attached_peers_with_hollywood_read_before_solo_decision": collaboration_first_debug,
-            "collaborate_when_peer_help_reduces_effort_risk_or_uncertainty": collaboration_first_debug,
-            "self_owned_coordination_is_not_peer_collaboration": collaboration_first_debug,
-            "solo_execution_is_for_small_local_or_unsplittable_work": collaboration_first_debug,
+            "evaluate_peer_collaboration_before_substantive_work": collaboration_first_enabled,
+            "inspect_attached_peers_with_hollywood_read_before_solo_decision": collaboration_first_enabled,
+            "collaborate_when_peer_help_reduces_effort_risk_or_uncertainty": collaboration_first_enabled,
+            "self_owned_coordination_is_not_peer_collaboration": collaboration_first_enabled,
+            "solo_execution_is_for_small_local_or_unsplittable_work": collaboration_first_enabled,
         },
         "broadcast_guidance": broadcast_guidance,
     })
@@ -805,8 +823,8 @@ pub(crate) fn startup_handshake_message(
     } else {
         "Before doing substantive work, read recent room traffic once to orient yourself and check for existing scope claims. In focused mode, do not send a startup presence broadcast by default. If you already own active scope, need to re-establish a handoff after reconnect or rolling deploy, or receive concrete user tasking, send one concise room update naming the exact scope or status that changed."
     };
-    let collaboration_first_guidance = if env_flag_enabled(COLLABORATION_FIRST_DEBUG_ENV_VAR) {
-        " Debug collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified. Collaboration is peer-to-peer and role-flexible: any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader. For work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help. A self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself. For cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request or assign a narrow durable task to a specific peer before claiming all scope yourself. If peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback. Prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers."
+    let collaboration_first_guidance = if collaboration_first_policy_enabled() {
+        " Collaboration-first policy: before substantive work, decide whether an existing or new Losangelex peer would make the directive easier, faster, safer, or better verified. Collaboration is peer-to-peer and role-flexible: any session may ask for help, split work, verify another session, hand off context, or integrate, without treating the current respondent as a permanent leader. For work that is not clearly tiny and local, call `hollywood_read` before claiming or editing; use its attached `peers` roster plus recent messages to decide whether to request peer help. A self-owned `coordination_act` open/accept/done records ownership but is not peer collaboration by itself. For cross-surface, risky, uncertain, or verification-heavy work, ask a peer for a narrow lane with `hollywood_send` @mention/direct request using `response_policy: \"required\"`, or assign a narrow durable task to a specific peer, before claiming all scope yourself. When peer input is required for the chosen plan, do not mark the task done or give a final answer until the peer responds, you have incorporated or explicitly rejected that response, or you have stated a timeout/fallback and limited yourself to unblocked scope. If peers are attached but no one responds after a brief wait, continue solo on unblocked scope and leave a concise room update explaining that fallback. Prefer solo execution only for small, clearly local, or unsplittable tasks; for naturally parallel, cross-surface, risky, uncertain, or verification-heavy work, coordinate through Hollywood or start app-server-hosted Losangelex peers."
     } else {
         ""
     };
@@ -1680,7 +1698,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn focused_hollywood_context_marks_presence_announcement_optional() {
+        let _policy = EnvGuard::set(COLLABORATION_FIRST_ENV_VAR, None);
+        let _debug = EnvGuard::set(COLLABORATION_FIRST_DEBUG_ENV_VAR, None);
         let thread_id =
             ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
         let message = format_hollywood_context_message(
@@ -1697,6 +1718,39 @@ mod tests {
             )
         );
         assert!(message.contains("\"do_not_substitute_codex_subagents_for_losangelex_team\":true"));
+        assert!(message.contains("\"evaluate_peer_collaboration_before_substantive_work\":true"));
+        assert!(
+            message.contains(
+                "\"inspect_attached_peers_with_hollywood_read_before_solo_decision\":true"
+            )
+        );
+        assert!(message.contains("\"self_owned_coordination_is_not_peer_collaboration\":true"));
+        assert!(
+            message.contains("\"solo_execution_is_for_small_local_or_unsplittable_work\":true")
+        );
+        assert!(message.contains("Collaboration-first policy"));
+    }
+
+    #[test]
+    #[serial]
+    fn disabled_hollywood_context_suppresses_collaboration_first_policy() {
+        let _policy = EnvGuard::set(COLLABORATION_FIRST_ENV_VAR, Some("0"));
+        let _debug = EnvGuard::set(COLLABORATION_FIRST_DEBUG_ENV_VAR, None);
+        let thread_id =
+            ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
+        let message = format_hollywood_context_message(
+            thread_id,
+            Some("Scout Agent"),
+            &HollywoodConfig::default(),
+            true,
+        );
+        let handshake = startup_handshake_message(
+            thread_id,
+            Some("Scout Agent"),
+            &HollywoodConfig::default(),
+            true,
+        );
+
         assert!(message.contains("\"evaluate_peer_collaboration_before_substantive_work\":false"));
         assert!(
             message.contains(
@@ -1707,11 +1761,14 @@ mod tests {
         assert!(
             message.contains("\"solo_execution_is_for_small_local_or_unsplittable_work\":false")
         );
+        assert!(!message.contains("Collaboration-first policy"));
+        assert!(!handshake.contains("Collaboration-first policy"));
     }
 
     #[test]
     #[serial]
-    fn debug_hollywood_context_enables_collaboration_first_policy() {
+    fn debug_env_still_enables_collaboration_first_policy() {
+        let _policy = EnvGuard::set(COLLABORATION_FIRST_ENV_VAR, Some("0"));
         let _debug = EnvGuard::set(COLLABORATION_FIRST_DEBUG_ENV_VAR, Some("1"));
         let thread_id =
             ThreadId::from_string("019d0798-12d8-76c3-a812-6e323637aa59").expect("valid thread");
@@ -1745,7 +1802,7 @@ mod tests {
         assert!(message.contains("role-flexible"));
         assert!(message.contains("use its attached `peers` roster"));
         assert!(message.contains("is not peer collaboration by itself"));
-        assert!(handshake.contains("Debug collaboration-first policy"));
+        assert!(handshake.contains("Collaboration-first policy"));
         assert!(
             handshake.contains("without treating the current respondent as a permanent leader")
         );
