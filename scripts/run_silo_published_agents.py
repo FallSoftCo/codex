@@ -13,6 +13,9 @@ switches the agent substrate under test:
   final-answer contract checklist.
 - losangelex-peer-review: native Hollywood/app-server agents with the contract
   checklist plus explicit peer contradiction/review rules.
+- losangelex-blackboard-finisher: native Hollywood/app-server agents that
+  publish compact local facts to the room/shared blackboard, elect one finisher,
+  and let that finisher write the final submissions with the contract checklist.
 
 The runner intentionally does not place the full task JSON or expected answer in
 the agent workspace before execution. Each agent receives only its private shard
@@ -27,6 +30,8 @@ import os
 import shutil
 import subprocess
 import time
+import urllib.parse
+import urllib.request
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -97,6 +102,7 @@ FOREMAN_SELECTOR_ID = "silo-topology-v1-2026-06-14"
 LOSANGELEX_PROMPT_PROFILE_STANDARD = "standard"
 LOSANGELEX_PROMPT_PROFILE_CONTRACT = "contract"
 LOSANGELEX_PROMPT_PROFILE_PEER_REVIEW = "peer-review"
+LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER = "blackboard-finisher"
 MODEL_BACKEND_FAILURE_PATTERNS = (
     ("usage-limit", "you've hit your usage limit"),
     ("unsupported-model", "requires a newer version of codex"),
@@ -1306,6 +1312,7 @@ def start_hollywood_agent(
     *,
     workspace: Path,
     room: str,
+    hollywood_url: str | None,
     agent_id: int,
     runtime_name: str,
     model: str,
@@ -1333,6 +1340,7 @@ def start_hollywood_agent(
         "thread/hollywood/attach",
         {
             "threadId": thread_id,
+            **({"url": hollywood_url} if hollywood_url else {}),
             "room": room,
             "observedRooms": [room],
             "wakeRooms": [room],
@@ -1344,6 +1352,66 @@ def start_hollywood_agent(
         },
     )
     return thread_id
+
+
+def fetch_hollywood_room_messages(hollywood_url: str | None, room: str) -> list[dict[str, Any]]:
+    if not hollywood_url:
+        return []
+    query = urllib.parse.urlencode(
+        {
+            "room": room,
+            "after_id": "0",
+            "limit": "1000",
+            "include_own": "1",
+        }
+    )
+    url = f"{hollywood_url.rstrip('/')}/hollywood/v1/messages?{query}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return []
+    messages = payload.get("messages", [])
+    if not isinstance(messages, list):
+        return []
+    return [message for message in messages if isinstance(message, dict)]
+
+
+def summarize_hollywood_room_messages(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    by_kind: dict[str, int] = {}
+    by_response_policy: dict[str, int] = {}
+    senders: set[str] = set()
+    examples: list[dict[str, Any]] = []
+    for message in messages:
+        kind = str(message.get("message_kind") or message.get("messageKind") or "unknown")
+        by_kind[kind] = by_kind.get(kind, 0) + 1
+        response_policy = str(
+            message.get("response_policy") or message.get("responsePolicy") or "none"
+        )
+        by_response_policy[response_policy] = (
+            by_response_policy.get(response_policy, 0) + 1
+        )
+        sender_id = message.get("sender_id") or message.get("senderId")
+        if isinstance(sender_id, str):
+            senders.add(sender_id)
+        if len(examples) < 10:
+            body = message.get("body")
+            examples.append(
+                {
+                    "id": message.get("id"),
+                    "senderId": sender_id,
+                    "messageKind": kind,
+                    "responsePolicy": response_policy,
+                    "bodyPreview": body[:200] if isinstance(body, str) else None,
+                }
+            )
+    return {
+        "total": len(messages),
+        "senderCount": len(senders),
+        "byKind": by_kind,
+        "byResponsePolicy": by_response_policy,
+        "examples": examples,
+    }
 
 
 def losangelex_prompt(
@@ -1394,7 +1462,13 @@ def losangelex_first_finisher_prompt(
     *,
     runtime_name: str,
     round_index: int,
+    prompt_profile: str = LOSANGELEX_PROMPT_PROFILE_STANDARD,
 ) -> str:
+    system_label = (
+        "losangelex-hollywood-blackboard-finisher"
+        if prompt_profile == LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER
+        else "losangelex-hollywood-first-finisher"
+    )
     profile = (
         f"\nPublished role/profile for this agent:\n{config.profile}\n"
         if config.profile
@@ -1402,7 +1476,7 @@ def losangelex_first_finisher_prompt(
     )
     return f"""We are running a published SILO-BENCH distributed coordination task.
 
-System under evaluation: losangelex-hollywood-first-finisher
+System under evaluation: {system_label}
 Case: {task.case_id} ({task.case_name})
 Hollywood runtime identity: {runtime_name}
 Agent id: {config.agent_id}
@@ -1436,6 +1510,7 @@ Losangelex/Hollywood first-finisher rules:
   outside this workspace. A run that uses an answer key is invalid.
 - Do not overwrite another agent's shared note.
 - Do not put commentary in the submission JSON files.
+{losangelex_finisher_profile_rules(task, config, prompt_profile=prompt_profile)}
 """
 
 
@@ -1479,6 +1554,19 @@ def losangelex_profile_rules(
     raise ValueError(f"unknown Losangelex prompt profile: {prompt_profile}")
 
 
+def losangelex_finisher_profile_rules(
+    task: SiloTask,
+    config: SiloAgentConfig,
+    *,
+    prompt_profile: str,
+) -> str:
+    if prompt_profile == LOSANGELEX_PROMPT_PROFILE_STANDARD:
+        return ""
+    if prompt_profile == LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER:
+        return "\n" + losangelex_blackboard_finisher_rules(task, config)
+    raise ValueError(f"unknown Losangelex finisher prompt profile: {prompt_profile}")
+
+
 def losangelex_output_contract_rules(config: SiloAgentConfig) -> str:
     return f"""Final-answer contract checklist:
 - Before writing `submissions/agent-{config.agent_id:03d}.json`, re-read the private prompt and identify the required answer type, element order, key names, and numeric precision.
@@ -1488,6 +1576,34 @@ def losangelex_output_contract_rules(config: SiloAgentConfig) -> str:
 - If the answer is a count, index, rank, label, boolean, bit, or membership flag, submit that exact discrete value rather than an explanatory derivation.
 - If the answer is a list or dictionary, preserve the requested order and labels exactly.
 - Write exactly one JSON object with the requested `agent_id` and `answer` fields; never write markdown, comments, derivation text, or an alternate schema."""
+
+
+def losangelex_finisher_output_contract_rules() -> str:
+    return """Finisher final-answer contract checklist:
+- Before writing any `submissions/agent-XXX.json`, identify whether the prompt requires one shared answer for every agent or one answer per agent.
+- Re-read the task's explicit `Algorithm`, `Output`, and `Communication Protocol`; those are binding and outrank generic interpretations of the case name.
+- For every submission file, write exactly one JSON object with numeric `agent_id` matching the filename and an `answer` value matching the requested type.
+- If the prompt asks for rounded numbers or a fixed number of decimal places, submit rounded JSON numbers at that precision, not full-precision intermediate values.
+- If no precision is requested, avoid binary floating-point artifacts. Use concise decimals that fit the task domain, such as two decimals for ordinary averages or coordinates and six decimals for probabilities/ranking scores unless the prompt implies otherwise.
+- Preserve requested ordering, key names, list lengths, labels, and per-agent identities exactly.
+- Never write markdown, comments, derivation text, bare values, alternate schemas, or one agent's answer into another agent's file."""
+
+
+def losangelex_blackboard_finisher_rules(
+    task: SiloTask,
+    config: SiloAgentConfig,
+) -> str:
+    return f"""Hollywood blackboard-finisher rules:
+- Use Hollywood as the append-only shared ledger and `shared/` as a durable fallback. After computing your compact local fact, call `hollywood_send` with `broadcast: false` and `response_policy: "none"`; do not use `@room` or `broadcast: true` for routine facts. If the tool is unavailable or returns an error, record that in `shared/agent-{config.agent_id:03d}.md` and continue with the file fallback.
+- The Hollywood message and `shared/agent-{config.agent_id:03d}.md` must be compact but sufficient for a finisher to reconstruct the answer without your private prompt. Include: `FACT agent={config.agent_id}`, task case `{task.case_id}`, the original raw shard exactly as shown in your private prompt, boundary values when relevant, protocol-specific local transitions or local result, output shape, and unresolved dependencies.
+- Publish the local fact before attempting `mkdir shared/finisher.lock`.
+- If you do not win `shared/finisher.lock`, stop after your fact is published. Do not write final submissions and do not perform redundant global synthesis.
+- If you win `shared/finisher.lock`, call `hollywood_read` with enough limit to read recent fact messages, then read `shared/agent-*.md` and existing `submissions/agent-*.json`. If `hollywood_read` is unavailable or fails, continue from `shared/` and note the fallback.
+- As finisher, aggregate only from peer-produced Hollywood facts, shared notes, existing submissions, and your own private shard. Do not inspect hidden benchmark files or previous results.
+- As finisher, prefer deterministic recomputation from raw shards in agent order over peer-derived aggregate summaries. Treat derived summaries as advisory checks, not as authoritative inputs.
+- If the prompt describes a pipeline, state machine, repeated boundary exchange, round-by-round simulation, or ordered chain, simulate that stated protocol from raw shards and boundaries. Do not substitute a generic all-pairs/all-subsequences/dynamic-programming aggregate unless the prompt explicitly asks for that aggregate.
+- If peer facts conflict, resolve by the task's stated Algorithm and Communication Protocol, not by majority vote. If facts are missing after the wait, write only defensible submissions; do not guess.
+{losangelex_finisher_output_contract_rules()}"""
 
 
 def losangelex_peer_review_rules(task: SiloTask, config: SiloAgentConfig) -> str:
@@ -1575,6 +1691,7 @@ def run_losangelex_task(
     output_dir: Path,
     first_finisher: bool = False,
     system_name: str = "losangelex",
+    hollywood_url: str | None = None,
     selector_decision: dict[str, str] | None = None,
     prompt_profile: str = LOSANGELEX_PROMPT_PROFILE_STANDARD,
     submission_settle_seconds: float = 5.0,
@@ -1597,6 +1714,7 @@ def run_losangelex_task(
                 conn,
                 workspace=workspace,
                 room=room,
+                hollywood_url=hollywood_url,
                 agent_id=config.agent_id,
                 runtime_name=runtime_name,
                 model=model,
@@ -1624,6 +1742,7 @@ def run_losangelex_task(
                             config,
                             runtime_name=agent.runtime_name,
                             round_index=round_index,
+                            prompt_profile=prompt_profile,
                         )
                     else:
                         prompt = losangelex_prompt(
@@ -1705,6 +1824,7 @@ def run_losangelex_task(
     finally:
         conn.close()
 
+    hollywood_messages = fetch_hollywood_room_messages(hollywood_url, room)
     (output_dir / "thread-states.json").write_text(
         json.dumps(final_states, indent=2) + "\n",
         encoding="utf-8",
@@ -1721,7 +1841,9 @@ def run_losangelex_task(
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
     coordination_strategy = "first-finisher" if first_finisher else "room"
-    if not first_finisher and prompt_profile != LOSANGELEX_PROMPT_PROFILE_STANDARD:
+    if first_finisher and prompt_profile == LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER:
+        coordination_strategy = prompt_profile
+    elif not first_finisher and prompt_profile != LOSANGELEX_PROMPT_PROFILE_STANDARD:
         coordination_strategy = prompt_profile
     record = {
         "system": system_name,
@@ -1747,6 +1869,7 @@ def run_losangelex_task(
         "tokenUsage": summary.get("tokenUsage", {}),
         "tokenUsageSummary": summary.get("tokenUsageSummary", {}),
         "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
+        "hollywoodMessageSummary": summarize_hollywood_room_messages(hollywood_messages),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "errorNotificationsPath": str(error_notifications_path),
         "threadStatesPath": str(output_dir / "thread-states.json"),
@@ -1791,6 +1914,7 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "avgUncachedPlusOutputTokens": None,
                 "totalTokensPerFullSuccess": None,
                 "uncachedPlusOutputTokensPerFullSuccess": None,
+                "hollywoodMessages": 0,
             }
         successes = sum(1 for record in valid_records if record["score"]["success"])
         avg_success_rate = (
@@ -1828,6 +1952,7 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         coordination_tool_errors = sum(
             coordination_error_total(record) for record in valid_records
         )
+        hollywood_messages = sum(hollywood_message_total(record) for record in valid_records)
         token_usage_records = [
             normalize_token_usage(record.get("tokenUsage"))
             for record in valid_records
@@ -1873,6 +1998,7 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "uncachedPlusOutputTokensPerFullSuccess": (
                 uncached_plus_output_tokens_per_full_success
             ),
+            "hollywoodMessages": hollywood_messages,
         }
 
     by_system: dict[str, list[dict[str, Any]]] = {}
@@ -1908,6 +2034,14 @@ def coordination_error_total(record: dict[str, Any]) -> int:
     return int(total) if isinstance(total, (int, float)) else 0
 
 
+def hollywood_message_total(record: dict[str, Any]) -> int:
+    summary = record.get("hollywoodMessageSummary", {})
+    if not isinstance(summary, dict):
+        return 0
+    total = summary.get("total", 0)
+    return int(total) if isinstance(total, (int, float)) else 0
+
+
 def write_report(
     path: Path, *, campaign_name: str, records: list[dict[str, Any]]
 ) -> None:
@@ -1922,8 +2056,8 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Valid tasks | Invalid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| System | Valid tasks | Invalid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors | Hollywood messages |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, row in summary["systems"].items():
         lines.append(
@@ -1937,15 +2071,16 @@ def write_report(
             f"{format_token_value(row['avgTotalTokens'])} | "
             f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
             f"{format_token_value(row['totalTokensPerFullSuccess'])} | "
-            f"{row['coordinationToolErrors']} |"
+            f"{row['coordinationToolErrors']} | "
+            f"{row['hollywoodMessages']} |"
         )
     lines.extend(
         [
             "",
             "## By Level",
             "",
-            "| Level | System | Valid tasks | Invalid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| Level | System | Valid tasks | Invalid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Avg seconds | Avg total tokens | Avg uncached+output | Total tokens/success | Coordination errors | Hollywood messages |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for level, level_summary in summary["levels"].items():
@@ -1961,7 +2096,8 @@ def write_report(
                 f"{format_token_value(row['avgTotalTokens'])} | "
                 f"{format_token_value(row['avgUncachedPlusOutputTokens'])} | "
                 f"{format_token_value(row['totalTokensPerFullSuccess'])} | "
-                f"{row['coordinationToolErrors']} |"
+                f"{row['coordinationToolErrors']} | "
+                f"{row['hollywoodMessages']} |"
             )
     lines.extend(["", "## Tasks", ""])
     for record in records:
@@ -1986,7 +2122,8 @@ def write_report(
             f"seconds={record['seconds']:.1f} "
             f"total_tokens={format_token_value(token_usage['totalTokens'])} "
             f"uncached_plus_output_tokens={format_token_value(token_usage['uncachedPlusOutputTokens'])} "
-            f"coordination_errors={coordination_error_total(record)}"
+            f"coordination_errors={coordination_error_total(record)} "
+            f"hollywood_messages={hollywood_message_total(record)}"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -2022,6 +2159,7 @@ def main() -> int:
             "losangelex-selector",
             "losangelex-contract",
             "losangelex-peer-review",
+            "losangelex-blackboard-finisher",
         ),
         action="append",
         required=True,
@@ -2117,6 +2255,11 @@ def main() -> int:
     ):
         app_server_url = app_server.url if app_server is not None else None
         app_server_metadata = app_server.metadata() if app_server is not None else None
+        app_server_hollywood_url = (
+            app_server_metadata.get("hollywood", {}).get("url")
+            if isinstance(app_server_metadata, dict)
+            else None
+        )
         for task in tasks:
             for system in args.system:
                 workspace = output_dir / "workspaces" / system / task.task_file.stem
@@ -2161,7 +2304,10 @@ def main() -> int:
                             "app server URL is required for Losangelex runs"
                         )
                     selector_decision = None
-                    first_finisher = system == "losangelex-first-finisher"
+                    first_finisher = system in (
+                        "losangelex-first-finisher",
+                        "losangelex-blackboard-finisher",
+                    )
                     prompt_profile = LOSANGELEX_PROMPT_PROFILE_STANDARD
                     if system == "losangelex-selector":
                         selector_decision = losangelex_selector_decision(task)
@@ -2172,6 +2318,8 @@ def main() -> int:
                         prompt_profile = LOSANGELEX_PROMPT_PROFILE_CONTRACT
                     elif system == "losangelex-peer-review":
                         prompt_profile = LOSANGELEX_PROMPT_PROFILE_PEER_REVIEW
+                    elif system == "losangelex-blackboard-finisher":
+                        prompt_profile = LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER
                     record = run_losangelex_task(
                         task=task,
                         workspace=workspace,
@@ -2185,6 +2333,7 @@ def main() -> int:
                         output_dir=run_dir,
                         first_finisher=first_finisher,
                         system_name=system,
+                        hollywood_url=app_server_hollywood_url,
                         selector_decision=selector_decision,
                         prompt_profile=prompt_profile,
                         submission_settle_seconds=args.submission_settle_seconds,

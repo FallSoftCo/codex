@@ -28,6 +28,7 @@ class BenchmarkAppServer:
     log_path: Path | None = None
     pid: int | None = None
     source: str = "explicit"
+    hollywood: dict[str, Any] | None = None
 
     def metadata(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -41,11 +42,18 @@ class BenchmarkAppServer:
             data["logPath"] = str(self.log_path)
         if self.pid is not None:
             data["pid"] = self.pid
+        if self.hollywood is not None:
+            data["hollywood"] = self.hollywood
         return data
 
 
 class AppServerStartupError(RuntimeError):
     pass
+
+
+HOLLYWOOD_SCRIPT = Path(
+    os.environ.get("HOLLYWOOD_SCRIPT", "/home/ai/Development/hollywood/hollywood.py")
+)
 
 
 def add_benchmark_app_server_args(parser: argparse.ArgumentParser) -> None:
@@ -107,37 +115,83 @@ def benchmark_app_server(
         source_home=codex_home_source,
         output_dir=output_dir,
     )
-    url = f"ws://127.0.0.1:{free_loopback_port()}"
-    env = os.environ.copy()
-    env["CODEX_HOME"] = str(codex_home)
+    with managed_hollywood_server(output_dir) as hollywood:
+        url = f"ws://127.0.0.1:{free_loopback_port()}"
+        env = os.environ.copy()
+        env["CODEX_HOME"] = str(codex_home)
+        env["HOLLYWOOD_URL"] = hollywood["url"]
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_handle = log_path.open("w", encoding="utf-8")
+        process = subprocess.Popen(
+            [str(codex.resolve()), "app-server", "--listen", url],
+            cwd=str(output_dir),
+            env=env,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            wait_for_ready(url, start_timeout_seconds)
+        except Exception as exc:
+            terminate_process(process)
+            log_handle.close()
+            raise AppServerStartupError(
+                f"managed app-server failed to start: {exc}\n{log_tail(log_path)}"
+            ) from exc
+
+        try:
+            yield BenchmarkAppServer(
+                url=url,
+                managed=True,
+                codex_home=codex_home,
+                log_path=log_path,
+                pid=process.pid,
+                source="managed",
+                hollywood=hollywood,
+            )
+        finally:
+            terminate_process(process)
+            log_handle.close()
+
+
+@contextmanager
+def managed_hollywood_server(output_dir: Path):
+    if not HOLLYWOOD_SCRIPT.exists():
+        raise AppServerStartupError(f"missing Hollywood server script: {HOLLYWOOD_SCRIPT}")
+    port = free_loopback_port()
+    url = f"http://127.0.0.1:{port}"
+    db_path = output_dir / "hollywood.db"
+    log_path = output_dir / "hollywood.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_handle = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(
-        [str(codex.resolve()), "app-server", "--listen", url],
+        [
+            "python3",
+            str(HOLLYWOOD_SCRIPT),
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--db",
+            str(db_path),
+        ],
         cwd=str(output_dir),
-        env=env,
         stdout=log_handle,
         stderr=subprocess.STDOUT,
         text=True,
     )
     try:
-        wait_for_ready(url, start_timeout_seconds)
-    except Exception as exc:
-        terminate_process(process)
-        log_handle.close()
-        raise AppServerStartupError(
-            f"managed app-server failed to start: {exc}\n{log_tail(log_path)}"
-        ) from exc
-
-    try:
-        yield BenchmarkAppServer(
-            url=url,
-            managed=True,
-            codex_home=codex_home,
-            log_path=log_path,
-            pid=process.pid,
-            source="managed",
+        wait_for_http_ready(
+            url.rstrip("/") + "/hollywood/v1/health",
+            timeout_seconds=15,
         )
+        yield {
+            "url": url,
+            "dbPath": str(db_path),
+            "logPath": str(log_path),
+            "pid": process.pid,
+        }
     finally:
         terminate_process(process)
         log_handle.close()
@@ -191,16 +245,20 @@ def free_loopback_port() -> int:
 
 
 def wait_for_ready(websocket_url: str, timeout_seconds: int) -> None:
-    deadline = time.time() + timeout_seconds
     ready_url = websocket_url.replace("ws://", "http://", 1).rstrip("/") + "/readyz"
+    wait_for_http_ready(ready_url, timeout_seconds=timeout_seconds)
+
+
+def wait_for_http_ready(url: str, *, timeout_seconds: int) -> None:
+    deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(ready_url, timeout=1.0) as response:
+            with urllib.request.urlopen(url, timeout=1.0) as response:
                 if response.status == 200:
                     return
         except Exception:
             time.sleep(0.25)
-    raise TimeoutError(f"{ready_url} was not ready after {timeout_seconds}s")
+    raise TimeoutError(f"{url} was not ready after {timeout_seconds}s")
 
 
 def terminate_process(process: subprocess.Popen[str]) -> None:

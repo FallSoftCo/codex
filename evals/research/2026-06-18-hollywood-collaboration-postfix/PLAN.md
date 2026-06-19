@@ -130,6 +130,9 @@ Current branch: `hollywood-native-integration-clean`.
     precision, ordering, and the prompt's stated algorithm/protocol.
   - `losangelex-peer-review`: the contract checklist plus peer contradiction
     checks through Hollywood or `shared/`.
+  - `losangelex-blackboard-finisher`: compact raw-shard facts through
+    Hollywood/`shared/`, one elected finisher, and protocol-bound final
+    submissions.
 - Hard-smoke artifact: `tmp/research/published-agent-benchmarks/silo-correctness-replay-hard-smoke-2026-06-19-a/`
   - Scope: `II-12_n5`, `II-14_n5`, `II-15_n5`.
   - Baseline `losangelex`: 1/3.
@@ -152,6 +155,30 @@ Current branch: `hollywood-native-integration-clean`.
     `losangelex-contract` recorded 9/10 while threads were still active, but the
     settled workspace rescored 10/10. The runner now waits for a stable
     submission snapshot before scoring.
+
+## Managed-Hollywood Blackboard Finisher
+
+- Clean artifact:
+  `tmp/research/published-agent-benchmarks/silo-blackboard-finisher-hard-smoke-managed-2026-06-19-a/`
+- Copied tracked reports:
+  - `SILO_BLACKBOARD_FINISHER_HARD_SMOKE_MANAGED_REPORT.md`
+  - `SILO_BLACKBOARD_FINISHER_HARD_SMOKE_MANAGED_CORRECTNESS_REPORT.md`
+  - `silo-blackboard-finisher-hard-smoke-managed-results.json`
+- Harness fixes:
+  - managed Losangelex benchmark app-servers now start an isolated Hollywood
+    server;
+  - `thread/hollywood/attach` now receives that managed server URL explicitly;
+  - result records now include `hollywoodMessageSummary`.
+- Scope: `II-12_n5`, `II-14_n5`, `II-15_n5`.
+- Aggregate:
+  - `codex-subagents`: 3 valid, 0 invalid, 2/3 successes, avg 208.3s, avg
+    total tokens 1,200,946, avg uncached+output 147,890.
+  - `losangelex-blackboard-finisher`: 3 valid, 0 invalid, 3/3 successes, avg
+    134.3s, avg total tokens 843,944, avg uncached+output 182,312, with 18
+    managed Hollywood room messages.
+- Interpretation: this is the first clean evidence that the Hollywood approach
+  can beat Codex subagents on strict correctness, wall time, and total tokens on
+  the hard-smoke slice. The remaining weakness is uncached+output token cost.
 
 ## MARBLE Subset Result
 
@@ -180,9 +207,14 @@ Current branch: `hollywood-native-integration-clean`.
 ## Full Rerun Decision
 
 - Do not start full SILO/MARBLE reruns yet without explicit acceptance of the current cost profile and hard-case quality regression.
-- Reason: subset evidence is enough to identify the current tradeoff: Losangelex latency is better, but uncached+output token cost is still roughly 2.2x to 2.3x Codex subagents, and the targeted historical SILO failure slice did not improve quality.
+- Reason: the managed-Hollywood blackboard-finisher result changes the hard-case
+  quality picture, but it is still only a three-task slice. Run at least one
+  wider managed-Hollywood SILO subset before a full benchmark rerun.
 - The hard-case usage-limit blocker was cleared with targeted reruns after the backend reset; the consolidated n5 hard-case artifact has no invalid rows.
-- Next useful engineering step before full reruns: reduce duplicated per-agent context/tool output in Losangelex, make room-state/peer wake handling more selective, and evaluate task-family-specific coordination policy instead of defaulting the same collaboration behavior across SILO Level II/III.
+- Next useful engineering step before full reruns: reduce uncached+output cost
+  in Losangelex, keep the blackboard/single-finisher strategy for
+  aggregate-style tasks, and evaluate task-family-specific coordination policy
+  instead of defaulting the same collaboration behavior across SILO Level II/III.
 
 ## Candidate Commands
 

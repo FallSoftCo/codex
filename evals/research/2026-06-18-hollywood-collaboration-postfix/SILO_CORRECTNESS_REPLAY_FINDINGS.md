@@ -11,6 +11,9 @@ outliers, and true global-computation errors.
   prompt's stated algorithm/protocol.
 - `losangelex-peer-review`: the contract checklist plus peer contradiction
   checks through the Hollywood room or `shared/` blackboard.
+- `losangelex-blackboard-finisher`: every agent publishes a compact raw-shard
+  fact to Hollywood plus `shared/`, then one elected finisher recomputes from
+  raw shards under the task's stated protocol and writes all submissions.
 
 These are benchmark runner profiles, not a change to normal Losangelex session
 behavior.
@@ -40,6 +43,24 @@ Refined two-case replay:
 - Finding: adding explicit guidance to avoid binary floating-point artifacts and
   to treat the prompt's algorithm/protocol as binding fixed both targeted
   failure families in this small live replay.
+
+Managed-Hollywood blackboard-finisher replay:
+
+- Artifact: `SILO_BLACKBOARD_FINISHER_HARD_SMOKE_MANAGED_REPORT.md`
+- Scope: `II-12_n5`, `II-14_n5`, `II-15_n5`
+- `codex-subagents`: 2/3 full successes, avg 208.3s, avg 1,200,946 total
+  tokens, avg 147,890 uncached+output.
+- `losangelex-blackboard-finisher`: 3/3 full successes, avg 134.3s, avg
+  843,944 total tokens, avg 182,312 uncached+output.
+- Hollywood evidence: the Losangelex rows recorded 18 managed-room messages
+  across the three tasks.
+- Finding: two issues were suppressing the expected Hollywood advantage. First,
+  the SILO harness started an isolated app-server but not a managed Hollywood
+  server, and `thread/hollywood/attach` defaulted to `127.0.0.1:8765` unless the
+  URL was passed explicitly. Second, normal room/peer-review coordination let
+  every agent do too much synthesis. A blackboard + single-finisher pattern
+  fixed the hard-smoke correctness slice and beat Codex subagents on wall time
+  and total tokens, though Losangelex still used more uncached+output tokens.
 
 ## Broad-Suite Status
 
@@ -77,4 +98,3 @@ python3 scripts/run_silo_correctness_replay.py \
   --max-rounds 3 \
   --submission-settle-seconds 5
 ```
-

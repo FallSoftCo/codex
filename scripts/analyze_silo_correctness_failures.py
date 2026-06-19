@@ -35,6 +35,14 @@ def coordination_tool_call_count(record: dict[str, Any]) -> int:
     return int(total) if isinstance(total, (int, float)) else 0
 
 
+def hollywood_message_count(record: dict[str, Any]) -> int:
+    summary = record.get("hollywoodMessageSummary", {})
+    if not isinstance(summary, dict):
+        return 0
+    total = summary.get("total", 0)
+    return int(total) if isinstance(total, (int, float)) else 0
+
+
 def classify_record(record: dict[str, Any]) -> dict[str, Any]:
     score = record.get("score", {})
     metrics = score.get("metrics", {})
@@ -88,6 +96,7 @@ def classify_record(record: dict[str, Any]) -> dict[str, Any]:
         "parseErrorCount": parse_errors,
         "toleranceCorrectWrongCount": tolerance_correct,
         "coordinationToolCalls": coordination_tool_call_count(record),
+        "hollywoodMessages": hollywood_message_count(record),
     }
 
 
@@ -125,8 +134,8 @@ def write_report(
         "",
         "## Summary",
         "",
-        "| System | Records | Valid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Strict formatting | Peer outlier | Global computation | Missing/invalid | Tool calls |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| System | Records | Valid | Full successes | Avg S | Avg P | Avg S_tol | Avg P_tol | Strict formatting | Peer outlier | Global computation | Missing/invalid | Tool calls | Hollywood messages |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for system, items in sorted(by_system.items()):
         valid_items = [item for item in items if record_valid(item[0])]
@@ -134,6 +143,7 @@ def write_report(
         valid_count = len(valid_items)
         successes = sum(1 for record, _ in valid_items if record["score"]["success"])
         tool_calls = sum(item[1]["coordinationToolCalls"] for item in valid_items)
+        hollywood_messages = sum(item[1]["hollywoodMessages"] for item in valid_items)
         if valid_count:
             avg_s = sum(
                 record["score"]["metrics"]["S_success_rate"]
@@ -167,7 +177,7 @@ def write_report(
             f"{classifications['peer-outlier']} | "
             f"{classifications['global-computation']} | "
             f"{classifications['missing-or-invalid-submission']} | "
-            f"{format_int(tool_calls)} |"
+            f"{format_int(tool_calls)} | {format_int(hollywood_messages)} |"
         )
 
     lines.extend(
@@ -175,8 +185,8 @@ def write_report(
             "",
             "## Records",
             "",
-            "| System | Task | Classification | Success | S | P | S_tol | P_tol | Wrong | Tol-correct wrong | Tool calls | Seconds |",
-            "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| System | Task | Classification | Success | S | P | S_tol | P_tol | Wrong | Tol-correct wrong | Tool calls | Hollywood messages | Seconds |",
+            "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for record, details in analyzed:
@@ -189,7 +199,8 @@ def write_report(
             f"{format_float(metrics.get('S_numeric_tolerance_success_rate'))} | "
             f"{format_float(metrics.get('P_numeric_tolerance_partial_correctness'))} | "
             f"{details['wrongCount']} | {details['toleranceCorrectWrongCount']} | "
-            f"{details['coordinationToolCalls']} | {format_float(record.get('seconds'))} |"
+            f"{details['coordinationToolCalls']} | {details['hollywoodMessages']} | "
+            f"{format_float(record.get('seconds'))} |"
         )
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

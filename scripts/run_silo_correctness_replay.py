@@ -78,6 +78,7 @@ def main() -> int:
             "losangelex",
             "losangelex-contract",
             "losangelex-peer-review",
+            "losangelex-blackboard-finisher",
             "codex-subagents",
             "codex-full-context",
         ),

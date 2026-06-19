@@ -7,6 +7,10 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 - Prompt/context policy: agents are now instructed by default to decide whether collaboration would help, ask peers directly with required responses when collaboration is useful, and avoid peer churn for tiny work.
 - Runtime wake path: Hollywood polling now follows the default collaboration policy instead of only `LOSANGELEX_COLLABORATION_FIRST_DEBUG`.
 - Benchmark harness: the SILO Losangelex wait loop now stops once all expected submission files exist after initial turns complete. This removed a benchmark wait/poll tail that was not useful task work.
+- Benchmark harness: managed Losangelex benchmark app-servers now start an isolated
+  Hollywood server and pass that URL into `thread/hollywood/attach`, so SILO
+  artifacts can prove live room-ledger traffic instead of falling back to
+  `shared/` files only.
 
 ## Artifacts
 
@@ -18,6 +22,11 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 - `SILO_CORRECTNESS_REPLAY_HARD_SMOKE_REPORT.md` and `silo-correctness-replay-hard-smoke-results.json`: three-case replay covering formatting, outlier, and global-computation failures.
 - `SILO_CORRECTNESS_REPLAY_REFINED_REPORT.md` and `silo-correctness-replay-refined-results.json`: refined two-case replay after adding protocol precedence and float-output guidance.
 - `SILO_CORRECTNESS_REPLAY_USAGE_LIMIT_PROBE_REPORT.md` and `silo-correctness-replay-usage-limit-probe-results.json`: captured usage-limit blocker with error payload preservation.
+- `SILO_BLACKBOARD_FINISHER_HARD_SMOKE_MANAGED_REPORT.md`,
+  `SILO_BLACKBOARD_FINISHER_HARD_SMOKE_MANAGED_CORRECTNESS_REPORT.md`, and
+  `silo-blackboard-finisher-hard-smoke-managed-results.json`: managed-Hollywood
+  hard-smoke replay comparing Codex subagents with a Losangelex blackboard
+  finisher profile.
 - `MARBLE_POSTFIX_SUBSET_REPORT.md` and `marble-postfix-subset-results.json`: 6 paired native-Postgres MARBLE database tasks, Codex subagents vs Losangelex.
 - `PLAN.md`: compaction-safe execution plan and notes.
 
@@ -40,6 +49,8 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 | SILO correctness smoke | losangelex-peer-review | 3 | 0 | 1/3 | 196.6 | 2,888,119 | 424,162 |
 | SILO correctness refined | losangelex-contract | 2 | 0 | 2/2 | 149.1 | 3,237,582 | 434,574 |
 | SILO correctness refined | losangelex-peer-review | 2 | 0 | 2/2 | 148.9 | 2,861,734 | 380,774 |
+| SILO blackboard finisher hard-smoke | codex-subagents | 3 | 0 | 2/3 | 208.3 | 1,200,946 | 147,890 |
+| SILO blackboard finisher hard-smoke | losangelex-blackboard-finisher | 3 | 0 | 3/3 | 134.3 | 843,944 | 182,312 |
 | MARBLE subset | codex-subagents | 6 | 0 | 6/6 | 198.3 | 1,347,910 | 198,790 |
 | MARBLE subset | losangelex | 6 | 0 | 6/6 | 170.9 | 2,468,825 | 447,705 |
 
@@ -56,8 +67,21 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
   peer-review attempt also showed a real risk: coordination can amplify a wrong
   interpretation unless the task's explicit algorithm/protocol outranks peer
   majority.
+- The managed-Hollywood blackboard-finisher replay changes the immediate
+  conclusion for the hard-smoke slice. Once the harness used an isolated
+  Hollywood server and passed its URL into `thread/hollywood/attach`, Losangelex
+  solved 3/3 versus Codex subagents at 2/3, averaged 134.3s versus 208.3s, and
+  averaged 843,944 total tokens versus 1,200,946. The Losangelex rows recorded
+  18 Hollywood room messages across three tasks. Uncached+output tokens were
+  still higher for Losangelex on this slice, so token efficiency is improved but
+  not fully solved.
 - On the MARBLE subset, Losangelex is modestly faster while preserving 100% success/recall, but uses about 2.3x uncached+output tokens.
-- Full SILO/MARBLE reruns are not recommended until the remaining token-efficiency and hard-case quality gaps are addressed or explicitly accepted. The subset evidence is stable enough to identify the current tradeoff: latency improved, cost still loses, and default collaboration does not automatically rescue historical SILO failures.
+- Full SILO/MARBLE reruns are now worth considering after one wider managed-Hollywood
+  SILO subset, because the previous hard-case conclusion was confounded by a
+  harness URL/server issue and by using room coordination without a single
+  finisher. The current tradeoff is narrower: strict quality improved on the
+  hard-smoke slice and total tokens beat Codex subagents there, while
+  uncached+output cost still needs work.
 
 ## Caveats
 
