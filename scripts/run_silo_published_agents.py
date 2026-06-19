@@ -9,6 +9,10 @@ switches the agent substrate under test:
 - losangelex-selector: native Hollywood/app-server agents with a frozen
   topology selector. The current selector uses first-finisher for SILO Level I
   global-reduction task families and normal room coordination otherwise.
+- losangelex-contract: native Hollywood/app-server agents with an explicit
+  final-answer contract checklist.
+- losangelex-peer-review: native Hollywood/app-server agents with the contract
+  checklist plus explicit peer contradiction/review rules.
 
 The runner intentionally does not place the full task JSON or expected answer in
 the agent workspace before execution. Each agent receives only its private shard
@@ -90,6 +94,9 @@ class HollywoodAgent:
 
 
 FOREMAN_SELECTOR_ID = "silo-topology-v1-2026-06-14"
+LOSANGELEX_PROMPT_PROFILE_STANDARD = "standard"
+LOSANGELEX_PROMPT_PROFILE_CONTRACT = "contract"
+LOSANGELEX_PROMPT_PROFILE_PEER_REVIEW = "peer-review"
 MODEL_BACKEND_FAILURE_PATTERNS = (
     ("usage-limit", "you've hit your usage limit"),
     ("unsupported-model", "requires a newer version of codex"),
@@ -265,7 +272,26 @@ def notification_error_messages(notifications: list[dict[str, Any]]) -> list[str
             error_message = params.get("message")
             if isinstance(error_message, str):
                 messages.append(error_message)
+                continue
+            error = params.get("error")
+            if isinstance(error, dict):
+                nested_message = error.get("message")
+                if isinstance(nested_message, str):
+                    messages.append(nested_message)
+                    continue
+            messages.append(compact_text(json.dumps(params, sort_keys=True)))
+        else:
+            messages.append(compact_text(json.dumps(message, sort_keys=True)))
     return messages
+
+
+def error_notifications(notifications: list[dict[str, Any]], *, limit: int = 20) -> list[dict[str, Any]]:
+    errors = [
+        notification
+        for notification in notifications
+        if notification.get("method") == "error"
+    ]
+    return errors[:limit]
 
 
 def losangelex_invalid_reason(
@@ -1326,6 +1352,7 @@ def losangelex_prompt(
     *,
     runtime_name: str,
     round_index: int,
+    prompt_profile: str = LOSANGELEX_PROMPT_PROFILE_STANDARD,
 ) -> str:
     profile = (
         f"\nPublished role/profile for this agent:\n{config.profile}\n"
@@ -1357,6 +1384,7 @@ Losangelex/Hollywood rules:
 - If you do not know the answer yet, post the local fact you can contribute, ask for
   the missing facts, and update `shared/agent-{config.agent_id:03d}.md`.
 - Do not put commentary in the submission JSON file.
+{losangelex_profile_rules(task, config, prompt_profile=prompt_profile)}
 """
 
 
@@ -1416,6 +1444,7 @@ def continue_losangelex_prompt(
     config: SiloAgentConfig,
     *,
     round_index: int,
+    prompt_profile: str = LOSANGELEX_PROMPT_PROFILE_STANDARD,
 ) -> str:
     return f"""Continue the published SILO-BENCH case {task.case_id}, round {round_index}.
 
@@ -1424,7 +1453,64 @@ Your private task prompt remains:
 
 Read the current room/shared workspace state, coordinate only as needed, and write
 `submissions/agent-{config.agent_id:03d}.json` once you know your answer.
+{losangelex_profile_rules(task, config, prompt_profile=prompt_profile)}
 """
+
+
+def losangelex_profile_rules(
+    task: SiloTask,
+    config: SiloAgentConfig,
+    *,
+    prompt_profile: str,
+) -> str:
+    if prompt_profile == LOSANGELEX_PROMPT_PROFILE_STANDARD:
+        return ""
+    if prompt_profile == LOSANGELEX_PROMPT_PROFILE_CONTRACT:
+        return "\n" + losangelex_output_contract_rules(config)
+    if prompt_profile == LOSANGELEX_PROMPT_PROFILE_PEER_REVIEW:
+        return "\n".join(
+            [
+                "",
+                losangelex_output_contract_rules(config),
+                "",
+                losangelex_peer_review_rules(task, config),
+            ]
+        )
+    raise ValueError(f"unknown Losangelex prompt profile: {prompt_profile}")
+
+
+def losangelex_output_contract_rules(config: SiloAgentConfig) -> str:
+    return f"""Final-answer contract checklist:
+- Before writing `submissions/agent-{config.agent_id:03d}.json`, re-read the private prompt and identify the required answer type, element order, key names, and numeric precision.
+- Treat the prompt's explicit `Algorithm` and `Communication Protocol` as binding. Do not replace them with a more familiar generic interpretation of the task title.
+- If the prompt asks for rounded numbers or a fixed number of decimal places, submit rounded JSON numbers at that precision, not full-precision intermediate values.
+- If a computed floating-point value has no requested precision, avoid binary floating-point artifacts. Submit a concise decimal representation that fits the task domain, such as two decimals for ordinary averages or coordinates and six decimals for probabilities/ranking scores, unless the prompt implies a different precision.
+- If the answer is a count, index, rank, label, boolean, bit, or membership flag, submit that exact discrete value rather than an explanatory derivation.
+- If the answer is a list or dictionary, preserve the requested order and labels exactly.
+- Write exactly one JSON object with the requested `agent_id` and `answer` fields; never write markdown, comments, derivation text, or an alternate schema."""
+
+
+def losangelex_peer_review_rules(task: SiloTask, config: SiloAgentConfig) -> str:
+    return f"""Peer-review and contradiction rules:
+- Treat the Hollywood room and `shared/` as the common blackboard for this task. If Hollywood messaging tools are available, send one concise status update with your local fact, need, claim, or verification result; otherwise write the same information to `shared/agent-{config.agent_id:03d}.md`.
+- For nontrivial cases, write `shared/agent-{config.agent_id:03d}.md` before final submission. Include: local facts from your private shard, any derived answer, confidence, output contract, and facts still needed.
+- Before final submission, inspect available peer notes and existing `submissions/agent-*.json` files. Compare answer shape, length, key set, precision, and any shared global quantity.
+- If your answer conflicts with a peer result for the same case, do not silently submit the conflict. Re-derive the value using the prompt's stated algorithm/protocol, publish a `CONTRADICTION` note naming the conflicting facts, then submit only after you have a defensible resolution.
+- When resolving contradictions, the task's stated algorithm and communication protocol outrank peer majority, generic textbook definitions, and any locally preferred interpretation.
+- If the task requires a global aggregate across agents, wait briefly for peer local facts when they are still arriving, then aggregate only from peer-produced notes or submissions plus your private shard. Do not guess missing facts.
+- If the task has per-agent answers, still use peer outputs as sanity checks for shared structure and output precision.
+- Case context for this run: `{task.case_id}` with {len(task.agent_configs)} agents."""
+
+
+def completion_path_snapshot(paths: list[Path]) -> tuple[tuple[str, int, int], ...] | None:
+    snapshot: list[tuple[str, int, int]] = []
+    for path in paths:
+        try:
+            stat_result = path.stat()
+        except FileNotFoundError:
+            return None
+        snapshot.append((str(path), stat_result.st_size, stat_result.st_mtime_ns))
+    return tuple(snapshot)
 
 
 def wait_for_hollywood_round(
@@ -1434,12 +1520,21 @@ def wait_for_hollywood_round(
     deadline: float,
     poll_seconds: int,
     completion_paths: list[Path],
+    submission_settle_seconds: float,
 ) -> tuple[bool, dict[str, dict[str, Any]]]:
     tracked_threads = {agent.thread_id for agent in agents}
     completed_once = False
     states: dict[str, dict[str, Any]] = {}
+    last_completion_snapshot: tuple[tuple[str, int, int], ...] | None = None
+    completion_stable_since: float | None = None
     while time.time() < deadline:
-        conn.drain(min(poll_seconds, max(0.1, deadline - time.time())))
+        now = time.time()
+        wait_seconds = min(poll_seconds, max(0.1, deadline - now))
+        if completion_stable_since is not None:
+            remaining = submission_settle_seconds - (now - completion_stable_since)
+            if remaining > 0:
+                wait_seconds = min(wait_seconds, max(0.5, remaining))
+        conn.drain(wait_seconds)
         completed_once = (
             completed_threads(conn.notifications, tracked_threads) >= tracked_threads
         )
@@ -1447,8 +1542,21 @@ def wait_for_hollywood_round(
             agent.thread_id: read_thread_state(conn, agent.thread_id)
             for agent in agents
         }
-        completion_paths_done = all(path.exists() for path in completion_paths)
-        if completed_once and (all_threads_idle(states) or completion_paths_done):
+        completion_snapshot = completion_path_snapshot(completion_paths)
+        if completion_snapshot is None:
+            last_completion_snapshot = None
+            completion_stable_since = None
+            completion_stable = False
+        elif completion_snapshot != last_completion_snapshot:
+            last_completion_snapshot = completion_snapshot
+            completion_stable_since = time.time()
+            completion_stable = False
+        else:
+            completion_stable = (
+                completion_stable_since is not None
+                and time.time() - completion_stable_since >= submission_settle_seconds
+            )
+        if completed_once and (all_threads_idle(states) or completion_stable):
             break
     return completed_once, states
 
@@ -1468,6 +1576,8 @@ def run_losangelex_task(
     first_finisher: bool = False,
     system_name: str = "losangelex",
     selector_decision: dict[str, str] | None = None,
+    prompt_profile: str = LOSANGELEX_PROMPT_PROFILE_STANDARD,
+    submission_settle_seconds: float = 5.0,
 ) -> dict[str, Any]:
     fresh_workspace(workspace)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1521,12 +1631,14 @@ def run_losangelex_task(
                             config,
                             runtime_name=agent.runtime_name,
                             round_index=round_index,
+                            prompt_profile=prompt_profile,
                         )
                 else:
                     prompt = continue_losangelex_prompt(
                         task,
                         config,
                         round_index=round_index,
+                        prompt_profile=prompt_profile,
                     )
                 (
                     output_dir
@@ -1547,6 +1659,7 @@ def run_losangelex_task(
                 deadline=round_deadline,
                 poll_seconds=poll_seconds,
                 completion_paths=completion_paths,
+                submission_settle_seconds=submission_settle_seconds,
             )
             submitted = [
                 config.agent_id
@@ -1600,11 +1713,20 @@ def run_losangelex_task(
         json.dumps(summary, indent=2) + "\n",
         encoding="utf-8",
     )
+    error_notifications_path = output_dir / "error-notifications.json"
+    error_notifications_path.write_text(
+        json.dumps(error_notifications(notifications), indent=2) + "\n",
+        encoding="utf-8",
+    )
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
+    coordination_strategy = "first-finisher" if first_finisher else "room"
+    if not first_finisher and prompt_profile != LOSANGELEX_PROMPT_PROFILE_STANDARD:
+        coordination_strategy = prompt_profile
     record = {
         "system": system_name,
-        "coordinationStrategy": "first-finisher" if first_finisher else "room",
+        "coordinationStrategy": coordination_strategy,
+        "promptProfile": prompt_profile,
         "caseId": task.case_id,
         "taskFile": task.task_file.name,
         "workspace": str(workspace),
@@ -1612,6 +1734,7 @@ def run_losangelex_task(
         "seconds": round(time.time() - started, 1),
         "rounds": completed_rounds,
         "stoppedForActiveTimeout": stopped_for_active_timeout,
+        "submissionSettleSeconds": submission_settle_seconds,
         "agents": [
             {
                 "agentId": agent.agent_id,
@@ -1625,6 +1748,7 @@ def run_losangelex_task(
         "tokenUsageSummary": summary.get("tokenUsageSummary", {}),
         "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
+        "errorNotificationsPath": str(error_notifications_path),
         "threadStatesPath": str(output_dir / "thread-states.json"),
     }
     if selector_decision is not None:
@@ -1896,6 +2020,8 @@ def main() -> int:
             "losangelex",
             "losangelex-first-finisher",
             "losangelex-selector",
+            "losangelex-contract",
+            "losangelex-peer-review",
         ),
         action="append",
         required=True,
@@ -1919,6 +2045,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     parser.add_argument("--round-timeout-seconds", type=int, default=300)
     parser.add_argument("--poll-seconds", type=int, default=45)
+    parser.add_argument("--submission-settle-seconds", type=float, default=5.0)
     parser.add_argument("--rpc-timeout-seconds", type=int, default=300)
     parser.add_argument("--campaign-name", default=f"silo-{int(time.time())}")
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
@@ -2035,11 +2162,16 @@ def main() -> int:
                         )
                     selector_decision = None
                     first_finisher = system == "losangelex-first-finisher"
+                    prompt_profile = LOSANGELEX_PROMPT_PROFILE_STANDARD
                     if system == "losangelex-selector":
                         selector_decision = losangelex_selector_decision(task)
                         first_finisher = (
                             selector_decision["strategy"] == "first-finisher"
                         )
+                    elif system == "losangelex-contract":
+                        prompt_profile = LOSANGELEX_PROMPT_PROFILE_CONTRACT
+                    elif system == "losangelex-peer-review":
+                        prompt_profile = LOSANGELEX_PROMPT_PROFILE_PEER_REVIEW
                     record = run_losangelex_task(
                         task=task,
                         workspace=workspace,
@@ -2054,6 +2186,8 @@ def main() -> int:
                         first_finisher=first_finisher,
                         system_name=system,
                         selector_decision=selector_decision,
+                        prompt_profile=prompt_profile,
+                        submission_settle_seconds=args.submission_settle_seconds,
                     )
                 records.append(record)
                 (output_dir / "results.json").write_text(

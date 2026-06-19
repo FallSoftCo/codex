@@ -14,6 +14,10 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 - `SILO_POSTFIX_SUBSET_REPORT.md` and `silo-postfix-subset-waitfix-results.json`: 6 paired SILO Level I five-agent tasks, Codex subagents vs Losangelex.
 - `SILO_POSTFIX_PRIOR_FAILURES_N5_REPORT.md` and `silo-postfix-prior-failures-n5-results.json`: targeted SILO five-agent cases that were partial/failing before the June 16 snapshot.
 - `SILO_POSTFIX_PRIOR_FAILURES_N10_REPORT.md` and `silo-postfix-prior-failures-n10-results.json`: targeted SILO ten-agent cases that were partial/failing before the June 16 snapshot.
+- `SILO_CORRECTNESS_REPLAY_FINDINGS.md`: targeted follow-up on hard-case correctness failure modes and candidate prompt profiles.
+- `SILO_CORRECTNESS_REPLAY_HARD_SMOKE_REPORT.md` and `silo-correctness-replay-hard-smoke-results.json`: three-case replay covering formatting, outlier, and global-computation failures.
+- `SILO_CORRECTNESS_REPLAY_REFINED_REPORT.md` and `silo-correctness-replay-refined-results.json`: refined two-case replay after adding protocol precedence and float-output guidance.
+- `SILO_CORRECTNESS_REPLAY_USAGE_LIMIT_PROBE_REPORT.md` and `silo-correctness-replay-usage-limit-probe-results.json`: captured usage-limit blocker with error payload preservation.
 - `MARBLE_POSTFIX_SUBSET_REPORT.md` and `marble-postfix-subset-results.json`: 6 paired native-Postgres MARBLE database tasks, Codex subagents vs Losangelex.
 - `PLAN.md`: compaction-safe execution plan and notes.
 
@@ -31,6 +35,11 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 | SILO prior hard n5 | losangelex | 9 | 0 | 2/9 | 135.0 | 2,413,434 | 380,993 |
 | SILO prior hard n10 | codex-subagents | 3 | 0 | 2/3 | 467.6 | 1,715,535 | 273,828 |
 | SILO prior hard n10 | losangelex | 3 | 0 | 0/3 | 175.5 | 6,876,753 | 1,044,902 |
+| SILO correctness smoke | losangelex | 3 | 0 | 1/3 | 165.1 | 3,262,657 | 526,614 |
+| SILO correctness smoke | losangelex-contract | 3 | 0 | 2/3 | 165.0 | 3,002,366 | 479,145 |
+| SILO correctness smoke | losangelex-peer-review | 3 | 0 | 1/3 | 196.6 | 2,888,119 | 424,162 |
+| SILO correctness refined | losangelex-contract | 2 | 0 | 2/2 | 149.1 | 3,237,582 | 434,574 |
+| SILO correctness refined | losangelex-peer-review | 2 | 0 | 2/2 | 148.9 | 2,861,734 | 380,774 |
 | MARBLE subset | codex-subagents | 6 | 0 | 6/6 | 198.3 | 1,347,910 | 198,790 |
 | MARBLE subset | losangelex | 6 | 0 | 6/6 | 170.9 | 2,468,825 | 447,705 |
 
@@ -41,6 +50,12 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 - On the SILO subset, Losangelex is materially faster than Codex subagents while preserving 100% success, but uses about 2.2x uncached+output tokens.
 - On the targeted pre-June-16 SILO hard-case slice, Losangelex did not show a broad quality lift: it solved 2/9 versus Codex subagents at 5/9, while remaining faster and about 2.4x token-heavier on uncached+output. A quota-limited intermediate run was completed with targeted reruns; the consolidated artifact has no invalid rows.
 - The targeted n10 hard-case slice reinforces this: Losangelex solved 0/3 versus Codex subagents at 2/3, while remaining 2.7x faster and about 3.8x token-heavier on uncached+output.
+- The correctness replay shows that at least some hard-case failures are fixable
+  with better final-answer discipline: the refined contract and peer-review
+  profiles solved both `II-12_n5` and `II-15_n5` in a live replay. The first
+  peer-review attempt also showed a real risk: coordination can amplify a wrong
+  interpretation unless the task's explicit algorithm/protocol outranks peer
+  majority.
 - On the MARBLE subset, Losangelex is modestly faster while preserving 100% success/recall, but uses about 2.3x uncached+output tokens.
 - Full SILO/MARBLE reruns are not recommended until the remaining token-efficiency and hard-case quality gaps are addressed or explicitly accepted. The subset evidence is stable enough to identify the current tradeoff: latency improved, cost still loses, and default collaboration does not automatically rescue historical SILO failures.
 
@@ -48,5 +63,10 @@ This artifact captures post-fix evidence for default-on Losangelex/Hollywood col
 
 - These are subset results, not full benchmark reruns.
 - The targeted hard-case SILO run originally hit usage limits at 4:52 PM EDT; targeted reruns after the 7:25 PM reset replaced the invalid rows in the consolidated artifact.
+- The broader correctness replay hit the Codex usage limit again before it could
+  finish; the captured backend message says to retry at June 19, 2026 12:37 AM
+  EDT. A partial broad run also exposed premature scoring while active agents
+  were still refining submissions; the runner now waits for stable submission
+  files before scoring, so the broad suite should be rerun after the reset.
 - The coordination benchmark is deliberately Hollywood-native; it is useful for measuring peer wake/response behavior but should not replace SILO/MARBLE.
 - The pre-fix June 15/16 full benchmark artifacts remain the latest full comparable runs.

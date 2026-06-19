@@ -32,6 +32,11 @@ Current branch: `hollywood-native-integration-clean`.
 - [x] Summarize results and decide whether full SILO/MARBLE reruns are justified immediately.
 - [x] Run targeted SILO pre-June-16 hard-case slice.
 - [x] Run bounded targeted SILO n10 hard-case slice.
+- [x] Add targeted SILO correctness replay profiles for final-answer contracts and peer-review contradiction checks.
+- [x] Run correctness hard-smoke replay.
+- [x] Refine candidate profiles after discovering peer-review could amplify a wrong task interpretation.
+- [x] Run refined two-case correctness replay.
+- [ ] After usage-limit reset, rerun the broad correctness suite with stable submission scoring.
 - [ ] If subset is stable, start full SILO and MARBLE runs in detached tmux sessions.
 - [x] Update research artifacts/reports with post-fix results.
 
@@ -117,6 +122,36 @@ Current branch: `hollywood-native-integration-clean`.
   - `II-14_n10`: Codex subagents succeeded; Losangelex was near-correct partial at S=0.900/P=0.990.
   - `II-15_n10`: Codex subagents succeeded; Losangelex failed.
 - Interpretation: the n10 hard slice reinforces the n5 conclusion. Default collaboration preserves latency advantage but loses strict quality and is roughly 3.8x token-heavier on uncached+output.
+
+## SILO Correctness Replay
+
+- Added runner profiles:
+  - `losangelex-contract`: final-answer contract checklist for output type,
+    precision, ordering, and the prompt's stated algorithm/protocol.
+  - `losangelex-peer-review`: the contract checklist plus peer contradiction
+    checks through Hollywood or `shared/`.
+- Hard-smoke artifact: `tmp/research/published-agent-benchmarks/silo-correctness-replay-hard-smoke-2026-06-19-a/`
+  - Scope: `II-12_n5`, `II-14_n5`, `II-15_n5`.
+  - Baseline `losangelex`: 1/3.
+  - Initial `losangelex-contract`: 2/3.
+  - Initial `losangelex-peer-review`: 1/3.
+  - Finding: contract helped `II-15_n5`; peer-review amplified the wrong
+    generic subsequence-DP interpretation on `II-15_n5`.
+- Refined artifact: `tmp/research/published-agent-benchmarks/silo-correctness-replay-refined-2026-06-19-a/`
+  - Scope: `II-12_n5`, `II-15_n5`.
+  - Refined `losangelex-contract`: 2/2.
+  - Refined `losangelex-peer-review`: 2/2.
+  - Finding: explicit "avoid binary floating-point artifacts" and
+    "task algorithm/protocol outranks peer majority" guidance fixed both
+    targeted failure families in this small live replay.
+- Broad replay status:
+  - Attempted `silo-correctness-replay-all-2026-06-19-a`.
+  - Stopped after repeated invalid attempts; error probe captured
+    `usageLimitExceeded`, with retry at June 19, 2026 12:37 AM EDT.
+  - The partial broad run also exposed premature scoring: `II-12_n10`
+    `losangelex-contract` recorded 9/10 while threads were still active, but the
+    settled workspace rescored 10/10. The runner now waits for a stable
+    submission snapshot before scoring.
 
 ## MARBLE Subset Result
 
