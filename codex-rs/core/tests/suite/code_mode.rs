@@ -6,7 +6,9 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use codex_config::types::McpServerConfig;
 use codex_config::types::McpServerTransportConfig;
 use codex_core::config::Config;
+use codex_core::config::CurrentTimeReminderConfig;
 use codex_extension_api::ExtensionRegistryBuilder;
+use codex_features::CurrentTimeSource;
 use codex_features::Feature;
 use codex_login::CodexAuth;
 use codex_models_manager::bundled_models_response;
@@ -219,6 +221,19 @@ async fn run_code_mode_turn_with_model_and_config(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn code_mode_can_call_standalone_web_search() -> Result<()> {
+    assert_code_mode_standalone_web_search(WebSearchMode::Live, serde_json::json!(true)).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn code_mode_can_call_indexed_standalone_web_search() -> Result<()> {
+    assert_code_mode_standalone_web_search(WebSearchMode::Indexed, serde_json::json!("indexed"))
+        .await
+}
+
+async fn assert_code_mode_standalone_web_search(
+    web_search_mode: WebSearchMode,
+    expected_external_web_access: Value,
+) -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = responses::start_mock_server().await;
@@ -266,7 +281,7 @@ text(result);
         .with_auth(auth)
         .with_extensions(Arc::new(extension_builder.build()))
         .with_model("test-gpt-5.1-codex")
-        .with_config(|config| {
+        .with_config(move |config| {
             config
                 .features
                 .enable(Feature::CodeMode)
@@ -277,7 +292,7 @@ text(result);
                 .expect("standalone web search should be enabled");
             config
                 .web_search_mode
-                .set(WebSearchMode::Live)
+                .set(web_search_mode)
                 .expect("web search mode should be accepted");
         });
     let test = builder.build(&server).await?;
@@ -308,7 +323,7 @@ text(result);
         search_body["settings"],
         serde_json::json!({
             "allowed_callers": ["direct"],
-            "external_web_access": true,
+            "external_web_access": expected_external_web_access,
         })
     );
     assert_eq!(
@@ -844,6 +859,49 @@ text(JSON.stringify(result));
             "tokens_left": 9500,
         })
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn code_mode_current_time_returns_structured_result() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = responses::start_mock_server().await;
+    let (_test, second_mock) = run_code_mode_turn_with_config(
+        &server,
+        "use exec to get the current time",
+        r#"
+const result = await tools.clock__curr_time({});
+text(JSON.stringify(result));
+"#,
+        |config| {
+            config
+                .features
+                .enable(Feature::CurrentTimeReminder)
+                .expect("test config should allow current-time reminders");
+            config.current_time_reminder = Some(CurrentTimeReminderConfig {
+                reminder_interval_model_requests: 50,
+                clock_source: CurrentTimeSource::System,
+            });
+        },
+    )
+    .await?;
+
+    let req = second_mock.single_request();
+    let (output, success) = custom_tool_output_body_and_success(&req, "call-1");
+    assert_ne!(
+        success,
+        Some(false),
+        "exec clock.curr_time call failed unexpectedly: {output}"
+    );
+
+    let parsed: Value = serde_json::from_str(&output)?;
+    let current_time = parsed
+        .get("current_time")
+        .and_then(Value::as_str)
+        .expect("clock.curr_time should return current_time");
+    assert_regex_match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$", current_time);
 
     Ok(())
 }
@@ -3411,8 +3469,8 @@ async fn code_mode_can_call_hidden_dynamic_tools() -> Result<()> {
     test.session_configured = new_thread.session_configured;
 
     let code = r#"
-const tool = ALL_TOOLS.find(({ name }) => name === "codex_app__hidden_dynamic_tool");
-const out = await tools.codex_app__hidden_dynamic_tool({ city: "Paris" });
+const tool = ALL_TOOLS.find(({ name }) => name === "codex_app_hidden_dynamic_tool");
+const out = await tools.codex_app_hidden_dynamic_tool({ city: "Paris" });
 text(
   JSON.stringify({
     name: tool?.name ?? null,
@@ -3519,7 +3577,7 @@ text(
     )?;
     assert_eq!(
         parsed.get("name"),
-        Some(&Value::String("codex_app__hidden_dynamic_tool".to_string()))
+        Some(&Value::String("codex_app_hidden_dynamic_tool".to_string()))
     );
     assert_eq!(
         parsed.get("out"),
@@ -3533,7 +3591,7 @@ text(
                 description.contains("Codex app tools.")
                     && description.contains("A hidden dynamic tool.")
                     && description.contains("declare const tools:")
-                    && description.contains("codex_app__hidden_dynamic_tool(args:")
+                    && description.contains("codex_app_hidden_dynamic_tool(args:")
             })
     );
 

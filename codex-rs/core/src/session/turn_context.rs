@@ -126,6 +126,7 @@ pub struct TurnContext {
     pub(crate) developer_instructions: Option<String>,
     pub(crate) user_instructions: Option<String>,
     pub(crate) collaboration_mode: CollaborationMode,
+    pub(crate) multi_agent_mode: Option<MultiAgentMode>,
     pub(crate) multi_agent_version: MultiAgentVersion,
     pub(crate) personality: Option<Personality>,
     pub(crate) approval_policy: Constrained<AskForApproval>,
@@ -204,6 +205,7 @@ impl TurnContext {
         self.config
             .features
             .apps_enabled_for_auth(uses_codex_backend)
+            && self.config.orchestrator_mcp_enabled
     }
 
     pub(crate) fn tool_environment_mode(&self) -> ToolEnvironmentMode {
@@ -277,6 +279,7 @@ impl TurnContext {
             developer_instructions: self.developer_instructions.clone(),
             user_instructions: self.user_instructions.clone(),
             collaboration_mode,
+            multi_agent_mode: self.multi_agent_mode,
             multi_agent_version: self.multi_agent_version,
             personality: self.personality,
             approval_policy: self.approval_policy.clone(),
@@ -331,6 +334,12 @@ impl TurnContext {
         FileSystemSandboxContext {
             permissions: permissions.into(),
             cwd: Some(cwd.clone()),
+            workspace_roots: self
+                .config
+                .effective_workspace_roots()
+                .iter()
+                .map(PathUri::from_abs_path)
+                .collect(),
             windows_sandbox_level: self.windows_sandbox_level,
             windows_sandbox_private_desktop: self
                 .config
@@ -376,6 +385,13 @@ impl TurnContext {
             personality: self.personality,
             collaboration_mode: Some(self.collaboration_mode.clone()),
             multi_agent_version: Some(self.multi_agent_version),
+            multi_agent_mode: super::multi_agents::effective_multi_agent_mode(
+                self.multi_agent_version,
+                &self.config.multi_agent_v2,
+                &self.session_source,
+                self.multi_agent_mode,
+                self.config.features.enabled(Feature::MultiAgentMode),
+            ),
             realtime_active: Some(self.realtime_active),
             effort: self.reasoning_effort.clone(),
             summary: ReasoningSummaryConfig::Auto,
@@ -557,6 +573,7 @@ impl Session {
                 .as_ref()
                 .map(LoadedAgentsMd::render),
             collaboration_mode: session_configuration.collaboration_mode.clone(),
+            multi_agent_mode: session_configuration.multi_agent_mode,
             multi_agent_version,
             personality: session_configuration.personality,
             approval_policy: session_configuration.approval_policy.clone(),
@@ -717,13 +734,19 @@ impl Session {
                 .or(model_info.multi_agent_version)
                 .unwrap_or_else(|| per_turn_config.multi_agent_version_from_features()),
         };
+        let plugins_input = per_turn_config.plugins_config_input();
         let plugin_outcome = self
             .services
             .plugins_manager
-            .plugins_for_config(&per_turn_config.plugins_config_input())
+            .plugins_for_config(&plugins_input)
             .await;
         let effective_skill_roots = plugin_outcome.effective_plugin_skill_roots();
-        let skills_input = skills_load_input_from_config(&per_turn_config, effective_skill_roots);
+        let plugin_skill_snapshots = self
+            .services
+            .plugins_manager
+            .plugin_skill_snapshots_for_config(&plugins_input);
+        let skills_input = skills_load_input_from_config(&per_turn_config, effective_skill_roots)
+            .with_plugin_skill_snapshots(plugin_skill_snapshots);
         let fs = primary_turn_environment
             .map(|turn_environment| turn_environment.environment.get_filesystem());
         let skills_snapshot = self

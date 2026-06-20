@@ -113,6 +113,7 @@ use codex_protocol::request_user_input::RequestUserInputResponse as CoreRequestU
 use codex_sandboxing::policy_transforms::intersect_permission_profiles;
 use codex_shell_command::parse_command::shlex_join;
 use codex_utils_absolute_path::AbsolutePathBuf;
+use codex_utils_path_uri::LegacyAppPathString;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -130,7 +131,7 @@ enum CommandExecutionApprovalPresentation {
 #[derive(Debug, PartialEq)]
 struct CommandExecutionCompletionItem {
     command: String,
-    cwd: AbsolutePathBuf,
+    cwd: LegacyAppPathString,
     command_actions: Vec<V2ParsedCommand>,
 }
 
@@ -561,6 +562,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 call_id,
                 approval_id,
                 turn_id,
+                environment_id,
                 started_at_ms,
                 command,
                 cwd,
@@ -585,7 +587,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 let command_string = shlex_join(&command);
                 let completion_item = CommandExecutionCompletionItem {
                     command: command_string,
-                    cwd: cwd.clone(),
+                    cwd: cwd.clone().into(),
                     command_actions: command_actions.clone(),
                 };
                 CommandExecutionApprovalPresentation::Command(completion_item)
@@ -637,6 +639,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 item_id: call_id.clone(),
                 started_at_ms,
                 approval_id: approval_id.clone(),
+                environment_id,
                 reason,
                 network_approval_context,
                 command,
@@ -1369,7 +1372,7 @@ async fn start_command_execution_item(
     turn_id: String,
     item_id: String,
     command: String,
-    cwd: AbsolutePathBuf,
+    cwd: LegacyAppPathString,
     command_actions: Vec<V2ParsedCommand>,
     source: CommandExecutionSource,
     outgoing: &ThreadScopedOutgoingMessageSender,
@@ -1413,7 +1416,7 @@ async fn complete_command_execution_item(
     turn_id: String,
     item_id: String,
     command: String,
-    cwd: AbsolutePathBuf,
+    cwd: LegacyAppPathString,
     process_id: Option<String>,
     source: CommandExecutionSource,
     command_actions: Vec<V2ParsedCommand>,
@@ -2383,6 +2386,7 @@ mod tests {
             reasoning_effort: None,
             created_at,
             updated_at: created_at,
+            recency_at: created_at,
             archived_at: None,
             cwd: test_path_buf("/tmp").abs().into(),
             cli_version: "0.0.0".to_string(),
@@ -2444,7 +2448,7 @@ mod tests {
     fn command_execution_completion_item(command: &str) -> CommandExecutionCompletionItem {
         CommandExecutionCompletionItem {
             command: command.to_string(),
-            cwd: test_path_buf("/tmp").abs(),
+            cwd: test_path_buf("/tmp").abs().into(),
             command_actions: vec![V2ParsedCommand::Unknown {
                 command: command.to_string(),
             }],

@@ -209,11 +209,7 @@ def codex_exec_invalid_reason(
     for reason, pattern in MODEL_BACKEND_FAILURE_PATTERNS:
         if pattern in combined_lower:
             detail = next(
-                (
-                    line
-                    for line in combined.splitlines()
-                    if pattern in line.lower()
-                ),
+                (line for line in combined.splitlines() if pattern in line.lower()),
                 combined,
             )
             return {
@@ -291,7 +287,9 @@ def notification_error_messages(notifications: list[dict[str, Any]]) -> list[str
     return messages
 
 
-def error_notifications(notifications: list[dict[str, Any]], *, limit: int = 20) -> list[dict[str, Any]]:
+def error_notifications(
+    notifications: list[dict[str, Any]], *, limit: int = 20
+) -> list[dict[str, Any]]:
     errors = [
         notification
         for notification in notifications
@@ -1354,7 +1352,9 @@ def start_hollywood_agent(
     return thread_id
 
 
-def fetch_hollywood_room_messages(hollywood_url: str | None, room: str) -> list[dict[str, Any]]:
+def fetch_hollywood_room_messages(
+    hollywood_url: str | None, room: str
+) -> list[dict[str, Any]]:
     if not hollywood_url:
         return []
     query = urllib.parse.urlencode(
@@ -1383,7 +1383,9 @@ def summarize_hollywood_room_messages(messages: list[dict[str, Any]]) -> dict[st
     senders: set[str] = set()
     examples: list[dict[str, Any]] = []
     for message in messages:
-        kind = str(message.get("message_kind") or message.get("messageKind") or "unknown")
+        kind = str(
+            message.get("message_kind") or message.get("messageKind") or "unknown"
+        )
         by_kind[kind] = by_kind.get(kind, 0) + 1
         response_policy = str(
             message.get("response_policy") or message.get("responsePolicy") or "none"
@@ -1618,7 +1620,9 @@ def losangelex_peer_review_rules(task: SiloTask, config: SiloAgentConfig) -> str
 - Case context for this run: `{task.case_id}` with {len(task.agent_configs)} agents."""
 
 
-def completion_path_snapshot(paths: list[Path]) -> tuple[tuple[str, int, int], ...] | None:
+def completion_path_snapshot(
+    paths: list[Path],
+) -> tuple[tuple[str, int, int], ...] | None:
     snapshot: list[tuple[str, int, int]] = []
     for path in paths:
         try:
@@ -1841,7 +1845,10 @@ def run_losangelex_task(
     submissions = read_submissions(workspace, len(task.agent_configs))
     score = score_task(task, submissions)
     coordination_strategy = "first-finisher" if first_finisher else "room"
-    if first_finisher and prompt_profile == LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER:
+    if (
+        first_finisher
+        and prompt_profile == LOSANGELEX_PROMPT_PROFILE_BLACKBOARD_FINISHER
+    ):
         coordination_strategy = prompt_profile
     elif not first_finisher and prompt_profile != LOSANGELEX_PROMPT_PROFILE_STANDARD:
         coordination_strategy = prompt_profile
@@ -1869,7 +1876,9 @@ def run_losangelex_task(
         "tokenUsage": summary.get("tokenUsage", {}),
         "tokenUsageSummary": summary.get("tokenUsageSummary", {}),
         "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
-        "hollywoodMessageSummary": summarize_hollywood_room_messages(hollywood_messages),
+        "hollywoodMessageSummary": summarize_hollywood_room_messages(
+            hollywood_messages
+        ),
         "notificationsSummaryPath": str(output_dir / "notifications-summary.json"),
         "errorNotificationsPath": str(error_notifications_path),
         "threadStatesPath": str(output_dir / "thread-states.json"),
@@ -1918,7 +1927,9 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
             }
         successes = sum(1 for record in valid_records if record["score"]["success"])
         avg_success_rate = (
-            sum(record["score"]["metrics"]["S_success_rate"] for record in valid_records)
+            sum(
+                record["score"]["metrics"]["S_success_rate"] for record in valid_records
+            )
             / count
         )
         avg_partial = (
@@ -1952,7 +1963,9 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         coordination_tool_errors = sum(
             coordination_error_total(record) for record in valid_records
         )
-        hollywood_messages = sum(hollywood_message_total(record) for record in valid_records)
+        hollywood_messages = sum(
+            hollywood_message_total(record) for record in valid_records
+        )
         token_usage_records = [
             normalize_token_usage(record.get("tokenUsage"))
             for record in valid_records

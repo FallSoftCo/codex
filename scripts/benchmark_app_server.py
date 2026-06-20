@@ -157,7 +157,9 @@ def benchmark_app_server(
 @contextmanager
 def managed_hollywood_server(output_dir: Path):
     if not HOLLYWOOD_SCRIPT.exists():
-        raise AppServerStartupError(f"missing Hollywood server script: {HOLLYWOOD_SCRIPT}")
+        raise AppServerStartupError(
+            f"missing Hollywood server script: {HOLLYWOOD_SCRIPT}"
+        )
     port = free_loopback_port()
     url = f"http://127.0.0.1:{port}"
     db_path = output_dir / "hollywood.db"

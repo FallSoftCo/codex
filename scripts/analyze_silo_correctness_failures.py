@@ -145,28 +145,40 @@ def write_report(
         tool_calls = sum(item[1]["coordinationToolCalls"] for item in valid_items)
         hollywood_messages = sum(item[1]["hollywoodMessages"] for item in valid_items)
         if valid_count:
-            avg_s = sum(
-                record["score"]["metrics"]["S_success_rate"]
-                for record, _ in valid_items
-            ) / valid_count
-            avg_p = sum(
-                record["score"]["metrics"]["P_partial_correctness"]
-                for record, _ in valid_items
-            ) / valid_count
-            avg_s_tol = sum(
-                record["score"]["metrics"].get(
-                    "S_numeric_tolerance_success_rate",
-                    record["score"]["metrics"]["S_success_rate"],
+            avg_s = (
+                sum(
+                    record["score"]["metrics"]["S_success_rate"]
+                    for record, _ in valid_items
                 )
-                for record, _ in valid_items
-            ) / valid_count
-            avg_p_tol = sum(
-                record["score"]["metrics"].get(
-                    "P_numeric_tolerance_partial_correctness",
-                    record["score"]["metrics"]["P_partial_correctness"],
+                / valid_count
+            )
+            avg_p = (
+                sum(
+                    record["score"]["metrics"]["P_partial_correctness"]
+                    for record, _ in valid_items
                 )
-                for record, _ in valid_items
-            ) / valid_count
+                / valid_count
+            )
+            avg_s_tol = (
+                sum(
+                    record["score"]["metrics"].get(
+                        "S_numeric_tolerance_success_rate",
+                        record["score"]["metrics"]["S_success_rate"],
+                    )
+                    for record, _ in valid_items
+                )
+                / valid_count
+            )
+            avg_p_tol = (
+                sum(
+                    record["score"]["metrics"].get(
+                        "P_numeric_tolerance_partial_correctness",
+                        record["score"]["metrics"]["P_partial_correctness"],
+                    )
+                    for record, _ in valid_items
+                )
+                / valid_count
+            )
         else:
             avg_s = avg_p = avg_s_tol = avg_p_tol = None
         lines.append(

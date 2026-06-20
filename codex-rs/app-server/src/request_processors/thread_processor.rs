@@ -30,6 +30,7 @@ use codex_app_server_protocol::ThreadOwnershipReleaseResponse;
 use codex_core::default_hollywood_observed_rooms;
 use codex_core::default_hollywood_room_for_cwd;
 use codex_extension_api::ExtensionDataInit;
+use codex_protocol::config_types::MultiAgentMode;
 use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 
@@ -445,6 +446,7 @@ impl ThreadRequestProcessor {
         params: ThreadStartParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
         request_context: RequestContext,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         self.thread_start_inner(
@@ -452,6 +454,7 @@ impl ThreadRequestProcessor {
             params,
             app_server_client_name,
             app_server_client_version,
+            supports_openai_form_elicitation,
             request_context,
         )
         .await
@@ -864,12 +867,14 @@ impl ThreadRequestProcessor {
         params: ThreadResumeParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         self.thread_resume_inner(
             request_id,
             params,
             app_server_client_name,
             app_server_client_version,
+            supports_openai_form_elicitation,
         )
         .await
         .map(|()| None)
@@ -881,12 +886,14 @@ impl ThreadRequestProcessor {
         params: ThreadForkParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         self.thread_fork_inner(
             request_id,
             params,
             app_server_client_name,
             app_server_client_version,
+            supports_openai_form_elicitation,
         )
         .await
         .map(|()| None)
@@ -1292,6 +1299,7 @@ impl ThreadRequestProcessor {
         params: ThreadStartParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
         request_context: RequestContext,
     ) -> Result<(), JSONRPCErrorError> {
         let ThreadStartParams {
@@ -1313,6 +1321,7 @@ impl ThreadRequestProcessor {
             mock_experimental_field: _mock_experimental_field,
             experimental_raw_events,
             personality,
+            multi_agent_mode,
             ephemeral,
             session_start_source,
             thread_source,
@@ -1363,8 +1372,10 @@ impl ThreadRequestProcessor {
                 request_id,
                 app_server_client_name,
                 app_server_client_version,
+                supports_openai_form_elicitation,
                 config,
                 typesafe_overrides,
+                multi_agent_mode,
                 dynamic_tools,
                 selected_capability_roots.unwrap_or_default(),
                 session_start_source,
@@ -1436,8 +1447,10 @@ impl ThreadRequestProcessor {
         request_id: ConnectionRequestId,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
         config_overrides: Option<HashMap<String, serde_json::Value>>,
         typesafe_overrides: ConfigOverrides,
+        multi_agent_mode: Option<MultiAgentMode>,
         dynamic_tools: Option<Vec<DynamicToolSpec>>,
         selected_capability_roots: Vec<SelectedCapabilityRoot>,
         session_start_source: Option<codex_app_server_protocol::ThreadStartSource>,
@@ -1561,9 +1574,11 @@ impl ThreadRequestProcessor {
                 thread_source,
                 dynamic_tools,
                 metrics_service_name: service_name,
+                multi_agent_mode,
                 parent_trace: request_trace,
                 environments,
                 thread_extension_init,
+                supports_openai_form_elicitation,
             })
             .instrument(tracing::info_span!(
                 "app_server.thread_start.create_thread",
@@ -1589,7 +1604,7 @@ impl ThreadRequestProcessor {
         )
         .await?;
 
-        let instruction_sources = thread.instruction_sources().await;
+        let instruction_sources = thread.legacy_instruction_sources().await;
         let config_snapshot = thread
             .config_snapshot()
             .instrument(tracing::info_span!(
@@ -1665,6 +1680,7 @@ impl ThreadRequestProcessor {
             sandbox,
             active_permission_profile,
             reasoning_effort: config_snapshot.reasoning_effort,
+            multi_agent_mode: config_snapshot.multi_agent_mode,
         };
         let notif = thread_started_notification(thread);
         listener_task_context
@@ -2208,16 +2224,22 @@ impl ThreadRequestProcessor {
             .list_background_terminals()
             .await
             .into_iter()
-            .map(|terminal| ThreadBackgroundTerminal {
-                item_id: terminal.item_id,
-                process_id: terminal.process_id,
-                command: terminal.command,
-                cwd: terminal.cwd,
-                os_pid: None,
-                cpu_percent: None,
-                rss_kb: None,
+            .map(|terminal| {
+                // TODO(anp): Migrate ThreadBackgroundTerminal to PathUri.
+                let cwd = terminal.cwd.to_abs_path().map_err(|err| {
+                    internal_error(format!("background terminal has invalid cwd: {err}"))
+                })?;
+                Ok(ThreadBackgroundTerminal {
+                    item_id: terminal.item_id,
+                    process_id: terminal.process_id,
+                    command: terminal.command,
+                    cwd,
+                    os_pid: None,
+                    cpu_percent: None,
+                    rss_kb: None,
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, JSONRPCErrorError>>()?;
 
         let (data, next_cursor) = paginate_background_terminals(&terminals, cursor, limit)?;
 
@@ -2324,6 +2346,7 @@ impl ThreadRequestProcessor {
         let store_sort_key = match sort_key.unwrap_or(ThreadSortKey::CreatedAt) {
             ThreadSortKey::CreatedAt => StoreThreadSortKey::CreatedAt,
             ThreadSortKey::UpdatedAt => StoreThreadSortKey::UpdatedAt,
+            ThreadSortKey::RecencyAt => StoreThreadSortKey::RecencyAt,
         };
         let sort_direction = sort_direction.unwrap_or(SortDirection::Desc);
         let (stored_threads, next_cursor) = self
@@ -2405,6 +2428,7 @@ impl ThreadRequestProcessor {
         let store_sort_key = match sort_key.unwrap_or(ThreadSortKey::CreatedAt) {
             ThreadSortKey::CreatedAt => StoreThreadSortKey::CreatedAt,
             ThreadSortKey::UpdatedAt => StoreThreadSortKey::UpdatedAt,
+            ThreadSortKey::RecencyAt => StoreThreadSortKey::RecencyAt,
         };
         let store_sort_direction = sort_direction.unwrap_or(SortDirection::Desc);
         let (allowed_sources, source_kind_filter) = compute_source_filters(source_kinds);
@@ -2925,6 +2949,7 @@ impl ThreadRequestProcessor {
         params: ThreadResumeParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
     ) -> Result<(), JSONRPCErrorError> {
         if let Ok(thread_id) = ThreadId::from_string(&params.thread_id)
             && self
@@ -3069,6 +3094,7 @@ impl ThreadRequestProcessor {
                 thread_history,
                 self.auth_manager.clone(),
                 self.request_trace_context(&request_id).await,
+                supports_openai_form_elicitation,
             )
             .await
         {
@@ -3088,7 +3114,7 @@ impl ThreadRequestProcessor {
                     self.outgoing.send_error(request_id, err).await;
                     return Ok(());
                 }
-                let instruction_sources = codex_thread.instruction_sources().await;
+                let instruction_sources = codex_thread.legacy_instruction_sources().await;
                 let SessionConfiguredEvent { rollout_path, .. } = session_configured;
                 let Some(rollout_path) = rollout_path else {
                     let error =
@@ -3194,6 +3220,7 @@ impl ThreadRequestProcessor {
                     sandbox,
                     active_permission_profile,
                     reasoning_effort: session_configured.reasoning_effort,
+                    multi_agent_mode: config_snapshot.multi_agent_mode,
                     initial_turns_page,
                 };
 
@@ -3396,7 +3423,7 @@ impl ThreadRequestProcessor {
                 /*include_turns*/ false,
             );
             thread_summary.session_id = existing_thread.session_configured().session_id.to_string();
-            let instruction_sources = existing_thread.instruction_sources().await;
+            let instruction_sources = existing_thread.legacy_instruction_sources().await;
 
             let listener_command_tx = {
                 let thread_state = thread_state.lock().await;
@@ -3686,6 +3713,7 @@ impl ThreadRequestProcessor {
         params: ThreadForkParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        supports_openai_form_elicitation: bool,
     ) -> Result<(), JSONRPCErrorError> {
         let ThreadForkParams {
             thread_id,
@@ -3795,6 +3823,7 @@ impl ThreadRequestProcessor {
                 }),
                 thread_source.map(Into::into),
                 self.request_trace_context(&request_id).await,
+                supports_openai_form_elicitation,
             )
             .await
             .map_err(|err| match err {
@@ -3827,7 +3856,7 @@ impl ThreadRequestProcessor {
                 .map_err(|err| core_thread_write_error("inherit source thread name", err))?;
         }
 
-        let instruction_sources = forked_thread.instruction_sources().await;
+        let instruction_sources = forked_thread.legacy_instruction_sources().await;
 
         // Auto-attach a conversation listener when forking a thread.
         log_listener_attach_result(
@@ -3913,6 +3942,7 @@ impl ThreadRequestProcessor {
             sandbox,
             active_permission_profile,
             reasoning_effort: session_configured.reasoning_effort,
+            multi_agent_mode: config_snapshot.multi_agent_mode,
         };
 
         let notif = thread_started_notification(thread);
@@ -4122,6 +4152,7 @@ fn thread_backwards_cursor_for_sort_key(
     let timestamp = match sort_key {
         StoreThreadSortKey::CreatedAt => thread.created_at,
         StoreThreadSortKey::UpdatedAt => thread.updated_at,
+        StoreThreadSortKey::RecencyAt => thread.recency_at,
     };
     // The state DB stores unique millisecond timestamps. Offset the reverse cursor by one
     // millisecond so the opposite-direction query includes the page anchor.
@@ -4566,6 +4597,7 @@ pub(crate) fn thread_from_stored_thread(
         },
         created_at: thread.created_at.timestamp(),
         updated_at: thread.updated_at.timestamp(),
+        recency_at: Some(thread.recency_at.timestamp()),
         status: ThreadStatus::NotLoaded,
         path,
         cwd,
@@ -4772,6 +4804,7 @@ fn build_thread_from_snapshot(
         model_provider: config_snapshot.model_provider_id.clone(),
         created_at: now,
         updated_at: now,
+        recency_at: Some(now),
         status: ThreadStatus::NotLoaded,
         path,
         cwd: config_snapshot.cwd().clone(),

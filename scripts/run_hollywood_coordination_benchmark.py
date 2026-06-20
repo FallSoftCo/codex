@@ -311,7 +311,9 @@ def score_codex_run(
     tool_calls = coordination_summary.get("toolCalls", {})
     tool_by_name = tool_calls.get("byTool", {}) if isinstance(tool_calls, dict) else {}
     error_calls = coordination_summary.get("errorCalls", {})
-    tool_errors = int(error_calls.get("total", 0)) if isinstance(error_calls, dict) else 0
+    tool_errors = (
+        int(error_calls.get("total", 0)) if isinstance(error_calls, dict) else 0
+    )
     spawn_calls = int(tool_by_name.get("spawn_agent", 0))
     wait_calls = int(tool_by_name.get("wait", 0))
     if system == "codex-subagents":
@@ -373,9 +375,7 @@ def run_losangelex_system(
     record["resultPath"] = str(run_dir / "result.json")
     score = record.get("score", {})
     if isinstance(score, dict):
-        score["coordinationRequirementMet"] = score.get(
-            "collaborationRequirementMet"
-        )
+        score["coordinationRequirementMet"] = score.get("collaborationRequirementMet")
     record["tokenUsage"] = record.get("notificationSummary", {}).get(
         "tokenUsage",
         normalize_token_usage(None),
@@ -446,8 +446,7 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
                 for record in system_records
             ),
             "peerResponses": sum(
-                record["score"].get("peerResponseCount", 0)
-                for record in system_records
+                record["score"].get("peerResponseCount", 0) for record in system_records
             ),
             "toolErrors": sum(
                 record["score"].get("coordinationToolErrors", 0)
