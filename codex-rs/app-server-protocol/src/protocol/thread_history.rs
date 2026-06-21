@@ -3412,6 +3412,8 @@ mod tests {
                 message: String::new(),
                 replacement_history: None,
                 window_number: None,
+                first_window_id: None,
+                previous_window_id: None,
                 window_id: None,
             }),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {

@@ -35,6 +35,7 @@ const CONTEXTUAL_DEVELOPER_PREFIXES: &[&str] = &[
     SKILLS_INSTRUCTIONS_OPEN_TAG,
     "<personality_spec>",
     "<hollywood_message>",
+    // Keep recognizing token-budget wrappers persisted by older versions.
     "<token_budget>",
     "<rollout_budget>",
 ];

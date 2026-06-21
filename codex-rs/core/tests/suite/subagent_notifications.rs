@@ -1107,8 +1107,9 @@ async fn encrypted_multi_agent_v2_spawn_sends_agent_message_to_child() -> Result
 
     let child_request = wait_for_requests(&child_request_log)
         .await?
-        .pop()
-        .expect("child request");
+        .into_iter()
+        .find(|request| !request.inputs_of_type("agent_message").is_empty())
+        .expect("child request with agent_message");
     assert_eq!(
         child_request.inputs_of_type("agent_message"),
         vec![json!({
