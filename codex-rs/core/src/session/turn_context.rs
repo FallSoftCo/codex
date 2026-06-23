@@ -126,7 +126,7 @@ pub struct TurnContext {
     pub(crate) developer_instructions: Option<String>,
     pub(crate) user_instructions: Option<String>,
     pub(crate) collaboration_mode: CollaborationMode,
-    pub(crate) multi_agent_mode: Option<MultiAgentMode>,
+    pub(crate) multi_agent_mode: MultiAgentMode,
     pub(crate) multi_agent_version: MultiAgentVersion,
     pub(crate) personality: Option<Personality>,
     pub(crate) approval_policy: Constrained<AskForApproval>,
@@ -206,10 +206,6 @@ impl TurnContext {
             .features
             .apps_enabled_for_auth(uses_codex_backend)
             && self.config.orchestrator_mcp_enabled
-    }
-
-    pub(crate) fn tool_environment_mode(&self) -> ToolEnvironmentMode {
-        ToolEnvironmentMode::from_count(self.environments.turn_environments.len())
     }
 
     pub(crate) async fn with_model(
@@ -304,13 +300,6 @@ impl TurnContext {
         }
     }
 
-    #[deprecated(note = "resolve paths from the selected turn environment cwd instead")]
-    pub(crate) fn resolve_path(&self, path: Option<String>) -> AbsolutePathBuf {
-        #[allow(deprecated)]
-        path.as_ref()
-            .map_or_else(|| self.cwd.clone(), |path| self.cwd.join(path))
-    }
-
     pub(crate) fn file_system_sandbox_context(
         &self,
         additional_permissions: Option<AdditionalPermissionProfile>,
@@ -387,10 +376,8 @@ impl TurnContext {
             multi_agent_version: Some(self.multi_agent_version),
             multi_agent_mode: super::multi_agents::effective_multi_agent_mode(
                 self.multi_agent_version,
-                &self.config.multi_agent_v2,
                 &self.session_source,
                 self.multi_agent_mode,
-                self.config.features.enabled(Feature::MultiAgentMode),
             ),
             realtime_active: Some(self.realtime_active),
             effort: self.reasoning_effort.clone(),
@@ -539,6 +526,7 @@ impl Session {
             session_configuration.forked_from_thread_id,
             session_configuration.parent_thread_id,
             &session_configuration.session_source,
+            session_configuration.thread_source.clone(),
             sub_id.clone(),
             cwd.clone(),
             &session_configuration.permission_profile(),
@@ -799,7 +787,7 @@ impl Session {
         turn_context
     }
 
-    pub(crate) async fn maybe_emit_unknown_model_warning_for_turn(&self, tc: &TurnContext) {
+    pub(crate) async fn maybe_emit_model_warnings_for_turn(&self, tc: &TurnContext) {
         if tc.model_info.used_fallback_model_metadata {
             self.send_event(
                 tc,
@@ -811,6 +799,13 @@ impl Session {
                 }),
             )
             .await;
+        }
+
+        if let Some(message) =
+            unsupported_code_mode_warning(&tc.model_info, tc.config.features.get())
+        {
+            self.send_event(tc, EventMsg::Warning(WarningEvent { message }))
+                .await;
         }
     }
 

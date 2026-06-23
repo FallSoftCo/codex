@@ -158,6 +158,7 @@ fn write_rollout_with_user_message(
             timestamp: "2026-06-01T14:26:25Z".to_string(),
             item: RolloutItem::SessionMeta(SessionMetaLine {
                 meta: SessionMeta {
+                    session_id: thread_id.into(),
                     id: thread_id,
                     forked_from_id: None,
                     parent_thread_id: None,
@@ -176,6 +177,7 @@ fn write_rollout_with_user_message(
                     memory_mode: None,
                     hollywood: None,
                     multi_agent_version: None,
+                    context_window: None,
                 },
                 git: None,
             }),

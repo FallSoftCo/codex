@@ -200,6 +200,7 @@ impl ExternalAgentSessionImporter {
         };
         let now = Utc::now();
         let create_params = CreateThreadParams {
+            session_id: thread_id.into(),
             thread_id,
             extra_config: None,
             forked_from_id: None,
@@ -214,6 +215,7 @@ impl ExternalAgentSessionImporter {
             },
             dynamic_tools: Vec::new(),
             multi_agent_version: Some(MultiAgentVersion::V1),
+            initial_window_id: uuid::Uuid::now_v7().to_string(),
             metadata: ThreadPersistenceMetadata {
                 cwd: Some(cwd.clone()),
                 model_provider: model_provider.clone(),

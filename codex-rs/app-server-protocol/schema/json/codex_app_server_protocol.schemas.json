@@ -1911,6 +1911,29 @@
             },
             "method": {
               "enum": [
+                "account/workspaceMessages/read"
+              ],
+              "title": "Account/workspaceMessages/readRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "title": "Account/workspaceMessages/readRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
                 "account/sendAddCreditsNudgeEmail"
               ],
               "title": "Account/sendAddCreditsNudgeEmailRequestMethod",
@@ -5095,6 +5118,26 @@
           "properties": {
             "method": {
               "enum": [
+                "model/safetyBuffering/updated"
+              ],
+              "title": "Model/safetyBuffering/updatedNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/ModelSafetyBufferingUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Model/safetyBuffering/updatedNotification",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "enum": [
                 "warning"
               ],
               "title": "WarningNotificationMethod",
@@ -5877,7 +5920,10 @@
           {
             "properties": {
               "email": {
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "planType": {
                 "$ref": "#/definitions/v2/PlanType"
@@ -6838,7 +6884,6 @@
           {
             "enum": [
               "untrusted",
-              "on-failure",
               "on-request",
               "never"
             ],
@@ -7018,6 +7063,7 @@
                 "type": "string"
               },
               "path": {
+                "description": "Absolute path for the root in the selected environment.",
                 "type": "string"
               },
               "type": {
@@ -10354,6 +10400,28 @@
         "title": "GetAccountTokenUsageResponse",
         "type": "object"
       },
+      "GetWorkspaceMessagesResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "featureEnabled": {
+            "description": "Whether the workspace-message backend route is available for this client.",
+            "type": "boolean"
+          },
+          "messages": {
+            "description": "Active workspace messages returned by the backend.",
+            "items": {
+              "$ref": "#/definitions/v2/WorkspaceMessage"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "featureEnabled",
+          "messages"
+        ],
+        "title": "GetWorkspaceMessagesResponse",
+        "type": "object"
+      },
       "GitInfo": {
         "properties": {
           "branch": {
@@ -11371,6 +11439,18 @@
             "type": "string"
           }
         ]
+      },
+      "InternalChatMessageMetadataPassthrough": {
+        "description": "Internal Responses API passthrough metadata copied into underlying chat messages.\n\nResponses API strongly types this payload. Do not modify it without first getting API approval and making the corresponding Responses API change.",
+        "properties": {
+          "turn_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
       },
       "ItemCompletedNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -12851,6 +12931,51 @@
         "title": "ModelReroutedNotification",
         "type": "object"
       },
+      "ModelSafetyBufferingUpdatedNotification": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "fasterModel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "showBufferingUi": {
+            "type": "boolean"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "useCases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "model",
+          "reasons",
+          "showBufferingUi",
+          "threadId",
+          "turnId",
+          "useCases"
+        ],
+        "title": "ModelSafetyBufferingUpdatedNotification",
+        "type": "object"
+      },
       "ModelServiceTier": {
         "properties": {
           "description": {
@@ -12930,8 +13055,9 @@
         "type": "object"
       },
       "MultiAgentMode": {
-        "description": "Controls whether the model should only spawn sub-agents after an explicit user request or may delegate proactively when doing so would help.",
+        "description": "Controls whether the model receives multi-agent delegation instructions and, when it does, whether it should only spawn sub-agents after an explicit user request or may delegate proactively when doing so would help. `none` leaves the multi-agent tools available without injecting delegation instructions.",
         "enum": [
+          "none",
           "explicitRequestOnly",
           "proactive"
         ],
@@ -13221,6 +13347,10 @@
       },
       "PermissionProfileSummary": {
         "properties": {
+          "allowed": {
+            "description": "Whether the effective requirements allow selecting this profile.",
+            "type": "boolean"
+          },
           "description": {
             "description": "Optional user-facing description for display in clients.",
             "type": [
@@ -13234,6 +13364,7 @@
           }
         },
         "required": [
+          "allowed",
           "id"
         ],
         "type": "object"
@@ -13578,8 +13709,26 @@
             ],
             "description": "Local logo path, resolved from the installed plugin package."
           },
+          "logoDark": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/AbsolutePathBuf"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Local dark-mode logo path, resolved from the installed plugin package."
+          },
           "logoUrl": {
             "description": "Remote logo URL from the plugin catalog.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logoUrlDark": {
+            "description": "Remote dark-mode logo URL from the plugin catalog.",
             "type": [
               "string",
               "null"
@@ -15139,10 +15288,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15195,10 +15344,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15249,10 +15398,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15299,10 +15448,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15342,10 +15491,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15396,10 +15545,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15439,10 +15588,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15482,10 +15631,10 @@
               "input": {
                 "type": "string"
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15529,10 +15678,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15581,10 +15730,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15633,10 +15782,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15671,10 +15820,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15720,10 +15869,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15747,16 +15896,6 @@
           },
           {
             "properties": {
-              "metadata": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
               "type": {
                 "enum": [
                   "compaction_trigger"
@@ -15785,10 +15924,10 @@
                   "null"
                 ]
               },
-              "metadata": {
+              "internal_chat_message_metadata_passthrough": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/v2/ResponseItemMetadata"
+                    "$ref": "#/definitions/v2/InternalChatMessageMetadataPassthrough"
                   },
                   {
                     "type": "null"
@@ -15826,23 +15965,6 @@
             "type": "object"
           }
         ]
-      },
-      "ResponseItemMetadata": {
-        "properties": {
-          "source_call_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "turn_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
       },
       "ResponsesApiWebSearchAction": {
         "oneOf": [
@@ -17012,6 +17134,7 @@
             "description": "Optional Hollywood coordination state when attached."
           },
           "id": {
+            "description": "Identifier for this thread. Codex-generated thread IDs are UUIDv7.",
             "type": "string"
           },
           "modelProvider": {
@@ -17231,6 +17354,10 @@
           "threadId"
         ],
         "title": "ThreadDeletedNotification",
+        "type": "object"
+      },
+      "ThreadExtra": {
+        "description": "Extra app-server data for a thread.",
         "type": "object"
       },
       "ThreadForkParams": {
@@ -18215,7 +18342,7 @@
                 "type": "string"
               },
               "path": {
-                "$ref": "#/definitions/v2/AbsolutePathBuf"
+                "$ref": "#/definitions/v2/LegacyAppPathString"
               },
               "type": {
                 "enum": [
@@ -19955,6 +20082,7 @@
             "description": "Only populated when the Turn's status is failed."
           },
           "id": {
+            "description": "Identifier for this turn. Codex-generated turn IDs are UUIDv7.",
             "type": "string"
           },
           "items": {
@@ -20885,6 +21013,49 @@
         ],
         "title": "WindowsWorldWritableWarningNotification",
         "type": "object"
+      },
+      "WorkspaceMessage": {
+        "properties": {
+          "archivedAt": {
+            "description": "Unix timestamp (in seconds) when the message was archived.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "description": "Unix timestamp (in seconds) when the message was created.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "messageBody": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "messageType": {
+            "$ref": "#/definitions/v2/WorkspaceMessageType"
+          }
+        },
+        "required": [
+          "messageBody",
+          "messageId",
+          "messageType"
+        ],
+        "type": "object"
+      },
+      "WorkspaceMessageType": {
+        "enum": [
+          "headline",
+          "announcement",
+          "unknown"
+        ],
+        "type": "string"
       },
       "WriteStatus": {
         "enum": [

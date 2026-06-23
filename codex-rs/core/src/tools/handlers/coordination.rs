@@ -622,17 +622,13 @@ async fn handle_coordination_act(
                 }
                 Err(fatal) => return Err(fatal),
             }
-            let new_owner_thread_id = args
-                .owner
-                .as_deref()
-                .ok_or_else(|| {
-                    FunctionCallError::RespondToModel(
-                        "coordination_act handoff requires `owner`".to_string(),
-                    )
-                })
-                .map(|owner| async { resolve_coordination_target(session, turn, db, owner).await })
-                .expect("owner should exist")
-                .await?;
+            let Some(owner) = args.owner.as_deref() else {
+                return coordination_failure_output(
+                    "coordination_act handoff requires `owner`".to_string(),
+                    Some(&task),
+                );
+            };
+            let new_owner_thread_id = resolve_coordination_target(session, turn, db, owner).await?;
             let outcome = match db
                 .handoff_coordination_task(codex_state::CoordinationTaskHandoffParams {
                     task_id: task.id.clone(),

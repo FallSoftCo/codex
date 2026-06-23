@@ -2126,6 +2126,7 @@ mod tests {
         );
         let items = vec![RolloutItem::SessionMeta(SessionMetaLine {
             meta: SessionMeta {
+                session_id: thread_id.into(),
                 id: thread_id,
                 forked_from_id: None,
                 parent_thread_id: None,
@@ -2144,6 +2145,7 @@ mod tests {
                 memory_mode: Some("polluted".to_string()),
                 hollywood: None,
                 multi_agent_version: None,
+                context_window: None,
             },
             git: None,
         })];
@@ -2188,6 +2190,7 @@ mod tests {
         );
         let items = vec![RolloutItem::SessionMeta(SessionMetaLine {
             meta: SessionMeta {
+                session_id: thread_id.into(),
                 id: thread_id,
                 forked_from_id: None,
                 parent_thread_id: None,
@@ -2206,6 +2209,7 @@ mod tests {
                 memory_mode: None,
                 hollywood: None,
                 multi_agent_version: None,
+                context_window: None,
             },
             git: Some(GitInfo {
                 commit_hash: Some(codex_git_utils::GitSha::new("rollout-sha")),

@@ -1,6 +1,7 @@
 use codex_git_utils::get_git_repo_root;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::HollywoodSessionMeta;
+#[cfg(test)]
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -28,6 +29,7 @@ pub(crate) struct HollywoodSessionConfig {
     pub(crate) attention_mode: String,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct HollywoodSemanticContext {
     pub(crate) attached: bool,
@@ -41,6 +43,7 @@ pub(crate) struct HollywoodSemanticContext {
     pub(crate) identities: Vec<String>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct HollywoodRuntimeContext {
     pub(crate) tools: Vec<String>,
@@ -48,6 +51,7 @@ pub(crate) struct HollywoodRuntimeContext {
     pub(crate) broadcast_guidance: Vec<String>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct HollywoodEnvironmentContext {
     pub(crate) semantic: HollywoodSemanticContext,

@@ -1,4 +1,5 @@
 use super::*;
+use crate::session::step_context::StepContext;
 use crate::session::tests::make_session_and_context;
 use crate::session::tests::make_session_and_context_with_rx;
 use crate::tools::context::ToolCallSource;
@@ -28,10 +29,14 @@ async fn restart_client_rejects_subagent_threads() {
         agent_role: None,
     });
 
+    let session = Arc::new(session);
+    let turn = Arc::new(turn);
+
     let result = RestartClientHandler
         .handle(ToolInvocation {
-            session: Arc::new(session),
-            turn: Arc::new(turn),
+            session,
+            step_context: StepContext::for_test(Arc::clone(&turn)),
+            turn,
             cancellation_token: tokio_util::sync::CancellationToken::new(),
             tracker: Arc::new(Mutex::new(TurnDiffTracker::default())),
             call_id: "call-1".to_string(),
@@ -65,6 +70,7 @@ async fn restart_client_emits_restart_event_and_returns_requested_status() {
     let output = RestartClientHandler
         .handle(ToolInvocation {
             session,
+            step_context: StepContext::for_test(Arc::clone(&turn)),
             turn,
             cancellation_token: tokio_util::sync::CancellationToken::new(),
             tracker: Arc::new(Mutex::new(TurnDiffTracker::default())),

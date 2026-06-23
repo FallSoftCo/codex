@@ -1,4 +1,5 @@
 use super::*;
+use crate::session::step_context::StepContext;
 use crate::session::tests::make_session_and_context;
 use crate::session::turn_context::TurnContext;
 use crate::tools::context::ToolCallSource;
@@ -30,6 +31,7 @@ fn invocation(
 ) -> ToolInvocation {
     ToolInvocation {
         session,
+        step_context: StepContext::for_test(Arc::clone(&turn)),
         turn,
         cancellation_token: tokio_util::sync::CancellationToken::new(),
         tracker: Arc::new(Mutex::new(TurnDiffTracker::default())),
