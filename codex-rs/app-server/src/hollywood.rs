@@ -31,6 +31,8 @@ use uuid::Uuid;
 
 const HOLLYWOOD_CONTEXT_OPEN_TAG: &str = "<hollywood_context>";
 const HOLLYWOOD_CONTEXT_CLOSE_TAG: &str = "</hollywood_context>";
+const TEAM_WORK_STATE_GUIDANCE: &str = "In a Losangelex team, concise work-state messages such as taking a lane, expected report-back point, blocker, changed direction, or finished result are team state, not routine chatter.";
+const DEPENDENCY_AWARE_GUIDANCE: &str = "If your lane verifies, reviews, summarizes, integrates, or otherwise depends on another lane, read recent Hollywood updates and inspect the relevant workspace files before finalizing; do not infer from silence that no peer work happened. When finishing dependency-sensitive work, name the peer update, room evidence, or file evidence you relied on, and state any unresolved uncertainty instead of presenting stale assumptions as verified.";
 
 pub(crate) const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 pub(crate) const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
@@ -732,8 +734,10 @@ pub(crate) fn format_hollywood_context_message(
     let mut broadcast_guidance = vec![
         "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.",
         "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.",
+        TEAM_WORK_STATE_GUIDANCE,
         "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.",
         "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.",
+        DEPENDENCY_AWARE_GUIDANCE,
         "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.",
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.",
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.",
@@ -829,7 +833,7 @@ pub(crate) fn startup_handshake_message(
         ""
     };
     format!(
-        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate.{} Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with already attached Hollywood sessions first. If the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request. Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar subtasks. {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate.{} Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with already attached Hollywood sessions first. If the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request. Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar subtasks. {} {} {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
         config.room,
         identities,
         observed,
@@ -837,6 +841,8 @@ pub(crate) fn startup_handshake_message(
         startup_guidance,
         collaboration_first_guidance,
         durable_coordination_handshake_guidance(state_db_available),
+        TEAM_WORK_STATE_GUIDANCE,
+        DEPENDENCY_AWARE_GUIDANCE,
     )
 }
 
@@ -1674,6 +1680,8 @@ mod tests {
         assert!(message.contains("do not send a startup presence broadcast by default"));
         assert!(message.contains("losangelex_team_launch"));
         assert!(message.contains("do not substitute Codex subagents"));
+        assert!(message.contains("not routine chatter"));
+        assert!(message.contains("dependency-sensitive work"));
     }
 
     #[test]
@@ -1729,6 +1737,8 @@ mod tests {
             message.contains("\"solo_execution_is_for_small_local_or_unsplittable_work\":true")
         );
         assert!(message.contains("Collaboration-first policy"));
+        assert!(message.contains("not routine chatter"));
+        assert!(message.contains("do not infer from silence"));
     }
 
     #[test]

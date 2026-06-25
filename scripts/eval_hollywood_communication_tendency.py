@@ -1,0 +1,774 @@
+#!/usr/bin/env python3
+"""Evaluate whether Losangelex team agents naturally communicate through Hollywood."""
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import time
+import uuid
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from benchmark_app_server import prepare_minimal_codex_home
+from eval_collaboration_first_debug import fetch_room_messages
+from eval_collaboration_first_debug import managed_debug_app_server
+from eval_collaboration_first_debug import managed_hollywood_server
+from eval_collaboration_first_debug import wait_for_tracked_turns
+from eval_hollywood_app_builds import DEFAULT_EVAL_MODEL_PROVIDER
+from losangelex_codex_bin import DEFAULT_CODEX
+from losangelex_codex_bin import ensure_default_codex
+from replay_hollywood_operator import JsonRpcWs
+from replay_hollywood_operator import initialize
+from replay_hollywood_operator import read_thread_state
+from replay_hollywood_operator import send_turn
+from replay_hollywood_operator import start_agent
+from replay_hollywood_operator import summarize_notifications
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_OUT_ROOT = REPO_ROOT / "tmp/research/hollywood-communication-tendency"
+PROFILE_CHOICES = (
+    "current",
+    "communication",
+    "dependency_prompt",
+    "structured_brief",
+    "dependency_structured",
+)
+
+COMMUNICATION_GUIDANCE = """Losangelex team communication expectation:
+- Hollywood is the shared working room for this team, not just an emergency channel.
+- Before starting your lane, send one concise Hollywood message in your own voice saying what you are taking up and when you expect to report back.
+- If you change direction, become blocked, need attention, or finish, send a concise Hollywood update before or alongside your final answer.
+- These work-state messages are not chatter; they are how teammates know the team is active.
+"""
+
+DEPENDENCY_GUIDANCE = """Dependency-aware communication expectation:
+- If your lane verifies, summarizes, reviews, or integrates another lane, do not finalize from stale assumptions.
+- Before finishing dependency-sensitive work, read recent Hollywood updates and inspect the relevant workspace files after the producing lane has had a chance to report.
+- If the dependency has not reported yet, wait briefly or state exactly what evidence you used and what remains uncertain.
+- Your finish message should name the dependency evidence you relied on when another lane affects your result.
+"""
+
+START_TERMS = (
+    "accept",
+    "accepted",
+    "begin",
+    "beginning",
+    "start",
+    "started",
+    "starting",
+    "taking",
+    "i'll",
+    "i will",
+    "working on",
+    "inspecting",
+    "checking",
+    "claim",
+    "claimed",
+    "claiming",
+)
+
+FINISH_TERMS = (
+    "done",
+    "finish",
+    "finished",
+    "complete",
+    "completed",
+    "result",
+    "updated",
+    "changed",
+    "wrote",
+    "verified",
+)
+
+
+@dataclass(frozen=True)
+class AgentSpec:
+    name: str
+    lane: str
+    expected: dict[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True)
+class CommunicationScenario:
+    scenario_id: str
+    description: str
+    files: dict[str, str]
+    agents: tuple[AgentSpec, ...]
+
+
+SCENARIOS: dict[str, CommunicationScenario] = {
+    "docs_pair": CommunicationScenario(
+        scenario_id="docs_pair",
+        description="Two-agent docs update where both agents have independent lanes.",
+        files={
+            "README.md": "# Communication Eval\n",
+            "docs/status.md": "# Status\n\nCurrent status is unknown.\n",
+            "docs/review.md": "# Review\n\nNo review has been recorded.\n",
+        },
+        agents=(
+            AgentSpec(
+                name="StatusWriter",
+                lane="Update docs/status.md to mention a handoff checkpoint and keep the file concise.",
+                expected={"docs/status.md": ("handoff checkpoint",)},
+            ),
+            AgentSpec(
+                name="ReviewWriter",
+                lane="Update docs/review.md to say that the status note was reviewed for the release handoff.",
+                expected={"docs/review.md": ("release handoff",)},
+            ),
+        ),
+    ),
+    "retry_pair": CommunicationScenario(
+        scenario_id="retry_pair",
+        description="Two-agent implementation and verification note.",
+        files={
+            "src/retry.js": """export function retryDelay(attempt) {
+  return Math.min(attempt, 4) * 250;
+}
+""",
+            "tests/retry_notes.md": "# Retry Notes\n\nNo jitter check yet.\n",
+        },
+        agents=(
+            AgentSpec(
+                name="RetryImplementer",
+                lane="Update src/retry.js so retryDelay applies small jitter using Math.random while keeping the capped base delay.",
+                expected={"src/retry.js": ("Math.random", "retryDelay")},
+            ),
+            AgentSpec(
+                name="RetryVerifier",
+                lane="Inspect the retry helper and update tests/retry_notes.md with the observed retryDelay behavior and whether jitter is present.",
+                expected={"tests/retry_notes.md": ("retryDelay", "Math.random")},
+            ),
+        ),
+    ),
+    "permissions_trio": CommunicationScenario(
+        scenario_id="permissions_trio",
+        description="Three-agent server, UI, and verification split.",
+        files={
+            "server/permissions.js": """export function canViewDashboard(role) {
+  return role === "admin" || role === "operator";
+}
+""",
+            "ui/permissions_panel.js": """export function permissionRows() {
+  return ["Dashboard view"];
+}
+""",
+            "tests/permissions_notes.md": "# Permission Notes\n\nAudit export is not documented.\n",
+        },
+        agents=(
+            AgentSpec(
+                name="ServerAgent",
+                lane="Add a canExportAudit(role) helper in server/permissions.js that only allows admin.",
+                expected={"server/permissions.js": ("canExportAudit", "admin")},
+            ),
+            AgentSpec(
+                name="UiAgent",
+                lane="Update ui/permissions_panel.js so permissionRows includes Audit export.",
+                expected={"ui/permissions_panel.js": ("Audit export",)},
+            ),
+            AgentSpec(
+                name="VerifierAgent",
+                lane="Update tests/permissions_notes.md with a concise note that Audit export is admin-only and visible in the UI list.",
+                expected={"tests/permissions_notes.md": ("Audit export", "admin-only")},
+            ),
+        ),
+    ),
+    "incident_trio": CommunicationScenario(
+        scenario_id="incident_trio",
+        description="Three-agent investigation with separate findings and summary files.",
+        files={
+            "logs/service.log": """10:02 ok boot
+10:04 warn queue depth 91
+10:05 error throttle limit exceeded
+""",
+            "config/limits.json": """{"queueDepthLimit": 80, "retryLimit": 3}
+""",
+            "docs/log-findings.md": "# Log Findings\n\n",
+            "docs/config-findings.md": "# Config Findings\n\n",
+            "docs/incident.md": "# Incident Summary\n\nPending.\n",
+        },
+        agents=(
+            AgentSpec(
+                name="LogReader",
+                lane="Inspect logs/service.log and update docs/log-findings.md with the throttle limit symptom.",
+                expected={"docs/log-findings.md": ("throttle limit",)},
+            ),
+            AgentSpec(
+                name="ConfigReader",
+                lane="Inspect config/limits.json and update docs/config-findings.md with the queueDepthLimit value.",
+                expected={"docs/config-findings.md": ("queueDepthLimit", "80")},
+            ),
+            AgentSpec(
+                name="IncidentSummarizer",
+                lane="Update docs/incident.md with a concise summary mentioning throttle limit and queue depth.",
+                expected={"docs/incident.md": ("throttle limit", "queue depth")},
+            ),
+        ),
+    ),
+    "release_quad": CommunicationScenario(
+        scenario_id="release_quad",
+        description="Four-agent release checklist with independent artifacts.",
+        files={
+            "package.json": """{"name": "communication-eval", "version": "0.1.0"}
+""",
+            "docs/runbook.md": "# Runbook\n\nPending.\n",
+            "tests/smoke.md": "# Smoke Test\n\nPending.\n",
+            "release/summary.md": "# Release Summary\n\nPending.\n",
+            "release/risk.md": "# Risk Notes\n\nPending.\n",
+        },
+        agents=(
+            AgentSpec(
+                name="VersionAgent",
+                lane="Update package.json version to 0.1.1 without changing the package name.",
+                expected={"package.json": ("0.1.1",)},
+            ),
+            AgentSpec(
+                name="RunbookAgent",
+                lane="Update docs/runbook.md with a concise rollback step for release 0.1.1.",
+                expected={"docs/runbook.md": ("rollback", "0.1.1")},
+            ),
+            AgentSpec(
+                name="SmokeAgent",
+                lane="Update tests/smoke.md with one smoke check for the release version.",
+                expected={"tests/smoke.md": ("smoke", "version", "0.1.1")},
+            ),
+            AgentSpec(
+                name="SummaryAgent",
+                lane="Update release/summary.md and release/risk.md with concise release and risk notes for 0.1.1.",
+                expected={
+                    "release/summary.md": ("0.1.1",),
+                    "release/risk.md": ("risk",),
+                },
+            ),
+        ),
+    ),
+}
+
+
+def fresh_workspace(workspace: Path, files: dict[str, str]) -> None:
+    if workspace.exists():
+        shutil.rmtree(workspace)
+    workspace.mkdir(parents=True)
+    for relative, contents in files.items():
+        path = workspace / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(contents, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    subprocess.run(["git", "add", "."], cwd=workspace, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "initial fixture"],
+        cwd=workspace,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Eval",
+            "GIT_AUTHOR_EMAIL": "eval@example.com",
+            "GIT_COMMITTER_NAME": "Eval",
+            "GIT_COMMITTER_EMAIL": "eval@example.com",
+        },
+        check=True,
+    )
+
+
+def workspace_diff(workspace: Path) -> str:
+    result = subprocess.run(
+        ["git", "diff", "--", "."],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout
+
+
+def dependency_names(
+    scenario: CommunicationScenario, agent: AgentSpec
+) -> tuple[str, ...]:
+    dependencies = {
+        "docs_pair": {
+            "ReviewWriter": ("StatusWriter",),
+        },
+        "retry_pair": {
+            "RetryVerifier": ("RetryImplementer",),
+        },
+        "permissions_trio": {
+            "VerifierAgent": ("ServerAgent", "UiAgent"),
+        },
+        "incident_trio": {
+            "IncidentSummarizer": ("LogReader", "ConfigReader"),
+        },
+        "release_quad": {
+            "SmokeAgent": ("VersionAgent",),
+            "SummaryAgent": ("VersionAgent",),
+        },
+    }
+    return dependencies.get(scenario.scenario_id, {}).get(agent.name, ())
+
+
+def profile_guidance(profile: str) -> str:
+    parts = []
+    if profile in {"communication", "dependency_prompt", "dependency_structured"}:
+        parts.append(COMMUNICATION_GUIDANCE)
+    if profile in {"dependency_prompt", "dependency_structured"}:
+        parts.append(DEPENDENCY_GUIDANCE)
+    return "\n".join(parts)
+
+
+def structured_brief(scenario: CommunicationScenario, agent: AgentSpec) -> str:
+    dependencies = dependency_names(scenario, agent)
+    dependency_lines = []
+    for dependency_name in dependencies:
+        dependency_agent = next(
+            peer for peer in scenario.agents if peer.name == dependency_name
+        )
+        dependency_lines.append(f"- {dependency_agent.name}: {dependency_agent.lane}")
+    if not dependency_lines:
+        dependency_lines.append("- none explicit")
+
+    other_lanes = [
+        f"- {peer.name}: {peer.lane}"
+        for peer in scenario.agents
+        if peer.name != agent.name
+    ]
+    return "\n".join(
+        [
+            "Team lane structure:",
+            f"- Your lane owner name: {agent.name}",
+            f"- Your lane: {agent.lane}",
+            "- Other active lanes:",
+            *other_lanes,
+            "- Dependency-sensitive lanes for your work:",
+            *dependency_lines,
+            "Use this structure to decide which Hollywood updates and files matter before finalizing.",
+        ]
+    )
+
+
+def agent_prompt(
+    scenario: CommunicationScenario,
+    agent: AgentSpec,
+    *,
+    profile: str,
+) -> str:
+    teammates = ", ".join(
+        peer.name for peer in scenario.agents if peer.name != agent.name
+    )
+    guidance = profile_guidance(profile)
+    if guidance:
+        guidance += "\n"
+    lane_text = (
+        structured_brief(scenario, agent)
+        if profile in {"structured_brief", "dependency_structured"}
+        else f"Your lane:\n{agent.lane}"
+    )
+    return f"""{guidance}You are one member of a Losangelex team attached to the same Hollywood room.
+
+Scenario: {scenario.description}
+Your agent name: {agent.name}
+Other team members: {teammates}
+
+{lane_text}
+
+Work only inside this scratch workspace. Keep the change minimal, avoid overlapping
+edits, and use normal Losangelex/Hollywood team behavior.
+"""
+
+
+def expected_matches(workspace: Path, scenario: CommunicationScenario) -> bool:
+    expected: dict[str, list[str]] = {}
+    for agent in scenario.agents:
+        for relative, substrings in agent.expected.items():
+            expected.setdefault(relative, []).extend(substrings)
+    for relative, substrings in expected.items():
+        path = workspace / relative
+        if not path.exists():
+            return False
+        folded = path.read_text(encoding="utf-8").casefold()
+        if any(substring.casefold() not in folded for substring in substrings):
+            return False
+    return True
+
+
+def message_body(message: dict[str, Any]) -> str:
+    return str(message.get("body") or "")
+
+
+def message_sender(message: dict[str, Any]) -> str:
+    return str(message.get("sender_id") or message.get("senderId") or "")
+
+
+def message_kind(message: dict[str, Any]) -> str:
+    return str(message.get("message_kind") or message.get("messageKind") or "").lower()
+
+
+def classify_messages(
+    *,
+    agents: list[dict[str, str]],
+    room_messages: list[dict[str, Any]],
+    notification_summary: dict[str, Any],
+    workspace: Path,
+    scenario: CommunicationScenario,
+    diff: str,
+) -> dict[str, Any]:
+    thread_to_name = {agent["threadId"]: agent["name"] for agent in agents}
+    messages_by_agent: dict[str, list[str]] = {agent["name"]: [] for agent in agents}
+    message_kinds: Counter[str] = Counter()
+    unknown_sender_count = 0
+
+    for message in room_messages:
+        sender = message_sender(message)
+        name = thread_to_name.get(sender)
+        message_kinds[message_kind(message)] += 1
+        if name is None:
+            unknown_sender_count += 1
+            continue
+        messages_by_agent[name].append(message_body(message))
+
+    start_like: dict[str, bool] = {}
+    finish_like: dict[str, bool] = {}
+    for agent in agents:
+        name = agent["name"]
+        bodies = "\n".join(messages_by_agent[name]).casefold()
+        start_like[name] = any(term in bodies for term in START_TERMS)
+        finish_like[name] = any(term in bodies for term in FINISH_TERMS)
+
+    tool_calls = (
+        notification_summary.get("coordinationToolSummary", {})
+        .get("toolCalls", {})
+        .get("byTool", {})
+    )
+    tool_errors = (
+        notification_summary.get("coordinationToolSummary", {})
+        .get("errorCalls", {})
+        .get("total", 0)
+    )
+    agents_with_messages = sum(1 for bodies in messages_by_agent.values() if bodies)
+    agents_with_start = sum(1 for value in start_like.values() if value)
+    agents_with_finish = sum(1 for value in finish_like.values() if value)
+    expected_content_matches = expected_matches(workspace, scenario)
+    complete = expected_content_matches and bool(diff.strip()) and tool_errors == 0
+
+    return {
+        "complete": complete,
+        "expectedContentMatches": expected_content_matches,
+        "workspaceChanged": bool(diff.strip()),
+        "roomMessageCount": len(room_messages),
+        "messageKinds": dict(message_kinds),
+        "unknownSenderCount": unknown_sender_count,
+        "agentsWithMessages": agents_with_messages,
+        "agentsWithStartLikeMessage": agents_with_start,
+        "agentsWithFinishLikeMessage": agents_with_finish,
+        "allAgentsMessaged": agents_with_messages == len(agents),
+        "allAgentsStartLike": agents_with_start == len(agents),
+        "allAgentsFinishLike": agents_with_finish == len(agents),
+        "messagesByAgent": messages_by_agent,
+        "startLikeByAgent": start_like,
+        "finishLikeByAgent": finish_like,
+        "hollywoodSendCalls": int(tool_calls.get("hollywood_send", 0)),
+        "coordinationToolErrors": tool_errors,
+    }
+
+
+def run_single(
+    *,
+    scenario: CommunicationScenario,
+    profile: str,
+    codex: Path,
+    model: str,
+    output_dir: Path,
+    codex_home_source: Path,
+    startup_timeout_seconds: int,
+    turn_timeout_seconds: int,
+) -> dict[str, Any]:
+    started = time.time()
+    run_id = uuid.uuid4().hex[:8]
+    run_dir = output_dir / profile / scenario.scenario_id / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    workspace = run_dir / "workspace"
+    fresh_workspace(workspace, scenario.files)
+
+    with (
+        managed_hollywood_server(run_dir) as hollywood,
+        managed_debug_app_server(
+            codex=codex,
+            output_dir=run_dir,
+            codex_home_source=codex_home_source,
+            candidate=True,
+            hollywood_url=str(hollywood["url"]),
+            start_timeout_seconds=startup_timeout_seconds,
+        ) as app_server,
+    ):
+        room = f"repo/comm-{scenario.scenario_id}-{run_id}"
+        conn = JsonRpcWs(app_server.url, request_timeout=turn_timeout_seconds + 30)
+        agents: list[dict[str, str]] = []
+        try:
+            initialize(conn)
+            for agent in scenario.agents:
+                thread_id = start_agent(
+                    conn,
+                    workspace=str(workspace),
+                    hollywood_url=str(hollywood["url"]),
+                    room=room,
+                    observed_rooms=[room],
+                    wake_rooms=[room],
+                    name=f"{agent.name}-{run_id}",
+                    model=model,
+                    model_provider=DEFAULT_EVAL_MODEL_PROVIDER,
+                )
+                agents.append({"name": agent.name, "threadId": thread_id})
+
+            conn.drain(3)
+            for agent in scenario.agents:
+                prompt = agent_prompt(scenario, agent, profile=profile)
+                (run_dir / f"prompt-{agent.name}.txt").write_text(
+                    prompt,
+                    encoding="utf-8",
+                )
+                thread_id = next(
+                    item["threadId"] for item in agents if item["name"] == agent.name
+                )
+                send_turn(conn, thread_id, prompt)
+
+            tracked_threads = {agent["threadId"] for agent in agents}
+            wait_for_tracked_turns(
+                conn,
+                tracked_threads,
+                timeout_seconds=turn_timeout_seconds,
+            )
+            conn.drain(8)
+            thread_states = {
+                agent["threadId"]: read_thread_state(conn, agent["threadId"])
+                for agent in agents
+            }
+            notification_summary = summarize_notifications(
+                conn.notifications,
+                tracked_threads,
+            )
+            notifications = list(conn.notifications)
+        finally:
+            conn.close()
+
+        room_messages = fetch_room_messages(str(hollywood["url"]), room)
+
+    diff = workspace_diff(workspace)
+    score = classify_messages(
+        agents=agents,
+        room_messages=room_messages,
+        notification_summary=notification_summary,
+        workspace=workspace,
+        scenario=scenario,
+        diff=diff,
+    )
+    result = {
+        "profile": profile,
+        "scenarioId": scenario.scenario_id,
+        "description": scenario.description,
+        "teamSize": len(scenario.agents),
+        "model": model,
+        "runId": run_id,
+        "seconds": round(time.time() - started, 1),
+        "workspace": str(workspace),
+        "room": room,
+        "appServer": app_server.metadata(),
+        "hollywood": hollywood,
+        "agents": agents,
+        "threadStates": thread_states,
+        "notificationSummary": notification_summary,
+        "roomMessages": room_messages,
+        "workspaceDiff": diff,
+        "score": score,
+    }
+    (run_dir / "result.json").write_text(
+        json.dumps(result, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "room-messages.json").write_text(
+        json.dumps(room_messages, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "notifications.json").write_text(
+        json.dumps(notifications, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "notification-summary.json").write_text(
+        json.dumps(notification_summary, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "workspace.diff").write_text(diff, encoding="utf-8")
+    return result
+
+
+def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
+    by_profile: dict[str, list[dict[str, Any]]] = {}
+    for result in results:
+        by_profile.setdefault(result["profile"], []).append(result)
+    summary: dict[str, Any] = {}
+    for profile, records in sorted(by_profile.items()):
+        count = len(records)
+        summary[profile] = {
+            "runs": count,
+            "complete": sum(1 for record in records if record["score"]["complete"]),
+            "allAgentsMessaged": sum(
+                1 for record in records if record["score"]["allAgentsMessaged"]
+            ),
+            "allAgentsStartLike": sum(
+                1 for record in records if record["score"]["allAgentsStartLike"]
+            ),
+            "allAgentsFinishLike": sum(
+                1 for record in records if record["score"]["allAgentsFinishLike"]
+            ),
+            "avgRoomMessages": (
+                sum(record["score"]["roomMessageCount"] for record in records) / count
+                if count
+                else 0
+            ),
+            "avgHollywoodSendCalls": (
+                sum(record["score"]["hollywoodSendCalls"] for record in records) / count
+                if count
+                else 0
+            ),
+            "toolErrors": sum(
+                record["score"]["coordinationToolErrors"] for record in records
+            ),
+        }
+    return summary
+
+
+def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
+    summary = aggregate(results)
+    lines = [
+        "# Hollywood Communication Tendency Evaluation",
+        "",
+        f"Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+        "",
+        "This live model-in-the-loop evaluation starts isolated Hollywood and app-server processes, assigns five scratch tasks across team sizes 2, 3, and 4, and scores whether agents send relevant work-state messages in Hollywood.",
+        "",
+        "## Summary",
+        "",
+        "| Profile | Runs | Complete | All agents messaged | All start-like | All finish-like | Avg room messages | Avg send calls | Tool errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for profile, stats in sorted(summary.items()):
+        lines.append(
+            f"| {profile} | {stats['runs']} | {stats['complete']} | "
+            f"{stats['allAgentsMessaged']} | {stats['allAgentsStartLike']} | "
+            f"{stats['allAgentsFinishLike']} | {stats['avgRoomMessages']:.1f} | "
+            f"{stats['avgHollywoodSendCalls']:.1f} | {stats['toolErrors']} |"
+        )
+
+    lines.extend(["", "## Runs", ""])
+    for result in results:
+        score = result["score"]
+        lines.extend(
+            [
+                f"### {result['profile']} / {result['scenarioId']} / {result['runId']}",
+                "",
+                f"- Team size: `{result['teamSize']}`",
+                f"- Complete: `{score['complete']}`",
+                f"- Room messages: `{score['roomMessageCount']}`",
+                f"- Hollywood send calls: `{score['hollywoodSendCalls']}`",
+                f"- Agents with messages: `{score['agentsWithMessages']}/{result['teamSize']}`",
+                f"- Agents with start-like messages: `{score['agentsWithStartLikeMessage']}/{result['teamSize']}`",
+                f"- Agents with finish-like messages: `{score['agentsWithFinishLikeMessage']}/{result['teamSize']}`",
+                f"- Tool errors: `{score['coordinationToolErrors']}`",
+                f"- Result: `{result['profile']}/{result['scenarioId']}/{result['runId']}/result.json`",
+                "",
+            ]
+        )
+        for agent in result["agents"]:
+            name = agent["name"]
+            bodies = score["messagesByAgent"].get(name, [])
+            preview = " | ".join(body.replace("\n", " ")[:160] for body in bodies)
+            lines.append(f"  - `{name}` messages: {preview or '`none`'}")
+        lines.append("")
+
+    (output_dir / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--codex", type=Path, default=DEFAULT_CODEX)
+    parser.add_argument("--model", default="gpt-5.5")
+    parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
+    parser.add_argument(
+        "--campaign-name",
+        default=f"communication-tendency-{time.strftime('%Y-%m-%d-%H%M%S')}",
+    )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        choices=PROFILE_CHOICES,
+        help="Prompt profile(s) to run. Defaults to current and communication.",
+    )
+    parser.add_argument(
+        "--scenario",
+        action="append",
+        choices=sorted(SCENARIOS),
+        help="Scenario(s) to run. Defaults to all five.",
+    )
+    parser.add_argument(
+        "--codex-home-source", type=Path, default=Path.home() / ".codex"
+    )
+    parser.add_argument("--startup-timeout-seconds", type=int, default=45)
+    parser.add_argument("--turn-timeout-seconds", type=int, default=240)
+    args = parser.parse_args()
+
+    ensure_default_codex(args.codex)
+    profiles = args.profile or ["current", "communication"]
+    scenarios = [SCENARIOS[name] for name in (args.scenario or sorted(SCENARIOS))]
+    output_dir = args.out_root / args.campaign_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    prepare_minimal_codex_home(
+        codex_home=output_dir / "codex-home-check",
+        source_home=args.codex_home_source,
+        output_dir=output_dir,
+    )
+
+    results = []
+    for scenario in scenarios:
+        for profile in profiles:
+            result = run_single(
+                scenario=scenario,
+                profile=profile,
+                codex=args.codex,
+                model=args.model,
+                output_dir=output_dir,
+                codex_home_source=args.codex_home_source,
+                startup_timeout_seconds=args.startup_timeout_seconds,
+                turn_timeout_seconds=args.turn_timeout_seconds,
+            )
+            results.append(result)
+            print(
+                json.dumps(
+                    {
+                        "profile": result["profile"],
+                        "scenarioId": result["scenarioId"],
+                        "teamSize": result["teamSize"],
+                        "runId": result["runId"],
+                        "score": result["score"],
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+
+    (output_dir / "results.json").write_text(
+        json.dumps(results, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    write_report(output_dir, results)
+    print(f"wrote {output_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

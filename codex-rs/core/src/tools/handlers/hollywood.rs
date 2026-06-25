@@ -58,6 +58,18 @@ const MAX_TEAM_LAUNCH_AGENTS: usize = 8;
 const MAX_TEAM_LAUNCH_AGENT_NAME_CHARS: usize = 80;
 const MAX_TEAM_LAUNCH_TASK_CHARS: usize = 8_000;
 const APP_SERVER_REQUEST_TIMEOUT: StdDuration = StdDuration::from_secs(120);
+const LOSANGELEX_TEAM_TASK_GUIDANCE: &str = "Losangelex team communication expectation:
+- Hollywood is the shared working room for this team, not just an emergency channel.
+- Before starting your lane, send one concise Hollywood message in your own voice saying what you are taking up and when you expect to report back.
+- If you change direction, become blocked, need attention, or finish, send a concise Hollywood update before or alongside your final answer.
+- These work-state messages are not chatter; they are how teammates know the team is active.
+
+Dependency-aware communication expectation:
+- If your lane verifies, summarizes, reviews, or integrates another lane, do not finalize from stale assumptions.
+- Before finishing dependency-sensitive work, read recent Hollywood updates and inspect the relevant workspace files after the producing lane has had a chance to report.
+- If the dependency has not reported yet, wait briefly or state exactly what evidence you used and what remains uncertain.
+- Your finish message should name the dependency evidence you relied on when another lane affects your result.
+";
 
 #[derive(Deserialize)]
 struct HollywoodReadArgs {
@@ -1065,6 +1077,7 @@ async fn launch_losangelex_peer(
         )
         .await?;
     if request.start_turns {
+        let task_text = launched_peer_task_prompt(request.peer.task.as_str());
         client
             .request(
                 "turn/start",
@@ -1073,7 +1086,7 @@ async fn launch_losangelex_peer(
                     "input": [
                         {
                             "type": "text",
-                            "text": request.peer.task.as_str(),
+                            "text": task_text.as_str(),
                         }
                     ],
                 }),
@@ -1086,6 +1099,13 @@ async fn launch_losangelex_peer(
         thread_id,
         turn_started: request.start_turns,
     })
+}
+
+fn launched_peer_task_prompt(task: &str) -> String {
+    if task.contains("Losangelex team communication expectation:") {
+        return task.to_string();
+    }
+    format!("{LOSANGELEX_TEAM_TASK_GUIDANCE}\n{task}")
 }
 
 fn thread_start_params(request: &PeerLaunchRequest<'_>) -> Value {
@@ -1648,5 +1668,25 @@ mod tests {
                 "modelProvider": "openai",
             })
         );
+    }
+
+    #[test]
+    fn launched_peer_task_prompt_adds_team_communication_expectations() {
+        let prompt = launched_peer_task_prompt("Run focused verification.");
+
+        assert!(prompt.starts_with("Losangelex team communication expectation:"));
+        assert!(prompt.contains("Hollywood is the shared working room"));
+        assert!(prompt.contains("These work-state messages are not chatter"));
+        assert!(prompt.contains("Dependency-aware communication expectation:"));
+        assert!(prompt.contains("do not finalize from stale assumptions"));
+        assert!(prompt.contains("Your finish message should name the dependency evidence"));
+        assert!(prompt.ends_with("Run focused verification."));
+    }
+
+    #[test]
+    fn launched_peer_task_prompt_does_not_duplicate_prepared_guidance() {
+        let task = format!("{LOSANGELEX_TEAM_TASK_GUIDANCE}\nRun focused verification.");
+
+        assert_eq!(launched_peer_task_prompt(&task), task);
     }
 }
