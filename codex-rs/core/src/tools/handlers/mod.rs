@@ -1,7 +1,9 @@
 pub(crate) mod agent_jobs;
 pub(crate) mod agent_jobs_spec;
 pub(crate) mod apply_patch;
+mod apply_patch_collaboration;
 pub(crate) mod apply_patch_spec;
+pub(crate) mod collaborative_edit;
 pub(crate) mod coordination;
 mod current_time;
 mod dynamic;
@@ -60,6 +62,7 @@ pub(crate) use crate::tools::code_mode::CodeModeWaitHandler;
 pub use apply_patch::ApplyPatchHandler;
 use codex_protocol::models::AdditionalPermissionProfile;
 use codex_protocol::protocol::AskForApproval;
+pub use collaborative_edit::CollaborativeEditPlanHandler;
 pub use coordination::CoordinationHandler;
 pub use current_time::CurrentTimeHandler;
 pub use dynamic::DynamicToolHandler;

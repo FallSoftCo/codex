@@ -20,6 +20,7 @@ pub(super) struct ListenerTaskContext {
     pub(super) thread_list_state_permit: Arc<Semaphore>,
     pub(super) fallback_model_provider: String,
     pub(super) codex_home: PathBuf,
+    pub(super) state_db: Option<StateDbHandle>,
     pub(super) skills_watcher: Arc<SkillsWatcher>,
 }
 
@@ -278,6 +279,7 @@ pub(super) async fn ensure_listener_task_running(
         thread_list_state_permit,
         fallback_model_provider,
         codex_home,
+        state_db: _,
         ..
     } = listener_task_context;
     let outgoing_for_task = Arc::clone(&outgoing);

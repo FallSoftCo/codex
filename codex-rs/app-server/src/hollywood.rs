@@ -33,6 +33,7 @@ const HOLLYWOOD_CONTEXT_OPEN_TAG: &str = "<hollywood_context>";
 const HOLLYWOOD_CONTEXT_CLOSE_TAG: &str = "</hollywood_context>";
 const TEAM_WORK_STATE_GUIDANCE: &str = "In a Losangelex team, concise work-state messages such as taking a lane, expected report-back point, blocker, changed direction, or finished result are team state, not routine chatter.";
 const DEPENDENCY_AWARE_GUIDANCE: &str = "If your lane verifies, reviews, summarizes, integrates, or otherwise depends on another lane, read recent Hollywood updates and inspect the relevant workspace files before finalizing; do not infer from silence that no peer work happened. When finishing dependency-sensitive work, name the peer update, room evidence, or file evidence you relied on, and state any unresolved uncertainty instead of presenting stale assumptions as verified.";
+const COLLABORATIVE_EDITING_GUIDANCE: &str = "Treat same-file work as a collaboration opportunity, not a reason to abandon parallelism. If another agent owns or needs an overlapping file, coordinate a collaborative edit plan in Hollywood before editing: name the file, slice/function/section, intended hunk, edit order or handoff, integrator, and report-back point. Reread the file and current diff immediately before patching, keep hunks narrow, and after applying broadcast the exact slice changed plus any merge risk. If a durable path claim blocks you, ask the owner to apply your proposed patch, hand off or release the claim, or agree on a serial handoff instead of silently doing unrelated work.";
 
 pub(crate) const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 pub(crate) const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
@@ -99,6 +100,55 @@ impl HollywoodConfig {
             room,
             observed_rooms,
             wake_rooms: parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok()),
+            attention: HollywoodAttentionSettings {
+                mode,
+                include_at_all: true,
+                include_at_room: true,
+            },
+        })
+    }
+
+    pub(crate) fn auto_attach_for_cwd(cwd: &Path) -> Option<Self> {
+        let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
+        let has_explicit_config =
+            env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
+        let enabled = auto_attach
+            .as_deref()
+            .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
+            .unwrap_or(has_explicit_config);
+        if !enabled {
+            return None;
+        }
+
+        let mode = match env::var("HOLLYWOOD_ATTENTION_MODE")
+            .unwrap_or_else(|_| "focused".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "ambient" => HollywoodAttentionMode::Ambient,
+            "broad" => HollywoodAttentionMode::Broad,
+            _ => HollywoodAttentionMode::Focused,
+        };
+
+        let room = default_hollywood_room_for_cwd(cwd);
+        let env_room = env::var("HOLLYWOOD_ROOM").ok();
+        let mut wake_rooms = parse_room_list(env::var("HOLLYWOOD_WAKE_ROOMS").ok());
+        if wake_rooms.is_empty()
+            || env_room
+                .as_ref()
+                .is_some_and(|env_room| env_room != &room && wake_rooms == [env_room.clone()])
+        {
+            wake_rooms = vec![room.clone()];
+        }
+
+        Some(Self {
+            url: env::var("HOLLYWOOD_URL").unwrap_or_else(|_| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room: room.clone(),
+            observed_rooms: default_hollywood_observed_rooms(
+                &room,
+                parse_room_list(env::var("HOLLYWOOD_OBSERVED_ROOMS").ok()),
+            ),
+            wake_rooms,
             attention: HollywoodAttentionSettings {
                 mode,
                 include_at_all: true,
@@ -736,7 +786,7 @@ pub(crate) fn format_hollywood_context_message(
         "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.",
         TEAM_WORK_STATE_GUIDANCE,
         "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.",
-        "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.",
+        COLLABORATIVE_EDITING_GUIDANCE,
         DEPENDENCY_AWARE_GUIDANCE,
         "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.",
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.",
@@ -778,7 +828,9 @@ pub(crate) fn format_hollywood_context_message(
             "relay_assigned_scope_to_room": true,
             "check_existing_scope_claims_before_editing": true,
             "claim_exact_paths_or_modules_before_editing": true,
-            "avoid_overlapping_edits_until_resolved": true,
+            "avoid_blind_overlapping_edits": true,
+            "same_file_collaboration_allowed_with_explicit_plan": true,
+            "resolve_overlapping_edits_with_collaborative_edit_plan": true,
             "relay_material_conclusions_to_room": true,
             "start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team": true,
             "do_not_substitute_codex_subagents_for_losangelex_team": true,
@@ -833,13 +885,14 @@ pub(crate) fn startup_handshake_message(
         ""
     };
     format!(
-        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate.{} Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own; if another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood. When the user asks you to work with teammates, peers, or other existing agents, coordinate with already attached Hollywood sessions first. If the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request. Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar subtasks. {} {} {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
+        "Startup protocol: you have just attached to the local Hollywood primary room `{}` as session identities [{}].{}{} {} If you do not yet have a concrete user-assigned task after startup, stay available and wait for explicit tasking instead of asking the user an open-ended readiness question. After the user gives you concrete tasking, send one concise room update relaying your assigned scope or ownership so other agents can coordinate.{} Make scope claims concrete by naming exact files, modules, directories, or narrow globs you own. {} When the user asks you to work with teammates, peers, or other existing agents, coordinate with already attached Hollywood sessions first. If the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request. Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar subtasks. {} {} {} When your scope changes or you hand work off, send a follow-up update reflecting the new ownership. When you reach a concrete diagnosis, decision, or verification result that materially affects peer work, send a concise room update before or alongside your user-facing answer so other sessions can converge on the same conclusion. If another agent later posts an explicit final QA or room-closure signal saying the gate is green and the room can stand down, do not run redundant local confirmation or send another closure update unless you still own unresolved exact scope or were directly asked to verify; end your turn promptly instead. If autonomous Hollywood follow-up later finds no new state to report, do not send a user-facing no-op message; stay silent unless something changed, and if you must acknowledge room state, keep it to a compact status tag. Use explicit room-wide broadcasts sparingly for presence, scope changes, blockers, handoffs, major completion updates, material conclusions that peers should know, and discovery-oriented coordination where any relevant idle agent should notice. Use @mentions for direct requests, replies, and anything that should reliably get another agent's attention. If you see an unmentioned room message that is plainly about your current repo, ownership, or specialized domain, proactively reply even without being @mentioned.",
         config.room,
         identities,
         observed,
         name_guidance,
         startup_guidance,
         collaboration_first_guidance,
+        COLLABORATIVE_EDITING_GUIDANCE,
         durable_coordination_handshake_guidance(state_db_available),
         TEAM_WORK_STATE_GUIDANCE,
         DEPENDENCY_AWARE_GUIDANCE,
@@ -1207,6 +1260,7 @@ fn hollywood_attention_mode_name(mode: HollywoodAttentionMode) -> String {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use std::fs;
 
     struct EnvGuard {
         key: &'static str,
@@ -1682,6 +1736,8 @@ mod tests {
         assert!(message.contains("do not substitute Codex subagents"));
         assert!(message.contains("not routine chatter"));
         assert!(message.contains("dependency-sensitive work"));
+        assert!(message.contains("collaborative edit plan"));
+        assert!(message.contains("same-file work as a collaboration opportunity"));
     }
 
     #[test]
@@ -1736,9 +1792,16 @@ mod tests {
         assert!(
             message.contains("\"solo_execution_is_for_small_local_or_unsplittable_work\":true")
         );
+        assert!(message.contains("\"avoid_blind_overlapping_edits\":true"));
+        assert!(message.contains("\"same_file_collaboration_allowed_with_explicit_plan\":true"));
+        assert!(
+            message.contains("\"resolve_overlapping_edits_with_collaborative_edit_plan\":true")
+        );
         assert!(message.contains("Collaboration-first policy"));
         assert!(message.contains("not routine chatter"));
         assert!(message.contains("do not infer from silence"));
+        assert!(message.contains("same-file work as a collaboration opportunity"));
+        assert!(!message.contains("avoid_overlapping_edits_until_resolved"));
     }
 
     #[test]
@@ -1836,6 +1899,29 @@ mod tests {
         assert_eq!(config.attention.mode, HollywoodAttentionMode::Ambient);
         assert!(config.attention.include_at_all);
         assert!(config.attention.include_at_room);
+    }
+
+    #[test]
+    #[serial]
+    fn auto_attach_for_cwd_uses_thread_cwd_not_stale_daemon_room() {
+        let _auto_attach = EnvGuard::set("HOLLYWOOD_AUTO_ATTACH", Some("1"));
+        let _room = EnvGuard::set("HOLLYWOOD_ROOM", Some("repo/stale-daemon"));
+        let _observed = EnvGuard::set("HOLLYWOOD_OBSERVED_ROOMS", Some("main"));
+        let _wake = EnvGuard::set("HOLLYWOOD_WAKE_ROOMS", Some("repo/stale-daemon"));
+
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let repo_root = temp_dir.path().join("Fresh Workspace");
+        let nested = repo_root.join("app");
+        fs::create_dir_all(repo_root.join(".git")).expect("create git dir");
+        fs::write(repo_root.join(".git/HEAD"), "ref: refs/heads/main\n").expect("write HEAD");
+        fs::create_dir_all(&nested).expect("create nested dir");
+
+        let config =
+            HollywoodConfig::auto_attach_for_cwd(nested.as_path()).expect("auto attach config");
+
+        assert_eq!(config.room, "repo/fresh-workspace");
+        assert_eq!(config.observed_rooms, vec!["main".to_string()]);
+        assert_eq!(config.wake_rooms, vec!["repo/fresh-workspace".to_string()]);
     }
 
     #[test]

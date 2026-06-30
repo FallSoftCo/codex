@@ -20,6 +20,7 @@ from benchmark_token_usage import summarize_app_server_token_usage
 
 DEFAULT_CURRENT_APP_SERVER = Path.home() / ".codex/losangelex/current-app-server.json"
 COORDINATION_TOOL_NAMES = {
+    "collaborative_edit_plan",
     "coordination_act",
     "hollywood_read",
     "hollywood_send",

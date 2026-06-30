@@ -47,6 +47,12 @@ struct ThreadListFilters {
     parent_thread_id: Option<ThreadId>,
 }
 
+struct HollywoodRuntimeAttachContext<'a> {
+    thread_state_manager: &'a ThreadStateManager,
+    thread_watch_manager: &'a ThreadWatchManager,
+    fallback_state_db: Option<StateDbHandle>,
+}
+
 fn collect_resume_override_mismatches(
     request: &ThreadResumeParams,
     config_snapshot: &ThreadConfigSnapshot,
@@ -504,62 +510,19 @@ impl ThreadRequestProcessor {
         let thread_name = stored_thread_name
             .as_deref()
             .or(config_snapshot.thread_name.as_deref());
-        let registry_thread_name = thread_name.map(ToOwned::to_owned);
-
-        {
-            let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-            let mut thread_state = thread_state.lock().await;
-            thread_state
-                .hollywood
-                .attach(hollywood_config.clone(), "attached", None);
-            thread_state
-                .hollywood
-                .set_registry_thread_name(registry_thread_name);
-        }
-        thread
-            .set_hollywood_session_meta(Some((&hollywood_config).into()))
-            .await;
-        self.persist_thread_hollywood_metadata(thread_id, &thread, Some(&hollywood_config))
-            .await?;
-        thread
-            .inject_user_message_without_turn(format_hollywood_context_message(
-                thread_id,
-                thread_name,
-                &hollywood_config,
-                thread
-                    .state_db()
-                    .or_else(|| self.state_db.clone())
-                    .is_some(),
-            ))
-            .await;
-        let runtime_state = {
-            let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-            thread_state.lock().await.hollywood.clone()
-        };
-        let status = self
-            .thread_watch_manager
-            .loaded_status_for_thread(&thread_id.to_string())
-            .await;
-        let status_name = thread_status_name(&status);
-        if let Err(err) = publish_registry_snapshot(
-            &reqwest::Client::new(),
+        Self::attach_thread_hollywood_runtime(
+            HollywoodRuntimeAttachContext {
+                thread_state_manager: &self.thread_state_manager,
+                thread_watch_manager: &self.thread_watch_manager,
+                fallback_state_db: self.state_db.clone(),
+            },
             thread_id,
             &thread,
-            &hollywood_config,
-            &runtime_state,
-            &status,
+            hollywood_config,
+            thread_name,
+            /*inject_context*/ true,
         )
-        .await
-        {
-            warn!("failed to publish Hollywood registry attach for thread {thread_id}: {err}");
-        } else {
-            let thread_state = self.thread_state_manager.thread_state(thread_id).await;
-            thread_state
-                .lock()
-                .await
-                .hollywood
-                .note_registry_synced(Instant::now(), status_name);
-        }
+        .await?;
         self.try_attach_thread_listener(thread_id, vec![request_id.connection_id])
             .await;
         Ok(ThreadHollywoodAttachResponse {})
@@ -846,7 +809,22 @@ impl ThreadRequestProcessor {
         thread: &Arc<CodexThread>,
         hollywood_config: Option<&HollywoodConfig>,
     ) -> Result<(), JSONRPCErrorError> {
-        let Some(state_db) = thread.state_db().or_else(|| self.state_db.clone()) else {
+        Self::persist_thread_hollywood_metadata_with_state_db(
+            self.state_db.clone(),
+            thread_id,
+            thread,
+            hollywood_config,
+        )
+        .await
+    }
+
+    async fn persist_thread_hollywood_metadata_with_state_db(
+        fallback_state_db: Option<StateDbHandle>,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        hollywood_config: Option<&HollywoodConfig>,
+    ) -> Result<(), JSONRPCErrorError> {
+        let Some(state_db) = thread.state_db().or_else(|| fallback_state_db.clone()) else {
             return Ok(());
         };
         let persisted = hollywood_config.map(codex_protocol::protocol::HollywoodSessionMeta::from);
@@ -858,6 +836,78 @@ impl ThreadRequestProcessor {
                     "failed to persist Hollywood metadata for thread {thread_id}: {err}"
                 ))
             })?;
+        Ok(())
+    }
+
+    async fn attach_thread_hollywood_runtime(
+        context: HollywoodRuntimeAttachContext<'_>,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        hollywood_config: HollywoodConfig,
+        thread_name: Option<&str>,
+        inject_context: bool,
+    ) -> Result<(), JSONRPCErrorError> {
+        {
+            let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+            let mut thread_state = thread_state.lock().await;
+            thread_state
+                .hollywood
+                .attach(hollywood_config.clone(), "attached", None);
+            thread_state
+                .hollywood
+                .set_registry_thread_name(thread_name.map(ToOwned::to_owned));
+        }
+        thread
+            .set_hollywood_session_meta(Some((&hollywood_config).into()))
+            .await;
+        Self::persist_thread_hollywood_metadata_with_state_db(
+            context.fallback_state_db.clone(),
+            thread_id,
+            thread,
+            Some(&hollywood_config),
+        )
+        .await?;
+        if inject_context {
+            thread
+                .inject_user_message_without_turn(format_hollywood_context_message(
+                    thread_id,
+                    thread_name,
+                    &hollywood_config,
+                    thread
+                        .state_db()
+                        .or_else(|| context.fallback_state_db.clone())
+                        .is_some(),
+                ))
+                .await;
+        }
+        let runtime_state = {
+            let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+            thread_state.lock().await.hollywood.clone()
+        };
+        let status = context
+            .thread_watch_manager
+            .loaded_status_for_thread(&thread_id.to_string())
+            .await;
+        let status_name = thread_status_name(&status);
+        if let Err(err) = publish_registry_snapshot(
+            &reqwest::Client::new(),
+            thread_id,
+            thread,
+            &hollywood_config,
+            &runtime_state,
+            &status,
+        )
+        .await
+        {
+            warn!("failed to publish Hollywood registry attach for thread {thread_id}: {err}");
+        } else {
+            let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+            thread_state
+                .lock()
+                .await
+                .hollywood
+                .note_registry_synced(Instant::now(), status_name);
+        }
         Ok(())
     }
 
@@ -1259,6 +1309,7 @@ impl ThreadRequestProcessor {
             thread_list_state_permit: self.thread_list_state_permit.clone(),
             fallback_model_provider: self.config.model_provider_id.clone(),
             codex_home: self.config.codex_home.to_path_buf(),
+            state_db: self.state_db.clone(),
             skills_watcher: Arc::clone(&self.skills_watcher),
         }
     }
@@ -1359,6 +1410,7 @@ impl ThreadRequestProcessor {
             thread_list_state_permit: self.thread_list_state_permit.clone(),
             fallback_model_provider: self.config.model_provider_id.clone(),
             codex_home: self.config.codex_home.to_path_buf(),
+            state_db: self.state_db.clone(),
             skills_watcher: Arc::clone(&self.skills_watcher),
         };
         let request_trace = request_context.request_trace();
@@ -1541,6 +1593,8 @@ impl ThreadRequestProcessor {
         if !dynamic_tools.is_empty() {
             validate_dynamic_tools(&dynamic_tools).map_err(invalid_request)?;
         }
+        let auto_attach_hollywood_on_start =
+            !matches!(service_name.as_deref(), Some("losangelex-team"));
         // Count callable functions rather than top-level namespace containers.
         let dynamic_tool_count: usize = dynamic_tools
             .iter()
@@ -1557,7 +1611,7 @@ impl ThreadRequestProcessor {
         let create_thread_started_at = std::time::Instant::now();
         let NewThread {
             thread_id,
-            thread,
+            thread: codex_thread,
             session_configured,
             ..
         } = listener_task_context
@@ -1590,7 +1644,7 @@ impl ThreadRequestProcessor {
                 CodexErr::InvalidRequest(message) => invalid_request(message),
                 err => internal_error(format!("error creating thread: {err}")),
             })?;
-        let session_telemetry = thread.session_telemetry();
+        let session_telemetry = codex_thread.session_telemetry();
         session_telemetry.record_startup_phase(
             "thread_start_create_thread",
             create_thread_started_at.elapsed(),
@@ -1598,14 +1652,14 @@ impl ThreadRequestProcessor {
         );
 
         Self::set_app_server_client_info(
-            thread.as_ref(),
+            codex_thread.as_ref(),
             app_server_client_name,
             app_server_client_version,
         )
         .await?;
 
-        let instruction_sources = thread.legacy_instruction_sources().await;
-        let config_snapshot = thread
+        let instruction_sources = codex_thread.legacy_instruction_sources().await;
+        let config_snapshot = codex_thread
             .config_snapshot()
             .instrument(tracing::info_span!(
                 "app_server.thread_start.config_snapshot",
@@ -1637,6 +1691,47 @@ impl ThreadRequestProcessor {
             request_id.connection_id,
             "thread",
         );
+
+        if auto_attach_hollywood_on_start
+            && let Some(hollywood_config) =
+                HollywoodConfig::auto_attach_for_cwd(config_snapshot.cwd().as_path())
+        {
+            let thread_name = config_snapshot.thread_name.as_deref();
+            Self::attach_thread_hollywood_runtime(
+                HollywoodRuntimeAttachContext {
+                    thread_state_manager: &listener_task_context.thread_state_manager,
+                    thread_watch_manager: &listener_task_context.thread_watch_manager,
+                    fallback_state_db: listener_task_context.state_db.clone(),
+                },
+                thread_id,
+                &codex_thread,
+                hollywood_config.clone(),
+                thread_name,
+                /*inject_context*/ true,
+            )
+            .await?;
+            let thread_state = listener_task_context
+                .thread_state_manager
+                .thread_state(thread_id)
+                .await;
+            let runtime_state = thread_state.lock().await.hollywood.clone();
+            let status = listener_task_context
+                .thread_watch_manager
+                .loaded_status_for_thread(&thread_id.to_string())
+                .await;
+            thread.hollywood = Some(hollywood_session_state_from_runtime(
+                thread_id,
+                thread_name,
+                &hollywood_config,
+                &runtime_state,
+                hollywood_session_status_from_thread_status(&status),
+                hollywood_session_diagnostics_from_runtime(
+                    &runtime_state,
+                    /*active_turn*/ None,
+                    codex_thread.hollywood_obligation_count().await,
+                ),
+            ));
+        }
 
         listener_task_context
             .thread_watch_manager

@@ -16,6 +16,7 @@ use tokio::sync::Mutex;
 use crate::session::step_context::StepContext;
 use crate::session::tests::make_session_and_context;
 use crate::tools::context::ToolInvocation;
+use crate::tools::handlers::apply_patch_collaboration::apply_patch_collaboration_preflight;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::registry::PostToolUsePayload;
 use crate::tools::registry::PreToolUsePayload;
@@ -42,6 +43,19 @@ async fn invocation_for_payload(payload: ToolPayload) -> ToolInvocation {
         source: crate::tools::context::ToolCallSource::Direct,
         payload,
     }
+}
+
+async fn session_with_state_db() -> (
+    Arc<Session>,
+    Arc<crate::session::turn_context::TurnContext>,
+    Arc<codex_state::StateRuntime>,
+) {
+    let (mut session, turn) = make_session_and_context().await;
+    let state_db = codex_rollout::state_db::init(turn.config.as_ref())
+        .await
+        .expect("sqlite state db should initialize");
+    session.services.state_db = Some(Arc::clone(&state_db));
+    (Arc::new(session), Arc::new(turn), state_db)
 }
 
 #[tokio::test]
@@ -81,6 +95,129 @@ async fn post_tool_use_payload_uses_patch_input_and_tool_output() {
             tool_response: json!("Success. Updated files."),
         })
     );
+}
+
+#[tokio::test]
+async fn preflight_blocks_peer_claim_without_collaborative_edit_plan() {
+    let (session, turn, state_db) = session_with_state_db().await;
+    let claimed_by_peer = codex_protocol::ThreadId::new();
+    let file_path = turn.config.cwd.join("shared.rs").into_path_buf();
+    state_db
+        .claim_path_ownership(
+            claimed_by_peer,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("claim path");
+    let file_uri = PathUri::from_abs_path(
+        &AbsolutePathBuf::from_absolute_path(file_path).expect("absolute file path"),
+    );
+
+    let err = apply_patch_collaboration_preflight(session.as_ref(), &[file_uri])
+        .await
+        .expect_err("peer-owned file should require a collaborative plan");
+
+    let FunctionCallError::RespondToModel(message) = err else {
+        panic!("expected model-facing preflight error");
+    };
+    assert!(message.contains("collaborative_edit_plan"));
+    assert!(message.contains(claimed_by_peer.to_string().as_str()));
+}
+
+#[tokio::test]
+async fn preflight_allows_peer_claim_with_collaborative_edit_plan() {
+    let (session, turn, state_db) = session_with_state_db().await;
+    let claimed_by_peer = codex_protocol::ThreadId::new();
+    let file_path = turn.config.cwd.join("shared.rs").into_path_buf();
+    state_db
+        .claim_path_ownership(
+            claimed_by_peer,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("claim path");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-1".to_string(),
+            actor_thread_id: session.thread_id(),
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "validation helper".to_string(),
+            intent: "patch only the validation helper".to_string(),
+            peers: vec![claimed_by_peer.to_string()],
+            handoff: Some("I patch helper; peer reviews same file after".to_string()),
+            integrator: Some(claimed_by_peer.to_string()),
+            report_back: Some("after apply_patch".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record plan");
+    let file_uri = PathUri::from_abs_path(
+        &AbsolutePathBuf::from_absolute_path(file_path).expect("absolute file path"),
+    );
+
+    let context = apply_patch_collaboration_preflight(session.as_ref(), &[file_uri])
+        .await
+        .expect("plan should allow peer-owned file");
+
+    let output = context.append_notice("Success. Updated files.".to_string());
+    assert!(output.contains("Collaborative edit plan matched"));
+    assert!(output.contains("validation helper"));
+}
+
+#[tokio::test]
+async fn preflight_rejects_plan_that_omits_blocking_owner() {
+    let (session, turn, state_db) = session_with_state_db().await;
+    let claimed_by_peer = codex_protocol::ThreadId::new();
+    let file_path = turn.config.cwd.join("shared.rs").into_path_buf();
+    state_db
+        .claim_path_ownership(
+            claimed_by_peer,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("claim path");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-1".to_string(),
+            actor_thread_id: session.thread_id(),
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "validation helper".to_string(),
+            intent: "patch only the validation helper".to_string(),
+            peers: Vec::new(),
+            handoff: Some("I patch helper; peer reviews same file after".to_string()),
+            integrator: None,
+            report_back: Some("after apply_patch".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record plan");
+    let file_uri = PathUri::from_abs_path(
+        &AbsolutePathBuf::from_absolute_path(file_path).expect("absolute file path"),
+    );
+
+    let err = apply_patch_collaboration_preflight(session.as_ref(), &[file_uri])
+        .await
+        .expect_err("plan should name the blocking owner");
+
+    let FunctionCallError::RespondToModel(message) = err else {
+        panic!("expected model-facing preflight error");
+    };
+    assert!(message.contains("claim owned by"));
+    assert!(message.contains(claimed_by_peer.to_string().as_str()));
 }
 
 #[test]

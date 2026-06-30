@@ -69,6 +69,12 @@ Dependency-aware communication expectation:
 - Before finishing dependency-sensitive work, read recent Hollywood updates and inspect the relevant workspace files after the producing lane has had a chance to report.
 - If the dependency has not reported yet, wait briefly or state exactly what evidence you used and what remains uncertain.
 - Your finish message should name the dependency evidence you relied on when another lane affects your result.
+
+Collaborative editing expectation:
+- Same-file work is not automatically off-limits. If shared editing would be faster, safer, or higher quality, coordinate a collaborative edit plan in Hollywood.
+- Before editing a file another peer owns or needs, name your slice/function/section, intended hunk, edit order or handoff, integrator, and report-back point.
+- Reread the file and current diff immediately before applying a patch, keep hunks narrow, and after applying report the exact slice changed plus any merge risk.
+- If a durable path claim blocks you, ask the owner to apply your proposed patch, hand off or release the claim, or agree on a serial handoff instead of silently switching to unrelated work.
 ";
 
 #[derive(Deserialize)]
@@ -1680,6 +1686,9 @@ mod tests {
         assert!(prompt.contains("Dependency-aware communication expectation:"));
         assert!(prompt.contains("do not finalize from stale assumptions"));
         assert!(prompt.contains("Your finish message should name the dependency evidence"));
+        assert!(prompt.contains("Collaborative editing expectation:"));
+        assert!(prompt.contains("Same-file work is not automatically off-limits"));
+        assert!(prompt.contains("coordinate a collaborative edit plan"));
         assert!(prompt.ends_with("Run focused verification."));
     }
 

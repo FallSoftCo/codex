@@ -1,5 +1,6 @@
 mod agent_job;
 mod backfill_state;
+mod collaborative_edit;
 mod coordination;
 mod graph;
 mod log;
@@ -21,6 +22,9 @@ pub use agent_job::AgentJobProgress;
 pub use agent_job::AgentJobStatus;
 pub use backfill_state::BackfillState;
 pub use backfill_state::BackfillStatus;
+pub use collaborative_edit::CollaborativeEditPlan;
+pub use collaborative_edit::CollaborativeEditPlanCreateParams;
+pub use collaborative_edit::DEFAULT_COLLABORATIVE_EDIT_PLAN_LEASE_SECONDS;
 pub use coordination::CoordinationAct;
 pub use coordination::CoordinationActKind;
 pub use coordination::CoordinationTask;
@@ -96,6 +100,7 @@ pub use watcher::WatcherTriggerKind;
 
 pub(crate) use agent_job::AgentJobItemRow;
 pub(crate) use agent_job::AgentJobRow;
+pub(crate) use collaborative_edit::CollaborativeEditPlanRow;
 pub(crate) use coordination::CoordinationActRow;
 pub(crate) use coordination::CoordinationTaskRow;
 pub(crate) use coordination::epoch_seconds_to_datetime as coordination_epoch_seconds_to_datetime;

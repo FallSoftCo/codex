@@ -1,4 +1,5 @@
 use crate::tools::context::ToolInvocation;
+use crate::tools::handlers::CollaborativeEditPlanHandler;
 use crate::tools::handlers::CoordinationHandler;
 use crate::tools::handlers::HollywoodReadHandler;
 use crate::tools::handlers::HollywoodSendHandler;
@@ -29,6 +30,10 @@ pub(crate) fn append_losangelex_tool_executors(
     ));
 
     if state_db_available {
+        executors.push(losangelex_tool(
+            CollaborativeEditPlanHandler,
+            create_collaborative_edit_plan_tool(),
+        ));
         executors.push(losangelex_tool(
             CoordinationHandler::new("coordination_act"),
             create_coordination_act_tool(),
@@ -219,7 +224,7 @@ pub(crate) fn create_coordination_act_tool() -> ToolSpec {
             "claim_paths".to_string(),
             JsonSchema::array(
                 path_claim_schema.clone(),
-                Some("Optional exact ownership claims. For `accept`, these claims become active scope. For directed implementation `open_task`, they reserve exact scope for the awarded owner.".to_string()),
+                Some("Optional exact ownership claims. For `accept`, these claims become active scope. For directed implementation `open_task`, they reserve exact scope for the awarded owner. For same-file collaboration, pair the claim with a Hollywood edit plan, patch proposal, or serial handoff instead of treating the file as off-limits to peer input.".to_string()),
             ),
         ),
         (
@@ -243,6 +248,97 @@ pub(crate) fn create_coordination_act_tool() -> ToolSpec {
         strict: false,
         defer_loading: None,
         parameters: object_schema(properties, Some(vec!["action".to_string()])),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_collaborative_edit_plan_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "file".to_string(),
+            JsonSchema::string(Some(
+                "File path to edit. Use an absolute path or a path relative to the current cwd."
+                    .to_string(),
+            )),
+        ),
+        (
+            "slice".to_string(),
+            JsonSchema::string(Some(
+                "The narrow slice/function/section you intend to edit in this file.".to_string(),
+            )),
+        ),
+        (
+            "intent".to_string(),
+            JsonSchema::string(Some(
+                "The intended hunk or change shape. Keep this concrete enough that a peer can see where your patch belongs."
+                    .to_string(),
+            )),
+        ),
+        (
+            "peers".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some(
+                    "Peer session id, alias, or agent name involved in this shared edit."
+                        .to_string(),
+                )),
+                Some("Optional peers who own, review, integrate, or depend on this file.".to_string()),
+            ),
+        ),
+        (
+            "handoff".to_string(),
+            JsonSchema::string(Some(
+                "Optional edit order or handoff expectation, for example `I patch parser first; reviewer patches tests after`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "integrator".to_string(),
+            JsonSchema::string(Some(
+                "Optional peer or role responsible for integrating the shared file.".to_string(),
+            )),
+        ),
+        (
+            "report_back".to_string(),
+            JsonSchema::string(Some(
+                "Optional report-back point, for example `after apply_patch` or `after tests pass`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood room for this edit plan. Defaults to the attached room when available."
+                    .to_string(),
+            )),
+        ),
+        (
+            "notify_room".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, also post this plan to Hollywood for teammates. Defaults to true."
+                    .to_string(),
+            )),
+        ),
+        (
+            "lease_seconds".to_string(),
+            JsonSchema::number(Some(
+                "Optional active duration for this plan. Defaults to one hour.".to_string(),
+            )),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "collaborative_edit_plan".to_string(),
+        description: "Record a durable collaborative editing plan before applying a patch that touches a file another Losangelex peer owns or is also editing. Use this to make same-file collaboration first-class: name the file, slice/function/section, intended hunk, handoff/order, integrator, and report-back point. `apply_patch` checks these active plans when it sees peer-owned paths.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(
+            properties,
+            Some(vec![
+                "file".to_string(),
+                "slice".to_string(),
+                "intent".to_string(),
+            ]),
+        ),
         output_schema: None,
     })
 }
@@ -352,7 +448,7 @@ pub(crate) fn create_losangelex_team_launch_tool() -> ToolSpec {
             (
                 "task".to_string(),
                 JsonSchema::string(Some(
-                    "Concrete initial assignment for this peer. Include exact scope, expected output, and coordination expectations."
+                    "Concrete initial assignment for this peer. Include exact scope, expected output, and coordination expectations. For shared-file work, include the collaborative edit slice, handoff/integrator expectation, and report-back point."
                         .to_string(),
                 )),
             ),
@@ -457,7 +553,7 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
         (
             "text".to_string(),
             JsonSchema::string(Some(
-                "Message body to send to Hollywood. Use @mentions when you need another agent's attention, and make ownership claims concrete with exact files, modules, directories, or narrow globs."
+                "Message body to send to Hollywood. Use @mentions when you need another agent's attention, make ownership claims concrete with exact files, modules, directories, or narrow globs, and for shared-file edits name the slice/function/section, intended hunk, edit order or handoff, integrator, and report-back point."
                     .to_string(),
             )),
         ),

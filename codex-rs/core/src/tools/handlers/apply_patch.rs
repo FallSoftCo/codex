@@ -22,6 +22,7 @@ use crate::tools::context::boxed_tool_output;
 use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
+use crate::tools::handlers::apply_patch_collaboration::apply_patch_collaboration_preflight;
 use crate::tools::handlers::apply_patch_spec::create_apply_patch_freeform_tool;
 use crate::tools::handlers::resolve_tool_environment;
 use crate::tools::handlers::updated_hook_command;
@@ -406,11 +407,13 @@ impl ApplyPatchHandler {
                     )
                     .await
                     .unwrap_or_else(|_| patch_permissions_without_path_matching(&changes));
+                let collaboration =
+                    apply_patch_collaboration_preflight(session.as_ref(), &file_paths).await?;
                 match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                     .await
                 {
                     InternalApplyPatchInvocation::Output(item) => {
-                        let content = item?;
+                        let content = collaboration.append_notice(item?);
                         Ok(boxed_tool_output(ApplyPatchToolOutput::from_text(content)))
                     }
                     InternalApplyPatchInvocation::DelegateToRuntime(apply) => {
@@ -468,7 +471,8 @@ impl ApplyPatchHandler {
                             &call_id,
                             Some(&tracker),
                         );
-                        let content = emitter.finish(event_ctx, out, delta.as_ref()).await?;
+                        let content = collaboration
+                            .append_notice(emitter.finish(event_ctx, out, delta.as_ref()).await?);
                         Ok(boxed_tool_output(ApplyPatchToolOutput::from_text(content)))
                     }
                 }
@@ -569,11 +573,13 @@ pub(crate) async fn intercept_apply_patch(
                 )
                 .await
                 .unwrap_or_else(|_| patch_permissions_without_path_matching(&changes));
+            let collaboration =
+                apply_patch_collaboration_preflight(session.as_ref(), &approval_keys).await?;
             match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                 .await
             {
                 InternalApplyPatchInvocation::Output(item) => {
-                    let content = item?;
+                    let content = collaboration.append_notice(item?);
                     Ok(Some(FunctionToolOutput::from_text(content, Some(true))))
                 }
                 InternalApplyPatchInvocation::DelegateToRuntime(apply) => {
@@ -631,7 +637,8 @@ pub(crate) async fn intercept_apply_patch(
                         call_id,
                         tracker.as_ref().copied(),
                     );
-                    let content = emitter.finish(event_ctx, out, delta.as_ref()).await?;
+                    let content = collaboration
+                        .append_notice(emitter.finish(event_ctx, out, delta.as_ref()).await?);
                     Ok(Some(FunctionToolOutput::from_text(content, Some(true))))
                 }
             }

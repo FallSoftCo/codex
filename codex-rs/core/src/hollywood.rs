@@ -15,6 +15,8 @@ const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
 const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
 #[cfg(test)]
 const COLLABORATION_FIRST_DEBUG_ENV_VAR: &str = "LOSANGELEX_COLLABORATION_FIRST_DEBUG";
+#[cfg(test)]
+const COLLABORATIVE_EDITING_GUIDANCE: &str = "Treat same-file work as a collaboration opportunity, not a reason to abandon parallelism. If another agent owns or needs an overlapping file, coordinate a collaborative edit plan in Hollywood before editing: name the file, slice/function/section, intended hunk, edit order or handoff, integrator, and report-back point. Reread the file and current diff immediately before patching, keep hunks narrow, and after applying broadcast the exact slice changed plus any merge risk. If a durable path claim blocks you, ask the owner to apply your proposed patch, hand off or release the claim, or agree on a serial handoff instead of silently doing unrelated work.";
 const BASE32_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 
 static HOLLYWOOD_SESSION_CONFIG_OVERRIDE: LazyLock<RwLock<Option<Option<HollywoodSessionConfig>>>> =
@@ -203,7 +205,9 @@ fn runtime_context(
         "relay_assigned_scope_to_room".to_string(),
         "check_existing_scope_claims_before_editing".to_string(),
         "claim_exact_paths_or_modules_before_editing".to_string(),
-        "avoid_overlapping_edits_until_resolved".to_string(),
+        "avoid_blind_overlapping_edits".to_string(),
+        "same_file_collaboration_allowed_with_explicit_plan".to_string(),
+        "resolve_overlapping_edits_with_collaborative_edit_plan".to_string(),
         "use_hollywood_first_for_peer_coordination".to_string(),
         "start_app_server_hosted_peers_with_losangelex_team_launch_for_user_requested_team"
             .to_string(),
@@ -224,7 +228,7 @@ fn runtime_context(
         "Use sparse explicit room-wide broadcasts for presence, scope changes, blockers, handoffs, major completion updates, and discovery-oriented coordination. Explicit broadcasts can wake idle attached agents.".to_string(),
         "Use @mentions for direct requests, replies, and anything that should reliably wake another agent.".to_string(),
         "When you claim scope, make it concrete: name exact files, modules, directories, or narrow globs, and update or relinquish that claim when it changes.".to_string(),
-        "If another agent already owns an overlapping path, do not edit that path until the overlap is resolved in Hollywood.".to_string(),
+        COLLABORATIVE_EDITING_GUIDANCE.to_string(),
         "When the user asks you to work with teammates, peers, or other existing agents, use Hollywood coordination with attached Losangelex agents first.".to_string(),
         "When the user asks you to form or start a Losangelex team and suitable peers are not already attached, call `losangelex_team_launch` to start app-server-hosted Losangelex peer sessions; do not substitute Codex subagents for that team request.".to_string(),
         "Reserve Codex subagents only for parallelizing your own currently owned work into bounded sidecar tasks.".to_string(),
@@ -638,7 +642,26 @@ mod tests {
             context
                 .runtime
                 .startup_protocol
-                .contains(&"avoid_overlapping_edits_until_resolved".to_string())
+                .contains(&"avoid_blind_overlapping_edits".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"same_file_collaboration_allowed_with_explicit_plan".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .startup_protocol
+                .contains(&"resolve_overlapping_edits_with_collaborative_edit_plan".to_string())
+        );
+        assert!(
+            context
+                .runtime
+                .broadcast_guidance
+                .iter()
+                .any(|guidance| guidance.contains("same-file work as a collaboration opportunity"))
         );
     }
 

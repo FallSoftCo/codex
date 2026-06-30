@@ -1423,6 +1423,7 @@ impl TurnRequestProcessor {
             thread_list_state_permit: self.thread_list_state_permit.clone(),
             fallback_model_provider: self.config.model_provider_id.clone(),
             codex_home: self.config.codex_home.to_path_buf(),
+            state_db: None,
             skills_watcher: Arc::clone(&self.skills_watcher),
         }
     }

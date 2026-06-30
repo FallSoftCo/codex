@@ -60,6 +60,7 @@ use tracing::warn;
 
 mod agent_jobs;
 mod backfill;
+mod collaborative_edit;
 mod coordination;
 mod external_agent_config_imports;
 mod goals;
@@ -503,6 +504,10 @@ async fn reconcile_legacy_state_migration_versions(pool: &SqlitePool) -> anyhow:
         (39_i64, "agent completion watchers", 41_i64),
         (39_i64, "coordination tasks", 44_i64),
         (39_i64, "tester runs drop runtime thread fk", 49_i64),
+        // Some fork builds briefly used 49 for a coordination-task index that
+        // is not part of this migration set. Move it outside the embedded
+        // range so the current 49 can apply and the historical record remains.
+        (49_i64, "coordination tasks room status idx", 90049_i64),
         (38_i64, "watchers", 40_i64),
         (38_i64, "path claims", 43_i64),
         (37_i64, "tester runs drop runtime thread fk", 49_i64),
