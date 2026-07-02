@@ -33,6 +33,8 @@ use codex_extension_api::ExtensionDataInit;
 use codex_protocol::config_types::MultiAgentMode;
 use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
+use codex_protocol::models::ContentItem;
+use codex_protocol::models::ResponseItem;
 
 const THREAD_LIST_DEFAULT_LIMIT: usize = 25;
 const THREAD_LIST_MAX_LIMIT: usize = 100;
@@ -868,17 +870,29 @@ impl ThreadRequestProcessor {
         )
         .await?;
         if inject_context {
+            let text = format_hollywood_context_message(
+                thread_id,
+                thread_name,
+                &hollywood_config,
+                thread
+                    .state_db()
+                    .or_else(|| context.fallback_state_db.clone())
+                    .is_some(),
+            );
             thread
-                .inject_user_message_without_turn(format_hollywood_context_message(
-                    thread_id,
-                    thread_name,
-                    &hollywood_config,
-                    thread
-                        .state_db()
-                        .or_else(|| context.fallback_state_db.clone())
-                        .is_some(),
-                ))
-                .await;
+                .inject_response_items(vec![ResponseItem::Message {
+                    id: None,
+                    role: "developer".to_string(),
+                    content: vec![ContentItem::InputText { text }],
+                    phase: None,
+                    internal_chat_message_metadata_passthrough: None,
+                }])
+                .await
+                .map_err(|err| {
+                    internal_error(format!(
+                        "failed to inject Hollywood context for thread {thread_id}: {err}"
+                    ))
+                })?;
         }
         let runtime_state = {
             let thread_state = context.thread_state_manager.thread_state(thread_id).await;

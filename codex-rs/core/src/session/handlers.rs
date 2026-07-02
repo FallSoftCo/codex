@@ -15,7 +15,10 @@ use crate::session::TurnInput;
 use crate::session::session::Session;
 use crate::session::session::SessionSettingsUpdate;
 
+use crate::codex_thread::TryStartTurnIfIdleRejectionReason;
 use crate::config::Config;
+use crate::context::ContextualUserFragment;
+use crate::context::HollywoodMessage;
 use crate::review_prompts::resolve_review_request;
 use crate::session::spawn_review_thread;
 use crate::tasks::CompactTask;
@@ -31,6 +34,7 @@ use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::GuardianAssessmentEvent;
 use codex_protocol::protocol::GuardianAssessmentStatus;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::InterAgentCommunication;
 use codex_protocol::protocol::McpServerRefreshConfig;
 use codex_protocol::protocol::Op;
@@ -291,6 +295,23 @@ pub async fn inter_agent_communication(
     if trigger_turn {
         sess.maybe_start_turn_for_pending_work_with_sub_id(sub_id)
             .await;
+    }
+}
+
+/// Delivers Hollywood room traffic as collaboration context, not user input.
+pub async fn hollywood_input(sess: &Arc<Session>, sub_id: String, message: HollywoodInputMessage) {
+    sess.add_hollywood_obligation(&message).await;
+    let items = vec![ContextualUserFragment::into(HollywoodMessage::new(
+        &message,
+    ))];
+    if let Err(err) = sess.try_start_turn_if_idle(items).await {
+        let reason = err.reason();
+        sess.inject_no_new_turn(err.into_input(), /*current_turn_context*/ None)
+            .await;
+        if reason == TryStartTurnIfIdleRejectionReason::PendingTriggerTurn {
+            sess.maybe_start_turn_for_pending_work_with_sub_id(sub_id)
+                .await;
+        }
     }
 }
 
@@ -768,6 +789,10 @@ pub(super) async fn submission_loop(
                 }
                 Op::InterAgentCommunication { communication } => {
                     inter_agent_communication(&sess, sub.id.clone(), communication).await;
+                    false
+                }
+                Op::HollywoodInput { message } => {
+                    hollywood_input(&sess, sub.id.clone(), message).await;
                     false
                 }
                 Op::ExecApproval {

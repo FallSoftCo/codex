@@ -116,6 +116,7 @@ use codex_protocol::protocol::CompactedItem;
 use codex_protocol::protocol::ConversationAudioParams;
 use codex_protocol::protocol::CreditsSnapshot;
 use codex_protocol::protocol::GranularApprovalConfig;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::InterAgentCommunication;
 use codex_protocol::protocol::MultiAgentVersion;
@@ -9393,6 +9394,60 @@ async fn try_start_turn_if_idle_rejects_active_review_turn_without_injecting() {
         Vec::<TurnInput>::new(),
         sess.input_queue.get_pending_input(&sess.active_turn).await
     );
+
+    sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
+}
+
+#[tokio::test]
+async fn hollywood_input_is_developer_context_not_user_message() {
+    let (sess, tc, rx) = make_session_and_context_with_rx().await;
+    sess.spawn_task(
+        Arc::clone(&tc),
+        Vec::new(),
+        NeverEndingTask {
+            kind: TaskKind::Regular,
+            listen_to_cancellation_token: true,
+        },
+    )
+    .await;
+
+    super::handlers::hollywood_input(
+        &sess,
+        "hollywood-4483".to_string(),
+        HollywoodInputMessage {
+            message_id: 4483,
+            room: "main".to_string(),
+            sender_id: "peer".to_string(),
+            body: "Need a durable verification task owner.".to_string(),
+            mentions: Vec::new(),
+            attention: Some("broadcast".to_string()),
+            message_kind: Some("broadcast".to_string()),
+            obligation: Some("obligation".to_string()),
+            synthetic_brief: None,
+            requires_response: true,
+        },
+    )
+    .await;
+
+    let pending_input = sess.input_queue.get_pending_input(&sess.active_turn).await;
+    let [TurnInput::ResponseItem(ResponseItem::Message { role, content, .. })] =
+        pending_input.as_slice()
+    else {
+        panic!("expected one developer response item, got {pending_input:?}");
+    };
+    assert_eq!(role, "developer");
+    let [ContentItem::InputText { text }] = content.as_slice() else {
+        panic!("expected one text content item, got {content:?}");
+    };
+    assert!(text.contains("Hollywood coordination obligation"));
+    assert!(text.contains("<hollywood_message>"));
+
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event.msg, EventMsg::UserMessage(_)),
+            "Hollywood input must not be emitted as user input"
+        );
+    }
 
     sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
 }

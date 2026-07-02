@@ -1196,30 +1196,7 @@ impl Session {
         self: &Arc<Self>,
         message: codex_protocol::protocol::HollywoodInputMessage,
     ) -> CodexResult<()> {
-        self.add_hollywood_obligation(&message).await;
-        let mut text = String::new();
-        if let Some(instruction) = crate::session_prefix::hollywood_obligation_instruction(&message)
-        {
-            text.push_str(&instruction);
-            text.push_str("\n\n");
-        }
-        text.push_str(&crate::session_prefix::format_hollywood_message(&message));
-        handlers::user_input_or_turn_inner(
-            self,
-            format!("hollywood-{}", message.message_id),
-            Op::UserInput {
-                items: vec![UserInput::Text {
-                    text,
-                    text_elements: Vec::new(),
-                }],
-                final_output_json_schema: None,
-                responsesapi_client_metadata: None,
-                additional_context: Default::default(),
-                thread_settings: Default::default(),
-            },
-            /*client_user_message_id*/ None,
-        )
-        .await;
+        handlers::hollywood_input(self, format!("hollywood-{}", message.message_id), message).await;
         Ok(())
     }
 

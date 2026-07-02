@@ -75,7 +75,7 @@ pub(super) async fn poll_hollywood_for_thread(
                 continue;
             }
         };
-        let followup = select_hollywood_followup(&poll_result.messages)
+        let followup = select_hollywood_followup(&poll_result.messages, &config.room)
             .map(classified_message_to_hollywood_input);
 
         let should_start = {
@@ -154,12 +154,13 @@ pub(super) async fn poll_hollywood_for_thread(
     }
 }
 
-fn select_hollywood_followup(
-    messages: &[HollywoodClassifiedMessage],
-) -> Option<&HollywoodClassifiedMessage> {
+fn select_hollywood_followup<'a>(
+    messages: &'a [HollywoodClassifiedMessage],
+    primary_room: &str,
+) -> Option<&'a HollywoodClassifiedMessage> {
     messages
         .iter()
-        .filter(|message| should_start_hollywood_followup(message))
+        .filter(|message| should_start_hollywood_followup(message, primary_room))
         .min_by_key(|message| hollywood_followup_priority(message))
 }
 
@@ -178,22 +179,21 @@ fn hollywood_followup_priority(message: &HollywoodClassifiedMessage) -> (u8, i64
     (priority, notification.id)
 }
 
-fn should_start_hollywood_followup(message: &HollywoodClassifiedMessage) -> bool {
+fn should_start_hollywood_followup(
+    message: &HollywoodClassifiedMessage,
+    primary_room: &str,
+) -> bool {
     if message.self_authored {
+        return false;
+    }
+    let in_primary_room = message.notification_message.room == primary_room;
+    if !in_primary_room && !message_targets_this_session(message) {
         return false;
     }
     if message_requires_response(message) {
         return true;
     }
-    matches!(
-        message.attention,
-        HollywoodMessageAttention::Focused
-            | HollywoodMessageAttention::Broadcast
-            | HollywoodMessageAttention::Broad
-    ) && matches!(
-        message.notification_message.response_policy,
-        HollywoodResponsePolicy::Optional
-    )
+    false
 }
 
 fn message_requires_response(message: &HollywoodClassifiedMessage) -> bool {
@@ -201,7 +201,12 @@ fn message_requires_response(message: &HollywoodClassifiedMessage) -> bool {
     matches!(
         notification.response_policy,
         HollywoodResponsePolicy::Required
-    ) || message.mentioned
+    ) || message_targets_this_session(message)
+}
+
+fn message_targets_this_session(message: &HollywoodClassifiedMessage) -> bool {
+    let notification = &message.notification_message;
+    message.mentioned
         || matches!(notification.message_kind, HollywoodMessageKind::Direct)
         || notification.recipient_id.is_some()
 }

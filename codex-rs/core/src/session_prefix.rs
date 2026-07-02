@@ -1,11 +1,11 @@
 use codex_protocol::AgentPath;
 use codex_protocol::protocol::AgentStatus;
+#[cfg(test)]
 use codex_protocol::protocol::HollywoodInputMessage;
 use codex_utils_output_truncation::TruncationPolicy;
 use codex_utils_output_truncation::truncate_text;
 
 use crate::context::ContextualUserFragment;
-use crate::context::HollywoodMessage;
 use crate::context::InterAgentCompletionMessage;
 use crate::context::SubagentNotification;
 
@@ -59,10 +59,7 @@ pub(crate) fn format_subagent_context_line(
     }
 }
 
-pub(crate) fn format_hollywood_message(message: &HollywoodInputMessage) -> String {
-    HollywoodMessage::new(message).render()
-}
-
+#[cfg(test)]
 pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) -> Option<String> {
     if message.sender_id == "hollywood-system" {
         return match message.obligation.as_deref() {

@@ -61,10 +61,26 @@ fn classified_message(
     response_policy: HollywoodResponsePolicy,
     attention: HollywoodMessageAttention,
 ) -> HollywoodClassifiedMessage {
+    classified_message_in_room(
+        id,
+        "repo/losangelex",
+        message_kind,
+        response_policy,
+        attention,
+    )
+}
+
+fn classified_message_in_room(
+    id: i64,
+    room: &str,
+    message_kind: HollywoodMessageKind,
+    response_policy: HollywoodResponsePolicy,
+    attention: HollywoodMessageAttention,
+) -> HollywoodClassifiedMessage {
     HollywoodClassifiedMessage {
         notification_message: HollywoodMessage {
             id,
-            room: "repo/losangelex".to_string(),
+            room: room.to_string(),
             sender_id: Some(format!("agent-{id}")),
             recipient_id: None,
             message_kind,
@@ -96,19 +112,64 @@ fn select_hollywood_followup_prioritizes_required_direct_message() {
         ),
     ];
 
-    let selected = select_hollywood_followup(&messages).expect("selected followup");
+    let selected =
+        select_hollywood_followup(&messages, "repo/losangelex").expect("selected followup");
 
     assert_eq!(selected.notification_message.id, 4);
 }
 
 #[test]
-fn select_hollywood_followup_ignores_no_response_broadcast() {
+fn select_hollywood_followup_ignores_optional_broadcast() {
     let messages = vec![classified_message(
         1,
         HollywoodMessageKind::Broadcast,
-        HollywoodResponsePolicy::None,
+        HollywoodResponsePolicy::Optional,
         HollywoodMessageAttention::Broadcast,
     )];
 
-    assert!(select_hollywood_followup(&messages).is_none());
+    assert!(select_hollywood_followup(&messages, "repo/losangelex").is_none());
+}
+
+#[test]
+fn select_hollywood_followup_accepts_required_primary_room_broadcast() {
+    let messages = vec![classified_message(
+        1,
+        HollywoodMessageKind::Broadcast,
+        HollywoodResponsePolicy::Required,
+        HollywoodMessageAttention::Broadcast,
+    )];
+
+    let selected =
+        select_hollywood_followup(&messages, "repo/losangelex").expect("selected followup");
+
+    assert_eq!(selected.notification_message.id, 1);
+}
+
+#[test]
+fn select_hollywood_followup_ignores_required_observed_room_broadcast() {
+    let messages = vec![classified_message_in_room(
+        1,
+        "main",
+        HollywoodMessageKind::Broadcast,
+        HollywoodResponsePolicy::Required,
+        HollywoodMessageAttention::Broadcast,
+    )];
+
+    assert!(select_hollywood_followup(&messages, "repo/losangelex").is_none());
+}
+
+#[test]
+fn select_hollywood_followup_accepts_targeted_observed_room_message() {
+    let messages = vec![classified_message_in_room(
+        1,
+        "main",
+        HollywoodMessageKind::Direct,
+        HollywoodResponsePolicy::Optional,
+        HollywoodMessageAttention::Focused,
+    )];
+
+    let selected =
+        select_hollywood_followup(&messages, "repo/losangelex").expect("selected followup");
+
+    assert_eq!(selected.notification_message.id, 1);
 }
