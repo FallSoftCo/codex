@@ -34,6 +34,7 @@ use wiremock::matchers::query_param;
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
 const HOLLYWOOD_ROOM: &str = "repo/losangelex-product";
 const HOLLYWOOD_DIRECT_BODY: &str = "Please verify your Hollywood lane is active.";
+const HOLLYWOOD_COLLABORATIVE_EDIT_BODY: &str = "Collaborative edit plan: I own `src/shared/editor.rs`; please take slice `render_toolbar`, intended hunk `add disabled-state label`, edit order `after my toolbar refactor lands`, integrator `peer-session`, report-back `after apply_patch with exact slice changed and merge risk`.";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn hollywood_attach_lists_multiple_interactive_sessions() -> Result<()> {
@@ -239,6 +240,133 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hollywood_collaborative_edit_plan_is_model_visible_context() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let model_server = responses::start_mock_server().await;
+    let model_response = responses::sse(vec![
+        responses::ev_response_created("resp-1"),
+        responses::ev_assistant_message("msg-1", "acknowledged collaborative edit plan"),
+        responses::ev_completed("resp-1"),
+    ]);
+    let response_mock = responses::mount_sse_sequence(&model_server, vec![model_response]).await;
+    create_config_toml(codex_home.path(), &model_server.uri())?;
+
+    let hollywood_server = MockServer::start().await;
+    mount_hollywood_registry(&hollywood_server).await;
+
+    let mut app = TestAppServer::new(codex_home.path()).await?;
+    timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
+
+    let target = start_thread(&mut app).await?;
+    let bystander = start_thread(&mut app).await?;
+    mount_hollywood_direct_message_with_body(
+        &hollywood_server,
+        HOLLYWOOD_ROOM,
+        &target.thread.id,
+        HOLLYWOOD_COLLABORATIVE_EDIT_BODY,
+    )
+    .await;
+    mount_empty_hollywood_messages_after(&hollywood_server, HOLLYWOOD_ROOM, 1).await;
+    mount_empty_hollywood_messages(&hollywood_server, "main").await;
+
+    attach_hollywood(&mut app, &target.thread.id, &hollywood_server.uri()).await?;
+    attach_hollywood(&mut app, &bystander.thread.id, &hollywood_server.uri()).await?;
+
+    let target_completed = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_matching_notification(
+            "target collaborative edit turn completed",
+            |notif| {
+                if notif.method != "turn/completed" {
+                    return false;
+                }
+                notif
+                    .params
+                    .as_ref()
+                    .and_then(|params| {
+                        serde_json::from_value::<TurnCompletedNotification>(params.clone()).ok()
+                    })
+                    .is_some_and(|payload| payload.thread_id == target.thread.id)
+            },
+        ),
+    )
+    .await??;
+    let payload: TurnCompletedNotification =
+        serde_json::from_value(target_completed.params.expect("params must be present"))?;
+    assert_eq!(payload.thread_id, target.thread.id);
+
+    let bystander_completed = timeout(
+        std::time::Duration::from_secs(2),
+        app.read_stream_until_matching_notification(
+            "bystander collaborative edit turn completed",
+            |notif| {
+                if notif.method != "turn/completed" {
+                    return false;
+                }
+                notif
+                    .params
+                    .as_ref()
+                    .and_then(|params| {
+                        serde_json::from_value::<TurnCompletedNotification>(params.clone()).ok()
+                    })
+                    .is_some_and(|payload| payload.thread_id == bystander.thread.id)
+            },
+        ),
+    )
+    .await;
+    match bystander_completed {
+        Err(_) => {}
+        Ok(Ok(notification)) => {
+            anyhow::bail!(
+                "Hollywood collaborative edit request should not wake the bystander session; got {notification:?}"
+            );
+        }
+        Ok(Err(err)) => return Err(err),
+    }
+
+    let requests = response_mock.requests();
+    assert_eq!(requests.len(), 1);
+    let request = requests
+        .first()
+        .expect("Hollywood wake should issue one model request");
+    let developer_texts = request.message_input_texts("developer");
+    assert!(
+        developer_texts.iter().any(|text| {
+            text.contains("<hollywood_context>")
+                && text.contains("same-file work as a collaboration opportunity")
+                && text.contains("collaborative edit plan")
+                && text.contains("slice/function/section")
+                && text.contains("intended hunk")
+                && text.contains("integrator")
+                && text.contains("report-back point")
+                && text.contains("after applying broadcast the exact slice changed")
+        }),
+        "Hollywood attach context should include collaborative editing guidance: {developer_texts:?}"
+    );
+    assert!(
+        developer_texts.iter().any(|text| {
+            text.contains("Hollywood coordination obligation")
+                && text.contains("<hollywood_message>")
+                && text.contains(HOLLYWOOD_COLLABORATIVE_EDIT_BODY)
+                && text.contains("src/shared/editor.rs")
+                && text.contains("render_toolbar")
+                && text.contains("add disabled-state label")
+                && text.contains("requires_response\":true")
+        }),
+        "Hollywood collaborative edit plan should be model-visible developer context: {developer_texts:?}"
+    );
+    let user_texts = request.message_input_texts("user");
+    assert!(
+        user_texts
+            .iter()
+            .all(|text| !text.contains(HOLLYWOOD_COLLABORATIVE_EDIT_BODY)),
+        "Hollywood collaborative edit plan must not be injected as user text: {user_texts:?}"
+    );
+
+    Ok(())
+}
+
 async fn start_thread(app: &mut TestAppServer) -> Result<ThreadStartResponse> {
     let request_id = app
         .send_thread_start_request(ThreadStartParams {
@@ -375,6 +503,16 @@ async fn mount_empty_hollywood_messages_after(server: &MockServer, room: &str, a
 }
 
 async fn mount_hollywood_direct_message(server: &MockServer, room: &str, recipient_id: &str) {
+    mount_hollywood_direct_message_with_body(server, room, recipient_id, HOLLYWOOD_DIRECT_BODY)
+        .await;
+}
+
+async fn mount_hollywood_direct_message_with_body(
+    server: &MockServer,
+    room: &str,
+    recipient_id: &str,
+    body: &str,
+) {
     Mock::given(method("GET"))
         .and(path("/hollywood/v1/messages"))
         .and(query_param("room", room))
@@ -387,7 +525,7 @@ async fn mount_hollywood_direct_message(server: &MockServer, room: &str, recipie
                 "recipient_id": recipient_id,
                 "message_kind": "direct",
                 "response_policy": "required",
-                "body": HOLLYWOOD_DIRECT_BODY,
+                "body": body,
                 "created_at": "2026-07-02T00:00:00Z"
             }],
             "last_id": 1

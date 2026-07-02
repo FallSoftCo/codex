@@ -174,6 +174,52 @@ async fn preflight_allows_peer_claim_with_collaborative_edit_plan() {
 }
 
 #[tokio::test]
+async fn preflight_allows_peer_owned_file_when_owner_invites_actor() {
+    let (session, turn, state_db) = session_with_state_db().await;
+    let claimed_by_peer = codex_protocol::ThreadId::new();
+    let file_path = turn.config.cwd.join("shared.rs").into_path_buf();
+    state_db
+        .claim_path_ownership(
+            claimed_by_peer,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("claim path");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-1".to_string(),
+            actor_thread_id: claimed_by_peer,
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "render_toolbar".to_string(),
+            intent: "add disabled-state label after the peer refactor".to_string(),
+            peers: vec![session.thread_id().to_string()],
+            handoff: Some("owner lands toolbar refactor; actor patches label after".to_string()),
+            integrator: Some(claimed_by_peer.to_string()),
+            report_back: Some("after apply_patch with exact slice and merge risk".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record owner-authored plan");
+    let file_uri = PathUri::from_abs_path(
+        &AbsolutePathBuf::from_absolute_path(file_path).expect("absolute file path"),
+    );
+
+    let context = apply_patch_collaboration_preflight(session.as_ref(), &[file_uri])
+        .await
+        .expect("owner-authored plan should allow invited actor to patch peer-owned file");
+
+    let output = context.append_notice("Success. Updated files.".to_string());
+    assert!(output.contains("Collaborative edit plan matched"));
+    assert!(output.contains("render_toolbar"));
+    assert!(output.contains(claimed_by_peer.to_string().as_str()));
+}
+
+#[tokio::test]
 async fn preflight_rejects_plan_that_omits_blocking_owner() {
     let (session, turn, state_db) = session_with_state_db().await;
     let claimed_by_peer = codex_protocol::ThreadId::new();
