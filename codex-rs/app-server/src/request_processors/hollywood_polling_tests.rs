@@ -173,3 +173,67 @@ fn select_hollywood_followup_accepts_targeted_observed_room_message() {
 
     assert_eq!(selected.notification_message.id, 1);
 }
+
+#[test]
+fn select_hollywood_followup_ignores_self_authored_targeted_message() {
+    let mut message = classified_message(
+        1,
+        HollywoodMessageKind::Direct,
+        HollywoodResponsePolicy::Required,
+        HollywoodMessageAttention::Focused,
+    );
+    message.self_authored = true;
+    let messages = vec![message];
+
+    assert!(select_hollywood_followup(&messages, "repo/losangelex").is_none());
+}
+
+#[test]
+fn targeted_observed_room_message_becomes_required_hollywood_input() {
+    let messages = vec![classified_message_in_room(
+        1,
+        "main",
+        HollywoodMessageKind::Direct,
+        HollywoodResponsePolicy::Optional,
+        HollywoodMessageAttention::Focused,
+    )];
+    let selected =
+        select_hollywood_followup(&messages, "repo/losangelex").expect("selected followup");
+
+    let input = classified_message_to_hollywood_input(selected);
+
+    assert_eq!(input.message_id, 1);
+    assert_eq!(input.room, "main");
+    assert_eq!(input.attention, Some("focused".to_string()));
+    assert_eq!(input.message_kind, Some("direct".to_string()));
+    assert_eq!(input.obligation, Some("obligation".to_string()));
+    assert_eq!(input.requires_response, true);
+    assert_eq!(
+        input
+            .synthetic_brief
+            .expect("synthetic brief should be present")
+            .stay_silent_if_no_actionable_delta,
+        false
+    );
+}
+
+#[test]
+fn primary_room_required_broadcast_becomes_required_hollywood_input() {
+    let messages = vec![classified_message(
+        1,
+        HollywoodMessageKind::Broadcast,
+        HollywoodResponsePolicy::Required,
+        HollywoodMessageAttention::Broadcast,
+    )];
+    let selected =
+        select_hollywood_followup(&messages, "repo/losangelex").expect("selected followup");
+
+    let input = classified_message_to_hollywood_input(selected);
+
+    assert_eq!(input.message_id, 1);
+    assert_eq!(input.room, "repo/losangelex");
+    assert_eq!(input.attention, Some("broadcast".to_string()));
+    assert_eq!(input.message_kind, Some("broadcast".to_string()));
+    assert_eq!(input.obligation, Some("obligation".to_string()));
+    assert_eq!(input.requires_response, true);
+}
