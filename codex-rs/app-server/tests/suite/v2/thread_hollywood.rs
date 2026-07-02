@@ -1,7 +1,5 @@
 use anyhow::Result;
 use app_test_support::TestAppServer;
-use app_test_support::create_final_assistant_message_sse_response;
-use app_test_support::create_mock_responses_server_sequence;
 use app_test_support::create_mock_responses_server_sequence_unchecked;
 use app_test_support::to_response;
 use codex_app_server_protocol::HollywoodAttentionMode;
@@ -11,11 +9,16 @@ use codex_app_server_protocol::JSONRPCResponse;
 use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ThreadHollywoodAttachParams;
 use codex_app_server_protocol::ThreadHollywoodAttachResponse;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetResponse;
+use codex_app_server_protocol::ThreadHollywoodDetachParams;
+use codex_app_server_protocol::ThreadHollywoodDetachResponse;
 use codex_app_server_protocol::ThreadHollywoodListParams;
 use codex_app_server_protocol::ThreadHollywoodListResponse;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_app_server_protocol::TurnCompletedNotification;
+use core_test_support::responses;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::path::Path;
@@ -30,6 +33,7 @@ use wiremock::matchers::query_param;
 
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
 const HOLLYWOOD_ROOM: &str = "repo/losangelex-product";
+const HOLLYWOOD_DIRECT_BODY: &str = "Please verify your Hollywood lane is active.";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn hollywood_attach_lists_multiple_interactive_sessions() -> Result<()> {
@@ -51,23 +55,7 @@ async fn hollywood_attach_lists_multiple_interactive_sessions() -> Result<()> {
     attach_hollywood(&mut app, &first.thread.id, &hollywood_server.uri()).await?;
     attach_hollywood(&mut app, &second.thread.id, &hollywood_server.uri()).await?;
 
-    let list_id = app
-        .send_raw_request(
-            "thread/hollywood/list",
-            Some(serde_json::to_value(ThreadHollywoodListParams {
-                cursor: None,
-                limit: Some(10),
-                rooms: Some(vec![HOLLYWOOD_ROOM.to_string()]),
-                statuses: None,
-            })?),
-        )
-        .await?;
-    let list_response: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        app.read_stream_until_response_message(RequestId::Integer(list_id)),
-    )
-    .await??;
-    let ThreadHollywoodListResponse { data, next_cursor } = to_response(list_response)?;
+    let ThreadHollywoodListResponse { data, next_cursor } = list_hollywood(&mut app).await?;
 
     assert_eq!(next_cursor, None);
     assert_eq!(data.len(), 2);
@@ -99,12 +87,60 @@ async fn hollywood_attach_lists_multiple_interactive_sessions() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hollywood_attach_attention_and_detach_update_public_session_state() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let model_server = create_mock_responses_server_sequence_unchecked(Vec::new()).await;
+    create_config_toml(codex_home.path(), &model_server.uri())?;
+
+    let hollywood_server = MockServer::start().await;
+    mount_hollywood_registry(&hollywood_server).await;
+    mount_empty_hollywood_messages(&hollywood_server, HOLLYWOOD_ROOM).await;
+    mount_empty_hollywood_messages(&hollywood_server, "main").await;
+
+    let mut app = TestAppServer::new(codex_home.path()).await?;
+    timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
+
+    let thread = start_thread(&mut app).await?;
+    attach_hollywood(&mut app, &thread.thread.id, &hollywood_server.uri()).await?;
+
+    let attached = list_hollywood(&mut app).await?;
+    let hollywood = attached.data[0]
+        .hollywood
+        .as_ref()
+        .expect("attached thread should include Hollywood state");
+    assert_eq!(hollywood.attention, HollywoodAttentionSettings::default());
+
+    let attention = HollywoodAttentionSettings {
+        mode: HollywoodAttentionMode::Ambient,
+        include_at_all: false,
+        include_at_room: false,
+    };
+    set_hollywood_attention(&mut app, &thread.thread.id, attention.clone()).await?;
+
+    let updated = list_hollywood(&mut app).await?;
+    let hollywood = updated.data[0]
+        .hollywood
+        .as_ref()
+        .expect("attached thread should include Hollywood state");
+    assert_eq!(hollywood.attention, attention);
+
+    detach_hollywood(&mut app, &thread.thread.id).await?;
+    let detached = list_hollywood(&mut app).await?;
+    assert_eq!(detached.data, Vec::new());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
     let codex_home = TempDir::new()?;
-    let responses = vec![create_final_assistant_message_sse_response(
-        "acknowledged hollywood direct message",
-    )?];
-    let model_server = create_mock_responses_server_sequence(responses).await;
+    let model_server = responses::start_mock_server().await;
+    let model_response = responses::sse(vec![
+        responses::ev_response_created("resp-1"),
+        responses::ev_assistant_message("msg-1", "acknowledged hollywood direct message"),
+        responses::ev_completed("resp-1"),
+    ]);
+    let response_mock = responses::mount_sse_sequence(&model_server, vec![model_response]).await;
     create_config_toml(codex_home.path(), &model_server.uri())?;
 
     let hollywood_server = MockServer::start().await;
@@ -171,6 +207,35 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
         Ok(Err(err)) => return Err(err),
     }
 
+    let requests = response_mock.requests();
+    assert_eq!(requests.len(), 1);
+    let request = requests
+        .first()
+        .expect("Hollywood wake should issue one model request");
+    let developer_texts = request.message_input_texts("developer");
+    assert!(
+        developer_texts
+            .iter()
+            .any(|text| { text.contains("<hollywood_context>") && text.contains(HOLLYWOOD_ROOM) }),
+        "Hollywood attach context should be model-visible developer context: {developer_texts:?}"
+    );
+    assert!(
+        developer_texts.iter().any(|text| {
+            text.contains("Hollywood coordination obligation")
+                && text.contains("<hollywood_message>")
+                && text.contains(HOLLYWOOD_DIRECT_BODY)
+                && text.contains("\"requires_response\":true")
+        }),
+        "Hollywood direct wake should be model-visible developer context: {developer_texts:?}"
+    );
+    let user_texts = request.message_input_texts("user");
+    assert!(
+        user_texts
+            .iter()
+            .all(|text| !text.contains(HOLLYWOOD_DIRECT_BODY)),
+        "Hollywood direct wake must not be injected as user text: {user_texts:?}"
+    );
+
     Ok(())
 }
 
@@ -220,6 +285,67 @@ async fn attach_hollywood(
     Ok(())
 }
 
+async fn set_hollywood_attention(
+    app: &mut TestAppServer,
+    thread_id: &str,
+    attention: HollywoodAttentionSettings,
+) -> Result<()> {
+    let request_id = app
+        .send_raw_request(
+            "thread/hollywood/attention/set",
+            Some(serde_json::to_value(ThreadHollywoodAttentionSetParams {
+                thread_id: thread_id.to_string(),
+                attention,
+            })?),
+        )
+        .await?;
+    let response: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    let _: ThreadHollywoodAttentionSetResponse = to_response(response)?;
+    Ok(())
+}
+
+async fn detach_hollywood(app: &mut TestAppServer, thread_id: &str) -> Result<()> {
+    let request_id = app
+        .send_raw_request(
+            "thread/hollywood/detach",
+            Some(serde_json::to_value(ThreadHollywoodDetachParams {
+                thread_id: thread_id.to_string(),
+            })?),
+        )
+        .await?;
+    let response: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    let _: ThreadHollywoodDetachResponse = to_response(response)?;
+    Ok(())
+}
+
+async fn list_hollywood(app: &mut TestAppServer) -> Result<ThreadHollywoodListResponse> {
+    let request_id = app
+        .send_raw_request(
+            "thread/hollywood/list",
+            Some(serde_json::to_value(ThreadHollywoodListParams {
+                cursor: None,
+                limit: Some(10),
+                rooms: Some(vec![HOLLYWOOD_ROOM.to_string()]),
+                statuses: None,
+            })?),
+        )
+        .await?;
+    let response: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    to_response(response)
+}
+
 async fn mount_hollywood_registry(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/hollywood/v1/registry"))
@@ -261,7 +387,7 @@ async fn mount_hollywood_direct_message(server: &MockServer, room: &str, recipie
                 "recipient_id": recipient_id,
                 "message_kind": "direct",
                 "response_policy": "required",
-                "body": "Please verify your Hollywood lane is active.",
+                "body": HOLLYWOOD_DIRECT_BODY,
                 "created_at": "2026-07-02T00:00:00Z"
             }],
             "last_id": 1
