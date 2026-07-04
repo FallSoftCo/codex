@@ -59,6 +59,50 @@ async fn session_with_state_db() -> (
     (Arc::new(session), Arc::new(turn), state_db)
 }
 
+async fn apply_patch_after_collaboration_preflight(
+    session: &Session,
+    cwd: &AbsolutePathBuf,
+    patch: &str,
+) -> String {
+    let argv = vec!["apply_patch".to_string(), patch.to_string()];
+    let cwd = PathUri::from_abs_path(cwd);
+    let action = match codex_apply_patch::maybe_parse_apply_patch_verified(
+        &argv,
+        &cwd,
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    {
+        MaybeApplyPatchVerified::Body(action) => action,
+        other => panic!("expected verified patch body, got: {other:?}"),
+    };
+    let file_paths = file_paths_for_action(&action);
+    let collaboration = apply_patch_collaboration_preflight(session, &file_paths)
+        .await
+        .expect("collaborative edit plan should allow apply_patch");
+
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    codex_apply_patch::apply_patch(
+        &action.patch,
+        &action.cwd,
+        &mut stdout,
+        &mut stderr,
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    .expect("collaborative edit apply_patch should write file");
+
+    let _stdout = String::from_utf8(stdout).expect("apply_patch stdout should be utf8");
+    assert_eq!(
+        String::from_utf8(stderr).expect("apply_patch stderr should be utf8"),
+        ""
+    );
+    collaboration.append_notice("Success. Updated files.".to_string())
+}
+
 #[tokio::test]
 async fn pre_tool_use_payload_uses_freeform_patch_input() {
     let patch = sample_patch();
@@ -267,50 +311,115 @@ async fn apply_patch_edits_peer_owned_file_when_owner_invites_actor() {
 +    "disabled-state label"
  }
 *** End Patch"#;
-    let argv = vec!["apply_patch".to_string(), patch.to_string()];
-    let cwd = PathUri::from_abs_path(&cwd);
-    let action = match codex_apply_patch::maybe_parse_apply_patch_verified(
-        &argv,
-        &cwd,
-        LOCAL_FS.as_ref(),
-        None,
-    )
-    .await
-    {
-        MaybeApplyPatchVerified::Body(action) => action,
-        other => panic!("expected verified patch body, got: {other:?}"),
-    };
-    let file_paths = file_paths_for_action(&action);
-    let collaboration = apply_patch_collaboration_preflight(session.as_ref(), &file_paths)
-        .await
-        .expect("owner-authored plan should allow invited actor to patch peer-owned file");
-
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    codex_apply_patch::apply_patch(
-        &action.patch,
-        &action.cwd,
-        &mut stdout,
-        &mut stderr,
-        LOCAL_FS.as_ref(),
-        None,
-    )
-    .await
-    .expect("collaborative edit apply_patch should write file");
+    let output = apply_patch_after_collaboration_preflight(session.as_ref(), &cwd, patch).await;
 
     assert_eq!(
         fs::read_to_string(&file_path).expect("read patched collaborative edit fixture"),
         "pub fn render_toolbar() -> &'static str {\n    \"disabled-state label\"\n}\n"
     );
-    let _stdout = String::from_utf8(stdout).expect("apply_patch stdout should be utf8");
-    assert_eq!(
-        String::from_utf8(stderr).expect("apply_patch stderr should be utf8"),
-        ""
-    );
-    let output = collaboration.append_notice("Success. Updated files.".to_string());
     assert!(output.contains("Collaborative edit plan matched"));
     assert!(output.contains("render_toolbar"));
     assert!(output.contains(claimed_by_peer.to_string().as_str()));
+}
+
+#[tokio::test]
+async fn two_agents_apply_collaborative_edits_to_same_file() {
+    let (agent_a, _turn_a, state_db) = session_with_state_db().await;
+    let (mut agent_b, _turn_b) = make_session_and_context().await;
+    agent_b.services.state_db = Some(Arc::clone(&state_db));
+    let agent_b = Arc::new(agent_b);
+    assert_ne!(agent_a.thread_id(), agent_b.thread_id());
+
+    let tmp = TempDir::new().expect("tmp");
+    let cwd = tmp.path().abs();
+    let file_path = cwd.join("shared.rs").into_path_buf();
+    fs::write(
+        &file_path,
+        concat!(
+            "pub fn render_toolbar() -> &'static str {\n",
+            "    \"enabled\"\n",
+            "}\n\n",
+            "pub fn render_status() -> &'static str {\n",
+            "    \"idle\"\n",
+            "}\n",
+        ),
+    )
+    .expect("write shared collaborative edit fixture");
+    state_db
+        .claim_path_ownership(
+            agent_a.thread_id(),
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("agent A should claim shared file");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-1".to_string(),
+            actor_thread_id: agent_a.thread_id(),
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "render_toolbar and render_status".to_string(),
+            intent: "agent A updates toolbar label; agent B updates status label".to_string(),
+            peers: vec![agent_b.thread_id().to_string()],
+            handoff: Some(
+                "agent A patches toolbar first; agent B patches status after".to_string(),
+            ),
+            integrator: Some(agent_a.thread_id().to_string()),
+            report_back: Some("each agent reports after apply_patch with exact slice".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record shared collaborative edit plan");
+
+    let agent_a_output = apply_patch_after_collaboration_preflight(
+        agent_a.as_ref(),
+        &cwd,
+        r#"*** Begin Patch
+*** Update File: shared.rs
+@@
+ pub fn render_toolbar() -> &'static str {
+-    "enabled"
++    "ready from agent A"
+ }
+*** End Patch"#,
+    )
+    .await;
+    assert!(agent_a_output.contains("Collaborative edit plan matched"));
+    assert!(agent_a_output.contains("render_toolbar and render_status"));
+    assert!(agent_a_output.contains(agent_a.thread_id().to_string().as_str()));
+
+    let agent_b_output = apply_patch_after_collaboration_preflight(
+        agent_b.as_ref(),
+        &cwd,
+        r#"*** Begin Patch
+*** Update File: shared.rs
+@@
+ pub fn render_status() -> &'static str {
+-    "idle"
++    "collaborating from agent B"
+ }
+*** End Patch"#,
+    )
+    .await;
+    assert!(agent_b_output.contains("Collaborative edit plan matched"));
+    assert!(agent_b_output.contains("render_toolbar and render_status"));
+    assert!(agent_b_output.contains(agent_a.thread_id().to_string().as_str()));
+
+    assert_eq!(
+        fs::read_to_string(&file_path).expect("read jointly edited file"),
+        concat!(
+            "pub fn render_toolbar() -> &'static str {\n",
+            "    \"ready from agent A\"\n",
+            "}\n\n",
+            "pub fn render_status() -> &'static str {\n",
+            "    \"collaborating from agent B\"\n",
+            "}\n",
+        )
+    );
 }
 
 #[tokio::test]
