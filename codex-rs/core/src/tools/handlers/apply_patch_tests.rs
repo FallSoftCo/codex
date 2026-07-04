@@ -5,6 +5,7 @@ use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::protocol::FileChange;
 use core_test_support::PathBufExt;
 use core_test_support::PathExt;
+use futures::future::join_all;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;
@@ -115,6 +116,24 @@ async fn apply_patch_after_collaboration_preflight_with_barrier(
         ""
     );
     collaboration.append_notice("Success. Updated files.".to_string())
+}
+
+async fn apply_collaborative_patch_wave(
+    agents: &[Arc<Session>],
+    cwd: &AbsolutePathBuf,
+    patches: Vec<String>,
+) -> Vec<String> {
+    assert_eq!(agents.len(), patches.len());
+    let start_barrier = Arc::new(Barrier::new(agents.len()));
+    let edits = agents.iter().zip(patches.iter()).map(|(session, patch)| {
+        apply_patch_after_collaboration_preflight_with_barrier(
+            session.as_ref(),
+            cwd,
+            patch,
+            Some(Arc::clone(&start_barrier)),
+        )
+    });
+    join_all(edits).await
 }
 
 #[tokio::test]
@@ -389,7 +408,6 @@ async fn two_agents_start_collaborative_edits_to_same_file_concurrently() {
         .await
         .expect("record shared collaborative edit plan");
 
-    let start_barrier = Arc::new(Barrier::new(2));
     let agent_a_patch = r#"*** Begin Patch
 *** Update File: shared.rs
 @@
@@ -397,7 +415,8 @@ async fn two_agents_start_collaborative_edits_to_same_file_concurrently() {
 -    "enabled"
 +    "ready from agent A"
  }
-*** End Patch"#;
+*** End Patch"#
+        .to_string();
     let agent_b_patch = r#"*** Begin Patch
 *** Update File: shared.rs
 @@
@@ -405,21 +424,14 @@ async fn two_agents_start_collaborative_edits_to_same_file_concurrently() {
 -    "idle"
 +    "collaborating from agent B"
  }
-*** End Patch"#;
+*** End Patch"#
+        .to_string();
 
-    let agent_a_edit = apply_patch_after_collaboration_preflight_with_barrier(
-        agent_a.as_ref(),
-        &cwd,
-        agent_a_patch,
-        Some(Arc::clone(&start_barrier)),
-    );
-    let agent_b_edit = apply_patch_after_collaboration_preflight_with_barrier(
-        agent_b.as_ref(),
-        &cwd,
-        agent_b_patch,
-        Some(Arc::clone(&start_barrier)),
-    );
-    let (agent_a_output, agent_b_output) = tokio::join!(agent_a_edit, agent_b_edit);
+    let agents = vec![Arc::clone(&agent_a), Arc::clone(&agent_b)];
+    let outputs =
+        apply_collaborative_patch_wave(&agents, &cwd, vec![agent_a_patch, agent_b_patch]).await;
+    let agent_a_output = &outputs[0];
+    let agent_b_output = &outputs[1];
 
     assert!(agent_a_output.contains("Collaborative edit plan matched"));
     assert!(agent_a_output.contains("render_toolbar and render_status"));
@@ -438,6 +450,117 @@ async fn two_agents_start_collaborative_edits_to_same_file_concurrently() {
             "    \"collaborating from agent B\"\n",
             "}\n",
         )
+    );
+}
+
+#[tokio::test]
+async fn six_agents_apply_two_rounds_of_collaborative_edits_to_same_file() {
+    let (agent_a, _turn_a, state_db) = session_with_state_db().await;
+    let mut agents = vec![agent_a];
+    for _ in 1..6 {
+        let (mut agent, _turn) = make_session_and_context().await;
+        agent.services.state_db = Some(Arc::clone(&state_db));
+        agents.push(Arc::new(agent));
+    }
+    for left in 0..agents.len() {
+        for right in (left + 1)..agents.len() {
+            assert_ne!(agents[left].thread_id(), agents[right].thread_id());
+        }
+    }
+
+    let tmp = TempDir::new().expect("tmp");
+    let cwd = tmp.path().abs();
+    let file_path = cwd.join("shared.rs").into_path_buf();
+    let patch_for = |agent_id: usize, from: &str, to: &str| {
+        format!(
+            "*** Begin Patch\n*** Update File: shared.rs\n@@\n pub fn section_{agent_id}() -> &'static str {{\n-    \"{from}\"\n+    \"{to}\"\n }}\n*** End Patch"
+        )
+    };
+
+    let mut initial = String::new();
+    let mut round_one_expected = String::new();
+    let mut round_two_expected = String::new();
+    let mut round_one_patches = Vec::new();
+    let mut round_two_patches = Vec::new();
+    for agent_id in 0..agents.len() {
+        let separator = if agent_id + 1 == agents.len() {
+            "\n"
+        } else {
+            "\n\n"
+        };
+        let initial_label = format!("agent-{agent_id}-v0");
+        let round_one_label = format!("agent-{agent_id}-round-1");
+        let round_two_label = format!("agent-{agent_id}-round-2");
+        initial.push_str(&format!(
+            "pub fn section_{agent_id}() -> &'static str {{\n    \"{initial_label}\"\n}}{separator}"
+        ));
+        round_one_expected.push_str(&format!(
+            "pub fn section_{agent_id}() -> &'static str {{\n    \"{round_one_label}\"\n}}{separator}"
+        ));
+        round_two_expected.push_str(&format!(
+            "pub fn section_{agent_id}() -> &'static str {{\n    \"{round_two_label}\"\n}}{separator}"
+        ));
+        round_one_patches.push(patch_for(agent_id, &initial_label, &round_one_label));
+        round_two_patches.push(patch_for(agent_id, &round_one_label, &round_two_label));
+    }
+    fs::write(&file_path, initial).expect("write shared collaborative edit fixture");
+
+    let owner_id = agents[0].thread_id();
+    state_db
+        .claim_path_ownership(
+            owner_id,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("owner should claim shared file");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-six-agent-rounds".to_string(),
+            actor_thread_id: owner_id,
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "six independent section labels".to_string(),
+            intent: "each agent updates its assigned section label across repeated waves"
+                .to_string(),
+            peers: agents
+                .iter()
+                .skip(1)
+                .map(|agent| agent.thread_id().to_string())
+                .collect(),
+            handoff: Some(
+                "all agents patch their section in each wave and report completion".to_string(),
+            ),
+            integrator: Some(owner_id.to_string()),
+            report_back: Some("each agent reports after apply_patch with exact slice".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record shared collaborative edit plan");
+
+    let round_one_outputs = apply_collaborative_patch_wave(&agents, &cwd, round_one_patches).await;
+    for output in &round_one_outputs {
+        assert!(output.contains("Collaborative edit plan matched"));
+        assert!(output.contains("six independent section labels"));
+        assert!(output.contains(owner_id.to_string().as_str()));
+    }
+    assert_eq!(
+        fs::read_to_string(&file_path).expect("read round-one collaboratively edited file"),
+        round_one_expected
+    );
+
+    let round_two_outputs = apply_collaborative_patch_wave(&agents, &cwd, round_two_patches).await;
+    for output in &round_two_outputs {
+        assert!(output.contains("Collaborative edit plan matched"));
+        assert!(output.contains("six independent section labels"));
+        assert!(output.contains(owner_id.to_string().as_str()));
+    }
+    assert_eq!(
+        fs::read_to_string(&file_path).expect("read round-two collaboratively edited file"),
+        round_two_expected
     );
 }
 

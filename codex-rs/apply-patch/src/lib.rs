@@ -1183,6 +1183,24 @@ mod tests {
         String::from_utf8(stdout).unwrap()
     }
 
+    async fn apply_patch_wave(cwd: &PathUri, patches: Vec<String>) -> Vec<String> {
+        let start_barrier = Arc::new(Barrier::new(patches.len()));
+        let mut handles = Vec::with_capacity(patches.len());
+        for patch in patches {
+            let cwd = cwd.clone();
+            let start_barrier = Arc::clone(&start_barrier);
+            handles.push(tokio::spawn(async move {
+                apply_patch_after_barrier(cwd, patch, start_barrier).await
+            }));
+        }
+
+        let mut outputs = Vec::with_capacity(handles.len());
+        for handle in handles {
+            outputs.push(handle.await.expect("concurrent patch task should finish"));
+        }
+        outputs
+    }
+
     #[tokio::test]
     async fn test_add_file_hunk_creates_file_with_contents() {
         let dir = tempdir().unwrap();
@@ -1316,24 +1334,73 @@ mod tests {
 +    "collaborating from agent B"
  }"#,
         );
-        let start_barrier = Arc::new(Barrier::new(2));
-
-        let edit_a = apply_patch_after_barrier(cwd.clone(), patch_a, Arc::clone(&start_barrier));
-        let edit_b = apply_patch_after_barrier(cwd, patch_b, Arc::clone(&start_barrier));
-        let (output_a, output_b) = tokio::join!(edit_a, edit_b);
+        let outputs = apply_patch_wave(&cwd, vec![patch_a, patch_b]).await;
 
         assert_eq!(
-            output_a,
+            outputs[0],
             "Success. Updated the following files:\nM shared.rs\n"
         );
         assert_eq!(
-            output_b,
+            outputs[1],
             "Success. Updated the following files:\nM shared.rs\n"
         );
         assert_eq!(
             fs::read_to_string(target_path).unwrap(),
             "pub fn render_toolbar() -> &'static str {\n    \"ready from agent A\"\n}\n\npub fn render_status() -> &'static str {\n    \"collaborating from agent B\"\n}\n"
         );
+    }
+
+    #[tokio::test]
+    async fn six_concurrent_updates_to_same_file_preserve_all_edits_across_rounds() {
+        let dir = tempdir().unwrap();
+        let target_path = dir.path().join("shared.rs");
+        let cwd = PathUri::from_host_native_path(dir.path()).expect("absolute test path");
+        let patch_for = |agent_id: usize, from: &str, to: &str| {
+            wrap_patch(&format!(
+                "*** Update File: shared.rs\n@@\n pub fn section_{agent_id}() -> &'static str {{\n-    \"{from}\"\n+    \"{to}\"\n }}"
+            ))
+        };
+
+        let mut initial = String::new();
+        let mut round_one_expected = String::new();
+        let mut round_two_expected = String::new();
+        let mut round_one_patches = Vec::new();
+        let mut round_two_patches = Vec::new();
+        for agent_id in 0..6 {
+            let separator = if agent_id == 5 { "\n" } else { "\n\n" };
+            let initial_label = format!("agent-{agent_id}-v0");
+            let round_one_label = format!("agent-{agent_id}-round-1");
+            let round_two_label = format!("agent-{agent_id}-round-2");
+            initial.push_str(&format!(
+                "pub fn section_{agent_id}() -> &'static str {{\n    \"{initial_label}\"\n}}{separator}"
+            ));
+            round_one_expected.push_str(&format!(
+                "pub fn section_{agent_id}() -> &'static str {{\n    \"{round_one_label}\"\n}}{separator}"
+            ));
+            round_two_expected.push_str(&format!(
+                "pub fn section_{agent_id}() -> &'static str {{\n    \"{round_two_label}\"\n}}{separator}"
+            ));
+            round_one_patches.push(patch_for(agent_id, &initial_label, &round_one_label));
+            round_two_patches.push(patch_for(agent_id, &round_one_label, &round_two_label));
+        }
+        fs::write(&target_path, initial).unwrap();
+
+        let round_one_outputs = apply_patch_wave(&cwd, round_one_patches).await;
+        assert_eq!(
+            round_one_outputs,
+            vec!["Success. Updated the following files:\nM shared.rs\n"; 6]
+        );
+        assert_eq!(
+            fs::read_to_string(&target_path).unwrap(),
+            round_one_expected
+        );
+
+        let round_two_outputs = apply_patch_wave(&cwd, round_two_patches).await;
+        assert_eq!(
+            round_two_outputs,
+            vec!["Success. Updated the following files:\nM shared.rs\n"; 6]
+        );
+        assert_eq!(fs::read_to_string(target_path).unwrap(), round_two_expected);
     }
 
     #[tokio::test]
