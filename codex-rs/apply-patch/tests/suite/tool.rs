@@ -7,6 +7,8 @@ use std::process::Command as StdCommand;
 use std::process::Stdio;
 use tempfile::tempdir;
 
+const COLLABORATIVE_STRESS_EDITORS: usize = 200;
+
 fn run_apply_patch_in_dir(dir: &Path, patch: &str) -> anyhow::Result<assert_cmd::assert::Assert> {
     let mut cmd = Command::new(codex_utils_cargo_bin::cargo_bin("apply_patch")?);
     cmd.current_dir(dir);
@@ -73,8 +75,12 @@ fn test_apply_patch_cli_concurrent_processes_same_file_preserve_all_edits() -> a
     let mut initial = String::new();
     let mut expected = String::new();
     let mut patches = Vec::new();
-    for agent_id in 0..6 {
-        let separator = if agent_id == 5 { "\n" } else { "\n\n" };
+    for agent_id in 0..COLLABORATIVE_STRESS_EDITORS {
+        let separator = if agent_id + 1 == COLLABORATIVE_STRESS_EDITORS {
+            "\n"
+        } else {
+            "\n\n"
+        };
         let initial_label = format!("agent-{agent_id}-v0");
         let edited_label = format!("agent-{agent_id}-process-edit");
         initial.push_str(&format!(

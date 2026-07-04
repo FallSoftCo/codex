@@ -1156,6 +1156,8 @@ mod tests {
     use tempfile::tempdir;
     use tokio::sync::Barrier;
 
+    const COLLABORATIVE_STRESS_EDITORS: usize = 200;
+
     /// Helper to construct a patch with the given body.
     fn wrap_patch(body: &str) -> String {
         format!("*** Begin Patch\n{body}\n*** End Patch")
@@ -1351,7 +1353,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn six_concurrent_updates_to_same_file_preserve_all_edits_across_rounds() {
+    async fn hundreds_of_concurrent_updates_to_same_file_preserve_all_edits_across_rounds() {
         let dir = tempdir().unwrap();
         let target_path = dir.path().join("shared.rs");
         let cwd = PathUri::from_host_native_path(dir.path()).expect("absolute test path");
@@ -1366,8 +1368,12 @@ mod tests {
         let mut round_two_expected = String::new();
         let mut round_one_patches = Vec::new();
         let mut round_two_patches = Vec::new();
-        for agent_id in 0..6 {
-            let separator = if agent_id == 5 { "\n" } else { "\n\n" };
+        for agent_id in 0..COLLABORATIVE_STRESS_EDITORS {
+            let separator = if agent_id + 1 == COLLABORATIVE_STRESS_EDITORS {
+                "\n"
+            } else {
+                "\n\n"
+            };
             let initial_label = format!("agent-{agent_id}-v0");
             let round_one_label = format!("agent-{agent_id}-round-1");
             let round_two_label = format!("agent-{agent_id}-round-2");
@@ -1388,7 +1394,10 @@ mod tests {
         let round_one_outputs = apply_patch_wave(&cwd, round_one_patches).await;
         assert_eq!(
             round_one_outputs,
-            vec!["Success. Updated the following files:\nM shared.rs\n"; 6]
+            vec![
+                "Success. Updated the following files:\nM shared.rs\n";
+                COLLABORATIVE_STRESS_EDITORS
+            ]
         );
         assert_eq!(
             fs::read_to_string(&target_path).unwrap(),
@@ -1398,7 +1407,10 @@ mod tests {
         let round_two_outputs = apply_patch_wave(&cwd, round_two_patches).await;
         assert_eq!(
             round_two_outputs,
-            vec!["Success. Updated the following files:\nM shared.rs\n"; 6]
+            vec![
+                "Success. Updated the following files:\nM shared.rs\n";
+                COLLABORATIVE_STRESS_EDITORS
+            ]
         );
         assert_eq!(fs::read_to_string(target_path).unwrap(), round_two_expected);
     }
