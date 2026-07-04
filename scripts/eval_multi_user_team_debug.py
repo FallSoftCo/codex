@@ -48,6 +48,9 @@ class MultiUserScenario:
     user_agents: tuple[UserAgent, ...]
     peer_name: str
     peer_prompt: str
+    send_user_turns_sequentially: bool = False
+    require_direct_wake: bool = False
+    required_note_terms: tuple[str, ...] = ()
 
 
 SCENARIOS = {
@@ -123,7 +126,90 @@ Stay available in this Hollywood room. Do not edit files unless another session
 asks. If you see conflicting edits, overlapping ownership, or an explicit
 verification request, respond with a narrow finding and the exact files checked.
 """,
-    )
+    ),
+    "direct_dependency_after_peer_idle": MultiUserScenario(
+        scenario_id="direct_dependency_after_peer_idle",
+        description=(
+            "Bob completes a server lane and becomes idle; Alice must use a "
+            "required Hollywood direct message to wake Bob for the exact helper "
+            "name before finishing her client lane and shared notes."
+        ),
+        files={
+            "README.md": """# Direct Dependency Team Debug App
+
+Scratch project for evaluating direct Hollywood wake behavior between user-facing Losangelex agents.
+""",
+            "client/dashboard.js": """export function dashboardCards() {
+  return ["Latency", "Errors"];
+}
+
+export function reconnectBanner(state) {
+  if (state === "retrying") {
+    return "Trying again";
+  }
+  return "Ready";
+}
+""",
+            "server/permissions.js": """export function canViewDashboard(role) {
+  return role === "admin" || role === "operator";
+}
+""",
+            "docs/team_notes.md": """# Team Notes
+
+## Alice
+
+- TODO
+
+## Bob
+
+- TODO
+""",
+        },
+        user_agents=(
+            UserAgent(
+                role="bob",
+                name="BobAgent",
+                prompt="""User Bob asks you to add audit export permission support first.
+
+Make a minimal server-side change in `server/permissions.js`: add an exported
+`canExportAudit(role)` helper that returns true only for `admin`.
+
+Also update only the Bob section of `docs/team_notes.md` with the files you
+checked and the exact helper name you added. Alice may later ask you a direct
+Hollywood question about this helper; if she does, answer her directly and
+concisely.
+""",
+            ),
+            UserAgent(
+                role="alice",
+                name="AliceAgent",
+                prompt="""User Alice asks you to improve the dashboard reconnect experience, but this task depends on Bob's completed server lane.
+
+Before making your final shared-notes update, send a Hollywood direct message to
+`BobAgent` with `response_policy` set to `required`, asking Bob to confirm the
+exact audit export helper name he added. Wait for Bob's Hollywood response and
+use that response as your source of truth; do not infer the helper name from
+silence.
+
+Then make a minimal client-side change in `client/dashboard.js`: add a
+`Reconnects` card and change retrying copy to `Reconnecting`.
+
+Also update only the Alice section of `docs/team_notes.md` with the files you
+checked and Bob's confirmed helper name. Do not overwrite Bob's section.
+""",
+            ),
+        ),
+        peer_name="QAPeer",
+        peer_prompt="""You are an attached Losangelex QA peer for a direct-dependency debug evaluation.
+
+Stay available in this Hollywood room. Do not edit files unless another session
+asks. If Alice asks Bob directly, do not answer for Bob; only Bob should answer
+the helper-name question.
+""",
+        send_user_turns_sequentially=True,
+        require_direct_wake=True,
+        required_note_terms=("canExportAudit",),
+    ),
 }
 
 
@@ -222,18 +308,32 @@ def run_single_eval(
             wait_for_threads(conn, {peer_id}, timeout_seconds=turn_timeout_seconds)
 
             user_started_agents = [agent for agent in agents if agent.role != "peer"]
-            for user_agent, agent in zip(
-                scenario.user_agents,
-                user_started_agents,
-                strict=True,
-            ):
-                send_turn(conn, agent.thread_id, user_agent.prompt)
+            if scenario.send_user_turns_sequentially:
+                for user_agent, agent in zip(
+                    scenario.user_agents,
+                    user_started_agents,
+                    strict=True,
+                ):
+                    send_turn(conn, agent.thread_id, user_agent.prompt)
+                    wait_for_threads(
+                        conn,
+                        {agent.thread_id},
+                        timeout_seconds=turn_timeout_seconds,
+                    )
+                    conn.drain(5)
+            else:
+                for user_agent, agent in zip(
+                    scenario.user_agents,
+                    user_started_agents,
+                    strict=True,
+                ):
+                    send_turn(conn, agent.thread_id, user_agent.prompt)
 
-            wait_for_threads(
-                conn,
-                {agent.thread_id for agent in agents if agent.role != "peer"},
-                timeout_seconds=turn_timeout_seconds,
-            )
+                wait_for_threads(
+                    conn,
+                    {agent.thread_id for agent in agents if agent.role != "peer"},
+                    timeout_seconds=turn_timeout_seconds,
+                )
             conn.drain(20)
             thread_states = {
                 agent.thread_id: read_thread_state(conn, agent.thread_id)
@@ -259,6 +359,7 @@ def run_single_eval(
         )
     }
     score = score_run(
+        scenario=scenario,
         agents=agents,
         room_messages=room_messages,
         notification_summary=notification_summary,
@@ -309,6 +410,7 @@ def run_single_eval(
 
 def score_run(
     *,
+    scenario: MultiUserScenario,
     agents: list[StartedAgent],
     room_messages: list[dict[str, Any]],
     notification_summary: dict[str, Any],
@@ -339,11 +441,7 @@ def score_run(
         message_counts_by_role[role] += 1
         if recipient:
             direct_messages += 1
-        if message_id is not None and (
-            recipient
-            or message_kind.lower() == "direct"
-            or response_policy.lower() == "required"
-        ):
+        if message_id is not None and response_policy.lower() == "required":
             required_direct_message_ids.add(int(message_id))
         if role == "peer":
             peer_responses += 1
@@ -409,6 +507,9 @@ def score_run(
     bob_done = "canExportAudit" in server and 'role === "admin"' in server
     notes_have_alice = "## Alice" in notes and "client/dashboard.js" in notes
     notes_have_bob = "## Bob" in notes and "server/permissions.js" in notes
+    required_note_terms_present = all(
+        term in notes for term in scenario.required_note_terms
+    )
     conflict_markers = any(
         marker in "\n".join(file_contents.values())
         for marker in ("<<<<<<<", "=======", ">>>>>>>")
@@ -421,15 +522,24 @@ def score_run(
         role for role in user_roles if message_counts_by_role.get(role, 0) > 0
     }
 
+    direct_wake_requirement_met = required_direct_wakes_delivered and (
+        not scenario.require_direct_wake
+        or (
+            direct_messages > 0
+            and bool(required_direct_message_ids)
+            and sum(hollywood_wake_turns_by_role.values()) > 0
+        )
+    )
     passed = (
         alice_done
         and bob_done
         and notes_have_alice
         and notes_have_bob
+        and required_note_terms_present
         and not conflict_markers
         and coordination_errors == 0
         and user_roles_with_messages == user_roles
-        and required_direct_wakes_delivered
+        and direct_wake_requirement_met
     )
     return {
         "passed": passed,
@@ -437,12 +547,14 @@ def score_run(
         "bobTaskDone": bob_done,
         "sharedNotesHaveAlice": notes_have_alice,
         "sharedNotesHaveBob": notes_have_bob,
+        "requiredNoteTermsPresent": required_note_terms_present,
         "conflictMarkers": conflict_markers,
         "workspaceChanged": bool(diff.strip()),
         "messageCountsByRole": dict(message_counts_by_role),
         "directMessageCount": direct_messages,
         "requiredDirectMessageIds": sorted(required_direct_message_ids),
         "requiredDirectWakesDelivered": required_direct_wakes_delivered,
+        "directWakeRequirementMet": direct_wake_requirement_met,
         "wakeMessageIdsByRole": wake_message_ids_by_role,
         "turnStartsByRole": dict(turn_starts_by_role),
         "hollywoodWakeTurnsByRole": dict(hollywood_wake_turns_by_role),
@@ -530,10 +642,12 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
                 f"- Bob task done: `{score['bobTaskDone']}`",
                 f"- Shared notes have Alice: `{score['sharedNotesHaveAlice']}`",
                 f"- Shared notes have Bob: `{score['sharedNotesHaveBob']}`",
+                f"- Required note terms present: `{score['requiredNoteTermsPresent']}`",
                 f"- Conflict markers: `{score['conflictMarkers']}`",
                 f"- Message counts by role: `{json.dumps(score['messageCountsByRole'], sort_keys=True)}`",
                 f"- Direct messages: `{score['directMessageCount']}`",
                 f"- Required direct wakes delivered: `{score['requiredDirectWakesDelivered']}`",
+                f"- Direct wake requirement met: `{score['directWakeRequirementMet']}`",
                 f"- Wake message IDs by role: `{json.dumps(score['wakeMessageIdsByRole'], sort_keys=True)}`",
                 f"- Hollywood wake turns by role: `{json.dumps(score['hollywoodWakeTurnsByRole'], sort_keys=True)}`",
                 f"- Internal Hollywood responses by role: `{json.dumps(score['internalHollywoodResponsesByRole'], sort_keys=True)}`",

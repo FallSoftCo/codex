@@ -193,7 +193,7 @@ fn should_start_hollywood_followup(
     if message_requires_response(message) {
         return true;
     }
-    false
+    message_targets_this_session(message)
 }
 
 fn message_requires_response(message: &HollywoodClassifiedMessage) -> bool {
@@ -201,7 +201,7 @@ fn message_requires_response(message: &HollywoodClassifiedMessage) -> bool {
     matches!(
         notification.response_policy,
         HollywoodResponsePolicy::Required
-    ) || message_targets_this_session(message)
+    )
 }
 
 fn message_targets_this_session(message: &HollywoodClassifiedMessage) -> bool {

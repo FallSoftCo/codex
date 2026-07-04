@@ -155,7 +155,7 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
     let target = start_thread(&mut app).await?;
     let bystander = start_thread(&mut app).await?;
     set_thread_name(&mut app, &target.thread.id, "Target Agent-e2ea841c").await?;
-    mount_hollywood_direct_message(&hollywood_server, HOLLYWOOD_ROOM, "targetagent-e2ea841c").await;
+    mount_hollywood_direct_message(&hollywood_server, HOLLYWOOD_ROOM, "targetagent").await;
     mount_empty_hollywood_messages_after(&hollywood_server, HOLLYWOOD_ROOM, 1).await;
     mount_empty_hollywood_messages(&hollywood_server, "main").await;
 
@@ -239,6 +239,110 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
             .iter()
             .all(|text| !text.contains(HOLLYWOOD_DIRECT_BODY)),
         "Hollywood direct wake must not be injected as user text: {user_texts:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hollywood_optional_direct_message_wakes_as_attention() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let model_server = responses::start_mock_server().await;
+    let model_response = responses::sse(vec![
+        responses::ev_response_created("resp-1"),
+        responses::ev_assistant_message("msg-1", "noted optional hollywood direct message"),
+        responses::ev_completed("resp-1"),
+    ]);
+    let response_mock = responses::mount_sse_sequence(&model_server, vec![model_response]).await;
+    create_config_toml(codex_home.path(), &model_server.uri())?;
+
+    let hollywood_server = MockServer::start().await;
+    mount_hollywood_registry(&hollywood_server).await;
+
+    let mut app = TestAppServer::new(codex_home.path()).await?;
+    timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
+
+    let target = start_thread(&mut app).await?;
+    let bystander = start_thread(&mut app).await?;
+    set_thread_name(&mut app, &target.thread.id, "Target Agent-e2ea841c").await?;
+    mount_hollywood_direct_message_with_response_policy(
+        &hollywood_server,
+        HOLLYWOOD_ROOM,
+        "targetagent",
+        "Optional FYI: no response required.",
+        "none",
+    )
+    .await;
+    mount_empty_hollywood_messages_after(&hollywood_server, HOLLYWOOD_ROOM, 1).await;
+    mount_empty_hollywood_messages(&hollywood_server, "main").await;
+
+    attach_hollywood(&mut app, &target.thread.id, &hollywood_server.uri()).await?;
+    attach_hollywood(&mut app, &bystander.thread.id, &hollywood_server.uri()).await?;
+
+    let target_completed = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_matching_notification("target hollywood turn completed", |notif| {
+            if notif.method != "turn/completed" {
+                return false;
+            }
+            notif
+                .params
+                .as_ref()
+                .and_then(|params| {
+                    serde_json::from_value::<TurnCompletedNotification>(params.clone()).ok()
+                })
+                .is_some_and(|payload| payload.thread_id == target.thread.id)
+        }),
+    )
+    .await??;
+    let payload: TurnCompletedNotification =
+        serde_json::from_value(target_completed.params.expect("params must be present"))?;
+    assert_eq!(payload.thread_id, target.thread.id);
+    assert_eq!(payload.turn.id, "hollywood-1");
+
+    let bystander_completed = timeout(
+        std::time::Duration::from_secs(2),
+        app.read_stream_until_matching_notification(
+            "bystander hollywood turn completed",
+            |notif| {
+                if notif.method != "turn/completed" {
+                    return false;
+                }
+                notif
+                    .params
+                    .as_ref()
+                    .and_then(|params| {
+                        serde_json::from_value::<TurnCompletedNotification>(params.clone()).ok()
+                    })
+                    .is_some_and(|payload| payload.thread_id == bystander.thread.id)
+            },
+        ),
+    )
+    .await;
+    match bystander_completed {
+        Err(_) => {}
+        Ok(Ok(notification)) => {
+            anyhow::bail!(
+                "Hollywood optional direct message should not wake the bystander session; got {notification:?}"
+            );
+        }
+        Ok(Err(err)) => return Err(err),
+    }
+
+    let requests = response_mock.requests();
+    assert_eq!(requests.len(), 1);
+    let request = requests
+        .first()
+        .expect("Hollywood wake should issue one model request");
+    let developer_texts = request.message_input_texts("developer");
+    assert!(
+        developer_texts.iter().any(|text| {
+            text.contains("Hollywood attention update")
+                && text.contains("Optional FYI: no response required.")
+                && text.contains("\"obligation\":\"attention\"")
+                && text.contains("\"requires_response\":false")
+        }),
+        "Hollywood optional direct wake should be attention developer context: {developer_texts:?}"
     );
 
     Ok(())
@@ -526,8 +630,14 @@ async fn mount_empty_hollywood_messages_after(server: &MockServer, room: &str, a
 }
 
 async fn mount_hollywood_direct_message(server: &MockServer, room: &str, recipient_id: &str) {
-    mount_hollywood_direct_message_with_body(server, room, recipient_id, HOLLYWOOD_DIRECT_BODY)
-        .await;
+    mount_hollywood_direct_message_with_response_policy(
+        server,
+        room,
+        recipient_id,
+        HOLLYWOOD_DIRECT_BODY,
+        "required",
+    )
+    .await;
 }
 
 async fn mount_hollywood_direct_message_with_body(
@@ -535,6 +645,23 @@ async fn mount_hollywood_direct_message_with_body(
     room: &str,
     recipient_id: &str,
     body: &str,
+) {
+    mount_hollywood_direct_message_with_response_policy(
+        server,
+        room,
+        recipient_id,
+        body,
+        "required",
+    )
+    .await;
+}
+
+async fn mount_hollywood_direct_message_with_response_policy(
+    server: &MockServer,
+    room: &str,
+    recipient_id: &str,
+    body: &str,
+    response_policy: &str,
 ) {
     Mock::given(method("GET"))
         .and(path("/hollywood/v1/messages"))
@@ -547,7 +674,7 @@ async fn mount_hollywood_direct_message_with_body(
                 "sender_id": "peer-session",
                 "recipient_id": recipient_id,
                 "message_kind": "direct",
-                "response_policy": "required",
+                "response_policy": response_policy,
                 "body": body,
                 "created_at": "2026-07-02T00:00:00Z"
             }],
