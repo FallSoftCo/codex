@@ -12,6 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
+use tokio::sync::Barrier;
 use tokio::sync::Mutex;
 
 use crate::session::step_context::StepContext;
@@ -64,6 +65,15 @@ async fn apply_patch_after_collaboration_preflight(
     cwd: &AbsolutePathBuf,
     patch: &str,
 ) -> String {
+    apply_patch_after_collaboration_preflight_with_barrier(session, cwd, patch, None).await
+}
+
+async fn apply_patch_after_collaboration_preflight_with_barrier(
+    session: &Session,
+    cwd: &AbsolutePathBuf,
+    patch: &str,
+    start_barrier: Option<Arc<Barrier>>,
+) -> String {
     let argv = vec!["apply_patch".to_string(), patch.to_string()];
     let cwd = PathUri::from_abs_path(cwd);
     let action = match codex_apply_patch::maybe_parse_apply_patch_verified(
@@ -81,6 +91,10 @@ async fn apply_patch_after_collaboration_preflight(
     let collaboration = apply_patch_collaboration_preflight(session, &file_paths)
         .await
         .expect("collaborative edit plan should allow apply_patch");
+
+    if let Some(start_barrier) = start_barrier {
+        start_barrier.wait().await;
+    }
 
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
@@ -323,7 +337,7 @@ async fn apply_patch_edits_peer_owned_file_when_owner_invites_actor() {
 }
 
 #[tokio::test]
-async fn two_agents_apply_collaborative_edits_to_same_file() {
+async fn two_agents_start_collaborative_edits_to_same_file_concurrently() {
     let (agent_a, _turn_a, state_db) = session_with_state_db().await;
     let (mut agent_b, _turn_b) = make_session_and_context().await;
     agent_b.services.state_db = Some(Arc::clone(&state_db));
@@ -375,36 +389,41 @@ async fn two_agents_apply_collaborative_edits_to_same_file() {
         .await
         .expect("record shared collaborative edit plan");
 
-    let agent_a_output = apply_patch_after_collaboration_preflight(
-        agent_a.as_ref(),
-        &cwd,
-        r#"*** Begin Patch
+    let start_barrier = Arc::new(Barrier::new(2));
+    let agent_a_patch = r#"*** Begin Patch
 *** Update File: shared.rs
 @@
  pub fn render_toolbar() -> &'static str {
 -    "enabled"
 +    "ready from agent A"
  }
-*** End Patch"#,
-    )
-    .await;
-    assert!(agent_a_output.contains("Collaborative edit plan matched"));
-    assert!(agent_a_output.contains("render_toolbar and render_status"));
-    assert!(agent_a_output.contains(agent_a.thread_id().to_string().as_str()));
-
-    let agent_b_output = apply_patch_after_collaboration_preflight(
-        agent_b.as_ref(),
-        &cwd,
-        r#"*** Begin Patch
+*** End Patch"#;
+    let agent_b_patch = r#"*** Begin Patch
 *** Update File: shared.rs
 @@
  pub fn render_status() -> &'static str {
 -    "idle"
 +    "collaborating from agent B"
  }
-*** End Patch"#,
-    )
-    .await;
+*** End Patch"#;
+
+    let agent_a_edit = apply_patch_after_collaboration_preflight_with_barrier(
+        agent_a.as_ref(),
+        &cwd,
+        agent_a_patch,
+        Some(Arc::clone(&start_barrier)),
+    );
+    let agent_b_edit = apply_patch_after_collaboration_preflight_with_barrier(
+        agent_b.as_ref(),
+        &cwd,
+        agent_b_patch,
+        Some(Arc::clone(&start_barrier)),
+    );
+    let (agent_a_output, agent_b_output) = tokio::join!(agent_a_edit, agent_b_edit);
+
+    assert!(agent_a_output.contains("Collaborative edit plan matched"));
+    assert!(agent_a_output.contains("render_toolbar and render_status"));
+    assert!(agent_a_output.contains(agent_a.thread_id().to_string().as_str()));
     assert!(agent_b_output.contains("Collaborative edit plan matched"));
     assert!(agent_b_output.contains("render_toolbar and render_status"));
     assert!(agent_b_output.contains(agent_a.thread_id().to_string().as_str()));

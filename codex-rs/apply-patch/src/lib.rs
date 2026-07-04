@@ -4,7 +4,10 @@ mod seek_sequence;
 mod standalone_executable;
 mod streaming_parser;
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::fs::File;
+use std::fs::OpenOptions;
 use std::io;
 use std::path::PathBuf;
 
@@ -33,6 +36,10 @@ pub use invocation::verify_apply_patch_args;
 pub use standalone_executable::main;
 
 use crate::invocation::ExtractHeredocError;
+
+struct PatchPathLockGuards {
+    _lock_files: Vec<File>,
+}
 
 /// Special argv[1] flag used when the Codex executable self-invokes to run the
 /// internal `apply_patch` path.
@@ -340,7 +347,27 @@ pub async fn apply_hunks(
     sandbox: Option<&FileSystemSandboxContext>,
 ) -> Result<AppliedPatchDelta, ApplyPatchFailure> {
     let mut delta = AppliedPatchDelta::empty();
-    match apply_hunks_to_files(hunks, cwd, fs, sandbox, &mut delta).await {
+    let path_locks = match lock_hunk_paths(hunks, cwd).await {
+        Ok(path_locks) => path_locks,
+        Err(error) => {
+            let msg = error.to_string();
+            writeln!(stderr, "{msg}").map_err(|error| {
+                ApplyPatchFailure::new(ApplyPatchError::from(error), delta.clone())
+            })?;
+            let error = if let Some(io) = error.downcast_ref::<std::io::Error>() {
+                ApplyPatchError::from(io)
+            } else {
+                ApplyPatchError::IoError(IoError {
+                    context: msg,
+                    source: std::io::Error::other(error),
+                })
+            };
+            return Err(ApplyPatchFailure::new(error, delta));
+        }
+    };
+    let result = apply_hunks_to_files(hunks, cwd, fs, sandbox, &mut delta).await;
+    drop(path_locks);
+    match result {
         Ok(affected_paths) => {
             print_summary(&affected_paths, stdout).map_err(|error| {
                 ApplyPatchFailure::new(ApplyPatchError::from(error), delta.clone())
@@ -363,6 +390,78 @@ pub async fn apply_hunks(
             Err(ApplyPatchFailure::new(error, delta))
         }
     }
+}
+
+fn collect_hunk_lock_paths(hunks: &[Hunk], cwd: &PathUri) -> anyhow::Result<Vec<String>> {
+    let mut paths = BTreeSet::new();
+    for hunk in hunks {
+        let path_uri = hunk.resolve_path(cwd)?;
+        paths.insert(path_uri.to_string());
+        if let Hunk::UpdateFile {
+            move_path: Some(dest),
+            ..
+        } = hunk
+        {
+            paths.insert(cwd.join(&dest.to_string_lossy())?.to_string());
+        }
+    }
+    Ok(paths.into_iter().collect())
+}
+
+async fn lock_hunk_paths(hunks: &[Hunk], cwd: &PathUri) -> anyhow::Result<PatchPathLockGuards> {
+    let paths = collect_hunk_lock_paths(hunks, cwd)?;
+    tokio::task::spawn_blocking(move || lock_hunk_paths_blocking(paths))
+        .await
+        .context("failed to join apply_patch path lock task")?
+}
+
+fn lock_hunk_paths_blocking(paths: Vec<String>) -> anyhow::Result<PatchPathLockGuards> {
+    let lock_root = apply_patch_lock_root();
+    std::fs::create_dir_all(&lock_root).with_context(|| {
+        format!(
+            "failed to create apply_patch lock directory {}",
+            lock_root.display()
+        )
+    })?;
+
+    let mut lock_files = Vec::with_capacity(paths.len());
+    for path in paths {
+        let lock_path = lock_root.join(format!("{}.lock", apply_patch_lock_key(&path)));
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .with_context(|| {
+                format!(
+                    "failed to open apply_patch lock file {}",
+                    lock_path.display()
+                )
+            })?;
+        file.lock()
+            .with_context(|| format!("failed to lock apply_patch path {path}"))?;
+        lock_files.push(file);
+    }
+    Ok(PatchPathLockGuards {
+        _lock_files: lock_files,
+    })
+}
+
+fn apply_patch_lock_root() -> PathBuf {
+    std::env::temp_dir().join("codex-apply-patch-locks")
+}
+
+fn apply_patch_lock_key(path: &str) -> String {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    let mut hash = FNV_OFFSET;
+    for byte in path.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    format!("{hash:016x}-{}", path.len())
 }
 
 /// Applies each parsed patch hunk to the filesystem.
@@ -1053,11 +1152,35 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::fs;
     use std::string::ToString;
+    use std::sync::Arc;
     use tempfile::tempdir;
+    use tokio::sync::Barrier;
 
     /// Helper to construct a patch with the given body.
     fn wrap_patch(body: &str) -> String {
         format!("*** Begin Patch\n{body}\n*** End Patch")
+    }
+
+    async fn apply_patch_after_barrier(
+        cwd: PathUri,
+        patch: String,
+        start_barrier: Arc<Barrier>,
+    ) -> String {
+        start_barrier.wait().await;
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &cwd,
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(String::from_utf8(stderr).unwrap(), "");
+        String::from_utf8(stdout).unwrap()
     }
 
     #[tokio::test]
@@ -1164,6 +1287,52 @@ mod tests {
                 absolute_update.display(),
                 absolute_delete.display(),
             )
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_updates_to_same_file_preserve_both_edits() {
+        let dir = tempdir().unwrap();
+        let target_path = dir.path().join("shared.rs");
+        fs::write(
+            &target_path,
+            "pub fn render_toolbar() -> &'static str {\n    \"enabled\"\n}\n\npub fn render_status() -> &'static str {\n    \"idle\"\n}\n",
+        )
+        .unwrap();
+        let cwd = PathUri::from_host_native_path(dir.path()).expect("absolute test path");
+        let patch_a = wrap_patch(
+            r#"*** Update File: shared.rs
+@@
+ pub fn render_toolbar() -> &'static str {
+-    "enabled"
++    "ready from agent A"
+ }"#,
+        );
+        let patch_b = wrap_patch(
+            r#"*** Update File: shared.rs
+@@
+ pub fn render_status() -> &'static str {
+-    "idle"
++    "collaborating from agent B"
+ }"#,
+        );
+        let start_barrier = Arc::new(Barrier::new(2));
+
+        let edit_a = apply_patch_after_barrier(cwd.clone(), patch_a, Arc::clone(&start_barrier));
+        let edit_b = apply_patch_after_barrier(cwd, patch_b, Arc::clone(&start_barrier));
+        let (output_a, output_b) = tokio::join!(edit_a, edit_b);
+
+        assert_eq!(
+            output_a,
+            "Success. Updated the following files:\nM shared.rs\n"
+        );
+        assert_eq!(
+            output_b,
+            "Success. Updated the following files:\nM shared.rs\n"
+        );
+        assert_eq!(
+            fs::read_to_string(target_path).unwrap(),
+            "pub fn render_toolbar() -> &'static str {\n    \"ready from agent A\"\n}\n\npub fn render_status() -> &'static str {\n    \"collaborating from agent B\"\n}\n"
         );
     }
 
@@ -1814,7 +1983,7 @@ g
         let mut stderr = Vec::new();
         apply_patch(
             &patch,
-            &PathUri::from_path(dir.path()).expect("absolute test path"),
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
             &mut stdout,
             &mut stderr,
             LOCAL_FS.as_ref(),
@@ -1848,7 +2017,7 @@ g
         let mut stderr = Vec::new();
         apply_patch(
             &patch,
-            &PathUri::from_path(dir.path()).expect("absolute test path"),
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
             &mut stdout,
             &mut stderr,
             LOCAL_FS.as_ref(),
