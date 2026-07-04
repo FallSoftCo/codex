@@ -254,6 +254,59 @@ async fn preflight_allows_peer_claim_with_collaborative_edit_plan() {
 }
 
 #[tokio::test]
+async fn preflight_allows_peer_claim_when_plan_uses_owner_hollywood_alias() {
+    let (session, turn, state_db) = session_with_state_db().await;
+    let claimed_by_peer = codex_protocol::ThreadId::new();
+    let file_path = turn.config.cwd.join("shared.rs").into_path_buf();
+    let config = session.get_config().await;
+    crate::rollout::append_thread_name(
+        config.codex_home.as_path(),
+        claimed_by_peer,
+        "BobAgent-e2ea841c",
+    )
+    .await
+    .expect("record owner thread name");
+    state_db
+        .claim_path_ownership(
+            claimed_by_peer,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("claim path");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-1".to_string(),
+            actor_thread_id: session.thread_id(),
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "Alice section only".to_string(),
+            intent: "patch only Alice's shared notes section".to_string(),
+            peers: vec!["bobagent-e2ea841c".to_string()],
+            handoff: Some("Alice patches Alice section; Bob owns Bob section".to_string()),
+            integrator: Some("aliceagent-e2ea841c".to_string()),
+            report_back: Some("after apply_patch".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record plan with owner alias");
+    let file_uri = PathUri::from_abs_path(
+        &AbsolutePathBuf::from_absolute_path(file_path).expect("absolute file path"),
+    );
+
+    let context = apply_patch_collaboration_preflight(session.as_ref(), &[file_uri])
+        .await
+        .expect("plan using owner Hollywood alias should allow peer-owned file");
+
+    let output = context.append_notice("Success. Updated files.".to_string());
+    assert!(output.contains("Collaborative edit plan matched"));
+    assert!(output.contains("Alice section only"));
+}
+
+#[tokio::test]
 async fn preflight_allows_peer_owned_file_when_owner_invites_actor() {
     let (session, turn, state_db) = session_with_state_db().await;
     let claimed_by_peer = codex_protocol::ThreadId::new();

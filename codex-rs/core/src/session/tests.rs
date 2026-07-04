@@ -9399,6 +9399,40 @@ async fn try_start_turn_if_idle_rejects_active_review_turn_without_injecting() {
 }
 
 #[tokio::test]
+async fn hollywood_input_idle_turn_uses_hollywood_message_turn_id() {
+    let (sess, _tc, rx) = make_session_and_context_with_rx().await;
+
+    super::handlers::hollywood_input(
+        &sess,
+        "hollywood-4483".to_string(),
+        HollywoodInputMessage {
+            message_id: 4483,
+            room: "main".to_string(),
+            sender_id: "peer".to_string(),
+            body: "Need a durable verification task owner.".to_string(),
+            mentions: Vec::new(),
+            attention: Some("broadcast".to_string()),
+            message_kind: Some("broadcast".to_string()),
+            obligation: Some("obligation".to_string()),
+            synthetic_brief: None,
+            requires_response: true,
+        },
+    )
+    .await;
+
+    let event = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+        .await
+        .expect("timeout waiting for Hollywood turn start")
+        .expect("event");
+    let EventMsg::TurnStarted(turn_started) = event.msg else {
+        panic!("expected turn started event");
+    };
+    assert_eq!(turn_started.turn_id, "hollywood-4483");
+
+    sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
+}
+
+#[tokio::test]
 async fn hollywood_input_is_developer_context_not_user_message() {
     let (sess, tc, rx) = make_session_and_context_with_rx().await;
     sess.spawn_task(

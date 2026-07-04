@@ -304,7 +304,10 @@ pub async fn hollywood_input(sess: &Arc<Session>, sub_id: String, message: Holly
     let items = vec![ContextualUserFragment::into(HollywoodMessage::new(
         &message,
     ))];
-    if let Err(err) = sess.try_start_turn_if_idle(items).await {
+    if let Err(err) = sess
+        .try_start_turn_if_idle_with_sub_id(sub_id.clone(), items)
+        .await
+    {
         let reason = err.reason();
         sess.inject_no_new_turn(err.into_input(), /*current_turn_context*/ None)
             .await;

@@ -341,10 +341,21 @@ pub fn live_identity_matches_target(value: &str, target: &str) -> bool {
     if normalized_value == normalized_target {
         return true;
     }
+    if compact_identity(&normalized_value) == compact_identity(&normalized_target) {
+        return true;
+    }
     generated_runtime_identity_base(&normalized_value).is_some_and(|runtime_base| {
         runtime_base == normalized_target
+            || compact_identity(runtime_base) == compact_identity(&normalized_target)
             || runtime_base.ends_with(&format!("-{normalized_target}"))
     })
+}
+
+fn compact_identity(value: &str) -> String {
+    value
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect()
 }
 
 fn generated_runtime_identity_base(value: &str) -> Option<&str> {
@@ -528,6 +539,14 @@ mod tests {
         assert!(live_identity_matches_target(
             "silo-agent-002-5b254e",
             "agent-002"
+        ));
+        assert!(live_identity_matches_target(
+            "bobagent-e2ea841c",
+            "bob-agent-e2ea841c"
+        ));
+        assert!(live_identity_matches_target(
+            "bobagent-e2ea841c",
+            "bob-agent"
         ));
         assert!(!live_identity_matches_target("james-proof", "james"));
         assert!(!live_identity_matches_target("jameson-7c45ba", "james"));

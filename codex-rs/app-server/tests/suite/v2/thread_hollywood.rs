@@ -15,6 +15,8 @@ use codex_app_server_protocol::ThreadHollywoodDetachParams;
 use codex_app_server_protocol::ThreadHollywoodDetachResponse;
 use codex_app_server_protocol::ThreadHollywoodListParams;
 use codex_app_server_protocol::ThreadHollywoodListResponse;
+use codex_app_server_protocol::ThreadSetNameParams;
+use codex_app_server_protocol::ThreadSetNameResponse;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_app_server_protocol::TurnCompletedNotification;
@@ -152,7 +154,8 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
 
     let target = start_thread(&mut app).await?;
     let bystander = start_thread(&mut app).await?;
-    mount_hollywood_direct_message(&hollywood_server, HOLLYWOOD_ROOM, &target.thread.id).await;
+    set_thread_name(&mut app, &target.thread.id, "Target Agent-e2ea841c").await?;
+    mount_hollywood_direct_message(&hollywood_server, HOLLYWOOD_ROOM, "targetagent-e2ea841c").await;
     mount_empty_hollywood_messages_after(&hollywood_server, HOLLYWOOD_ROOM, 1).await;
     mount_empty_hollywood_messages(&hollywood_server, "main").await;
 
@@ -178,6 +181,7 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
     let payload: TurnCompletedNotification =
         serde_json::from_value(target_completed.params.expect("params must be present"))?;
     assert_eq!(payload.thread_id, target.thread.id);
+    assert_eq!(payload.turn.id, "hollywood-1");
 
     let bystander_completed = timeout(
         std::time::Duration::from_secs(2),
@@ -364,6 +368,25 @@ async fn hollywood_collaborative_edit_plan_is_model_visible_context() -> Result<
         "Hollywood collaborative edit plan must not be injected as user text: {user_texts:?}"
     );
 
+    Ok(())
+}
+
+async fn set_thread_name(app: &mut TestAppServer, thread_id: &str, name: &str) -> Result<()> {
+    let request_id = app
+        .send_raw_request(
+            "thread/name/set",
+            Some(serde_json::to_value(ThreadSetNameParams {
+                thread_id: thread_id.to_string(),
+                name: name.to_string(),
+            })?),
+        )
+        .await?;
+    let response: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    let _: ThreadSetNameResponse = to_response(response)?;
     Ok(())
 }
 

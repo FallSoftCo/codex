@@ -46,6 +46,15 @@ impl Session {
         self: &Arc<Self>,
         input: Vec<ResponseItem>,
     ) -> Result<(), TryStartTurnIfIdleError> {
+        self.try_start_turn_if_idle_with_sub_id(uuid::Uuid::new_v4().to_string(), input)
+            .await
+    }
+
+    pub(crate) async fn try_start_turn_if_idle_with_sub_id(
+        self: &Arc<Self>,
+        sub_id: String,
+        input: Vec<ResponseItem>,
+    ) -> Result<(), TryStartTurnIfIdleError> {
         if input.is_empty() {
             return Ok(());
         }
@@ -83,9 +92,7 @@ impl Session {
             ));
         }
 
-        let turn_context = self
-            .new_default_turn_with_sub_id(uuid::Uuid::new_v4().to_string())
-            .await;
+        let turn_context = self.new_default_turn_with_sub_id(sub_id).await;
         if turn_context.collaboration_mode.mode == ModeKind::Plan {
             self.clear_reserved_idle_turn(&turn_state).await;
             self.maybe_start_turn_for_pending_work().await;

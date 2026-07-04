@@ -374,8 +374,12 @@ def score_run(
             turn = params.get("turn") or {}
             turn_id = str(turn.get("id") or "")
             turn_starts_by_role[role] += 1
-            if turn_id.startswith("hollywood-"):
+            hollywood_message_id = hollywood_message_id_from_turn_id(turn_id)
+            if hollywood_message_id is not None:
                 hollywood_wake_turns_by_role[role] += 1
+                wake_message_ids_by_role.setdefault(role, []).append(
+                    hollywood_message_id
+                )
         elif method == "item/completed":
             turn_id = str(params.get("turnId") or "")
             if not turn_id.startswith("hollywood-"):
@@ -448,6 +452,16 @@ def score_run(
         "coordinationToolErrors": coordination_errors,
         "tokenUsage": notification_summary.get("tokenUsage", {}),
     }
+
+
+def hollywood_message_id_from_turn_id(turn_id: str) -> int | None:
+    prefix = "hollywood-"
+    if not turn_id.startswith(prefix):
+        return None
+    try:
+        return int(turn_id[len(prefix) :])
+    except ValueError:
+        return None
 
 
 def hollywood_message_id_from_user_message(item: dict[str, Any]) -> int | None:

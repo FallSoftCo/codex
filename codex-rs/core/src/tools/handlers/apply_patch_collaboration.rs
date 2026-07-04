@@ -1,5 +1,9 @@
 use crate::function_tool::FunctionCallError;
+use crate::hollywood::identities;
+use crate::hollywood::live_identity_matches_target;
+use crate::rollout::find_thread_name_by_id;
 use crate::session::session::Session;
+use codex_protocol::ThreadId;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use codex_utils_path_uri::PathUri;
 use std::path::Path;
@@ -37,6 +41,7 @@ impl ApplyPatchCollaborationContext {
 struct PeerPathClaimConflict {
     path: PathBuf,
     blocking_claim: codex_state::PathClaim,
+    blocking_owner_identities: Vec<String>,
 }
 
 pub(super) async fn apply_patch_collaboration_preflight(
@@ -61,12 +66,16 @@ pub(super) async fn apply_patch_collaboration_preflight(
             return Ok(ApplyPatchCollaborationContext::default());
         }
     };
-    let actor_thread_id = session.thread_id().to_string();
-    let peer_claim_conflicts = collect_peer_path_claim_conflicts(
+    let actor_thread_id = session.thread_id();
+    let actor_thread_name = session.thread_name().await;
+    let actor_identities = identities(actor_thread_id, actor_thread_name.as_deref());
+    let actor_thread_id_string = actor_thread_id.to_string();
+    let mut peer_claim_conflicts = collect_peer_path_claim_conflicts(
         &native_file_paths,
-        actor_thread_id.as_str(),
+        actor_thread_id_string.as_str(),
         &active_claims,
     );
+    populate_blocking_owner_identities(session, &mut peer_claim_conflicts).await;
     let active_plans = match db
         .list_collaborative_edit_plans_for_files(&native_file_paths)
         .await
@@ -81,7 +90,12 @@ pub(super) async fn apply_patch_collaboration_preflight(
         .into_iter()
         .filter(|plan| {
             native_file_paths.iter().any(|path| {
-                collaborative_edit_plan_allows_path(plan, actor_thread_id.as_str(), path)
+                collaborative_edit_plan_allows_path(
+                    plan,
+                    actor_thread_id_string.as_str(),
+                    &actor_identities,
+                    path,
+                )
             })
         })
         .collect::<Vec<_>>();
@@ -90,7 +104,12 @@ pub(super) async fn apply_patch_collaboration_preflight(
         .iter()
         .filter(|conflict| {
             !matching_plans.iter().any(|plan| {
-                collaborative_edit_plan_covers_conflict(plan, actor_thread_id.as_str(), conflict)
+                collaborative_edit_plan_covers_conflict(
+                    plan,
+                    actor_thread_id_string.as_str(),
+                    &actor_identities,
+                    conflict,
+                )
             })
         })
         .cloned()
@@ -119,6 +138,7 @@ fn collect_peer_path_claim_conflicts(
                 conflicts.push(PeerPathClaimConflict {
                     path: file_path.clone(),
                     blocking_claim: claim.clone(),
+                    blocking_owner_identities: Vec::new(),
                 });
             }
         }
@@ -135,27 +155,69 @@ fn path_claim_blocks_file(file_path: &Path, claim: &codex_state::PathClaim) -> b
     }
 }
 
+async fn populate_blocking_owner_identities(
+    session: &Session,
+    conflicts: &mut [PeerPathClaimConflict],
+) {
+    let config = session.get_config().await;
+    for conflict in conflicts {
+        conflict.blocking_owner_identities = thread_identities(
+            config.codex_home.as_path(),
+            conflict.blocking_claim.owner_thread_id.as_str(),
+        )
+        .await;
+    }
+}
+
+async fn thread_identities(codex_home: &Path, thread_id: &str) -> Vec<String> {
+    let Ok(thread_id) = ThreadId::from_string(thread_id) else {
+        return vec![thread_id.to_string()];
+    };
+    let thread_name = find_thread_name_by_id(codex_home, &thread_id)
+        .await
+        .ok()
+        .flatten();
+    identities(thread_id, thread_name.as_deref())
+}
+
 fn collaborative_edit_plan_allows_path(
     plan: &codex_state::CollaborativeEditPlan,
     actor_thread_id: &str,
+    actor_identities: &[String],
     file_path: &Path,
 ) -> bool {
     plan.file_path == file_path
         && (plan.actor_thread_id == actor_thread_id
-            || plan.peers.iter().any(|peer| peer == actor_thread_id))
+            || plan
+                .peers
+                .iter()
+                .any(|peer| identity_matches_any(peer, actor_identities)))
 }
 
 fn collaborative_edit_plan_covers_conflict(
     plan: &codex_state::CollaborativeEditPlan,
     actor_thread_id: &str,
+    actor_identities: &[String],
     conflict: &PeerPathClaimConflict,
 ) -> bool {
     let blocking_owner = conflict.blocking_claim.owner_thread_id.as_str();
     plan.file_path == conflict.path
         && ((plan.actor_thread_id == actor_thread_id
-            && plan.peers.iter().any(|peer| peer == blocking_owner))
+            && plan.peers.iter().any(|peer| {
+                peer == blocking_owner
+                    || identity_matches_any(peer, &conflict.blocking_owner_identities)
+            }))
             || (plan.actor_thread_id == blocking_owner
-                && plan.peers.iter().any(|peer| peer == actor_thread_id)))
+                && plan.peers.iter().any(|peer| {
+                    peer == actor_thread_id || identity_matches_any(peer, actor_identities)
+                })))
+}
+
+fn identity_matches_any(value: &str, identities: &[String]) -> bool {
+    identities.iter().any(|identity| {
+        live_identity_matches_target(value, identity)
+            || live_identity_matches_target(identity, value)
+    })
 }
 
 fn format_unplanned_peer_claim_conflicts(conflicts: &[PeerPathClaimConflict]) -> String {
