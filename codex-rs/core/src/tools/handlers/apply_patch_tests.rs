@@ -8,6 +8,7 @@ use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -214,6 +215,99 @@ async fn preflight_allows_peer_owned_file_when_owner_invites_actor() {
         .expect("owner-authored plan should allow invited actor to patch peer-owned file");
 
     let output = context.append_notice("Success. Updated files.".to_string());
+    assert!(output.contains("Collaborative edit plan matched"));
+    assert!(output.contains("render_toolbar"));
+    assert!(output.contains(claimed_by_peer.to_string().as_str()));
+}
+
+#[tokio::test]
+async fn apply_patch_edits_peer_owned_file_when_owner_invites_actor() {
+    let (session, _turn, state_db) = session_with_state_db().await;
+    let tmp = TempDir::new().expect("tmp");
+    let cwd = tmp.path().abs();
+    let claimed_by_peer = codex_protocol::ThreadId::new();
+    let file_path = cwd.join("shared.rs").into_path_buf();
+    fs::write(
+        &file_path,
+        "pub fn render_toolbar() -> &'static str {\n    \"enabled\"\n}\n",
+    )
+    .expect("write collaborative edit fixture");
+    state_db
+        .claim_path_ownership(
+            claimed_by_peer,
+            &[codex_state::PathClaimSpec {
+                kind: codex_state::PathClaimKind::File,
+                path: file_path.clone(),
+            }],
+            std::time::Duration::from_secs(300),
+        )
+        .await
+        .expect("claim path");
+    state_db
+        .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
+            id: "plan-1".to_string(),
+            actor_thread_id: claimed_by_peer,
+            room: Some("room".to_string()),
+            file_path: file_path.clone(),
+            edit_slice: "render_toolbar".to_string(),
+            intent: "replace the enabled label with the disabled-state label".to_string(),
+            peers: vec![session.thread_id().to_string()],
+            handoff: Some("owner lands toolbar refactor; actor patches label after".to_string()),
+            integrator: Some(claimed_by_peer.to_string()),
+            report_back: Some("after apply_patch with exact slice and merge risk".to_string()),
+            lease_seconds: 300,
+        })
+        .await
+        .expect("record owner-authored plan");
+    let patch = r#"*** Begin Patch
+*** Update File: shared.rs
+@@
+ pub fn render_toolbar() -> &'static str {
+-    "enabled"
++    "disabled-state label"
+ }
+*** End Patch"#;
+    let argv = vec!["apply_patch".to_string(), patch.to_string()];
+    let cwd = PathUri::from_abs_path(&cwd);
+    let action = match codex_apply_patch::maybe_parse_apply_patch_verified(
+        &argv,
+        &cwd,
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    {
+        MaybeApplyPatchVerified::Body(action) => action,
+        other => panic!("expected verified patch body, got: {other:?}"),
+    };
+    let file_paths = file_paths_for_action(&action);
+    let collaboration = apply_patch_collaboration_preflight(session.as_ref(), &file_paths)
+        .await
+        .expect("owner-authored plan should allow invited actor to patch peer-owned file");
+
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    codex_apply_patch::apply_patch(
+        &action.patch,
+        &action.cwd,
+        &mut stdout,
+        &mut stderr,
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    .expect("collaborative edit apply_patch should write file");
+
+    assert_eq!(
+        fs::read_to_string(&file_path).expect("read patched collaborative edit fixture"),
+        "pub fn render_toolbar() -> &'static str {\n    \"disabled-state label\"\n}\n"
+    );
+    let _stdout = String::from_utf8(stdout).expect("apply_patch stdout should be utf8");
+    assert_eq!(
+        String::from_utf8(stderr).expect("apply_patch stderr should be utf8"),
+        ""
+    );
+    let output = collaboration.append_notice("Success. Updated files.".to_string());
     assert!(output.contains("Collaborative edit plan matched"));
     assert!(output.contains("render_toolbar"));
     assert!(output.contains(claimed_by_peer.to_string().as_str()));
