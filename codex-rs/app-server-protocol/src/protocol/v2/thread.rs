@@ -1,6 +1,7 @@
 use super::ActivePermissionProfile;
 use super::ApprovalsReviewer;
 use super::AskForApproval;
+use super::HollywoodSessionAttachOptions;
 use super::SandboxMode;
 use super::SandboxPolicy;
 use super::Thread;
@@ -116,6 +117,12 @@ pub struct ThreadStartParams {
     #[experimental("thread/start.environments")]
     #[ts(optional = nullable)]
     pub environments: Option<Vec<TurnEnvironmentParams>>,
+    /// Optional Hollywood room attachment to apply immediately after starting
+    /// the thread. This lets clients pass launch-scoped room settings instead
+    /// of relying on daemon environment variables.
+    #[experimental("thread/start.hollywood")]
+    #[ts(optional = nullable)]
+    pub hollywood: Option<HollywoodSessionAttachOptions>,
     #[experimental("thread/start.dynamicTools")]
     #[serde(
         default,

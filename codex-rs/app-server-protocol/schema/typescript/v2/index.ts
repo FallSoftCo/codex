@@ -174,6 +174,7 @@ export type { HollywoodMessageAttention } from "./HollywoodMessageAttention";
 export type { HollywoodMessageKind } from "./HollywoodMessageKind";
 export type { HollywoodMessageNotification } from "./HollywoodMessageNotification";
 export type { HollywoodResponsePolicy } from "./HollywoodResponsePolicy";
+export type { HollywoodSessionAttachOptions } from "./HollywoodSessionAttachOptions";
 export type { HollywoodSessionState } from "./HollywoodSessionState";
 export type { HollywoodSessionStatus } from "./HollywoodSessionStatus";
 export type { HookCompletedNotification } from "./HookCompletedNotification";

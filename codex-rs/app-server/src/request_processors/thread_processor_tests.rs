@@ -1,3 +1,90 @@
+mod thread_start_hollywood_config_tests {
+    use super::super::thread_start_hollywood_config;
+    use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
+    use crate::hollywood::HollywoodConfig;
+    use codex_app_server_protocol::HollywoodAttentionMode;
+    use codex_app_server_protocol::HollywoodAttentionSettings;
+    use codex_app_server_protocol::HollywoodSessionAttachOptions;
+    use pretty_assertions::assert_eq;
+    use std::fs;
+
+    #[test]
+    fn explicit_start_hollywood_config_overrides_cwd_room() -> std::io::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let repo_root = temp_dir.path().join("Workspace Repo");
+        let nested = repo_root.join("app");
+        fs::create_dir_all(repo_root.join(".git"))?;
+        fs::write(repo_root.join(".git/HEAD"), "ref: refs/heads/main\n")?;
+        fs::create_dir_all(&nested)?;
+
+        let config = thread_start_hollywood_config(
+            Some(HollywoodSessionAttachOptions {
+                url: Some("http://127.0.0.1:53373".to_string()),
+                room: Some("repo/requested-room".to_string()),
+                observed_rooms: vec!["main".to_string()],
+                wake_rooms: vec!["repo/requested-room".to_string()],
+                attention: Some(HollywoodAttentionSettings {
+                    mode: HollywoodAttentionMode::Broad,
+                    include_at_all: true,
+                    include_at_room: false,
+                }),
+            }),
+            /*auto_attach_hollywood_on_start*/ true,
+            nested.as_path(),
+        );
+
+        assert_eq!(
+            config,
+            Some(HollywoodConfig {
+                url: "http://127.0.0.1:53373".to_string(),
+                room: "repo/requested-room".to_string(),
+                observed_rooms: vec!["main".to_string()],
+                wake_rooms: vec!["repo/requested-room".to_string()],
+                attention: HollywoodAttentionSettings {
+                    mode: HollywoodAttentionMode::Broad,
+                    include_at_all: true,
+                    include_at_room: false,
+                },
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn explicit_start_hollywood_config_defaults_room_from_cwd() -> std::io::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let repo_root = temp_dir.path().join("Fresh Workspace");
+        let nested = repo_root.join("app");
+        fs::create_dir_all(repo_root.join(".git"))?;
+        fs::write(repo_root.join(".git/HEAD"), "ref: refs/heads/main\n")?;
+        fs::create_dir_all(&nested)?;
+
+        let config = thread_start_hollywood_config(
+            Some(HollywoodSessionAttachOptions {
+                url: None,
+                room: None,
+                observed_rooms: Vec::new(),
+                wake_rooms: Vec::new(),
+                attention: None,
+            }),
+            /*auto_attach_hollywood_on_start*/ false,
+            nested.as_path(),
+        );
+
+        assert_eq!(
+            config,
+            Some(HollywoodConfig {
+                url: DEFAULT_HOLLYWOOD_URL.to_string(),
+                room: "repo/fresh-workspace".to_string(),
+                observed_rooms: vec!["main".to_string()],
+                wake_rooms: Vec::new(),
+                attention: HollywoodAttentionSettings::default(),
+            })
+        );
+        Ok(())
+    }
+}
+
 mod thread_list_cwd_filter_tests {
     use super::super::normalize_thread_list_cwd_filters;
     use codex_app_server_protocol::ThreadListCwdFilter;

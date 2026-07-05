@@ -1259,6 +1259,47 @@
       ],
       "type": "object"
     },
+    "HollywoodSessionAttachOptions": {
+      "properties": {
+        "attention": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HollywoodAttentionSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedRooms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "room": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wakeRooms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "HollywoodSessionStatus": {
       "enum": [
         "persisted",

@@ -8,6 +8,7 @@ use crate::hollywood::hollywood_session_state_from_runtime;
 use crate::hollywood::hollywood_session_status_from_thread_status;
 use crate::hollywood::publish_registry_snapshot;
 use crate::hollywood::thread_status_name;
+use codex_app_server_protocol::HollywoodSessionAttachOptions;
 use codex_app_server_protocol::SelectedCapabilityRoot;
 use codex_app_server_protocol::ThreadHollywoodAttachParams;
 use codex_app_server_protocol::ThreadHollywoodAttachResponse;
@@ -53,6 +54,30 @@ struct HollywoodRuntimeAttachContext<'a> {
     thread_state_manager: &'a ThreadStateManager,
     thread_watch_manager: &'a ThreadWatchManager,
     fallback_state_db: Option<StateDbHandle>,
+}
+
+fn thread_start_hollywood_config(
+    hollywood: Option<HollywoodSessionAttachOptions>,
+    auto_attach_hollywood_on_start: bool,
+    cwd: &std::path::Path,
+) -> Option<HollywoodConfig> {
+    if let Some(hollywood) = hollywood {
+        let default_room = default_hollywood_room_for_cwd(cwd);
+        let room = hollywood.room.unwrap_or(default_room);
+        return Some(HollywoodConfig {
+            url: hollywood
+                .url
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room: room.clone(),
+            observed_rooms: default_hollywood_observed_rooms(&room, hollywood.observed_rooms),
+            wake_rooms: hollywood.wake_rooms,
+            attention: hollywood.attention.unwrap_or_default(),
+        });
+    }
+
+    auto_attach_hollywood_on_start
+        .then(|| HollywoodConfig::auto_attach_for_cwd(cwd))
+        .flatten()
 }
 
 fn collect_resume_override_mismatches(
@@ -1391,6 +1416,7 @@ impl ThreadRequestProcessor {
             session_start_source,
             thread_source,
             environments,
+            hollywood,
         } = params;
         if sandbox.is_some() && permissions.is_some() {
             return Err(invalid_request(
@@ -1440,6 +1466,7 @@ impl ThreadRequestProcessor {
                 app_server_client_version,
                 supports_openai_form_elicitation,
                 config,
+                hollywood,
                 typesafe_overrides,
                 multi_agent_mode,
                 dynamic_tools,
@@ -1515,6 +1542,7 @@ impl ThreadRequestProcessor {
         app_server_client_version: Option<String>,
         supports_openai_form_elicitation: bool,
         config_overrides: Option<HashMap<String, serde_json::Value>>,
+        hollywood: Option<HollywoodSessionAttachOptions>,
         typesafe_overrides: ConfigOverrides,
         multi_agent_mode: Option<MultiAgentMode>,
         dynamic_tools: Option<Vec<DynamicToolSpec>>,
@@ -1706,10 +1734,11 @@ impl ThreadRequestProcessor {
             "thread",
         );
 
-        if auto_attach_hollywood_on_start
-            && let Some(hollywood_config) =
-                HollywoodConfig::auto_attach_for_cwd(config_snapshot.cwd().as_path())
-        {
+        if let Some(hollywood_config) = thread_start_hollywood_config(
+            hollywood,
+            auto_attach_hollywood_on_start,
+            config_snapshot.cwd().as_path(),
+        ) {
             let thread_name = config_snapshot.thread_name.as_deref();
             Self::attach_thread_hollywood_runtime(
                 HollywoodRuntimeAttachContext {

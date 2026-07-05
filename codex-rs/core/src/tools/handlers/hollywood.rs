@@ -11,8 +11,15 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::fs::File;
+use std::net::TcpListener;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Stdio;
 use std::time::Duration as StdDuration;
 use tokio::net::TcpStream;
+use tokio::process::Command;
+use tokio::time::sleep;
 use tokio::time::timeout;
 use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
@@ -493,6 +500,7 @@ impl ToolExecutor<ToolInvocation> for LosangelexTeamLaunchHandler {
                 validate_peer_launch_specs(&args.agents)
                     .map_err(FunctionCallError::RespondToModel)?;
                 let app_server_url = resolve_losangelex_app_server_url()
+                    .await
                     .map_err(FunctionCallError::RespondToModel)?;
                 let workspace = args.workspace.take().unwrap_or_else(|| {
                     invocation
@@ -1195,22 +1203,37 @@ fn normalize_attention_mode(
     }
 }
 
-fn resolve_losangelex_app_server_url() -> Result<String, String> {
+async fn resolve_losangelex_app_server_url() -> Result<String, String> {
     if let Ok(value) = env::var(LOSANGELEX_APP_SERVER_URL_ENV_VAR)
         && !value.trim().is_empty()
     {
         return Ok(value);
     }
 
-    let state_file = match env::var(LOSANGELEX_APP_SERVER_STATE_FILE_ENV_VAR) {
-        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
-        _ => codex_utils_home_dir::find_codex_home()
+    let state_file = losangelex_app_server_state_file()?;
+    match read_losangelex_app_server_url_from_state(state_file.as_path()) {
+        Ok(url) => Ok(url),
+        Err(read_error) => bootstrap_losangelex_app_server(state_file.as_path())
+            .await
+            .map_err(|bootstrap_error| {
+                format!("{read_error}; automatic app-server bootstrap failed: {bootstrap_error}")
+            }),
+    }
+}
+
+fn losangelex_app_server_state_file() -> Result<PathBuf, String> {
+    match env::var(LOSANGELEX_APP_SERVER_STATE_FILE_ENV_VAR) {
+        Ok(value) if !value.trim().is_empty() => Ok(PathBuf::from(value)),
+        _ => Ok(codex_utils_home_dir::find_codex_home()
             .map_err(|err| format!("failed to resolve CODEX_HOME for app-server state: {err}"))?
             .join("losangelex")
             .join("current-app-server.json")
-            .into(),
-    };
-    let text = fs::read_to_string(&state_file).map_err(|err| {
+            .to_path_buf()),
+    }
+}
+
+fn read_losangelex_app_server_url_from_state(state_file: &Path) -> Result<String, String> {
+    let text = fs::read_to_string(state_file).map_err(|err| {
         format!(
             "{LOSANGELEX_APP_SERVER_URL_ENV_VAR} is not set and app-server state file {} could not be read: {err}",
             state_file.display()
@@ -1219,7 +1242,7 @@ fn resolve_losangelex_app_server_url() -> Result<String, String> {
     let state = serde_json::from_str::<AppServerStateFile>(&text).map_err(|err| {
         format!(
             "failed to parse app-server state file {}: {err}",
-            state_file.display()
+            state_file.display(),
         )
     })?;
     state
@@ -1231,6 +1254,124 @@ fn resolve_losangelex_app_server_url() -> Result<String, String> {
                 state_file.display()
             )
         })
+}
+
+async fn bootstrap_losangelex_app_server(state_file: &Path) -> Result<String, String> {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .map_err(|err| format!("failed to reserve loopback app-server port: {err}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|err| format!("failed to inspect reserved app-server port: {err}"))?
+        .port();
+    drop(listener);
+
+    let app_server_url = format!("ws://127.0.0.1:{port}");
+    let state_dir = state_file.parent().ok_or_else(|| {
+        format!(
+            "app-server state path has no parent: {}",
+            state_file.display()
+        )
+    })?;
+    let run_dir = state_dir
+        .join("app-servers")
+        .join(format!("bootstrap-{}", Utc::now().timestamp_millis()));
+    fs::create_dir_all(&run_dir).map_err(|err| {
+        format!(
+            "failed to create app-server bootstrap log dir {}: {err}",
+            run_dir.display()
+        )
+    })?;
+
+    let stdout = File::create(run_dir.join("app-server.stdout.log"))
+        .map_err(|err| format!("failed to create app-server stdout log: {err}"))?;
+    let stderr = File::create(run_dir.join("app-server.stderr.log"))
+        .map_err(|err| format!("failed to create app-server stderr log: {err}"))?;
+    let current_exe =
+        env::current_exe().map_err(|err| format!("failed to resolve current executable: {err}"))?;
+    let mut child = Command::new(current_exe)
+        .arg("app-server")
+        .arg("--listen")
+        .arg(app_server_url.as_str())
+        .env(LOSANGELEX_APP_SERVER_URL_ENV_VAR, app_server_url.as_str())
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr))
+        .spawn()
+        .map_err(|err| format!("failed to start loopback app-server: {err}"))?;
+
+    let mut last_error = None;
+    for _ in 0..40 {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|err| format!("failed to poll bootstrapped app-server: {err}"))?
+        {
+            return Err(format!(
+                "bootstrapped app-server exited before becoming ready with status {status}; logs in {}",
+                run_dir.display()
+            ));
+        }
+
+        match AppServerJsonRpcClient::connect(&app_server_url).await {
+            Ok(mut client) => match client.initialize().await {
+                Ok(()) => {
+                    write_losangelex_app_server_state(
+                        state_file,
+                        &app_server_url,
+                        child.id(),
+                        run_dir.as_path(),
+                    )?;
+                    tokio::spawn(async move {
+                        let _ = child.wait().await;
+                    });
+                    return Ok(app_server_url);
+                }
+                Err(err) => last_error = Some(err),
+            },
+            Err(err) => last_error = Some(err),
+        }
+        sleep(StdDuration::from_millis(250)).await;
+    }
+
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+    Err(format!(
+        "timed out waiting for loopback app-server at {app_server_url}; last error: {}; logs in {}",
+        last_error.unwrap_or_else(|| "not available".to_string()),
+        run_dir.display()
+    ))
+}
+
+fn write_losangelex_app_server_state(
+    state_file: &Path,
+    app_server_url: &str,
+    pid: Option<u32>,
+    run_dir: &Path,
+) -> Result<(), String> {
+    if let Some(parent) = state_file.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "failed to create app-server state dir {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let state = json!({
+        "websocket_url": app_server_url,
+        "pid": pid,
+        "started_at": Utc::now().to_rfc3339(),
+        "log_dir": run_dir.to_string_lossy(),
+    });
+    fs::write(
+        state_file,
+        serde_json::to_vec_pretty(&state)
+            .map_err(|err| format!("failed to serialize app-server state: {err}"))?,
+    )
+    .map_err(|err| {
+        format!(
+            "failed to write app-server state file {}: {err}",
+            state_file.display()
+        )
+    })
 }
 
 fn resolve_target_identities(args: &HollywoodSendArgs) -> Vec<String> {
@@ -1704,5 +1845,26 @@ mod tests {
         let task = format!("{LOSANGELEX_TEAM_TASK_GUIDANCE}\nRun focused verification.");
 
         assert_eq!(launched_peer_task_prompt(&task), task);
+    }
+
+    #[test]
+    fn losangelex_app_server_state_round_trips_websocket_url() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let state_file = temp_dir.path().join("losangelex/current-app-server.json");
+        let run_dir = temp_dir.path().join("logs");
+
+        write_losangelex_app_server_state(
+            state_file.as_path(),
+            "ws://127.0.0.1:45678",
+            Some(1234),
+            run_dir.as_path(),
+        )
+        .expect("state write should succeed");
+
+        assert_eq!(
+            read_losangelex_app_server_url_from_state(state_file.as_path())
+                .expect("state read should succeed"),
+            "ws://127.0.0.1:45678"
+        );
     }
 }

@@ -33,6 +33,9 @@ use codex_app_server_protocol::ExternalAgentConfigMigrationItem;
 use codex_app_server_protocol::GetAccountParams;
 use codex_app_server_protocol::GetAccountRateLimitsResponse;
 use codex_app_server_protocol::GetAccountResponse;
+use codex_app_server_protocol::HollywoodAttentionMode;
+use codex_app_server_protocol::HollywoodAttentionSettings;
+use codex_app_server_protocol::HollywoodSessionAttachOptions;
 use codex_app_server_protocol::JSONRPCErrorError;
 use codex_app_server_protocol::LogoutAccountResponse;
 use codex_app_server_protocol::MemoryResetResponse;
@@ -107,6 +110,7 @@ use codex_app_server_protocol::TurnStartResponse;
 use codex_app_server_protocol::TurnSteerParams;
 use codex_app_server_protocol::TurnSteerResponse;
 use codex_app_server_protocol::UserInput;
+use codex_git_utils::get_git_repo_root;
 use codex_otel::TelemetryAuthMode;
 use codex_protocol::ThreadId;
 use codex_protocol::approvals::GuardianAssessmentEvent;
@@ -125,6 +129,9 @@ use color_eyre::eyre::ContextCompat;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::env;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -134,6 +141,8 @@ use uuid::Uuid;
 
 const JSONRPC_INVALID_REQUEST: i64 = -32600;
 const JSONRPC_METHOD_NOT_FOUND: i64 = -32601;
+const DEFAULT_HOLLYWOOD_URL: &str = "http://127.0.0.1:8765";
+const DEFAULT_HOLLYWOOD_ROOM: &str = "main";
 pub(crate) const EXTERNAL_AGENT_CONFIG_IMPORT_IN_PROGRESS_MESSAGE: &str =
     "A previous Claude Code import is still running. Wait for it to finish before importing again.";
 const THREAD_SETTINGS_UPDATE_METHOD: &str = "thread/settings/update";
@@ -1372,6 +1381,138 @@ fn permissions_selection_from_config(
         .map(permission_profile_id_from_active_profile)
 }
 
+#[derive(Debug, Default)]
+struct HollywoodEnv {
+    auto_attach: Option<String>,
+    url: Option<String>,
+    room: Option<String>,
+    observed_rooms: Option<String>,
+    wake_rooms: Option<String>,
+    attention_mode: Option<String>,
+}
+
+impl HollywoodEnv {
+    fn from_process() -> Self {
+        Self {
+            auto_attach: env::var("HOLLYWOOD_AUTO_ATTACH").ok(),
+            url: env::var("HOLLYWOOD_URL").ok(),
+            room: env::var("HOLLYWOOD_ROOM").ok(),
+            observed_rooms: env::var("HOLLYWOOD_OBSERVED_ROOMS").ok(),
+            wake_rooms: env::var("HOLLYWOOD_WAKE_ROOMS").ok(),
+            attention_mode: env::var("HOLLYWOOD_ATTENTION_MODE").ok(),
+        }
+    }
+}
+
+fn hollywood_attach_options_from_env(cwd: &Path) -> Option<HollywoodSessionAttachOptions> {
+    hollywood_attach_options_from_values(cwd, HollywoodEnv::from_process())
+}
+
+fn hollywood_attach_options_from_values(
+    cwd: &Path,
+    env_values: HollywoodEnv,
+) -> Option<HollywoodSessionAttachOptions> {
+    let has_explicit_config = env_values.url.is_some() || env_values.room.is_some();
+    let enabled = env_values
+        .auto_attach
+        .as_deref()
+        .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(has_explicit_config);
+    if !enabled {
+        return None;
+    }
+
+    let room = env_values
+        .room
+        .filter(|room| !room.trim().is_empty())
+        .unwrap_or_else(|| default_hollywood_room_for_cwd(cwd));
+    Some(HollywoodSessionAttachOptions {
+        url: Some(
+            env_values
+                .url
+                .filter(|url| !url.trim().is_empty())
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+        ),
+        room: Some(room.clone()),
+        observed_rooms: default_hollywood_observed_rooms(
+            &room,
+            parse_hollywood_room_list(env_values.observed_rooms),
+        ),
+        wake_rooms: parse_hollywood_room_list(env_values.wake_rooms),
+        attention: Some(HollywoodAttentionSettings {
+            mode: hollywood_attention_mode(env_values.attention_mode.as_deref()),
+            include_at_all: true,
+            include_at_room: true,
+        }),
+    })
+}
+
+fn parse_hollywood_room_list(value: Option<String>) -> Vec<String> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|room| !room.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn default_hollywood_room_for_cwd(cwd: &Path) -> String {
+    get_git_repo_root(cwd)
+        .and_then(|repo_root| {
+            repo_root
+                .file_name()
+                .map(|value| value.to_string_lossy().into_owned())
+        })
+        .map(|repo_name| {
+            let mut slug = String::new();
+            let mut last_was_separator = false;
+
+            for ch in repo_name.chars() {
+                let lower = ch.to_ascii_lowercase();
+                if lower.is_ascii_alphanumeric() {
+                    slug.push(lower);
+                    last_was_separator = false;
+                } else if !last_was_separator && !slug.is_empty() {
+                    slug.push('-');
+                    last_was_separator = true;
+                }
+            }
+
+            format!("repo/{}", slug.trim_matches('-'))
+        })
+        .filter(|room| room != "repo/")
+        .unwrap_or_else(|| DEFAULT_HOLLYWOOD_ROOM.to_string())
+}
+
+fn default_hollywood_observed_rooms(
+    primary_room: &str,
+    observed_rooms: Vec<String>,
+) -> Vec<String> {
+    let mut rooms = Vec::new();
+    let mut seen = HashSet::new();
+
+    for room in observed_rooms {
+        if !room.is_empty() && seen.insert(room.clone()) {
+            rooms.push(room);
+        }
+    }
+
+    if primary_room != DEFAULT_HOLLYWOOD_ROOM && seen.insert(DEFAULT_HOLLYWOOD_ROOM.to_string()) {
+        rooms.push(DEFAULT_HOLLYWOOD_ROOM.to_string());
+    }
+
+    rooms
+}
+
+fn hollywood_attention_mode(value: Option<&str>) -> HollywoodAttentionMode {
+    match value.unwrap_or("focused").to_ascii_lowercase().as_str() {
+        "ambient" => HollywoodAttentionMode::Ambient,
+        "broad" => HollywoodAttentionMode::Broad,
+        _ => HollywoodAttentionMode::Focused,
+    }
+}
+
 fn thread_start_params_from_config(
     config: &Config,
     thread_params_mode: ThreadParamsMode,
@@ -1405,6 +1546,7 @@ fn thread_start_params_from_config(
         developer_instructions: with_terminal_visualization_instructions(
             config, /*control_instructions*/ None,
         ),
+        hollywood: hollywood_attach_options_from_env(config.cwd.as_path()),
         ..ThreadStartParams::default()
     }
 }
@@ -1881,6 +2023,54 @@ mod tests {
         );
         assert_eq!(params.model_provider, Some(config.model_provider_id));
         assert_eq!(params.thread_source, Some(ThreadSource::User));
+    }
+
+    #[test]
+    fn hollywood_attach_options_preserve_explicit_launch_room() -> std::io::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let repo_root = temp_dir.path().join("Workspace Repo");
+        let nested = repo_root.join("app");
+        std::fs::create_dir_all(repo_root.join(".git"))?;
+        std::fs::write(repo_root.join(".git/HEAD"), "ref: refs/heads/main\n")?;
+        std::fs::create_dir_all(&nested)?;
+
+        let options = hollywood_attach_options_from_values(
+            nested.as_path(),
+            HollywoodEnv {
+                auto_attach: Some("1".to_string()),
+                url: Some("http://127.0.0.1:53373".to_string()),
+                room: Some("repo/code-team-orchestration".to_string()),
+                observed_rooms: Some("main,repo/shared".to_string()),
+                wake_rooms: Some("repo/code-team-orchestration".to_string()),
+                attention_mode: Some("broad".to_string()),
+            },
+        );
+
+        assert_eq!(
+            options,
+            Some(HollywoodSessionAttachOptions {
+                url: Some("http://127.0.0.1:53373".to_string()),
+                room: Some("repo/code-team-orchestration".to_string()),
+                observed_rooms: vec!["main".to_string(), "repo/shared".to_string()],
+                wake_rooms: vec!["repo/code-team-orchestration".to_string()],
+                attention: Some(HollywoodAttentionSettings {
+                    mode: HollywoodAttentionMode::Broad,
+                    include_at_all: true,
+                    include_at_room: true,
+                }),
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hollywood_attach_options_stay_disabled_without_env() {
+        let cwd = test_path_buf("/workspace/project").abs();
+
+        assert_eq!(
+            hollywood_attach_options_from_values(cwd.as_path(), HollywoodEnv::default()),
+            None
+        );
     }
 
     #[tokio::test]

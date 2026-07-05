@@ -4,6 +4,7 @@ use app_test_support::create_mock_responses_server_sequence_unchecked;
 use app_test_support::to_response;
 use codex_app_server_protocol::HollywoodAttentionMode;
 use codex_app_server_protocol::HollywoodAttentionSettings;
+use codex_app_server_protocol::HollywoodSessionAttachOptions;
 use codex_app_server_protocol::HollywoodSessionStatus;
 use codex_app_server_protocol::JSONRPCResponse;
 use codex_app_server_protocol::RequestId;
@@ -37,6 +38,40 @@ const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 const HOLLYWOOD_ROOM: &str = "repo/losangelex-product";
 const HOLLYWOOD_DIRECT_BODY: &str = "Please verify your Hollywood lane is active.";
 const HOLLYWOOD_COLLABORATIVE_EDIT_BODY: &str = "Collaborative edit plan: I own `src/shared/editor.rs`; please take slice `render_toolbar`, intended hunk `add disabled-state label`, edit order `after my toolbar refactor lands`, integrator `peer-session`, report-back `after apply_patch with exact slice changed and merge risk`.";
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn thread_start_hollywood_options_attach_requested_room() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let model_server = create_mock_responses_server_sequence_unchecked(Vec::new()).await;
+    create_config_toml(codex_home.path(), &model_server.uri())?;
+
+    let hollywood_server = MockServer::start().await;
+    mount_hollywood_registry(&hollywood_server).await;
+    mount_empty_hollywood_messages(&hollywood_server, HOLLYWOOD_ROOM).await;
+    mount_empty_hollywood_messages(&hollywood_server, "main").await;
+
+    let mut app = TestAppServer::new(codex_home.path()).await?;
+    timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
+
+    let thread = start_thread_with_hollywood(&mut app, &hollywood_server.uri()).await?;
+    let hollywood = thread
+        .thread
+        .hollywood
+        .as_ref()
+        .expect("started thread should include Hollywood state");
+    assert_eq!(hollywood.attached, true);
+    assert_eq!(hollywood.url, hollywood_server.uri());
+    assert_eq!(hollywood.primary_room, HOLLYWOOD_ROOM);
+    assert_eq!(hollywood.observed_rooms, vec!["main".to_string()]);
+    assert_eq!(hollywood.wake_rooms, vec![HOLLYWOOD_ROOM.to_string()]);
+    assert_eq!(hollywood.status, HollywoodSessionStatus::Idle);
+
+    let listed = list_hollywood(&mut app).await?;
+    assert_eq!(listed.data.len(), 1);
+    assert_eq!(listed.data[0], thread.thread);
+
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn hollywood_attach_lists_multiple_interactive_sessions() -> Result<()> {
@@ -498,6 +533,35 @@ async fn start_thread(app: &mut TestAppServer) -> Result<ThreadStartResponse> {
     let request_id = app
         .send_thread_start_request(ThreadStartParams {
             model: Some("mock-model".to_string()),
+            ..Default::default()
+        })
+        .await?;
+    let response: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    to_response(response)
+}
+
+async fn start_thread_with_hollywood(
+    app: &mut TestAppServer,
+    hollywood_url: &str,
+) -> Result<ThreadStartResponse> {
+    let request_id = app
+        .send_thread_start_request(ThreadStartParams {
+            model: Some("mock-model".to_string()),
+            hollywood: Some(HollywoodSessionAttachOptions {
+                url: Some(hollywood_url.to_string()),
+                room: Some(HOLLYWOOD_ROOM.to_string()),
+                observed_rooms: Vec::new(),
+                wake_rooms: vec![HOLLYWOOD_ROOM.to_string()],
+                attention: Some(HollywoodAttentionSettings {
+                    mode: HollywoodAttentionMode::Focused,
+                    include_at_all: true,
+                    include_at_room: true,
+                }),
+            }),
             ..Default::default()
         })
         .await?;
