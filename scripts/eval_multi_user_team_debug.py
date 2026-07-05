@@ -9,6 +9,7 @@ import time
 import uuid
 from collections import Counter
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,11 @@ class MultiUserScenario:
     send_user_turns_sequentially: bool = False
     require_direct_wake: bool = False
     required_note_terms: tuple[str, ...] = ()
+    required_file_terms: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    required_room_terms: tuple[str, ...] = ()
+    required_wake_roles: tuple[str, ...] = ()
+    require_peer_response: bool = False
+    max_direct_messages: int | None = None
 
 
 SCENARIOS = {
@@ -126,6 +132,16 @@ Stay available in this Hollywood room. Do not edit files unless another session
 asks. If you see conflicting edits, overlapping ownership, or an explicit
 verification request, respond with a narrow finding and the exact files checked.
 """,
+        required_file_terms={
+            "client/dashboard.js": ("Reconnects", "Reconnecting"),
+            "server/permissions.js": ("canExportAudit", 'role === "admin"'),
+            "docs/team_notes.md": (
+                "## Alice",
+                "client/dashboard.js",
+                "## Bob",
+                "server/permissions.js",
+            ),
+        },
     ),
     "direct_dependency_after_peer_idle": MultiUserScenario(
         scenario_id="direct_dependency_after_peer_idle",
@@ -209,6 +225,234 @@ the helper-name question.
         send_user_turns_sequentially=True,
         require_direct_wake=True,
         required_note_terms=("canExportAudit",),
+        required_file_terms={
+            "client/dashboard.js": ("Reconnects", "Reconnecting"),
+            "server/permissions.js": ("canExportAudit", 'role === "admin"'),
+            "docs/team_notes.md": (
+                "## Alice",
+                "client/dashboard.js",
+                "canExportAudit",
+                "## Bob",
+                "server/permissions.js",
+            ),
+        },
+        required_wake_roles=("bob",),
+        max_direct_messages=4,
+    ),
+    "three_users_shared_notes": MultiUserScenario(
+        scenario_id="three_users_shared_notes",
+        description=(
+            "Three user-facing agents edit separate files while all three must "
+            "coordinate around one shared notes artifact."
+        ),
+        files={
+            "README.md": """# Three User Team Debug App
+
+Scratch project for evaluating simultaneous multi-user Losangelex collaboration.
+""",
+            "client/dashboard.js": """export function dashboardCards() {
+  return ["Latency", "Errors"];
+}
+
+export function reconnectBanner(state) {
+  if (state === "retrying") {
+    return "Trying again";
+  }
+  return "Ready";
+}
+""",
+            "server/permissions.js": """export function canViewDashboard(role) {
+  return role === "admin" || role === "operator";
+}
+""",
+            "ops/runbook.md": """# Ops Runbook
+
+- Audit export policy: pending.
+""",
+            "docs/team_notes.md": """# Team Notes
+
+## Alice
+
+- TODO
+
+## Bob
+
+- TODO
+
+## Casey
+
+- TODO
+""",
+        },
+        user_agents=(
+            UserAgent(
+                role="alice",
+                name="AliceAgent",
+                prompt="""User Alice asks you to improve the dashboard reconnect experience.
+
+Make a minimal client-side change in `client/dashboard.js`: add a `Reconnects`
+card and change retrying copy to `Reconnecting`.
+
+Also update only the Alice section of `docs/team_notes.md` with the files you
+checked. Bob and Casey may be working in this same repo; coordinate in
+Hollywood before touching shared notes and do not overwrite their sections.
+""",
+            ),
+            UserAgent(
+                role="bob",
+                name="BobAgent",
+                prompt="""User Bob asks you to add audit export permission support.
+
+Make a minimal server-side change in `server/permissions.js`: add an exported
+`canExportAudit(role)` helper that returns true only for `admin`.
+
+Also update only the Bob section of `docs/team_notes.md` with the files you
+checked. Alice and Casey may be working in this same repo; coordinate in
+Hollywood before touching shared notes and do not overwrite their sections.
+""",
+            ),
+            UserAgent(
+                role="casey",
+                name="CaseyAgent",
+                prompt="""User Casey asks you to document the audit export operating rule.
+
+Make a minimal docs change in `ops/runbook.md`: replace the pending audit export
+policy with `Audit exports require admin approval.`
+
+Also update only the Casey section of `docs/team_notes.md` with the files you
+checked. Alice and Bob may be working in this same repo; coordinate in Hollywood
+before touching shared notes and do not overwrite their sections.
+""",
+            ),
+        ),
+        peer_name="QAPeer",
+        peer_prompt="""You are an attached Losangelex QA peer for a three-user debug evaluation.
+
+Stay available in this Hollywood room. Do not edit files unless another session
+asks. If you see conflicting edits, overlapping ownership, or an explicit
+verification request, respond with a narrow finding and the exact files checked.
+""",
+        required_file_terms={
+            "client/dashboard.js": ("Reconnects", "Reconnecting"),
+            "server/permissions.js": ("canExportAudit", 'role === "admin"'),
+            "ops/runbook.md": ("Audit exports require admin approval.",),
+            "docs/team_notes.md": (
+                "## Alice",
+                "client/dashboard.js",
+                "## Bob",
+                "server/permissions.js",
+                "## Casey",
+                "ops/runbook.md",
+            ),
+        },
+    ),
+    "third_agent_verification_after_dependency": MultiUserScenario(
+        scenario_id="third_agent_verification_after_dependency",
+        description=(
+            "Bob finishes a lane, Alice depends on Bob, then Alice must wake "
+            "an idle QA peer with a required direct verification request before "
+            "marking the shared work complete."
+        ),
+        files={
+            "README.md": """# Third Agent Verification Team Debug App
+
+Scratch project for evaluating required Hollywood wake behavior across two peers.
+""",
+            "client/dashboard.js": """export function dashboardCards() {
+  return ["Latency", "Errors"];
+}
+
+export function reconnectBanner(state) {
+  if (state === "retrying") {
+    return "Trying again";
+  }
+  return "Ready";
+}
+""",
+            "server/permissions.js": """export function canViewDashboard(role) {
+  return role === "admin" || role === "operator";
+}
+""",
+            "docs/team_notes.md": """# Team Notes
+
+## Alice
+
+- TODO
+
+## Bob
+
+- TODO
+""",
+        },
+        user_agents=(
+            UserAgent(
+                role="bob",
+                name="BobAgent",
+                prompt="""User Bob asks you to add audit export permission support first.
+
+Make a minimal server-side change in `server/permissions.js`: add an exported
+`canExportAudit(role)` helper that returns true only for `admin`.
+
+Also update only the Bob section of `docs/team_notes.md` with the files you
+checked and the exact helper name you added. Alice may later ask you a direct
+Hollywood question about this helper; if she does, answer her directly and
+concisely.
+""",
+            ),
+            UserAgent(
+                role="alice",
+                name="AliceAgent",
+                prompt="""User Alice asks you to improve the dashboard reconnect experience and get independent verification before marking the work complete.
+
+First send a Hollywood direct message to `BobAgent` with `response_policy` set
+to `required`, asking Bob to confirm the exact audit export helper name he
+added. Wait for Bob's Hollywood response and use that response as your source of
+truth; do not infer the helper name from silence.
+
+Then make a minimal client-side change in `client/dashboard.js`: add a
+`Reconnects` card and change retrying copy to `Reconnecting`.
+
+Update only the Alice section of `docs/team_notes.md` with the files you checked
+and Bob's confirmed helper name. Do not overwrite Bob's section.
+
+Before your final answer, send a second Hollywood direct message to `QAPeer`
+with `response_policy` set to `required`, asking QA to verify
+`client/dashboard.js`, `server/permissions.js`, and `docs/team_notes.md`.
+Wait for QAPeer's Hollywood response before marking the task done.
+""",
+            ),
+        ),
+        peer_name="QAPeer",
+        peer_prompt="""You are an attached Losangelex QA peer for a third-agent verification debug evaluation.
+
+Stay available in this Hollywood room. Do not edit files unless another session
+asks. If Alice sends you a direct required verification request, inspect
+`client/dashboard.js`, `server/permissions.js`, and `docs/team_notes.md`, then
+reply in Hollywood with the exact files checked and whether the Alice and Bob
+sections are both preserved.
+""",
+        send_user_turns_sequentially=True,
+        require_direct_wake=True,
+        required_note_terms=("canExportAudit",),
+        required_file_terms={
+            "client/dashboard.js": ("Reconnects", "Reconnecting"),
+            "server/permissions.js": ("canExportAudit", 'role === "admin"'),
+            "docs/team_notes.md": (
+                "## Alice",
+                "client/dashboard.js",
+                "canExportAudit",
+                "## Bob",
+                "server/permissions.js",
+            ),
+        },
+        required_room_terms=(
+            "client/dashboard.js",
+            "server/permissions.js",
+            "docs/team_notes.md",
+        ),
+        required_wake_roles=("bob", "peer"),
+        require_peer_response=True,
+        max_direct_messages=6,
     ),
 }
 
@@ -245,6 +489,7 @@ def run_single_eval(
     startup_timeout_seconds: int,
     turn_timeout_seconds: int,
 ) -> dict[str, Any]:
+    started_at = time.time()
     run_id = uuid.uuid4().hex[:8]
     run_dir = output_dir / scenario.scenario_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -352,11 +597,7 @@ def run_single_eval(
     diff = workspace_diff(workspace)
     file_contents = {
         relative: (workspace / relative).read_text(encoding="utf-8")
-        for relative in (
-            "client/dashboard.js",
-            "server/permissions.js",
-            "docs/team_notes.md",
-        )
+        for relative in scenario.files
     }
     score = score_run(
         scenario=scenario,
@@ -367,11 +608,15 @@ def run_single_eval(
         diff=diff,
         file_contents=file_contents,
     )
+    ended_at = time.time()
     result = {
         "scenarioId": scenario.scenario_id,
         "description": scenario.description,
         "model": model,
         "runId": run_id,
+        "startedAt": started_at,
+        "endedAt": ended_at,
+        "wallSeconds": round(ended_at - started_at, 3),
         "workspace": str(workspace),
         "room": room,
         "appServer": app_server.metadata(),
@@ -424,6 +669,8 @@ def score_run(
     peer_responses = 0
     scope_mentions = 0
     required_direct_message_ids: set[int] = set()
+    pending_required_direct_by_pair: dict[tuple[str, str], int] = {}
+    duplicate_pending_required_direct_ids: list[int] = []
 
     for message in room_messages:
         message_id = message.get("id")
@@ -439,10 +686,24 @@ def score_run(
         )
         role = thread_roles.get(sender, "unknown")
         message_counts_by_role[role] += 1
+        sender_key = hollywood_identity_key(sender, agents, thread_roles)
+        recipient_key = hollywood_identity_key(recipient, agents, thread_roles)
         if recipient:
             direct_messages += 1
-        if message_id is not None and response_policy.lower() == "required":
-            required_direct_message_ids.add(int(message_id))
+        if (
+            message_id is not None
+            and recipient
+            and response_policy.lower() == "required"
+        ):
+            required_message_id = int(message_id)
+            required_direct_message_ids.add(required_message_id)
+            pending_key = (sender_key, recipient_key)
+            if pending_key in pending_required_direct_by_pair:
+                duplicate_pending_required_direct_ids.append(required_message_id)
+            else:
+                pending_required_direct_by_pair[pending_key] = required_message_id
+        elif recipient:
+            pending_required_direct_by_pair.pop((recipient_key, sender_key), None)
         if role == "peer":
             peer_responses += 1
         if any(
@@ -499,6 +760,10 @@ def score_run(
     required_direct_wakes_delivered = required_direct_message_ids.issubset(
         delivered_wake_message_ids
     )
+    required_wake_roles_met = all(
+        bool(wake_message_ids_by_role.get(role))
+        for role in scenario.required_wake_roles
+    )
 
     client = file_contents["client/dashboard.js"]
     server = file_contents["server/permissions.js"]
@@ -510,6 +775,20 @@ def score_run(
     required_note_terms_present = all(
         term in notes for term in scenario.required_note_terms
     )
+    required_file_terms_present_by_file = {
+        relative: all(term in file_contents.get(relative, "") for term in terms)
+        for relative, terms in scenario.required_file_terms.items()
+    }
+    required_file_terms_present = all(required_file_terms_present_by_file.values())
+    room_message_text = "\n".join(
+        str(message.get("body") or "") for message in room_messages
+    )
+    room_message_text_lower = room_message_text.lower()
+    required_room_terms_present_by_term = {
+        term: term.lower() in room_message_text_lower
+        for term in scenario.required_room_terms
+    }
+    required_room_terms_present = all(required_room_terms_present_by_term.values())
     conflict_markers = any(
         marker in "\n".join(file_contents.values())
         for marker in ("<<<<<<<", "=======", ">>>>>>>")
@@ -528,18 +807,32 @@ def score_run(
             direct_messages > 0
             and bool(required_direct_message_ids)
             and sum(hollywood_wake_turns_by_role.values()) > 0
+            and required_wake_roles_met
         )
     )
+    peer_response_requirement_met = (
+        not scenario.require_peer_response or peer_responses > 0
+    )
+    direct_message_limit_met = (
+        scenario.max_direct_messages is None
+        or direct_messages <= scenario.max_direct_messages
+    )
+    duplicate_pending_required_directs = bool(duplicate_pending_required_direct_ids)
     passed = (
         alice_done
         and bob_done
         and notes_have_alice
         and notes_have_bob
         and required_note_terms_present
+        and required_file_terms_present
+        and required_room_terms_present
         and not conflict_markers
         and coordination_errors == 0
         and user_roles_with_messages == user_roles
         and direct_wake_requirement_met
+        and peer_response_requirement_met
+        and direct_message_limit_met
+        and not duplicate_pending_required_directs
     )
     return {
         "passed": passed,
@@ -548,18 +841,29 @@ def score_run(
         "sharedNotesHaveAlice": notes_have_alice,
         "sharedNotesHaveBob": notes_have_bob,
         "requiredNoteTermsPresent": required_note_terms_present,
+        "requiredFileTermsPresent": required_file_terms_present,
+        "requiredFileTermsPresentByFile": required_file_terms_present_by_file,
+        "requiredRoomTermsPresent": required_room_terms_present,
+        "requiredRoomTermsPresentByTerm": required_room_terms_present_by_term,
         "conflictMarkers": conflict_markers,
         "workspaceChanged": bool(diff.strip()),
         "messageCountsByRole": dict(message_counts_by_role),
         "directMessageCount": direct_messages,
+        "maxDirectMessages": scenario.max_direct_messages,
+        "directMessageLimitMet": direct_message_limit_met,
         "requiredDirectMessageIds": sorted(required_direct_message_ids),
+        "duplicatePendingRequiredDirectIds": duplicate_pending_required_direct_ids,
+        "duplicatePendingRequiredDirects": duplicate_pending_required_directs,
         "requiredDirectWakesDelivered": required_direct_wakes_delivered,
+        "requiredWakeRoles": list(scenario.required_wake_roles),
+        "requiredWakeRolesMet": required_wake_roles_met,
         "directWakeRequirementMet": direct_wake_requirement_met,
         "wakeMessageIdsByRole": wake_message_ids_by_role,
         "turnStartsByRole": dict(turn_starts_by_role),
         "hollywoodWakeTurnsByRole": dict(hollywood_wake_turns_by_role),
         "internalHollywoodResponsesByRole": dict(internal_hollywood_responses_by_role),
         "peerResponseCount": peer_responses,
+        "peerResponseRequirementMet": peer_response_requirement_met,
         "scopeMentionCount": scope_mentions,
         "coordinationToolErrors": coordination_errors,
         "tokenUsage": notification_summary.get("tokenUsage", {}),
@@ -574,6 +878,26 @@ def hollywood_message_id_from_turn_id(turn_id: str) -> int | None:
         return int(turn_id[len(prefix) :])
     except ValueError:
         return None
+
+
+def hollywood_identity_key(
+    identity: str,
+    agents: list[StartedAgent],
+    thread_roles: dict[str, str],
+) -> str:
+    if not identity:
+        return ""
+    if identity in thread_roles:
+        return thread_roles[identity]
+    canonical_identity = canonical_identity_fragment(identity)
+    for agent in agents:
+        if canonical_identity == canonical_identity_fragment(agent.name):
+            return agent.role
+    return canonical_identity or identity
+
+
+def canonical_identity_fragment(identity: str) -> str:
+    return "".join(char for char in identity.lower() if char.isalnum())
 
 
 def hollywood_message_id_from_user_message(item: dict[str, Any]) -> int | None:
@@ -604,8 +928,8 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
         "",
         "## Summary",
         "",
-        "| Scenario | Runs | Passed | User room messages | Peer responses | Tool errors |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Scenario | Runs | Passed | Wall s | User room messages | Direct messages | Duplicate required | Wake turns | Peer responses | Uncached+out tokens | Tool errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     by_scenario: dict[str, list[dict[str, Any]]] = {}
     for result in results:
@@ -623,11 +947,29 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
         peer_responses = sum(
             result["score"]["peerResponseCount"] for result in scenario_results
         )
+        direct_messages = sum(
+            result["score"]["directMessageCount"] for result in scenario_results
+        )
+        duplicate_required = sum(
+            len(result["score"].get("duplicatePendingRequiredDirectIds", []))
+            for result in scenario_results
+        )
+        wake_turns = sum(
+            sum(result["score"]["hollywoodWakeTurnsByRole"].values())
+            for result in scenario_results
+        )
+        uncached_plus_output_tokens = sum(
+            result["score"].get("tokenUsage", {}).get("uncachedPlusOutputTokens", 0)
+            for result in scenario_results
+        )
+        wall_seconds = sum(
+            result.get("wallSeconds", 0.0) for result in scenario_results
+        )
         tool_errors = sum(
             result["score"]["coordinationToolErrors"] for result in scenario_results
         )
         lines.append(
-            f"| {scenario_id} | {len(scenario_results)} | {passed} | {user_messages} | {peer_responses} | {tool_errors} |"
+            f"| {scenario_id} | {len(scenario_results)} | {passed} | {wall_seconds:.1f} | {user_messages} | {direct_messages} | {duplicate_required} | {wake_turns} | {peer_responses} | {uncached_plus_output_tokens} | {tool_errors} |"
         )
 
     lines.extend(["", "## Runs", ""])
@@ -638,21 +980,29 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
                 f"### {result['scenarioId']} / {result['runId']}",
                 "",
                 f"- Passed: `{score['passed']}`",
+                f"- Wall seconds: `{result.get('wallSeconds', 0.0)}`",
                 f"- Alice task done: `{score['aliceTaskDone']}`",
                 f"- Bob task done: `{score['bobTaskDone']}`",
                 f"- Shared notes have Alice: `{score['sharedNotesHaveAlice']}`",
                 f"- Shared notes have Bob: `{score['sharedNotesHaveBob']}`",
                 f"- Required note terms present: `{score['requiredNoteTermsPresent']}`",
+                f"- Required file terms present: `{score['requiredFileTermsPresent']}`",
+                f"- Required room terms present: `{score['requiredRoomTermsPresent']}`",
                 f"- Conflict markers: `{score['conflictMarkers']}`",
                 f"- Message counts by role: `{json.dumps(score['messageCountsByRole'], sort_keys=True)}`",
                 f"- Direct messages: `{score['directMessageCount']}`",
+                f"- Direct message limit met: `{score['directMessageLimitMet']}`",
                 f"- Required direct wakes delivered: `{score['requiredDirectWakesDelivered']}`",
+                f"- Duplicate pending required directs: `{score['duplicatePendingRequiredDirects']}`",
+                f"- Required wake roles met: `{score['requiredWakeRolesMet']}`",
                 f"- Direct wake requirement met: `{score['directWakeRequirementMet']}`",
                 f"- Wake message IDs by role: `{json.dumps(score['wakeMessageIdsByRole'], sort_keys=True)}`",
                 f"- Hollywood wake turns by role: `{json.dumps(score['hollywoodWakeTurnsByRole'], sort_keys=True)}`",
                 f"- Internal Hollywood responses by role: `{json.dumps(score['internalHollywoodResponsesByRole'], sort_keys=True)}`",
                 f"- Peer responses: `{score['peerResponseCount']}`",
+                f"- Peer response requirement met: `{score['peerResponseRequirementMet']}`",
                 f"- Coordination tool errors: `{score['coordinationToolErrors']}`",
+                f"- Token usage: `{json.dumps(score.get('tokenUsage', {}), sort_keys=True)}`",
                 f"- Result: `{result['scenarioId']}/{result['runId']}/result.json`",
                 "",
             ]

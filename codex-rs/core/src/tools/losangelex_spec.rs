@@ -580,7 +580,7 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
         (
             "response_policy".to_string(),
             JsonSchema::string(Some(
-                "Optional reply contract for the message: `required`, `optional`, or `none`. Use `required` for direct peer asks that block your plan, request a narrow lane, or need review before you mark work done."
+                "Optional reply contract for the message: `required`, `optional`, or `none`. Use `required` for direct peer asks that block your plan, request a narrow lane, or need review before you mark work done. A required direct message is one pending ask; do not send duplicate nudges for the same question while waiting for the peer's reply."
                     .to_string(),
             )),
         ),
@@ -588,7 +588,7 @@ pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "hollywood_send".to_string(),
         description: format!(
-            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room. For direct requests where you need a peer to take work, review, answer, or unblock you, set `response_policy` to `required` and wait for the reply before finalizing. {}",
+            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room. For direct requests where you need a peer to take work, review, answer, or unblock you, set `response_policy` to `required` and wait for the reply before finalizing. Treat each required direct as one pending ask; do not send a duplicate nudge for the same question unless the prior reply is ambiguous, declined, superseded, or the human asks you to follow up. {}",
             durable_coordination_tool_text(state_db_available)
         ),
         strict: false,
@@ -698,3 +698,7 @@ pub(crate) fn create_hollywood_team_member_update_tool() -> ToolSpec {
         output_schema: None,
     })
 }
+
+#[cfg(test)]
+#[path = "losangelex_spec_tests.rs"]
+mod tests;

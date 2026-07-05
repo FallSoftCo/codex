@@ -70,6 +70,10 @@ Dependency-aware communication expectation:
 - If the dependency has not reported yet, wait briefly or state exactly what evidence you used and what remains uncertain.
 - Your finish message should name the dependency evidence you relied on when another lane affects your result.
 
+Required-reply expectation:
+- A `response_policy: required` direct message is one pending ask. After sending it, wait for the peer's reply instead of sending duplicate nudges for the same question.
+- Send another required message for the same ask only if the first reply declines, is ambiguous, is superseded by new facts, or the human explicitly asks you to follow up.
+
 Collaborative editing expectation:
 - Same-file work is not automatically off-limits. If shared editing would be faster, safer, or higher quality, coordinate a collaborative edit plan in Hollywood.
 - Before editing a file another peer owns or needs, name your slice/function/section, intended hunk, edit order or handoff, integrator, and report-back point.
@@ -1686,6 +1690,9 @@ mod tests {
         assert!(prompt.contains("Dependency-aware communication expectation:"));
         assert!(prompt.contains("do not finalize from stale assumptions"));
         assert!(prompt.contains("Your finish message should name the dependency evidence"));
+        assert!(prompt.contains("Required-reply expectation:"));
+        assert!(prompt.contains("one pending ask"));
+        assert!(prompt.contains("instead of sending duplicate nudges"));
         assert!(prompt.contains("Collaborative editing expectation:"));
         assert!(prompt.contains("Same-file work is not automatically off-limits"));
         assert!(prompt.contains("coordinate a collaborative edit plan"));
