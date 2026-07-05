@@ -11,6 +11,7 @@ import subprocess
 import time
 import uuid
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -365,7 +366,9 @@ def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
             "Work in the current repository workspace. Read README.md first, then coordinate through "
             "Hollywood to finish the app. Follow the active room coordination policy and your Hollywood "
             "synthetic coordination briefs; do not invent a private policy. Run tests before claiming the "
-            "app is done. Only declare completion when `npm test -- --run` passes in this workspace. "
+            "app is done. Prefer bounded verification commands; do not start a long-running dev server "
+            "unless the task explicitly requires browser inspection, and stop any long-running process "
+            "before finalizing. Only declare completion when `npm test -- --run` passes in this workspace. "
             f"{auto_block}"
         )
     if policy in RUNTIME_ROOM_POLICIES:
@@ -375,7 +378,9 @@ def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
             "Work in the current repository workspace. Read README.md first, then coordinate through "
             "Hollywood to finish the app. Follow the active room coordination policy and your Hollywood "
             "synthetic coordination briefs; do not invent a private policy. Run tests before claiming the "
-            "app is done. Only declare completion when `npm test -- --run` passes in this workspace."
+            "app is done. Prefer bounded verification commands; do not start a long-running dev server "
+            "unless the task explicitly requires browser inspection, and stop any long-running process "
+            "before finalizing. Only declare completion when `npm test -- --run` passes in this workspace."
         )
     policy_block = (
         POLICY_PROMPTS[policy].get(agent_name) or POLICY_PROMPTS[policy]["shared"]
@@ -385,6 +390,8 @@ def policy_prompt(policy: str, agent_name: str, specialty: str) -> str:
         f"The team roster is: {roster}. "
         "Work in the current repository workspace. Read README.md first, then coordinate through "
         "Hollywood to finish the app. Run tests before claiming the app is done. "
+        "Prefer bounded verification commands; do not start a long-running dev server unless the task "
+        "explicitly requires browser inspection, and stop any long-running process before finalizing. "
         "Only declare completion when `npm test -- --run` passes in this workspace. "
         f"{policy_block}"
     )
@@ -478,6 +485,7 @@ def start_team(
     conn: JsonRpcWs,
     *,
     workspace: Path,
+    hollywood_url: str,
     room: str,
     run_suffix: str,
 ) -> list[AgentRun]:
@@ -487,6 +495,7 @@ def start_team(
         thread_id = start_agent(
             conn,
             workspace=str(workspace),
+            hollywood_url=hollywood_url,
             room=room,
             observed_rooms=[room],
             wake_rooms=[room],
@@ -503,6 +512,24 @@ def start_team(
             )
         )
     return agents
+
+
+def fetch_room_messages(hollywood_url: str, room: str) -> list[dict[str, Any]]:
+    query = urllib.parse.urlencode(
+        {
+            "room": room,
+            "after_id": "0",
+            "limit": "1000",
+            "include_own": "1",
+        }
+    )
+    url = f"{hollywood_url.rstrip('/')}/hollywood/v1/messages?{query}"
+    with urllib.request.urlopen(url, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    messages = payload.get("messages", [])
+    if not isinstance(messages, list):
+        return []
+    return [message for message in messages if isinstance(message, dict)]
 
 
 def evaluate_policy(
@@ -530,7 +557,13 @@ def evaluate_policy(
     agents: list[AgentRun] = []
     try:
         initialize(conn)
-        agents = start_team(conn, workspace=workspace, room=room, run_suffix=run_suffix)
+        agents = start_team(
+            conn,
+            workspace=workspace,
+            hollywood_url=hollywood_url,
+            room=room,
+            run_suffix=run_suffix,
+        )
         current_phase = "discovery" if policy == "auto" else "execution"
         current_epoch = 1
         room_policy_state = apply_room_policy_state(
@@ -614,7 +647,10 @@ def evaluate_policy(
         )
         changed = changed_files(workspace, challenge)
         active_threads_after_run = active_thread_count(thread_states)
-        message_count = summary["notificationCounts"].get("thread/hollywood/message", 0)
+        room_messages = fetch_room_messages(hollywood_url, room)
+        notification_message_count = summary["notificationCounts"].get(
+            "thread/hollywood/message", 0
+        )
         return {
             "policy": policy,
             "challenge": challenge,
@@ -640,7 +676,9 @@ def evaluate_policy(
                 if quiesced_at is not None and passed_at is not None
                 else None
             ),
-            "messageCount": message_count,
+            "messageCount": len(room_messages),
+            "notificationHollywoodMessageCount": notification_message_count,
+            "roomMessages": room_messages,
             "coordinationToolSummary": summary.get("coordinationToolSummary", {}),
             "finalTest": {
                 "returncode": final_test.returncode,

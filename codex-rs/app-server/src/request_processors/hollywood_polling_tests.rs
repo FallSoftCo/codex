@@ -159,12 +159,25 @@ fn select_hollywood_followup_ignores_required_observed_room_broadcast() {
 }
 
 #[test]
-fn select_hollywood_followup_accepts_targeted_observed_room_message() {
+fn select_hollywood_followup_ignores_optional_targeted_observed_room_message() {
     let messages = vec![classified_message_in_room(
         1,
         "main",
         HollywoodMessageKind::Direct,
         HollywoodResponsePolicy::Optional,
+        HollywoodMessageAttention::Focused,
+    )];
+
+    assert!(select_hollywood_followup(&messages, "repo/losangelex").is_none());
+}
+
+#[test]
+fn select_hollywood_followup_accepts_required_targeted_observed_room_message() {
+    let messages = vec![classified_message_in_room(
+        1,
+        "main",
+        HollywoodMessageKind::Direct,
+        HollywoodResponsePolicy::Required,
         HollywoodMessageAttention::Focused,
     )];
 
@@ -189,12 +202,12 @@ fn select_hollywood_followup_ignores_self_authored_targeted_message() {
 }
 
 #[test]
-fn targeted_observed_room_message_becomes_required_hollywood_input() {
+fn required_targeted_observed_room_message_becomes_required_hollywood_input() {
     let messages = vec![classified_message_in_room(
         1,
         "main",
         HollywoodMessageKind::Direct,
-        HollywoodResponsePolicy::Optional,
+        HollywoodResponsePolicy::Required,
         HollywoodMessageAttention::Focused,
     )];
     let selected =

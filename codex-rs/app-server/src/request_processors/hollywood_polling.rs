@@ -186,14 +186,10 @@ fn should_start_hollywood_followup(
     if message.self_authored {
         return false;
     }
-    let in_primary_room = message.notification_message.room == primary_room;
-    if !in_primary_room && !message_targets_this_session(message) {
+    if !message_requires_response(message) {
         return false;
     }
-    if message_requires_response(message) {
-        return true;
-    }
-    message_targets_this_session(message)
+    message.notification_message.room == primary_room || message_targets_this_session(message)
 }
 
 fn message_requires_response(message: &HollywoodClassifiedMessage) -> bool {
