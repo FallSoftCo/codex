@@ -29,6 +29,7 @@ use crate::tools::handlers::SleepHandler;
 use crate::tools::handlers::TestSyncHandler;
 use crate::tools::handlers::ToolSearchHandlerCache;
 use crate::tools::handlers::ViewImageHandler;
+use crate::tools::handlers::WaitForEnvironmentHandler;
 use crate::tools::handlers::WriteStdinHandler;
 use crate::tools::handlers::agent_jobs::ReportAgentJobResultHandler;
 use crate::tools::handlers::agent_jobs::SpawnAgentsOnCsvHandler;
@@ -98,7 +99,6 @@ use tracing::warn;
 const MULTI_AGENT_V2_NAMESPACE_DESCRIPTION: &str = "Tools for spawning and managing sub-agents.";
 const IMAGE_GEN_NAMESPACE: &str = "image_gen";
 const IMAGEGEN_TOOL_NAME: &str = "imagegen";
-const ACTOR_AUTHORIZATION_HEADER: &str = "x-openai-actor-authorization";
 
 type PlannedRuntime = Arc<dyn CoreToolRuntime>;
 
@@ -393,7 +393,10 @@ fn image_generation_tool_enabled(turn_context: &TurnContext) -> bool {
 }
 
 fn image_generation_runtime_enabled(turn_context: &TurnContext) -> bool {
-    (provider_uses_actor_authorization(turn_context)
+    (turn_context
+        .provider
+        .info()
+        .uses_openai_actor_authorization()
         || (turn_context.provider.info().requires_openai_auth
             && turn_context
                 .auth_manager
@@ -404,16 +407,6 @@ fn image_generation_runtime_enabled(turn_context: &TurnContext) -> bool {
             .model_info
             .input_modalities
             .contains(&InputModality::Image)
-}
-
-fn provider_uses_actor_authorization(turn_context: &TurnContext) -> bool {
-    let provider_info = turn_context.provider.info();
-    !provider_info.requires_openai_auth
-        && provider_info.http_headers.as_ref().is_some_and(|headers| {
-            headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case(ACTOR_AUTHORIZATION_HEADER) && !value.trim().is_empty()
-            })
-        })
 }
 
 fn standalone_image_generation_model_visible(turn_context: &TurnContext) -> bool {
@@ -727,6 +720,10 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
 
     planned_tools.add(PlanHandler);
 
+    if features.enabled(Feature::DeferredExecutor) {
+        planned_tools.add(WaitForEnvironmentHandler);
+    }
+
     if turn_context.config.experimental_request_user_input_enabled {
         planned_tools.add_with_exposure(
             RequestUserInputHandler {
@@ -741,18 +738,20 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
     }
 
     if features.enabled(Feature::TokenBudget) {
-        if features.enabled(Feature::AutoCompaction) {
-            planned_tools.add_with_exposure(NewContextWindowHandler, ToolExposure::DirectModelOnly);
-        }
+        planned_tools.add_with_exposure(NewContextWindowHandler, ToolExposure::DirectModelOnly);
         planned_tools.add(GetContextRemainingHandler);
     }
 
     if features.enabled(Feature::CurrentTimeReminder) {
         planned_tools.add(CurrentTimeHandler);
-    }
-
-    if features.enabled(Feature::SleepTool) {
-        planned_tools.add(SleepHandler);
+        if turn_context
+            .config
+            .current_time_reminder
+            .as_ref()
+            .is_some_and(|config| config.sleep_tool)
+        {
+            planned_tools.add(SleepHandler);
+        }
     }
 
     if tool_suggest_enabled(turn_context)

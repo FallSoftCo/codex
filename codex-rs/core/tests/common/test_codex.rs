@@ -121,6 +121,7 @@ pub struct TestEnv {
     environment: codex_exec_server::Environment,
     exec_server_url: Option<String>,
     cwd: AbsolutePathBuf,
+    selection: TurnEnvironmentSelection,
     local_cwd_temp_dir: Option<Arc<TempDir>>,
     remote_container_name: Option<String>,
 }
@@ -131,10 +132,12 @@ impl TestEnv {
         let cwd = local_cwd_temp_dir.abs();
         let environment =
             codex_exec_server::Environment::create_for_tests(/*exec_server_url*/ None)?;
+        let selection = local(cwd.clone());
         Ok(Self {
             environment,
             exec_server_url: None,
             cwd,
+            selection,
             local_cwd_temp_dir: Some(local_cwd_temp_dir),
             remote_container_name: None,
         })
@@ -146,6 +149,11 @@ impl TestEnv {
 
     pub fn environment(&self) -> &codex_exec_server::Environment {
         &self.environment
+    }
+
+    /// Returns the environment and target-native cwd selected by the test harness.
+    pub fn selection(&self) -> &TurnEnvironmentSelection {
+        &self.selection
     }
 
     fn local_cwd_temp_dir(&self) -> Option<Arc<TempDir>> {
@@ -180,6 +188,10 @@ pub async fn test_env() -> Result<TestEnv> {
                     /*sandbox*/ None,
                 )
                 .await?;
+            let selection = TurnEnvironmentSelection {
+                environment_id: codex_exec_server::REMOTE_ENVIRONMENT_ID.to_string(),
+                cwd: cwd_uri.clone(),
+            };
             let cwd = if remote_env == TestEnvironment::WineExec {
                 // TODO(anp): Convert `Config::cwd` to `LegacyAppPathString` and remove this
                 // compatibility projection.
@@ -198,6 +210,7 @@ pub async fn test_env() -> Result<TestEnv> {
                 environment,
                 exec_server_url: Some(websocket_url),
                 cwd,
+                selection,
                 local_cwd_temp_dir: None,
                 remote_container_name: remote_env.docker_container_name().map(str::to_owned),
             })
@@ -595,7 +608,7 @@ impl TestCodexBuilder {
             user_instructions_provider,
             /*analytics_events_client*/ None,
             thread_store,
-            state_db.clone(),
+            codex_core::local_agent_graph_store_from_state_db(state_db.as_ref()),
             installation_id,
             /*attestation_provider*/ None,
             /*external_time_provider*/ self.external_time_provider.clone(),
@@ -645,12 +658,13 @@ impl TestCodexBuilder {
                 Box::pin(
                     thread_manager.start_thread_with_options(StartThreadOptions {
                         config: config.clone(),
+                        allow_provider_model_fallback: false,
                         initial_history: InitialHistory::New,
+                        history_mode: None,
                         session_source: None,
                         thread_source: None,
                         dynamic_tools: Vec::new(),
                         metrics_service_name: None,
-                        multi_agent_mode: None,
                         parent_trace: None,
                         environments,
                         thread_extension_init: Default::default(),

@@ -493,52 +493,67 @@ async fn reconcile_legacy_state_migration_versions(pool: &SqlitePool) -> anyhow:
     // upstream later claimed overlapping versions. Move applied migration
     // records to the current upstream-first numbering so SQLx can apply only
     // the missing migrations.
+    //
+    // Keep the current 40-50 fork migration shifts first and in descending
+    // order. Existing databases can have the whole block applied, so each
+    // target version must be freed before the next row moves into it.
     for (from_version, description, to_version) in [
-        (37_i64, "remote control enrollments enabled", 47_i64),
-        (36_i64, "threads visible sort indexes", 46_i64),
-        (35_i64, "drop memory tables", 45_i64),
-        (38_i64, "external agent config imports", 48_i64),
-        (42_i64, "coordination tasks", 44_i64),
-        (41_i64, "path claims", 43_i64),
-        (40_i64, "task watches", 42_i64),
-        (39_i64, "agent completion watchers", 41_i64),
-        (39_i64, "coordination tasks", 44_i64),
-        (39_i64, "tester runs drop runtime thread fk", 49_i64),
+        (50_i64, "collaborative edit plans", 51_i64),
+        (49_i64, "tester runs drop runtime thread fk", 50_i64),
+        (48_i64, "external agent config imports", 49_i64),
+        (47_i64, "remote control enrollments enabled", 48_i64),
+        (46_i64, "threads visible sort indexes", 47_i64),
+        (45_i64, "drop memory tables", 46_i64),
+        (44_i64, "coordination tasks", 45_i64),
+        (43_i64, "path claims", 44_i64),
+        (42_i64, "task watches", 43_i64),
+        (41_i64, "agent completion watchers", 42_i64),
+        (40_i64, "watchers", 41_i64),
+        (37_i64, "remote control enrollments enabled", 48_i64),
+        (36_i64, "threads visible sort indexes", 47_i64),
+        (35_i64, "drop memory tables", 46_i64),
+        (38_i64, "external agent config imports", 49_i64),
+        (42_i64, "coordination tasks", 45_i64),
+        (41_i64, "path claims", 44_i64),
+        (40_i64, "task watches", 43_i64),
+        (39_i64, "agent completion watchers", 42_i64),
+        (39_i64, "coordination tasks", 45_i64),
+        (39_i64, "tester runs drop runtime thread fk", 50_i64),
         // Some fork builds briefly used 49 for a coordination-task index that
         // is not part of this migration set. Move it outside the embedded
         // range so the current 49 can apply and the historical record remains.
         (49_i64, "coordination tasks room status idx", 90049_i64),
-        (38_i64, "watchers", 40_i64),
-        (38_i64, "path claims", 43_i64),
-        (37_i64, "tester runs drop runtime thread fk", 49_i64),
-        (37_i64, "task watches", 42_i64),
+        (38_i64, "watchers", 41_i64),
+        (38_i64, "path claims", 44_i64),
+        (37_i64, "tester runs drop runtime thread fk", 50_i64),
+        (37_i64, "task watches", 43_i64),
         (36_i64, "tester runs", 38_i64),
-        (36_i64, "agent completion watchers", 41_i64),
-        (36_i64, "coordination tasks", 44_i64),
+        (36_i64, "agent completion watchers", 42_i64),
+        (36_i64, "coordination tasks", 45_i64),
         (35_i64, "testers", 37_i64),
-        (35_i64, "watchers", 40_i64),
-        (35_i64, "path claims", 43_i64),
+        (35_i64, "watchers", 41_i64),
+        (35_i64, "path claims", 44_i64),
         (34_i64, "scheduled tasks", 36_i64),
-        (34_i64, "tester runs drop runtime thread fk", 49_i64),
-        (34_i64, "task watches", 42_i64),
-        (34_i64, "coordination tasks", 44_i64),
+        (34_i64, "tester runs drop runtime thread fk", 50_i64),
+        (34_i64, "task watches", 43_i64),
+        (34_i64, "coordination tasks", 45_i64),
         (33_i64, "threads hollywood", 35_i64),
         (33_i64, "tester runs", 38_i64),
-        (33_i64, "agent completion watchers", 41_i64),
-        (33_i64, "path claims", 43_i64),
+        (33_i64, "agent completion watchers", 42_i64),
+        (33_i64, "path claims", 44_i64),
         (32_i64, "testers", 37_i64),
-        (32_i64, "watchers", 40_i64),
-        (32_i64, "task watches", 42_i64),
+        (32_i64, "watchers", 41_i64),
+        (32_i64, "task watches", 43_i64),
         (31_i64, "scheduled tasks", 36_i64),
-        (31_i64, "tester runs drop runtime thread fk", 49_i64),
-        (31_i64, "agent completion watchers", 41_i64),
+        (31_i64, "tester runs drop runtime thread fk", 50_i64),
+        (31_i64, "agent completion watchers", 42_i64),
         (41_i64, "drop device key bindings", 31_i64),
         (30_i64, "threads hollywood", 35_i64),
         (30_i64, "tester runs", 38_i64),
-        (30_i64, "watchers", 40_i64),
+        (30_i64, "watchers", 41_i64),
         (40_i64, "threads thread source", 30_i64),
         (29_i64, "testers", 37_i64),
-        (29_i64, "tester runs drop runtime thread fk", 49_i64),
+        (29_i64, "tester runs drop runtime thread fk", 50_i64),
         (28_i64, "scheduled tasks", 36_i64),
         (28_i64, "tester runs", 38_i64),
         (27_i64, "threads hollywood", 35_i64),
@@ -662,6 +677,7 @@ pub async fn sqlite_integrity_check(path: &Path) -> anyhow::Result<Vec<String>> 
 mod tests {
     use super::StateRuntime;
     use super::open_state_sqlite;
+    use super::reconcile_legacy_state_migration_versions;
     use super::runtime_state_migrator;
     use super::sqlite_integrity_check;
     use super::state_db_path;
@@ -670,8 +686,11 @@ mod tests {
     use crate::DbTelemetry;
     use crate::migrations::STATE_MIGRATOR;
     use pretty_assertions::assert_eq;
+    use sqlx::Row;
     use sqlx::SqlitePool;
     use sqlx::migrate::MigrateError;
+    use sqlx::migrate::Migration;
+    use sqlx::migrate::Migrator;
     use sqlx::sqlite::SqliteConnectOptions;
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
@@ -739,6 +758,38 @@ mod tests {
         .expect("open sqlite pool")
     }
 
+    fn state_migrator_through(version: i64) -> Migrator {
+        Migrator::with_migrations(
+            STATE_MIGRATOR
+                .migrations
+                .iter()
+                .filter(|migration| migration.version <= version)
+                .cloned()
+                .collect(),
+        )
+    }
+
+    fn legacy_shifted_fork_migrator() -> Migrator {
+        let mut migrator = Migrator::with_migrations(
+            STATE_MIGRATOR
+                .migrations
+                .iter()
+                .filter(|migration| (41..=51).contains(&migration.version))
+                .map(|migration| {
+                    Migration::new(
+                        migration.version - 1,
+                        migration.description.clone(),
+                        migration.migration_type,
+                        migration.sql.clone(),
+                        migration.no_tx,
+                    )
+                })
+                .collect(),
+        );
+        migrator.ignore_missing = true;
+        migrator
+    }
+
     #[tokio::test]
     async fn sqlite_integrity_check_reports_ok_for_valid_db() {
         let codex_home = unique_temp_dir();
@@ -765,6 +816,59 @@ mod tests {
 
         assert_eq!(result, vec!["ok".to_string()]);
         let _ = tokio::fs::remove_dir_all(codex_home).await;
+    }
+
+    #[tokio::test]
+    async fn reconcile_legacy_state_migration_versions_shifts_fork_block_after_history_mode() {
+        let pool = SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("open in-memory sqlite");
+        state_migrator_through(/*version*/ 39)
+            .run(&pool)
+            .await
+            .expect("apply upstream migrations before history mode");
+        legacy_shifted_fork_migrator()
+            .run(&pool)
+            .await
+            .expect("apply legacy fork migration block");
+
+        reconcile_legacy_state_migration_versions(&pool)
+            .await
+            .expect("legacy fork migration records should reconcile");
+        STATE_MIGRATOR
+            .run(&pool)
+            .await
+            .expect("current migrator should apply after reconciliation");
+
+        let applied = sqlx::query(
+            "SELECT version, description, checksum FROM _sqlx_migrations WHERE version >= 40 ORDER BY version",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("applied migrations should load")
+        .into_iter()
+        .map(|row| {
+            (
+                row.get::<i64, _>("version"),
+                row.get::<String, _>("description"),
+                row.get::<Vec<u8>, _>("checksum"),
+            )
+        })
+        .collect::<Vec<_>>();
+        let expected = STATE_MIGRATOR
+            .migrations
+            .iter()
+            .filter(|migration| migration.version >= 40)
+            .map(|migration| {
+                (
+                    migration.version,
+                    migration.description.to_string(),
+                    migration.checksum.to_vec(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(applied, expected);
+        pool.close().await;
     }
 
     #[tokio::test]

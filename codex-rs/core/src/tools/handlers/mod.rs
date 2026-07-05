@@ -40,6 +40,7 @@ pub(crate) mod tool_search_spec;
 pub(crate) mod unified_exec;
 mod view_image;
 pub(crate) mod view_image_spec;
+mod wait_for_environment;
 pub(crate) mod watcher;
 
 use codex_sandboxing::policy_transforms::intersect_permission_profiles;
@@ -94,6 +95,7 @@ pub use unified_exec::ExecCommandHandler;
 pub(crate) use unified_exec::ExecCommandHandlerOptions;
 pub use unified_exec::WriteStdinHandler;
 pub use view_image::ViewImageHandler;
+pub(crate) use wait_for_environment::WaitForEnvironmentHandler;
 
 pub(crate) fn parse_arguments<T>(arguments: &str) -> Result<T, FunctionCallError>
 where

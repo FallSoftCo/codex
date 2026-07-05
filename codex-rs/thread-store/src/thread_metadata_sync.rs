@@ -286,7 +286,9 @@ impl ThreadMetadataSync {
                 | RolloutItem::EventMsg(_)
                 | RolloutItem::ResponseItem(_)
                 | RolloutItem::InterAgentCommunication(_)
-                | RolloutItem::Compacted(_) => {}
+                | RolloutItem::InterAgentCommunicationMetadata { .. }
+                | RolloutItem::Compacted(_)
+                | RolloutItem::WorldState(_) => {}
             }
         }
         Some(update)

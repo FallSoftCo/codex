@@ -2,8 +2,11 @@ use std::collections::HashMap;
 
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use codex_file_system::FileSystemSandboxContext;
+pub use codex_file_system::WalkOptions;
+pub use codex_file_system::WalkOutcome;
 use codex_network_proxy::ManagedNetworkSandboxContext;
 use codex_protocol::config_types::ShellEnvironmentPolicyInherit;
+use codex_shell_command::shell_detect::DetectedShell;
 use codex_utils_path_uri::PathUri;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,14 +25,15 @@ pub const EXEC_EXITED_METHOD: &str = "process/exited";
 pub const EXEC_CLOSED_METHOD: &str = "process/closed";
 pub const ENVIRONMENT_INFO_METHOD: &str = "environment/info";
 pub const FS_READ_FILE_METHOD: &str = "fs/readFile";
-pub(crate) const FS_OPEN_METHOD: &str = "fs/open";
-pub(crate) const FS_READ_BLOCK_METHOD: &str = "fs/readBlock";
-pub(crate) const FS_CLOSE_METHOD: &str = "fs/close";
+pub const FS_OPEN_METHOD: &str = "fs/open";
+pub const FS_READ_BLOCK_METHOD: &str = "fs/readBlock";
+pub const FS_CLOSE_METHOD: &str = "fs/close";
 pub const FS_WRITE_FILE_METHOD: &str = "fs/writeFile";
 pub const FS_CREATE_DIRECTORY_METHOD: &str = "fs/createDirectory";
 pub const FS_GET_METADATA_METHOD: &str = "fs/getMetadata";
 pub const FS_CANONICALIZE_METHOD: &str = "fs/canonicalize";
 pub const FS_READ_DIRECTORY_METHOD: &str = "fs/readDirectory";
+pub const FS_WALK_METHOD: &str = "fs/walk";
 pub const FS_REMOVE_METHOD: &str = "fs/remove";
 pub const FS_COPY_METHOD: &str = "fs/copy";
 /// JSON-RPC request method for executor-side HTTP requests.
@@ -77,6 +81,18 @@ pub struct EnvironmentInfo {
     pub cwd: Option<PathUri>,
 }
 
+impl EnvironmentInfo {
+    /// Returns information about the current local exec-server process.
+    pub fn local() -> Self {
+        Self {
+            shell: codex_shell_command::shell_detect::default_user_shell().into(),
+            cwd: std::env::current_dir()
+                .ok()
+                .and_then(|cwd| PathUri::from_host_native_path(cwd).ok()),
+        }
+    }
+}
+
 /// Shell detected for an execution/filesystem environment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -86,6 +102,15 @@ pub struct ShellInfo {
     /// Target-native shell executable path or command name. Fallbacks such as `cmd.exe` need not
     /// be absolute, so this is not a [`PathUri`].
     pub path: String,
+}
+
+impl From<DetectedShell> for ShellInfo {
+    fn from(shell: DetectedShell) -> Self {
+        Self {
+            name: shell.name().to_string(),
+            path: shell.shell_path.to_string_lossy().into_owned(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -350,6 +375,16 @@ pub struct FsReadDirectoryResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FsWalkParams {
+    pub path: PathUri,
+    pub options: WalkOptions,
+    pub sandbox: Option<FileSystemSandboxContext>,
+}
+
+pub type FsWalkResponse = WalkOutcome;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FsRemoveParams {
     pub path: PathUri,
     pub recursive: Option<bool>,
@@ -384,6 +419,17 @@ pub struct HttpHeader {
     pub value: String,
 }
 
+/// Redirect behavior for an executor-side HTTP request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HttpRedirectPolicy {
+    /// Follow redirects using the HTTP client's normal limits.
+    #[default]
+    Follow,
+    /// Return the redirect response without following its location.
+    Stop,
+}
+
 /// Executor-side HTTP request envelope.
 ///
 /// This intentionally stays transport-shaped rather than MCP-shaped so callers
@@ -408,6 +454,9 @@ pub struct HttpRequestParams {
     /// millisecond deadline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+    /// Whether the executor should follow HTTP redirects.
+    #[serde(default)]
+    pub redirect_policy: HttpRedirectPolicy,
     /// Caller-chosen stream id for `http/request/bodyDelta` notifications.
     ///
     /// The id must remain unique on a connection until the terminal body delta
@@ -478,6 +527,8 @@ pub struct ExecExitedNotification {
     pub process_id: ProcessId,
     pub seq: u64,
     pub exit_code: i32,
+    #[serde(default)]
+    pub sandbox_denied: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -515,6 +566,7 @@ mod base64_bytes {
 #[cfg(test)]
 mod tests {
     use super::EnvironmentInfo;
+    use super::ExecExitedNotification;
     use super::ExecParams;
     use super::FsReadFileParams;
     use super::HttpRequestParams;
@@ -658,5 +710,17 @@ mod tests {
             ),
             ("req-explicit-timeout", Some(1234))
         );
+    }
+
+    #[test]
+    fn exited_notification_accepts_legacy_payload_without_sandbox_denied() {
+        let notification: ExecExitedNotification = serde_json::from_value(serde_json::json!({
+            "processId": "proc-1",
+            "seq": 3,
+            "exitCode": 1,
+        }))
+        .expect("legacy exited notification should deserialize");
+
+        assert_eq!(notification.sandbox_denied, None);
     }
 }
