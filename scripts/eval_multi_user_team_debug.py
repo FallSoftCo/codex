@@ -57,6 +57,8 @@ class MultiUserScenario:
     required_wake_roles: tuple[str, ...] = ()
     require_peer_response: bool = False
     max_direct_messages: int | None = None
+    legacy_dashboard_checks: bool = True
+    min_collaborative_edit_plans: int = 0
 
 
 SCENARIOS = {
@@ -345,6 +347,108 @@ verification request, respond with a narrow finding and the exact files checked.
                 "ops/runbook.md",
             ),
         },
+    ),
+    "same_file_three_user_release_plan": MultiUserScenario(
+        scenario_id="same_file_three_user_release_plan",
+        description=(
+            "Three user-facing agents edit distinct sections of one shared "
+            "release-plan file at the same time."
+        ),
+        files={
+            "README.md": """# Same File Team Debug App
+
+Scratch project for evaluating collaborative editing in one shared file.
+""",
+            "docs/release_plan.md": """# Release Plan
+
+## Client Readiness
+
+- TODO
+
+## Server Readiness
+
+- TODO
+
+## Launch Ops
+
+- TODO
+""",
+        },
+        user_agents=(
+            UserAgent(
+                role="alice",
+                name="AliceAgent",
+                prompt="""User Alice asks you to complete the client readiness section of the shared release plan.
+
+Edit only the `## Client Readiness` section of `docs/release_plan.md`. Replace
+the TODO with bullets that include exactly these facts: `Reconnect card`,
+`retrying copy`, and `client owner: Alice`.
+
+Bob and Casey may be editing other sections of the same file at the same time.
+Coordinate in Hollywood before editing, name your exact section, keep your patch
+narrow, and do not overwrite the Server Readiness or Launch Ops sections.
+""",
+            ),
+            UserAgent(
+                role="bob",
+                name="BobAgent",
+                prompt="""User Bob asks you to complete the server readiness section of the shared release plan.
+
+Edit only the `## Server Readiness` section of `docs/release_plan.md`. Replace
+the TODO with bullets that include exactly these facts: `Audit export helper`,
+``canExportAudit(role)``, and `server owner: Bob`.
+
+Alice and Casey may be editing other sections of the same file at the same time.
+Coordinate in Hollywood before editing, name your exact section, keep your patch
+narrow, and do not overwrite the Client Readiness or Launch Ops sections.
+""",
+            ),
+            UserAgent(
+                role="casey",
+                name="CaseyAgent",
+                prompt="""User Casey asks you to complete the launch ops section of the shared release plan.
+
+Edit only the `## Launch Ops` section of `docs/release_plan.md`. Replace the
+TODO with bullets that include exactly these facts: `admin approval runbook`,
+`rollback checkpoint`, and `ops owner: Casey`.
+
+Alice and Bob may be editing other sections of the same file at the same time.
+Coordinate in Hollywood before editing, name your exact section, keep your patch
+narrow, and do not overwrite the Client Readiness or Server Readiness sections.
+""",
+            ),
+        ),
+        peer_name="QAPeer",
+        peer_prompt="""You are an attached Losangelex QA peer for a same-file collaborative editing debug evaluation.
+
+Stay available in this Hollywood room. Do not edit files unless another session
+asks. If you see overlapping same-file ownership, conflict markers, or a request
+for review, respond with a narrow finding and the exact sections checked.
+""",
+        required_file_terms={
+            "docs/release_plan.md": (
+                "## Client Readiness",
+                "Reconnect card",
+                "retrying copy",
+                "client owner: Alice",
+                "## Server Readiness",
+                "Audit export helper",
+                "`canExportAudit(role)`",
+                "server owner: Bob",
+                "## Launch Ops",
+                "admin approval runbook",
+                "rollback checkpoint",
+                "ops owner: Casey",
+            ),
+        },
+        required_room_terms=(
+            "docs/release_plan.md",
+            "Client Readiness",
+            "Server Readiness",
+            "Launch Ops",
+        ),
+        legacy_dashboard_checks=False,
+        min_collaborative_edit_plans=3,
     ),
     "third_agent_verification_after_dependency": MultiUserScenario(
         scenario_id="third_agent_verification_after_dependency",
@@ -668,6 +772,7 @@ def score_run(
     direct_messages = 0
     peer_responses = 0
     scope_mentions = 0
+    collaborative_edit_plan_messages = 0
     required_direct_message_ids: set[int] = set()
     pending_required_direct_by_pair: dict[tuple[str, str], int] = {}
     duplicate_pending_required_direct_ids: list[int] = []
@@ -706,6 +811,8 @@ def score_run(
             pending_required_direct_by_pair.pop((recipient_key, sender_key), None)
         if role == "peer":
             peer_responses += 1
+        if "collaborative edit plan" in body_lower:
+            collaborative_edit_plan_messages += 1
         if any(
             term in body_lower
             for term in (
@@ -765,13 +872,21 @@ def score_run(
         for role in scenario.required_wake_roles
     )
 
-    client = file_contents["client/dashboard.js"]
-    server = file_contents["server/permissions.js"]
-    notes = file_contents["docs/team_notes.md"]
-    alice_done = "Reconnects" in client and "Reconnecting" in client
-    bob_done = "canExportAudit" in server and 'role === "admin"' in server
-    notes_have_alice = "## Alice" in notes and "client/dashboard.js" in notes
-    notes_have_bob = "## Bob" in notes and "server/permissions.js" in notes
+    client = file_contents.get("client/dashboard.js", "")
+    server = file_contents.get("server/permissions.js", "")
+    notes = file_contents.get("docs/team_notes.md", "")
+    alice_done = not scenario.legacy_dashboard_checks or (
+        "Reconnects" in client and "Reconnecting" in client
+    )
+    bob_done = not scenario.legacy_dashboard_checks or (
+        "canExportAudit" in server and 'role === "admin"' in server
+    )
+    notes_have_alice = not scenario.legacy_dashboard_checks or (
+        "## Alice" in notes and "client/dashboard.js" in notes
+    )
+    notes_have_bob = not scenario.legacy_dashboard_checks or (
+        "## Bob" in notes and "server/permissions.js" in notes
+    )
     required_note_terms_present = all(
         term in notes for term in scenario.required_note_terms
     )
@@ -818,6 +933,9 @@ def score_run(
         or direct_messages <= scenario.max_direct_messages
     )
     duplicate_pending_required_directs = bool(duplicate_pending_required_direct_ids)
+    collaborative_edit_requirement_met = (
+        collaborative_edit_plan_messages >= scenario.min_collaborative_edit_plans
+    )
     passed = (
         alice_done
         and bob_done
@@ -833,11 +951,13 @@ def score_run(
         and peer_response_requirement_met
         and direct_message_limit_met
         and not duplicate_pending_required_directs
+        and collaborative_edit_requirement_met
     )
     return {
         "passed": passed,
         "aliceTaskDone": alice_done,
         "bobTaskDone": bob_done,
+        "legacyDashboardChecks": scenario.legacy_dashboard_checks,
         "sharedNotesHaveAlice": notes_have_alice,
         "sharedNotesHaveBob": notes_have_bob,
         "requiredNoteTermsPresent": required_note_terms_present,
@@ -864,6 +984,9 @@ def score_run(
         "internalHollywoodResponsesByRole": dict(internal_hollywood_responses_by_role),
         "peerResponseCount": peer_responses,
         "peerResponseRequirementMet": peer_response_requirement_met,
+        "collaborativeEditPlanMessages": collaborative_edit_plan_messages,
+        "minCollaborativeEditPlans": scenario.min_collaborative_edit_plans,
+        "collaborativeEditRequirementMet": collaborative_edit_requirement_met,
         "scopeMentionCount": scope_mentions,
         "coordinationToolErrors": coordination_errors,
         "tokenUsage": notification_summary.get("tokenUsage", {}),
@@ -928,8 +1051,8 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
         "",
         "## Summary",
         "",
-        "| Scenario | Runs | Passed | Wall s | User room messages | Direct messages | Duplicate required | Wake turns | Peer responses | Uncached+out tokens | Tool errors |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Scenario | Runs | Passed | Wall s | User room messages | Direct messages | Duplicate required | Edit plans | Wake turns | Peer responses | Uncached+out tokens | Tool errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     by_scenario: dict[str, list[dict[str, Any]]] = {}
     for result in results:
@@ -958,6 +1081,10 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
             sum(result["score"]["hollywoodWakeTurnsByRole"].values())
             for result in scenario_results
         )
+        edit_plans = sum(
+            result["score"].get("collaborativeEditPlanMessages", 0)
+            for result in scenario_results
+        )
         uncached_plus_output_tokens = sum(
             result["score"].get("tokenUsage", {}).get("uncachedPlusOutputTokens", 0)
             for result in scenario_results
@@ -969,7 +1096,7 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
             result["score"]["coordinationToolErrors"] for result in scenario_results
         )
         lines.append(
-            f"| {scenario_id} | {len(scenario_results)} | {passed} | {wall_seconds:.1f} | {user_messages} | {direct_messages} | {duplicate_required} | {wake_turns} | {peer_responses} | {uncached_plus_output_tokens} | {tool_errors} |"
+            f"| {scenario_id} | {len(scenario_results)} | {passed} | {wall_seconds:.1f} | {user_messages} | {direct_messages} | {duplicate_required} | {edit_plans} | {wake_turns} | {peer_responses} | {uncached_plus_output_tokens} | {tool_errors} |"
         )
 
     lines.extend(["", "## Runs", ""])
@@ -1001,6 +1128,8 @@ def write_report(output_dir: Path, results: list[dict[str, Any]]) -> None:
                 f"- Internal Hollywood responses by role: `{json.dumps(score['internalHollywoodResponsesByRole'], sort_keys=True)}`",
                 f"- Peer responses: `{score['peerResponseCount']}`",
                 f"- Peer response requirement met: `{score['peerResponseRequirementMet']}`",
+                f"- Collaborative edit plans: `{score['collaborativeEditPlanMessages']}`",
+                f"- Collaborative edit requirement met: `{score['collaborativeEditRequirementMet']}`",
                 f"- Coordination tool errors: `{score['coordinationToolErrors']}`",
                 f"- Token usage: `{json.dumps(score.get('tokenUsage', {}), sort_keys=True)}`",
                 f"- Result: `{result['scenarioId']}/{result['runId']}/result.json`",
