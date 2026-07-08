@@ -409,21 +409,31 @@ ON CONFLICT(child_thread_id) DO NOTHING
     ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
         let mut builder = QueryBuilder::<Sqlite>::new("");
         push_thread_select_columns(&mut builder);
-        builder.push(" FROM threads");
-        push_thread_filters(
-            &mut builder,
-            ThreadFilterOptions {
-                archived_only,
-                allowed_sources,
-                model_providers,
-                cwd_filters: None,
-                anchor: None,
-                sort_key: crate::SortKey::UpdatedAt,
-                sort_direction: SortDirection::Desc,
-                search_term: None,
-            },
-            /*include_thread_id_tiebreaker*/ false,
-        );
+        // Exact title lookup must include freshly named threads before they have preview text.
+        builder.push(" FROM threads WHERE 1 = 1");
+        if archived_only {
+            builder.push(" AND threads.archived = 1");
+        } else {
+            builder.push(" AND threads.archived = 0");
+        }
+        if !allowed_sources.is_empty() {
+            builder.push(" AND threads.source IN (");
+            let mut separated = builder.separated(", ");
+            for source in allowed_sources {
+                separated.push_bind(source);
+            }
+            separated.push_unseparated(")");
+        }
+        if let Some(model_providers) = model_providers
+            && !model_providers.is_empty()
+        {
+            builder.push(" AND threads.model_provider IN (");
+            let mut separated = builder.separated(", ");
+            for provider in model_providers {
+                separated.push_bind(provider);
+            }
+            separated.push_unseparated(")");
+        }
         if require_first_user_message {
             builder.push(" AND threads.first_user_message <> ''");
         }
@@ -438,7 +448,7 @@ ON CONFLICT(child_thread_id) DO NOTHING
             crate::SortKey::UpdatedAt,
             SortDirection::Desc,
             OrderByIndex::Enabled,
-            /*include_thread_id_tiebreaker*/ false,
+            /*include_thread_id_tiebreaker*/ true,
             /*limit*/ 1,
         );
 
@@ -2847,6 +2857,7 @@ mod tests {
         let mut fresh = test_thread_metadata(&codex_home, fresh_id, codex_home.clone());
         fresh.title = "james".to_string();
         fresh.first_user_message = None;
+        fresh.preview = None;
         fresh.updated_at = DateTime::<Utc>::from_timestamp(1_700_001_260, 0).expect("timestamp");
         runtime
             .upsert_thread(&fresh)
