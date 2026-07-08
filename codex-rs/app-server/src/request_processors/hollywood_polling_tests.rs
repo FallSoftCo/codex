@@ -131,6 +131,21 @@ fn select_hollywood_followup_ignores_optional_broadcast() {
 }
 
 #[test]
+fn select_hollywood_followup_accepts_optional_focused_primary_room_message() {
+    let messages = vec![classified_message(
+        1,
+        HollywoodMessageKind::Direct,
+        HollywoodResponsePolicy::Optional,
+        HollywoodMessageAttention::Focused,
+    )];
+
+    let selected =
+        select_hollywood_followup(&messages, "repo/losangelex").expect("selected followup");
+
+    assert_eq!(selected.notification_message.id, 1);
+}
+
+#[test]
 fn select_hollywood_followup_accepts_required_primary_room_broadcast() {
     let messages = vec![classified_message(
         1,

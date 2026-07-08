@@ -186,10 +186,12 @@ fn should_start_hollywood_followup(
     if message.self_authored {
         return false;
     }
-    if !message_requires_response(message) {
-        return false;
+    let notification = &message.notification_message;
+    if message_requires_response(message) {
+        return notification.room == primary_room || message_targets_this_session(message);
     }
-    message.notification_message.room == primary_room || message_targets_this_session(message)
+    notification.room == primary_room
+        && matches!(message.attention, HollywoodMessageAttention::Focused)
 }
 
 fn message_requires_response(message: &HollywoodClassifiedMessage) -> bool {
