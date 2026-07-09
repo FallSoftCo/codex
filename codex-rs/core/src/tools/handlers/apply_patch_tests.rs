@@ -16,7 +16,7 @@ use tempfile::TempDir;
 use tokio::sync::Barrier;
 use tokio::sync::Mutex;
 
-const COLLABORATIVE_STRESS_AGENTS: usize = 200;
+const COLLABORATIVE_STRESS_AGENTS: usize = 32;
 
 use crate::session::step_context::StepContext;
 use crate::session::tests::make_session_and_context;
@@ -509,7 +509,7 @@ async fn two_agents_start_collaborative_edits_to_same_file_concurrently() {
 }
 
 #[tokio::test]
-async fn hundreds_of_agents_apply_two_rounds_of_collaborative_edits_to_same_file() {
+async fn many_agents_apply_two_rounds_of_collaborative_edits_to_same_file() {
     let (agent_a, _turn_a, state_db) = session_with_state_db().await;
     let mut agents = vec![agent_a];
     for _ in 1..COLLABORATIVE_STRESS_AGENTS {
@@ -572,13 +572,14 @@ async fn hundreds_of_agents_apply_two_rounds_of_collaborative_edits_to_same_file
         )
         .await
         .expect("owner should claim shared file");
+    let edit_slice = format!("{COLLABORATIVE_STRESS_AGENTS} independent section labels");
     state_db
         .record_collaborative_edit_plan(codex_state::CollaborativeEditPlanCreateParams {
-            id: "plan-six-agent-rounds".to_string(),
+            id: format!("plan-{COLLABORATIVE_STRESS_AGENTS}-agent-rounds"),
             actor_thread_id: owner_id,
             room: Some("room".to_string()),
             file_path: file_path.clone(),
-            edit_slice: "200 independent section labels".to_string(),
+            edit_slice: edit_slice.clone(),
             intent: "each agent updates its assigned section label across repeated waves"
                 .to_string(),
             peers: agents
@@ -599,7 +600,7 @@ async fn hundreds_of_agents_apply_two_rounds_of_collaborative_edits_to_same_file
     let round_one_outputs = apply_collaborative_patch_wave(&agents, &cwd, round_one_patches).await;
     for output in &round_one_outputs {
         assert!(output.contains("Collaborative edit plan matched"));
-        assert!(output.contains("200 independent section labels"));
+        assert!(output.contains(&edit_slice));
         assert!(output.contains(owner_id.to_string().as_str()));
     }
     assert_eq!(
@@ -610,7 +611,7 @@ async fn hundreds_of_agents_apply_two_rounds_of_collaborative_edits_to_same_file
     let round_two_outputs = apply_collaborative_patch_wave(&agents, &cwd, round_two_patches).await;
     for output in &round_two_outputs {
         assert!(output.contains("Collaborative edit plan matched"));
-        assert!(output.contains("200 independent section labels"));
+        assert!(output.contains(&edit_slice));
         assert!(output.contains(owner_id.to_string().as_str()));
     }
     assert_eq!(

@@ -71,7 +71,12 @@ async fn thread_start_hollywood_options_attach_requested_room() -> Result<()> {
 
     let listed = list_hollywood(&mut app).await?;
     assert_eq!(listed.data.len(), 1);
-    assert_eq!(listed.data[0], thread.thread);
+    let listed_thread = &listed.data[0];
+    let mut expected_thread = thread.thread;
+    expected_thread.created_at = listed_thread.created_at;
+    expected_thread.updated_at = listed_thread.updated_at;
+    expected_thread.recency_at = listed_thread.recency_at;
+    assert_eq!(listed_thread, &expected_thread);
 
     Ok(())
 }

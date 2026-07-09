@@ -822,6 +822,7 @@ fn serialize_websocket_request(request: &ResponsesWsRequest) -> Result<String, A
 mod tests {
     use super::*;
     use crate::common::ResponseCreateWsRequest;
+    use codex_http_client::OutboundProxyPolicy;
     use codex_protocol::models::ContentItem;
     use codex_protocol::models::ResponseItem;
     use pretty_assertions::assert_eq;
@@ -829,9 +830,10 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
     use tokio::net::TcpListener;
+    use tokio::net::TcpStream;
     use tokio::time::timeout;
+    use tokio_tungstenite::WebSocketStream;
     use tokio_tungstenite::accept_async;
-    use tokio_tungstenite::connect_async;
     use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 
     #[test]
@@ -1084,10 +1086,7 @@ mod tests {
         .expect("connection should observe peer close");
     }
 
-    async fn connected_websocket_pair() -> (
-        WebSocketStream<MaybeTlsStream<TcpStream>>,
-        WebSocketStream<TcpStream>,
-    ) {
+    async fn connected_websocket_pair() -> (WebSocketConnection, WebSocketStream<TcpStream>) {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("listener should bind");
@@ -1099,7 +1098,14 @@ mod tests {
                 .expect("server websocket should accept")
         });
         let url = format!("ws://{addr}");
-        let (client_stream, _response) = connect_async(url)
+        let request = url
+            .as_str()
+            .into_client_request()
+            .expect("websocket request should build");
+        let factory = HttpClientFactory::new(OutboundProxyPolicy::ReqwestDefault);
+        let connector = WebSocketConnector::new(&factory).expect("connector should build");
+        let (client_stream, _response) = connector
+            .connect(request, WebSocketConfig::default())
             .await
             .expect("client websocket should connect");
         let server_stream = accept_task.await.expect("accept task should join");
