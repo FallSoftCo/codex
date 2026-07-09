@@ -53,7 +53,6 @@ const EXPECTED_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 async fn init_mcp(codex_home: &Path) -> Result<TestAppServer> {
     let mut mcp = TestAppServer::builder()
         .with_codex_home(codex_home)
-        .without_auto_env()
         .build()
         .await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
@@ -262,7 +261,7 @@ async fn thread_list_reports_system_error_idle_flag_after_failed_turn() -> Resul
     let mut mcp = init_mcp(codex_home.path()).await?;
 
     let start_id = mcp
-        .send_thread_start_request(ThreadStartParams {
+        .send_thread_start_request_with_auto_env(ThreadStartParams {
             model: Some("mock-model".to_string()),
             ..Default::default()
         })

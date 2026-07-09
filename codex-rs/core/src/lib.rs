@@ -125,7 +125,6 @@ pub use hollywood::default_hollywood_room_for_cwd;
 pub use hollywood::live_identity_matches_target;
 pub use hollywood::parse_agent_mentions;
 mod event_mapping;
-pub mod review_format;
 pub use codex_prompts as review_prompts;
 mod thread_manager;
 pub(crate) mod web_search;

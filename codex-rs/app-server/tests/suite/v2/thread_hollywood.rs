@@ -50,7 +50,10 @@ async fn thread_start_hollywood_options_attach_requested_room() -> Result<()> {
     mount_empty_hollywood_messages(&hollywood_server, HOLLYWOOD_ROOM).await;
     mount_empty_hollywood_messages(&hollywood_server, "main").await;
 
-    let mut app = TestAppServer::new(codex_home.path()).await?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build()
+        .await?;
     timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
 
     let thread = start_thread_with_hollywood(&mut app, &hollywood_server.uri()).await?;
@@ -84,7 +87,10 @@ async fn hollywood_attach_lists_multiple_interactive_sessions() -> Result<()> {
     mount_empty_hollywood_messages(&hollywood_server, HOLLYWOOD_ROOM).await;
     mount_empty_hollywood_messages(&hollywood_server, "main").await;
 
-    let mut app = TestAppServer::new(codex_home.path()).await?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build()
+        .await?;
     timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
 
     let first = start_thread(&mut app).await?;
@@ -135,7 +141,10 @@ async fn hollywood_attach_attention_and_detach_update_public_session_state() -> 
     mount_empty_hollywood_messages(&hollywood_server, HOLLYWOOD_ROOM).await;
     mount_empty_hollywood_messages(&hollywood_server, "main").await;
 
-    let mut app = TestAppServer::new(codex_home.path()).await?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build()
+        .await?;
     timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
 
     let thread = start_thread(&mut app).await?;
@@ -184,7 +193,10 @@ async fn hollywood_direct_message_wakes_only_target_session() -> Result<()> {
     let hollywood_server = MockServer::start().await;
     mount_hollywood_registry(&hollywood_server).await;
 
-    let mut app = TestAppServer::new(codex_home.path()).await?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build()
+        .await?;
     timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
 
     let target = start_thread(&mut app).await?;
@@ -294,7 +306,10 @@ async fn hollywood_optional_direct_message_wakes_as_attention() -> Result<()> {
     let hollywood_server = MockServer::start().await;
     mount_hollywood_registry(&hollywood_server).await;
 
-    let mut app = TestAppServer::new(codex_home.path()).await?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build()
+        .await?;
     timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
 
     let target = start_thread(&mut app).await?;
@@ -398,7 +413,10 @@ async fn hollywood_collaborative_edit_plan_is_model_visible_context() -> Result<
     let hollywood_server = MockServer::start().await;
     mount_hollywood_registry(&hollywood_server).await;
 
-    let mut app = TestAppServer::new(codex_home.path()).await?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build()
+        .await?;
     timeout(DEFAULT_READ_TIMEOUT, app.initialize()).await??;
 
     let target = start_thread(&mut app).await?;
@@ -531,7 +549,7 @@ async fn set_thread_name(app: &mut TestAppServer, thread_id: &str, name: &str) -
 
 async fn start_thread(app: &mut TestAppServer) -> Result<ThreadStartResponse> {
     let request_id = app
-        .send_thread_start_request(ThreadStartParams {
+        .send_thread_start_request_with_auto_env(ThreadStartParams {
             model: Some("mock-model".to_string()),
             ..Default::default()
         })
@@ -549,7 +567,7 @@ async fn start_thread_with_hollywood(
     hollywood_url: &str,
 ) -> Result<ThreadStartResponse> {
     let request_id = app
-        .send_thread_start_request(ThreadStartParams {
+        .send_thread_start_request_with_auto_env(ThreadStartParams {
             model: Some("mock-model".to_string()),
             hollywood: Some(HollywoodSessionAttachOptions {
                 url: Some(hollywood_url.to_string()),

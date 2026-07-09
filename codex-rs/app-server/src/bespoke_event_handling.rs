@@ -86,8 +86,6 @@ use codex_app_server_protocol::guardian_auto_approval_review_notification;
 use codex_app_server_protocol::item_event_to_server_notification;
 use codex_core::CodexThread;
 use codex_core::ThreadManager;
-use codex_core::review_format::format_review_findings_block;
-use codex_core::review_prompts;
 use codex_protocol::ThreadId;
 use codex_protocol::items::CollabAgentTool as CoreCollabAgentTool;
 use codex_protocol::items::TurnItem as CoreTurnItem;
@@ -101,7 +99,6 @@ use codex_protocol::protocol::ExecApprovalRequestEvent;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::RealtimeEvent;
 use codex_protocol::protocol::ReviewDecision;
-use codex_protocol::protocol::ReviewOutputEvent;
 use codex_protocol::protocol::SubAgentActivityKind;
 use codex_protocol::protocol::TokenCountEvent;
 use codex_protocol::protocol::TurnAbortedEvent;
@@ -848,11 +845,13 @@ pub(crate) async fn apply_bespoke_event_handling(
         | EventMsg::CollabResumeEnd(_)
         | EventMsg::SubAgentActivity(_)
         | EventMsg::ExecCommandBegin(_)
-        | EventMsg::ExecCommandEnd(_) => {
+        | EventMsg::ExecCommandEnd(_)
+        | EventMsg::EnteredReviewMode(_)
+        | EventMsg::ExitedReviewMode(_) => {
             // Deprecated item lifecycle events are still fanned out for raw-event and rollout
             // compatibility consumers.
-            // App-server v2 receives canonical TurnItem lifecycle instead, and dispatches
-            // dynamic tool requests from canonical DynamicToolCall starts.
+            // App-server v2 receives TurnItem lifecycle instead, and dispatches dynamic tool
+            // requests from DynamicToolCall starts.
         }
         EventMsg::McpToolCallBegin(_) | EventMsg::McpToolCallEnd(_) => {
             // Deprecated MCP tool-call events are still fanned out for raw-event and rollout
@@ -949,33 +948,6 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .await;
         }
         EventMsg::ViewImageToolCall(_) => {}
-        EventMsg::EnteredReviewMode(review_request) => {
-            let review = review_request
-                .user_facing_hint
-                .unwrap_or_else(|| review_prompts::user_facing_hint(&review_request.target));
-            let item = ThreadItem::EnteredReviewMode {
-                id: event_turn_id.clone(),
-                review,
-            };
-            let started = ItemStartedNotification {
-                thread_id: conversation_id.to_string(),
-                turn_id: event_turn_id.clone(),
-                started_at_ms: now_unix_timestamp_ms(),
-                item: item.clone(),
-            };
-            outgoing
-                .send_server_notification(ServerNotification::ItemStarted(started))
-                .await;
-            let completed = ItemCompletedNotification {
-                thread_id: conversation_id.to_string(),
-                turn_id: event_turn_id.clone(),
-                completed_at_ms: now_unix_timestamp_ms(),
-                item,
-            };
-            outgoing
-                .send_server_notification(ServerNotification::ItemCompleted(completed))
-                .await;
-        }
         EventMsg::ItemStarted(event) => {
             let should_emit = match &event.item {
                 // Approval and guardian flows can emit the command start notification before core
@@ -1058,34 +1030,6 @@ pub(crate) async fn apply_bespoke_event_handling(
             };
             outgoing
                 .send_server_notification(ServerNotification::HookCompleted(notification))
-                .await;
-        }
-        EventMsg::ExitedReviewMode(review_event) => {
-            let review = match review_event.review_output {
-                Some(output) => render_review_output_text(&output),
-                None => REVIEW_FALLBACK_MESSAGE.to_string(),
-            };
-            let item = ThreadItem::ExitedReviewMode {
-                id: event_turn_id.clone(),
-                review,
-            };
-            let started = ItemStartedNotification {
-                thread_id: conversation_id.to_string(),
-                turn_id: event_turn_id.clone(),
-                started_at_ms: now_unix_timestamp_ms(),
-                item: item.clone(),
-            };
-            outgoing
-                .send_server_notification(ServerNotification::ItemStarted(started))
-                .await;
-            let completed = ItemCompletedNotification {
-                thread_id: conversation_id.to_string(),
-                turn_id: event_turn_id.clone(),
-                completed_at_ms: now_unix_timestamp_ms(),
-                item,
-            };
-            outgoing
-                .send_server_notification(ServerNotification::ItemCompleted(completed))
                 .await;
         }
         EventMsg::RawResponseItem(raw_response_item_event) => {
@@ -2076,28 +2020,6 @@ fn request_permissions_response_from_client_result(
     }))
 }
 
-const REVIEW_FALLBACK_MESSAGE: &str = "Reviewer failed to output a response.";
-
-fn render_review_output_text(output: &ReviewOutputEvent) -> String {
-    let mut sections = Vec::new();
-    let explanation = output.overall_explanation.trim();
-    if !explanation.is_empty() {
-        sections.push(explanation.to_string());
-    }
-    if !output.findings.is_empty() {
-        let findings = format_review_findings_block(&output.findings, /*selection*/ None);
-        let trimmed = findings.trim();
-        if !trimmed.is_empty() {
-            sections.push(trimmed.to_string());
-        }
-    }
-    if sections.is_empty() {
-        REVIEW_FALLBACK_MESSAGE.to_string()
-    } else {
-        sections.join("\n\n")
-    }
-}
-
 fn map_file_change_approval_decision(decision: FileChangeApprovalDecision) -> ReviewDecision {
     match decision {
         FileChangeApprovalDecision::Accept => ReviewDecision::Approved,
@@ -2306,10 +2228,8 @@ mod tests {
     use codex_protocol::AgentPath;
     use codex_protocol::items::DynamicToolCallItem;
     use codex_protocol::items::DynamicToolCallStatus as CoreDynamicToolCallStatus;
-    use codex_protocol::items::HookPromptFragment;
     use codex_protocol::items::SubAgentActivityItem;
     use codex_protocol::items::TurnItem as CoreTurnItem;
-    use codex_protocol::items::build_hook_prompt_message;
     use codex_protocol::models::FileSystemPermissions as CoreFileSystemPermissions;
     use codex_protocol::models::NetworkPermissions as CoreNetworkPermissions;
     use codex_protocol::models::PermissionProfile;
@@ -4189,57 +4109,6 @@ mod tests {
                 assert_eq!(notification.thread_id, conversation_id.to_string());
                 assert_eq!(notification.turn_id, "turn-1");
                 assert_eq!(notification.diff, unified_diff);
-            }
-            other => bail!("unexpected message: {other:?}"),
-        }
-        assert!(rx.try_recv().is_err(), "no extra messages expected");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_hook_prompt_raw_response_emits_item_completed() -> Result<()> {
-        let (tx, mut rx) = mpsc::channel(CHANNEL_CAPACITY);
-        let outgoing = Arc::new(OutgoingMessageSender::new(
-            tx,
-            codex_analytics::AnalyticsEventsClient::disabled(),
-        ));
-        let conversation_id = ThreadId::new();
-        let outgoing = ThreadScopedOutgoingMessageSender::new(
-            outgoing,
-            vec![ConnectionId(1)],
-            conversation_id,
-        );
-        let item = build_hook_prompt_message(&[
-            HookPromptFragment::from_single_hook("Retry with tests.", "hook-run-1"),
-            HookPromptFragment::from_single_hook("Then summarize cleanly.", "hook-run-2"),
-        ])
-        .expect("hook prompt message");
-
-        maybe_emit_hook_prompt_item_completed(conversation_id, "turn-1", &item, &outgoing).await;
-
-        let msg = recv_broadcast_message(&mut rx).await?;
-        match msg {
-            OutgoingMessage::AppServerNotification(ServerNotification::ItemCompleted(
-                notification,
-            )) => {
-                assert_eq!(notification.thread_id, conversation_id.to_string());
-                assert_eq!(notification.turn_id, "turn-1");
-                assert_eq!(
-                    notification.item,
-                    ThreadItem::HookPrompt {
-                        id: notification.item.id().to_string(),
-                        fragments: vec![
-                            codex_app_server_protocol::HookPromptFragment {
-                                text: "Retry with tests.".into(),
-                                hook_run_id: "hook-run-1".into(),
-                            },
-                            codex_app_server_protocol::HookPromptFragment {
-                                text: "Then summarize cleanly.".into(),
-                                hook_run_id: "hook-run-2".into(),
-                            },
-                        ],
-                    }
-                );
             }
             other => bail!("unexpected message: {other:?}"),
         }
