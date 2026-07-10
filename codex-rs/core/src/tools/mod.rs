@@ -1,4 +1,5 @@
 pub(crate) mod apply_patch_turn_fs;
+mod approvals;
 pub(crate) mod code_mode;
 pub(crate) mod context;
 pub(crate) mod events;
