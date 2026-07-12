@@ -2081,6 +2081,7 @@ dependencies = [
  "tracing",
  "tungstenite",
  "url",
+ "uuid",
  "wiremock",
 ]
 

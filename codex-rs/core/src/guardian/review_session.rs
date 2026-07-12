@@ -1177,7 +1177,9 @@ mod tests {
             id: turn_id.to_string(),
             msg: EventMsg::TurnComplete(TurnCompleteEvent {
                 turn_id: turn_id.to_string(),
+                started_at: None,
                 last_agent_message: last_agent_message.map(str::to_string),
+                error: None,
                 completed_at: None,
                 duration_ms: None,
                 time_to_first_token_ms,
@@ -1190,6 +1192,7 @@ mod tests {
             id: turn_id.to_string(),
             msg: EventMsg::TurnAborted(TurnAbortedEvent {
                 turn_id: Some(turn_id.to_string()),
+                started_at: None,
                 reason: TurnAbortReason::Interrupted,
                 completed_at: None,
                 duration_ms: None,

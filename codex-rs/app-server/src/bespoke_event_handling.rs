@@ -1547,7 +1547,10 @@ pub(crate) async fn maybe_emit_hook_prompt_item_completed(
         return;
     }
 
-    let Some(hook_prompt) = parse_hook_prompt_message(id.as_ref(), content) else {
+    let Some(hook_prompt) = parse_hook_prompt_message(
+        id.as_ref().map(codex_protocol::ResponseItemId::as_str),
+        content,
+    ) else {
         return;
     };
 
@@ -2362,7 +2365,9 @@ mod tests {
     fn turn_complete_event(turn_id: &str) -> TurnCompleteEvent {
         TurnCompleteEvent {
             turn_id: turn_id.to_string(),
+            started_at: None,
             last_agent_message: None,
+            error: None,
             completed_at: Some(TEST_TURN_COMPLETED_AT),
             duration_ms: Some(TEST_TURN_DURATION_MS),
             time_to_first_token_ms: None,
@@ -2372,6 +2377,7 @@ mod tests {
     fn turn_aborted_event(turn_id: &str) -> TurnAbortedEvent {
         TurnAbortedEvent {
             turn_id: Some(turn_id.to_string()),
+            started_at: None,
             reason: codex_protocol::protocol::TurnAbortReason::Interrupted,
             completed_at: Some(TEST_TURN_COMPLETED_AT),
             duration_ms: Some(TEST_TURN_DURATION_MS),
