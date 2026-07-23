@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/FallSoftCo/losangelex">Losangelex</a>
+  <a href="https://github.com/FallSoftCo/codex">Losangelex</a>
   ·
   <a href="https://github.com/FallSoftCo/hollywood">Hollywood</a>
 </p>
@@ -53,7 +53,7 @@ Losangelex is the runtime side of the FallSoftCo local multi-agent stack.
 
 That stack currently consists of two repositories:
 
-- `FallSoftCo/losangelex`
+- `FallSoftCo/codex`
   - the Codex-derived runtime, app-server, TUI, launcher, and workflow surface
 - `FallSoftCo/hollywood`
   - the local room service used for coordination between sessions
@@ -239,7 +239,7 @@ extrapolated to Silo or MARBLE until those runners record usage.
 
 ```bash
 git clone git@github.com:FallSoftCo/hollywood.git
-git clone git@github.com:FallSoftCo/losangelex.git
+git clone git@github.com:FallSoftCo/codex.git
 ```
 
 ### 2. Start Hollywood
@@ -267,7 +267,7 @@ http://127.0.0.1:8765
 ### 3. Build Losangelex
 
 ```bash
-cd ../losangelex/codex-rs
+cd ../codex/codex-rs
 cargo build
 ```
 
@@ -276,7 +276,7 @@ cargo build
 From any project directory:
 
 ```bash
-/path/to/losangelex/scripts/losangelex
+/path/to/codex/scripts/losangelex
 ```
 
 Or put that launcher on your `PATH` and run:
