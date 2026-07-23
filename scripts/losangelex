@@ -420,7 +420,6 @@ if [[ ! -f "$migration_marker" ]]; then
   for path in \
     "$codex_home/auth.json" \
     "$codex_home/config.toml" \
-    "$codex_home/state_5.sqlite" \
     "$codex_home/sessions"
   do
     if [[ -e "$path" ]]; then
@@ -428,6 +427,9 @@ if [[ ! -f "$migration_marker" ]]; then
       break
     fi
   done
+  if [[ $existing_state -eq 0 ]] && compgen -G "$codex_home/state_*.sqlite" >/dev/null; then
+    existing_state=1
+  fi
 
   cat >"$migration_marker" <<JSON
 {

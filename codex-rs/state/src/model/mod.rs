@@ -1,4 +1,3 @@
-mod agent_job;
 mod backfill_state;
 mod collaborative_edit;
 mod coordination;
@@ -13,13 +12,6 @@ mod thread_goal;
 mod thread_metadata;
 mod watcher;
 
-pub use agent_job::AgentJob;
-pub use agent_job::AgentJobCreateParams;
-pub use agent_job::AgentJobItem;
-pub use agent_job::AgentJobItemCreateParams;
-pub use agent_job::AgentJobItemStatus;
-pub use agent_job::AgentJobProgress;
-pub use agent_job::AgentJobStatus;
 pub use backfill_state::BackfillState;
 pub use backfill_state::BackfillStatus;
 pub use collaborative_edit::CollaborativeEditPlan;
@@ -99,8 +91,6 @@ pub use watcher::WatcherRunStatus;
 pub use watcher::WatcherStatus;
 pub use watcher::WatcherTriggerKind;
 
-pub(crate) use agent_job::AgentJobItemRow;
-pub(crate) use agent_job::AgentJobRow;
 pub(crate) use collaborative_edit::CollaborativeEditPlanRow;
 pub(crate) use coordination::CoordinationActRow;
 pub(crate) use coordination::CoordinationTaskRow;

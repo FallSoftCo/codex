@@ -2,32 +2,33 @@ use std::fmt;
 use std::sync::Arc;
 
 use codex_mcp::McpConfig;
-use codex_mcp::McpConnectionManager;
+use codex_mcp::McpConnectionSet;
 use codex_mcp::McpRuntimeContext;
+use codex_protocol::capabilities::SelectedCapabilityRoot;
 
 /// MCP config, plugin availability, exact environment bindings, and manager for one request.
 pub struct McpRuntimeSnapshot {
     config: Arc<McpConfig>,
     plugins_available: bool,
-    manager: Arc<McpConnectionManager>,
+    manager: Arc<McpConnectionSet>,
     runtime_context: McpRuntimeContext,
-    available_environment_ids: Vec<String>,
+    ready_selected_capability_roots: Vec<SelectedCapabilityRoot>,
 }
 
 impl McpRuntimeSnapshot {
     pub(crate) fn new(
         config: Arc<McpConfig>,
         plugins_available: bool,
-        manager: Arc<McpConnectionManager>,
+        manager: Arc<McpConnectionSet>,
         runtime_context: McpRuntimeContext,
-        available_environment_ids: Vec<String>,
+        ready_selected_capability_roots: Vec<SelectedCapabilityRoot>,
     ) -> Self {
         Self {
             config,
             plugins_available,
             manager,
             runtime_context,
-            available_environment_ids,
+            ready_selected_capability_roots,
         }
     }
 
@@ -39,11 +40,11 @@ impl McpRuntimeSnapshot {
         self.plugins_available
     }
 
-    pub fn manager(&self) -> &McpConnectionManager {
+    pub fn manager(&self) -> &McpConnectionSet {
         self.manager.as_ref()
     }
 
-    pub(crate) fn manager_arc(&self) -> Arc<McpConnectionManager> {
+    pub(crate) fn manager_arc(&self) -> Arc<McpConnectionSet> {
         Arc::clone(&self.manager)
     }
 
@@ -51,8 +52,8 @@ impl McpRuntimeSnapshot {
         &self.runtime_context
     }
 
-    pub(crate) fn available_environment_ids(&self) -> &[String] {
-        &self.available_environment_ids
+    pub(crate) fn ready_selected_capability_roots(&self) -> &[SelectedCapabilityRoot] {
+        &self.ready_selected_capability_roots
     }
 
     #[cfg(test)]
@@ -82,7 +83,7 @@ impl McpRuntimeSnapshot {
             mcp_server_catalog: ResolvedMcpCatalog::default(),
             connector_snapshot: codex_connectors::ConnectorSnapshot::default(),
         };
-        let manager = McpConnectionManager::new_uninitialized_with_permission_profile(
+        let manager = McpConnectionSet::new_uninitialized_with_permission_profile(
             &config.permissions.approval_policy,
             config.permissions.permission_profile(),
             config.prefix_mcp_tool_names(),

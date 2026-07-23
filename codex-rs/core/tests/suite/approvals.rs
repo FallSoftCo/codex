@@ -5,6 +5,7 @@ use anyhow::Result;
 use codex_config::types::ApprovalsReviewer;
 use codex_core::CodexThread;
 use codex_core::config::Constrained;
+use codex_core::config::ThreadStoreConfig;
 use codex_core::sandboxing::SandboxPermissions;
 use codex_features::Feature;
 use codex_protocol::approvals::NetworkApprovalProtocol;
@@ -53,7 +54,6 @@ use pretty_assertions::assert_eq;
 use regex_lite::Regex;
 use serde_json::Value;
 use serde_json::json;
-use std::env;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -83,9 +83,7 @@ impl TargetPath {
                 (path, name.to_string())
             }
             TargetPath::OutsideWorkspace(name) => {
-                let path = env::current_dir()
-                    .expect("current dir should be available")
-                    .join(name);
+                let path = test.home.path().join(name);
                 (path.clone(), path.display().to_string())
             }
         }
@@ -805,12 +803,16 @@ async fn expect_patch_approval(
     test: &TestCodex,
     expected_call_id: &str,
 ) -> ApplyPatchApprovalRequestEvent {
-    let event = wait_for_event(&test.codex, |event| {
-        matches!(
-            event,
-            EventMsg::ApplyPatchApprovalRequest(_) | EventMsg::TurnComplete(_)
-        )
-    })
+    let event = wait_for_event_with_timeout(
+        &test.codex,
+        |event| {
+            matches!(
+                event,
+                EventMsg::ApplyPatchApprovalRequest(_) | EventMsg::TurnComplete(_)
+            )
+        },
+        Duration::from_secs(15),
+    )
     .await;
 
     match event {
@@ -1009,11 +1011,11 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.2"),
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("blocked by distinctive approval policy"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
-                output_contains: "rejected by user",
+                output_contains: "blocked by distinctive approval policy",
             },
         },
         ScenarioSpec {
@@ -1027,7 +1029,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.2"),
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
@@ -1045,7 +1047,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.2"),
             outcome: Outcome::ExecApprovalWithAmendment {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
                 expected_execpolicy_amendment: Some(&["echo", "known-safe-escalation"]),
             },
@@ -1088,7 +1090,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.2"),
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
@@ -1109,7 +1111,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.2"),
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
@@ -1130,7 +1132,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.2"),
             outcome: Outcome::ExecApprovalWithAmendment {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
                 expected_execpolicy_amendment: None,
             },
@@ -1308,7 +1310,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: None,
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::FileNotCreated {
@@ -1440,7 +1442,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![],
             model_override: Some("gpt-5.4"),
             outcome: Outcome::PatchApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::FileNotCreated {
@@ -1746,7 +1748,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![Feature::UnifiedExec],
             model_override: None,
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
@@ -1765,7 +1767,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![Feature::UnifiedExec],
             model_override: None,
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
@@ -1784,7 +1786,7 @@ fn scenarios() -> Vec<ScenarioSpec> {
             features: vec![Feature::UnifiedExec],
             model_override: None,
             outcome: Outcome::ExecApproval {
-                decision: ReviewDecision::Denied,
+                decision: ReviewDecision::denied("rejected by user"),
                 expected_reason: None,
             },
             expectation: Expectation::CommandFailure {
@@ -1851,8 +1853,13 @@ async fn run_scenario(scenario: &ScenarioSpec) -> Result<()> {
     let model_override = scenario.model_override;
     let model = model_override.unwrap_or("gpt-5.4");
     let policy_src = scenario.action.policy_src();
+    let thread_store_id = format!("approval-scenario-{}", scenario.name);
 
     let mut builder = test_codex().with_model(model).with_config(move |config| {
+        // These scenarios assert tool behavior, not rollout persistence.
+        config.experimental_thread_store = ThreadStoreConfig::InMemory {
+            id: thread_store_id,
+        };
         config.permissions.approval_policy = Constrained::allow_any(approval_policy);
         config
             .set_legacy_sandbox_policy(sandbox_policy.clone())
@@ -2005,9 +2012,9 @@ async fn run_scenario(scenario: &ScenarioSpec) -> Result<()> {
         "approval scenario {} result: exit_code={:?} stdout={:?}",
         scenario.name, result.exit_code, result.stdout
     );
-    scenario.expectation.verify(&test, &result)?;
-
-    Ok(())
+    let verification_result = scenario.expectation.verify(&test, &result);
+    test.codex.shutdown_and_wait().await?;
+    verification_result
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -3421,6 +3428,12 @@ allow_local_binding = true
         policy_contents.contains(&expected_rule),
         "unexpected policy contents: {policy_contents}"
     );
+    assert!(first_results.requests().iter().any(|request| {
+        request.body_contains_text(&format!(
+            "Denied network rule saved in execpolicy (denylist): {}",
+            deny_network_amendment.host
+        ))
+    }));
 
     let first_output = parse_result(
         &first_results
@@ -3577,6 +3590,7 @@ allow_local_binding = true
                 pattern: format!("{}/**/*.env", test.config.cwd.as_path().display()),
             },
             access: FileSystemAccessMode::Deny,
+            missing_path_behavior: None,
         });
     assert!(
         file_system_sandbox_policy.has_denied_read_restrictions(),
@@ -3858,7 +3872,7 @@ allow_local_binding = true
         .submit(Op::ExecApproval {
             id: approval.effective_approval_id(),
             turn_id: None,
-            decision: ReviewDecision::Denied,
+            decision: ReviewDecision::denied("rejected by user"),
         })
         .await?;
     wait_for_completion(&test).await;
@@ -3930,7 +3944,7 @@ async fn compound_command_with_one_safe_command_still_requires_approval() -> Res
         .submit(Op::ExecApproval {
             id: approval.effective_approval_id(),
             turn_id: None,
-            decision: ReviewDecision::Denied,
+            decision: ReviewDecision::denied("rejected by user"),
         })
         .await?;
     wait_for_completion(&test).await;

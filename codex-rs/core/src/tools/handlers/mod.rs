@@ -1,5 +1,3 @@
-pub(crate) mod agent_jobs;
-pub(crate) mod agent_jobs_spec;
 pub(crate) mod apply_patch;
 mod apply_patch_collaboration;
 pub(crate) mod apply_patch_spec;
@@ -178,8 +176,7 @@ fn resolve_tool_environment<'a>(
         || Ok(environments.primary()),
         |environment_id| {
             environments
-                .turn_environments
-                .iter()
+                .turn_environments()
                 .find(|environment| environment.environment_id == environment_id)
                 .map(Some)
                 .ok_or_else(|| {
@@ -463,12 +460,14 @@ mod tests {
                             value: FileSystemSpecialPath::project_roots(/*subpath*/ None),
                         },
                         access: FileSystemAccessMode::Write,
+                        missing_path_behavior: None,
                     },
                     FileSystemSandboxEntry {
                         path: FileSystemPath::GlobPattern {
                             pattern: "**/*.env".to_string(),
                         },
                         access: FileSystemAccessMode::Deny,
+                        missing_path_behavior: None,
                     },
                 ],
                 glob_scan_max_depth: None,
