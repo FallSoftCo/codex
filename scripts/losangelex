@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="/home/ai/Development/losangelex/codex-rs"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../codex-rs" && pwd)"
 default_cargo_target_dir="$repo_root/target/losangelex-launcher"
 cargo_target_dir="${LOSANGELEX_CARGO_TARGET_DIR:-$default_cargo_target_dir}"
 default_binary_path="$cargo_target_dir/debug/codex"
@@ -21,7 +21,7 @@ app_server_base_port="${LOSANGELEX_APP_SERVER_BASE_PORT:-46321}"
 app_server_state_file="$migration_dir/current-app-server.json"
 app_server_generations_dir="$migration_dir/app-servers"
 app_server_start_timeout_seconds="${LOSANGELEX_APP_SERVER_START_TIMEOUT_SECONDS:-20}"
-restart_handoff_file="$migration_dir/restart-handoff.json"
+restart_handoff_file="${LOSANGELEX_RESTART_HANDOFF_FILE:-$migration_dir/restart-handoff-$$.json}"
 restart_exit_code="${LOSANGELEX_CLIENT_RESTART_EXIT_CODE:-85}"
 is_team_command=0
 if [[ "${1:-}" == "team" ]]; then
@@ -50,10 +50,10 @@ ensure_losangelex_binary() {
     return
   fi
 
-  if [[ "${LOSANGELEX_AUTO_BUILD:-1}" != "0" ]]; then
+  if [[ "${LOSANGELEX_AUTO_BUILD:-0}" != "0" ]]; then
     (
       cd "$repo_root"
-      cargo +stable build --target-dir "$cargo_target_dir" -p codex-cli --bin codex
+      cargo build --locked --target-dir "$cargo_target_dir" -p codex-cli --bin codex
     )
   fi
 

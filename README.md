@@ -268,7 +268,7 @@ http://127.0.0.1:8765
 
 ```bash
 cd ../codex/codex-rs
-cargo build
+cargo build --locked --target-dir target/losangelex-launcher -p codex-cli --bin codex
 ```
 
 ### 4. Run Losangelex
@@ -284,6 +284,15 @@ Or put that launcher on your `PATH` and run:
 ```bash
 losangelex
 ```
+
+Normal launcher startup uses the existing binary without invoking Cargo. To
+explicitly rebuild from a development checkout, run
+`LOSANGELEX_AUTO_BUILD=1 /path/to/codex/scripts/losangelex`.
+For daily use while developing the fork, install a copied binary and launcher
+outside the checkout; the `losangelex-next` branch includes
+[`losangelex/pin_legacy.py`](https://github.com/FallSoftCo/codex/blob/losangelex-next/losangelex/pin_legacy.py)
+and the [upstream renewal investigation](https://github.com/FallSoftCo/codex/blob/losangelex-next/losangelex/RENEWAL.md).
+Test replacement runtimes with their own Codex home and Hollywood database.
 
 To give the session a durable assistant identity for coordination, launch it as:
 
