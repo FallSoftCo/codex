@@ -1,7 +1,7 @@
 Losangelex renewal investigation, 2026-09-10
 =========================================
 
-Build the next Losangelex from current upstream Codex, carrying forward a small Hollywood integration. Keep the existing runtime installed separately while developing that replacement. The goal is better delivery of real team tasks at a measured latency and token budget.
+Build the next Losangelex from current upstream Codex, carrying forward a small Hollywood integration. Losangelex already uses app-server; this is an upstream refresh and reduction of duplicated functionality. Keep the existing runtime installed separately while developing that replacement. The goal is better delivery of real team tasks at a measured latency and token budget.
 
 **Verified baseline.** The original fork is `468b24abd9549dece2e7a92e6353ea4d4bc43778`, dated July 23. Its upstream merge base is `44d76c6a6dd04fa2efc302b906ac8774267a1272`. The new `losangelex-next` branch starts directly at upstream `f8ab57359dde6b6d5de1aee613c18fe60b661aeb`, dated September 10. Hollywood local and remote `main` both point at `54bca57317bc3c949b8bd35fde5f1dca6284f640`, dated April 29. The installed legacy executable reports `codex-cli 0.139.0`; its build commit is unknown, so it must not be represented as a build of the July 23 source.
 
@@ -17,21 +17,24 @@ Build the next Losangelex from current upstream Codex, carrying forward a small 
 
 The apparent total fork delta is +368,931 / -712 lines, but 307,682 added lines are under `evals/` and `tmp/`. Carrying that entire tree into the new implementation would obscure the product changes. Preserve historical research as evidence in the legacy branch and transfer selected fixtures and runners deliberately. The [machine-readable summary](audit-2026-09-10/diff-summary.json) and [conflict paths](audit-2026-09-10/merge-conflicts.txt) record the comparison. `git merge-tree --write-tree --name-only` produced the conflict assessment without merging either working tree.
 
-**What current Codex already supplies.** These are source-level findings at the pinned upstream commit; optional features still need explicit configuration and product testing.
+**What current Codex already supplies.** These are source-level findings at the pinned upstream commit; optional features still need explicit configuration and product testing. This inventory includes features already present in July. The [dated July-to-September comparison](JULY_TO_SEPTEMBER.md) distinguishes those from subsequent additions. July's upstream base already included v2 collaboration tools, agent mailboxes, durable sleep wakeups, and extension interfaces.
 
 | Capability | Upstream evidence | Porting decision |
 | --- | --- | --- |
 | Agent messaging with separate queue-only and wake behavior | [v2 message handler](../codex-rs/core/src/tools/handlers/multi_agents_v2/message_tool.rs) | Reuse within each agent tree. Preserve the distinction between messages and obligations. |
 | Root-scoped agent identity, execution limits, and residency | [AgentControl](../codex-rs/core/src/agent/control.rs) | Keep upstream ownership. Hollywood connects independently controlled root sessions. |
+| Interactive management of independent root sessions | [agents dashboard](../codex-rs/tui/src/app/agents_overview.rs) | Reuse `codex agents` for task launch, switching, and background activity. Independent interactive sessions alone no longer distinguish Losangelex. |
 | Durable user-input queue and idle dispatch | [queue extension](../codex-rs/ext/queue/src/service.rs) | Reuse admission/lifecycle patterns. Its user-only queue is not automatically a typed peer-message inbox. |
-| Typed contextual input, tools, and thread/turn lifecycle contributions | [extension interfaces](../codex-rs/ext/extension-api/src/contributors.rs) | Put Hollywood behavior in an extension crate with small host registration changes. |
+| External messages that start or join a turn with tool authority | [Python SDK ExternalMessage](../sdk/python/docs/api-reference.md#externalmessage), [turn protocol](../codex-rs/app-server-protocol/src/protocol/v2/turn.rs) | Assess the public `turn/start.toolOutput` boundary before adding native integration code. Keep room wake admission and durable delivery in Hollywood. |
+| Typed contextual input, tools, and thread/turn lifecycle contributions | [extension interfaces](../codex-rs/ext/extension-api/src/contributors.rs) | Use a small extension crate only for required behavior the public API cannot provide. |
 | Remote TUI, streamed events, history, approvals, and authentication | [official app-server documentation](https://learn.chatgpt.com/docs/app-server) | Keep the upstream client/server protocol and rendering wherever possible. |
 | Managed daemon lifecycle and package assembly | [daemon](../codex-rs/app-server-daemon/README.md), [package builder](../scripts/codex_package/README.md) | Use packaged binaries and explicit lifecycle operations. Avoid launch-time compilation. |
+| Automatic TUI reconnection and managed daemon thread recovery | [daemon recovery](../codex-rs/app-server/src/daemon_thread_recovery.rs), [restart integration tests](../codex-rs/app-server/tests/suite/v2/daemon_update_recovery.rs) | Reuse upstream recovery. Test forced shutdown and delivery recovery separately; cold resume does not preserve an in-flight process. |
 | Model catalog, tools, plugins, permissions, and context improvements | Current upstream tree | Inherit them from upstream; avoid copying old fork overrides wholesale. |
 
 `multi_agent` defaults to enabled; `multi_agent_v2` is marked stable but defaults to disabled in the [feature registry](../codex-rs/features/src/lib.rs). Benchmark both the default product and a correctly configured native v2 baseline. Upstream `AgentControl` documents a registry scoped to one root's tree. Cross-root Hollywood rooms remain a distinct product capability.
 
-The extension interfaces are internal Rust interfaces, not a stable third-party binary plugin ABI. A small source fork is still a reasonable first implementation. A pure MCP integration can expose coordination tools, but MCP alone does not establish delivery, idle wake, restart recovery, or interactive roster behavior. Validate those paths before claiming that a plugin can replace the native integration.
+The extension interfaces are internal Rust interfaces, not a stable third-party binary plugin ABI. First assess a Hollywood service adapter using public app-server input and event APIs, with MCP tools for coordination. MCP alone does not establish delivery or idle wake, but `turn/start.toolOutput` now supplies an explicit external-message path. Add source integration only where the required behavior cannot be expressed through those APIs. In particular, optional room traffic must not wake an idle thread merely because this API can start one.
 
 **Development interruption diagnosis and mitigation.** The legacy launcher invoked `cargo +stable build` on every ordinary start, used mutable `target/.../debug/codex`, and loaded launcher code from the working checkout. The local Hollywood service also started directly from its development checkout. These coupled daily use to development.
 
@@ -41,7 +44,7 @@ On this machine, `~/.local/bin/losangelex` now selects the pinned legacy install
 
 Hollywood was installed non-editably from a Git archive of `54bca573...` into its own version directory and virtual environment. An isolated HTTP smoke returned schema `3` and contract `losangelex-room/v2`. The systemd drop-in `~/.config/systemd/user/hollywood.service.d/10-pinned-runtime.conf` selects that installation on the next start. Only `daemon-reload` was issued: the live service remained healthy with PID `4269`. Development in either source checkout no longer changes the code that its next restart will load. Keep the retained source snapshot and environment together.
 
-This separation prevents development builds from replacing daily runtime files. Explicitly stopping the daily app-server still interrupts its work. Current upstream's daemon documentation likewise states that manual updates can interrupt active or queued work; it is not a zero-downtime migration guarantee.
+This separation prevents development builds from replacing daily runtime files. Upstream added automatic TUI reconnect on August 31 and managed daemon recovery of saved persistent root threads on September 9, including goal continuation before a client reconnects. These should replace custom recovery machinery where their contracts fit. Explicitly stopping the daily app-server still interrupts its work. The daemon documentation states that manual updates can interrupt active or queued work; recovery uses cold resume and does not guarantee preservation of an in-flight process or a recovery snapshot after forced termination.
 
 **State migration is the highest-risk port.** The fork changed upstream migration numbering. For example:
 
@@ -62,13 +65,13 @@ Use a separate Codex home, database, app-server endpoint, and Hollywood database
 flowchart LR
     T[Upstream TUI and interactive clients] --> A[Upstream app-server]
     A --> C[Upstream Codex runtime and agent trees]
-    A --> X[Hollywood extension]
+    X[Hollywood adapter] --> A
     X --> H[Versioned Hollywood service]
     H --> D[Rooms, obligations, delivery cursors and claims]
     P[Other interactive root sessions] --> H
 ```
 
-The extension should use `TurnInputContributor` for bounded typed external context, tool contributors for a small coordination surface, and lifecycle callbacks for registration, recovery, and delivery. Keep peer text at its external/user authority level. The public `thread/inject_items` RPC appends history without waking a thread, but it exposes raw response items and passes through ownership checks. It is a useful prototype boundary, not permission to bypass typed fragments or manufacture user instructions for room messages.
+Prototype addressed external delivery through `turn/start.toolOutput` or the SDK's `ExternalMessage`, which retains tool authority and can start an idle turn or join an active regular turn. Never turn peer text into user authorization. Use upstream events for runtime observation and explicit Hollywood state for room membership and obligations. If native lifecycle or passive-context integration is required, use `TurnInputContributor`, tool contributors, and lifecycle callbacks in a small extension. The public `thread/inject_items` RPC appends history without waking a thread, but exposes raw response items and applies ownership checks; it is not permission to bypass authority boundaries.
 
 Start with the existing HTTP/polling contract. Add persisted delivery IDs, deduplication, transactional obligation/lease transitions, bounded inboxes, backpressure, and auditable ownership where the actual failure fixtures require them. Use at-least-once delivery with idempotent handling, rather than claiming exactly-once effects across a service and app-server. An outbox/inbox transaction and acknowledged cursor make crash recovery reviewable. Introduce event streaming only after measuring polling as a bottleneck; maintain cursor replay and reconnect semantics.
 
@@ -79,7 +82,7 @@ For context efficiency, send bounded addressed deltas and compact artifact refer
 **Port in reviewable stages.** These are remaining implementation stages, not completed capabilities of the upstream baseline.
 
 1. Freeze daily runtimes; compile and package clean upstream; establish isolated smoke tests. Keep the legacy branch available as a reference and recovery path. This investigation implements the daily-runtime separation and prepares the upstream baseline.
-2. Add a small Hollywood adapter and read-only roster/attachment support using upstream extension registration. Prove two independently interactive roots can join one isolated room. Keep schemas versioned; regenerate only generated artifacts from the new source.
+2. Prove two independently interactive roots can join one isolated room through a small Hollywood adapter. Reuse the agents dashboard and assess public app-server external input and event APIs first. Add extension registration only for demonstrated API gaps. Keep schemas versioned; regenerate only generated artifacts from the new source.
 3. Add addressed messages and required-obligation delivery, then recovery. Port the July no-op wake failure fixtures first. Add public app-server integration tests and real model runs for optional silence, required wakes, interruption, and handoff. Add TUI snapshots for new roster/attention UI.
 4. Move durable coordination tasks, leases, and claims into the separate store. Build and test the legacy importer before bringing existing sessions over. Add optimistic version checks and fencing for expired ownership. Compare default worktrees with explicit same-file coordination.
 5. Re-evaluate schedulers, watchers, tester runtimes, identity/auth additions, and collaborative patch extensions independently. Carry forward only product requirements that current upstream does not cover, in changes under the repository's review-size limits.
