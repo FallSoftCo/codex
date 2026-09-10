@@ -1,11 +1,13 @@
-Workspace interaction study
-===========================
+Earlier workspace navigation study
+==================================
+
+The current proposal makes a shared team chat room the default: the user and all agents can contribute, address one another and control work through conversation. This sketch predates that direction. Its task/agent navigation remains useful for optional inspectors and direct conversations, but does not represent the proposed primary interaction. See [CONTROL_CONSOLE.md](../CONTROL_CONSOLE.md) for the current design and example room exchange.
 
 Open [console.html](console.html) in a browser. It is a self-contained interaction sketch with no network requests, model calls, backend connection, or notification provider. Reloading or Reset clears the sample state. It is not an Android implementation or a model-behavior evaluation.
 
 Static previews: [desktop](workspace-desktop.png) and [phone](workspace-phone.png).
 
-The accepted UX decisions are: a coordinator conversation as the default for each task; direct access to all teammates; a persistent project team with separate task conversations; automatic brief task updates to the coordinator while complete direct conversations remain separate; and native Android access with push notifications and private connectivity first.
+The decisions explored here are: a coordinator as the default planning partner; direct access to all teammates; a persistent project team with separate task contexts; automatic brief task updates to the coordinator while complete direct conversations remain separate; and native Android access with push notifications and private connectivity first. The shared-room proposal preserves these and makes public, addressed conversation possible without switching agent tabs.
 
 Try this sequence:
 

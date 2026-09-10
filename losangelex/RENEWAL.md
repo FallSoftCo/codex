@@ -61,7 +61,7 @@ Use a separate Codex home, database, app-server endpoint, and Hollywood database
 
 **Recommended architecture.** Keep upstream responsible for each session's execution, approvals, history, model access, and subagent lifecycle. Keep Hollywood responsible for durable coordination across independent sessions.
 
-The user's next product requirement is a [single team console with native Android access and background notifications](CONTROL_CONSOLE.md). Both clients should share Hollywood's control and attention state. Every team agent must remain independently addressable; start with private connectivity and keep public authenticated deployment possible.
+The user's next product direction is a [shared team chat room with native Android access and background notifications](CONTROL_CONSOLE.md). The user and every agent can contribute and address one another, with conversational task control and independent agent contexts. Both clients should share Hollywood's control and attention state. Start with private connectivity and keep public authenticated deployment possible.
 
 ```mermaid
 flowchart LR
