@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Losangelex — team workspace sketch</title>
+<style>
+:root{color-scheme:dark;--bg:#11151a;--panel:#191e25;--line:#2c333e;--muted:#9ca8b7;--text:#ecf1f7;--accent:#95dfcb;--warm:#f0c889}
+*{box-sizing:border-box}
+body{margin:0;background:#090c10;color:var(--text);font:14px/1.55 system-ui,sans-serif}
+button,select,textarea{font:inherit;color:inherit}
+button,select{cursor:pointer}
+button{border:1px solid var(--line);background:transparent;border-radius:9px;padding:9px 13px;min-height:42px}
+button:hover{background:#29333b}
+button:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.45;cursor:default}
+a{color:var(--accent)}
+h1,h2,h3,p{margin:0}
+h1{font-size:21px;line-height:1.3;font-weight:620}
+h2{font-size:18px}
+h3{font-size:14px}
+.muted,small{color:var(--muted)}
+small{font-size:12px}
+.eyebrow{font-size:11px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.study{max-width:1460px;margin:auto;padding:20px 24px}
+.studybar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.studybar p{font-size:12px;color:var(--muted)}
+.studytools{display:flex;gap:6px}
+.studytools button{font-size:12px;padding:6px 10px;min-height:36px}
+.frame{height:calc(100dvh - 125px);min-height:610px;max-height:940px;max-width:1400px;margin:auto;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--bg);box-shadow:0 24px 70px #0005}
+.layout{height:100%;display:grid;grid-template-columns:230px minmax(0,1fr)}
+.navigation{padding:24px 14px;background:#14191f;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:25px;min-width:0}
+.brand{padding:0 12px;font-weight:700;font-size:18px;letter-spacing:-.03em}
+.brand span{color:var(--accent)}
+.project{margin:0 12px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.navheading{padding:0 12px;margin-bottom:9px;display:flex;justify-content:space-between}
+.tasknav,.navbutton{width:100%;text-align:left;border-color:transparent;padding:12px;display:block;margin-bottom:5px}
+.tasknav small{display:block;margin-top:4px}
+.selected{background:#25332f!important;border-color:#436055!important}
+.tasknav b{font-size:13px;font-weight:550}
+.navbottom{margin-top:auto;padding:0 12px}
+.connected{color:var(--accent);font-size:12px}
+.workspace{min-width:0;display:flex;flex-direction:column;min-height:0}
+.taskhead{padding:22px 28px 17px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.taskhead .eyebrow{margin-bottom:5px}
+.headtools{display:flex;align-items:center;gap:8px}
+.attention{color:var(--warm);border-color:#655137;background:#2e271e;white-space:nowrap}
+.mobile-menu{display:none}
+.agents{display:flex;gap:8px;padding:0 28px 17px;overflow-x:auto;flex-shrink:0}
+.agent{display:flex;align-items:center;gap:8px;text-align:left;white-space:nowrap;min-height:54px;padding:8px 11px}
+.agent small{display:block;font-size:11px;line-height:1.35}
+.avatar{width:30px;height:30px;background:#303945;border-radius:9px;display:grid;place-items:center;color:#cfd9e5;font-size:11px;font-weight:650;flex-shrink:0}
+.agent.selected .avatar{background:#4a7161;color:#e3fff3}
+.tabs{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 28px;display:flex;gap:24px;overflow:auto;flex-shrink:0}
+.tabs button{border:0;border-radius:0;padding:12px 0;font-size:12px;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button.active{color:var(--text);border-bottom-color:var(--accent)}
+.content{min-height:0;flex:1;overflow:auto;padding:24px 28px;scroll-behavior:smooth}
+.conversation{max-width:790px;margin:auto}
+.orientation{display:flex;gap:10px;padding:13px 15px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:24px}
+.orientation p{font-size:12px;color:var(--muted)}
+.message{margin:0 0 23px}
+.message .byline{display:flex;gap:9px;align-items:center;margin-bottom:8px;font-size:12px;font-weight:600}
+.message .body{white-space:pre-wrap;font-size:14px;line-height:1.75}
+.message.user .body{background:#202b32;padding:14px 17px;border-radius:12px}
+.message.user{margin-left:35px}
+.message.shared{padding:13px 16px;border-left:2px solid var(--accent);background:#172822;border-radius:0 9px 9px 0}
+.message.shared .body{font-size:13px}
+.message.shared .byline{color:var(--accent)}
+.update-source{font-size:11px;color:var(--muted);margin-top:8px}
+.example{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
+.example button{font-size:12px;color:var(--accent);border-color:#405b52}
+.composer{padding:15px 28px 21px;border-top:1px solid var(--line);background:#141a20;flex-shrink:0}
+.composer-inner{max-width:790px;margin:auto}
+.recipient{display:flex;gap:8px;align-items:center;margin-bottom:9px;font-size:12px;color:var(--muted)}
+.recipient select{background:#202933;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px;max-width:170px}
+.draftbox{border:1px solid #42505e;border-radius:12px;padding:10px 12px;background:#191f27}
+textarea{width:100%;resize:vertical;max-height:150px;min-height:45px;border:0;background:transparent;outline:none;font-size:14px;display:block;line-height:1.5}
+.sendrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sendrow small{font-size:10px}
+.primary{background:var(--accent);color:#142720;border-color:var(--accent);font-weight:650}
+.primary:hover{background:#b7f2e1}
+.sendrow button{font-size:12px;min-height:34px;padding:5px 16px}
+.bottomnav{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
+.card p{margin-top:7px}
+.card h3{font-size:15px}
+.card small{display:block;margin-top:6px}
+.status{color:var(--accent);font-size:11px}
+.planstep{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.planstep:last-child{border:0}
+.stepnum{color:var(--muted);font-variant-numeric:tabular-nums}
+.planstep p{font-size:13px}
+.diff{font:12px/1.7 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#112219;color:#b3e6c3;border-radius:7px;margin-top:12px}
+.paneltitle{margin-bottom:18px}
+.help{font-size:12px;color:var(--muted);margin-top:10px}
+dialog{border:1px solid #455362;border-radius:16px;padding:0;background:var(--bg);color:var(--text);width:min(560px,calc(100vw - 24px));max-height:85dvh;box-shadow:0 25px 100px #0009}
+dialog::backdrop{background:#0009}
+.dialoghead{display:flex;align-items:center;justify-content:space-between;padding:20px 22px;border-bottom:1px solid var(--line)}
+.dialogbody{padding:22px}
+.dialogbody .card:last-child{margin-bottom:0}
+.dialogbody button{margin-top:12px}
+.dialoghead button{margin:0}
+.dialogbody .tasknav{margin-top:0}
+.decision{display:flex;gap:8px;flex-wrap:wrap}
+.phone .frame{max-width:420px;height:min(850px,calc(100dvh - 125px));min-height:650px}
+.phone .layout{grid-template-columns:minmax(0,1fr)}
+.phone .navigation{display:none}
+.phone .taskhead{padding:18px 16px 14px}
+.phone h1{font-size:18px}
+.phone .taskhead .eyebrow{font-size:10px}
+.phone .headtools>button:not(.attention){display:none}
+.phone .attention{padding:7px 9px;font-size:11px}
+.phone .agents{padding:0 16px 13px;gap:6px}
+.phone .agent{padding:7px 9px}
+.phone .tabs{padding:0 16px;gap:21px}
+.phone .content{padding:18px 16px}
+.phone .composer{padding:12px 16px}
+.phone .bottomnav{display:flex}
+.phone .message.user{margin-left:16px}
+.phone .recipient{flex-wrap:wrap}
+.phone .sendrow small{max-width:230px}
+.phone .mobile-menu{display:inline-block}
+.bottomnav{padding:7px 12px;border-top:1px solid var(--line);justify-content:space-around;gap:8px;background:#14191f}
+.bottomnav button{border:0;font-size:11px;flex:1;padding:5px 8px}
+.bottomnav .active{color:var(--accent)}
+.notification{position:fixed;z-index:10;right:28px;top:84px;max-width:350px;width:calc(100vw - 32px);background:#e3e9ef;color:#162333;border:1px solid #fff;border-radius:16px;padding:17px;box-shadow:0 15px 50px #0009;text-align:left}
+.notification small{color:#4c5a6a}
+.notification p{margin-top:5px}
+.notification .status{color:#305e50}
+@media(max-width:780px){.study{padding:12px 10px}
+.studytools{gap:4px}
+.studytools button{padding:5px 8px;font-size:11px}
+.frame{height:calc(100dvh - 145px);min-height:560px;border-radius:12px}
+.layout{grid-template-columns:minmax(0,1fr)}
+.navigation{display:none}
+.taskhead{padding:16px 14px 13px}
+h1{font-size:18px}
+.taskhead .eyebrow{font-size:10px}
+.headtools>button:not(.attention){display:none}
+.attention{padding:7px 9px;font-size:11px}
+.agents{padding:0 14px 13px;gap:6px}
+.agent{padding:7px 9px}
+.tabs{padding:0 14px;gap:21px}
+.content{padding:18px 14px}
+.composer{padding:12px 14px}
+.bottomnav{display:flex}
+.message.user{margin-left:16px}
+.recipient{flex-wrap:wrap}
+.sendrow small{max-width:210px}
+.mobile-menu{display:inline-block}
+.notification{right:16px}
+.phone .frame{height:calc(100dvh - 145px);min-height:560px}
+.studybar{gap:8px;margin-bottom:11px}
+}
+@media(prefers-reduced-motion:reduce){.content{scroll-behavior:auto}
+}
+.draftbox:focus-within{border-color:var(--accent)}
+textarea:focus-visible{outline:none}
+</style>
+</head>
+<body>
+<div class="study">
+  <header class="studybar">
+    <div><strong>Losangelex / Workspace study</strong><p>Interactive sketch · sample data · no agents or push service connected</p></div>
+    <div class="studytools"><button data-act="desktop">Desktop</button><button data-act="phone">Phone</button><button data-act="notification">Preview notification</button><button data-act="reset">Reset</button></div>
+  </header>
+  <main class="frame" id="app" aria-label="Losangelex workspace"></main>
+</div>
+<dialog id="drawer" aria-labelledby="drawer-title"></dialog>
+<div id="alerts" aria-live="polite"></div>
+<script>
+"use strict";
+const team = [
+  { id: "coordinator", name: "Coordinator", role: "Planning & integration", initials: "CO" },
+  { id: "maya", name: "Maya", role: "Android", initials: "MA" },
+  { id: "theo", name: "Theo", role: "Backend", initials: "TH" },
+  { id: "rowan", name: "Rowan", role: "Review", initials: "RO" },
+];
+const tasks = {
+  push: {
+    name: "Android notifications",
+    status: "In progress",
+    goal: "Know when your team needs you, even with the phone locked.",
+  },
+  console: {
+    name: "One team console",
+    status: "Queued",
+    goal: "Control your project team from a single task workspace.",
+  },
+};
+const example = "Use a generic lock-screen notification. Fetch the task details only when I open the app.";
+const brief =
+  "Notification previews will use generic text. The app will fetch task details when opened. Backend and Android should use the same event ID.";
+const app = document.querySelector("#app"),
+  drawer = document.querySelector("#drawer");
+let state;
+function reset() {
+  state = {
+    task: "push",
+    agent: "coordinator",
+    panel: "conversation",
+    drafts: {},
+    scroll: {},
+    shared: false,
+    decision: null,
+    messages: {},
+  };
+  document.querySelector("#alerts").replaceChildren();
+  render();
+}
+function key() {
+  return state.task + ":" + state.agent;
+}
+function esc(value) {
+  return String(value).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+}
+function button(label, act, value = "", cls = "") {
+  return '<button class="' + cls + '" data-act="' + act + '" data-value="' + esc(value) + '">' + label + "</button>";
+}
+function agent() {
+  return team.find((a) => a.id === state.agent);
+}
+function attentionCount() {
+  return state.decision ? 0 : 1;
+}
+function taskButtons() {
+  return Object.entries(tasks)
+    .map(([id, t]) =>
+      button(
+        "<b>" + t.name + "</b><small>" + t.status + "</small>",
+        "task",
+        id,
+        "tasknav " + (state.task === id ? "selected" : ""),
+      ),
+    )
+    .join("");
+}
+function save() {
+  const input = document.querySelector("#draft");
+  if (input) state.drafts[key()] = input.value;
+  const content = document.querySelector(".content");
+  if (content) state.scroll[key() + ":" + state.panel] = content.scrollTop;
+}
+function go(taskId, agentId, panel = "conversation") {
+  save();
+  state.task = taskId;
+  state.agent = agentId;
+  state.panel = panel;
+  render();
+}
+function initialMessages() {
+  if (state.task === "console")
+    return state.agent === "coordinator"
+      ? [
+          {
+            who: "Coordinator",
+            text: "This task has its own conversation. The same project team is available, but work is queued behind Android notifications.\n\nI’ll reuse our project decisions and prepare a separate brief for each teammate.",
+          },
+        ]
+      : [
+          {
+            who: agent().name,
+            text: "My conversation for One team console is separate from my Android notifications work. This assignment is queued.",
+          },
+        ];
+  if (state.agent === "coordinator")
+    return [
+      {
+        who: "You",
+        text: "Build Android notifications so I can leave the team working and know when someone needs me.",
+      },
+      {
+        who: "Coordinator",
+        text: "Maya owns the Android experience, Theo owns delivery, and Rowan will test the complete flow with the phone locked.\n\nThe main decision still open is what appears on the lock screen. You can discuss it directly with Maya; I’ll receive a brief update if the task changes.",
+      },
+    ];
+  if (state.agent === "maya")
+    return [
+      {
+        who: "Maya",
+        text: "I’m designing the notification and the screen it opens.\n\nA notification can show a task title or use generic text. I recommend generic text until the app is opened. Theo needs the same payload contract.",
+      },
+    ];
+  if (state.agent === "theo")
+    return [
+      {
+        who: "Theo",
+        text: "The delivery flow is ready for a payload decision. I need to know whether the notification should contain a task title or only an event ID.\n\nI’ve added this question to Needs you.",
+      },
+    ];
+  return [
+    {
+      who: "Rowan",
+      text: "I’ll evaluate delivery with the phone locked, then check that opening the notification reaches the correct task and question.\n\nI have the task requirements. I don’t need the implementation conversations to perform that review.",
+    },
+  ];
+}
+function messageHtml(m) {
+  const kind = m.shared ? "shared" : m.who === "You" ? "user" : "";
+  return (
+    '<article class="message ' +
+    kind +
+    '"><div class="byline">' +
+    esc(m.who) +
+    (m.shared ? " · Task update" : "") +
+    '</div><div class="body">' +
+    esc(m.text) +
+    "</div>" +
+    (m.shared
+      ? '<div class="update-source">Source: Maya · Android notifications · Full conversation stays separate</div>'
+      : "") +
+    "</article>"
+  );
+}
+function conversation() {
+  let messages = initialMessages().concat(state.messages[key()] || []);
+  const responsibility =
+    state.agent === "coordinator"
+      ? "Keep the task moving and integrate the team’s work."
+      : state.agent === "maya"
+        ? "Android notification, navigation, and response flow."
+        : state.agent === "theo"
+          ? "Durable event delivery and the notification payload."
+          : "Independent verification of the complete user flow.";
+  return (
+    '<div class="conversation"><div class="orientation"><div><div class="eyebrow">' +
+    esc(agent().name) +
+    " · " +
+    esc(tasks[state.task].status) +
+    "</div><p>" +
+    responsibility +
+    "</p></div></div>" +
+    messages.map(messageHtml).join("") +
+    (state.task === "push" && !state.shared
+      ? '<div class="example">' +
+        button(
+          state.agent === "maya" ? "Try the example task change" : "Discuss the notification with Maya",
+          "example",
+        ) +
+        "</div>"
+      : "") +
+    "</div>"
+  );
+}
+function plan() {
+  if (state.task === "console")
+    return (
+      '<div class="conversation"><h2 class="paneltitle">Task plan</h2><div class="card"><h3>' +
+      tasks.console.goal +
+      '</h3><p class="muted">Queued. Coordinator will assign task-specific briefs when this work starts.</p></div></div>'
+    );
+  const steps = [
+    ["Theo", "Store attention and deliver an event ID.", "Working"],
+    ["Maya", "Open the exact task from the notification.", "Working"],
+    ["Rowan", "Verify the experience with the phone locked.", "Waiting for implementation"],
+  ];
+  return (
+    '<div class="conversation"><h2 class="paneltitle">Task plan</h2><div class="card"><h3>' +
+    esc(tasks[state.task].goal) +
+    '</h3><p class="muted">Done when a background task can request attention, the phone alerts you, and your response reaches the right teammate.</p></div><div class="card">' +
+    steps
+      .map(
+        (s, i) =>
+          '<div class="planstep"><span class="stepnum">0' +
+          (i + 1) +
+          "</span><div><h3>" +
+          s[0] +
+          "</h3><p>" +
+          s[1] +
+          "</p><small>" +
+          s[2] +
+          "</small></div></div>",
+      )
+      .join("") +
+    "</div>" +
+    (state.shared || state.decision
+      ? '<div class="card"><span class="status">Latest task decision</span><p>' +
+        esc(state.decision || brief) +
+        "</p></div>"
+      : "") +
+    "</div>"
+  );
+}
+function changes() {
+  if (state.task === "console")
+    return '<div class="conversation"><h2 class="paneltitle">Changes & evidence</h2><p class="muted">No changes yet. This task is queued.</p></div>';
+  return (
+    '<div class="conversation"><h2 class="paneltitle">Changes & evidence</h2><div class="card"><h3>Notification payload</h3><small>Sample artifact · Backend + Android</small><div class="diff">+ eventId: opaque attention identifier\n+ preview: ' +
+    (state.decision === "Show the task title in the notification." ? "task title" : "generic notification text") +
+    '\n+ destination: authorized task details</div><p class="help">The final app would show actual diffs, previews, and validation here.</p></div><div class="card"><h3>Acceptance checks</h3><p class="muted">Screen off · Network handover · Correct conversation · Stale question already answered</p><small>Waiting for the implementation to test</small></div></div>'
+  );
+}
+function activity() {
+  if (state.task === "console")
+    return '<div class="conversation"><h2 class="paneltitle">What changed</h2><p class="muted">Task created and queued. Your project team is available when this starts.</p></div>';
+  return (
+    '<div class="conversation"><h2 class="paneltitle">What changed</h2><div class="card"><h3>Theo needs a payload decision</h3><p class="muted">An actionable question was added to your inbox.</p></div>' +
+    (state.shared
+      ? '<div class="card"><h3>Maya shared a task update</h3><p>' +
+        brief +
+        "</p><small>The coordinator updated the plan. The full conversation was not shared.</small></div>"
+      : "") +
+    (state.decision
+      ? '<div class="card"><h3>You resolved the notification question</h3><p>' + esc(state.decision) + "</p></div>"
+      : "") +
+    "</div>"
+  );
+}
+function render() {
+  const t = tasks[state.task],
+    a = agent();
+  app.innerHTML =
+    '<div class="layout"><aside class="navigation"><div class="brand"><span>◈</span> losangelex</div><div class="project"><div class="eyebrow">Project</div><h3>Losangelex</h3><small>Persistent team · 4 teammates</small></div><div><div class="navheading"><span class="eyebrow">Your work</span><span class="muted">2</span></div>' +
+    taskButtons() +
+    "</div><div>" +
+    button("Needs you · " + attentionCount(), "inbox", "", "navbutton") +
+    button("Project team", "team", "", "navbutton") +
+    '</div><div class="navbottom"><p class="connected">Host connected</p><small>Team work continues when you leave.</small></div></aside><section class="workspace"><header class="taskhead"><div><div class="eyebrow">Losangelex / Task</div><h1>' +
+    t.name +
+    '</h1></div><div class="headtools">' +
+    button("Plan", "panel", "plan") +
+    button("Needs you · " + attentionCount(), "inbox", "", "attention") +
+    '</div></header><nav class="agents" aria-label="Task conversations">' +
+    team
+      .map((member) =>
+        button(
+          '<span class="avatar">' +
+            member.initials +
+            "</span><span>" +
+            member.name +
+            "<small>" +
+            member.role +
+            "</small></span>",
+          "agent",
+          member.id,
+          "agent " + (member.id === a.id ? "selected" : ""),
+        ),
+      )
+      .join("") +
+    '</nav><nav class="tabs" aria-label="Task views">' +
+    [
+      ["conversation", "Conversation"],
+      ["plan", "Plan"],
+      ["changes", "Changes"],
+      ["activity", "Activity"],
+    ]
+      .map(([id, label]) => button(label, "panel", id, state.panel === id ? "active" : ""))
+      .join("") +
+    '</nav><div class="content">' +
+    { conversation, plan, changes, activity }[state.panel]() +
+    "</div>" +
+    (state.panel === "conversation"
+      ? '<footer class="composer"><div class="composer-inner"><label class="recipient" for="recipient">To: <select id="recipient" aria-label="Message recipient">' +
+        team
+          .map((m) => '<option value="' + m.id + '" ' + (m.id === a.id ? "selected" : "") + ">" + m.name + "</option>")
+          .join("") +
+        "</select><span>· " +
+        t.name +
+        '</span></label><form id="compose" class="draftbox"><textarea id="draft" aria-label="Message to ' +
+        a.name +
+        '" placeholder="Message ' +
+        a.name +
+        '…" rows="2">' +
+        esc(state.drafts[key()] || "") +
+        '</textarea><div class="sendrow"><small>' +
+        (a.id === "coordinator"
+          ? "Direct conversation with your coordinator"
+          : "Task changes are briefly shared with Coordinator") +
+        '</small><button type="submit" class="primary">Send</button></div></form></div></footer>'
+      : "") +
+    '<nav class="bottomnav" aria-label="Workspace navigation">' +
+    button("Work", "tasks", "", "active") +
+    button("Needs you · " + attentionCount(), "inbox") +
+    button("Team", "team") +
+    "</nav></section></div>";
+  document.querySelector(".content").scrollTop = state.scroll[key() + ":" + state.panel] || 0;
+}
+function modal(title, body) {
+  drawer.innerHTML =
+    '<div class="dialoghead"><h2 id="drawer-title">' +
+    title +
+    "</h2>" +
+    button("Close", "close") +
+    '</div><div class="dialogbody">' +
+    body +
+    "</div>";
+  if (!drawer.open) drawer.showModal();
+}
+function inbox() {
+  modal(
+    "Needs you",
+    state.decision
+      ? '<div class="card"><span class="status">Resolved</span><h3>Notification preview</h3><p>' +
+          esc(state.decision) +
+          "</p><small>This item is resolved everywhere in this sketch. Reading it alone would not resolve it.</small>" +
+          button("Open Theo’s conversation", "open-theo") +
+          "</div>"
+      : '<div class="card"><span class="eyebrow">Android notifications · Theo</span><h3>What should appear on the lock screen?</h3><p class="muted">Recommendation: show a generic message. Fetch task details after the app opens.</p><div class="decision">' +
+          button("Use generic text", "decision", "generic", "primary") +
+          button("Show task title", "decision", "title") +
+          "</div>" +
+          button("Discuss with Theo", "open-theo") +
+          "</div>",
+  );
+}
+function addMessage(who, text, shared = false, target = key()) {
+  (state.messages[target] ??= []).push({ who, text, shared });
+}
+function send() {
+  save();
+  const text = (state.drafts[key()] || "").trim();
+  if (!text) return;
+  addMessage("You", text);
+  state.drafts[key()] = "";
+  if (state.task === "push" && state.agent === "maya" && text === example && !state.shared) {
+    state.shared = true;
+    addMessage(
+      "Maya",
+      "I’ll use generic text and load details after opening. I’ve sent the task update to Coordinator.",
+    );
+    addMessage("Shared with coordinator", brief, true);
+    addMessage("Maya", brief, true, "push:coordinator");
+    addMessage(
+      "Coordinator",
+      "I’ve updated the task brief and Theo’s payload requirement. Maya’s detailed conversation stays with her.",
+      false,
+      "push:coordinator",
+    );
+  } else
+    addMessage(
+      agent().name,
+      "Message recorded in this UX sketch. The example task change demonstrates the shared-update flow; no model is responding here.",
+    );
+  render();
+  document.querySelector(".content").scrollTop = 999999;
+  document.querySelector("#draft").focus();
+}
+document.addEventListener("submit", (event) => {
+  if (event.target.id === "compose") {
+    event.preventDefault();
+    send();
+  }
+});
+document.addEventListener("input", (event) => {
+  if (event.target.id === "draft") state.drafts[key()] = event.target.value;
+});
+document.addEventListener("change", (event) => {
+  if (event.target.id === "recipient") go(state.task, event.target.value);
+});
+document.addEventListener("click", (event) => {
+  const el = event.target.closest("[data-act]");
+  if (!el) return;
+  const act = el.dataset.act,
+    value = el.dataset.value;
+  if (act === "agent") go(state.task, value);
+  else if (act === "panel") go(state.task, state.agent, value);
+  else if (act === "task") {
+    drawer.close();
+    go(value, "coordinator");
+  } else if (act === "example") {
+    go("push", "maya");
+    state.drafts[key()] = example;
+    render();
+    document.querySelector("#draft").focus();
+  } else if (act === "close") drawer.close();
+  else if (act === "inbox") inbox();
+  else if (act === "tasks") modal("Your work", taskButtons());
+  else if (act === "team")
+    modal(
+      "Losangelex team",
+      team
+        .map(
+          (m) =>
+            '<div class="card"><h3>' +
+            m.name +
+            " · " +
+            m.role +
+            "</h3><small>Separate conversations for each task</small>" +
+            button("Android notifications", "team-task", "push:" + m.id) +
+            button("One team console", "team-task", "console:" + m.id) +
+            "</div>",
+        )
+        .join(""),
+    );
+  else if (act === "team-task") {
+    drawer.close();
+    const parts = value.split(":");
+    go(parts[0], parts[1]);
+  } else if (act === "open-theo") {
+    drawer.close();
+    go("push", "theo");
+  } else if (act === "decision") {
+    save();
+    state.decision =
+      value === "generic" ? "Use generic notification text." : "Show the task title in the notification.";
+    addMessage("You", state.decision, false, "push:theo");
+    addMessage("Theo", "Decision recorded. I’ll align the payload with this choice.", false, "push:theo");
+    addMessage(
+      "Coordinator",
+      "You resolved Theo’s question: " + state.decision + " I’ll align the Android and backend assignments.",
+      false,
+      "push:coordinator",
+    );
+    render();
+    inbox();
+  } else if (act === "notification")
+    document.querySelector("#alerts").innerHTML =
+      '<button class="notification" data-act="open-notification"><small>LOSANGELEX · Notification preview</small><p><strong>A task needs your attention</strong></p><p class="status">Open the question →</p></button>';
+  else if (act === "open-notification") {
+    document.querySelector("#alerts").replaceChildren();
+    go("push", "theo");
+    inbox();
+  } else if (act === "phone") document.body.classList.add("phone");
+  else if (act === "desktop") document.body.classList.remove("phone");
+  else if (act === "reset") {
+    drawer.close();
+    reset();
+  }
+});
+reset();
+</script>
+</body>
+</html>
