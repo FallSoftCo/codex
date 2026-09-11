@@ -6,8 +6,42 @@
   "checks": {
     "installedSignedReleaseMatches": true,
     "notDebuggable": true,
-    "notificationPermissionGranted": true
+    "notificationPermissionGranted": true,
+    "privateHttpsConnected": true,
+    "notificationRegistrationConfirmed": true,
+    "appInBackgroundBeforeQuestion": true,
+    "actualModelQuestion": true,
+    "physicalOsNotificationPosted": true,
+    "appInBackgroundAtReceipt": true,
+    "genericNotification": true,
+    "privateQuestionAbsentFromNotification": true,
+    "notificationTapOpenedExactQuestion": true,
+    "notificationOpenedPrivateTheoConversation": true,
+    "deviceReceiptShownInApp": true,
+    "nativeAnswerPersisted": true,
+    "nativeAnswerKeptPrivate": true,
+    "attentionResolved": true
   },
-  "pairingStatus": "Pending owner unlock; Android lock screen covers the app",
-  "physicalNotificationReceiptVerified": false
+  "pairingStatus": "Connected over private HTTPS",
+  "pairedAt": "2026-09-11T04:24:57.041197+00:00",
+  "appRelaunchedBeforeRegistration": true,
+  "backgroundMode": "Home screen; no forced Doze or battery changes",
+  "fixture": "Should this phone keep task notification previews generic? Reference: PIXEL-6f922a61.",
+  "attentionId": 88,
+  "attentionCreatedAt": 1789100701,
+  "questionVisibility": "direct:theo",
+  "notificationObservedAt": 1789100704.9545486,
+  "physicalNotificationReceiptVerified": true,
+  "providerDelivery": {
+    "state": "sent",
+    "attempts": 1
+  },
+  "nativeAnswer": {
+    "id": 91,
+    "task": "lobby",
+    "author": "you",
+    "body": "Yes. Keep previews generic. This physical-phone acceptance test is complete; no further action is needed.",
+    "visibility": "direct:theo",
+    "created_at": 1789100808
+  }
 }

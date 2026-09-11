@@ -17,7 +17,8 @@
     "liveLifecycleChecks": 7,
     "androidBackgroundChecks": 5,
     "rustSourceChanges": 0,
-    "justFmt": "passed; unrelated justfile formatter churn excluded"
+    "justFmt": "passed; unrelated justfile formatter churn excluded",
+    "physicalAndroidChecks": 17
   },
   "installation": {
     "normalCodexSignInShared": true,
@@ -33,7 +34,10 @@
       "releaseApkInstalled": true,
       "installedHashVerified": true,
       "notificationPermissionGranted": true,
-      "pairing": "pending phone unlock"
+      "pairing": "connected over private HTTPS",
+      "backgroundNotificationReceived": true,
+      "notificationOpenedPrivateQuestion": true,
+      "nativeAnswerResolvedByHost": true
     }
   }
 }

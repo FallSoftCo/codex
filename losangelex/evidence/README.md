@@ -10,7 +10,7 @@ behaviors; they are not a comparative productivity benchmark against Codex.
 | [Room model run](room-model.json) | 15/15 checks: direct addressing, peer handoff, private brief, independent task contexts, real delegated artifact, correct task follow-up, durable question and answer |
 | [Session lifecycle run](session-lifecycle.json) | 7/7 checks: steer a live turn, close the actual TUI, rebuild its wheel, reconnect, verify the corrected file, restart the idle runtime and recover prior context |
 | [Android background replay](android-background.json) | 5/5 checks, including real Firebase receipt in Doze and all 3 native integration tests over private HTTPS |
-| [Physical Android installation](android-physical-phone.json) | Signed release installed on a Pixel 9 Pro Fold running Android 16; installed APK hash verified and notification permission granted |
+| [Physical Android run](android-physical-phone.json) | 17/17 checks on the signed release: private HTTPS pairing, actual background notification, notification tap opening the exact private question, and native answer persisted and resolved by the host |
 | [Native Android answer](android-answer.json) | The native composer answered question 27; the host resolved it and kept the answer in `direct:theo` |
 | [Build and installation](build-and-install.json) | 35 backend tests, 5 terminal tests with 3 snapshots, signed non-debuggable release APK, existing Codex sign-in shared, installed runtime preserved across client installation |
 
@@ -41,15 +41,21 @@ ActivityScenario matching the original launch intent after `onNewIntent` replace
 now restores that bookkeeping after its behavior assertions. The final replay includes the
 passing instrumentation output.
 
-Notification transport remains subject to Android and Firebase delivery behavior. The signed
-release is installed on the physical Pixel 9 Pro Fold through the user-provided wireless ADB
-endpoint. Pairing and notification receipt on that phone are pending its owner unlocking the
-screen. The background receipt and navigation results above are from the disposable emulator.
+The signed release is installed and paired on the physical Pixel 9 Pro Fold running Android 16.
+With the app in the background, a real Theo question triggered a generic Android notification,
+observed within four seconds of the question timestamp. Tapping the actual notification opened
+question 88 in `direct:theo`. The native composer sent the test answer; the host persisted it in
+the same private conversation and resolved the question. This run used the normal home screen,
+without changing battery settings or forcing Doze. The app was relaunched once after initial
+pairing before Firebase registration completed; the cause of that initial registration delay
+was not established. Notification transport remains subject to Android and Firebase delivery
+behavior. The separate emulator runs above cover forced Doze.
 
 ## Visual records
 
 - [Actual generic Android notification](android-notification.png): no private question text.
 - [Actual private question on Android](android-private-question.png): source, recipient and answer action.
+- [Private question on the physical Pixel](android-physical-question.png): the signed release after tapping its actual notification.
 - [Installed terminal client](tui-installed.svg): live API connection and replay.
 - [TUI after reconnecting to the lifecycle test](tui-reconnected.svg).
 - [Wide](tui-wide.svg) and [narrow](tui-narrow.svg) layout fixtures; these are explicitly labeled previews.
