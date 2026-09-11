@@ -1,0 +1,22 @@
+[project]
+name = "losangelex-room"
+version = "0.1.0"
+description = "A single terminal room for Hollywood teams"
+requires-python = ">=3.10"
+dependencies = ["aiohttp>=3.12,<4", "textual>=6,<7"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+losangelex-room = "losangelex_room.client:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "pytest-textual-snapshot>=1,<2", "ruff>=0.15,<1"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
