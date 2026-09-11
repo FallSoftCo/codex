@@ -68,13 +68,16 @@ pending message. Approvals show the concrete command or change and cannot revive
 ## Android connection
 
 The signed release APK on this host is available privately at
-[Download Losangelex](https://system76-pc.tailb77f2a.ts.net:8446/android/losangelex-0.1.0.apk).
+[Download Losangelex](https://system76-pc.tailb77f2a.ts.net:8446/android/losangelex-0.1.1.apk).
 Connect Tailscale on the phone, install the APK, open it and allow notifications. In **Connect**,
 use `https://system76-pc.tailb77f2a.ts.net:8446` and the token file described below.
 
 The signed release is installed and paired on the owner's Pixel 9 Pro Fold. Notification
 permission is granted, and a [physical-device test](evidence/android-physical-phone.json)
 verified background delivery, opening the private question, and answering it from the app.
+Version 0.1.1 adds the [Hollywood Hills launcher icon](android/artwork/README.md), including
+a themed monochrome variant. Its signed update retained the phone's connection and notification
+registration; the room service continued running during the update.
 
 Build the native app in `losangelex/android` with `./gradlew :app:assembleDebug`. Register
 `co.fallsoft.losangelex` in Firebase and put its downloaded `google-services.json` in `app/`;

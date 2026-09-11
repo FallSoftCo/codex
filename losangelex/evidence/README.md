@@ -15,6 +15,11 @@ behaviors; they are not a comparative productivity benchmark against Codex.
 | [Build and installation](build-and-install.json) | 39 backend tests, 5 terminal tests with 3 snapshots, signed non-debuggable release APK, existing Codex sign-in shared, installed runtime preserved across client installation |
 | [Shared development root](shared-workspace-model.json) | 11/11 real-model checks: same thread and memory after changing root, edits in two nested repositories, per-folder instructions, preserved existing changes, and delegated repository selection |
 | [Installed root verification](shared-root-install.json) | 8/8 checks: idle activation retained existing thread bindings; the existing Maya conversation verified `/home/ai/Development` and wrote/read a temporary nested file there without a scope approval |
+| [Android icon update](../android/artwork/release.json) | Version 0.1.1: release build and lint passed, signed APK installed and visually reviewed on the Pixel, connection and notification registration retained, host service stayed running |
+
+The icon update is recorded separately from the Android behavior runs, which used version 0.1.0.
+Its [artwork previews and physical-device screenshot](../android/artwork/README.md) show the new
+Hollywood Hills icon; the background-notification behavior suites were not repeated for this change.
 
 The shared-root update adds `--workspace-mode shared`. The installed root is now
 `/home/ai/Development`, with direct access to its named subfolders. The isolated evaluation
