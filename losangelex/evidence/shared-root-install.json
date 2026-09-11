@@ -1,0 +1,61 @@
+{
+  "workspace": "/home/ai/Development",
+  "workspaceMode": "shared",
+  "before": {
+    "pid": 3085171,
+    "bindings": [
+      {
+        "task": "lobby",
+        "agent": "maya",
+        "thread": "01a08e5a-a3d6-78a3-955b-8ab58d5acdb6",
+        "status": "idle"
+      },
+      {
+        "task": "lobby",
+        "agent": "theo",
+        "thread": "01a08e5b-d5e0-7b22-9a8a-00a4d1e1c603",
+        "status": "idle"
+      }
+    ],
+    "pending": 0
+  },
+  "checks": {
+    "installedWithoutRestartingActiveRuntime": true,
+    "idleBeforeActivation": true,
+    "existingThreadBindingsPreserved": true,
+    "runtimeReadyAfterActivation": true,
+    "existingMayaThreadResumed": true,
+    "nestedFileWrittenAtDevelopmentRoot": true,
+    "agentConfirmedRoot": true,
+    "noScopeApprovalRequired": true
+  },
+  "after": {
+    "pid": 3447002,
+    "bindings": [
+      {
+        "task": "lobby",
+        "agent": "maya",
+        "thread": "01a08e5a-a3d6-78a3-955b-8ab58d5acdb6",
+        "status": "idle"
+      },
+      {
+        "task": "lobby",
+        "agent": "theo",
+        "thread": "01a08e5b-d5e0-7b22-9a8a-00a4d1e1c603",
+        "status": "idle"
+      }
+    ]
+  },
+  "proofPath": "/home/ai/Development/.losangelex-workspace-check-a9be7131/nested/verified.txt",
+  "commandEvent": 95,
+  "proofTranscript": [
+    {
+      "id": 100,
+      "kind": "message",
+      "author": "maya",
+      "body": "Deployment acceptance passed. Actual working directory from pwd: /home/ai/Development. Confirmed hollywood-next/pyproject.toml and losangelex-next/losangelex/ROOM.md exist without reading contents. Created and read back /home/ai/Development/.losangelex-workspace-check-a9be7131/nested/verified.txt; exact contents: SHARED-DEVELOPMENT-OK followed by one newline. Proof file left in place. No other files changed and no commits created.",
+      "created_at": 1789102725
+    }
+  ],
+  "temporaryProofRemoved": true
+}

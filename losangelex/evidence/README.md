@@ -12,7 +12,17 @@ behaviors; they are not a comparative productivity benchmark against Codex.
 | [Android background replay](android-background.json) | 5/5 checks, including real Firebase receipt in Doze and all 3 native integration tests over private HTTPS |
 | [Physical Android run](android-physical-phone.json) | 17/17 checks on the signed release: private HTTPS pairing, actual background notification, notification tap opening the exact private question, and native answer persisted and resolved by the host |
 | [Native Android answer](android-answer.json) | The native composer answered question 27; the host resolved it and kept the answer in `direct:theo` |
-| [Build and installation](build-and-install.json) | 35 backend tests, 5 terminal tests with 3 snapshots, signed non-debuggable release APK, existing Codex sign-in shared, installed runtime preserved across client installation |
+| [Build and installation](build-and-install.json) | 39 backend tests, 5 terminal tests with 3 snapshots, signed non-debuggable release APK, existing Codex sign-in shared, installed runtime preserved across client installation |
+| [Shared development root](shared-workspace-model.json) | 11/11 real-model checks: same thread and memory after changing root, edits in two nested repositories, per-folder instructions, preserved existing changes, and delegated repository selection |
+| [Installed root verification](shared-root-install.json) | 8/8 checks: idle activation retained existing thread bindings; the existing Maya conversation verified `/home/ai/Development` and wrote/read a temporary nested file there without a scope approval |
+
+The shared-root update adds `--workspace-mode shared`. The installed root is now
+`/home/ai/Development`, with direct access to its named subfolders. The isolated evaluation
+used frozen copies of actual room documentation in two repositories under a non-Git parent.
+Existing conversations remained independent and remembered earlier context. The final installed
+check used the real host and then removed its temporary proof files. Shared mode does not provide
+automatic file locks; teammates must coordinate overlapping edits. The earlier worktree-mode
+proofs below remain records of that supported mode. No Android code or APK changed for this update.
 
 The lifecycle run retained the same process, thread and turn identifiers while its client was
 rebuilt. The model obeyed a correction delivered during the running shell command: the resulting

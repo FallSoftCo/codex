@@ -106,7 +106,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hollywood-source", type=Path, required=True)
     parser.add_argument("--workspace", type=Path, required=True)
-    parser.add_argument("--workspace-mode", choices=("worktree", "shared"), default="worktree")
+    parser.add_argument(
+        "--workspace-mode", choices=("worktree", "shared"), default="worktree"
+    )
     parser.add_argument("--codex", type=Path, required=True)
     parser.add_argument(
         "--auth-file", type=Path, default=Path.home() / ".codex/auth.json"
