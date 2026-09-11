@@ -1,7 +1,7 @@
 One team room for Hollywood agents, with Android access
 ======================================================
 
-Design proposal, September 10, 2026. This document specifies the next product increment; the console, notification delivery, and Android app described here have not been implemented. The packaged upstream baseline and daily/runtime separation described in [DEVELOPMENT.md](DEVELOPMENT.md) already exist.
+Design proposal, September 10, 2026. A first implementation now exists: the [shared room](ROOM.md), terminal client, native Android app and background notifications. See [captured evidence](evidence/README.md). This proposal also describes future scope, including cross-project aggregation and configurable teams; those features are not implemented.
 
 The user selected a native Android app with background notifications, support for private and public access, and private access first. Project teams persist, while each teammate has a separate context for each task. The latest direction is conversational control through a shared chat room where the user and every teammate can contribute and address one another. The coordinator remains the default planning partner. For separate direct conversations, changes that affect a task automatically produce a brief update to the coordinator while the full conversation remains separate. Existing Losangelex and Hollywood implementation can be rewritten as needed. Keep the independent team model and reuse current Codex where it fits.
 

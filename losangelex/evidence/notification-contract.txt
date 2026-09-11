@@ -1,0 +1,1 @@
+generic lock-screen text; fetch details on open

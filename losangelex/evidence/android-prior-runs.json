@@ -1,0 +1,71 @@
+[
+  {
+    "postedAt": 1789094777.5193584,
+    "commandId": "android-doze-proof-20260911-1",
+    "messageId": 10,
+    "idleStateBefore": "IDLE",
+    "attentionId": 11,
+    "attentionCreatedAt": 1789094784,
+    "receivedAt": 1789094785.254,
+    "idleStateAfterReceipt": "IDLE",
+    "providerDelivery": [
+      [
+        "sent",
+        1
+      ]
+    ]
+  },
+  {
+    "postedAt": 1789095176.5668476,
+    "commandId": "android-doze-proof-20260911-2",
+    "messageId": 18,
+    "idleStateBefore": "IDLE",
+    "attentionId": 19,
+    "attentionCreatedAt": 1789095180,
+    "receivedAt": 1789095267.286,
+    "idleStateAfterReceipt": "ACTIVE",
+    "providerDelivery": [
+      [
+        "sent",
+        1
+      ]
+    ]
+  },
+  {
+    "postedAt": 1789095575.2498858,
+    "commandId": "android-doze-proof-20260911-3",
+    "messageId": 26,
+    "idleStateBefore": "IDLE",
+    "idleSettlingSeconds": 61,
+    "attentionId": 27,
+    "attentionCreatedAt": 1789095580,
+    "receivedAt": 1789095581.922,
+    "idleStateAfterReceipt": "IDLE",
+    "deliveredPriority": "1",
+    "originalPriority": "1",
+    "providerDelivery": [
+      [
+        "sent",
+        1
+      ]
+    ]
+  },
+  {
+    "fixture": "Should Android notification previews remain generic? Reference: PUSH-468c94f7.",
+    "checks": {
+      "actualModelQuestion": true,
+      "receivedDuringDoze": true,
+      "genericNotification": true,
+      "privateQuestionAbsentFromNotification": true,
+      "nativeApiReplyAndNotificationTests": false
+    },
+    "serial": "emulator-5582",
+    "idleBefore": "IDLE",
+    "attentionId": 52,
+    "attentionCreatedAt": 1789096287,
+    "receivedAt": 1789096288.982,
+    "originalPriority": "1",
+    "deliveredPriority": "1",
+    "idleAfterReceipt": "IDLE"
+  }
+]

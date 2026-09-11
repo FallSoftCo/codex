@@ -1,0 +1,19 @@
+{
+  "questionId": 27,
+  "state": "resolved",
+  "answer": {
+    "id": 47,
+    "kind": "message",
+    "task": "lobby",
+    "author": "you",
+    "body": "Yes. Kee",
+    "data": {
+      "targets": [
+        "theo"
+      ],
+      "replyTo": 27
+    },
+    "visibility": "direct:theo",
+    "created_at": 1789096211
+  }
+}

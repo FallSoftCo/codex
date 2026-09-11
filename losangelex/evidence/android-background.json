@@ -1,0 +1,19 @@
+{
+  "fixture": "Should Android notification previews remain generic? Reference: PUSH-689f7367.",
+  "checks": {
+    "actualModelQuestion": true,
+    "receivedDuringDoze": true,
+    "genericNotification": true,
+    "privateQuestionAbsentFromNotification": true,
+    "nativeApiReplyAndNotificationTests": true
+  },
+  "serial": "emulator-5582",
+  "idleBefore": "IDLE",
+  "attentionId": 75,
+  "attentionCreatedAt": 1789097332,
+  "receivedAt": 1789097333.787,
+  "originalPriority": "1",
+  "deliveredPriority": "1",
+  "idleAfterReceipt": "IDLE",
+  "instrumentation": "co.fallsoft.losangelex.NotificationUiTest:.\nco.fallsoft.losangelex.RoomUiTest:..\n\nTime: 17.224\n\nOK (3 tests)"
+}

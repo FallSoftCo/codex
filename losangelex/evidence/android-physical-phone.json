@@ -1,0 +1,13 @@
+{
+  "deviceModel": "Pixel 9 Pro Fold",
+  "androidRelease": "16",
+  "installedAt": "2026-09-11T03:40:29.196445+00:00",
+  "apkSha256": "97f3380ea282f8713b827b44a50342854eb8330e520b981b7e11d39e32302b16",
+  "checks": {
+    "installedSignedReleaseMatches": true,
+    "notDebuggable": true,
+    "notificationPermissionGranted": true
+  },
+  "pairingStatus": "Pending owner unlock; Android lock screen covers the app",
+  "physicalNotificationReceiptVerified": false
+}

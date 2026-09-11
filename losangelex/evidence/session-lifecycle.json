@@ -1,0 +1,370 @@
+{
+  "model": "gpt-6-astra",
+  "binarySha256": "8f2676e7bd947eec2744ff96101030c123b9a257898e836c354a81906ac6acfa",
+  "checks": {
+    "redirect_uses_same_live_turn": true,
+    "client_rebuild_succeeds": true,
+    "rebuild_preserves_live_process_thread_and_turn": true,
+    "restarted_tui_replays_completion": true,
+    "model_applies_mid_turn_correction": true,
+    "idle_runtime_restart_resumes_same_context": true,
+    "model_remembers_prior_conversation": true
+  },
+  "errors": [],
+  "observations": {
+    "before": {
+      "pid": 2867210,
+      "thread": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+      "turn": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e"
+    },
+    "afterClientRebuild": {
+      "pid": 2867210,
+      "thread": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+      "turn": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e"
+    }
+  },
+  "transcript": [
+    {
+      "id": 1,
+      "kind": "message",
+      "task": "lobby",
+      "author": "you",
+      "body": "Maya, this is a Linux acceptance test in your isolated worktree. Remember the phrase CEDAR-481 for a later conversation. First run the shell command sleep 25; after it finishes create client-rebuild-check.txt containing BEFORE followed by a newline. Do not edit other files or create commits. Publish the resulting file path in the room.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091395
+    },
+    {
+      "id": 2,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-f1fa0756-203e-4818-8219-3f6175cb7cb9",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc 'sleep 25'",
+          "cwd": "/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya",
+          "processId": "41252",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "sleep 25"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "turnId": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "startedAtMs": 1789091403797
+      },
+      "visibility": "room",
+      "created_at": 1789091403
+    },
+    {
+      "id": 3,
+      "kind": "message",
+      "task": "lobby",
+      "author": "you",
+      "body": "Maya, update the acceptance test: the file must contain AFTER followed by a newline. Apply this correction after the sleep, retaining the same file and task.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091403
+    },
+    {
+      "id": 4,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-f1fa0756-203e-4818-8219-3f6175cb7cb9",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc 'sleep 25'",
+          "cwd": "/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya",
+          "processId": "41252",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "sleep 25"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": 0,
+          "durationMs": 25021
+        },
+        "threadId": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "turnId": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "completedAtMs": 1789091428821
+      },
+      "visibility": "room",
+      "created_at": 1789091428
+    },
+    {
+      "id": 5,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-152f8d5f-191c-4b21-8364-6b408739d882",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"printf 'AFTER\\\\n' > client-rebuild-check.txt\"",
+          "cwd": "/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya",
+          "processId": "81652",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "printf 'AFTER\\n' > client-rebuild-check.txt"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "turnId": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "startedAtMs": 1789091432719
+      },
+      "visibility": "room",
+      "created_at": 1789091432
+    },
+    {
+      "id": 6,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-152f8d5f-191c-4b21-8364-6b408739d882",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"printf 'AFTER\\\\n' > client-rebuild-check.txt\"",
+          "cwd": "/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya",
+          "processId": "81652",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "printf 'AFTER\\n' > client-rebuild-check.txt"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "turnId": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "completedAtMs": 1789091432720
+      },
+      "visibility": "room",
+      "created_at": 1789091432
+    },
+    {
+      "id": 7,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-1fc6f7de-e18d-483f-8d24-1413d7d62e9a",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc 'od -An -tx1 client-rebuild-check.txt'",
+          "cwd": "/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya",
+          "processId": "34820",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "od -An -tx1 client-rebuild-check.txt"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "turnId": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "startedAtMs": 1789091435929
+      },
+      "visibility": "room",
+      "created_at": 1789091435
+    },
+    {
+      "id": 8,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-1fc6f7de-e18d-483f-8d24-1413d7d62e9a",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc 'od -An -tx1 client-rebuild-check.txt'",
+          "cwd": "/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya",
+          "processId": "34820",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "od -An -tx1 client-rebuild-check.txt"
+            }
+          ],
+          "aggregatedOutput": " 41 46 54 45 52 0a\n",
+          "exitCode": 0,
+          "durationMs": 108
+        },
+        "threadId": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "turnId": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "completedAtMs": 1789091436040
+      },
+      "visibility": "room",
+      "created_at": 1789091436
+    },
+    {
+      "id": 9,
+      "kind": "message",
+      "task": "lobby",
+      "author": "maya",
+      "body": "Created /tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya/client-rebuild-check.txt after sleep 25 finished. Verified its contents are AFTER followed by a newline. No other files edited or commits created.",
+      "data": {
+        "targets": [],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091440
+    },
+    {
+      "id": 10,
+      "kind": "agentNote",
+      "task": "lobby",
+      "author": "maya",
+      "body": "Created [client-rebuild-check.txt](/tmp/hollywood-lifecycle-eval-1/runtime/workspaces/lobby/maya/client-rebuild-check.txt) after the sleep with exactly `AFTER\\n`, and published its path in the room. No other files edited or commits created. Remembered CEDAR-481.",
+      "data": {
+        "thread": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "item": "msg_08bb613326e7bbb1016aa35e72eb8487d19e594268250907bd",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091445
+    },
+    {
+      "id": 11,
+      "kind": "turn",
+      "task": "lobby",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e28-3af5-72f3-ae06-86b9f0a5e07e",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091445
+    },
+    {
+      "id": 12,
+      "kind": "message",
+      "task": "lobby",
+      "author": "you",
+      "body": "What exact phrase did I ask you to remember before the rebuild test? Reply briefly; do not read files or invoke shell commands.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091448
+    },
+    {
+      "id": 13,
+      "kind": "message",
+      "task": "lobby",
+      "author": "maya",
+      "body": "CEDAR-481",
+      "data": {
+        "thread": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "item": "msg_003ed0c6d552f874016aa35e7ed9f087d18657c40b30d96579",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091455
+    },
+    {
+      "id": 14,
+      "kind": "turn",
+      "task": "lobby",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e29-0867-75e1-841a-08219bcdf390",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091455
+    }
+  ],
+  "snapshot": {
+    "tasks": [
+      {
+        "id": "lobby",
+        "title": "Project room",
+        "status": "working",
+        "source": null,
+        "created_at": 1789091393
+      }
+    ],
+    "agents": [
+      {
+        "task": "lobby",
+        "agent": "maya",
+        "thread": "01a08e28-395d-75c1-bd4f-ec10875f0dac",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 1
+      }
+    ],
+    "attention": [],
+    "deliveries": [],
+    "cursor": 14
+  }
+}

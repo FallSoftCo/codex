@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Losangelex, O=FallSoftCo
+Signer #1 certificate SHA-256 digest: c98c28d5e349d270823d6c9def8dbe0f6ad718e6d2fc85b404d3a6b21ed9168b
+Signer #1 certificate SHA-1 digest: 92962050c40bae3eb1bc78bad23e3b1dc8971678
+Signer #1 certificate MD5 digest: bb22e5996fe89d7678caed860030a053
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: 95739fc2a2b7ba8e713b65175beb70673bdf26c24b3767b59d6084b8ca50488f
+Signer #1 public key SHA-1 digest: 08529258530588c39852fcb0cc587934d8da2338
+Signer #1 public key MD5 digest: e2ffd6fde9995f67d9e2442582a4c503

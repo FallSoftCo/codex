@@ -6,11 +6,14 @@ On the investigated Linux machine:
 | Command/location | Purpose |
 | --- | --- |
 | `losangelex` | Pinned legacy Hollywood runtime; startup does not build |
-| `losangelex-next` | Packaged September 10 upstream baseline; Hollywood port pending |
+| `losangelex-next` | Packaged September 10 upstream Codex baseline |
+| `losangelex-room` | Installed shared Hollywood team room, with native Android access |
 | `/home/ai/Development/losangelex` | Legacy source and reference implementation |
 | `/home/ai/Development/losangelex-next` | New integration branch based on upstream `f8ab57359d` |
 
-The candidate has its own Codex home under `~/.local/share/losangelex/candidates/f8ab57359dde6b6d5de1aee613c18fe60b661aeb/codex-home`. No credentials or historical sessions were copied into it. Use `losangelex-next login` when you want to run authenticated work. Its `0.0.0` version string is the upstream source-tree version; the adjacent `build-receipt.json` records the exact upstream commit and package hashes.
+The candidate has its own runtime home under `~/.local/share/losangelex/candidates/f8ab57359dde6b6d5de1aee613c18fe60b661aeb/codex-home`. Its authentication file now links to the existing `~/.codex/auth.json`; another login is unnecessary. Historical sessions and runtime databases remain separate. Its `0.0.0` version string is the upstream source-tree version; the adjacent `build-receipt.json` records the exact upstream commit and package hashes.
+
+The new [shared room](ROOM.md) runs as `hollywood-room.service` on loopback port 18766. It uses the same Codex sign-in and owns model threads independently of terminal and Android clients. See [the captured proof](evidence/README.md) for a live turn surviving a TUI rebuild and actual Android delivery during Doze.
 
 To snapshot another tested legacy build, run from this checkout:
 
@@ -42,4 +45,4 @@ python3 /home/ai/Development/hollywood/hollywood.py serve \
   --host 127.0.0.1 --port 18765 --db /absolute/path/to/candidate-hollywood.db
 ```
 
-Keep the daily `8765` service and its `~/.hollywood/hollywood.db` for existing sessions. The installed `losangelex-next` wrapper reserves the development endpoint but keeps Hollywood auto-attach disabled while the port is pending. See [the investigation](RENEWAL.md) for the architecture, migration stages, and performance acceptance criteria.
+Keep the daily `8765` service and its `~/.hollywood/hollywood.db` for existing sessions. The installed `losangelex-next` wrapper keeps legacy Hollywood auto-attach disabled; use `losangelex-room` for the new shared room. See [the investigation](RENEWAL.md) for the architecture, migration stages, and performance acceptance criteria.

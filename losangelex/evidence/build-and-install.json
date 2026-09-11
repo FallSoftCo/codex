@@ -1,0 +1,39 @@
+{
+  "upstreamCommit": "f8ab57359dde6b6d5de1aee613c18fe60b661aeb",
+  "losangelexCodeCommit": "35e22c24481fa9b9eb76164245680785dd22e7dc",
+  "hollywoodCodeCommit": "e42d7000d87785b22a5a84adeb981eb33def4f61",
+  "androidRelease": {
+    "sha256": "97f3380ea282f8713b827b44a50342854eb8330e520b981b7e11d39e32302b16",
+    "directory": "/home/ai/.local/share/losangelex/android-releases/97f3380ea282f8713b827b44a50342854eb8330e520b981b7e11d39e32302b16",
+    "debuggable": false,
+    "signatureVerified": true
+  },
+  "validation": {
+    "backendTests": 35,
+    "terminalTests": 5,
+    "terminalSnapshots": 3,
+    "androidTests": 3,
+    "liveRoomChecks": 15,
+    "liveLifecycleChecks": 7,
+    "androidBackgroundChecks": 5,
+    "rustSourceChanges": 0,
+    "justFmt": "passed; unrelated justfile formatter churn excluded"
+  },
+  "installation": {
+    "normalCodexSignInShared": true,
+    "baselineLauncherLoginStatus": "Logged in using ChatGPT",
+    "runtimePreservedDuringReinstall": true,
+    "reinstallPidBefore": 3037468,
+    "reinstallPidAfter": 3037468,
+    "currentRuntimePid": 3085171,
+    "privateUrl": "https://system76-pc.tailb77f2a.ts.net:8446",
+    "lingerEnabled": true,
+    "physicalAndroid": {
+      "model": "Pixel 9 Pro Fold",
+      "releaseApkInstalled": true,
+      "installedHashVerified": true,
+      "notificationPermissionGranted": true,
+      "pairing": "pending phone unlock"
+    }
+  }
+}

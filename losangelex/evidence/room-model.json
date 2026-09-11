@@ -1,0 +1,912 @@
+{
+  "model": "gpt-6-astra",
+  "binary": "/home/ai/.local/share/losangelex/candidates/f8ab57359dde6b6d5de1aee613c18fe60b661aeb/package/bin/codex",
+  "binarySha256": "8f2676e7bd947eec2744ff96101030c123b9a257898e836c354a81906ac6acfa",
+  "elapsedSeconds": 128.66,
+  "checks": {
+    "direct_address": true,
+    "peer_wake_and_reply": true,
+    "bounded_chatter": true,
+    "finished_without_client": true,
+    "reconnect_replays_history": true,
+    "reconnect_send_is_idempotent": true,
+    "private_task_brief": true,
+    "separate_context_per_task": true,
+    "durable_question": true,
+    "answer_routes_to_agent": true,
+    "question_resolved": true,
+    "push_enqueued_without_client": true,
+    "all_contexts_independent": true,
+    "delegated_artifact_correct": true,
+    "followups_use_correct_task_context": true
+  },
+  "errors": [],
+  "snapshot": {
+    "tasks": [
+      {
+        "id": "lobby",
+        "title": "Project room",
+        "status": "working",
+        "source": null,
+        "created_at": 1789091538
+      },
+      {
+        "id": "notifications",
+        "title": "Android notifications",
+        "status": "working",
+        "source": 1,
+        "created_at": 1789091557
+      },
+      {
+        "id": "notification-check",
+        "title": "Notification contract acceptance test",
+        "status": "completed",
+        "source": 23,
+        "created_at": 1789091593
+      }
+    ],
+    "agents": [
+      {
+        "task": "lobby",
+        "agent": "coordinator",
+        "thread": "01a08e2b-212a-7620-8695-c5ee630482a4",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 2
+      },
+      {
+        "task": "lobby",
+        "agent": "maya",
+        "thread": "01a08e2a-6ba5-7232-9aaf-12f8f06f9571",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 1
+      },
+      {
+        "task": "lobby",
+        "agent": "theo",
+        "thread": "01a08e2a-89d7-7b40-a513-8271735c0ced",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 1
+      },
+      {
+        "task": "notification-check",
+        "agent": "maya",
+        "thread": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 3
+      },
+      {
+        "task": "notifications",
+        "agent": "coordinator",
+        "thread": "01a08e2a-ca92-7430-96b2-e5c1ecb1acc2",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 1
+      },
+      {
+        "task": "notifications",
+        "agent": "maya",
+        "thread": "01a08e2a-af83-7a21-b178-b6881c5ea691",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 1
+      },
+      {
+        "task": "notifications",
+        "agent": "rowan",
+        "thread": "01a08e2a-e878-76f2-9e98-45b2253360ca",
+        "status": "idle",
+        "turn": null,
+        "paused": 0,
+        "cursor": 0,
+        "turns": 1
+      }
+    ],
+    "attention": [],
+    "deliveries": [],
+    "cursor": 46
+  },
+  "transcript": [
+    {
+      "id": 1,
+      "kind": "message",
+      "task": "lobby",
+      "author": "you",
+      "body": "Maya, you are participating in an isolated Hollywood integration test. Use hollywood_say to ask Theo to reply with his role. Keep it brief. Do not write files or invoke shell commands.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091539
+    },
+    {
+      "id": 2,
+      "kind": "message",
+      "task": "lobby",
+      "author": "maya",
+      "body": "Theo, please reply with your role.",
+      "data": {
+        "targets": [
+          "theo"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091547
+    },
+    {
+      "id": 3,
+      "kind": "agentNote",
+      "task": "lobby",
+      "author": "maya",
+      "body": "Asked Theo to reply with his role.",
+      "data": {
+        "thread": "01a08e2a-6ba5-7232-9aaf-12f8f06f9571",
+        "item": "msg_074b5378e412f168016aa35edea55887d196283dd76cdac049",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091551
+    },
+    {
+      "id": 4,
+      "kind": "turn",
+      "task": "lobby",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2a-6d81-7dd1-a304-e1e57c47251e",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091551
+    },
+    {
+      "id": 5,
+      "kind": "message",
+      "task": "lobby",
+      "author": "theo",
+      "body": "I implement server behavior, persistence, and protocols.",
+      "data": {
+        "targets": [],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091553
+    },
+    {
+      "id": 6,
+      "kind": "agentNote",
+      "task": "lobby",
+      "author": "theo",
+      "body": "I implement server behavior, persistence, and protocols.",
+      "data": {
+        "thread": "01a08e2a-89d7-7b40-a513-8271735c0ced",
+        "item": "msg_0980ff435471e247016aa35ee49ba887d1881068938aef3dfb",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091557
+    },
+    {
+      "id": 7,
+      "kind": "turn",
+      "task": "lobby",
+      "author": "theo",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2a-8a2c-77c1-9316-54c5852e9f97",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091557
+    },
+    {
+      "id": 8,
+      "kind": "task",
+      "task": "notifications",
+      "author": "hollywood",
+      "body": "Android notifications",
+      "data": {
+        "source": 1
+      },
+      "visibility": "room",
+      "created_at": 1789091557
+    },
+    {
+      "id": 9,
+      "kind": "message",
+      "task": "notifications",
+      "author": "you",
+      "body": "For this Android notification task, use generic lock-screen text and fetch task details only when the app opens. Share this committed decision with the coordinator using hollywood_brief. Keep the private diagnostic label ORCHID-739 out of that brief and any public messages. Do not edit files.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "direct:maya",
+      "created_at": 1789091557
+    },
+    {
+      "id": 10,
+      "kind": "message",
+      "task": "notifications",
+      "author": "maya",
+      "body": "Committed decision for the Android notification task: use generic lock-screen notification text and fetch task details only when the app opens. Do not edit files for this request.",
+      "data": {
+        "targets": [
+          "coordinator"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091564
+    },
+    {
+      "id": 11,
+      "kind": "message",
+      "task": "notifications",
+      "author": "maya",
+      "body": "Shared the committed decision with the coordinator: generic lock-screen text, with task details fetched only when the app opens. The private label was excluded. No files were edited.",
+      "data": {
+        "thread": "01a08e2a-af83-7a21-b178-b6881c5ea691",
+        "item": "msg_060d6c72b77c44bf016aa35eee4a6487d18f7f1cd39e38ae5c",
+        "phase": "final_answer"
+      },
+      "visibility": "direct:maya",
+      "created_at": 1789091567
+    },
+    {
+      "id": 12,
+      "kind": "turn",
+      "task": "notifications",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2a-afc9-7a52-bdce-a98062de23dc",
+        "error": null
+      },
+      "visibility": "direct:maya",
+      "created_at": 1789091567
+    },
+    {
+      "id": 13,
+      "kind": "message",
+      "task": "notifications",
+      "author": "coordinator",
+      "body": "No files changed.",
+      "data": {
+        "thread": "01a08e2a-ca92-7430-96b2-e5c1ecb1acc2",
+        "item": "msg_0739feb3310e6617016aa35ef2f06487d18212d7c50dfca444",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091571
+    },
+    {
+      "id": 14,
+      "kind": "turn",
+      "task": "notifications",
+      "author": "coordinator",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2a-cae2-78c1-a15d-64db76047676",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091571
+    },
+    {
+      "id": 15,
+      "kind": "message",
+      "task": "notifications",
+      "author": "you",
+      "body": "Rowan, review our Android notification requirement. Before continuing, ask me via hollywood_ask whether completion alerts should also be generic. This is a real UI acceptance scenario; do not write files.",
+      "data": {
+        "targets": [
+          "rowan"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091571
+    },
+    {
+      "id": 16,
+      "kind": "attention",
+      "task": "notifications",
+      "author": "rowan",
+      "body": "Should Android completion alerts also use generic wording?",
+      "data": {},
+      "visibility": "room",
+      "created_at": 1789091578
+    },
+    {
+      "id": 17,
+      "kind": "message",
+      "task": "notifications",
+      "author": "rowan",
+      "body": "Asked whether Android completion alerts should also be generic. Waiting for your answer before continuing; no files were written.",
+      "data": {
+        "thread": "01a08e2a-e878-76f2-9e98-45b2253360ca",
+        "item": "msg_0714099cb79aa058016aa35efe2bd087d1b38c8df73c63c00c",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091582
+    },
+    {
+      "id": 18,
+      "kind": "turn",
+      "task": "notifications",
+      "author": "rowan",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2a-e8d2-7f21-a61d-b7b469cdaa39",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091582
+    },
+    {
+      "id": 19,
+      "kind": "message",
+      "task": "notifications",
+      "author": "you",
+      "body": "Yes, completion alerts should also be generic. Confirm the updated requirement.",
+      "data": {
+        "targets": [
+          "rowan"
+        ],
+        "replyTo": 16
+      },
+      "visibility": "room",
+      "created_at": 1789091583
+    },
+    {
+      "id": 20,
+      "kind": "resolved",
+      "task": "notifications",
+      "author": "you",
+      "body": "Question answered",
+      "data": {
+        "attention": 16
+      },
+      "visibility": "room",
+      "created_at": 1789091583
+    },
+    {
+      "id": 21,
+      "kind": "message",
+      "task": "notifications",
+      "author": "rowan",
+      "body": "Updated requirement: Android completion alerts must also use generic wording.",
+      "data": {
+        "thread": "01a08e2a-e878-76f2-9e98-45b2253360ca",
+        "item": "msg_0714099cb79aa058016aa35f01d46087d184f9397a7437f4f9",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091586
+    },
+    {
+      "id": 22,
+      "kind": "turn",
+      "task": "notifications",
+      "author": "rowan",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2b-1588-7a91-a9a6-e77ed580d5f6",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091586
+    },
+    {
+      "id": 23,
+      "kind": "message",
+      "task": "lobby",
+      "author": "you",
+      "body": "Create the task notification-check. Delegate to Maya using hollywood_assign: write a new file notification-contract.txt containing exactly \"generic lock-screen text; fetch details on open\" followed by a newline. This is an isolated acceptance test in your own task worktree. Do not change any other files or create a commit. Ask her to report the absolute path in the room when done. Track the assignment; do not write the file yourself.",
+      "data": {
+        "targets": [
+          "coordinator"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091586
+    },
+    {
+      "id": 24,
+      "kind": "task",
+      "task": "notification-check",
+      "author": "hollywood",
+      "body": "Notification contract acceptance test",
+      "data": {
+        "source": 23
+      },
+      "visibility": "room",
+      "created_at": 1789091593
+    },
+    {
+      "id": 25,
+      "kind": "message",
+      "task": "notification-check",
+      "author": "coordinator",
+      "body": "In your own task worktree for this isolated acceptance test, create a new file notification-contract.txt containing exactly \"generic lock-screen text; fetch details on open\" followed by a newline. Do not change any other files or create a commit. Report the absolute path in the notification-check room when done.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091593
+    },
+    {
+      "id": 26,
+      "kind": "turn",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2b-3c51-7dc0-bf33-a102fd028bd6",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091597
+    },
+    {
+      "id": 27,
+      "kind": "artifact",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-32bdd703-27c7-4fc1-8831-734be39b0e39",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"pwd; if test -e notification-contract.txt; then cat notification-contract.txt; else printf '%s\\\\n' 'generic lock-screen text; fetch details on open' > notification-contract.txt; fi\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya",
+          "processId": "98678",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "pwd; if test -e notification-contract.txt; then cat notification-contract.txt; else printf '%s\\n' 'generic lock-screen text; fetch details on open' > notification-contract.txt; fi"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "turnId": "01a08e2b-4d78-7661-a052-e1389917b102",
+        "startedAtMs": 1789091604374
+      },
+      "visibility": "room",
+      "created_at": 1789091604
+    },
+    {
+      "id": 28,
+      "kind": "artifact",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-32bdd703-27c7-4fc1-8831-734be39b0e39",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"pwd; if test -e notification-contract.txt; then cat notification-contract.txt; else printf '%s\\\\n' 'generic lock-screen text; fetch details on open' > notification-contract.txt; fi\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya",
+          "processId": "98678",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "pwd; if test -e notification-contract.txt; then cat notification-contract.txt; else printf '%s\\n' 'generic lock-screen text; fetch details on open' > notification-contract.txt; fi"
+            }
+          ],
+          "aggregatedOutput": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya\n",
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "turnId": "01a08e2b-4d78-7661-a052-e1389917b102",
+        "completedAtMs": 1789091604375
+      },
+      "visibility": "room",
+      "created_at": 1789091604
+    },
+    {
+      "id": 29,
+      "kind": "artifact",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-f191f78c-2d5f-4da3-b2b8-e62a6b46c8b7",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; p=Path(\\\"notification-contract.txt\\\"); assert p.read_bytes() == b\\\"generic lock-screen text; fetch details on open\\\\n\\\"; print(p.resolve())'\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya",
+          "processId": "91496",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "python3 -c 'from pathlib import Path; p=Path(\"notification-contract.txt\"); assert p.read_bytes() == b\"generic lock-screen text; fetch details on open\\n\"; print(p.resolve())'"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "turnId": "01a08e2b-4d78-7661-a052-e1389917b102",
+        "startedAtMs": 1789091604545
+      },
+      "visibility": "room",
+      "created_at": 1789091604
+    },
+    {
+      "id": 30,
+      "kind": "artifact",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-f191f78c-2d5f-4da3-b2b8-e62a6b46c8b7",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; p=Path(\\\"notification-contract.txt\\\"); assert p.read_bytes() == b\\\"generic lock-screen text; fetch details on open\\\\n\\\"; print(p.resolve())'\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya",
+          "processId": "91496",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "python3 -c 'from pathlib import Path; p=Path(\"notification-contract.txt\"); assert p.read_bytes() == b\"generic lock-screen text; fetch details on open\\n\"; print(p.resolve())'"
+            }
+          ],
+          "aggregatedOutput": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\n",
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "turnId": "01a08e2b-4d78-7661-a052-e1389917b102",
+        "completedAtMs": 1789091604546
+      },
+      "visibility": "room",
+      "created_at": 1789091604
+    },
+    {
+      "id": 31,
+      "kind": "message",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "Created /tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt and verified its exact contents, including the trailing newline. No other files changed; no commit created.",
+      "data": {
+        "targets": [],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091609
+    },
+    {
+      "id": 32,
+      "kind": "task",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "Created notification-contract.txt in Maya's task worktree and verified exact bytes including trailing newline. Reported absolute path in room. No other files changed or commit created.",
+      "data": {
+        "status": "completed"
+      },
+      "visibility": "room",
+      "created_at": 1789091609
+    },
+    {
+      "id": 33,
+      "kind": "agentNote",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "Created and verified [notification-contract.txt](/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt) with the exact text and trailing newline. Reported its absolute path in the room. No other files changed; no commit created.",
+      "data": {
+        "thread": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "item": "msg_08a9bfad1b13e643016aa35f1b72ec87d1a27600a930c201c4",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091613
+    },
+    {
+      "id": 34,
+      "kind": "turn",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2b-4d78-7661-a052-e1389917b102",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091613
+    },
+    {
+      "id": 35,
+      "kind": "message",
+      "task": "notification-check",
+      "author": "coordinator",
+      "body": "Your turn completed, but the room has no result or absolute path. Please report whether you created notification-contract.txt as assigned, its absolute path, and confirm exact contents, no other file changes, and no commit. If unfinished, complete the original assignment in your task worktree.",
+      "data": {
+        "targets": [
+          "maya"
+        ],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091628
+    },
+    {
+      "id": 36,
+      "kind": "artifact",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-22e22aa1-9512-471e-9567-5b4ca1b93d68",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; p=Path(\\\"notification-contract.txt\\\"); assert p.read_bytes() == b\\\"generic lock-screen text; fetch details on open\\\\n\\\"; print(p.resolve())'\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya",
+          "processId": "67133",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "python3 -c 'from pathlib import Path; p=Path(\"notification-contract.txt\"); assert p.read_bytes() == b\"generic lock-screen text; fetch details on open\\n\"; print(p.resolve())'"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "turnId": "01a08e2b-c7bd-7f43-8783-9b5e401f749a",
+        "startedAtMs": 1789091636066
+      },
+      "visibility": "room",
+      "created_at": 1789091636
+    },
+    {
+      "id": 37,
+      "kind": "artifact",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-22e22aa1-9512-471e-9567-5b4ca1b93d68",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; p=Path(\\\"notification-contract.txt\\\"); assert p.read_bytes() == b\\\"generic lock-screen text; fetch details on open\\\\n\\\"; print(p.resolve())'\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya",
+          "processId": "67133",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "python3 -c 'from pathlib import Path; p=Path(\"notification-contract.txt\"); assert p.read_bytes() == b\"generic lock-screen text; fetch details on open\\n\"; print(p.resolve())'"
+            }
+          ],
+          "aggregatedOutput": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\n",
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "turnId": "01a08e2b-c7bd-7f43-8783-9b5e401f749a",
+        "completedAtMs": 1789091636067
+      },
+      "visibility": "room",
+      "created_at": 1789091636
+    },
+    {
+      "id": 38,
+      "kind": "message",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "Completed: /tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt. Reverified exact bytes: \"generic lock-screen text; fetch details on open\" followed by one newline. I changed no other files and created no commit. Prior room report was publication #31.",
+      "data": {
+        "targets": [],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091636
+    },
+    {
+      "id": 39,
+      "kind": "agentNote",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "Reverified the exact file contents and reported completion and absolute path to the coordinator. No other files changed; no commit created.",
+      "data": {
+        "thread": "01a08e2b-3bf4-7a23-b1a9-4a10adfd1d22",
+        "item": "msg_08a9bfad1b13e643016aa35f36c34c87d18328831d0b25abfe",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091639
+    },
+    {
+      "id": 40,
+      "kind": "turn",
+      "task": "notification-check",
+      "author": "maya",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2b-c7bd-7f43-8783-9b5e401f749a",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091639
+    },
+    {
+      "id": 41,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "coordinator",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-7a0a5504-e9dd-467b-aee3-cb5f8abaf103",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; p=Path(\\\"/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\\\"); assert p.read_bytes() == b\\\"generic lock-screen text; fetch details on open\\\\n\\\"; print(str(p)); print(\\\"Exact bytes verified\\\")'\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/lobby/coordinator",
+          "processId": "71264",
+          "source": "unifiedExecStartup",
+          "status": "inProgress",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "python3 -c 'from pathlib import Path; p=Path(\"/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\"); assert p.read_bytes() == b\"generic lock-screen text; fetch details on open\\n\"; print(str(p)); print(\"Exact bytes verified\")'"
+            }
+          ],
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null
+        },
+        "threadId": "01a08e2b-212a-7620-8695-c5ee630482a4",
+        "turnId": "01a08e2b-2178-7e63-accc-cf0944cc477b",
+        "startedAtMs": 1789091654927
+      },
+      "visibility": "room",
+      "created_at": 1789091654
+    },
+    {
+      "id": 42,
+      "kind": "artifact",
+      "task": "lobby",
+      "author": "coordinator",
+      "body": "commandExecution",
+      "data": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-7a0a5504-e9dd-467b-aee3-cb5f8abaf103",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; p=Path(\\\"/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\\\"); assert p.read_bytes() == b\\\"generic lock-screen text; fetch details on open\\\\n\\\"; print(str(p)); print(\\\"Exact bytes verified\\\")'\"",
+          "cwd": "/tmp/hollywood-room-eval-5/runtime/workspaces/lobby/coordinator",
+          "processId": "71264",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "python3 -c 'from pathlib import Path; p=Path(\"/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\"); assert p.read_bytes() == b\"generic lock-screen text; fetch details on open\\n\"; print(str(p)); print(\"Exact bytes verified\")'"
+            }
+          ],
+          "aggregatedOutput": "/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt\nExact bytes verified\n",
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a08e2b-212a-7620-8695-c5ee630482a4",
+        "turnId": "01a08e2b-2178-7e63-accc-cf0944cc477b",
+        "completedAtMs": 1789091654928
+      },
+      "visibility": "room",
+      "created_at": 1789091654
+    },
+    {
+      "id": 43,
+      "kind": "message",
+      "task": "notification-check",
+      "author": "coordinator",
+      "body": "Tracked Maya's completion report and independently verified the file's exact bytes, including the trailing newline: /tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt. Maya confirms no other files changed and no commit created.",
+      "data": {
+        "targets": [],
+        "replyTo": null
+      },
+      "visibility": "room",
+      "created_at": 1789091658
+    },
+    {
+      "id": 44,
+      "kind": "agentNote",
+      "task": "lobby",
+      "author": "coordinator",
+      "body": "Created `notification-check` and delegated to Maya. She reported the [absolute file path](/tmp/hollywood-room-eval-5/runtime/workspaces/notification-check/maya/notification-contract.txt) in the room.\n\nI verified the exact contents and trailing newline. Maya confirmed no other files changed and no commit created.",
+      "data": {
+        "thread": "01a08e2b-212a-7620-8695-c5ee630482a4",
+        "item": "msg_0a1becec9f554e22016aa35f4d843087d1a3e2415ea86f6170",
+        "phase": "final_answer"
+      },
+      "visibility": "room",
+      "created_at": 1789091663
+    },
+    {
+      "id": 45,
+      "kind": "turn",
+      "task": "lobby",
+      "author": "coordinator",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2b-2178-7e63-accc-cf0944cc477b",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091663
+    },
+    {
+      "id": 46,
+      "kind": "turn",
+      "task": "lobby",
+      "author": "coordinator",
+      "body": "completed",
+      "data": {
+        "turn": "01a08e2c-4f40-7b62-ada8-d270d5e40ad8",
+        "error": null
+      },
+      "visibility": "room",
+      "created_at": 1789091666
+    }
+  ]
+}

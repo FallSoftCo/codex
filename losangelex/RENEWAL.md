@@ -1,6 +1,8 @@
 Losangelex renewal investigation, 2026-09-10
 =========================================
 
+Implementation update: the [shared Hollywood room](ROOM.md) now runs on this pinned upstream baseline with terminal and Android clients. [Captured evidence](evidence/README.md) covers real model coordination, session continuity and Android notifications. The comparisons below remain the original source audit; a general productivity benchmark is still outstanding.
+
 Build the next Losangelex from current upstream Codex, carrying forward a small Hollywood integration. Losangelex already uses app-server; this is an upstream refresh and reduction of duplicated functionality. Keep the existing runtime installed separately while developing that replacement. The goal is better delivery of real team tasks at a measured latency and token budget.
 
 **Verified baseline.** The original fork is `468b24abd9549dece2e7a92e6353ea4d4bc43778`, dated July 23. Its upstream merge base is `44d76c6a6dd04fa2efc302b906ac8774267a1272`. The new `losangelex-next` branch starts directly at upstream `f8ab57359dde6b6d5de1aee613c18fe60b661aeb`, dated September 10. Hollywood local and remote `main` both point at `54bca57317bc3c949b8bd35fde5f1dca6284f640`, dated April 29. The installed legacy executable reports `codex-cli 0.139.0`; its build commit is unknown, so it must not be represented as a build of the July 23 source.
