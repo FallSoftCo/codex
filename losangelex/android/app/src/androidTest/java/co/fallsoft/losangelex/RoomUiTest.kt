@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -29,6 +31,7 @@ class RoomUiTest {
         } }
         compose.onNodeWithText("Use a generic alert").assertIsDisplayed()
         compose.onNodeWithText("Private diagnostic").assertDoesNotExist()
+        compose.onNodeWithText("Use a generic alert").performTouchInput { longClick() }
         compose.onNodeWithText("Reply").performClick()
         assertEquals(event, target)
     }
@@ -44,12 +47,13 @@ class RoomUiTest {
         tokenFile?.delete()
         repository.credentials.connect(url!!, token)
         val payload = JSONObject().put("commandId", UUID.randomUUID().toString())
-            .put("body", "Maya, inspect the notification state")
+            .put("body", "Maya, this is a connection test. Reply only 'Android chat connected'. " +
+                "Do not use tools, delegate, inspect files or make changes.")
         val first = repository.request("messages", payload)
         val retry = repository.request("messages", payload)
         assertEquals(first.getLong("id"), retry.getLong("id"))
         assertEquals("you", first.getString("author"))
-        assertTrue(repository.messages(0).any { it.id == first.getLong("id") })
+        assertTrue(repository.messages(first.getLong("id") - 1).any { it.id == first.getLong("id") })
         val original = repository.credentials.read()
         repository.credentials.connect("https://different.invalid", "different-host-fixture")
         try {

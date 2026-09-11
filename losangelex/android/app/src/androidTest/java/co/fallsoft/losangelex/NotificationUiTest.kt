@@ -27,9 +27,9 @@ class NotificationUiTest {
         try {
             notification.notification.contentIntent.send()
             compose.waitUntil(15000) {
-                compose.onAllNodesWithText("lobby · direct: theo").fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithText("Private · Backend & systems").fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithText("Replying to #$id").assertIsDisplayed()
+            compose.onNodeWithText("Replying to Theo").assertIsDisplayed()
             assertTrue(activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
         } finally {
             // ActivityScenario matches lifecycle callbacks by its launch intent. The app's
