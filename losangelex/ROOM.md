@@ -16,7 +16,7 @@ From the renewed Losangelex checkout, after testing the candidate:
 ```sh
 python3 losangelex/pin_room.py \
   --hollywood-source /home/ai/Development/hollywood-next \
-  --workspace /home/ai/Development/losangelex-next \
+  --workspace /home/ai/Development --workspace-mode shared \
   --codex /home/ai/.local/share/losangelex/candidates/f8ab57359dde6b6d5de1aee613c18fe60b661aeb/package/bin/codex \
   --firebase-project losangelex \
   --firebase-credentials /absolute/private/application_default_credentials.json
@@ -36,10 +36,22 @@ For a host that must continue after logout, enable its user service manager with
 `loginctl enable-linger "$USER"` (an administrator may need to run this). Lingering is enabled
 on this development host.
 
+The installed project root is `/home/ai/Development`, including its subfolders and repositories.
+Agents work directly in the folder you name, for example `hollywood-next` or
+`losangelex-next/losangelex/android`. Changes in this shared mode appear in those actual folders;
+there is no automatic copy to integrate. Independent task conversations share the filesystem,
+so teammates must coordinate overlapping edits and preserve existing work. Their instructions
+require reading applicable nested `AGENTS.md` files before editing a subproject.
+
+The original single-repository behavior remains available with `--workspace-mode worktree`.
+Changing root or mode takes effect at an idle runtime restart. Existing conversations resume
+at the configured root; old worktrees and their uncommitted changes remain available.
+
 ## Conversation and control
 
 - “Coordinator, create notification-check and have Maya implement it; ask Rowan to review.”
 - “Maya, explain the tradeoff.” Addressing a name in the shared room remains public.
+- “Coordinator, work in hollywood-next and update its room API; have Theo review the changed files.”
 - Reply to an agent's task message to continue in that task's conversation.
 - Select **Direct** to redirect a teammate privately. Committed changes are summarized to the
   coordinator through Hollywood; the full conversation is kept separate.
@@ -139,7 +151,8 @@ The script waits for Doze to settle, asks the real teammate a fixed test questio
 Android receipt and priority, and runs the three native integration tests. It restores the
 emulator's battery/idle state. Its question stays open for inspection and can be answered in the room.
 
-Current scope is one project per service and a fixed team of four agents, with separate
-conversations and worktrees for each task. Cross-project aggregation, arbitrary team setup,
+Current scope is one configured root per service, which can contain multiple repositories,
+and a fixed team of four agents with separate conversations for each task. Aggregation of
+independently configured roots, arbitrary team setup,
 automatic integration of worktree changes, and migration of legacy sessions are not implemented.
 These checks establish the listed behaviors; they do not establish general superiority over Codex.

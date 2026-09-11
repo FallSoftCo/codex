@@ -106,6 +106,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hollywood-source", type=Path, required=True)
     parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--workspace-mode", choices=("worktree", "shared"), default="worktree")
     parser.add_argument("--codex", type=Path, required=True)
     parser.add_argument(
         "--auth-file", type=Path, default=Path.home() / ".codex/auth.json"
@@ -129,12 +130,15 @@ def main():
         parser.error("Firebase credential file is missing")
     if args.firebase_credentials and not args.firebase_project:
         parser.error("--firebase-project is required with --firebase-credentials")
-    subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=args.workspace,
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
+    if not args.workspace.is_dir():
+        parser.error(f"Workspace directory does not exist: {args.workspace}")
+    if args.workspace_mode == "worktree":
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=args.workspace,
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
     base = Path.home() / ".local/share/losangelex/room-releases"
     backend = install_package(
         args.hollywood_source.resolve(), "hollywood", ["room", "push"], base
@@ -171,6 +175,8 @@ def main():
         str(state),
         "--workspace",
         str(args.workspace.resolve()),
+        "--workspace-mode",
+        args.workspace_mode,
         "--codex",
         str(args.codex.resolve()),
         "--codex-home",
@@ -229,6 +235,8 @@ def main():
                 "backend": str(backend),
                 "client": str(client),
                 "state": str(state),
+                "workspace": str(args.workspace.resolve()),
+                "workspaceMode": args.workspace_mode,
                 "existingRuntimeKeptRunning": active,
                 "launch": "losangelex-room",
             },
