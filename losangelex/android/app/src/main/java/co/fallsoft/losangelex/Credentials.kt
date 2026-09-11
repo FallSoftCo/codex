@@ -10,13 +10,15 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** A captured host and credential pair; requests retain it across connection changes. */
+class HostConnection(val url: String, internal val token: String)
+
 /** Device-local credentials encrypted by an Android Keystore key; backups are disabled. */
 class Credentials(context: Context) {
     private val preferences = context.getSharedPreferences("connection", Context.MODE_PRIVATE)
     private val alias = "losangelex-room-token"
-    var url: String
+    val url: String
         get() = preferences.getString("url", "") ?: ""
-        set(value) { preferences.edit().putString("url", value.trimEnd('/')).apply() }
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -29,20 +31,24 @@ class Credentials(context: Context) {
         }
     }
 
-    fun token(): String {
-        val encoded = preferences.getString("token", null) ?: return ""
+    fun read(): HostConnection {
+        val saved = preferences.all
+        val host = saved["url"] as? String ?: ""
+        val encoded = saved["token"] as? String ?: return HostConnection(host, "")
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        return Cipher.getInstance("AES/GCM/NoPadding").run {
+        val token = Cipher.getInstance("AES/GCM/NoPadding").run {
             init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
             String(doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
         }
+        return HostConnection(host, token)
     }
 
-    fun saveToken(token: String) {
+    fun connect(url: String, token: String) {
         val encrypted = Cipher.getInstance("AES/GCM/NoPadding").run {
             init(Cipher.ENCRYPT_MODE, key())
             iv + doFinal(token.toByteArray(Charsets.UTF_8))
         }
-        preferences.edit().putString("token", Base64.encodeToString(encrypted, Base64.NO_WRAP)).apply()
+        check(preferences.edit().putString("url", url.trimEnd('/'))
+            .putString("token", Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit())
     }
 }

@@ -39,11 +39,10 @@ class RoomUiTest {
         assumeTrue("Run with an explicitly configured Hollywood test server", url != null)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val repository = RoomRepository(context)
-        repository.credentials.url = url!!
         val tokenFile = args.getString("roomTokenFile")?.let { File(context.filesDir, it) }
         val token = tokenFile?.readText()?.trim() ?: "android-fixture"
         tokenFile?.delete()
-        repository.credentials.saveToken(token)
+        repository.credentials.connect(url!!, token)
         val payload = JSONObject().put("commandId", UUID.randomUUID().toString())
             .put("body", "Maya, inspect the notification state")
         val first = repository.request("messages", payload)
@@ -51,5 +50,13 @@ class RoomUiTest {
         assertEquals(first.getLong("id"), retry.getLong("id"))
         assertEquals("you", first.getString("author"))
         assertTrue(repository.messages(0).any { it.id == first.getLong("id") })
+        val original = repository.credentials.read()
+        repository.credentials.connect("https://different.invalid", "different-host-fixture")
+        try {
+            val captured = repository.request("messages", payload, host = original)
+            assertEquals(first.getLong("id"), captured.getLong("id"))
+        } finally {
+            repository.credentials.connect(original.url, original.token)
+        }
     }
 }

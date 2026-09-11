@@ -39,10 +39,11 @@ class RoomRepository(context: Context) {
     private val client = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
 
-    suspend fun request(path: String, payload: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(credentials.url + "/hollywood/v2/" + path)
-            .header("Authorization", "Bearer " + credentials.token())
-        payload?.let { request.post(it.toString().toRequestBody("application/json".toMediaType())) }
+    suspend fun request(path: String, payload: JSONObject? = null, host: HostConnection = credentials.read(),
+                        method: String = if (payload == null) "GET" else "POST"): JSONObject = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(host.url + "/hollywood/v2/" + path)
+            .header("Authorization", "Bearer " + host.token)
+            .method(method, payload?.toString()?.toRequestBody("application/json".toMediaType()))
         client.newCall(request.build()).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) error("Request failed (${response.code}): " + body.take(200))
@@ -56,9 +57,10 @@ class RoomRepository(context: Context) {
     }
 
     fun stream(after: Long) = callbackFlow {
+        val host = credentials.read()
         val streaming = client.newBuilder().callTimeout(0, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
-        val call = streaming.newCall(Request.Builder().url(credentials.url + "/hollywood/v2/events?after=$after")
-            .header("Authorization", "Bearer " + credentials.token()).build())
+        val call = streaming.newCall(Request.Builder().url(host.url + "/hollywood/v2/events?after=$after")
+            .header("Authorization", "Bearer " + host.token).build())
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
             override fun onResponse(call: Call, response: Response) {

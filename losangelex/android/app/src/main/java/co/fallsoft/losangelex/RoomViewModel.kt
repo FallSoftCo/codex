@@ -57,8 +57,17 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
             error("Reconcile the pending submission before changing hosts")
         }
         val changed = repository.credentials.url != url.trimEnd('/')
-        repository.credentials.url = url
-        repository.credentials.saveToken(token)
+        val previous = runCatching { repository.credentials.read() }.getOrNull()
+        repository.credentials.connect(url, token)
+        if (changed && previous != null && previous.url.isNotEmpty()) {
+            val id = getApplication<Application>().getSharedPreferences("push", Application.MODE_PRIVATE)
+                .getString("deviceId:${previous.url}", null)
+            if (id != null) viewModelScope.launch {
+                try { repository.request("devices/$id", host = previous, method = "DELETE") }
+                catch (error: CancellationException) { throw error }
+                catch (error: Exception) { /* Old-host alerts are also rejected by their registration ID. */ }
+            }
+        }
         mutable.update { if (changed) RoomState(status = "Connecting…", events = repository.cached(),
             draft = preferences.getString(draftKey("lobby", "room"), "").orEmpty()) else it.copy(status = "Connecting…") }
         connection?.cancel()
@@ -115,15 +124,16 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun registerPush() {
         val push = getApplication<Application>().getSharedPreferences("push", Application.MODE_PRIVATE)
         val fid = push.getString("fid", null) ?: return
-        val id = push.getString("deviceId", null) ?: UUID.randomUUID().toString().also {
-            push.edit().putString("deviceId", it).apply()
+        val registrationKey = "deviceId:${repository.credentials.url}"
+        val id = push.getString(registrationKey, null) ?: UUID.randomUUID().toString().also {
+            push.edit().putString(registrationKey, it).apply()
         }
         val result = repository.request("devices", JSONObject().put("id", id).put("fid", fid))
         val permitted = getApplication<Application>().getSystemService(NotificationManager::class.java).areNotificationsEnabled()
         mutable.update { it.copy(pushStatus = when {
             !permitted -> "Notifications are disabled in Android settings"
             !result.optBoolean("pushConfigured") -> "Host notification provider is not configured"
-            push.getLong("lastReceivedAt", 0) > 0 -> "Notifications active · this device has received an alert"
+            push.getString("lastDeviceId", null) == id -> "Notifications active · this device has received an alert"
             else -> "Notifications registered · delivery requires a device test"
         }) }
     }

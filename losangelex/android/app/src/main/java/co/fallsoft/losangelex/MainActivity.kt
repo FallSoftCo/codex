@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.firebase.FirebaseApp
@@ -40,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 model.syncPush()
             }
         }
-        intent.getStringExtra("attentionId")?.let(model::openAttention)
+        openNotification(intent)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF70DFBB), background = Color(0xFF101820))) {
                 val state by model.state.collectAsStateWithLifecycle()
@@ -53,7 +55,15 @@ class MainActivity : ComponentActivity() {
     override fun onStop() { model.foreground(false); super.onStop() }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.getStringExtra("attentionId")?.let(model::openAttention)
+        setIntent(intent)
+        openNotification(intent)
+    }
+
+    private fun openNotification(intent: Intent) {
+        val device = intent.getStringExtra("deviceId") ?: return
+        val registered = getSharedPreferences("push", MODE_PRIVATE)
+            .getString("deviceId:${model.repository.credentials.url}", null)
+        if (device == registered) intent.getStringExtra("attentionId")?.let(model::openAttention)
     }
 }
 
@@ -132,7 +142,9 @@ fun RoomScreen(state: RoomState, initialUrl: String, connect: (String, String) -
     if (settings) AlertDialog(onDismissRequest = { settings = false }, title = { Text("Connect to Hollywood") },
         text = { Column {
             OutlinedTextField(url, { url = it }, label = { Text("Private HTTPS host") })
-            OutlinedTextField(token, { token = it }, label = { Text("Device access token") }, visualTransformation = PasswordVisualTransformation())
+            OutlinedTextField(token, { token = it }, label = { Text("Device access token") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false))
             if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
         } }, confirmButton = { TextButton(onClick = {
             runCatching { connect(url, token) }.onSuccess { settings = false; token = "" }.onFailure { error = it.message.orEmpty() }

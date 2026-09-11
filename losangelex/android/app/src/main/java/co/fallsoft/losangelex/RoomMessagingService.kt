@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -11,11 +12,18 @@ import com.google.firebase.messaging.RemoteMessage
 class RoomMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val attention = message.data["attentionId"] ?: return
-        getSharedPreferences("push", MODE_PRIVATE).edit()
-            .putLong("lastReceivedAt", System.currentTimeMillis()).putString("lastAttentionId", attention).apply()
+        val device = message.data["deviceId"] ?: return
+        val push = getSharedPreferences("push", MODE_PRIVATE)
+        if (device != push.getString("deviceId:${Credentials(this).url}", null)) return
+        push.edit().putString("lastDeviceId", device)
+            .putLong("lastReceivedAt", System.currentTimeMillis()).putString("lastAttentionId", attention)
+            .putInt("lastPriority", message.priority).putInt("lastOriginalPriority", message.originalPriority)
+            .putLong("lastSentAt", message.sentTime).apply()
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("attention", "Needs your attention", NotificationManager.IMPORTANCE_HIGH))
         val intent = Intent(this, MainActivity::class.java).putExtra("attentionId", attention)
+            .putExtra("deviceId", device).setData(Uri.parse("losangelex://attention/$device/$attention"))
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pending = PendingIntent.getActivity(this, attention.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = android.app.Notification.Builder(this, "attention")

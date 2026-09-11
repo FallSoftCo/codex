@@ -1,8 +1,13 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 if (file("google-services.json").exists()) { apply(plugin = "com.google.gms.google-services") }
+val releaseSigning = providers.environmentVariable("LOSANGELEX_SIGNING_PROPERTIES").orNull?.let { path ->
+    Properties().apply { file(path).inputStream().use(::load) }
+}
 android {
     namespace = "co.fallsoft.losangelex"
     compileSdk = 37
@@ -20,6 +25,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     testOptions { unitTests.isReturnDefaultValues = true }
+    if (releaseSigning != null) {
+        signingConfigs.create("privateRelease") {
+            storeFile = file(releaseSigning.getProperty("storeFile"))
+            storePassword = releaseSigning.getProperty("storePassword")
+            keyAlias = releaseSigning.getProperty("keyAlias")
+            keyPassword = releaseSigning.getProperty("keyPassword")
+        }
+        buildTypes.getByName("release") { signingConfig = signingConfigs.getByName("privateRelease") }
+    }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {
