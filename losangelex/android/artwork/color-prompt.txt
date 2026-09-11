@@ -1,0 +1,7 @@
+Use case: logo-brand
+Asset type: Android launcher icon foreground for the Losangelex app.
+Primary request: A distinctive, polished Hollywood Hills app icon, centered on the famous hillside HOLLYWOOD sign.
+Subject and style: A bold, elegant illustrated mark: the iconic white HOLLYWOOD letters standing on two clean, sweeping layers of Hollywood hillside. Simplified cinematic shapes, crisp edges, subtle depth, readable as a small app icon. Match the existing app's mint/teal accent (#70DFBB) with darker teal hills; the icon will sit over the app's dark blue-black (#101820) background.
+Composition: Square 1024 x 1024 transparent canvas. Keep the complete sign and hill silhouette contained in the central 60% of the canvas, with generous transparent padding on every side. A compact, balanced hill emblem, not a full landscape. The sign must be prominent and integrated naturally with the ridge.
+Text (verbatim): "HOLLYWOOD" in the landmark's upright white block capitals. No other lettering.
+Constraints: Genuine transparent alpha background. No square tile, no surrounding circle or badge border, no device mockup, no drop shadow outside the emblem, no watermark, no extra props.

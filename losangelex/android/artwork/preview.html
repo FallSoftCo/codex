@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Losangelex · Hollywood Hills launcher artwork</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 48px; background: #edf1ef; color: #101820; font: 16px system-ui, sans-serif; }
+  h1 { margin: 0 0 8px; font-size: 28px; font-weight: 650; }
+  p { margin: 0 0 36px; color: #52635d; }
+  main { display: flex; gap: 44px; align-items: start; }
+  figure { margin: 0; text-align: center; }
+  figcaption { margin-top: 18px; }
+  .icon { position: relative; width: 176px; height: 176px; overflow: hidden; background: #101820; }
+  .round { border-radius: 50%; }
+  .squircle { border-radius: 28%; }
+  /* Adaptive layers extend to 150% of the viewport; 19% insets leave 93%. */
+  .icon img { position: absolute; width: 93%; height: 93%; left: 3.5%; top: 3.5%; }
+  .themed { background: #b6ecd7; }
+  .small { width: 64px; height: 64px; margin-top: 56px; }
+</style>
+<h1>Losangelex · Hollywood Hills</h1>
+<p>Launcher artwork previews. Android applies the device's own icon mask.</p>
+<main>
+  <figure><div class="icon round"><img src="../app/src/main/res/drawable-nodpi/hollywood_hills.png" alt="White Hollywood sign over teal hills"></div><figcaption>Circle</figcaption></figure>
+  <figure><div class="icon squircle"><img src="../app/src/main/res/drawable-nodpi/hollywood_hills.png" alt="Hollywood Hills icon with rounded corners"></div><figcaption>Rounded</figcaption></figure>
+  <figure><div class="icon round themed"><img src="../app/src/main/res/drawable-nodpi/hollywood_hills_monochrome.png" alt="Monochrome Hollywood lettering and hill contours"></div><figcaption>Themed</figcaption></figure>
+  <figure><div class="icon round small"><img src="../app/src/main/res/drawable-nodpi/hollywood_hills.png" alt="Small Hollywood Hills icon"></div><figcaption>64 px</figcaption></figure>
+</main>
+</html>

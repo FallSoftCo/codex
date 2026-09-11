@@ -1,0 +1,5 @@
+Use case: logo-brand
+Asset type: monochrome Android launcher icon mask, square 1024 x 1024, genuinely transparent background.
+Create an exceptionally clean, bold, simplified Hollywood Hills emblem using ONLY solid opaque black shapes and transparent negative space.
+The word "HOLLYWOOD" in the landmark's upright block capitals stands clearly above two smooth, broad hill contour bands. ALL lettering is solid black. The sky behind and between every letter is entirely transparent. The hill bands sit BELOW the lettering, with a large clear transparent gap between the two bands. The holes inside O and D are transparent. Separate all nine letters with clear gaps.
+Vector-like precise geometry, clean smooth edges, no texture, no trees, no shading, no supporting scaffolding, no outlines. A compact centered horizontal emblem on a generously padded square canvas; the word spans about 70% of the canvas width. Every part of the image other than the black letters and two black hill bands must be transparent. No tile, no border, no extra words. This will be recolored by Android from its alpha mask.
