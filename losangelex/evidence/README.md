@@ -16,6 +16,14 @@ behaviors; they are not a comparative productivity benchmark against Codex.
 | [Shared development root](shared-workspace-model.json) | 11/11 real-model checks: same thread and memory after changing root, edits in two nested repositories, per-folder instructions, preserved existing changes, and delegated repository selection |
 | [Installed root verification](shared-root-install.json) | 8/8 checks: idle activation retained existing thread bindings; the existing Maya conversation verified `/home/ai/Development` and wrote/read a temporary nested file there without a scope approval |
 | [Android icon update](../android/artwork/release.json) | Version 0.1.1: release build and lint passed, signed APK installed and visually reviewed on the Pixel, connection and notification registration retained, host service stayed running |
+| [Android chat update](android-chat-release.json) | Version 0.2.0 installed on the Pixel: 9 native tests, 2 visual snapshots, 47 backend tests, progressive history beyond 650 messages with preserved reading position, and a repeated real Firebase Doze replay on the emulator |
+
+The [chat UI snapshots](../android/CHAT_UX.md) use native Compose rendering with explicit fixtures.
+The [nine-test output](android-chat-tests.txt) covers messaging, paging, drafts and retries;
+the separate [Firebase replay](android-chat-push.json) passed five checks and its three native
+acceptance tests. Version 0.2.0's installed APK hash, certificate and notification permission
+were verified on the Pixel. Screenshots and interaction tests for this release came from the
+emulator. The earlier physical UI and notification records below remain evidence for version 0.1.0.
 
 The icon update is recorded separately from the Android behavior runs, which used version 0.1.0.
 Its [artwork previews and physical-device screenshot](../android/artwork/README.md) show the new

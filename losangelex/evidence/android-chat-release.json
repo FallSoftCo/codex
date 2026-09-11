@@ -1,0 +1,83 @@
+{
+  "versionName": "0.2.0",
+  "versionCode": 3,
+  "apkSha256": "218e87f8ce1d969f01d40fb005b92dca18ca31106db25a9304a3f79b7a9b4d76",
+  "signingCertificateSha256": "c98c28d5e349d270823d6c9def8dbe0f6ad718e6d2fc85b404d3a6b21ed9168b",
+  "checks": {
+    "releaseBuildPassed": true,
+    "releaseLintPassed": true,
+    "originalSigningCertificate": true,
+    "nativeTestsPassed": 9,
+    "backendTestsPassed": 47,
+    "visualSnapshotsPassed": 2,
+    "installedApkMatchesRelease": true,
+    "privateDownloadMatchesRelease": true,
+    "notificationPermissionRetained": true,
+    "hostNotRestartedForApkUpdate": true,
+    "dozeReplayChecksPassed": 5,
+    "realHostNativeAcceptanceTestsPassed": 3,
+    "repositoryFormattingPassed": true,
+    "changedPythonLintPassed": true
+  },
+  "runtimePidBeforeApkInstall": 536298,
+  "privateDownloadUrl": "https://system76-pc.tailb77f2a.ts.net:8446/android/losangelex-0.2.0.apk",
+  "apkPath": "/home/ai/.local/share/losangelex/android-releases/218e87f8ce1d969f01d40fb005b92dca18ca31106db25a9304a3f79b7a9b4d76/losangelex-0.2.0.apk",
+  "runtimePidAfterApkInstall": 536298,
+  "hostActivation": {
+    "backendCommit": "833926d4827f399928c62cba3115e6dba71031c9",
+    "threadsRetained": true,
+    "eventCursorRetained": true,
+    "runtimeReady": true,
+    "historyEndpointAvailable": true,
+    "sharedRoot": "/home/ai/Development",
+    "idleActivation": true
+  },
+  "verifiedAt": "2026-09-11T13:10:23.780722+00:00",
+  "clientSourceCommit": "1a4f3a6aa97021be1cf8822a2e065b4f65876a3f",
+  "physicalDevice": {
+    "model": "Pixel 9 Pro Fold",
+    "androidVersion": 16,
+    "installedVersionName": "0.2.0",
+    "installedVersionCode": 3,
+    "installedApkSha256": "218e87f8ce1d969f01d40fb005b92dca18ca31106db25a9304a3f79b7a9b4d76",
+    "uiVerification": "Native UI and screenshot comparisons ran on the emulator; physical installation, signature and notification permission were verified."
+  },
+  "emulator": {
+    "apiLevel": 35,
+    "resolution": "1080x2340",
+    "densityDpi": 440,
+    "fontScale": 1,
+    "timeZone": "America/New_York",
+    "disposableRegistrationRevoked": true
+  },
+  "evidence": {
+    "nativeTests": "android-chat-tests.txt",
+    "pushReplay": "android-chat-push.json",
+    "releaseSignature": "android-chat-signature.txt",
+    "teamRoomSnapshot": "../android/app/src/androidTest/assets/screenshots/team-room.png",
+    "directReplySnapshot": "../android/app/src/androidTest/assets/screenshots/direct-reply.png"
+  },
+  "longHistory": {
+    "fixturePublicMessages": 650,
+    "pageSize": 50,
+    "pagingMemoryTarget": 250,
+    "observedLoadedItemLimit": 300,
+    "reachedFirstMessage": true,
+    "liveArrivalRetainedPixelPosition": true,
+    "latestReturnedToNewArrival": true
+  },
+  "notificationQuestion": {
+    "id": 107,
+    "state": "resolved",
+    "observedAnswerId": 113,
+    "answerVisibility": "direct:theo",
+    "answerSource": "An existing user answer was observed via authenticated API readback; no replacement test answer was sent."
+  },
+  "liveModelProbe": {
+    "agent": "maya",
+    "eventId": 104,
+    "response": "Android chat connected"
+  },
+  "finalOpenAttentionCount": 0,
+  "runtimePidAtFinalVerification": 536298
+}

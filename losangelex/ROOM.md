@@ -68,16 +68,22 @@ pending message. Approvals show the concrete command or change and cannot revive
 ## Android connection
 
 The signed release APK on this host is available privately at
-[Download Losangelex](https://system76-pc.tailb77f2a.ts.net:8446/android/losangelex-0.1.1.apk).
-Connect Tailscale on the phone, install the APK, open it and allow notifications. In **Connect**,
+[Download Losangelex 0.2.0](https://system76-pc.tailb77f2a.ts.net:8446/android/losangelex-0.2.0.apk).
+Connect Tailscale on the phone, install the APK, open it and allow notifications. In **Connection & notifications**,
 use `https://system76-pc.tailb77f2a.ts.net:8446` and the token file described below.
 
 The signed release is installed and paired on the owner's Pixel 9 Pro Fold. Notification
 permission is granted, and a [physical-device test](evidence/android-physical-phone.json)
 verified background delivery, opening the private question, and answering it from the app.
-Version 0.1.1 adds the [Hollywood Hills launcher icon](android/artwork/README.md), including
+Version 0.1.1 added the [Hollywood Hills launcher icon](android/artwork/README.md), including
 a themed monochrome variant. Its signed update retained the phone's connection and notification
 registration; the room service continued running during the update.
+
+Version 0.2.0 adds [the chat interface](android/CHAT_UX.md): distinct teammate avatars and roles,
+message bubbles, quoted replies, mention suggestions, and progressive access to the complete
+conversation history. Its signed update is installed on the Pixel with the same certificate.
+The [chat release record](evidence/android-chat-release.json) includes native interaction and
+visual tests, long-history scrolling, and a repeated real Firebase Doze check on the emulator.
 
 Build the native app in `losangelex/android` with `./gradlew :app:assembleDebug`. Register
 `co.fallsoft.losangelex` in Firebase and put its downloaded `google-services.json` in `app/`;
@@ -86,7 +92,7 @@ configuration for local UI development. Android 8 or newer is supported; backgro
 Google Play services and notification permission.
 
 Use your private HTTPS host URL and the access token in
-`~/.local/state/hollywood-room/client-token` in the app's **Connect** dialog. The token stays in
+`~/.local/state/hollywood-room/client-token` in the app's **Connection & notifications** dialog. The token stays in
 Android Keystore-backed encrypted storage. The release network policy rejects cleartext HTTP;
 debug builds allow only the emulator bridge and loopback for integration tests. A TLS reverse
 proxy can also provide a public endpoint; initial deployment uses the private connection.

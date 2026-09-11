@@ -1,0 +1,9 @@
+co.fallsoft.losangelex.RoomHistoryTest:..
+co.fallsoft.losangelex.RoomUiTest:..
+co.fallsoft.losangelex.RoomDraftTest:.
+co.fallsoft.losangelex.ChatUiTest:...
+co.fallsoft.losangelex.ChatPagingTest:.
+
+Time: 55.548
+
+OK (9 tests)
