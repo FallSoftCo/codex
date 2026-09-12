@@ -1,3 +1,6 @@
+#[path = "notification_tests.rs"]
+mod notification_tests;
+
 use super::mcp_refresh::McpRefresh;
 use super::step_settings::ResolvedStepSettings;
 use super::step_settings::StepSettings;
@@ -6,6 +9,7 @@ pub(crate) use super::step_settings::tests::update_selected_settings_for_test;
 use super::turn_context::TurnEnvironment;
 use super::*;
 use crate::agents_md_manager::AgentsMdManager;
+use crate::agents_md_manager::SessionInstructions;
 use crate::compact::InitialContextInjection;
 use crate::config::ConfigBuilder;
 use crate::config::ConfigOverrides;
@@ -72,7 +76,6 @@ use codex_protocol::models::FunctionCallOutputPayload;
 use codex_protocol::models::ImageDetail;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::SandboxEnforcement;
-use codex_protocol::openai_models::ModelInstructionsVariables;
 use codex_protocol::openai_models::ModelServiceTier;
 use codex_protocol::openai_models::ToolMode;
 use codex_protocol::permissions::FileSystemAccessMode;
@@ -82,7 +85,6 @@ use codex_protocol::permissions::FileSystemSandboxPolicy;
 use codex_protocol::permissions::FileSystemSandboxPolicyContext;
 use codex_protocol::permissions::FileSystemSpecialPath;
 use codex_protocol::protocol::EnvironmentConfigState;
-use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::TurnEnvironmentSelections;
 use codex_protocol::request_permissions::PermissionGrantScope;
@@ -161,7 +163,6 @@ use codex_protocol::protocol::RealtimeVoicesList;
 use codex_protocol::protocol::SessionMeta;
 use codex_protocol::protocol::SessionMetaLine;
 use codex_protocol::protocol::Submission;
-use codex_protocol::protocol::ThreadRolledBackEvent;
 use codex_protocol::protocol::ThreadSettingsOverrides;
 use codex_protocol::protocol::TokenCountEvent;
 use codex_protocol::protocol::TokenUsage;
@@ -177,7 +178,6 @@ use core_test_support::PathBufExt;
 use core_test_support::PathExt;
 use core_test_support::context_snapshot;
 use core_test_support::context_snapshot::ContextSnapshotOptions;
-use core_test_support::context_snapshot::ContextSnapshotRenderMode;
 use core_test_support::responses;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -3121,11 +3121,19 @@ async fn record_token_usage_info_notifies_extension_contributors() {
     };
 
     session
-        .record_token_usage_info(&turn_context, Some(&first_usage))
+        .record_token_usage_info(
+            &turn_context,
+            &turn_context.initial_settings,
+            Some(&first_usage),
+        )
         .await
         .expect("first usage should be recorded");
     session
-        .record_token_usage_info(&turn_context, Some(&second_usage))
+        .record_token_usage_info(
+            &turn_context,
+            &turn_context.initial_settings,
+            Some(&second_usage),
+        )
         .await
         .expect("second usage should be recorded");
 
@@ -3783,10 +3791,7 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
     let snapshot = context_snapshot::format_labeled_requests_snapshot(
         "First request after fork when startup preserves the parent baseline, the fork changes approval policy, and the first forked turn enters plan mode.",
         &[("First Forked Turn Request", &request)],
-        &ContextSnapshotOptions::default()
-            .render_mode(ContextSnapshotRenderMode::KindWithTextPrefix { max_chars: 96 })
-            .strip_capability_instructions()
-            .strip_agents_md_user_context(),
+        &ContextSnapshotOptions::default().rewrite_known_segments(),
     );
 
     let mut settings = insta::Settings::clone_current();
@@ -3891,608 +3896,6 @@ async fn record_initial_history_forked_hydrates_previous_turn_settings() {
             .expect("serialize fork reference context item"),
         serde_json::to_value(Some(previous_context_item))
             .expect("serialize expected reference context item")
-    );
-}
-
-#[tokio::test]
-async fn thread_rollback_drops_last_turn_from_history() {
-    let (mut sess, tc, rx) = make_session_and_context_with_rx().await;
-    let rollout_path = attach_thread_persistence(
-        Arc::get_mut(&mut sess).expect("session should not have additional references"),
-    )
-    .await;
-
-    let initial_context = build_initial_context(&sess, &tc).await;
-    let turn_1 = vec![
-        user_message("turn 1 user"),
-        assistant_message("turn 1 assistant"),
-    ];
-    let turn_2 = vec![
-        user_message("turn 2 user"),
-        assistant_message("turn 2 assistant"),
-    ];
-    let mut full_history = Vec::new();
-    full_history.extend(initial_context.clone());
-    full_history.extend(turn_1.clone());
-    full_history.extend(turn_2);
-    sess.replace_history(full_history.clone(), Some(tc.to_turn_context_item()))
-        .await;
-    let rollout_items: Vec<RolloutItem> = full_history
-        .into_iter()
-        .map(ResponseItemEnvelope::new)
-        .map(RolloutItem::ResponseItem)
-        .collect();
-    sess.persist_rollout_items(&rollout_items).await;
-    sess.set_previous_turn_settings(Some(PreviousTurnSettings {
-        model: "stale-model".to_string(),
-        comp_hash: None,
-        realtime_active: Some(tc.realtime_active),
-    }))
-    .await;
-    {
-        let mut state = sess.state.lock().await;
-        state.set_reference_context_item(Some(tc.to_turn_context_item()));
-    }
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-
-    let rollback_event = wait_for_thread_rolled_back(&rx).await;
-    assert_eq!(rollback_event.num_turns, 1);
-
-    let mut expected = Vec::new();
-    expected.extend(initial_context);
-    expected.extend(turn_1);
-
-    let history = sess.clone_history().await;
-    assert_eq!(expected, raw_history_items(&history));
-    assert_eq!(sess.previous_turn_settings().await, None);
-    assert!(sess.reference_context_item().await.is_none());
-
-    let InitialHistory::Resumed(resumed) = RolloutRecorder::get_rollout_history(&rollout_path)
-        .await
-        .expect("read rollout history")
-    else {
-        panic!("expected resumed rollout history");
-    };
-    assert!(resumed.history.iter().any(|item| {
-        matches!(
-            item,
-            RolloutItem::EventMsg(EventMsg::ThreadRolledBack(rollback))
-            if rollback.num_turns == 1
-        )
-    }));
-}
-
-#[tokio::test]
-async fn thread_rollback_clears_history_when_num_turns_exceeds_existing_turns() {
-    let (mut sess, tc, rx) = make_session_and_context_with_rx().await;
-    attach_thread_persistence(
-        Arc::get_mut(&mut sess).expect("session should not have additional references"),
-    )
-    .await;
-
-    let initial_context = build_initial_context(&sess, &tc).await;
-    let turn_1 = vec![user_message("turn 1 user")];
-    let mut full_history = Vec::new();
-    full_history.extend(initial_context.clone());
-    full_history.extend(turn_1);
-    sess.replace_history(full_history.clone(), Some(tc.to_turn_context_item()))
-        .await;
-    let rollout_items: Vec<RolloutItem> = full_history
-        .into_iter()
-        .map(ResponseItemEnvelope::new)
-        .map(RolloutItem::ResponseItem)
-        .collect();
-    sess.persist_rollout_items(&rollout_items).await;
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 99).await;
-
-    let rollback_event = wait_for_thread_rolled_back(&rx).await;
-    assert_eq!(rollback_event.num_turns, 99);
-
-    let history = sess.clone_history().await;
-    assert_eq!(initial_context, raw_history_items(&history));
-}
-
-#[tokio::test]
-async fn thread_rollback_fails_without_persisted_thread_history() {
-    let (sess, tc, rx) = make_session_and_context_with_rx().await;
-
-    let initial_context = build_initial_context(&sess, &tc).await;
-    sess.record_conversation_items(tc.as_ref(), tc.model_info(), &initial_context)
-        .await;
-    let history_before_rollback = sess.clone_history().await;
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-
-    let error_event = wait_for_thread_rollback_failed(&rx).await;
-    assert_eq!(
-        error_event.message,
-        "thread rollback requires persisted thread history"
-    );
-    assert_eq!(
-        error_event.codex_error_info,
-        Some(CodexErrorInfo::ThreadRollbackFailed)
-    );
-    assert_eq!(
-        raw_history_items(&sess.clone_history().await),
-        raw_history_items(&history_before_rollback)
-    );
-}
-
-#[tokio::test]
-async fn thread_rollback_recomputes_previous_turn_settings_and_reference_context_from_replay() {
-    let (mut sess, tc, rx) = make_session_and_context_with_rx().await;
-    attach_thread_persistence(
-        Arc::get_mut(&mut sess).expect("session should not have additional references"),
-    )
-    .await;
-
-    let first_context_item = tc.to_turn_context_item();
-    let first_turn_id = first_context_item
-        .turn_id
-        .clone()
-        .expect("thread settings should have turn_id");
-    let mut rolled_back_context_item = first_context_item.clone();
-    rolled_back_context_item.turn_id = Some("rolled-back-turn".to_string());
-    rolled_back_context_item.model = "rolled-back-model".to_string();
-    let rolled_back_turn_id = rolled_back_context_item
-        .turn_id
-        .clone()
-        .expect("thread settings should have turn_id");
-    let turn_one_user = user_message("turn 1 user");
-    let turn_one_assistant = assistant_message("turn 1 assistant");
-    let turn_two_user = user_message("turn 2 user");
-    let turn_two_assistant = assistant_message("turn 2 assistant");
-
-    sess.persist_rollout_items(&[
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: first_turn_id.clone(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(
-            codex_protocol::protocol::UserMessageEvent {
-                client_id: None,
-                message: "turn 1 user".to_string(),
-                images: None,
-                local_images: Vec::new(),
-                text_elements: Vec::new(),
-                ..Default::default()
-            },
-        )),
-        RolloutItem::TurnContext(first_context_item.clone()),
-        RolloutItem::ResponseItem(turn_one_user.clone().into()),
-        RolloutItem::ResponseItem(turn_one_assistant.clone().into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: first_turn_id,
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: rolled_back_turn_id.clone(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(
-            codex_protocol::protocol::UserMessageEvent {
-                client_id: None,
-                message: "turn 2 user".to_string(),
-                images: None,
-                local_images: Vec::new(),
-                text_elements: Vec::new(),
-                ..Default::default()
-            },
-        )),
-        RolloutItem::TurnContext(rolled_back_context_item),
-        RolloutItem::ResponseItem(turn_two_user.into()),
-        RolloutItem::ResponseItem(turn_two_assistant.into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: rolled_back_turn_id,
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-    ])
-    .await;
-    sess.replace_history(
-        vec![assistant_message("stale history")],
-        Some(first_context_item.clone()),
-    )
-    .await;
-    sess.set_previous_turn_settings(Some(PreviousTurnSettings {
-        model: "stale-model".to_string(),
-        comp_hash: None,
-        realtime_active: None,
-    }))
-    .await;
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-    let rollback_event = wait_for_thread_rolled_back(&rx).await;
-    assert_eq!(rollback_event.num_turns, 1);
-
-    assert_eq!(
-        raw_history_items(&sess.clone_history().await),
-        vec![turn_one_user, turn_one_assistant]
-    );
-    assert_eq!(
-        sess.previous_turn_settings().await,
-        Some(PreviousTurnSettings {
-            model: tc.model_info().slug.clone(),
-            comp_hash: None,
-            realtime_active: Some(tc.realtime_active),
-        })
-    );
-    assert_eq!(
-        serde_json::to_value(sess.reference_context_item().await)
-            .expect("serialize replay reference context item"),
-        serde_json::to_value(Some(first_context_item))
-            .expect("serialize expected reference context item")
-    );
-}
-
-#[tokio::test]
-async fn thread_rollback_restores_cleared_reference_context_item_after_compaction() {
-    let (mut sess, tc, rx) = make_session_and_context_with_rx().await;
-    attach_thread_persistence(
-        Arc::get_mut(&mut sess).expect("session should not have additional references"),
-    )
-    .await;
-
-    let first_context_item = tc.to_turn_context_item();
-    let first_turn_id = first_context_item
-        .turn_id
-        .clone()
-        .expect("thread settings should have turn_id");
-    let compact_turn_id = "compact-turn".to_string();
-    let rolled_back_turn_id = "rolled-back-turn".to_string();
-    let compacted_history = vec![
-        user_message("turn 1 user"),
-        user_message("summary after compaction"),
-    ];
-    let first_window_id = Uuid::now_v7();
-    let previous_window_id = Uuid::now_v7();
-    let compacted_window_id = Uuid::now_v7();
-
-    sess.persist_rollout_items(&[
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: first_turn_id.clone(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
-            client_id: None,
-            message: "turn 1 user".to_string(),
-            images: None,
-            local_images: Vec::new(),
-            text_elements: Vec::new(),
-            ..Default::default()
-        })),
-        RolloutItem::TurnContext(first_context_item.clone()),
-        RolloutItem::ResponseItem(user_message("turn 1 user").into()),
-        RolloutItem::ResponseItem(assistant_message("turn 1 assistant").into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: first_turn_id,
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: compact_turn_id.clone(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::Compacted(CompactedItem {
-            message: "summary after compaction".to_string(),
-            replacement_history: Some(
-                compacted_history
-                    .iter()
-                    .cloned()
-                    .map(ResponseItemEnvelope::new)
-                    .collect(),
-            ),
-            retained_context: None,
-            guardian_history: None,
-            mcp_resource_origins: None,
-            window_number: Some(7),
-            first_window_id: Some(first_window_id.to_string()),
-            previous_window_id: Some(previous_window_id.to_string()),
-            window_id: Some(compacted_window_id.to_string()),
-            compaction_response_id: None,
-            latest_token_usage_record: None,
-        }),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: compact_turn_id,
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: rolled_back_turn_id.clone(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
-            client_id: None,
-            message: "turn 2 user".to_string(),
-            images: None,
-            local_images: Vec::new(),
-            text_elements: Vec::new(),
-            ..Default::default()
-        })),
-        RolloutItem::TurnContext(TurnContextItem {
-            turn_id: Some(rolled_back_turn_id.clone()),
-            model: "rolled-back-model".to_string(),
-            comp_hash: None,
-            ..first_context_item.clone()
-        }),
-        RolloutItem::ResponseItem(user_message("turn 2 user").into()),
-        RolloutItem::ResponseItem(assistant_message("turn 2 assistant").into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: rolled_back_turn_id,
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-    ])
-    .await;
-    sess.replace_history(
-        vec![assistant_message("stale history")],
-        Some(first_context_item),
-    )
-    .await;
-    {
-        let mut state = sess.state.lock().await;
-        state.restore_auto_compact_window(
-            /*window_number*/ 99,
-            AutoCompactWindowIds {
-                first_window_id: Uuid::now_v7(),
-                previous_window_id: Some(Uuid::now_v7()),
-                window_id: Uuid::now_v7(),
-            },
-        );
-    }
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-    let rollback_event = wait_for_thread_rolled_back(&rx).await;
-    assert_eq!(rollback_event.num_turns, 1);
-
-    assert_eq!(
-        raw_history_items(&sess.clone_history().await),
-        compacted_history
-    );
-    assert!(sess.reference_context_item().await.is_none());
-    assert_eq!(
-        sess.state.lock().await.auto_compact_window_ids(),
-        AutoCompactWindowIds {
-            first_window_id,
-            previous_window_id: Some(previous_window_id),
-            window_id: compacted_window_id,
-        }
-    );
-    assert!(sess.current_window_id().await.ends_with(":7"));
-}
-
-#[tokio::test]
-async fn thread_rollback_persists_marker_and_replays_cumulatively() {
-    let (mut sess, tc, rx) = make_session_and_context_with_rx().await;
-    let rollout_path = attach_thread_persistence(
-        Arc::get_mut(&mut sess).expect("session should not have additional references"),
-    )
-    .await;
-    let turn_context_item = tc.to_turn_context_item();
-
-    sess.persist_rollout_items(&[
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: "turn-1".to_string(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
-            client_id: None,
-            message: "turn 1 user".to_string(),
-            images: None,
-            local_images: Vec::new(),
-            text_elements: Vec::new(),
-            ..Default::default()
-        })),
-        RolloutItem::TurnContext(turn_context_item.clone()),
-        RolloutItem::ResponseItem(user_message("turn 1 user").into()),
-        RolloutItem::ResponseItem(assistant_message("turn 1 assistant").into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: "turn-1".to_string(),
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: "turn-2".to_string(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
-            client_id: None,
-            message: "turn 2 user".to_string(),
-            images: None,
-            local_images: Vec::new(),
-            text_elements: Vec::new(),
-            ..Default::default()
-        })),
-        RolloutItem::TurnContext(turn_context_item.clone()),
-        RolloutItem::ResponseItem(user_message("turn 2 user").into()),
-        RolloutItem::ResponseItem(assistant_message("turn 2 assistant").into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: "turn-2".to_string(),
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-        RolloutItem::EventMsg(EventMsg::TurnStarted(
-            codex_protocol::protocol::TurnStartedEvent {
-                turn_id: "turn-3".to_string(),
-                root_turn_id: None,
-                trace_id: None,
-                started_at: None,
-                model_context_window: Some(128_000),
-                collaboration_mode_kind: ModeKind::Default,
-            },
-        )),
-        RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
-            client_id: None,
-            message: "turn 3 user".to_string(),
-            images: None,
-            local_images: Vec::new(),
-            text_elements: Vec::new(),
-            ..Default::default()
-        })),
-        RolloutItem::TurnContext(turn_context_item),
-        RolloutItem::ResponseItem(user_message("turn 3 user").into()),
-        RolloutItem::ResponseItem(assistant_message("turn 3 assistant").into()),
-        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-            turn_id: "turn-3".to_string(),
-            started_at: None,
-            last_agent_message: None,
-            error: None,
-            completed_at: None,
-            duration_ms: None,
-            time_to_first_token_ms: None,
-        })),
-    ])
-    .await;
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-    let first_rollback = wait_for_thread_rolled_back(&rx).await;
-    assert_eq!(first_rollback.num_turns, 1);
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-    let second_rollback = wait_for_thread_rolled_back(&rx).await;
-    assert_eq!(second_rollback.num_turns, 1);
-
-    assert_eq!(
-        raw_history_items(&sess.clone_history().await),
-        vec![
-            user_message("turn 1 user"),
-            assistant_message("turn 1 assistant")
-        ]
-    );
-
-    let InitialHistory::Resumed(resumed) = RolloutRecorder::get_rollout_history(&rollout_path)
-        .await
-        .expect("read rollout history")
-    else {
-        panic!("expected resumed rollout history");
-    };
-    let rollback_markers = resumed
-        .history
-        .iter()
-        .filter(|item| matches!(item, RolloutItem::EventMsg(EventMsg::ThreadRolledBack(_))))
-        .count();
-    assert_eq!(rollback_markers, 2);
-}
-
-#[tokio::test]
-async fn thread_rollback_fails_when_turn_in_progress() {
-    let (sess, tc, rx) = make_session_and_context_with_rx().await;
-
-    let initial_context = build_initial_context(&sess, &tc).await;
-    sess.record_conversation_items(tc.as_ref(), tc.model_info(), &initial_context)
-        .await;
-    let history_before_rollback = sess.clone_history().await;
-
-    *sess.active_turn.lock().await = Some(crate::state::ActiveTurn::default());
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 1).await;
-
-    let error_event = wait_for_thread_rollback_failed(&rx).await;
-    assert_eq!(
-        error_event.codex_error_info,
-        Some(CodexErrorInfo::ThreadRollbackFailed)
-    );
-
-    let history = sess.clone_history().await;
-    assert_eq!(
-        raw_history_items(&history_before_rollback),
-        raw_history_items(&history)
-    );
-}
-
-#[tokio::test]
-async fn thread_rollback_fails_when_num_turns_is_zero() {
-    let (sess, tc, rx) = make_session_and_context_with_rx().await;
-
-    let initial_context = build_initial_context(&sess, &tc).await;
-    sess.record_conversation_items(tc.as_ref(), tc.model_info(), &initial_context)
-        .await;
-    let history_before_rollback = sess.clone_history().await;
-
-    handlers::thread_rollback(&sess, "sub-1".to_string(), /*num_turns*/ 0).await;
-
-    let error_event = wait_for_thread_rollback_failed(&rx).await;
-    assert_eq!(error_event.message, "num_turns must be >= 1");
-    assert_eq!(
-        error_event.codex_error_info,
-        Some(CodexErrorInfo::ThreadRollbackFailed)
-    );
-
-    let history = sess.clone_history().await;
-    assert_eq!(
-        raw_history_items(&history_before_rollback),
-        raw_history_items(&history)
     );
 }
 
@@ -4951,42 +4354,6 @@ fn success_flag_true_with_no_error_and_content_used() {
     };
 
     assert_eq!(expected, got);
-}
-
-async fn wait_for_thread_rolled_back(rx: &async_channel::Receiver<Event>) -> ThreadRolledBackEvent {
-    let deadline = StdDuration::from_secs(2);
-    let start = std::time::Instant::now();
-    loop {
-        let remaining = deadline.saturating_sub(start.elapsed());
-        let evt = tokio::time::timeout(remaining, rx.recv())
-            .await
-            .expect("timeout waiting for event")
-            .expect("event");
-        match evt.msg {
-            EventMsg::ThreadRolledBack(payload) => return payload,
-            _ => continue,
-        }
-    }
-}
-
-async fn wait_for_thread_rollback_failed(rx: &async_channel::Receiver<Event>) -> ErrorEvent {
-    let deadline = StdDuration::from_secs(2);
-    let start = std::time::Instant::now();
-    loop {
-        let remaining = deadline.saturating_sub(start.elapsed());
-        let evt = tokio::time::timeout(remaining, rx.recv())
-            .await
-            .expect("timeout waiting for event")
-            .expect("event");
-        match evt.msg {
-            EventMsg::Error(payload)
-                if payload.codex_error_info == Some(CodexErrorInfo::ThreadRollbackFailed) =>
-            {
-                return payload;
-            }
-            _ => continue,
-        }
-    }
 }
 
 async fn open_thread_persistence(session: &mut Session) -> PathBuf {
@@ -6423,7 +5790,7 @@ async fn session_new_fails_when_zsh_fork_enabled_without_packaged_zsh() {
         session_configuration,
         /*environment_selections*/ &[],
         Arc::clone(&config),
-        /*user_instructions*/ None,
+        SessionInstructions::default(),
         "11111111-1111-4111-8111-111111111111".to_string(),
         auth_manager,
         models_manager,
@@ -6665,7 +6032,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         tool_approvals: Mutex::new(ApprovalStore::default()),
         runtime_handle: tokio::runtime::Handle::current(),
         skills_service,
-        agents_md_manager: Arc::new(AgentsMdManager::new(/*user_instructions*/ None)),
+        agents_md_manager: Arc::new(AgentsMdManager::new(SessionInstructions::default())),
         plugins_manager,
         mcp_manager,
         extensions: Arc::new(codex_extension_api::ExtensionRegistryBuilder::new().build()),
@@ -6710,6 +6077,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         ),
         executed_tool_calls: executed_tool_calls.clone(),
         code_mode_service: crate::tools::code_mode::CodeModeService::new(
+            thread_id,
             Arc::new(codex_code_mode::DisabledCodeModeSessionProvider),
             &config.code_mode,
             executed_tool_calls,
@@ -6733,6 +6101,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
             codex_sandboxing::WindowsSandboxProxySettingsMode::Reconcile,
         multi_agent_version: OnceLock::from(config.multi_agent_version_from_features()),
         mcp_refresh: McpRefresh::new(),
+        mcp_tool_approval_metadata: Default::default(),
         mcp_elicitation_reviewer_handle: OnceLock::new(),
         mcp_elicitation_lifecycle_handle: OnceLock::new(),
         mcp_prewarm_tx: async_channel::bounded(1).0,
@@ -6903,7 +6272,7 @@ async fn make_session_with_config_and_rx(
         session_configuration,
         &default_environments,
         Arc::clone(&config),
-        /*user_instructions*/ None,
+        SessionInstructions::default(),
         "11111111-1111-4111-8111-111111111111".to_string(),
         auth_manager,
         models_manager,
@@ -7032,7 +6401,7 @@ async fn make_session_with_history_source_and_agent_control_and_rx(
         session_configuration,
         &default_environments,
         Arc::clone(&config),
-        /*user_instructions*/ None,
+        SessionInstructions::default(),
         "11111111-1111-4111-8111-111111111111".to_string(),
         auth_manager,
         models_manager,
@@ -8838,7 +8207,7 @@ where
         tool_approvals: Mutex::new(ApprovalStore::default()),
         runtime_handle: tokio::runtime::Handle::current(),
         skills_service,
-        agents_md_manager: Arc::new(AgentsMdManager::new(/*user_instructions*/ None)),
+        agents_md_manager: Arc::new(AgentsMdManager::new(SessionInstructions::default())),
         plugins_manager,
         mcp_manager,
         extensions: Arc::new(codex_extension_api::ExtensionRegistryBuilder::new().build()),
@@ -8883,6 +8252,7 @@ where
         ),
         executed_tool_calls: executed_tool_calls.clone(),
         code_mode_service: crate::tools::code_mode::CodeModeService::new(
+            thread_id,
             Arc::new(codex_code_mode::DisabledCodeModeSessionProvider),
             &config.code_mode,
             executed_tool_calls,
@@ -8906,6 +8276,7 @@ where
             codex_sandboxing::WindowsSandboxProxySettingsMode::Reconcile,
         multi_agent_version: OnceLock::from(config.multi_agent_version_from_features()),
         mcp_refresh: McpRefresh::new(),
+        mcp_tool_approval_metadata: Default::default(),
         mcp_elicitation_reviewer_handle: OnceLock::new(),
         mcp_elicitation_lifecycle_handle: OnceLock::new(),
         mcp_prewarm_tx: async_channel::bounded(1).0,
@@ -9870,7 +9241,8 @@ async fn record_context_updates_use_environment_permission_profile_and_workspace
 
 #[tokio::test]
 async fn record_context_updates_emits_environment_item_for_time_changes() {
-    let (session, previous_context) = make_session_and_context().await;
+    let (session, mut previous_context) = make_session_and_context().await;
+    previous_context.timezone = Some("UTC".to_string());
     let previous_context = Arc::new(previous_context);
     let mut current_context = previous_context
         .with_model(
@@ -10758,9 +10130,7 @@ async fn build_initial_context_uses_retained_step_after_model_change() {
             CodexAuth::from_api_key("Test API Key"),
             Vec::new(),
             |config| {
-                config.features.enable(Feature::Personality).unwrap();
                 config.features.enable(Feature::TokenBudget).unwrap();
-                config.personality = Some(Personality::Friendly);
             },
         )
         .await;
@@ -10781,12 +10151,8 @@ async fn build_initial_context_uses_retained_step_after_model_change() {
         model_info.context_window = None;
         model_info.max_context_window = None;
         let messages = model_info.model_messages.as_mut().unwrap();
-        messages.instructions_template = Some("A instructions: {{ personality }}".to_string());
-        messages.instructions_variables = Some(ModelInstructionsVariables {
-            personality_default: Some("default".to_string()),
-            personality_friendly: Some("friendly".to_string()),
-            personality_pragmatic: Some("pragmatic".to_string()),
-        });
+        messages.instructions_template = Some("A instructions".to_string());
+        messages.instructions_variables = None;
     });
     session
         .set_previous_turn_settings(Some(PreviousTurnSettings {
@@ -10809,7 +10175,6 @@ async fn build_initial_context_uses_retained_step_after_model_change() {
 
     let mut selected_b = step_a.settings.selected().clone();
     selected_b.collaboration_mode.settings.model = "model-b".to_string();
-    selected_b.personality = Some(Personality::Pragmatic);
     let mut model_b = step_a.settings.model_info.as_ref().clone();
     model_b.slug = "model-b".to_string();
     model_b.context_window = Some(128_000);
@@ -10818,7 +10183,7 @@ async fn build_initial_context_uses_retained_step_after_model_change() {
         .model_messages
         .as_mut()
         .unwrap()
-        .instructions_template = Some("B instructions: {{ personality }}".to_string());
+        .instructions_template = Some("B instructions".to_string());
     turn_context
         .current_settings
         .store(Arc::new(ResolvedStepSettings::new(
@@ -10846,9 +10211,9 @@ async fn build_initial_context_uses_retained_step_after_model_change() {
         .collect::<Vec<_>>();
     let a_text = developer_input_texts(&initial_a).join("\n");
     let b_text = developer_input_texts(&initial_b).join("\n");
-    assert!(a_text.contains("A instructions: friendly"));
+    assert!(a_text.contains("A instructions"));
     assert!(!a_text.contains("<context_window>"));
-    assert!(b_text.contains("B instructions: pragmatic"));
+    assert!(b_text.contains("B instructions"));
     assert!(!b_text.contains("A instructions:"));
     assert!(!a_text.contains("turn context extension enabled"));
     assert!(b_text.contains("turn context extension enabled"));
@@ -11234,12 +10599,12 @@ impl SessionTask for GuardianDeniedApprovalTask {
     async fn run(
         self: Arc<Self>,
         session: Arc<Session>,
-        ctx: Arc<TurnContext>,
+        _ctx: Arc<TurnContext>,
         _input: Vec<TurnInput>,
         cancellation_token: CancellationToken,
     ) -> SessionTaskResult {
         for _ in 0..3 {
-            crate::guardian::record_guardian_denial_for_test(&session, &ctx, &ctx.sub_id).await;
+            crate::guardian::record_guardian_denial_for_test(&session).await;
         }
 
         cancellation_token.cancelled().await;
@@ -11610,8 +10975,6 @@ async fn guardian_helper_review_interrupts_after_three_consecutive_denials() {
     .await;
 
     let session_for_review = Arc::clone(&sess);
-    let turn_for_review = Arc::clone(&tc);
-    let turn_id = tc.sub_id.clone();
     let review_thread = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -11619,12 +10982,7 @@ async fn guardian_helper_review_interrupts_after_three_consecutive_denials() {
             .expect("helper review runtime");
         runtime.block_on(async move {
             for _ in 0..3 {
-                crate::guardian::record_guardian_denial_for_test(
-                    &session_for_review,
-                    &turn_for_review,
-                    &turn_id,
-                )
-                .await;
+                crate::guardian::record_guardian_denial_for_test(&session_for_review).await;
             }
         });
     });
@@ -12579,36 +11937,9 @@ async fn sample_rollout(
     let mut rollout_items = Vec::new();
     let mut live_history = ContextManager::new();
 
-    // Use the same turn_context source as record_initial_history so model_info (and thus
-    // personality_spec) matches reconstruction.
+    // Use the same turn_context source as record_initial_history so model_info matches reconstruction.
     let reconstruction_turn = session.new_default_turn().await;
-    let mut initial_context = build_initial_context(session, &reconstruction_turn).await;
-    // Ensure personality_spec is present when Personality is enabled, so expected matches
-    // what reconstruction produces (build_initial_context may omit it when baked into model).
-    if !initial_context.iter().any(|m| {
-        matches!(m, ResponseItem::Message { role, content, .. }
-        if role == "developer"
-            && content.iter().any(|c| {
-                matches!(c, ContentItem::InputText { text } if text.contains("<personality_spec>"))
-            }))
-    }) && let Some(p) = reconstruction_turn.personality()
-        && session.features.enabled(Feature::Personality)
-        && let Some(personality_message) = reconstruction_turn
-            .model_info()
-            .model_messages
-            .as_ref()
-            .and_then(|m| m.get_personality_message(Some(p)).filter(|s| !s.is_empty()))
-    {
-        let msg = crate::context::ContextualUserFragment::into(
-            crate::context::PersonalitySpecInstructions::new(personality_message),
-        );
-        let insert_at = initial_context
-            .iter()
-            .position(|m| matches!(m, ResponseItem::Message { role, .. } if role == "developer"))
-            .map(|i| i + 1)
-            .unwrap_or(0);
-        initial_context.insert(insert_at, msg);
-    }
+    let initial_context = build_initial_context(session, &reconstruction_turn).await;
     for item in &initial_context {
         rollout_items.push(RolloutItem::ResponseItem(item.clone().into()));
     }

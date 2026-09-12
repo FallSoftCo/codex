@@ -3,6 +3,7 @@
 //! Removing the current root leaves an unattached dashboard, even when it is empty.
 
 use super::App;
+use super::agents_overview_view::AgentsOverviewFocus;
 use crate::app_event::AgentsOverviewAction;
 use crate::app_event::AppEvent;
 use crate::app_server_session::AppServerSession;
@@ -153,7 +154,7 @@ impl App {
                         tx.send(AppEvent::RunAgentsOverviewAction { thread_id, action })
                     })],
                     dismiss_on_select: true,
-                    require_explicit_confirmation: true,
+                    require_explicit_confirmation: action == AgentsOverviewAction::Delete,
                     ..Default::default()
                 },
             ],
@@ -168,6 +169,9 @@ impl App {
         thread_id: ThreadId,
         action: AgentsOverviewAction,
     ) -> color_eyre::Result<()> {
+        if self.windows_sandbox_blocks_thread_switch() {
+            return Ok(());
+        }
         // The overview may lack intermediate ancestors, or even the primary's metadata.
         let mut removes_primary = self.primary_thread_id == Some(thread_id);
         let mut attempted = false;
@@ -262,6 +266,7 @@ impl App {
                 self.agents_overview.threads.remove(&removed_id);
                 self.agents_overview.activity.remove(&removed_id);
                 self.agents_overview.last_messages.remove(&removed_id);
+                self.agents_overview.usage.remove(&removed_id);
                 self.agents_overview.refresh_thread_ids.remove(&removed_id);
                 self.agents_overview.input_states.remove(&removed_id);
                 self.agents_overview.dispatched_requests.remove(&removed_id);
@@ -279,7 +284,7 @@ impl App {
                 /*initial_user_message*/ None,
             );
             self.replace_chat_widget(ChatWidget::new_with_app_event(init));
-            self.open_agents_overview(app_server);
+            self.open_agents_overview(app_server, AgentsOverviewFocus::List);
         } else {
             self.repaint_agents_overview();
             if attempted {

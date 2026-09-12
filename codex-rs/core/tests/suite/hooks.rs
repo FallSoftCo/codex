@@ -1955,6 +1955,13 @@ async fn async_hook_finishing_while_idle_waits_for_the_next_turn(
         "an async hook result from the previous turn must not start a model turn"
     );
 
+    // Keep the next prompt's hook pending so only the previous turn's result can steer it.
+    fs::remove_file(
+        test.codex_home_path()
+            .join("async_user_prompt_submit_release"),
+    )
+    .context("gate the next user prompt hook")?;
+
     let next_prompt = "observe the buffered async context";
     let next_turn = if automatic_continuation {
         TurnInputRequest::new(TurnInput::ResponseItem(responses::user_message_item(
