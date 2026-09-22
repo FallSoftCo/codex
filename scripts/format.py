@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+RUSTFMT_COMMAND_BYTE_LIMIT = 24_000
 
 
 @dataclass(frozen=True)
@@ -41,11 +42,67 @@ def just_formatter_group(*, check: bool) -> FormatterGroup:
 
 
 def rust_formatter_group(*, check: bool) -> FormatterGroup:
-    args = ["cargo", "fmt", "--", "--config", "imports_granularity=Item"]
+    rust_root = REPO_ROOT / "codex-rs"
+    repository_files = subprocess.check_output(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "*.rs",
+        ],
+        cwd=REPO_ROOT,
+    ).split(b"\0")
+    rust_files = sorted(
+        {
+            os.path.relpath(REPO_ROOT / os.fsdecode(path), rust_root)
+            for path in repository_files
+            if path and (REPO_ROOT / os.fsdecode(path)).is_file()
+        }
+    )
+    args = [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--config-path",
+        str(rust_root / "rustfmt.toml"),
+        "--config",
+        "imports_granularity=Item,skip_children=true",
+    ]
     if check:
         args.append("--check")
-    command = Command(tuple(args), REPO_ROOT / "codex-rs")
-    return FormatterGroup("Rust", (command,))
+    args.append("--")
+    commands: list[Command] = []
+    batch: list[str] = []
+    for path in rust_files:
+        command_line = subprocess.list2cmdline([*args, *batch, path])
+        # Bound both Windows UTF-16 command lines and POSIX argument bytes.
+        if (
+            max(
+                len(command_line.encode("utf-16-le", errors="surrogatepass")),
+                len(os.fsencode(command_line)),
+            )
+            > RUSTFMT_COMMAND_BYTE_LIMIT
+        ):
+            if batch:
+                commands.append(Command(tuple([*args, *batch]), rust_root))
+                batch = []
+            command_line = subprocess.list2cmdline([*args, path])
+            if (
+                max(
+                    len(command_line.encode("utf-16-le", errors="surrogatepass")),
+                    len(os.fsencode(command_line)),
+                )
+                > RUSTFMT_COMMAND_BYTE_LIMIT
+            ):
+                raise ValueError(f"Rust formatter path exceeds command limit: {path}")
+        batch.append(path)
+    if batch:
+        commands.append(Command(tuple([*args, *batch]), rust_root))
+    return FormatterGroup("Rust", tuple(commands))
 
 
 def buildifier_formatter_group(*, check: bool) -> FormatterGroup:

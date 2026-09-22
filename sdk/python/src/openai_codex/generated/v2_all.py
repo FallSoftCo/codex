@@ -1830,6 +1830,27 @@ class FuzzyFileSearchSessionUpdatedNotification(BaseModel):
     session_id: Annotated[str, Field(alias="sessionId")]
 
 
+class GatewayOAuthCancelResponse(BaseModel):
+    pass
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+class GatewayOAuthLoginResponse(BaseModel):
+    pass
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+class GatewayOAuthStatus(Enum):
+    not_ready = "notReady"
+    started = "started"
+    succeeded = "succeeded"
+    failed = "failed"
+
+
 class GetAccountParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -2094,6 +2115,13 @@ class InitializeCapabilities(BaseModel):
             description="Opt into receiving experimental API methods and fields.",
         ),
     ] = False
+    explicit_gateway_oauth: Annotated[
+        bool | None,
+        Field(
+            alias="explicitGatewayOauth",
+            description="Use explicit gateway OAuth login instead of automatic browser authorization. Applies to this app-server's gateway runtime; later connections cannot undo it.",
+        ),
+    ] = None
     extensions: Annotated[
         dict[str, Any] | None,
         Field(description="MCP extension settings declared by the app-server client."),
@@ -2461,6 +2489,21 @@ class MarketplaceUpgradeResponse(BaseModel):
     upgraded_roots: Annotated[list[AbsolutePathBuf], Field(alias="upgradedRoots")]
 
 
+class McpAppDisplayMode(Enum):
+    inline = "inline"
+    fullscreen = "fullscreen"
+
+
+class McpAppUi(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    preferred_model_display_mode: Annotated[
+        McpAppDisplayMode, Field(alias="preferredModelDisplayMode")
+    ]
+    resource_uri: Annotated[str, Field(alias="resourceUri")]
+
+
 class McpAuthStatus(Enum):
     unknown = "unknown"
     unsupported = "unsupported"
@@ -2469,21 +2512,18 @@ class McpAuthStatus(Enum):
     o_auth = "oAuth"
 
 
-class McpResourceReadParams(BaseModel):
+class McpResourceReadTarget(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
-    connector_id: Annotated[str | None, Field(alias="connectorId")] = None
-    origin_call_id: Annotated[
+    connector_id: Annotated[str, Field(alias="connectorId")]
+    link_id: Annotated[
         str | None,
         Field(
-            alias="originCallId",
-            description="Originating MCP tool call used to select the resource's app.",
+            alias="linkId",
+            description="Null explicitly requests no-auth access, subject to the app's resource policy.",
         ),
-    ] = None
-    server: str
-    thread_id: Annotated[str | None, Field(alias="threadId")] = None
-    uri: str
+    ]
 
 
 class McpServerConnectionStatus(Enum):
@@ -3103,6 +3143,16 @@ class PluginHookSummary(BaseModel):
     key: str
 
 
+class PluginIcon(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    mime_type: Annotated[str | None, Field(alias="mimeType")] = None
+    sizes: list[str] | None = None
+    src: str
+    theme: str | None = None
+
+
 class PluginInstallParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -3255,6 +3305,22 @@ class PluginListParams(BaseModel):
     ] = None
 
 
+class ToolPluginQuickActionTarget(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    arguments: Any | None = None
+    name: str
+    type: Annotated[Literal["tool"], Field(title="ToolPluginQuickActionTargetType")]
+
+
+class PluginQuickActionTarget(RootModel[ToolPluginQuickActionTarget]):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    root: ToolPluginQuickActionTarget
+
+
 class PluginReadParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -3322,10 +3388,28 @@ class PluginReconcileResponse(BaseModel):
     ]
 
 
+class PluginSearchProviderCall(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    field_meta: Annotated[Any, Field(alias="_meta")]
+    arguments: Any
+    name: str
+
+
 class PluginSearchScope(Enum):
     global_ = "global"
     workspace = "workspace"
     personal = "personal"
+
+
+class PluginSettings(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    app_id: Annotated[str, Field(alias="appId")]
+    read_tool_name: Annotated[str, Field(alias="readToolName")]
+    update_tool_name: Annotated[str, Field(alias="updateToolName")]
 
 
 class PluginShareCheckoutParams(BaseModel):
@@ -5303,7 +5387,14 @@ class McpToolCallThreadItem(BaseModel):
         str | None,
         Field(
             alias="mcpAppResourceUri",
-            description="Deprecated: use `appContext.resourceUri` instead.",
+            description="Legacy compatibility field; prefer `mcpAppUi.resourceUri` when available.",
+        ),
+    ] = None
+    mcp_app_ui: Annotated[
+        McpAppUi | None,
+        Field(
+            alias="mcpAppUi",
+            description="Presentation captured from the invoked descriptor; absent in older history.",
         ),
     ] = None
     plugin_id: Annotated[str | None, Field(alias="pluginId")] = None
@@ -5812,7 +5903,12 @@ class ThreadResumeParams(BaseModel):
         str | None, Field(description="Configuration overrides for the resumed thread, if any.")
     ] = None
     model_provider: Annotated[str | None, Field(alias="modelProvider")] = None
-    personality: Personality | None = None
+    personality: Annotated[
+        Personality | None,
+        Field(
+            description="@deprecated `friendly` and `pragmatic` no longer select a style. Changing this does not rewrite the thread's existing instructions."
+        ),
+    ] = None
     sandbox: SandboxMode | None = None
     service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
     thread_id: Annotated[str, Field(alias="threadId")]
@@ -6152,6 +6248,12 @@ class Tool(BaseModel):
     title: str | None = None
 
 
+class ToolExposureSurface(Enum):
+    code_mode = "code_mode"
+    deferred = "deferred"
+    direct = "direct"
+
+
 class TurnDiffUpdatedNotification(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -6249,6 +6351,15 @@ class ImageUserInput(BaseModel):
     url: str
 
 
+class FileIdUserInput(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    detail: ImageDetail | None = None
+    type: Annotated[Literal["image"], Field(title="ImageUserInputType")]
+    file_id: Annotated[str, Field(alias="fileId")]
+
+
 class LocalImageUserInput(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -6296,6 +6407,7 @@ class UserInput(
     RootModel[
         TextUserInput
         | ImageUserInput
+        | FileIdUserInput
         | LocalImageUserInput
         | AudioUserInput
         | LocalAudioUserInput
@@ -6309,6 +6421,7 @@ class UserInput(
     root: (
         TextUserInput
         | ImageUserInput
+        | FileIdUserInput
         | LocalImageUserInput
         | AudioUserInput
         | LocalAudioUserInput
@@ -6421,6 +6534,12 @@ class WebSearchToolConfig(BaseModel):
     allowed_domains: list[str] | None = None
     context_size: WebSearchContextSize | None = None
     location: WebSearchLocation | None = None
+
+
+class WindowsSandboxImplementation(Enum):
+    elevated = "elevated"
+    unelevated = "unelevated"
+    mxc = "mxc"
 
 
 class WindowsSandboxReadiness(Enum):
@@ -6542,6 +6661,10 @@ class AppConfig(BaseModel):
     enabled: bool | None = True
     links: Annotated[
         AppLinksConfig | None, Field(description="Per-account approval settings keyed by link ID.")
+    ] = None
+    omit_tools_from: Annotated[
+        list[ToolExposureSurface] | None,
+        Field(description="Additional model-facing surfaces omitted for this connector's tools."),
     ] = None
     open_world_enabled: bool | None = None
     tools: AppToolsConfig | None = None
@@ -7195,6 +7318,41 @@ class ModelListRequest(BaseModel):
     params: ModelListParams
 
 
+class AccountGatewayOAuthReadRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[
+        Literal["account/gatewayOAuth/read"], Field(title="Account/gatewayOAuth/readRequestMethod")
+    ]
+    params: None = None
+
+
+class AccountGatewayOAuthLoginRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[
+        Literal["account/gatewayOAuth/login"],
+        Field(title="Account/gatewayOAuth/loginRequestMethod"),
+    ]
+    params: None = None
+
+
+class AccountGatewayOAuthCancelRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[
+        Literal["account/gatewayOAuth/cancel"],
+        Field(title="Account/gatewayOAuth/cancelRequestMethod"),
+    ]
+    params: None = None
+
+
 class ModelProviderCapabilitiesReadRequest(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -7261,17 +7419,6 @@ class ConfigMcpServerReloadRequest(BaseModel):
         Literal["config/mcpServer/reload"], Field(title="Config/mcpServer/reloadRequestMethod")
     ]
     params: None = None
-
-
-class McpServerResourceReadRequest(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-    id: RequestId
-    method: Annotated[
-        Literal["mcpServer/resource/read"], Field(title="McpServer/resource/readRequestMethod")
-    ]
-    params: McpResourceReadParams
 
 
 class McpServerToolCallRequest(BaseModel):
@@ -7788,15 +7935,34 @@ class InputImageContentItem(BaseModel):
     image_url: str
 
 
+class FileIdContentItem(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    detail: ImageDetail | None = None
+    type: Annotated[Literal["input_image"], Field(title="InputImageContentItemType")]
+    file_id: str
+
+
 class ContentItem(
     RootModel[
-        InputTextContentItem | InputImageContentItem | InputAudioContentItem | OutputTextContentItem
+        InputTextContentItem
+        | InputImageContentItem
+        | FileIdContentItem
+        | InputAudioContentItem
+        | OutputTextContentItem
     ]
 ):
     model_config = ConfigDict(
         populate_by_name=True,
     )
-    root: InputTextContentItem | InputImageContentItem | InputAudioContentItem | OutputTextContentItem
+    root: (
+        InputTextContentItem
+        | InputImageContentItem
+        | FileIdContentItem
+        | InputAudioContentItem
+        | OutputTextContentItem
+    )
 
 
 class ExperimentalFeature(BaseModel):
@@ -7984,10 +8150,22 @@ class InputImageFunctionCallOutputContentItem(BaseModel):
     image_url: str
 
 
+class FileIdFunctionCallOutputContentItem(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    detail: ImageDetail | None = None
+    type: Annotated[
+        Literal["input_image"], Field(title="InputImageFunctionCallOutputContentItemType")
+    ]
+    file_id: str
+
+
 class FunctionCallOutputContentItem(
     RootModel[
         InputTextFunctionCallOutputContentItem
         | InputImageFunctionCallOutputContentItem
+        | FileIdFunctionCallOutputContentItem
         | InputAudioFunctionCallOutputContentItem
         | EncryptedContentFunctionCallOutputContentItem
     ]
@@ -7998,12 +8176,48 @@ class FunctionCallOutputContentItem(
     root: Annotated[
         InputTextFunctionCallOutputContentItem
         | InputImageFunctionCallOutputContentItem
+        | FileIdFunctionCallOutputContentItem
         | InputAudioFunctionCallOutputContentItem
         | EncryptedContentFunctionCallOutputContentItem,
         Field(
             description="Responses API compatible content items that can be returned by a tool call. This is a subset of ContentItem with the types we support as function call outputs."
         ),
     ]
+
+
+class GatewayOAuthChangedNotification(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    auth_url: Annotated[
+        str | None,
+        Field(
+            alias="authUrl",
+            description="Authorization handoff, sent only to the connection that started login.",
+        ),
+    ] = None
+    error: str | None = None
+    provider_id: Annotated[str, Field(alias="providerId")]
+    status: GatewayOAuthStatus
+
+
+class GatewayOAuthReadResponse(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    error: str | None = None
+    provider_id: Annotated[str, Field(alias="providerId")]
+    provider_name: Annotated[str, Field(alias="providerName")]
+    required: Annotated[
+        bool,
+        Field(
+            description="Whether the selected provider uses gateway OAuth, even when already signed in."
+        ),
+    ]
+    status: Annotated[
+        GatewayOAuthStatus | None,
+        Field(description="Null when the effective provider does not use gateway OAuth."),
+    ] = None
 
 
 class GetAccountResponse(BaseModel):
@@ -8308,6 +8522,27 @@ class LoginAccountParams(
     ]
 
 
+class McpResourceReadParams(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    connector_id: Annotated[str | None, Field(alias="connectorId")] = None
+    origin_call_id: Annotated[
+        str | None,
+        Field(
+            alias="originCallId",
+            description="Originating MCP tool call used to select the resource's app.",
+        ),
+    ] = None
+    server: str
+    target: Annotated[
+        McpResourceReadTarget | None,
+        Field(description="Explicit hosted app/account. Omit to retain legacy resource discovery."),
+    ] = None
+    thread_id: Annotated[str | None, Field(alias="threadId")] = None
+    uri: str
+
+
 class McpResourceReadResponse(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -8327,6 +8562,13 @@ class McpServerStatus(BaseModel):
         populate_by_name=True,
     )
     auth_status: Annotated[McpAuthStatus, Field(alias="authStatus")]
+    http_origin: Annotated[
+        str | None,
+        Field(
+            alias="httpOrigin",
+            description="HTTP origin of the effective configured endpoint, including plugin servers. Excludes credentials, path, query, and fragment; null for non-HTTP transports.",
+        ),
+    ] = None
     name: str
     plugin_id: Annotated[str | None, Field(alias="pluginId")] = None
     resource_templates: Annotated[list[ResourceTemplate], Field(alias="resourceTemplates")]
@@ -8450,7 +8692,13 @@ class Model(BaseModel):
     supported_reasoning_efforts: Annotated[
         list[ReasoningEffortOption], Field(alias="supportedReasoningEfforts")
     ]
-    supports_personality: Annotated[bool | None, Field(alias="supportsPersonality")] = False
+    supports_personality: Annotated[
+        bool | None,
+        Field(
+            alias="supportsPersonality",
+            description="@deprecated Always false; models no longer support personality selection.",
+        ),
+    ] = False
     upgrade: str | None = None
     upgrade_info: Annotated[ModelUpgradeInfo | None, Field(alias="upgradeInfo")] = None
 
@@ -8501,6 +8749,64 @@ class PermissionProfileListResponse(BaseModel):
             description="Opaque cursor to pass to the next call to continue after the last item. If None, there are no more items to return.",
         ),
     ] = None
+
+
+class SettingsPluginEntrypoint(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    app_id: Annotated[str, Field(alias="appId")]
+    icons: list[PluginIcon]
+    resource_uri: Annotated[str, Field(alias="resourceUri")]
+    search_terms: Annotated[list[str] | None, Field(alias="searchTerms")] = []
+    title: str
+    tool_name: Annotated[str, Field(alias="toolName")]
+    type: Annotated[Literal["settings"], Field(title="SettingsPluginEntrypointType")]
+
+
+class ThreadPluginEntrypoint(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    app_id: Annotated[str, Field(alias="appId")]
+    icons: list[PluginIcon]
+    resource_uri: Annotated[str, Field(alias="resourceUri")]
+    title: str
+    tool_name: Annotated[str, Field(alias="toolName")]
+    type: Annotated[Literal["thread"], Field(title="ThreadPluginEntrypointType")]
+
+
+class FilePluginEntrypoint(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    app_id: Annotated[str, Field(alias="appId")]
+    extensions: list[str]
+    icons: list[PluginIcon]
+    resource_uri: Annotated[str, Field(alias="resourceUri")]
+    title: str
+    tool_name: Annotated[str, Field(alias="toolName")]
+    type: Annotated[Literal["file"], Field(title="FilePluginEntrypointType")]
+
+
+class PluginQuickAction(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    icons: list[PluginIcon]
+    target: PluginQuickActionTarget
+    title: str
+
+
+class PluginSearchProvider(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    app_id: Annotated[str, Field(alias="appId")]
+    call: PluginSearchProviderCall | None = None
+    link_id: Annotated[str, Field(alias="linkId")]
+    title: str
+    tool_name: Annotated[str, Field(alias="toolName")]
 
 
 class PluginSharePrincipal(BaseModel):
@@ -9106,6 +9412,24 @@ class AccountUpdatedServerNotification(BaseModel):
     ] = None
     method: Annotated[Literal["account/updated"], Field(title="Account/updatedNotificationMethod")]
     params: AccountUpdatedNotification
+
+
+class AccountGatewayOAuthChangedServerNotification(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    emitted_at_ms: Annotated[
+        int | None,
+        Field(
+            alias="emittedAtMs",
+            description="Unix timestamp (in milliseconds) when app-server emitted this notification.",
+        ),
+    ] = None
+    method: Annotated[
+        Literal["account/gatewayOAuth/changed"],
+        Field(title="Account/gatewayOAuth/changedNotificationMethod"),
+    ]
+    params: GatewayOAuthChangedNotification
 
 
 class TurnModerationMetadataServerNotification(BaseModel):
@@ -9900,7 +10224,12 @@ class ThreadSettings(BaseModel):
     effort: ReasoningEffort | None = None
     model: str
     model_provider: Annotated[str, Field(alias="modelProvider")]
-    personality: Personality | None = None
+    personality: Annotated[
+        Personality | None,
+        Field(
+            description="@deprecated Reports the saved setting; `friendly` and `pragmatic` no longer select a style."
+        ),
+    ] = None
     sandbox_policy: Annotated[SandboxPolicy, Field(alias="sandboxPolicy")]
     service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
     summary: ReasoningSummary | None = None
@@ -9933,7 +10262,10 @@ class ThreadStartParams(BaseModel):
     ephemeral: bool | None = None
     model: str | None = None
     model_provider: Annotated[str | None, Field(alias="modelProvider")] = None
-    personality: Personality | None = None
+    personality: Annotated[
+        Personality | None,
+        Field(description="@deprecated `friendly` and `pragmatic` no longer select a style."),
+    ] = None
     sandbox: SandboxMode | None = None
     service_name: Annotated[str | None, Field(alias="serviceName")] = None
     service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
@@ -10250,6 +10582,17 @@ class McpServerStatusListRequest(BaseModel):
     params: ListMcpServerStatusParams
 
 
+class McpServerResourceReadRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[
+        Literal["mcpServer/resource/read"], Field(title="McpServer/resource/readRequestMethod")
+    ]
+    params: McpResourceReadParams
+
+
 class AccountLoginStartRequest(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -10353,7 +10696,7 @@ class ConfigBatchWriteParams(BaseModel):
         bool | None,
         Field(
             alias="reloadUserConfig",
-            description="When true, hot-reload updated runtime settings into loaded threads after writing. Session-static model, reasoning-effort, Plan-mode reasoning-effort, service-tier, and personality defaults are not reloaded.",
+            description="When true, hot-reload updated runtime settings into loaded threads after writing. Session-static model, reasoning-effort, Plan-mode reasoning-effort, and service-tier defaults are not reloaded. The deprecated personality setting is also not reloaded.",
         ),
     ] = None
 
@@ -10597,6 +10940,56 @@ class ModelsRequirements(BaseModel):
     new_thread: Annotated[NewThreadModelDefaults | None, Field(alias="newThread")] = None
 
 
+class GlobalPluginEntrypoint(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    app_id: Annotated[str, Field(alias="appId")]
+    icons: list[PluginIcon]
+    quick_action: Annotated[PluginQuickAction | None, Field(alias="quickAction")] = None
+    resource_uri: Annotated[str, Field(alias="resourceUri")]
+    title: str
+    tool_name: Annotated[str, Field(alias="toolName")]
+    type: Annotated[Literal["global"], Field(title="GlobalPluginEntrypointType")]
+
+
+class PluginEntrypoint(
+    RootModel[
+        GlobalPluginEntrypoint
+        | SettingsPluginEntrypoint
+        | ThreadPluginEntrypoint
+        | FilePluginEntrypoint
+    ]
+):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    root: (
+        GlobalPluginEntrypoint
+        | SettingsPluginEntrypoint
+        | ThreadPluginEntrypoint
+        | FilePluginEntrypoint
+    )
+
+
+class PluginExtensions(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    entrypoints: list[PluginEntrypoint] | None = None
+    file_handlers: Annotated[list[PluginEntrypoint] | None, Field(alias="fileHandlers")] = []
+    search_mention_providers: Annotated[
+        list[PluginSearchProvider] | None, Field(alias="searchMentionProviders")
+    ] = []
+    settings: list[PluginSettings] | None = []
+    settings_entrypoints: Annotated[
+        list[PluginEntrypoint] | None, Field(alias="settingsEntrypoints")
+    ] = []
+    thread_entrypoints: Annotated[
+        list[PluginEntrypoint] | None, Field(alias="threadEntrypoints")
+    ] = []
+
+
 class PluginShareContext(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -10653,6 +11046,7 @@ class PluginSummary(BaseModel):
         ),
     ] = None
     enabled: bool
+    extensions: PluginExtensions | None = None
     id: str
     install_policy: Annotated[PluginInstallPolicy, Field(alias="installPolicy")]
     install_policy_source: Annotated[
@@ -11094,7 +11488,21 @@ class ThreadItemEntry(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
+    completed_at_ms: Annotated[
+        int | None,
+        Field(
+            alias="completedAtMs",
+            description="Unix timestamp (milliseconds) when the item completed, if recorded by the producer.",
+        ),
+    ] = None
     item: ThreadItem
+    started_at_ms: Annotated[
+        int | None,
+        Field(
+            alias="startedAtMs",
+            description="Unix timestamp (milliseconds) when the item started, if recorded by the producer.",
+        ),
+    ] = None
     turn_id: Annotated[str, Field(alias="turnId", description="Turn containing this item.")]
 
 
@@ -11312,7 +11720,8 @@ class ConfigRequirements(BaseModel):
         list[WebSearchMode] | None, Field(alias="allowedWebSearchModes")
     ] = None
     allowed_windows_sandbox_implementations: Annotated[
-        list[WindowsSandboxSetupMode] | None, Field(alias="allowedWindowsSandboxImplementations")
+        list[WindowsSandboxImplementation] | None,
+        Field(alias="allowedWindowsSandboxImplementations"),
     ] = None
     auto_review: Annotated[AutoReviewRequirements | None, Field(alias="autoReview")] = None
     browser_use: Annotated[BrowserUseRequirements | None, Field(alias="browserUse")] = None
@@ -11351,9 +11760,6 @@ class ConfigRequirements(BaseModel):
     ] = None
     models: ModelsRequirements | None = None
     sqlite_home: Annotated[str | None, Field(alias="sqliteHome")] = None
-    windows_sandbox_private_desktop: Annotated[
-        bool | None, Field(alias="windowsSandboxPrivateDesktop")
-    ] = None
 
 
 class ConfigRequirementsReadResponse(BaseModel):
@@ -11473,6 +11879,13 @@ class PluginDetail(BaseModel):
     marketplace_name: Annotated[str, Field(alias="marketplaceName")]
     marketplace_path: Annotated[AbsolutePathBuf | None, Field(alias="marketplacePath")] = None
     mcp_servers: Annotated[list[str], Field(alias="mcpServers")]
+    onboarding_skill: Annotated[
+        SkillSummary | None,
+        Field(
+            alias="onboardingSkill",
+            description="The declared onboarding skill, when the plugin and visible skill are enabled.",
+        ),
+    ] = None
     scheduled_tasks: Annotated[list[ScheduledTaskSummary] | None, Field(alias="scheduledTasks")] = (
         None
     )
@@ -12069,7 +12482,9 @@ class TurnStartParams(BaseModel):
     ] = None
     personality: Annotated[
         Personality | None,
-        Field(description="Override the personality for this turn and subsequent turns."),
+        Field(
+            description="@deprecated `friendly` and `pragmatic` no longer select a style. Changing this does not rewrite the thread's existing instructions."
+        ),
     ] = None
     sandbox_policy: Annotated[
         SandboxPolicy | None,
@@ -12209,6 +12624,9 @@ class ClientRequest(
         | TurnInterruptRequest
         | ReviewStartRequest
         | ModelListRequest
+        | AccountGatewayOAuthReadRequest
+        | AccountGatewayOAuthLoginRequest
+        | AccountGatewayOAuthCancelRequest
         | ModelProviderCapabilitiesReadRequest
         | ExperimentalFeatureListRequest
         | PermissionProfileListRequest
@@ -12316,6 +12734,9 @@ class ClientRequest(
         | TurnInterruptRequest
         | ReviewStartRequest
         | ModelListRequest
+        | AccountGatewayOAuthReadRequest
+        | AccountGatewayOAuthLoginRequest
+        | AccountGatewayOAuthCancelRequest
         | ModelProviderCapabilitiesReadRequest
         | ExperimentalFeatureListRequest
         | PermissionProfileListRequest
@@ -12573,6 +12994,7 @@ class ServerNotification(
         | McpServerStartupStatusUpdatedServerNotification
         | McpServerEventStreamNotificationServerNotification
         | AccountUpdatedServerNotification
+        | AccountGatewayOAuthChangedServerNotification
         | AccountRateLimitsUpdatedServerNotification
         | AppListUpdatedServerNotification
         | RemoteControlStatusChangedServerNotification
@@ -12661,6 +13083,7 @@ class ServerNotification(
         | McpServerStartupStatusUpdatedServerNotification
         | McpServerEventStreamNotificationServerNotification
         | AccountUpdatedServerNotification
+        | AccountGatewayOAuthChangedServerNotification
         | AccountRateLimitsUpdatedServerNotification
         | AppListUpdatedServerNotification
         | RemoteControlStatusChangedServerNotification

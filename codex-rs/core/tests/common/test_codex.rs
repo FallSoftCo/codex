@@ -13,6 +13,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
+use codex_analytics::AnalyticsEventsClient;
 use codex_attachment_store::AttachmentStore;
 use codex_config::CloudConfigBundleLoader;
 use codex_core::CodexThread;
@@ -329,6 +330,7 @@ pub fn turn_permission_fields(
 pub struct TestCodexBuilder {
     config_mutators: Vec<Box<ConfigMutator>>,
     auth: CodexAuth,
+    analytics_events_client: Option<AnalyticsEventsClient>,
     pre_build_hooks: Vec<Box<PreBuildHook>>,
     workspace_setups: Vec<Box<WorkspaceSetup>>,
     home: Option<Arc<TempDir>>,
@@ -362,6 +364,14 @@ impl TestCodexBuilder {
 
     pub fn with_auth(mut self, auth: CodexAuth) -> Self {
         self.auth = auth;
+        self
+    }
+
+    pub fn with_analytics_events_client(
+        mut self,
+        analytics_events_client: AnalyticsEventsClient,
+    ) -> Self {
+        self.analytics_events_client = Some(analytics_events_client);
         self
     }
 
@@ -732,7 +742,12 @@ impl TestCodexBuilder {
             .or_else(|| codex_utils_cargo_bin::cargo_bin("codex-code-mode-host").ok());
         let thread_manager = Arc::new_cyclic(|manager| {
             let mut extensions = self.extensions.to_builder();
-            codex_guardian_v2::install_reviewer(&mut extensions, manager.clone());
+            codex_core::install_agent_message_board(&mut extensions, manager.clone());
+            if config.features.enabled(Feature::GuardianV2) {
+                codex_guardian_v2::install(&mut extensions, auth_manager.clone(), manager.clone());
+            } else {
+                codex_guardian_v2::install_reviewer(&mut extensions, manager.clone());
+            }
             let thread_manager = ThreadManager::new(
                 &config,
                 auth_manager.clone(),
@@ -742,7 +757,7 @@ impl TestCodexBuilder {
                 Arc::clone(&environment_manager),
                 Arc::new(extensions.build()),
                 user_instructions_provider,
-                /*analytics_events_client*/ None,
+                self.analytics_events_client.clone(),
                 Arc::clone(&self.image_store),
                 Arc::clone(&thread_store),
                 codex_core::local_agent_graph_store_from_state_db(state_db.as_ref()),
@@ -1393,6 +1408,7 @@ pub fn test_codex() -> TestCodexBuilder {
                 .expect("test config should allow ShellSnapshot override");
         })],
         auth: CodexAuth::from_api_key("dummy"),
+        analytics_events_client: None,
         pre_build_hooks: vec![],
         workspace_setups: vec![],
         home: None,
@@ -1409,6 +1425,31 @@ pub fn test_codex() -> TestCodexBuilder {
         thread_store: None,
         image_store: codex_core::passthrough_image_store(),
     }
+}
+
+pub fn run_test_with_large_stack<F, Fut>(name: &str, test: F) -> Result<()>
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: Future<Output = Result<()>> + Send + 'static,
+{
+    const WORKER_THREADS: usize = 2;
+    const TEST_STACK_SIZE_BYTES: usize = 8 * 1024 * 1024;
+
+    let handle = std::thread::Builder::new()
+        .name(name.to_string())
+        .stack_size(TEST_STACK_SIZE_BYTES)
+        .spawn(move || -> Result<()> {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(WORKER_THREADS)
+                .thread_stack_size(TEST_STACK_SIZE_BYTES)
+                .enable_all()
+                .build()?;
+            runtime.block_on(Box::pin(test()))
+        })?;
+
+    handle
+        .join()
+        .map_err(|_| anyhow!("{name} thread panicked"))?
 }
 
 #[cfg(test)]

@@ -17,16 +17,22 @@ use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 
+#[test_case::test_case("{{ tenant_policy_config }}"; "tenant_policy")]
+#[test_case::test_case("{{ extra_policy }}"; "extra_policy")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn oversized_local_guardian_policy_denies_without_reviewer_inference() -> Result<()> {
+async fn oversized_local_guardian_policy_denies_without_reviewer_inference(
+    placeholder: &str,
+) -> Result<()> {
     let server = start_mock_server().await;
+    let template = placeholder.repeat(3);
     let test = test_codex()
-        .with_config(|config| {
+        .with_config(move |config| {
             config.model_provider.supports_websockets = false;
             config.permissions.approval_policy = Constrained::allow_any(AskForApproval::OnRequest);
             config.approvals_reviewer = ApprovalsReviewer::User;
-            config.guardian_policy_template = Some("{{ tenant_policy_config }}".repeat(3));
+            config.guardian_policy_template = Some(template);
             config.guardian_policy_config = Some("界".repeat(1_200));
+            config.guardian_extra_policy = Some("界".repeat(1_200));
         })
         .build_with_auto_env(&server)
         .await?;

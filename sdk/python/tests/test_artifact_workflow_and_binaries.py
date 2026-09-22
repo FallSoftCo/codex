@@ -146,6 +146,53 @@ def test_root_fmt_recipes_use_shared_formatter_driver() -> None:
     )
 
 
+@pytest.mark.parametrize("check", [False, True])
+def test_rust_formatter_batches_paths_without_loss(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, check: bool
+) -> None:
+    script = _load_root_format_script_module()
+    paths = ["codex-rs/--file.rs", *[f"codex-rs/source {index:02d} 🦀.rs" for index in range(30)]]
+    for name in paths:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.setattr(script, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(script, "RUSTFMT_COMMAND_BYTE_LIMIT", 1_000)
+    monkeypatch.setattr(
+        script.subprocess,
+        "check_output",
+        lambda args, *, cwd: b"\0".join(os.fsencode(path) for path in reversed(paths)),
+    )
+    group = script.rust_formatter_group(check=check)
+    assert len(group.commands) > 1
+    argument_count = 9 if check else 8
+    assert [path for command in group.commands for path in command.args[argument_count:]] == [
+        Path(path).name for path in paths
+    ]
+    for command in group.commands:
+        assert command.cwd == tmp_path / "codex-rs"
+        assert len(command.args) > argument_count
+        quoted = subprocess.list2cmdline(command.args)
+        assert len(quoted.encode("utf-16-le")) <= 1_000
+        assert len(os.fsencode(quoted)) <= 1_000
+        assert ("--check" in command.args) == check
+        assert command.args[argument_count - 1] == "--"
+    monkeypatch.setattr(script, "RUSTFMT_COMMAND_BYTE_LIMIT", 1)
+    with pytest.raises(ValueError, match="exceeds command limit"):
+        script.rust_formatter_group(check=check)
+
+
+def test_rust_formatter_ignores_missing_files_without_launching_stdin(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    script = _load_root_format_script_module()
+    monkeypatch.setattr(script, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        script.subprocess, "check_output", lambda args, *, cwd: b"codex-rs/deleted.rs\0"
+    )
+    assert script.rust_formatter_group(check=False).commands == ()
+
+
 def test_root_format_driver_covers_all_formatter_groups(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -253,10 +300,10 @@ def test_root_format_driver_covers_all_formatter_groups(
         os.path.join("src", "lib.rs"),
     )
     assert formatters[1].commands == (
-        script.Command(rustfmt_args + rust_files, tmp_path / "codex-rs"),
+        script.Command(rustfmt_args + ("--",) + rust_files, tmp_path / "codex-rs"),
     )
     assert checks[1].commands == (
-        script.Command(rustfmt_args + ("--check",) + rust_files, tmp_path / "codex-rs"),
+        script.Command(rustfmt_args + ("--check", "--") + rust_files, tmp_path / "codex-rs"),
     )
     format_buildifier_args = formatters[2].commands[-1].args
     check_buildifier_args = checks[2].commands[-1].args
@@ -536,13 +583,27 @@ def test_generated_chatgpt_account_email_is_required_nullable() -> None:
         ChatgptAccount.model_validate({"planType": "pro", "type": "chatgpt"})
 
 
+@pytest.mark.parametrize("link_id", ["link_calendar", None])
+def test_generated_resource_read_target_requires_explicit_account(link_id: str | None) -> None:
+    from openai_codex.generated.v2_all import McpResourceReadTarget
+
+    payload = {"connectorId": "calendar", "linkId": link_id}
+    target = McpResourceReadTarget.model_validate(payload)
+    assert target.model_dump(by_alias=True) == payload
+
+    with pytest.raises(ValidationError):
+        McpResourceReadTarget.model_validate({"connectorId": "calendar"})
+
+
 def test_generated_inline_image_class_names_remain_stable() -> None:
     """Keep the existing Python class names when image references expand."""
     from openai_codex.generated.v2_all import (
+        ImageUserInput,
         InputImageContentItem,
         InputImageFunctionCallOutputContentItem,
     )
 
+    assert ImageUserInput.__name__ == "ImageUserInput"
     assert InputImageContentItem.__name__ == "InputImageContentItem"
     assert (
         InputImageFunctionCallOutputContentItem.__name__

@@ -1,7 +1,9 @@
 use super::*;
 use crate::app_event::ConnectorsSnapshot;
+use crate::bottom_pane::RestrictedInputMode;
 use crate::history_cell::ThreadRecapLoadingCell;
 use base64::Engine;
+use codex_app_server_protocol::ImageReference;
 use codex_protocol::models::ManagedFileSystemPermissions;
 use codex_protocol::permissions::FileSystemAccessMode;
 use codex_protocol::permissions::FileSystemPath;
@@ -10,6 +12,34 @@ use codex_protocol::permissions::FileSystemSpecialPath;
 use codex_protocol::permissions::NetworkSandboxPolicy;
 use pretty_assertions::assert_eq;
 use std::collections::VecDeque;
+
+#[tokio::test]
+async fn composer_submission_sends_once_and_requests_latest() {
+    let (mut chat, mut events, mut operations) =
+        make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.apply_external_edit("send once".to_string());
+    while events.try_recv().is_ok() {}
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+    assert_eq!(
+        std::iter::from_fn(|| events.try_recv().ok())
+            .filter(|event| matches!(event, AppEvent::FollowTranscript))
+            .count(),
+        1
+    );
+    let Op::UserTurn { items, .. } = next_submit_op(&mut operations) else {
+        panic!("expected submitted user turn");
+    };
+    assert_eq!(
+        items,
+        vec![UserInput::Text {
+            text: "send once".into(),
+            text_elements: Vec::new(),
+        }]
+    );
+    assert!(operations.try_recv().is_err());
+    assert_eq!(chat.composer_text_with_pending(), "");
+}
 
 fn paste_hidden_shell_payload(chat: &mut ChatWidget) -> String {
     let payload = format!("!echo {}", "x".repeat(1000));
@@ -383,6 +413,7 @@ async fn submission_preserves_text_elements_and_local_images() {
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -492,6 +523,7 @@ async fn submission_includes_configured_active_permission_profile() {
     };
     let expected_active_permission_profile = ActivePermissionProfile::new("custom");
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -547,6 +579,7 @@ async fn submission_omits_active_permission_profile_for_legacy_snapshot() {
         file_system: ManagedFileSystemPermissions::Unrestricted,
     };
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -592,6 +625,7 @@ async fn submission_with_remote_and_local_images_keeps_local_placeholder_numberi
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -640,7 +674,9 @@ async fn submission_with_remote_and_local_images_keeps_local_placeholder_numberi
     assert_eq!(
         items[0],
         UserInput::Image {
-            url: remote_url.clone(),
+            image: ImageReference::Inline {
+                url: remote_url.clone(),
+            },
             detail: None,
         }
     );
@@ -690,6 +726,7 @@ async fn enter_with_only_remote_images_submits_user_turn() {
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -727,7 +764,9 @@ async fn enter_with_only_remote_images_submits_user_turn() {
     assert_eq!(
         items,
         vec![UserInput::Image {
-            url: remote_url.clone(),
+            image: ImageReference::Inline {
+                url: remote_url.clone(),
+            },
             detail: None,
         }]
     );
@@ -757,6 +796,7 @@ async fn shift_enter_with_only_remote_images_does_not_submit_user_turn() {
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -798,6 +838,7 @@ async fn enter_with_only_remote_images_does_not_submit_when_modal_is_active() {
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -839,6 +880,7 @@ async fn enter_with_only_remote_images_does_not_submit_when_input_disabled() {
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -883,6 +925,7 @@ async fn submission_prefers_selected_duplicate_skill_path() {
     let thread_id = ThreadId::new();
     let rollout_file = NamedTempFile::new().unwrap();
     let configured = crate::session_state::ThreadSessionState {
+        windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
         forked_from_id: None,
         fork_parent_title: None,
@@ -1004,7 +1047,7 @@ async fn blocked_image_restore_preserves_mention_bindings() {
     );
     assert_eq!(chat.bottom_pane.take_mention_bindings(), mention_bindings);
 
-    let cells = drain_insert_history(&mut rx);
+    let cells = drain_insert_history_transcript(&mut rx);
     let warning = cells
         .last()
         .map(|lines| lines_to_single_string(lines))
@@ -1779,6 +1822,7 @@ async fn restore_thread_input_state_applies_running_state_policy() {
         submit_pending_steers_after_interrupt: true,
         current_collaboration_mode: chat.current_collaboration_mode.clone(),
         active_collaboration_mask: chat.active_collaboration_mask.clone(),
+        plan_mode_reasoning_effort: chat.config.plan_mode_reasoning_effort.clone(),
         task_running: true,
         agent_turn_running: true,
     };
@@ -1809,11 +1853,17 @@ async fn restore_thread_input_state_applies_running_state_policy() {
     );
 
     chat.pause_for_disconnect();
-    chat.handle_disconnected_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    chat.handle_restricted_key(
+        KeyEvent::new(KeyCode::Up, KeyModifiers::ALT),
+        RestrictedInputMode::Disconnected,
+    );
     assert!(!chat.has_queued_follow_up_messages());
     // Editing the last queued draft must not release the uncertain steer for replay.
     assert!(chat.capture_thread_input_state().unwrap().recovered_queue);
-    chat.handle_disconnected_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    chat.handle_restricted_key(
+        KeyEvent::new(KeyCode::Up, KeyModifiers::ALT),
+        RestrictedInputMode::Disconnected,
+    );
     assert_eq!(
         chat.composer_text_with_pending(),
         "submitted history\nqueued history"
@@ -2157,7 +2207,9 @@ fn user_message_display_from_inputs_matches_flattened_user_message_shape() {
             text_elements: vec![TextElement::new((0..5).into(), /*placeholder*/ None).into()],
         },
         UserInput::Image {
-            url: "https://example.com/remote.png".to_string(),
+            image: ImageReference::Inline {
+                url: "https://example.com/remote.png".to_string(),
+            },
             detail: None,
         },
         UserInput::LocalImage {
@@ -2522,7 +2574,13 @@ async fn image_submission_is_portable_for_new_turns_and_steers() {
                     _ => {}
                 }
             };
-            let [UserInput::Image { url, detail }, UserInput::Text { .. }] = items.as_slice()
+            let [
+                UserInput::Image {
+                    image: ImageReference::Inline { url },
+                    detail,
+                },
+                UserInput::Text { .. },
+            ] = items.as_slice()
             else {
                 panic!("local image must be portable on the wire");
             };
@@ -2796,6 +2854,7 @@ fn image_preparation_keeps_input_responsive_and_preserves_pending_input() {
                     assert_chatwidget_snapshot!(
                         "image_preparation_disconnected",
                         normalize_snapshot_paths(render_bottom_popup(&chat, /*width*/ 80))
+                            .replace('◦', "•")
                     );
                     chat.on_images_prepared(id);
                 } else {

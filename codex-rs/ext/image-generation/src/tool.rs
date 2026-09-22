@@ -217,9 +217,13 @@ impl ImageGenerationTool {
                 return Err(FunctionCallError::RespondToModel(message));
             }
         };
+        // TODO(anp): Migrate image tool path arguments and saved-path events to PathUri so image
+        // operations can use the primary environment even when its paths are foreign to the host.
         let saved_path = save_image_generation_result(
             self.save_root.as_ref(),
-            call.environments.first(),
+            call.environments
+                .iter()
+                .find(|environment| environment.cwd.to_abs_path().is_ok()),
             &self.thread_id,
             &call.call_id,
             &result,
@@ -320,7 +324,8 @@ async fn save_image_generation_result(
         }
         None => {
             let environment = environment?;
-            let output_dir = environment.cwd.join("generated_images");
+            let cwd = environment.cwd.to_abs_path().ok()?;
+            let output_dir = cwd.join("generated_images");
             let save_result: io::Result<AbsolutePathBuf> = async {
                 let result = result.trim();
                 if result.len() > MAX_EXECUTOR_GENERATED_IMAGE_BASE64_BYTES {
@@ -339,8 +344,7 @@ async fn save_image_generation_result(
                     ));
                 }
 
-                let artifact_path =
-                    image_generation_artifact_path(&environment.cwd, session_id, call_id);
+                let artifact_path = image_generation_artifact_path(&cwd, session_id, call_id);
                 let path = output_dir.join(artifact_path.as_path().file_name().unwrap_or_default());
                 let sandbox = Some(&environment.file_system_sandbox_context);
                 if let Some(parent) = path.parent() {
@@ -440,7 +444,10 @@ async fn request_for_call_args(
             }));
         }
         (false, None) => {
-            let Some(environment) = environments.first() else {
+            let Some(environment) = environments
+                .iter()
+                .find(|environment| environment.cwd.to_abs_path().is_ok())
+            else {
                 return Err(FunctionCallError::RespondToModel(
                     "referenced image paths are unavailable in this session".to_string(),
                 ));
@@ -459,14 +466,7 @@ async fn request_for_call_args(
             }
             // Pathless images have no stable reference, so this bounded window may include newer
             // unrelated images. This remains best-effort until the harness provides stable refs.
-            let images = recent_images(history, count);
-            if images.len() != count {
-                return Err(FunctionCallError::RespondToModel(format!(
-                    "requested the last {count} conversation images, but only {} were available",
-                    images.len()
-                )));
-            }
-            images
+            recent_images(history, count)?
         }
         (false, Some(_)) => {
             return Err(FunctionCallError::RespondToModel(
@@ -488,17 +488,19 @@ async fn request_for_call_args(
     }))
 }
 
-fn recent_images(history: &[ResponseItem], count: usize) -> Vec<ImageUrl> {
+fn recent_images(
+    history: &[ResponseItem],
+    count: usize,
+) -> Result<Vec<ImageUrl>, FunctionCallError> {
     let mut images = Vec::with_capacity(count);
     'history: for item in history.iter().rev() {
         let mut image_urls = Vec::new();
         match item {
             ResponseItem::Message { content, .. } => {
                 image_urls.extend(content.iter().rev().filter_map(|item| match item {
-                    ContentItem::InputImage {
-                        image: ImageReference::Inline { image_url },
-                        ..
-                    } => Some(image_url.clone()),
+                    ContentItem::InputImage { image, .. } => {
+                        Some(inline_image_url(image).map(str::to_owned))
+                    }
                     ContentItem::InputText { .. }
                     | ContentItem::InputAudio { .. }
                     | ContentItem::OutputText { .. } => None,
@@ -506,10 +508,12 @@ fn recent_images(history: &[ResponseItem], count: usize) -> Vec<ImageUrl> {
             }
             ResponseItem::FunctionCallOutput { output, .. }
             | ResponseItem::CustomToolCallOutput { output, .. } => {
-                image_urls.extend(output_image_urls(output));
+                image_urls.extend(
+                    output_images(output).map(|image| inline_image_url(image).map(str::to_owned)),
+                );
             }
             ResponseItem::ImageGenerationCall { result, .. } if !result.is_empty() => {
-                image_urls.push(format!("data:image/png;base64,{result}"));
+                image_urls.push(Some(format!("data:image/png;base64,{result}")));
             }
             ResponseItem::AdditionalTools { .. }
             | ResponseItem::Reasoning { .. }
@@ -528,32 +532,53 @@ fn recent_images(history: &[ResponseItem], count: usize) -> Vec<ImageUrl> {
             | ResponseItem::Other => {}
         }
         for image_url in image_urls {
-            images.push(ImageUrl { image_url });
+            images.push(image_url.map(|image_url| ImageUrl { image_url }));
             if images.len() == count {
                 break 'history;
             }
         }
     }
-    images.reverse();
-    images
+    if images.len() != count {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "requested the last {count} conversation images, but only {} were available",
+            images.len()
+        )));
+    }
+    let mut inline_images = Vec::with_capacity(count);
+    for image in images {
+        let Some(image) = image else {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "requested the last {count} conversation images, but that window includes a \
+                 file-backed image that cannot be used for editing"
+            )));
+        };
+        inline_images.push(image);
+    }
+    inline_images.reverse();
+    Ok(inline_images)
 }
 
-/// Extracts image URLs from a tool output in newest-first order.
-fn output_image_urls(output: &FunctionCallOutputPayload) -> impl Iterator<Item = String> + '_ {
+/// Extracts image references from a tool output in newest-first order.
+fn output_images(output: &FunctionCallOutputPayload) -> impl Iterator<Item = &ImageReference> + '_ {
     output
         .content_items()
         .into_iter()
         .flatten()
         .rev()
         .filter_map(|item| match item {
-            FunctionCallOutputContentItem::InputImage {
-                image: ImageReference::Inline { image_url },
-                ..
-            } => Some(image_url.clone()),
+            FunctionCallOutputContentItem::InputImage { image, .. } => Some(image),
             FunctionCallOutputContentItem::InputText { .. }
             | FunctionCallOutputContentItem::InputAudio { .. }
             | FunctionCallOutputContentItem::EncryptedContent { .. } => None,
         })
+}
+
+fn inline_image_url(image: &ImageReference) -> Option<&str> {
+    match image {
+        ImageReference::Inline { image_url } => Some(image_url),
+        // TODO(kc) Image generation and the Images API only accept inline image URLs.
+        ImageReference::File { .. } => None,
+    }
 }
 
 async fn image_url(
