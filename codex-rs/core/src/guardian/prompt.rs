@@ -330,7 +330,7 @@ use codex_guardian_reviewer::guardian_output_contract_prompt;
 pub(crate) const BUNDLED_GUARDIAN_POLICY: &str = include_str!("../../assets/guardian/policy.md");
 pub(crate) const BUNDLED_GUARDIAN_POLICY_TEMPLATE: &str =
     include_str!("../../assets/guardian/policy_template.md");
-const TENANT_POLICY_CONFIG_PLACEHOLDER: &str = "{{ tenant_policy_config }}";
+pub(super) const TENANT_POLICY_CONFIG_PLACEHOLDER: &str = "{{ tenant_policy_config }}";
 
 /// Guardian policy prompt.
 ///

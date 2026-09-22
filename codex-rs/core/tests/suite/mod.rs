@@ -78,6 +78,8 @@ mod guardian_authorization;
 mod guardian_context_budget;
 mod guardian_history;
 mod guardian_mcp_elicitation;
+#[cfg(not(target_os = "windows"))]
+mod guardian_policy_bounds;
 mod guardian_retained_context;
 mod guardian_retry;
 #[cfg(not(target_os = "windows"))]
@@ -99,6 +101,8 @@ mod interrupt_hooks;
 mod items;
 mod json_result;
 mod live_cli;
+#[path = "managed_threads_tests.rs"]
+mod managed_threads;
 mod mcp_auth_elicitation;
 mod mcp_auth_refresh;
 mod mcp_ema_config;
@@ -129,6 +133,7 @@ mod openai_file_mcp;
 mod otel;
 mod override_updates;
 mod pending_input;
+mod pending_input_persistence;
 mod permissions_messages;
 mod personality;
 mod plugins;

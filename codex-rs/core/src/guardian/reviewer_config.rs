@@ -13,6 +13,7 @@ use crate::config::NetworkProxySpec;
 use crate::config::TokenBudgetConfig;
 
 use super::prompt::BUNDLED_GUARDIAN_POLICY_TEMPLATE;
+use super::prompt::TENANT_POLICY_CONFIG_PLACEHOLDER;
 use super::prompt::guardian_policy_prompt_with_config_and_template;
 
 /// Builds the existing read-only reviewer configuration with its policy and live network rules.
@@ -47,9 +48,33 @@ pub fn build_guardian_review_session_config(
     }
     let catalog_auto_review = model_messages.and_then(|messages| messages.auto_review.as_ref());
     let tenant_policy_config = parent_config.resolve_guardian_policy(model_messages);
-    let policy_template = catalog_auto_review
-        .and_then(|messages| messages.policy_template.as_deref())
+    let policy_template = parent_config
+        .guardian_policy_template
+        .as_deref()
+        .or_else(|| catalog_auto_review.and_then(|messages| messages.policy_template.as_deref()))
         .unwrap_or(BUNDLED_GUARDIAN_POLICY_TEMPLATE);
+    if parent_config.guardian_policy_template.is_some() {
+        // Bound only the new local override. UTF-8 bytes provide a conservative token bound;
+        // account for every substitution and the output contract before allocating the prompt.
+        const MAX_LOCAL_POLICY_BYTES: usize = 10_000;
+        let template = policy_template.trim_end();
+        let replacements = template.matches(TENANT_POLICY_CONFIG_PLACEHOLDER).count();
+        let expanded_bytes = replacements
+            .checked_mul(tenant_policy_config.trim().len())
+            .and_then(|bytes| {
+                bytes.checked_add(
+                    template.len() - replacements * TENANT_POLICY_CONFIG_PLACEHOLDER.len(),
+                )
+            })
+            .and_then(|bytes| {
+                bytes.checked_add(codex_guardian_reviewer::guardian_output_contract_prompt().len())
+            })
+            .and_then(|bytes| bytes.checked_add(3));
+        anyhow::ensure!(
+            expanded_bytes.is_some_and(|bytes| bytes <= MAX_LOCAL_POLICY_BYTES),
+            "auto_review.experimental_policy_template expands beyond the 10,000 UTF-8 byte limit, including tenant policy and output contract"
+        );
+    }
     guardian_config.base_instructions = Some(guardian_policy_prompt_with_config_and_template(
         tenant_policy_config,
         policy_template,
