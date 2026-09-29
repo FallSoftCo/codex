@@ -51,7 +51,8 @@ impl StatusLineAccent {
             | StatusLineItem::TotalInputTokens
             | StatusLineItem::TotalOutputTokens
             | StatusLineItem::ThreadCredits
-            | StatusLineItem::EstimatedThreadCost => Self::Usage,
+            | StatusLineItem::EstimatedThreadCost 
+            | StatusLineItem::ThreadCost => Self::Usage,
             StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => Self::Limit,
             StatusLineItem::CodexVersion | StatusLineItem::Hostname | StatusLineItem::SessionId => {
                 Self::Metadata

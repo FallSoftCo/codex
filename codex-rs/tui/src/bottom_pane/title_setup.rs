@@ -94,6 +94,8 @@ pub(crate) enum TerminalTitleItem {
     Reasoning,
     /// Latest checklist task progress from `update_plan` (if available).
     TaskProgress,
+    /// Estimated current-thread cost from the user's configured model rates.
+    ThreadCost,
 }
 
 impl TerminalTitleItem {
@@ -144,6 +146,9 @@ impl TerminalTitleItem {
             TerminalTitleItem::TaskProgress => {
                 "Latest task progress from update_plan (omitted until available)"
             }
+            TerminalTitleItem::ThreadCost => {
+                "Estimated current-thread cost from configured model_prices (omitted when unpriced)"
+            }
         }
     }
 
@@ -180,6 +185,7 @@ impl TerminalTitleItem {
             }
             TerminalTitleItem::Reasoning => Some(StatusSurfacePreviewItem::Reasoning),
             TerminalTitleItem::TaskProgress => Some(StatusSurfacePreviewItem::TaskProgress),
+            TerminalTitleItem::ThreadCost => Some(StatusSurfacePreviewItem::ThreadCost),
         }
     }
 

@@ -21,6 +21,7 @@ use crate::types::MarketplaceConfig;
 use crate::types::McpEnterpriseManagedAuthConfig;
 use crate::types::McpServerConfig;
 use crate::types::MemoriesToml;
+use crate::types::ModelPrice;
 use crate::types::Notice;
 use crate::types::OAuthCredentialsStoreMode;
 use crate::types::OtelConfigToml;
@@ -385,6 +386,18 @@ pub struct ConfigToml {
 
     /// Collection of settings that are specific to the TUI.
     pub tui: Option<Tui>,
+
+    /// Token rates per model slug, in USD per 1M tokens, used for the local
+    /// cost estimate on status surfaces. Omit to disable the estimate.
+    ///
+    /// ```toml
+    /// [model_prices."deepseek-flash"]
+    /// input_cached_per_million = 0.006
+    /// input_uncached_per_million = 0.30
+    /// output_per_million = 1.20
+    /// ```
+    #[serde(default)]
+    pub model_prices: BTreeMap<String, ModelPrice>,
 
     /// When set to `true`, `AgentReasoning` events will be hidden from the
     /// UI/output. Defaults to `false`.

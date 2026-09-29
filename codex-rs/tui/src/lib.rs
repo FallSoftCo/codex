@@ -186,6 +186,7 @@ mod markdown_text_merge;
 mod mention_codec;
 mod model_catalog;
 mod model_migration;
+mod model_pricing;
 mod motion;
 mod multi_agents;
 mod named_session_lookup;
