@@ -760,6 +760,22 @@ pub struct ModelAvailabilityNuxConfig {
 /// Fallback resize-reflow row cap when Codex cannot identify a terminal-specific scrollback size.
 pub const DEFAULT_TERMINAL_RESIZE_REFLOW_FALLBACK_MAX_ROWS: usize = 1_000;
 
+/// User-supplied token rates for one model, in USD per one million tokens.
+///
+/// Codex only knows rates for models it prices itself. This table lets a
+/// session against a custom `model_provider` show a local cost estimate.
+/// Values are user-supplied and are never presented as billed amounts.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct ModelPrice {
+    /// USD per 1M input tokens served from the provider's prompt cache.
+    pub input_cached_per_million: f64,
+    /// USD per 1M input tokens that were not served from cache.
+    pub input_uncached_per_million: f64,
+    /// USD per 1M output tokens.
+    pub output_per_million: f64,
+}
+
 /// Collection of settings that are specific to the TUI.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]

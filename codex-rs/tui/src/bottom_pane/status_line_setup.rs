@@ -142,6 +142,9 @@ pub(crate) enum StatusLineItem {
 
     /// Latest checklist task progress from `update_plan` (if available).
     TaskProgress,
+
+    /// Estimated current-thread cost from the user's configured model rates.
+    ThreadCost,
 }
 
 impl StatusLineItem {
@@ -194,6 +197,9 @@ impl StatusLineItem {
             StatusLineItem::TaskProgress => {
                 "Latest task progress from update_plan (omitted until available)"
             }
+            StatusLineItem::ThreadCost => {
+                "Estimated current-thread cost from configured model_prices (omitted when unpriced)"
+            }
         }
     }
 
@@ -225,6 +231,7 @@ impl StatusLineItem {
             StatusLineItem::ThreadTitle => StatusSurfacePreviewItem::ThreadTitle,
             StatusLineItem::WorkspaceHeadline => StatusSurfacePreviewItem::WorkspaceHeadline,
             StatusLineItem::TaskProgress => StatusSurfacePreviewItem::TaskProgress,
+            StatusLineItem::ThreadCost => StatusSurfacePreviewItem::ThreadCost,
         }
     }
 }

@@ -41,6 +41,7 @@ use codex_config::types::McpServerConfig;
 use codex_config::types::McpServerDisabledReason;
 use codex_config::types::MemoriesConfig;
 use codex_config::types::ModelAvailabilityNuxConfig;
+use codex_config::types::ModelPrice;
 use codex_config::types::Notice;
 use codex_config::types::OAuthCredentialsStoreMode;
 use codex_config::types::ResumeCwdMode;
@@ -767,6 +768,10 @@ pub struct Config {
     ///
     /// When unset, the TUI defaults to: `model-with-reasoning` and `current-dir`.
     pub tui_status_line: Option<Vec<String>>,
+
+    /// User-supplied token rates per model slug, in USD per 1M tokens. Empty
+    /// when unset, which disables the local cost estimate.
+    pub model_prices: std::collections::BTreeMap<String, ModelPrice>,
 
     /// Whether to color status line items with colors from the active syntax theme.
     pub tui_status_line_use_colors: bool,
@@ -4111,6 +4116,7 @@ impl Config {
                 .map(|t| t.alternate_screen)
                 .unwrap_or_default(),
             tui_status_line: cfg.tui.as_ref().and_then(|t| t.status_line.clone()),
+            model_prices: cfg.model_prices.clone(),
             tui_status_line_use_colors: cfg
                 .tui
                 .as_ref()

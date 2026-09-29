@@ -9,6 +9,7 @@ use crate::branch_summary;
 use crate::chatwidget::limit_label_for_window;
 use crate::chatwidget::rate_limits::get_limits_duration;
 use crate::legacy_core::config::Config;
+use crate::model_pricing;
 use crate::status::format_tokens_compact;
 use codex_app_server_protocol::AskForApproval;
 use codex_config::ConfigLayerSource;
@@ -749,6 +750,17 @@ impl ChatWidget {
             ),
             StatusLineItem::WorkspaceHeadline => self.status_line_workspace_headline.clone(),
             StatusLineItem::TaskProgress => self.terminal_title_task_progress(),
+            StatusLineItem::ThreadCost => {
+                // Local, user-priced estimate for providers Codex cannot bill.
+                let price = self.config.model_prices.get(self.current_model())?;
+                let usage = self.status_line_total_usage();
+                if usage.total_tokens <= 0 {
+                    return None;
+                }
+                Some(model_pricing::format_cost_micros(
+                    model_pricing::cost_micros(&usage, price),
+                ))
+            }
         }
     }
 
@@ -792,6 +804,7 @@ impl ChatWidget {
             StatusSurfacePreviewItem::Model => StatusLineItem::ModelName,
             StatusSurfacePreviewItem::ModelWithReasoning => StatusLineItem::ModelWithReasoning,
             StatusSurfacePreviewItem::Reasoning => StatusLineItem::Reasoning,
+            StatusSurfacePreviewItem::ThreadCost => StatusLineItem::ThreadCost,
         };
         self.status_line_value_for_item(status_line_item)
     }
@@ -862,6 +875,9 @@ impl ChatWidget {
                 /*max_chars*/ 32,
             )),
             TerminalTitleItem::TaskProgress => self.terminal_title_task_progress(),
+            TerminalTitleItem::ThreadCost => self
+                .status_line_value_for_item(StatusLineItem::ThreadCost)
+                .map(|value| Self::truncate_terminal_title_part(value, /*max_chars*/ 32)),
         }
     }
 
