@@ -124,6 +124,7 @@ async fn thread_unarchive_moves_rollout_back_into_sessions_directory() -> Result
         .await?;
     let ThreadReadResponse {
         thread: pinned_thread,
+        ..
     } = timeout(DEFAULT_READ_TIMEOUT, mcp.read_response(read_id)).await??;
     assert_eq!(pinned_thread.section, Some(pinned_section.clone()));
     let pinned_entered_at = pinned_thread
@@ -297,6 +298,7 @@ async fn thread_unarchive_preserves_pathless_store_metadata() -> Result<()> {
         loader_overrides,
         strict_config: false,
         cloud_config_bundle: CloudConfigBundleLoader::default(),
+        embedded_network_policy: Default::default(),
         thread_config_loader: Arc::new(codex_config::NoopThreadConfigLoader),
         feedback: CodexFeedback::new(),
         log_db: None,
