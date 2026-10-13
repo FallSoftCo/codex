@@ -749,6 +749,7 @@ async fn guardian_review_session_config_bounds_expanded_local_template() {
                 result.expect("valid local template").base_instructions,
                 Some(
                     GuardianPolicyInstructions::new(
+                        parent_config.guardian_transcript_mode,
                         &policy,
                         &extra_policy,
                         &template,
