@@ -13,6 +13,10 @@ use serde::Serialize;
 pub struct ModelProviderCapabilities {
     /// Whether hosted web search may access the live web.
     pub external_web_access: Option<bool>,
+    /// Per-content provenance on the inference wire. Backend schema support must
+    /// be declared independently of the model's Responses Lite selection. Missing
+    /// support omits only the wire field; local attribution and message roles remain.
+    pub content_item_metadata: Option<bool>,
     /// Remote context-compaction protocol; omission preserves provider defaults.
     pub remote_compaction: Option<RemoteCompactionSupport>,
 }

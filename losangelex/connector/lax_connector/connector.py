@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from uuid import uuid4
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ContentTypeError
 
 from .administration import administer
 from .roles import RoleContext, validate_administration
@@ -163,7 +163,20 @@ class Connector:
             json=payload,
             headers={"Authorization": "Bearer " + self.config["token"]},
         ) as response:
-            data = await response.json()
+            try:
+                data = await response.json()
+            except (ValueError, ContentTypeError) as error:
+                if response.status in (400, 403, 409):
+                    raise HttpFailure(response.status, "Request rejected") from error
+                # A successful write may already have committed. Parsing failure
+                # cannot be classified as rejected and invite a replacement effect.
+                raise RuntimeError(
+                    "Hollywood reply unconfirmed; reconcile the original operation"
+                ) from error
+            if not isinstance(data, dict):
+                raise RuntimeError(
+                    "Hollywood reply shape unconfirmed; reconcile the original operation"
+                )
             if response.status != 200:
                 raise HttpFailure(response.status, data.get("error", "request failed"))
             return data
@@ -654,7 +667,12 @@ class Connector:
                     self.thread = json.loads(context_path.read_text())["nativeThread"]
                     await self.rpc.call(
                         "thread/resume",
-                        {"threadId": self.thread, "excludeTurns": True, **settings},
+                        {
+                            "threadId": self.thread,
+                            "excludeTurns": True,
+                            "dynamicTools": TOOLS,
+                            **settings,
+                        },
                     )
                 else:
                     result = await self.rpc.call(

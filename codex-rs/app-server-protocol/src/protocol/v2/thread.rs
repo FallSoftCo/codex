@@ -412,6 +412,16 @@ pub struct ThreadResumeParams {
     pub base_instructions: Option<String>,
     #[ts(optional = nullable)]
     pub developer_instructions: Option<String>,
+    /// Client-owned dynamic tools for this cold resume. Omission retains saved
+    /// declarations; an empty list removes client tools. A loaded thread must
+    /// be released at an idle boundary before its declarations can change.
+    #[experimental("thread/resume.dynamicTools")]
+    #[serde(
+        default,
+        deserialize_with = "codex_protocol::dynamic_tools::deserialize_dynamic_tool_specs"
+    )]
+    #[ts(optional = nullable)]
+    pub dynamic_tools: Option<Vec<DynamicToolSpec>>,
     /// @deprecated `friendly` and `pragmatic` no longer select a style.
     /// Changing this does not rewrite the thread's existing instructions.
     #[ts(optional = nullable)]

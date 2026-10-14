@@ -1004,8 +1004,18 @@ impl ModelClient {
             prefix.push(instructions);
         }
         input.splice(0..0, prefix);
-        if !model_info.use_responses_lite {
-            // Only RLite accepts per-content attribution until the Responses API schema expands.
+        let supports_content_item_metadata = self
+            .state
+            .provider
+            .info()
+            .capabilities
+            .as_ref()
+            .and_then(|capabilities| capabilities.content_item_metadata)
+            .unwrap_or(false);
+        if !model_info.use_responses_lite || !supports_content_item_metadata {
+            // Responses Lite selection alone does not establish the backend's
+            // current schema. Preserve local provenance and native message roles;
+            // emit the optional field only with declared provider support.
             for item in &mut input {
                 item.clear_content_item_metadata();
             }

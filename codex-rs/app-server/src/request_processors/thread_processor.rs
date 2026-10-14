@@ -3918,10 +3918,14 @@ impl ThreadRequestProcessor {
             config: mut request_overrides,
             base_instructions,
             developer_instructions,
+            dynamic_tools,
             personality,
             exclude_turns,
             initial_turns_page,
         } = params.clone();
+        if let Some(tools) = &dynamic_tools {
+            validate_dynamic_tools(tools).map_err(invalid_request)?;
+        }
         let include_turns = !exclude_turns;
 
         let resume_result = if let Some(history) = history {
@@ -4202,6 +4206,7 @@ impl ThreadRequestProcessor {
         match self
             .thread_manager
             .start_thread(StartThreadOptions {
+                dynamic_tools_override: dynamic_tools,
                 initial_history: thread_history,
                 parent_trace: match target {
                     ThreadResumeTarget::Client(request_id) => {
@@ -4548,6 +4553,11 @@ impl ThreadRequestProcessor {
         };
 
         if let Some((existing_thread_id, existing_thread, mut source_thread)) = running_thread {
+            if params.dynamic_tools.is_some() {
+                return Err(invalid_request(format!(
+                    "cannot replace dynamic tools on loaded thread {existing_thread_id}; release it at an idle ownership boundary before cold resume"
+                )));
+            }
             let paginated_resume =
                 matches!(source_thread.history_mode, ThreadHistoryMode::Paginated);
             let existing_thread_rollout_path = existing_thread.rollout_path();
