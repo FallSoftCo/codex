@@ -51,6 +51,7 @@ use crate::events::stop::StopHookTarget;
 use crate::events::stop::StopRequest;
 use crate::mcp::HookMcpCall;
 use crate::mcp::HookMcpExecutor;
+use crate::mcp::HookMcpOutput;
 
 fn cwd() -> AbsolutePathBuf {
     AbsolutePathBuf::current_dir().expect("current dir")
@@ -2240,7 +2241,7 @@ struct StaticMcpExecutor {
 }
 
 impl HookMcpExecutor for StaticMcpExecutor {
-    fn execute(&self, call: HookMcpCall) -> BoxFuture<'_, anyhow::Result<String>> {
+    fn execute(&self, call: HookMcpCall) -> BoxFuture<'_, anyhow::Result<HookMcpOutput>> {
         async move {
             let output = self
                 .outputs_by_tool
@@ -2248,7 +2249,10 @@ impl HookMcpExecutor for StaticMcpExecutor {
                 .unwrap_or(&self.output)
                 .clone();
             self.calls.lock().expect("lock MCP calls").push(call);
-            Ok(output)
+            Ok(HookMcpOutput {
+                text: output,
+                source_tool_namespace: None,
+            })
         }
         .boxed()
     }
@@ -2655,11 +2659,14 @@ async fn executor_stop_hooks_do_not_delay_stop_completion() {
     }
 
     impl HookMcpExecutor for BlockingMcpExecutor {
-        fn execute(&self, _call: HookMcpCall) -> BoxFuture<'_, anyhow::Result<String>> {
+        fn execute(&self, _call: HookMcpCall) -> BoxFuture<'_, anyhow::Result<HookMcpOutput>> {
             async move {
                 self.started.notify_one();
                 self.release.notified().await;
-                Ok(String::new())
+                Ok(HookMcpOutput {
+                    text: String::new(),
+                    source_tool_namespace: None,
+                })
             }
             .boxed()
         }

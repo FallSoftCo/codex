@@ -1004,6 +1004,12 @@ impl ModelClient {
             prefix.push(instructions);
         }
         input.splice(0..0, prefix);
+        if !model_info.use_responses_lite {
+            // Only RLite accepts per-content attribution until the Responses API schema expands.
+            for item in &mut input {
+                item.clear_content_item_metadata();
+            }
+        }
         if !is_openai {
             for item in &mut input {
                 item.clear_internal_chat_message_metadata_passthrough();
@@ -1479,7 +1485,6 @@ impl<'a> ResponsesHttpExecutor<'a> {
 }
 
 impl ModelClientSession {
-    #[allow(dead_code)]
     pub(crate) fn turn_state_with_auth_owner(&self) -> (Option<String>, Option<u64>) {
         let owner = self.client.auth_owner_generation();
         let turn_state = (self.websocket_session.auth_owner_generation == owner)
