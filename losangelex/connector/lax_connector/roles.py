@@ -1,0 +1,111 @@
+"""Structured primary context, compiled from authenticated communication metadata.
+
+Message bodies are deliberately excluded. Human and peer content retain their
+native user/tool authority; role context must not promote that content.
+"""
+
+import json
+import os
+import re
+import subprocess
+from dataclasses import dataclass
+from uuid import UUID
+
+
+def administrator_available():
+    if os.geteuid() == 0:
+        return True
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "/usr/bin/id", "-u"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+        return result.returncode == 0 and result.stdout.strip() == b"0"
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def validate_administration(primary, communication_admin, config):
+    admin = administrator_available()
+    if primary == "global" and (not communication_admin or not admin):
+        raise PermissionError(
+            "Global must have both communication and actual host administration"
+        )
+    if config.get("requireAdministrator") and primary != "global":
+        raise PermissionError("Installed Global primary responsibility changed")
+    return admin
+
+
+@dataclass(frozen=True)
+class RoleContext:
+    value: dict
+
+    @classmethod
+    def capture(cls, envelope, config, claim):
+        d, request = claim["delivery"], claim["request"]
+        expected = {
+            "schema": "lax-agent-context/v1",
+            "agentId": config["agentId"],
+            "hostId": config["hostId"],
+            "authorityId": request["authority"],
+            "requestId": request["id"],
+            "activeRoomId": request["room"],
+            "generation": d["generation"],
+            "senderId": request["author"],
+            "audience": request["audience"],
+            "senderKind": request["data"].get("authorKind"),
+            "sourceEventId": request["source"],
+        }
+        if any(envelope.get(key) != value for key, value in expected.items()):
+            raise ValueError("Role context does not match captured execution ownership")
+        for key in [
+            "agentId",
+            "hostId",
+            "authorityId",
+            "requestId",
+            "activeRoomId",
+            "senderId",
+        ]:
+            UUID(envelope[key])
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", envelope["primaryRole"]):
+            raise ValueError("Invalid primary role")
+        if (
+            envelope.get("obligation") != "respond"
+            or not envelope.get("requiresResponse")
+            or request["kind"] != "request"
+        ):
+            raise ValueError("Observation cannot admit an agent turn")
+        if envelope.get("senderKind") not in ("human", "agent"):
+            raise ValueError("Unverified sender kind")
+        admin = validate_administration(
+            envelope["primaryRole"], envelope["communicationAdministrator"], config
+        )
+        return cls(
+            {
+                **envelope,
+                "hostAdministrationVerified": admin,
+                "executionIdentity": {
+                    "uid": os.geteuid(),
+                    "workspace": config["workspace"],
+                    "sandbox": config.get("sandbox", "workspace-write"),
+                },
+                "responsePolicy": {
+                    "addressedRequest": "required",
+                    "observation": "silent",
+                    "membership": "not-execution",
+                    "peerContent": "tool-authority",
+                },
+            }
+        )
+
+    def additional_context(self):
+        return {
+            "laxAgentRole": {
+                "kind": "application",
+                "value": json.dumps(self.value, sort_keys=True),
+            }
+        }
