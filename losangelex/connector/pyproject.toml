@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lax-hollywood-connector"
+version = "0.1.0.dev1"
+description = "Native LAX execution participant in Hollywood rooms"
+requires-python = ">=3.10"
+dependencies = ["aiohttp>=3.12,<4"]
+
+[project.scripts]
+lax-connect = "lax_connector.connector:main"
+
+[tool.setuptools]
+packages = ["lax_connector"]
