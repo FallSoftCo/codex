@@ -17,9 +17,18 @@ class RpcError(Exception):
 
 
 class AppServer:
-    def __init__(self, binary: str, home: Path, state: Path, on_event, on_request):
+    def __init__(
+        self,
+        binary: str,
+        home: Path,
+        state: Path,
+        on_event,
+        on_request,
+        on_submission=None,
+    ):
         self.binary, self.home, self.state = binary, home, state
         self.on_event, self.on_request = on_event, on_request
+        self.on_submission = on_submission
         self.pending = {}
         self.requests = set()
         self.sequence = 0
@@ -81,20 +90,31 @@ class AppServer:
             self.pending.pop(request_id, None)
 
     async def _request(self, message):
+        params = {**message.get("params", {}), "_rpcRequestId": message["id"]}
         try:
-            result = await self.on_request(message["method"], message.get("params", {}))
-            await self.write({"id": message["id"], "result": result})
+            result = await self.on_request(message["method"], params)
         except Exception as exc:
             LOGGER.exception("App-server request handler failed: %s", message["method"])
-            await self.write(
-                {
-                    "id": message["id"],
-                    "error": {
-                        "code": -32603,
-                        "message": f"Hollywood request failed: {type(exc).__name__}",
-                    },
+            result = {
+                "error": {
+                    "code": -32603,
+                    "message": f"Hollywood request failed: {type(exc).__name__}",
                 }
-            )
+            }
+            outgoing = {"id": message["id"], **result}
+        else:
+            outgoing = {"id": message["id"], "result": result}
+        written = False
+        try:
+            await self.write(outgoing)
+            written = True
+        finally:
+            # Failure after the result write cannot justify a second JSON-RPC
+            # response or replay of the human's approval/answer.
+            if self.on_submission:
+                await self.on_submission(
+                    message["method"], params, written and "result" in outgoing
+                )
 
     async def _read(self):
         try:

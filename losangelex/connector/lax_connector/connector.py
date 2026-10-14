@@ -16,7 +16,9 @@ from uuid import uuid4
 
 from aiohttp import ClientSession, ContentTypeError
 
+from .activity import Activity
 from .administration import administer
+from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
 from .roles import RoleContext, validate_administration
 from .rpc import AppServer
 
@@ -84,6 +86,37 @@ TOOLS = [
 ]
 ROLE = {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
 TOOLS += [
+    spec(
+        "hollywood_ask",
+        "Ask the attributable human a necessary scoped question and wait for their authenticated answer. Do not request secrets in chat. Observation alone does not require a question.",
+        {
+            "questions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": STRING,
+                        "header": STRING,
+                        "question": STRING,
+                        "options": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {"label": STRING, "description": STRING},
+                                "required": ["label", "description"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["id", "header", "question", "options"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        ["questions"],
+    ),
     spec(
         "lax_provision_worker",
         "Verified Global administrator: provision and start a scoped Linux worker on this enrolled host. Credentials remain private; no model runs until a request is addressed to it.",
@@ -155,6 +188,9 @@ class Connector:
         self.journal = self.state / "execution.json"
         self.interrupt_task = None
         self.uncertain_tools = False
+        self.attention = Attention(self)
+        self.native_items = {}
+        self.activity = Activity(self)
 
     async def http(self, method, path, payload=None):
         async with self.session.request(
@@ -184,12 +220,20 @@ class Connector:
     async def event(self, method, params):
         if not self.active:
             return
+        if (
+            method in ("item/started", "item/completed")
+            and params.get("threadId") == self.thread
+        ):
+            item = params.get("item", {})
+            if item.get("id"):
+                self.native_items[item["id"]] = item
         if method == "turn/started" and params.get("threadId") == self.thread:
             record = json.loads(self.journal.read_text())
             saved(
                 self.journal,
                 {**record, "nativeTurn": params["turn"]["id"], "state": "running"},
             )
+        self.activity.record(method, params)
         if (
             method == "item/completed"
             and params.get("threadId") == self.thread
@@ -225,8 +269,13 @@ class Connector:
                 ],
             }
 
-        if method != "item/tool/call" or not self.active:
-            return output({"error": "Unsupported request; no approval inferred"}, False)
+        if not self.active:
+            raise RuntimeError("No captured native execution; no approval inferred")
+        if method in QUESTION + APPROVAL:
+            slot = method + ":" + str(params.get("itemId", params["_rpcRequestId"]))
+            return await self.attention.wait(method, params, slot=slot)
+        if method != "item/tool/call":
+            raise ValueError("Unsupported native request; no approval inferred")
         call = params["callId"]
         read_only = params["tool"] in (
             "hollywood_context",
@@ -286,6 +335,10 @@ class Connector:
                     "GET",
                     f"rooms/{arguments['roomId']}/history?after={arguments['after']}&limit=10",
                 )
+            elif name == "hollywood_ask":
+                value = await self.attention.wait(
+                    "hollywood/question", {**params, **arguments}, slot=call
+                )
             elif name in ("hollywood_publish", "hollywood_request"):
                 room = arguments.get("roomId", self.active["request"]["room"])
                 value = await self.http(
@@ -322,6 +375,7 @@ class Connector:
         except Exception as error:
             if (
                 read_only
+                or isinstance(error, AttentionExpired)
                 or isinstance(error, (ValueError, PermissionError))
                 or (isinstance(error, HttpFailure) and error.status in (400, 403, 409))
             ):
@@ -427,6 +481,9 @@ class Connector:
                     "Native ownership changed; fenced reconciliation required"
                 )
             if d["state"] in ("completed", "failed", "cancelled"):
+                self.activity.start()
+                await self.activity.flush()
+                await self.activity.close()
                 if d["native_turn"] != record.get("nativeTurn") or d[
                     "native_thread"
                 ] != record.get("nativeThread"):
@@ -451,7 +508,9 @@ class Connector:
                 self.state / "native",
                 self.event,
                 self.tool,
+                self.attention.submitted,
             )
+            self.activity.start()
             try:
                 await self.rpc.start()
                 snapshot = await self.rpc.call(
@@ -485,6 +544,7 @@ class Connector:
                     raise RuntimeError(
                         "Unconfirmed Hollywood tool effects must be reconciled first"
                     )
+                await self.activity.flush()
                 status = (
                     "completed"
                     if turn["status"] == "completed"
@@ -538,6 +598,7 @@ class Connector:
                     "source": "Native persisted terminal turn",
                 }
             finally:
+                await self.activity.close()
                 await self.rpc.close()
 
     async def once(self, claim_operation):
@@ -644,6 +705,7 @@ class Connector:
                 self.state / "native",
                 self.event,
                 self.tool,
+                self.attention.submitted,
             )
             try:
                 await self.rpc.start()
@@ -696,6 +758,7 @@ class Connector:
                     },
                 )
                 self.finished = asyncio.get_running_loop().create_future()
+                self.activity.start()
                 fresh = await self.http(
                     "GET", "deliveries/" + self.active["delivery"]["id"]
                 )
@@ -771,6 +834,7 @@ class Connector:
                 turn = await asyncio.wait_for(
                     self.finished, self.config.get("turnDeadlineSeconds")
                 )
+                await self.activity.flush()
                 if self.uncertain_tools:
                     raise RuntimeError(
                         "Native turn ended with an unconfirmed communication/administration effect; reconcile original tool receipts"
@@ -828,6 +892,7 @@ class Connector:
                 if self.interrupt_task:
                     self.interrupt_task.cancel()
                     await asyncio.gather(self.interrupt_task, return_exceptions=True)
+                await self.activity.close()
                 await self.rpc.close()
 
     async def serve(self):
