@@ -53,6 +53,8 @@ use crate::tool::GoalToolExecutor;
 #[derive(Clone, Debug)]
 pub struct GoalExtensionConfig {
     pub enabled: bool,
+    /// External owner retains admission; goal persistence and accounting remain enabled.
+    pub external_admission: bool,
     pub max_goal_token_budget: Option<i64>,
 }
 
@@ -103,6 +105,7 @@ where
         Box::pin(async move {
             let config = (self.goal_config)(input.config);
             let enabled = config.enabled;
+            let external_admission = config.external_admission;
             let tools_visible_for_thread = !matches!(
                 input.session_source,
                 SessionSource::SubAgent(SubAgentSource::Review)
@@ -151,6 +154,7 @@ where
                     GoalRuntimeConfig {
                         analytics: self.analytics.clone(),
                         enabled,
+                        external_admission,
                         tools_available_for_thread,
                         tools_visible_for_thread,
                         root_accounting_state,
@@ -158,6 +162,7 @@ where
                 )
             });
             runtime.set_enabled(enabled);
+            runtime.set_external_admission(external_admission);
             self.goal_service.register_runtime(&runtime);
         })
     }

@@ -83,6 +83,9 @@ pub(crate) fn thread_extensions(
             goal_service,
             |config: &Config| GoalExtensionConfig {
                 enabled: config.features.enabled(codex_features::Feature::Goals),
+                external_admission: config
+                    .features
+                    .enabled(codex_features::Feature::GoalExternalAdmission),
                 max_goal_token_budget: config.max_goal_token_budget,
             },
         );

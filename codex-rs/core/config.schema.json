@@ -943,6 +943,9 @@
             "fast_mode": {
               "type": "boolean"
             },
+            "goal_external_admission": {
+              "type": "boolean"
+            },
             "goals": {
               "type": "boolean"
             },
@@ -2816,6 +2819,10 @@
       "additionalProperties": false,
       "description": "Overrides for the optional API features supported by a custom provider.",
       "properties": {
+        "content_item_metadata": {
+          "description": "Per-content provenance on the inference wire. Backend schema support must be declared independently of the model's Responses Lite selection. Missing support omits only the wire field; local attribution and message roles remain.",
+          "type": "boolean"
+        },
         "external_web_access": {
           "description": "Whether hosted web search may access the live web.",
           "type": "boolean"
@@ -7299,6 +7306,9 @@
           "type": "boolean"
         },
         "fast_mode": {
+          "type": "boolean"
+        },
+        "goal_external_admission": {
           "type": "boolean"
         },
         "goals": {

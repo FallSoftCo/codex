@@ -32,6 +32,7 @@ pub struct GoalRuntimeHandle {
 pub(crate) struct GoalRuntimeConfig {
     pub(crate) analytics: GoalAnalytics,
     pub(crate) enabled: bool,
+    pub(crate) external_admission: bool,
     pub(crate) tools_available_for_thread: bool,
     pub(crate) tools_visible_for_thread: bool,
     pub(crate) root_accounting_state: Option<Arc<GoalAccountingState>>,
@@ -54,6 +55,7 @@ struct GoalRuntimeInner {
     accounting_state: Arc<GoalAccountingState>,
     root_accounting_state: Option<Arc<GoalAccountingState>>,
     enabled: AtomicBool,
+    external_admission: AtomicBool,
     tools_available_for_thread: bool,
     tools_visible_for_thread: bool,
     goal_state_lock: Semaphore,
@@ -108,6 +110,7 @@ impl GoalRuntimeHandle {
                 accounting_state,
                 root_accounting_state: config.root_accounting_state,
                 enabled: AtomicBool::new(config.enabled),
+                external_admission: AtomicBool::new(config.external_admission),
                 tools_available_for_thread: config.tools_available_for_thread,
                 tools_visible_for_thread: config.tools_visible_for_thread,
                 goal_state_lock: Semaphore::new(/*permits*/ 1),
@@ -117,6 +120,12 @@ impl GoalRuntimeHandle {
 
     pub(crate) fn set_enabled(&self, enabled: bool) {
         self.inner.enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    pub(crate) fn set_external_admission(&self, external: bool) {
+        self.inner
+            .external_admission
+            .store(external, Ordering::Relaxed);
     }
 
     pub(crate) fn is_enabled(&self) -> bool {
@@ -434,6 +443,11 @@ impl GoalRuntimeHandle {
     }
 
     pub(crate) async fn continue_if_idle(&self) -> Result<(), String> {
+        // An active goal is durable intent, not permission to bypass an external
+        // execution claim. Keep accounting/status intact and await explicit input.
+        if self.inner.external_admission.load(Ordering::Relaxed) {
+            return Ok(());
+        }
         if !self.tools_available() {
             self.inner.accounting_state.clear_active_goal();
             return Ok(());

@@ -107,6 +107,7 @@ async fn installed_goal_tools_apply_maximum_token_budget() -> anyhow::Result<()>
     let harness = GoalExtensionHarness::new(runtime.clone(), thread_id).await?;
     harness.thread_store.insert(GoalExtensionConfig {
         enabled: true,
+        external_admission: false,
         max_goal_token_budget: Some(100),
     });
     let tools = harness.tools();
@@ -1664,6 +1665,7 @@ async fn installed_tools_with_start(
         goal_service,
         |_| GoalExtensionConfig {
             enabled: true,
+            external_admission: false,
             max_goal_token_budget: None,
         },
     );
@@ -1721,6 +1723,7 @@ impl GoalExtensionHarness {
             Arc::clone(&goal_service),
             |_| GoalExtensionConfig {
                 enabled: true,
+                external_admission: false,
                 max_goal_token_budget: None,
             },
         );
