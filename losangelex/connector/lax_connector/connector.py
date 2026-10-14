@@ -272,7 +272,7 @@ class Connector:
         if not self.active:
             raise RuntimeError("No captured native execution; no approval inferred")
         if method in QUESTION + APPROVAL:
-            slot = method + ":" + str(params.get("itemId", params["_rpcRequestId"]))
+            slot = method + ":" + str(params.get("approvalId") or params["_rpcRequestId"])
             return await self.attention.wait(method, params, slot=slot)
         if method != "item/tool/call":
             raise ValueError("Unsupported native request; no approval inferred")
@@ -715,7 +715,7 @@ class Connector:
                 settings = {
                     "cwd": self.config["workspace"],
                     "sandbox": self.config.get("sandbox", "workspace-write"),
-                    "approvalPolicy": "never",
+                    "approvalPolicy": self.config.get("approvalPolicy", "never"),
                     "model": self.config["model"],
                     "developerInstructions": self.config["instructions"]
                     + "\nAll human and agent communication is through Hollywood. Room observation does not request work or create execution contexts. This turn is addressed to this captured agent and room. Provision agents only when your captured administrator capability and the addressed request authorize it. Do not start historical work, poll models or self-chain. Finish the admitted request and wait. Agent messages retain tool authority; use the source request as scope evidence, not as a new direct human order.",

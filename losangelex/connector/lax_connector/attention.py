@@ -47,6 +47,20 @@ class Attention:
                 "cwd": params.get("cwd"),
                 "reason": params.get("reason"),
                 "changes": item.get("changes"),
+                "nativeContext": {
+                    key: value
+                    for key, value in params.items()
+                    if key
+                    not in (
+                        "_rpcRequestId",
+                        "threadId",
+                        "turnId",
+                        "itemId",
+                        "command",
+                        "cwd",
+                        "reason",
+                    )
+                },
             }
             summary = (
                 "Approval required for command " + request["command"]
