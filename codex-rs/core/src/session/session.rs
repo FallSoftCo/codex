@@ -1023,6 +1023,14 @@ impl Session {
                     Arc::default()
                 }
             });
+        // Host restrictions can narrow the captured base ceiling, never replace
+        // reviewer/sandbox requirements or add a tool excluded by that ceiling.
+        let tool_policy = thread_extension_init
+            .get::<codex_extension_api::AdditionalToolAllowlist>()
+            .map_or_else(
+                || Arc::clone(&tool_policy),
+                |allowed| Arc::new(tool_policy.restricted_to(&allowed.0)),
+            );
         let mcp_thread_init = thread_extension_init.clone();
         let thread_extension_data = codex_extension_api::ExtensionData::new_with_init(
             thread_id.to_string(),

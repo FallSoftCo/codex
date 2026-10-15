@@ -6,6 +6,11 @@ import type { ThreadGoalStatus } from "./ThreadGoalStatus";
 
 export type ThreadGoalSetParams = { threadId: string,
 /**
+ * Optional compare-and-set fence. Null requires no existing goal; a string
+ * requires that exact persisted goal instance. Omission preserves legacy callers.
+ */
+expectedGoalId?: string | null,
+/**
  * Missing provenance does not supply user authorization.
  */
 origin?: ThreadGoalMutationOrigin | null, objective?: string | null, status?: ThreadGoalStatus | null, tokenBudget?: number | null, };

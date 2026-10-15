@@ -913,6 +913,7 @@ pub(super) async fn handle_pending_thread_resume_request(
     thread.session_id = session_id;
 
     let response = ThreadResumeResponse {
+        tool_policy: super::thread_processor::tool_policy_snapshot(conversation.as_ref()),
         thread,
         disabled_plugin_ids,
         model,

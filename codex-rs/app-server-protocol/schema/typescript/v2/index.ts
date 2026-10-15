@@ -598,6 +598,8 @@ export type { ThreadStatusChangedNotification } from "./ThreadStatusChangedNotif
 export type { ThreadTimelineEntry } from "./ThreadTimelineEntry";
 export type { ThreadTokenUsage } from "./ThreadTokenUsage";
 export type { ThreadTokenUsageUpdatedNotification } from "./ThreadTokenUsageUpdatedNotification";
+export type { ThreadToolName } from "./ThreadToolName";
+export type { ThreadToolPolicy } from "./ThreadToolPolicy";
 export type { ThreadTurnsListParams } from "./ThreadTurnsListParams";
 export type { ThreadTurnsListResponse } from "./ThreadTurnsListResponse";
 export type { ThreadUnarchiveParams } from "./ThreadUnarchiveParams";

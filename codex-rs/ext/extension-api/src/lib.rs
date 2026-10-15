@@ -9,6 +9,7 @@ mod user_instructions;
 
 pub use session_isolation::IsolatedSessionExtensions;
 pub use session_isolation::SessionIsolation;
+pub use tool_policy::AdditionalToolAllowlist;
 pub use tool_policy::ToolPolicy;
 
 pub use capabilities::ConversationHistorySnapshot;

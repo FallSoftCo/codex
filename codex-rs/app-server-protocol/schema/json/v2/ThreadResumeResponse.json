@@ -2649,6 +2649,42 @@
         }
       ]
     },
+    "ThreadToolName": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "ThreadToolPolicy": {
+      "additionalProperties": false,
+      "description": "An additional startup tool ceiling, supplied again on cold resume. This intersects the host/reviewer base policy and grants no permissions.",
+      "properties": {
+        "allowedTools": {
+          "description": "Empty permits no callable tools. Generated Code Mode tools must be included.",
+          "items": {
+            "$ref": "#/definitions/ThreadToolName"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "allowedTools"
+      ],
+      "type": "object"
+    },
     "Turn": {
       "properties": {
         "completedAt": {

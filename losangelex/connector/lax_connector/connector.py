@@ -23,6 +23,9 @@ from .errors import HttpFailure
 from .effects import Effects
 from .journal import saved
 from .native_controls import NativeControls
+from .native_policy import NativeToolPolicyUnavailable
+from .native_policy import normalized as normalize_tool_policy
+from .native_policy import verify as verify_tool_policy
 from .native_goals import (
     NativeAdmissionUnavailable,
     NativeGoalHeld,
@@ -198,6 +201,9 @@ TOOLS += workflow_definitions(spec)
 class Connector:
     def __init__(self, config):
         self.config = config
+        self.required_tool_policy = config.get("nativeToolPolicy")
+        if self.required_tool_policy is not None:
+            normalize_tool_policy(self.required_tool_policy)
         self.state = Path(config["state"])
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.lock = (self.state / "connector.lock").open("a")
@@ -1175,9 +1181,11 @@ class Connector:
                         "model_reasoning_effort": self.config["effort"],
                     },
                 }
+                if self.required_tool_policy is not None:
+                    settings["toolPolicy"] = self.required_tool_policy
                 if context_path.exists():
                     self.thread = json.loads(context_path.read_text())["nativeThread"]
-                    await self.rpc.call(
+                    native_started = await self.rpc.call(
                         "thread/resume",
                         {
                             "threadId": self.thread,
@@ -1190,6 +1198,7 @@ class Connector:
                     result = await self.rpc.call(
                         "thread/start", {**settings, "dynamicTools": TOOLS}
                     )
+                    native_started = result
                     self.thread = result["thread"]["id"]
                     saved(
                         context_path,
@@ -1199,6 +1208,28 @@ class Connector:
                             "nativeThread": self.thread,
                         },
                     )
+                saved(
+                    journal,
+                    {
+                        **record,
+                        "state": "verifying-native-tool-policy",
+                        "nativeThread": self.thread,
+                        "requestedNativeToolPolicy": self.required_tool_policy,
+                    },
+                )
+                effective_policy = verify_tool_policy(
+                    self.required_tool_policy, native_started
+                )
+                self.role_context.value["nativeToolPolicy"] = effective_policy
+                saved(
+                    self.state / ("native-policy-" + request["id"] + ".json"),
+                    {
+                        "requested": self.required_tool_policy,
+                        "effective": effective_policy,
+                        "nativeThread": self.thread,
+                        "modelsStartedByVerification": 0,
+                    },
+                )
                 if external_lifecycle:
                     await bind_role(self)
                 elif request["data"].get("goalId"):
@@ -1415,6 +1446,24 @@ class Connector:
                         **record,
                         "state": "failed",
                         "modelsStarted": 0,
+                        "receipt": receipt,
+                    },
+                )
+                return {"state": "failed", "modelsStarted": 0, "reason": str(error)}
+            except NativeToolPolicyUnavailable as error:
+                current = json.loads(journal.read_text())
+                receipt = await self.transition(
+                    "failed",
+                    nativeThread=self.thread,
+                    body="Required native tool ceiling could not be verified; no model turn admitted.",
+                )
+                saved(
+                    journal,
+                    {
+                        **current,
+                        "state": "failed",
+                        "modelsStarted": 0,
+                        "nativePolicyUnverified": True,
                         "receipt": receipt,
                     },
                 )

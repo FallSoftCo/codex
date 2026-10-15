@@ -31,7 +31,24 @@ impl Default for ToolPolicy {
     }
 }
 
+/// An additional host ceiling. It is intersected with the base startup policy,
+/// including reviewer requirements, and must be supplied again on cold resume.
+#[derive(Clone, Debug)]
+pub struct AdditionalToolAllowlist(pub Vec<ToolName>);
+
 impl ToolPolicy {
+    pub fn restricted_to(&self, allowed: &[ToolName]) -> Self {
+        let mut policy = self.clone();
+        policy.allowed_tools = Some(
+            allowed
+                .iter()
+                .filter(|name| self.allows(name))
+                .cloned()
+                .collect(),
+        );
+        policy
+    }
+
     pub fn allows(&self, tool: &ToolName) -> bool {
         self.allowed_tools.as_ref().is_none_or(|tools| {
             tools.iter().any(|allowed| {
@@ -40,5 +57,33 @@ impl ToolPolicy {
                         || (allowed.is_default_namespace() && tool.is_default_namespace()))
             })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolPolicy;
+    use crate::ToolName;
+
+    #[test]
+    fn additional_allowlist_preserves_base_ceiling_and_requirements() {
+        let base = ToolPolicy {
+            allowed_tools: Some(vec![ToolName::plain("inspect")]),
+            require_managed_sandbox: true,
+            require_unified_exec: true,
+            expose_additional_permissions: false,
+        };
+        let restricted = base.restricted_to(&[
+            ToolName::namespaced("functions", "inspect"),
+            ToolName::plain("exec_command"),
+        ]);
+        assert!(restricted.allows(&ToolName::plain("inspect")));
+        assert!(!restricted.allows(&ToolName::plain("exec_command")));
+        assert!(!restricted.allows(&ToolName::namespaced("foreign", "inspect")));
+        assert!(restricted.require_managed_sandbox);
+        assert!(restricted.require_unified_exec);
+        assert!(!restricted.expose_additional_permissions);
+        assert!(base.allows(&ToolName::plain("inspect")));
+        assert!(!base.restricted_to(&[]).allows(&ToolName::plain("inspect")));
     }
 }

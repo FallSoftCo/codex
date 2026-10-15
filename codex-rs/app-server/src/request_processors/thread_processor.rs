@@ -23,7 +23,10 @@ use codex_app_server_protocol::ThreadSection;
 use codex_app_server_protocol::ThreadSectionAppearance;
 use codex_app_server_protocol::ThreadSectionMoveParams;
 use codex_app_server_protocol::ThreadSectionMoveResponse;
+use codex_app_server_protocol::ThreadToolName;
+use codex_app_server_protocol::ThreadToolPolicy;
 use codex_config::types::WindowsSandboxModeToml;
+use codex_extension_api::AdditionalToolAllowlist;
 use codex_extension_api::ExtensionDataInit;
 use codex_extension_api::ThreadIdleCause;
 use codex_protocol::SanitizedGitUrl;
@@ -41,6 +44,56 @@ pub(super) const THREAD_LIST_MAX_LIMIT: usize = 100;
 const THREAD_LIST_MAX_EXCLUDED_IDS: usize = 100;
 const PAGINATED_FULL_HISTORY_DEPRECATION_SUMMARY: &str = "Full-history hydration is deprecated for paginated threads; use `excludeTurns: true`, then page with `thread/turns/list` and `thread/items/list`.";
 const PAGINATED_THREAD_READ_DEPRECATION_SUMMARY: &str = "Full-history hydration is deprecated for paginated threads; omit `includeTurns` or set it to `false`, then page with `thread/turns/list` and `thread/items/list`.";
+
+fn additional_tool_allowlist(
+    policy: Option<&ThreadToolPolicy>,
+) -> Result<Option<AdditionalToolAllowlist>, JSONRPCErrorError> {
+    let Some(policy) = policy else {
+        return Ok(None);
+    };
+    if policy.allowed_tools.len() > 512 {
+        return Err(invalid_request("toolPolicy permits at most 512 names"));
+    }
+    let mut allowed = Vec::new();
+    for tool in &policy.allowed_tools {
+        if tool.name.is_empty()
+            || tool.name.len() > 128
+            || tool
+                .name
+                .chars()
+                .any(|c| c.is_control() || c.is_whitespace())
+            || tool.namespace.as_ref().is_some_and(|namespace| {
+                namespace.len() > 128
+                    || namespace
+                        .chars()
+                        .any(|c| c.is_control() || c.is_whitespace())
+            })
+        {
+            return Err(invalid_request("invalid toolPolicy tool name"));
+        }
+        let name = codex_extension_api::ToolName::new(tool.namespace.clone(), tool.name.clone());
+        if !allowed.contains(&name) {
+            allowed.push(name);
+        }
+    }
+    Ok(Some(AdditionalToolAllowlist(allowed)))
+}
+
+pub(super) fn tool_policy_snapshot(thread: &codex_core::CodexThread) -> Option<ThreadToolPolicy> {
+    let policy = thread.tool_policy();
+    policy
+        .allowed_tools
+        .as_ref()
+        .map(|allowed| ThreadToolPolicy {
+            allowed_tools: allowed
+                .iter()
+                .map(|name| ThreadToolName {
+                    name: name.name.clone(),
+                    namespace: name.namespace.clone(),
+                })
+                .collect(),
+        })
+}
 
 async fn stage_pending_thread_metadata(
     thread_manager: &ThreadManager,
@@ -1163,6 +1216,7 @@ impl ThreadRequestProcessor {
             base_instructions,
             developer_instructions,
             dynamic_tools,
+            tool_policy,
             selected_capability_roots,
             mock_experimental_field: _mock_experimental_field,
             experimental_raw_events,
@@ -1176,6 +1230,7 @@ impl ThreadRequestProcessor {
             daybreak_enabled,
             environments,
         } = params;
+        let additional_tool_allowlist = additional_tool_allowlist(tool_policy.as_ref())?;
         if matches!(
             history_mode,
             Some(codex_app_server_protocol::ThreadHistoryMode::Paginated)
@@ -1255,6 +1310,7 @@ impl ThreadRequestProcessor {
                 config,
                 typesafe_overrides,
                 dynamic_tools,
+                additional_tool_allowlist,
                 selected_capability_roots.unwrap_or_default(),
                 history_mode.map(Into::into),
                 session_start_source,
@@ -1337,6 +1393,7 @@ impl ThreadRequestProcessor {
         config_overrides: Option<HashMap<String, serde_json::Value>>,
         typesafe_overrides: ConfigOverrides,
         dynamic_tools: Option<Vec<DynamicToolSpec>>,
+        additional_tool_allowlist: Option<AdditionalToolAllowlist>,
         selected_capability_roots: Vec<SelectedCapabilityRoot>,
         history_mode: Option<ThreadHistoryMode>,
         session_start_source: Option<codex_app_server_protocol::ThreadStartSource>,
@@ -1478,6 +1535,9 @@ impl ThreadRequestProcessor {
                 .then_some(ThreadHistoryMode::Paginated)
         });
         let mut thread_extension_init = ExtensionDataInit::new();
+        if let Some(allowed) = additional_tool_allowlist {
+            thread_extension_init.insert(allowed);
+        }
         if !selected_capability_roots.is_empty() {
             thread_extension_init.insert(selected_capability_roots);
         }
@@ -1577,6 +1637,7 @@ impl ThreadRequestProcessor {
                 otel.name = "app_server.thread_start.config_snapshot",
             ))
             .await;
+        let effective_tool_policy = tool_policy_snapshot(thread.as_ref());
         let mut thread = build_thread_from_snapshot(
             thread_id,
             session_configured.session_id.to_string(),
@@ -1634,6 +1695,7 @@ impl ThreadRequestProcessor {
         let thread_originator = config_snapshot.originator.clone();
 
         let response = ThreadStartResponse {
+            tool_policy: effective_tool_policy,
             thread: thread.clone(),
             disabled_plugin_ids: config_snapshot.disabled_plugin_ids,
             model: config_snapshot.model,
@@ -3919,10 +3981,12 @@ impl ThreadRequestProcessor {
             base_instructions,
             developer_instructions,
             dynamic_tools,
+            tool_policy,
             personality,
             exclude_turns,
             initial_turns_page,
         } = params.clone();
+        let additional_tool_allowlist = additional_tool_allowlist(tool_policy.as_ref())?;
         if let Some(tools) = &dynamic_tools {
             validate_dynamic_tools(tools).map_err(invalid_request)?;
         }
@@ -4202,11 +4266,16 @@ impl ThreadRequestProcessor {
         }
 
         let response_history = thread_history.clone();
+        let mut thread_extension_init = ExtensionDataInit::new();
+        if let Some(allowed) = additional_tool_allowlist {
+            thread_extension_init.insert(allowed);
+        }
 
         match self
             .thread_manager
             .start_thread(StartThreadOptions {
                 dynamic_tools_override: dynamic_tools,
+                thread_extension_init,
                 initial_history: thread_history,
                 parent_trace: match target {
                     ThreadResumeTarget::Client(request_id) => {
@@ -4405,6 +4474,7 @@ impl ThreadRequestProcessor {
 
                 let thread_originator = config_snapshot.originator.clone();
                 let response = ThreadResumeResponse {
+                    tool_policy: tool_policy_snapshot(codex_thread.as_ref()),
                     thread,
                     disabled_plugin_ids: config_snapshot.disabled_plugin_ids,
                     model: session_configured.model,
@@ -4553,6 +4623,11 @@ impl ThreadRequestProcessor {
         };
 
         if let Some((existing_thread_id, existing_thread, mut source_thread)) = running_thread {
+            if params.tool_policy.is_some() {
+                return Err(invalid_request(format!(
+                    "cannot replace tool policy on loaded thread {existing_thread_id}; release it at an idle ownership boundary before cold resume"
+                )));
+            }
             if params.dynamic_tools.is_some() {
                 return Err(invalid_request(format!(
                     "cannot replace dynamic tools on loaded thread {existing_thread_id}; release it at an idle ownership boundary before cold resume"

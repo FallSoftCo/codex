@@ -321,3 +321,6 @@ terminal recovery also inspected that receipt. An older completed guidance
 receipt reconciled while preserving a later execution journal byte-for-byte.
 This is specific native-control recovery, not general arbitrary effect recovery
 or a claim that a missing message proves rejection.
+
+Native start/cold-resume capability ceilings and fail-closed effective readback
+are described in [NATIVE_TOOL_POLICY.md](NATIVE_TOOL_POLICY.md).

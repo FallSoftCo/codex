@@ -6331,6 +6331,29 @@ class TurnStartedThreadTimelineEntry(BaseModel):
     type: Annotated[Literal["turnStarted"], Field(title="TurnStartedThreadTimelineEntryType")]
 
 
+class ThreadToolName(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    name: str
+    namespace: str | None = None
+
+
+class ThreadToolPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    allowed_tools: Annotated[
+        list[ThreadToolName],
+        Field(
+            alias="allowedTools",
+            description="Empty permits no callable tools. Generated Code Mode tools must be included.",
+        ),
+    ]
+
+
 class ThreadUnarchiveParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -10006,12 +10029,20 @@ class ThreadGoalGetResponse(BaseModel):
         populate_by_name=True,
     )
     goal: ThreadGoal | None = None
+    goal_id: Annotated[str | None, Field(alias="goalId")] = None
 
 
 class ThreadGoalSetParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
+    expected_goal_id: Annotated[
+        str | None,
+        Field(
+            alias="expectedGoalId",
+            description="Optional compare-and-set fence. Null requires no existing goal; a string requires that exact persisted goal instance. Omission preserves legacy callers.",
+        ),
+    ] = None
     objective: str | None = None
     origin: Annotated[
         ThreadGoalMutationOrigin | None,
@@ -10027,6 +10058,7 @@ class ThreadGoalSetResponse(BaseModel):
         populate_by_name=True,
     )
     goal: ThreadGoal
+    goal_id: Annotated[str, Field(alias="goalId")]
 
 
 class ThreadGoalUpdatedNotification(BaseModel):

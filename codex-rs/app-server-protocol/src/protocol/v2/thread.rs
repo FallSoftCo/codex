@@ -52,6 +52,26 @@ pub enum ThreadStartSource {
     Clear,
 }
 
+/// An additional startup tool ceiling, supplied again on cold resume.
+/// This intersects the host/reviewer base policy and grants no permissions.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadToolPolicy {
+    /// Empty permits no callable tools. Generated Code Mode tools must be included.
+    pub allowed_tools: Vec<ThreadToolName>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadToolName {
+    pub name: String,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub namespace: Option<String>,
+}
+
 // === Threads, Turns, and Items ===
 // Thread APIs
 #[derive(
@@ -149,6 +169,11 @@ pub struct ThreadStartParams {
     )]
     #[ts(optional = nullable)]
     pub dynamic_tools: Option<Vec<DynamicToolSpec>>,
+    /// Additional immutable tool ceiling for this runtime; cold resume only.
+    #[experimental("thread/start.toolPolicy")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_policy: Option<ThreadToolPolicy>,
     /// Capability roots selected for this thread by the hosting platform.
     #[experimental("thread/start.selectedCapabilityRoots")]
     #[ts(optional = nullable)]
@@ -187,6 +212,12 @@ pub struct MockExperimentalMethodResponse {
 #[ts(export_to = "v2/")]
 pub struct ThreadStartResponse {
     pub thread: Thread,
+    /// Effective captured allowlist after intersection with the base policy.
+    /// Omitted means no allowlist ceiling, not a grant of tool permissions.
+    #[experimental("thread/start.toolPolicy")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_policy: Option<ThreadToolPolicy>,
     pub model: String,
     pub model_provider: String,
     pub service_tier: Option<String>,
@@ -422,6 +453,11 @@ pub struct ThreadResumeParams {
     )]
     #[ts(optional = nullable)]
     pub dynamic_tools: Option<Vec<DynamicToolSpec>>,
+    /// Additional immutable tool ceiling for this runtime; cold resume only.
+    #[experimental("thread/resume.toolPolicy")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_policy: Option<ThreadToolPolicy>,
     /// @deprecated `friendly` and `pragmatic` no longer select a style.
     /// Changing this does not rewrite the thread's existing instructions.
     #[ts(optional = nullable)]
@@ -445,6 +481,12 @@ pub struct ThreadResumeParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadResumeResponse {
     pub thread: Thread,
+    /// Effective captured allowlist after intersection with the base policy.
+    /// Omitted means no allowlist ceiling, not a grant of tool permissions.
+    #[experimental("thread/resume.toolPolicy")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_policy: Option<ThreadToolPolicy>,
     pub model: String,
     pub model_provider: String,
     pub service_tier: Option<String>,

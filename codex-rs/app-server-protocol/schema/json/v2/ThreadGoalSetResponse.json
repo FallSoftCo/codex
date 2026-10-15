@@ -62,10 +62,14 @@
   "properties": {
     "goal": {
       "$ref": "#/definitions/ThreadGoal"
+    },
+    "goalId": {
+      "type": "string"
     }
   },
   "required": [
-    "goal"
+    "goal",
+    "goalId"
   ],
   "title": "ThreadGoalSetResponse",
   "type": "object"

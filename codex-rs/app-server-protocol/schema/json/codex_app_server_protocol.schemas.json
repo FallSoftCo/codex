@@ -21955,6 +21955,12 @@
                 "type": "null"
               }
             ]
+          },
+          "goalId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "title": "ThreadGoalGetResponse",
@@ -21971,6 +21977,13 @@
       "ThreadGoalSetParams": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "properties": {
+          "expectedGoalId": {
+            "description": "Optional compare-and-set fence. Null requires no existing goal; a string requires that exact persisted goal instance. Omission preserves legacy callers.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "objective": {
             "type": [
               "string",
@@ -22020,10 +22033,14 @@
         "properties": {
           "goal": {
             "$ref": "#/definitions/v2/ThreadGoal"
+          },
+          "goalId": {
+            "type": "string"
           }
         },
         "required": [
-          "goal"
+          "goal",
+          "goalId"
         ],
         "title": "ThreadGoalSetResponse",
         "type": "object"
@@ -25404,6 +25421,42 @@
           "turnId"
         ],
         "title": "ThreadTokenUsageUpdatedNotification",
+        "type": "object"
+      },
+      "ThreadToolName": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ThreadToolPolicy": {
+        "additionalProperties": false,
+        "description": "An additional startup tool ceiling, supplied again on cold resume. This intersects the host/reviewer base policy and grants no permissions.",
+        "properties": {
+          "allowedTools": {
+            "description": "Empty permits no callable tools. Generated Code Mode tools must be included.",
+            "items": {
+              "$ref": "#/definitions/v2/ThreadToolName"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "allowedTools"
+        ],
         "type": "object"
       },
       "ThreadTurnsListParams": {

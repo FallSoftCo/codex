@@ -287,6 +287,12 @@ impl CodexThread {
         self.session.services.analytics_events_client.is_enabled()
     }
 
+    /// The effective immutable tool ceiling captured for this loaded runtime.
+    /// Other permission, approval and tool-availability checks still apply.
+    pub fn tool_policy(&self) -> Arc<codex_extension_api::ToolPolicy> {
+        Arc::clone(&self.session.tool_policy)
+    }
+
     /// Returns extension-owned data attached to this thread runtime.
     pub fn thread_extension_data(&self) -> &codex_extension_api::ExtensionData {
         &self.session.services.thread_extension_data
