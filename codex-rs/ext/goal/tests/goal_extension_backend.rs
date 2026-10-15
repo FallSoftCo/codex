@@ -1338,6 +1338,7 @@ async fn goal_service_external_set_active_preserves_concurrent_usage() -> anyhow
         .set_thread_goal(
             runtime.as_ref(),
             GoalSetRequest {
+                expected_goal_id: None,
                 thread_id,
                 objective: GoalObjectiveUpdate::Set("new objective"),
                 status: Some(ThreadGoalStatus::Active),
@@ -1487,6 +1488,7 @@ async fn goal_service_sets_gets_and_clears_thread_goal() -> anyhow::Result<()> {
     let api = GoalService::new();
 
     let request = GoalSetRequest {
+        expected_goal_id: None,
         thread_id,
         objective: GoalObjectiveUpdate::Set(" ship goal API ownership "),
         status: None,
@@ -1565,6 +1567,7 @@ async fn goal_service_enforces_maximum_token_budget_on_creation_and_updates() ->
         .set_thread_goal(
             runtime.as_ref(),
             GoalSetRequest {
+                expected_goal_id: None,
                 thread_id,
                 objective: GoalObjectiveUpdate::Set("bounded goal"),
                 status: None,
@@ -1580,6 +1583,7 @@ async fn goal_service_enforces_maximum_token_budget_on_creation_and_updates() ->
         .set_thread_goal(
             runtime.as_ref(),
             GoalSetRequest {
+                expected_goal_id: None,
                 thread_id,
                 objective: GoalObjectiveUpdate::Keep,
                 status: None,
@@ -1607,6 +1611,7 @@ async fn goal_service_enforces_maximum_token_budget_on_creation_and_updates() ->
         .set_thread_goal(
             runtime.as_ref(),
             GoalSetRequest {
+                expected_goal_id: None,
                 thread_id,
                 objective: GoalObjectiveUpdate::Keep,
                 status: None,
@@ -1622,6 +1627,7 @@ async fn goal_service_enforces_maximum_token_budget_on_creation_and_updates() ->
         .set_thread_goal(
             runtime.as_ref(),
             GoalSetRequest {
+                expected_goal_id: None,
                 thread_id,
                 objective: GoalObjectiveUpdate::Keep,
                 status: None,

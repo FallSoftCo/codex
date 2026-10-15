@@ -210,6 +210,40 @@ RETURNING
         thread_goal_from_row(&row)
     }
 
+    /// Replace only the exact completed instance, atomically across processes.
+    pub async fn replace_completed_thread_goal(
+        &self,
+        thread_id: ThreadId,
+        expected_goal_id: &str,
+        objective: &str,
+        status: crate::ThreadGoalStatus,
+        token_budget: Option<i64>,
+    ) -> anyhow::Result<Option<crate::ThreadGoal>> {
+        let now_ms = datetime_to_epoch_millis(Utc::now());
+        let status = status_after_budget_limit(status, 0, token_budget);
+        let row = sqlx::query(
+            r#"
+UPDATE thread_goals SET
+ goal_id=?, objective=?, status=?, token_budget=?, tokens_used=0,
+ time_used_seconds=0, created_at_ms=?, updated_at_ms=?
+WHERE thread_id=? AND goal_id=? AND status='complete'
+RETURNING thread_id,goal_id,objective,status,token_budget,tokens_used,
+ time_used_seconds,created_at_ms,updated_at_ms
+            "#,
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(objective)
+        .bind(status.as_str())
+        .bind(token_budget)
+        .bind(now_ms)
+        .bind(now_ms)
+        .bind(thread_id.to_string())
+        .bind(expected_goal_id)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+        row.map(|row| thread_goal_from_row(&row)).transpose()
+    }
+
     pub async fn insert_thread_goal(
         &self,
         thread_id: ThreadId,

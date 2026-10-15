@@ -17,6 +17,30 @@ class Activity:
 
         c = self.connector
         if (
+            method in ("turn/plan/updated", "hollywood/goalProgress")
+            and params.get("threadId") == c.thread
+        ):
+            raw = {"method": method, "params": params}
+            item = {
+                "type": "planUpdate" if method == "turn/plan/updated" else "goalState",
+                "id": hashlib.sha256(
+                    json.dumps(raw, sort_keys=True).encode()
+                ).hexdigest(),
+                "status": "completed",
+            }
+            if method == "turn/plan/updated":
+                item.update(
+                    plan=params["plan"],
+                    text=params.get("explanation") or "Execution plan updated",
+                )
+            else:
+                item.update(
+                    nativeGoal=params["goal"],
+                    text="Native goal " + params["goal"]["status"],
+                )
+            params = {**params, "item": item}
+            method = "item/completed"
+        if (
             method not in ("item/started", "item/completed")
             or params.get("threadId") != c.thread
         ):
@@ -79,6 +103,13 @@ class Activity:
             # credential capability. Never republish arbitrary tool payloads into
             # the originating room. The full item stays in the private journal.
             detail = "Native tool payload retained in the protected execution journal."
+        elif kind in ("planUpdate", "goalState"):
+            title = (
+                "Plan"
+                if kind == "planUpdate"
+                else "Goal status: " + item["nativeGoal"]["status"]
+            )
+            detail = item.get("text")
         elif kind in ("agentMessage", "plan"):
             title = "Message" if kind == "agentMessage" else "Plan"
             detail = item.get("text")
@@ -91,8 +122,21 @@ class Activity:
             if kind in ("agentMessage", "plan")
             else (3000 if changes is None else 500),
         )
+        plan = None
+        if kind == "planUpdate":
+            raw_plan = item.get("plan", [])
+            plan = [
+                {
+                    "step": excerpt(step.get("step") or "(unnamed step)", 200),
+                    "status": step["status"],
+                }
+                for step in raw_plan[:32]
+            ]
+            truncated |= len(plan) != len(raw_plan)
         public = {
             "nativeType": kind,
+            "plan": plan,
+            "nativeGoal": item.get("nativeGoal"),
             "title": excerpt(title, 1000),
             "status": status,
             "command": excerpt(item.get("command"), 2500),

@@ -5,10 +5,7 @@ import shutil
 import stat
 from pathlib import Path
 
-from .targets import PackageInputs
-from .targets import PackageVariant
-from .targets import TargetSpec
-
+from .targets import PackageInputs, PackageVariant, TargetSpec
 
 LAYOUT_VERSION = 1
 
@@ -28,6 +25,7 @@ def prepare_package_dir(package_dir: Path, *, force: bool) -> None:
             shutil.rmtree(package_dir)
 
     package_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.chmod(0o755)
 
 
 def build_package_dir(
@@ -43,6 +41,8 @@ def build_package_dir(
     bin_dir.mkdir()
     resources_dir.mkdir()
     path_dir.mkdir()
+    for directory in (bin_dir, resources_dir, path_dir):
+        directory.chmod(0o755)
 
     entrypoint_name = variant.entrypoint_name(spec)
     copy_executable(
@@ -158,14 +158,16 @@ def copy_executable(src: Path, dest: Path, *, is_windows: bool) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dest)
     if not is_windows:
-        mode = dest.stat().st_mode
-        dest.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        # Artifacts must run under the installed service identity even when the
+        # builder uses a restrictive umask. No credentials belong in a package.
+        dest.chmod(0o755)
 
 
 def write_json(path: Path, value: object) -> None:
     with open(path, "w", encoding="utf-8") as out:
         json.dump(value, out, indent=2)
         out.write("\n")
+    path.chmod(0o644)
 
 
 def is_executable(path: Path) -> bool:

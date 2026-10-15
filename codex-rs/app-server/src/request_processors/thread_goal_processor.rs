@@ -185,6 +185,10 @@ impl ThreadGoalRequestProcessor {
                 &state_db,
                 GoalSetRequest {
                     thread_id,
+                    expected_goal_id: params
+                        .expected_goal_id
+                        .as_ref()
+                        .map(|value| value.as_deref()),
                     objective: objective
                         .map(GoalObjectiveUpdate::Set)
                         .unwrap_or(GoalObjectiveUpdate::Keep),
@@ -242,7 +246,10 @@ impl ThreadGoalRequestProcessor {
         self.outgoing
             .send_response(
                 request_id.clone(),
-                ThreadGoalSetResponse { goal: goal.clone() },
+                ThreadGoalSetResponse {
+                    goal_id: outcome.goal_id().to_string(),
+                    goal: goal.clone(),
+                },
             )
             .await;
         self.emit_thread_goal_updated_ordered(thread_id, goal, listener_command_tx)
@@ -263,13 +270,15 @@ impl ThreadGoalRequestProcessor {
         let state_db = self
             .state_db_for_materialized_thread(thread_id, GoalAccess::Read)
             .await?;
-        let goal = self
+        let (goal, goal_id) = self
             .goal_service
-            .get_thread_goal(&state_db, thread_id)
+            .get_thread_goal_with_identity(&state_db, thread_id)
             .await
-            .map_err(goal_service_error)?
-            .map(ThreadGoal::from);
-        Ok(ThreadGoalGetResponse { goal })
+            .map_err(goal_service_error)?;
+        Ok(ThreadGoalGetResponse {
+            goal: goal.map(ThreadGoal::from),
+            goal_id,
+        })
     }
 
     async fn thread_goal_clear_inner(

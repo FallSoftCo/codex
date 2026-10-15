@@ -51,6 +51,7 @@ pub enum GoalTokenBudgetUpdate {
 #[derive(Clone, Copy, Debug)]
 pub struct GoalSetRequest<'a> {
     pub thread_id: ThreadId,
+    pub expected_goal_id: Option<Option<&'a str>>,
     pub objective: GoalObjectiveUpdate<'a>,
     pub status: Option<ThreadGoalStatus>,
     pub token_budget: GoalTokenBudgetUpdate,
@@ -65,6 +66,10 @@ pub struct GoalSetOutcome {
 }
 
 impl GoalSetOutcome {
+    pub fn goal_id(&self) -> &str {
+        &self.state_goal.goal_id
+    }
+
     pub fn thread_goal_updated_item(&self) -> RolloutItem {
         RolloutItem::EventMsg(EventMsg::ThreadGoalUpdated(ThreadGoalUpdatedEvent {
             thread_id: self.goal.thread_id,
@@ -133,12 +138,25 @@ impl GoalService {
         state_db: &codex_state::StateRuntime,
         thread_id: ThreadId,
     ) -> Result<Option<ThreadGoal>, GoalServiceError> {
-        state_db
+        self.get_thread_goal_with_identity(state_db, thread_id)
+            .await
+            .map(|(goal, _)| goal)
+    }
+
+    pub async fn get_thread_goal_with_identity(
+        &self,
+        state_db: &codex_state::StateRuntime,
+        thread_id: ThreadId,
+    ) -> Result<(Option<ThreadGoal>, Option<String>), GoalServiceError> {
+        let goal = state_db
             .thread_goals()
             .get_thread_goal(thread_id)
             .await
-            .map(|goal| goal.map(protocol_goal_from_state))
-            .map_err(|err| GoalServiceError::Internal(format!("failed to read thread goal: {err}")))
+            .map_err(|err| {
+                GoalServiceError::Internal(format!("failed to read thread goal: {err}"))
+            })?;
+        let identity = goal.as_ref().map(|goal| goal.goal_id.clone());
+        Ok((goal.map(protocol_goal_from_state), identity))
     }
 
     /// Records the user's instruction after validation and before changing goal state.
@@ -152,6 +170,7 @@ impl GoalService {
     ) -> Result<GoalSetOutcome, GoalServiceError> {
         let GoalSetRequest {
             thread_id,
+            expected_goal_id,
             objective,
             status,
             token_budget,
@@ -202,6 +221,13 @@ impl GoalService {
             .map_err(|err| {
                 GoalServiceError::Internal(format!("failed to read thread goal: {err}"))
             })?;
+        if let Some(expected) = expected_goal_id
+            && existing_goal.as_ref().map(|goal| goal.goal_id.as_str()) != expected
+        {
+            return Err(GoalServiceError::InvalidRequest(
+                "persisted goal instance changed".to_string(),
+            ));
+        }
         if objective.is_none() && existing_goal.is_none() {
             return Err(GoalServiceError::InvalidRequest(format!(
                 "cannot update goal for thread {thread_id}: no goal exists"
@@ -212,27 +238,74 @@ impl GoalService {
         let (goal, previous_goal) = if let Some(objective) = objective {
             if let Some(existing_goal) = existing_goal.as_ref() {
                 let previous_goal = PreviousGoalSnapshot::from(existing_goal);
-                state_db
+                if existing_goal.status == codex_state::ThreadGoalStatus::Complete
+                    && expected_goal_id.flatten().is_some()
+                {
+                    let replaced = state_db
+                        .thread_goals()
+                        .replace_completed_thread_goal(
+                            thread_id,
+                            &existing_goal.goal_id,
+                            objective,
+                            status.unwrap_or(codex_state::ThreadGoalStatus::Active),
+                            token_budget.flatten().or(max_goal_token_budget),
+                        )
+                        .await
+                        .map_err(|err| {
+                            GoalServiceError::Internal(format!(
+                                "failed to replace completed goal: {err}"
+                            ))
+                        })?;
+                    let goal = replaced.ok_or_else(|| {
+                        GoalServiceError::InvalidRequest(
+                            "completed goal instance changed".to_string(),
+                        )
+                    })?;
+                    (goal, Some(previous_goal))
+                } else {
+                    state_db
+                        .thread_goals()
+                        .update_thread_goal(
+                            thread_id,
+                            codex_state::GoalUpdate {
+                                objective: Some(objective.to_string()),
+                                status,
+                                token_budget,
+                                expected_goal_id: Some(existing_goal.goal_id.clone()),
+                            },
+                        )
+                        .await
+                        .map_err(|err| {
+                            GoalServiceError::Internal(format!(
+                                "failed to update thread goal: {err}"
+                            ))
+                        })?
+                        .ok_or_else(|| {
+                            GoalServiceError::InvalidRequest(format!(
+                                "cannot update goal for thread {thread_id}: no goal exists"
+                            ))
+                        })
+                        .map(|goal| (goal, Some(previous_goal)))?
+                }
+            } else if expected_goal_id.is_some() {
+                let inserted = state_db
                     .thread_goals()
-                    .update_thread_goal(
+                    .insert_thread_goal(
                         thread_id,
-                        codex_state::GoalUpdate {
-                            objective: Some(objective.to_string()),
-                            status,
-                            token_budget,
-                            expected_goal_id: Some(existing_goal.goal_id.clone()),
-                        },
+                        objective,
+                        status.unwrap_or(codex_state::ThreadGoalStatus::Active),
+                        token_budget.flatten().or(max_goal_token_budget),
                     )
                     .await
                     .map_err(|err| {
-                        GoalServiceError::Internal(format!("failed to update thread goal: {err}"))
-                    })?
-                    .ok_or_else(|| {
-                        GoalServiceError::InvalidRequest(format!(
-                            "cannot update goal for thread {thread_id}: no goal exists"
-                        ))
-                    })
-                    .map(|goal| (goal, Some(previous_goal)))?
+                        GoalServiceError::Internal(format!("failed to insert fenced goal: {err}"))
+                    })?;
+                let goal = inserted.ok_or_else(|| {
+                    GoalServiceError::InvalidRequest(
+                        "another goal instance already exists".to_string(),
+                    )
+                })?;
+                (goal, None)
             } else {
                 state_db
                     .thread_goals()

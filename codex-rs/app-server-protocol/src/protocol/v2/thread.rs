@@ -875,6 +875,16 @@ pub enum ThreadGoalMutationOrigin {
 #[ts(export_to = "v2/")]
 pub struct ThreadGoalSetParams {
     pub thread_id: String,
+    /// Optional compare-and-set fence. Null requires no existing goal; a string
+    /// requires that exact persisted goal instance. Omission preserves legacy callers.
+    #[serde(
+        default,
+        deserialize_with = "crate::protocol::serde_helpers::deserialize_double_option",
+        serialize_with = "crate::protocol::serde_helpers::serialize_double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[ts(optional = nullable, type = "string | null")]
+    pub expected_goal_id: Option<Option<String>>,
     /// Missing provenance does not supply user authorization.
     #[ts(optional = nullable)]
     pub origin: Option<ThreadGoalMutationOrigin>,
@@ -896,6 +906,7 @@ pub struct ThreadGoalSetParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadGoalSetResponse {
+    pub goal_id: String,
     pub goal: ThreadGoal,
 }
 
@@ -910,6 +921,7 @@ pub struct ThreadGoalGetParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadGoalGetResponse {
+    pub goal_id: Option<String>,
     pub goal: Option<ThreadGoal>,
 }
 

@@ -10,7 +10,8 @@ import json
 import os
 from pathlib import Path
 from aiohttp import web
-from lax_connector.rpc import AppServer
+from lax_connector.rpc import AppServer, RpcError
+from lax_connector.native_goals import external_admission
 
 ROOT = Path(os.environ["NATIVE_GOAL_EVIDENCE"])
 BINARY = os.environ["NATIVE_GOAL_BINARY"]
@@ -150,6 +151,7 @@ async def main():
     async def open_runtime():
         r = AppServer(BINARY, home, native, event, request)
         await r.start()
+        await external_admission(r)
         return r
 
     try:
@@ -174,15 +176,56 @@ async def main():
                 break
         flag = next(f for f in feature if f["name"] == "goal_external_admission")
         assert flag["enabled"] is True
-        goal = await rpc.call(
+        # Materialize the fresh empty context through metadata, without a turn.
+        # The disposable seed is explicitly cleared before either racing caller.
+        seed = await rpc.call(
             "thread/goal/set",
             {
                 "threadId": thread,
+                "expectedGoalId": None,
+                "origin": "automatic",
+                "objective": "Disposable metadata materialization seed.",
+                "status": "paused",
+            },
+        )
+        (ROOT / "materialization-seed.json").write_text(json.dumps(seed))
+        await rpc.call("thread/goal/clear", {"threadId": thread, "origin": "automatic"})
+        assert (await rpc.call("thread/goal/get", {"threadId": thread}))["goal"] is None
+        second = await open_runtime()
+        try:
+            try:
+                await second.call(
+                    "thread/resume",
+                    {"threadId": thread, "excludeTurns": True, **settings},
+                )
+                raise AssertionError("A second native context writer was admitted")
+            except RpcError as error:
+                assert "active writer" in str(error), str(error)
+            create = {
+                "threadId": thread,
+                "expectedGoalId": None,
                 "origin": "automatic",
                 "objective": "Exercise one explicitly admitted goal turn and persist its structured plan. Remain active for metadata readback.",
                 "status": "active",
-            },
-        )
+            }
+            race = await asyncio.gather(
+                rpc.call("thread/goal/set", create),
+                second.call("thread/goal/set", create),
+                return_exceptions=True,
+            )
+            winners = [r for r in race if isinstance(r, dict)]
+            failures = [r for r in race if isinstance(r, RpcError)]
+            assert len(winners) == 1 and len(failures) == 1, [
+                (type(r).__name__, str(r)[:200]) for r in race
+            ]
+            goal = winners[0]
+            assert (
+                goal["goalId"]
+                and (await rpc.call("thread/goal/get", {"threadId": thread}))["goalId"]
+                == goal["goalId"]
+            )
+        finally:
+            await second.close()
         (ROOT / "initial-goal.json").write_text(json.dumps(goal))
         await asyncio.sleep(2)
         assert requests == [] and not any(e["method"] == "turn/started" for e in events)
@@ -223,6 +266,49 @@ async def main():
         assert (
             final["goal"]["status"] == "active" and final["goal"]["tokensUsed"] > 0
         ), final
+        await rpc.call(
+            "thread/goal/set",
+            {
+                "threadId": thread,
+                "expectedGoalId": goal["goalId"],
+                "origin": "automatic",
+                "status": "complete",
+            },
+        )
+        replacement = await rpc.call(
+            "thread/goal/set",
+            {
+                "threadId": thread,
+                "expectedGoalId": goal["goalId"],
+                "origin": "automatic",
+                "objective": "A fresh explicitly authorized metadata objective.",
+                "status": "active",
+            },
+        )
+        assert (
+            replacement["goalId"] != goal["goalId"]
+            and replacement["goal"]["tokensUsed"] == 0
+        )
+        try:
+            await rpc.call(
+                "thread/goal/set",
+                {
+                    "threadId": thread,
+                    "expectedGoalId": goal["goalId"],
+                    "origin": "automatic",
+                    "status": "paused",
+                },
+            )
+            raise AssertionError("Stale goal mutation was accepted")
+        except RpcError:
+            pass
+        await asyncio.sleep(1)
+        current = await rpc.call("thread/goal/get", {"threadId": thread})
+        assert (
+            current["goalId"] == replacement["goalId"]
+            and current["goal"]["status"] == "active"
+        )
+        assert len([e for e in events if e["method"] == "turn/started"]) == 1
         history = await rpc.call(
             "thread/read", {"threadId": thread, "includeTurns": True}
         )
@@ -230,6 +316,10 @@ async def main():
         (ROOT / "final-goal.json").write_text(json.dumps(final))
         result = {
             "state": "passed",
+            "twoNativeProcessesCreateOneGoal": True,
+            "nativeGoalIdentityRetained": True,
+            "completedGoalReplacementFenced": True,
+            "staleGoalMutationDenied": True,
             "threadId": thread,
             "turnId": submitted["turn"]["id"],
             "activeGoalSetStartedNoTurn": True,

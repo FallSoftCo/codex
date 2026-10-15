@@ -578,7 +578,7 @@ where
             .get::<GoalExtensionConfig>()
             .and_then(|config| config.max_goal_token_budget);
 
-        let tools = [
+        let mut tools = vec![
             GoalToolExecutor::get(
                 runtime.thread_id(),
                 Arc::clone(&self.state_dbs),
@@ -586,15 +586,6 @@ where
                 self.analytics.clone(),
                 self.event_emitter.clone(),
                 self.metrics.clone(),
-            ),
-            GoalToolExecutor::create(
-                runtime.thread_id(),
-                Arc::clone(&self.state_dbs),
-                runtime.accounting_state(),
-                self.analytics.clone(),
-                self.event_emitter.clone(),
-                self.metrics.clone(),
-                max_goal_token_budget,
             ),
             GoalToolExecutor::update(
                 runtime.thread_id(),
@@ -605,6 +596,26 @@ where
                 self.metrics.clone(),
             ),
         ];
+        // In externally managed execution, canonical work admission creates
+        // the native goal through the fenced API. Models retain get/update,
+        // without creating an unbound competing goal in this context.
+        if !thread_store
+            .get::<GoalExtensionConfig>()
+            .is_some_and(|config| config.external_admission)
+        {
+            tools.insert(
+                1,
+                GoalToolExecutor::create(
+                    runtime.thread_id(),
+                    Arc::clone(&self.state_dbs),
+                    runtime.accounting_state(),
+                    self.analytics.clone(),
+                    self.event_emitter.clone(),
+                    self.metrics.clone(),
+                    max_goal_token_budget,
+                ),
+            );
+        }
         tools
             .into_iter()
             .map(|mut tool| {

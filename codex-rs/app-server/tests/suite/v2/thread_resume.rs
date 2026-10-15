@@ -2185,6 +2185,7 @@ async fn unloaded_thread_goal_mutations_respect_parent_ownership() -> Result<()>
                 assert_eq!(
                     retained,
                     ThreadGoalGetResponse {
+                        goal_id: Some(original.goal_id.clone()),
                         goal: Some(original.goal.clone()),
                     },
                 );

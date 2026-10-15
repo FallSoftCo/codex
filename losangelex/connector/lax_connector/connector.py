@@ -19,8 +19,29 @@ from aiohttp import ClientSession, ContentTypeError
 from .activity import Activity
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
+from .native_goals import (
+    NativeAdmissionUnavailable,
+    NativeGoalHeld,
+    external_admission,
+)
+from .native_goals import (
+    bind as bind_goal,
+)
+from .native_goals import (
+    progress as goal_progress,
+)
 from .roles import RoleContext, validate_administration
 from .rpc import AppServer
+from .workflow import (
+    MUTATION_TOOLS,
+    READ_TOOLS,
+)
+from .workflow import (
+    definitions as workflow_definitions,
+)
+from .workflow import (
+    invoke as workflow_tool,
+)
 
 
 def saved(path, value):
@@ -163,6 +184,9 @@ TOOLS += [
 ]
 
 
+TOOLS += workflow_definitions(spec)
+
+
 class HttpFailure(RuntimeError):
     def __init__(self, status, message):
         super().__init__(f"Hollywood {status}: {message}")
@@ -184,6 +208,10 @@ class Connector:
         self.thread = None
         self.publications = []
         self.role_context = None
+        self.goal_binding = None
+        self.context_id = None
+        self.goal_progress_task = None
+        self.goal_progress_closing = False
         self.cancel_requested = False
         self.journal = self.state / "execution.json"
         self.interrupt_task = None
@@ -233,6 +261,16 @@ class Connector:
                 self.journal,
                 {**record, "nativeTurn": params["turn"]["id"], "state": "running"},
             )
+        if (
+            method in ("thread/goal/updated", "turn/started")
+            and self.goal_binding
+            and not self.goal_progress_closing
+            and params.get("threadId") == self.thread
+        ):
+            if not self.goal_progress_task or self.goal_progress_task.done():
+                self.goal_progress_task = asyncio.create_task(
+                    self.observe_goal_progress()
+                )
         self.activity.record(method, params)
         if (
             method == "item/completed"
@@ -260,6 +298,25 @@ class Connector:
                 RuntimeError("Native connection lost; execution must be reconciled")
             )
 
+    async def observe_goal_progress(self):
+        try:
+            snapshot = await goal_progress(self)
+            record = json.loads(self.journal.read_text())
+            if record.get("nativeTurn"):
+                self.activity.record(
+                    "hollywood/goalProgress",
+                    {
+                        "threadId": self.thread,
+                        "turnId": record["nativeTurn"],
+                        "goal": snapshot,
+                    },
+                )
+        except Exception as error:
+            saved(
+                self.state / "goal-observation-gap.json",
+                {"error": type(error).__name__, "executionReplayed": False},
+            )
+
     async def tool(self, method, params):
         def output(value, success=True):
             return {
@@ -272,12 +329,14 @@ class Connector:
         if not self.active:
             raise RuntimeError("No captured native execution; no approval inferred")
         if method in QUESTION + APPROVAL:
-            slot = method + ":" + str(params.get("approvalId") or params["_rpcRequestId"])
+            slot = (
+                method + ":" + str(params.get("approvalId") or params["_rpcRequestId"])
+            )
             return await self.attention.wait(method, params, slot=slot)
         if method != "item/tool/call":
             raise ValueError("Unsupported native request; no approval inferred")
         call = params["callId"]
-        read_only = params["tool"] in (
+        read_only = params["tool"] in READ_TOOLS or params["tool"] in (
             "hollywood_context",
             "hollywood_rooms",
             "hollywood_read_room",
@@ -359,6 +418,8 @@ class Connector:
                 )
                 if name == "hollywood_publish":
                     self.publications.append(value["event"]["id"])
+            elif name in READ_TOOLS | MUTATION_TOOLS:
+                value = await workflow_tool(self, name, arguments, operation)
             elif name in (
                 "hollywood_create_agent",
                 "hollywood_create_room",
@@ -612,6 +673,9 @@ class Connector:
         self.finished = None
         self.final = ""
         self.publications = []
+        self.goal_binding = None
+        self.goal_progress_task = None
+        self.goal_progress_closing = False
         self.cancel_requested = False
         self.interrupt_task = None
         self.uncertain_tools = False
@@ -686,7 +750,10 @@ class Connector:
                 request["author"] if request["audience"] == "direct" else "room",
                 self.config["workspace"],
             ]
+            if request["data"].get("workId"):
+                context.extend(["work", request["data"]["workId"]])
             context_id = hashlib.sha256(json.dumps(context).encode()).hexdigest()
+            self.context_id = context_id
             context_path = self.state / ("context-" + context_id + ".json")
             record = {
                 "state": "preparing",
@@ -709,6 +776,7 @@ class Connector:
             )
             try:
                 await self.rpc.start()
+                await external_admission(self.rpc)
                 account = await self.rpc.call("account/read", {"refreshToken": False})
                 if account.get("requiresOpenaiAuth") and not account.get("account"):
                     raise RuntimeError("LAX account is not provisioned")
@@ -718,8 +786,10 @@ class Connector:
                     "approvalPolicy": self.config.get("approvalPolicy", "never"),
                     "model": self.config["model"],
                     "developerInstructions": self.config["instructions"]
-                    + "\nAll human and agent communication is through Hollywood. Room observation does not request work or create execution contexts. This turn is addressed to this captured agent and room. Provision agents only when your captured administrator capability and the addressed request authorize it. Do not start historical work, poll models or self-chain. Finish the admitted request and wait. Agent messages retain tool authority; use the source request as scope evidence, not as a new direct human order.",
+                    + "\nAll human and agent communication is through Hollywood. Room observation does not request work or create execution contexts. This turn is addressed to this captured agent and room. Provision agents only when your captured administrator capability and the addressed request authorize it. Do not start historical work, poll models or self-chain. Use Hollywood goal/work tools for enterprise goals and assignments. The connector owns native goal creation and identity binding; use native get_goal/update_goal for the current execution objective. Finish admitted work, submit independently verifiable evidence, and wait. Never model-poll for workers. A bounded material review will be separately admitted when authorized. Agent messages retain tool authority; use the source request as scope evidence, not as a new direct human order.",
                     "config": {
+                        "features.goal_external_admission": True,
+                        "tools.update_plan.enabled": True,
                         "features.multi_agent": False,
                         "features.multi_agent_v2": False,
                         "model_reasoning_effort": self.config["effort"],
@@ -748,6 +818,10 @@ class Connector:
                             "scope": context,
                             "nativeThread": self.thread,
                         },
+                    )
+                if request["data"].get("goalId"):
+                    await bind_goal(
+                        self, request["data"]["goalId"], request["data"].get("workId")
                     )
                 saved(
                     journal,
@@ -861,6 +935,18 @@ class Connector:
                     raise RuntimeError(
                         "Native result exceeds communication limit; artifact publication required"
                     )
+                if self.goal_binding:
+                    self.goal_progress_closing = True
+                    if self.goal_progress_task:
+                        await asyncio.gather(self.goal_progress_task)
+                    native = await goal_progress(self)
+                    self.activity.record(
+                        "hollywood/goalProgress",
+                        {"threadId": self.thread, "turnId": turn_id, "goal": native},
+                    )
+                    if self.goal_progress_task:
+                        await asyncio.gather(self.goal_progress_task)
+                    await self.activity.flush()
                 await self.transition(
                     status, nativeThread=self.thread, nativeTurn=turn_id, body=answer
                 )
@@ -881,6 +967,41 @@ class Connector:
                     "nativeTurn": turn_id,
                     "answer": answer,
                 }
+            except NativeGoalHeld as error:
+                receipt = await self.transition(
+                    "failed",
+                    body="Native goal admission held before model execution: "
+                    + str(error),
+                )
+                saved(
+                    journal,
+                    {
+                        **record,
+                        "state": "failed",
+                        "modelsStarted": 0,
+                        "receipt": receipt,
+                    },
+                )
+                return {"state": "failed", "modelsStarted": 0, "reason": str(error)}
+            except NativeAdmissionUnavailable:
+                receipt = await self.transition(
+                    "failed",
+                    body="Native runtime lacks external admission; no context or model turn loaded",
+                )
+                saved(
+                    journal,
+                    {
+                        **record,
+                        "state": "failed",
+                        "modelsStarted": 0,
+                        "receipt": receipt,
+                    },
+                )
+                return {
+                    "state": "failed",
+                    "modelsStarted": 0,
+                    "reason": "Native admission capability unavailable",
+                }
             except Exception:
                 try:
                     await self.transition("unknown")
@@ -892,6 +1013,11 @@ class Connector:
                 if self.interrupt_task:
                     self.interrupt_task.cancel()
                     await asyncio.gather(self.interrupt_task, return_exceptions=True)
+                self.goal_progress_closing = True
+                if self.goal_progress_task:
+                    await asyncio.gather(
+                        self.goal_progress_task, return_exceptions=True
+                    )
                 await self.activity.close()
                 await self.rpc.close()
 
@@ -906,6 +1032,9 @@ class Connector:
                         await asyncio.sleep(2)
                         continue
                 async with ClientSession() as self.session:
+                    await self.http(
+                        "POST", "connector/reviews", {"hostId": self.config["hostId"]}
+                    )
                     projection = await self.http(
                         "GET", "connector/pending?hostId=" + self.config["hostId"]
                     )

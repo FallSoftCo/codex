@@ -59,6 +59,10 @@ class RoleContext:
             "audience": request["audience"],
             "senderKind": request["data"].get("authorKind"),
             "sourceEventId": request["source"],
+            "goalId": request["data"].get("goalId"),
+            "workId": request["data"].get("workId"),
+            "workAcceptance": request["data"].get("acceptance"),
+            "goalReview": bool(request["data"].get("goalReview")),
         }
         if any(envelope.get(key) != value for key, value in expected.items()):
             raise ValueError("Role context does not match captured execution ownership")
