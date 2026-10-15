@@ -1573,7 +1573,17 @@ class Connector:
                     "modelsStarted": 0,
                     "reason": "Native admission capability unavailable",
                 }
-            except Exception:
+            except Exception as error:
+                current = json.loads(journal.read_text())
+                saved(journal.parent / "execution-error.json", {
+                    "phase": current["state"],
+                    "error": type(error).__name__,
+                    "detail": str(error)[:2000],
+                    "nativeThread": self.thread,
+                    "nativeTurn": current.get("nativeTurn"),
+                    "deliveryId": self.active["delivery"]["id"],
+                    "executionNotRepeated": True,
+                })
                 try:
                     await self.transition("unknown")
                 except Exception:

@@ -107,6 +107,19 @@ async def bind_role(c):
             "Completing, cancelling or failing one delivery does not finish this role. "
             "Hollywood admits every turn; remain idle between addressed requests or authorized material reviews."
         )
+        if len(objective) > 4000:
+            objective = (
+                "Ongoing Hollywood responsibility for agent " + policy["agentId"]
+                + "; instance " + str(uuid4()) + chr(10)
+                + "Authority: " + policy["authorityId"] + chr(10)
+                + "Primary: " + policy["primaryRole"] + chr(10)
+                + "Exact captured role contract SHA-256: " + role_digest + chr(10)
+                + "Follow the complete authoritative role purpose in the captured "
+                "LAX role context. This responsibility spans separately accepted "
+                "business goals; completing one delivery does not finish the role. "
+                "Hollywood admits every turn. Remain idle between addressed "
+                "requests and authorized material reviews."
+            )
         binding = {
             "state": "create-intent",
             "bindingKind": "role",
@@ -227,16 +240,35 @@ async def bind(connector, goal_id, work_id=None, new_goal=False):
     if not binding:
         if snapshot["goal"] and expected is None:
             raise NativeGoalHeld("Existing native goal needs explicit adoption")
+        # Native goals have a 4,000-character ceiling. Hollywood messages and
+        # acceptance are separate, larger authoritative records; duplicating them
+        # here can reject ordinary enterprise assignments before the first turn.
+        # Bind exact references and digests, retaining the complete original
+        # request in the admitted turn, journal and Hollywood work briefing.
+        request = c.active["request"]
+        specification = {
+            "requestId": request["id"],
+            "body": request["body"],
+            "acceptance": c.role_context.value.get("workAcceptance"),
+        }
+        contract_digest = hashlib.sha256(
+            json.dumps(specification, sort_keys=True).encode()
+        ).hexdigest()
         objective = (
-            "Hollywood work " + work_id
-            if work_id
-            else "Hollywood coordination request " + c.active["request"]["id"]
+            ("Hollywood work " + work_id if work_id else
+             "Hollywood coordination request " + request["id"])
+            + "; binding " + str(uuid4()) + chr(10)
+            + "Authority: " + request["authority"] + chr(10)
+            + "Hollywood goal: " + goal_id + chr(10)
+            + "Source request: " + request["id"] + chr(10)
+            + "Exact request/acceptance contract SHA-256: " + contract_digest + chr(10)
+            + "Perform the complete original admitted request and its authoritative "
+            "Hollywood work acceptance, available in the turn and hollywood_briefing. "
+            "Do not substitute this reference for reading that contract. "
+            "Complete this bounded native objective only after satisfying those "
+            "criteria and submitting verifiable work evidence. Do not complete "
+            "the parent enterprise goal or ongoing agent responsibility."
         )
-        objective += "; binding " + str(uuid4()) + chr(10) + c.active["request"]["body"]
-        if work_id and c.role_context.value.get("workAcceptance"):
-            objective += (
-                chr(10) + "Acceptance: " + c.role_context.value["workAcceptance"]
-            )
         binding = {
             "state": "create-intent",
             "nativeThread": c.thread,
