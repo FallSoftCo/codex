@@ -175,6 +175,51 @@ def enroll(spec):
     return receipt
 
 
+def observe_executors(config):
+    """Independent host facts, coalesced and receipted; never a model wake."""
+    from .service_observer import observe, digest
+    root = Path(config["state"])
+    after = None
+    observed = 0
+    while True:
+        route = "hosts/" + config["hostId"] + "/executors"
+        if after:
+            route += "?after=" + after
+        page = request(config["hollywoodUrl"], config["token"], "GET", route)
+        for row in page["executors"]:
+            path = root / ("executor-observation-" + row["id"] + ".json")
+            prior = json.loads(path.read_text()) if path.exists() else None
+            if prior and prior["state"] == "pending":
+                payload = prior["payload"]
+            else:
+                try:
+                    fact = observe(config, row)
+                except Exception as error:
+                    d = row["descriptor"]
+                    fact = {"state": "unknown", "evidence": {
+                        "reason": "unverified-host-executor", "error": type(error).__name__,
+                        "originalBootId": d["bootId"], "observedBootId": None,
+                        "serviceUnit": d["serviceUnit"], "originalServiceInvocation": d["serviceInvocation"],
+                        "guardianPid": d["guardianPid"], "guardianStart": d["guardianStart"],
+                        "nativePid": d["nativePid"], "nativeStart": d["nativeStart"],
+                        "externalEffectsUndone": False}}
+                fingerprint = digest(fact)
+                if prior and prior.get("fingerprint") == fingerprint:
+                    continue
+                payload = {"operationId": str(uuid4()), "machineIdentity": config["machineIdentity"],
+                           "descriptorDigest": row["descriptor_digest"], **fact}
+                saved(path, {"state": "pending", "fingerprint": fingerprint, "payload": payload})
+            result = request(config["hollywoodUrl"], config["token"], "POST",
+                             "hosts/" + config["hostId"] + "/executors/" + row["id"] + "/observation", payload)
+            original = json.loads(path.read_text())
+            saved(path, {**original, "state": "completed", "receipt": result})
+            observed += 1
+        after = page["nextAfter"]
+        if not after:
+            break
+    return observed
+
+
 def supervise(config, once=False):
     if machine_identity() != config["machineIdentity"]:
         raise PermissionError("Controller config belongs to another machine")
@@ -203,9 +248,10 @@ def supervise(config, once=False):
                 payload,
             )
             saved(path, {"state": "completed", "payload": payload, "receipt": result})
+            executor_observations = observe_executors(config)
             saved(
                 root / "status.json",
-                {"state": "healthy", "lastReceipt": result, "modelsStarted": 0},
+                {"state": "healthy", "lastReceipt": result, "executorObservations": executor_observations, "modelsStarted": 0},
             )
             if once:
                 return result
