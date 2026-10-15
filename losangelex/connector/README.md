@@ -324,3 +324,6 @@ or a claim that a missing message proves rejection.
 
 Native start/cold-resume capability ceilings and fail-closed effective readback
 are described in [NATIVE_TOOL_POLICY.md](NATIVE_TOOL_POLICY.md).
+
+Per-attempt authority and original execution recovery are described in
+[ATTEMPT_JOURNALS.md](ATTEMPT_JOURNALS.md).

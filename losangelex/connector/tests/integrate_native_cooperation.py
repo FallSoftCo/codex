@@ -60,6 +60,130 @@ def cleanup(spec):
     )
 
 
+def qualify_attempt_journals(spec, workers, python):
+    """Inspect the actual completed cohort; no unit or model is started."""
+    root = Path(spec["evidence"])
+    candidates = []
+    for name, worker in sorted(workers.items()):
+        service = subprocess.run(
+            [
+                "systemctl",
+                "show",
+                worker["unit"],
+                "-p",
+                "ActiveState",
+                "-p",
+                "UnitFileState",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert "ActiveState=inactive" in service and "UnitFileState=disabled" in service
+        state = Path(worker["workspace"]).parent / "state"
+        records = list(state.glob("executions/*/*/execution.json"))
+        if len(records) > 1:
+            candidates.append((name, worker, state))
+    assert len(candidates) == 1
+    name, worker, state = candidates[0]
+    latest = state / "execution.json"
+    selected = state / "execution-current.json"
+    attempts = sorted(
+        (
+            json.loads(path.read_text())
+            for path in state.glob("executions/*/*/execution.json")
+        ),
+        key=lambda row: row["request"]["seq"],
+    )
+    assert len(attempts) == 2
+    older, current = attempts
+    assert json.loads(latest.read_text())["delivery"]["id"] == current["delivery"]["id"]
+    canonical = (
+        state
+        / "executions"
+        / current["delivery"]["id"]
+        / str(current["delivery"]["generation"])
+        / "execution.json"
+    )
+    protected = {path: path.read_bytes() for path in (latest, selected, canonical)}
+    native_files = [
+        path
+        for item in workers.values()
+        for path in (Path(item["workspace"]).parent / "codex-home/sessions").rglob(
+            "*.jsonl"
+        )
+    ]
+
+    def provider_turns():
+        return sum(
+            json.loads(line).get("payload", {}).get("type") == "task_started"
+            for path in native_files
+            for line in path.read_text().splitlines()
+        )
+
+    before_recovery = provider_turns()
+    assert before_recovery == 4
+    command = [
+        "runuser",
+        "-u",
+        worker["linuxUser"],
+        "--",
+        python,
+        "-m",
+        "lax_connector.connector",
+        "--config",
+        str(state.parent / "connector.json"),
+        "--reconcile-delivery",
+        older["delivery"]["id"],
+        "--generation",
+        str(older["delivery"]["generation"]),
+    ]
+    saved(
+        root / "old-attempt-recovery-intent.json",
+        {
+            "deliveryId": older["delivery"]["id"],
+            "generation": older["delivery"]["generation"],
+            "originalRequestReplayed": False,
+            "expectedNewModelTurns": 0,
+        },
+    )
+    with (root / "old-attempt-recovery.log").open("wb") as output:
+        recovery = subprocess.run(
+            command, stdout=output, stderr=subprocess.STDOUT, timeout=90
+        )
+    assert recovery.returncode == 0
+    assert all(path.read_bytes() == value for path, value in protected.items())
+    assert provider_turns() == before_recovery
+    older_path = (
+        state
+        / "executions"
+        / older["delivery"]["id"]
+        / str(older["delivery"]["generation"])
+        / "execution.json"
+    )
+    old_receipt = json.loads(older_path.read_text())
+    assert old_receipt["reconciled"] and old_receipt["state"] == "completed"
+    assert not list((state / "executions/open").iterdir())
+    journal_result = {
+        "passed": True,
+        "actualNativePeers": 3,
+        "actualProviderTurns": before_recovery,
+        "agentWithMultipleAttempts": name,
+        "olderAttemptReconciled": older["delivery"]["id"],
+        "laterAttemptPreserved": current["delivery"]["id"],
+        "latestSelectorProjectionAndCanonicalBytesUnchanged": True,
+        "oldAttemptRecoveryNewModelTurns": 0,
+        "oldRequestOrArtifactReplayed": False,
+        "allOwnedWorkersStopped": True,
+        "unknownOriginalGlobalControlJourneyQualified": False,
+    }
+    saved(root / "attempt-journal-recovery.json", journal_result)
+    result_path = root / "result.json"
+    final_result = json.loads(result_path.read_text())
+    final_result["attemptJournalRecovery"] = journal_result
+    saved(result_path, final_result)
+
+
 def main(spec):
     os.umask(0o077)
     autonomous = spec.get("autonomousPeerRequest", False)
@@ -694,6 +818,9 @@ def main(spec):
                 "artifactAccess": "Explicit same-host disposable Unix ACL; full artifact capability service remains required",
             },
         )
+        if spec.get("attemptJournalRecovery"):
+            cleanup(spec)
+            qualify_attempt_journals(spec, workers, python)
         print(
             json.dumps(
                 {

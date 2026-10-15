@@ -21,7 +21,7 @@ from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
 from .errors import HttpFailure
 from .effects import Effects
-from .journal import saved
+from .journal import ExecutionJournals, saved
 from .native_controls import NativeControls
 from .native_policy import NativeToolPolicyUnavailable
 from .native_policy import normalized as normalize_tool_policy
@@ -68,7 +68,7 @@ def spec(name, description, properties, required):
     }
 
 
-CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1']
+CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1']
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -222,7 +222,10 @@ class Connector:
         self.goal_progress_task = None
         self.goal_progress_closing = False
         self.cancel_requested = False
-        self.journal = self.state / "execution.json"
+        self.executions = ExecutionJournals(
+            self.state, agent=config["agentId"], host=config["hostId"]
+        )
+        self.journal = self.executions.current()
         self.interrupt_task = None
         self.control_task = None
         self.uncertain_tools = False
@@ -577,6 +580,21 @@ class Connector:
                 False,
             )
 
+    def transition_path(self, state):
+        path = self.journal.directory / ("transition-" + state + ".json")
+        previous = self.state / path.name
+        if not path.exists() and previous.exists():
+            receipt = json.loads(previous.read_text())
+            delivery = self.active["delivery"]
+            payload = receipt.get("payload", {})
+            if (
+                receipt.get("deliveryId") == delivery["id"]
+                and payload.get("generation") == delivery["generation"]
+                and payload.get("claimId") == delivery["claim_id"]
+            ):
+                saved(path, receipt)
+        return path
+
     async def transition(self, state, *, operation=None, **details):
         d = self.active["delivery"]
         operation = operation or "lax:" + d["id"] + ":" + state
@@ -588,12 +606,12 @@ class Connector:
             **details,
         }
         saved(
-            self.state / ("transition-" + state + ".json"),
+            self.transition_path(state),
             {"deliveryId": d["id"], "payload": payload, "state": "intent"},
         )
         out = await self.http("POST", "deliveries/" + d["id"] + "/transition", payload)
         saved(
-            self.state / ("transition-" + state + ".json"),
+            self.transition_path(state),
             {
                 "deliveryId": d["id"],
                 "payload": payload,
@@ -708,6 +726,22 @@ class Connector:
                 results = await self.read_guidance([row], row["scope"]["nativeTurn"])
             return {"guidance": results, "nativeReplay": False, "latestExecutionJournalChanged": False}
 
+    async def reconcile_attempt(self, delivery_id, generation):
+        """Inspect one captured original attempt without replacing the latest."""
+        if self.rpc and self.rpc.process and self.rpc.process.returncode is None:
+            raise RuntimeError("Old-attempt recovery cannot replace a live native transport")
+        fields = (
+            "journal", "active", "thread", "rpc", "goal_binding",
+            "context_id", "goal_progress_closing",
+        )
+        previous = {name: getattr(self, name) for name in fields}
+        self.journal = self.executions.open(delivery_id, generation)
+        try:
+            return await self.reconcile()
+        finally:
+            for name, value in previous.items():
+                setattr(self, name, value)
+
     async def reconcile(self):
         """Recover the original owner using metadata only; never resume/start a turn."""
         record = json.loads(self.journal.read_text())
@@ -808,7 +842,7 @@ class Connector:
                     snapshot = await self.rpc.call(
                         "thread/read", {"threadId": self.thread, "includeTurns": True}
                     )
-                    saved(self.state / "native-reconciliation-readback.json", snapshot)
+                    saved(self.journal.directory / "native-reconciliation-readback.json", snapshot)
                     turns = [
                         t
                         for t in snapshot["thread"].get("turns", [])
@@ -847,7 +881,13 @@ class Connector:
                             "Native turn has an unresolved tool effect; hold original delivery"
                         )
                     for path in self.state.glob("tool-*.json"):
-                        if json.loads(path.read_text())["state"] != "completed":
+                        original_tool = json.loads(path.read_text())
+                        if (
+                            original_tool.get("requestId") != self.active["request"]["id"]
+                            or original_tool.get("nativeThread") != record["nativeThread"]
+                        ):
+                            continue
+                        if original_tool["state"] != "completed":
                             if d["state"] != "unknown":
                                 await self.transition("unknown")
                             raise RuntimeError(
@@ -894,7 +934,7 @@ class Connector:
                         ),
                         "",
                     )
-                    transition_file = self.state / ("transition-" + status + ".json")
+                    transition_file = self.transition_path(status)
                     original = (
                         json.loads(transition_file.read_text())
                         if transition_file.exists()
@@ -966,7 +1006,7 @@ class Connector:
                 ]
             ).encode()
         ).hexdigest()
-        path = self.state / "recovery-observation.json"
+        path = self.journal.directory / "recovery-observation.json"
         prior = json.loads(path.read_text()) if path.exists() else {}
         unchanged = prior.get("fingerprint") == fingerprint
         attempts = prior.get("attempts", 0) if unchanged else 0
@@ -998,13 +1038,10 @@ class Connector:
         await self.reconcile()
 
     async def once(self, claim_operation):
-        journal = self.state / "execution.json"
-        if journal.exists():
-            previous = json.loads(journal.read_text())
-            if previous["state"] not in ("completed", "failed", "cancelled"):
-                raise RuntimeError(
-                    "Unsettled native execution retained; do not replay it"
-                )
+        if self.executions.unsettled():
+            raise RuntimeError(
+                "Unsettled native execution retained; do not replay it"
+            )
         self.finished = None
         self.final = ""
         self.publications = []
@@ -1050,7 +1087,8 @@ class Connector:
                 "delivery": self.active["delivery"],
                 "request": request,
             }
-            saved(journal, captured)
+            self.journal = self.executions.begin(captured)
+            journal = self.journal
             try:
                 envelope = await self.http(
                     "GET",
@@ -1615,10 +1653,31 @@ def main():
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--claim-id")
     action.add_argument("--reconcile", action="store_true")
+    action.add_argument("--reconcile-delivery", metavar="DELIVERY_ID")
+    action.add_argument("--list-attempts", action="store_true")
+    parser.add_argument("--generation", type=int)
     action.add_argument("--reconcile-guidance", metavar="CONTROL_ID")
     action.add_argument("--serve", action="store_true")
     args = parser.parse_args()
+    if bool(args.reconcile_delivery) != (args.generation is not None):
+        parser.error("--reconcile-delivery requires --generation; neither starts a model")
     connector = Connector(json.loads(args.config.read_text()))
+    if args.list_attempts:
+        print(json.dumps({
+            "attempts": [
+                {
+                    "deliveryId": value["delivery"]["id"],
+                    "generation": value["delivery"]["generation"],
+                    "state": value["state"],
+                    "nativeThread": value.get("nativeThread"),
+                    "nativeTurn": value.get("nativeTurn"),
+                }
+                for value in connector.executions.records()
+            ],
+            "current": connector.executions.selected_key(),
+            "modelsStarted": 0,
+        }))
+        return
     print(
         json.dumps(
             asyncio.run(
@@ -1626,6 +1685,8 @@ def main():
                 if args.serve
                 else connector.reconcile_guidance(args.reconcile_guidance)
                 if args.reconcile_guidance
+                else connector.reconcile_attempt(args.reconcile_delivery, args.generation)
+                if args.reconcile_delivery
                 else connector.reconcile()
                 if args.reconcile
                 else connector.once(args.claim_id)
