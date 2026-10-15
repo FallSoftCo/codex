@@ -294,3 +294,30 @@ one matching clientId message after all owned execution stopped. Preserve the
 captured native/sqlite store as well as rollout files during backup/restore.
 The new Android Guide UI, broader crash/read recovery, physical phone and
 multi-host work remain separate gates.
+
+
+## Original guidance recovery after process loss
+
+Connector dev19 checks unsettled guidance before returning an already terminal
+execution receipt. The metadata path uses the original native/sqlite store and
+matches the exact native thread/turn, clientId and body. It acknowledges an
+observed original message without resuming a context, starting a turn or
+resending guidance. A possible submission with no matching history stays held.
+Unrelated uncertain tools retain their existing fence.
+
+The explicit --reconcile-guidance CONTROL_ID command can inspect an older
+original receipt without overwriting the agent's latest execution journal.
+It holds the agent process lock, checks its current authoritative claim,
+generation, host and scope, and opens only the captured original native store
+when history is required. It does not restore/change the ongoing role goal
+merely to inspect one guidance receipt.
+
+An actual Android Guide task wrote the supplied marker; acknowledgement writes
+were withheld and the owned connector was stopped. Guidance and execution
+reconciled from the original native history with zero further model turns.
+A separate fresh input received an actual native rejection whose acknowledgement
+was hidden; its unknown receipt remained held and was not retried. Repeated
+terminal recovery also inspected that receipt. An older completed guidance
+receipt reconciled while preserving a later execution journal byte-for-byte.
+This is specific native-control recovery, not general arbitrary effect recovery
+or a claim that a missing message proves rejection.

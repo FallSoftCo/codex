@@ -57,6 +57,73 @@ class NativeControls:
             raise RuntimeError("Original native turn unavailable")
         return self.recorded(row, turns[0].get("items", []))
 
+    async def pending(self, turn_id):
+        d = self.c.active["delivery"]
+        value = await self.c.http("POST", "connector/deliveries/" + d["id"] + "/guidance", {
+            "claimId": d["claim_id"], "generation": d["generation"],
+            "hostId": self.c.config["hostId"],
+        })
+        for row in value["controls"]:
+            self.matches(row, turn_id)
+        return value["controls"]
+
+    def local_receipt(self, row):
+        path = self.c.state / ("native-control-" + row["control"]["id"] + ".json")
+        local = json.loads(path.read_text()) if path.exists() else None
+        if local:
+            if local.get("scope") != row["scope"] or local.get("controlId", row["control"]["id"]) != row["control"]["id"]:
+                raise RuntimeError("Local human guidance identity changed")
+            params = local.get("params")
+            if params and (
+                params.get("threadId") != row["scope"]["nativeThread"]
+                or params.get("expectedTurnId") != row["scope"]["nativeTurn"]
+                or params.get("clientUserMessageId") != "hollywood-control-" + row["control"]["id"]
+                or params.get("input") != [{"type": "text", "text": row["control"]["body"]}]
+            ):
+                raise RuntimeError("Original human guidance intent conflicts")
+        return path, local
+
+    async def reconcile_rows(self, rows, turn=None):
+        """Observe original effects only. This method cannot dispatch native input."""
+        results = []
+        async with self.lock:
+            for row in rows:
+                control = row["control"]
+                self.matches(row, control["native_turn"])
+                path, local = self.local_receipt(row)
+                state = control["state"]
+                matched = False
+                if state in ("native_recorded", "rejected"):
+                    saved(path, {"state": state, "scope": row["scope"], "evidence": control["evidence"], "reconciled": True})
+                else:
+                    if turn is None or turn["id"] != control["native_turn"]:
+                        raise RuntimeError("Original native turn required for guidance reconciliation")
+                    proof = self.recorded(row, turn.get("items", []))
+                    if proof:
+                        if state == "pending":
+                            raise RuntimeError("Native message exists without its authoritative dispatch receipt; operator reconciliation required")
+                        await self.acknowledge(row, "native_recorded", proof)
+                        state, matched = "native_recorded", True
+                        saved(path, {"state": state, "scope": row["scope"], "evidence": proof, "reconciled": True})
+                    elif state == "pending" and turn["status"] in ("completed", "failed", "interrupted"):
+                        evidence = {"reason": "original-native-turn-terminal"}
+                        await self.acknowledge(row, "rejected", evidence)
+                        state = "rejected"
+                        saved(path, {"state": state, "scope": row["scope"], "evidence": evidence, "reconciled": True})
+                    elif state == "dispatching":
+                        # An absent message never proves that a possible native input was rejected.
+                        await self.acknowledge(row, "unknown", {"reason": "original-message-not-yet-observed"})
+                        state = "unknown"
+                result = {
+                    "controlId": control["id"], "state": state,
+                    "nativeTurn": control["native_turn"], "originalMessageMatched": matched,
+                    "held": state not in ("native_recorded", "rejected"),
+                    "nativeReplay": False, "modelConsumptionProved": False,
+                }
+                saved(self.c.state / ("guidance-reconciliation-" + control["id"] + ".json"), result)
+                results.append(result)
+        return results
+
     async def tick(self, turn_id, terminal=False):
         async with self.lock:
             c = self.c

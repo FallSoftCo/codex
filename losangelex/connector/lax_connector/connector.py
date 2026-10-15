@@ -608,6 +608,57 @@ class Connector:
                 })
             await asyncio.sleep(1)
 
+    async def read_guidance(self, rows, turn_id):
+        """Open only the captured native store; do not load a context or admit input."""
+        async def event(*args):
+            pass
+
+        async def request(*args):
+            raise RuntimeError("Guidance readback cannot execute native requests")
+
+        previous_rpc = self.rpc
+        self.rpc = AppServer(
+            self.config["binary"], Path(self.config["codexHome"]), self.state / "native",
+            event, request,
+        )
+        try:
+            await self.rpc.start()
+            await external_admission(
+                self.rpc, self.active.get("nativeGoalBinding", {}).get("binding_kind") == "role"
+            )
+            snapshot = await self.rpc.call(
+                "thread/read", {"threadId": self.thread, "includeTurns": True}
+            )
+            turns = [t for t in snapshot["thread"].get("turns", []) if t["id"] == turn_id]
+            if len(turns) != 1:
+                raise RuntimeError("Original native turn unavailable; guidance remains held")
+            saved(self.state / ("guidance-read-" + self.active["delivery"]["id"] + ".json"),
+                  {"nativeThread": self.thread, "turn": turns[0]})
+            return await self.controls.reconcile_rows(rows, turns[0])
+        finally:
+            await self.rpc.close()
+            self.rpc = previous_rpc
+
+    async def reconcile_guidance(self, identity):
+        """Reconcile one original control without overwriting a later execution journal."""
+        identity = str(UUID(identity))
+        async with ClientSession() as self.session:
+            row = await self.http("GET", "native-controls/" + identity)
+            self.active = await self.http("GET", "deliveries/" + row["scope"]["deliveryId"])
+            d = self.active["delivery"]
+            self.thread = row["scope"]["nativeThread"]
+            if (
+                d["native_thread"] != self.thread or d["native_turn"] != row["scope"]["nativeTurn"]
+                or row["control"]["id"] != identity
+            ):
+                raise RuntimeError("Original guidance native owner changed")
+            self.controls.matches(row, row["scope"]["nativeTurn"])
+            if row["control"]["state"] in ("native_recorded", "rejected"):
+                results = await self.controls.reconcile_rows([row])
+            else:
+                results = await self.read_guidance([row], row["scope"]["nativeTurn"])
+            return {"guidance": results, "nativeReplay": False, "latestExecutionJournalChanged": False}
+
     async def reconcile(self):
         """Recover the original owner using metadata only; never resume/start a turn."""
         record = json.loads(self.journal.read_text())
@@ -652,6 +703,13 @@ class Connector:
                 and d["state"] in ("cancelled", "failed")
                 and not settled
             )
+            guidance = []
+            if record.get("nativeTurn") and self.thread:
+                open_controls = await self.controls.pending(record["nativeTurn"])
+                if terminal and open_controls:
+                    guidance = await self.read_guidance(open_controls, record["nativeTurn"])
+            else:
+                open_controls = []
             if terminal and not needs_goal:
                 self.activity.start()
                 try:
@@ -671,6 +729,7 @@ class Connector:
                     "state": d["state"],
                     "nativeReplay": False,
                     "source": "Hollywood terminal receipt",
+                    "guidance": guidance,
                 }
             if not record.get("nativeTurn") or not self.thread:
                 raise RuntimeError(
@@ -706,6 +765,8 @@ class Connector:
                         for t in snapshot["thread"].get("turns", [])
                         if t["id"] == record["nativeTurn"]
                     ]
+                    if len(turns) == 1 and open_controls:
+                        guidance = await self.controls.reconcile_rows(open_controls, turns[0])
                     if len(turns) != 1 or turns[0]["status"] == "inProgress":
                         if d["state"] != "unknown":
                             await self.transition("unknown")
@@ -819,6 +880,7 @@ class Connector:
                     "state": status,
                     "nativeReplay": False,
                     "source": "Original native ownership and terminal evidence",
+                    "guidance": guidance,
                 }
             except NativeGoalHeld:
                 current = json.loads(self.journal.read_text())
@@ -1460,6 +1522,7 @@ def main():
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--claim-id")
     action.add_argument("--reconcile", action="store_true")
+    action.add_argument("--reconcile-guidance", metavar="CONTROL_ID")
     action.add_argument("--serve", action="store_true")
     args = parser.parse_args()
     connector = Connector(json.loads(args.config.read_text()))
@@ -1468,6 +1531,8 @@ def main():
             asyncio.run(
                 connector.serve()
                 if args.serve
+                else connector.reconcile_guidance(args.reconcile_guidance)
+                if args.reconcile_guidance
                 else connector.reconcile()
                 if args.reconcile
                 else connector.once(args.claim_id)
