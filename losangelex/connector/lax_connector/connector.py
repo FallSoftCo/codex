@@ -700,10 +700,17 @@ class Connector:
                         raise RuntimeError(
                             "Unrecognized original native terminal state"
                         )
+                    from .recovery import reconcile_failed_questions
+
+                    try:
+                        await reconcile_failed_questions(self, record, turn)
+                    except Exception:
+                        if d["state"] != "unknown":
+                            await self.transition("unknown")
+                        raise
                     if any(
-                        item.get("type") in ("commandExecution", "dynamicToolCall")
-                        and item.get("status")
-                        not in ("completed", "failed", "declined")
+                        item.get("status") is not None
+                        and item["status"] not in ("completed", "failed", "declined")
                         for item in turn.get("items", [])
                     ):
                         if d["state"] != "unknown":
@@ -713,6 +720,8 @@ class Connector:
                         )
                     for path in self.state.glob("tool-*.json"):
                         if json.loads(path.read_text())["state"] != "completed":
+                            if d["state"] != "unknown":
+                                await self.transition("unknown")
                             raise RuntimeError(
                                 "Unconfirmed Hollywood tool effect; original receipts required"
                             )

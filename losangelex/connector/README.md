@@ -236,3 +236,28 @@ four-turn peer/decision/API-restart proof used dev16/dev13. Both used the pinned
 native model at xhigh. Neither qualifies cross-host artifact delivery or physical
 Android voice/push, active-turn Global steering, full enterprise installation
 or production cutover. Preserve those gates and the individual build receipts.
+
+## Original failed-question recovery
+
+The explicit metadata-only reconciliation path now matches a failed native
+hollywood_ask item to its original local call digest, request/thread and
+deterministic Hollywood attention receipt. A terminal failed caller can expire
+its original pending question through the existing generation/claim-scoped
+acknowledgement API. Already accepted human responses remain facts; recovery
+does not infer native consumption, create a replacement question or rerun a tool.
+
+Only that observed failed question call receives a reconstructed failure result.
+Other unresolved native items or unconfirmed Hollywood effects remain unknown
+and held. Every status-bearing unfinished native item is considered, including
+file/MCP work; unknown effects are not declared complete because another call
+was safely reconciled. Terminal execution and business acceptance are separate:
+an interrupted final review can fail while its previously accepted artifact and
+business goal remain accepted. Ongoing role responsibility remains independent.
+
+An installed dev17 candidate reconciled two real stopped worker questions and
+one interrupted Global review from the retained actual-provider qualification.
+Original native start counts and thread identities stayed unchanged; repeated
+terminal observation started no model. Both late human answers were rejected
+through authenticated HTTP. This is specific original-receipt recovery evidence,
+not general administration/MCP-effect reconciliation, cross-host adoption or
+production migration.
