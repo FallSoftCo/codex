@@ -20,6 +20,7 @@ from .activity import Activity
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
 from .errors import HttpFailure
+from .effects import Effects
 from .journal import saved
 from .native_controls import NativeControls
 from .native_goals import (
@@ -222,9 +223,20 @@ class Connector:
         self.attention = Attention(self)
         self.native_items = {}
         self.activity = Activity(self)
+        self.effects = Effects(self)
         self.controls = NativeControls(self)
 
     async def http(self, method, path, payload=None):
+        marker = self.effects.before(method, path, payload)
+        try:
+            result = await self._http(method, path, payload)
+        except Exception as error:
+            self.effects.after(marker, error=error)
+            raise
+        self.effects.after(marker, result=result)
+        return result
+
+    async def _http(self, method, path, payload=None):
         async with self.session.request(
             method,
             self.config["hollywoodUrl"] + "/hollywood/v3/" + path,
@@ -351,6 +363,10 @@ class Connector:
             )
 
     async def tool(self, method, params):
+        with self.effects.tool_scope(method, params):
+            return await self._tool(method, params)
+
+    async def _tool(self, method, params):
         def output(value, success=True):
             return {
                 "success": success,
@@ -376,7 +392,13 @@ class Connector:
             "hollywood_room_info",
             "hollywood_agent_info",
         )
-        if self.uncertain_tools and not read_only:
+        control = params["tool"] in ("hollywood_execution_cancel", "hollywood_work_cancel")
+        if params["tool"] == "hollywood_goal_state":
+            try:
+                control = (json.loads(params["arguments"]) if isinstance(params["arguments"], str) else params["arguments"]).get("state") == "cancelled"
+            except (ValueError, TypeError, AttributeError):
+                control = False
+        if self.uncertain_tools and not (read_only or control):
             return output(
                 {
                     "error": "Prior tool effect unconfirmed; further mutations held pending original receipt reconciliation"
@@ -492,11 +514,26 @@ class Connector:
             saved(path, {**record, "state": "completed", "result": result})
             return result
         except Exception as error:
+            if not read_only and not isinstance(error, AttentionExpired):
+                try:
+                    recovered = await self.effects.recover_live()
+                except Exception:
+                    recovered = None  # Original uncertainty remains fenced.
+                if recovered is not None:
+                    if params["tool"] == "hollywood_publish":
+                        event_id = recovered["event"]["id"]
+                        if event_id not in self.publications:
+                            self.publications.append(event_id)
+                    result = output(recovered)
+                    saved(path, {**record, "state": "completed", "result": result, "effectRecoveredByOriginalRead": True})
+                    return result
             if (
                 read_only
                 or isinstance(error, AttentionExpired)
-                or isinstance(error, (ValueError, PermissionError))
-                or (isinstance(error, HttpFailure) and error.status in (400, 403, 409))
+                or self.effects.safe_rejection() and (
+                    isinstance(error, (ValueError, PermissionError))
+                    or isinstance(error, HttpFailure) and error.status in (400, 403, 409)
+                )
             ):
                 result = output(
                     {
@@ -782,6 +819,7 @@ class Connector:
 
                     try:
                         await reconcile_failed_questions(self, record, turn)
+                        await self.effects.reconcile(record, turn)
                     except Exception:
                         if d["state"] != "unknown":
                             await self.transition("unknown")

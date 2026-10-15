@@ -1,0 +1,246 @@
+"""Scoped original HTTP evidence. Recovery reads receipts; it never invokes a tool again."""
+import contextlib
+import contextvars
+import hashlib
+import json
+from .journal import saved
+from .errors import HttpFailure
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+def parsed(value):
+    return json.loads(value) if isinstance(value, str) else value
+
+ATOMIC = {
+    "hollywood_publish", "hollywood_request", "hollywood_decision_set",
+    "hollywood_cooperation_set", "hollywood_work_create", "hollywood_work_assign",
+    "hollywood_work_claim", "hollywood_work_report", "hollywood_work_review",
+    "hollywood_work_cancel", "hollywood_work_revise",
+}
+
+class Effects:
+    def __init__(self, connector):
+        self.c = connector
+        self.current = contextvars.ContextVar("lax_original_tool_effect", default=None)
+
+    @contextlib.contextmanager
+    def tool_scope(self, method, params):
+        c = self.c
+        if method != "item/tool/call":
+            yield
+            return
+        if not c.active or params["threadId"] != c.thread:
+            raise RuntimeError("Tool belongs to another native context")
+        key = hashlib.sha256((params["threadId"] + params["callId"]).encode()).hexdigest()
+        record = json.loads(c.journal.read_text())
+        binding = c.goal_binding
+        scope = {
+            "authorityId": c.active["request"]["authority"], "agentId": c.config["agentId"],
+            "hostId": c.config["hostId"], "deliveryId": c.active["delivery"]["id"],
+            "claimId": c.active["delivery"]["claim_id"], "generation": c.active["delivery"]["generation"],
+            "requestId": c.active["request"]["id"], "nativeThread": c.thread,
+            "nativeTurn": record.get("nativeTurn"), "callId": params["callId"],
+            "tool": params["tool"],
+            "argumentsDigest": hashlib.sha256(json.dumps([params["tool"], params["arguments"]], sort_keys=True).encode()).hexdigest(),
+            "bindingAtStart": {k: binding.get(k) for k in ("bindingKind", "goalId", "nativeGoalId")} if binding else None,
+        }
+        token = self.current.set({"key": key, "scope": scope})
+        try:
+            yield
+        finally:
+            self.current.reset(token)
+
+    def before(self, method, path, payload):
+        context = self.current.get()
+        if not context or method not in ("POST", "PUT"):
+            return None
+        key, scope = context["key"], context["scope"]
+        tool_path = self.c.state / ("tool-" + key + ".json")
+        tool = json.loads(tool_path.read_text())
+        if tool["digest"] != scope["argumentsDigest"] or tool["requestId"] != scope["requestId"]:
+            raise RuntimeError("Tool mutation scope changed")
+        journal = self.c.state / ("effects-" + key + ".json")
+        group = json.loads(journal.read_text()) if journal.exists() else {"schema": "lax-tool-effects/v1", "scope": scope, "steps": []}
+        if group["scope"] != scope:
+            raise RuntimeError("Original tool effects changed scope")
+        wire = json.loads(json.dumps({"method": method, "path": path, "body": payload}))
+        operation = payload.get("operationId") if isinstance(payload, dict) else None
+        supported = operation == "lax-tool:" + key
+        step = {
+            "ordinal": len(group["steps"]), "state": "intent", "method": method, "path": path,
+            "operationId": operation, "wireDigest": digest(wire),
+            # Unsupported administrative requests can contain enrollment credentials.
+            "wireRequest": wire if supported else None, "receiptSupported": supported,
+        }
+        group["steps"].append(step)
+        saved(journal, group)
+        return journal, step["ordinal"]
+
+    def after(self, marker, *, result=None, error=None):
+        if marker is None:
+            return
+        path, index = marker
+        group = json.loads(path.read_text())
+        step = group["steps"][index]
+        if error is None:
+            step["state"] = "confirmed"
+            if step["receiptSupported"]:
+                step["result"] = result
+        else:
+            step["state"] = "rejected" if isinstance(error, HttpFailure) and error.status in (400, 403, 409) else "unconfirmed"
+            step["error"] = type(error).__name__
+        saved(path, group)
+
+    def group(self, key):
+        path = self.c.state / ("effects-" + key + ".json")
+        return json.loads(path.read_text()) if path.exists() else None
+
+    def safe_rejection(self):
+        context = self.current.get()
+        if not context:
+            return False
+        group = self.group(context["key"])
+        return not group or not group["steps"] or all(s["state"] == "rejected" for s in group["steps"])
+
+    def atomic(self, group):
+        name = group["scope"]["tool"]
+        if name in ATOMIC:
+            return True
+        binding = group["scope"]["bindingAtStart"]
+        if binding is not None:
+            current = self.c.goal_binding
+            if not current or binding != {k: current.get(k) for k in ("bindingKind", "goalId", "nativeGoalId")}:
+                return False
+        if name == "hollywood_goal_create":
+            return binding is not None
+        if name == "hollywood_goal_state":
+            args = parsed(json.loads((self.c.state / ("tool-" + self.current_key(group) + ".json")).read_text())["arguments"])
+            return not binding or binding["bindingKind"] == "role" or binding["goalId"] != args["goalId"] or args["state"] == "accepted"
+        return False
+
+    @staticmethod
+    def current_key(group):
+        s = group["scope"]
+        return hashlib.sha256((s["nativeThread"] + s["callId"]).encode()).hexdigest()
+
+    async def resolve(self, group):
+        c = self.c
+        scope = group["scope"]
+        expected = {
+            "authorityId": c.active["request"]["authority"], "agentId": c.config["agentId"],
+            "hostId": c.config["hostId"], "deliveryId": c.active["delivery"]["id"],
+            "claimId": c.active["delivery"]["claim_id"], "generation": c.active["delivery"]["generation"],
+            "requestId": c.active["request"]["id"], "nativeThread": c.thread,
+        }
+        if any(scope.get(k) != v for k, v in expected.items()):
+            raise RuntimeError("Original command effect ownership changed")
+        if len(group["steps"]) != 1 or not group["steps"][0]["receiptSupported"] or not self.atomic(group):
+            return None
+        step = group["steps"][0]
+        if (
+            step["operationId"] != "lax-tool:" + self.current_key(group)
+            or digest(step["wireRequest"]) != step["wireDigest"]
+            or step["wireRequest"]["method"] != step["method"]
+            or step["wireRequest"]["path"] != step["path"]
+            or step["wireRequest"]["body"].get("operationId") != step["operationId"]
+        ):
+            raise RuntimeError("Original command request changed")
+        receipt = await c.http("GET", "commands/" + step["operationId"])
+        evidence = receipt.get("canonicalCommand")
+        if not evidence or not evidence.get("evidenceComplete"):
+            return None
+        expected_evidence = {
+            "schema": "hollywood-command/v1", "authorityId": scope["authorityId"],
+            "actorId": scope["agentId"], "operationId": step["operationId"],
+            "wireRequest": step["wireRequest"], "wireDigest": step["wireDigest"],
+        }
+        if any(evidence.get(k) != v for k, v in expected_evidence.items()):
+            raise RuntimeError("Authoritative command evidence conflicts")
+        if receipt["event"]["id"] != evidence["eventId"] or receipt["event"]["author"] != scope["agentId"]:
+            raise RuntimeError("Original command event changed")
+        if step["state"] == "confirmed" and step.get("result") != evidence["acceptedResult"]:
+            raise RuntimeError("Original accepted response conflicts")
+        step.update(state="confirmed", result=evidence["acceptedResult"], recoveredBy="original-command-read")
+        saved(c.state / ("effects-" + self.current_key(group) + ".json"), group)
+        return evidence["acceptedResult"]
+
+    def completed_administration(self, key, name):
+        if name not in ("hollywood_create_agent", "hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "lax_provision_worker"):
+            return None
+        operation = "lax-tool:" + key
+        path = self.c.state / ("administration-" + hashlib.sha256(operation.encode()).hexdigest() + ".json")
+        if not path.exists():
+            return None
+        record = json.loads(path.read_text())
+        if record.get("operationId") != operation or record.get("tool") != name:
+            raise RuntimeError("Original administration journal identity changed")
+        if record["state"] == "completed":
+            return record["result"]
+        return None  # An unfinished multi-step workflow is not an atomic rejection.
+
+    async def recover_live(self):
+        context = self.current.get()
+        if not context:
+            return None
+        admin = self.completed_administration(context["key"], context["scope"]["tool"])
+        if admin is not None:
+            return admin
+        group = self.group(context["key"])
+        if not group:
+            return None
+        return await self.resolve(group)
+
+    async def reconcile(self, execution, turn):
+        """Reconcile failed original callbacks using accepted effects, not current file contents."""
+        c = self.c
+        items = {item["id"]: item for item in turn.get("items", [])}
+        recovered = []
+        for path in sorted(c.state.glob("tool-*.json")):
+            tool = json.loads(path.read_text())
+            if tool["state"] == "completed" or tool.get("requestId") != c.active["request"]["id"] or tool.get("nativeThread") != execution["nativeThread"]:
+                continue
+            item = items.get(tool["callId"])
+            if not item or item.get("type") != "dynamicToolCall" or item.get("tool") != tool["tool"]:
+                continue
+            if not (item.get("status") in ("failed", "declined") or item.get("status") == "completed" and item.get("success") is False):
+                continue
+            if parsed(item.get("arguments")) != parsed(tool["arguments"]):
+                raise RuntimeError("Original native tool arguments conflict")
+            key = hashlib.sha256((tool["nativeThread"] + tool["callId"]).encode()).hexdigest()
+            fingerprint = hashlib.sha256(json.dumps([tool["tool"], tool["arguments"]], sort_keys=True).encode()).hexdigest()
+            if path.name != "tool-" + key + ".json" or fingerprint != tool["digest"]:
+                raise RuntimeError("Original tool journal identity changed")
+            from .workflow import READ_TOOLS
+            read_only = tool["tool"] in READ_TOOLS | {"hollywood_context", "hollywood_rooms", "hollywood_read_room", "hollywood_room_info", "hollywood_agent_info"}
+            group = self.group(key)
+            if read_only:
+                value = {"effect": "none", "observation": "Original read callback failed; no read was replayed"}
+            else:
+                if (
+                    not group or group["scope"]["nativeTurn"] != execution["nativeTurn"]
+                    or group["scope"]["argumentsDigest"] != fingerprint
+                    or group["scope"]["callId"] != tool["callId"]
+                    or group["scope"]["tool"] != tool["tool"]
+                    or group["scope"]["deliveryId"] != c.active["delivery"]["id"]
+                    or group["scope"]["generation"] != c.active["delivery"]["generation"]
+                    or group["scope"]["claimId"] != c.active["delivery"]["claim_id"]
+                    or group["scope"]["agentId"] != c.config["agentId"]
+                    or group["scope"]["hostId"] != c.config["hostId"]
+                ):
+                    continue
+                value = self.completed_administration(key, tool["tool"])
+                if value is None:
+                    value = await self.resolve(group)
+                if value is None:
+                    continue
+            result = {
+                "success": False,
+                "contentItems": [{"type": "inputText", "text": json.dumps({
+                    "effect": "none" if read_only else "confirmed-from-original-receipt", "receipt": value,
+                    "nativeCallbackReplayed": False, "originalNativeCallbackFailed": True,
+                })}],
+            }
+            saved(path, {**tool, "state": "completed", "result": result, "effectReconciled": True, "nativeCallbackReplayed": False})
+            recovered.append({"callId": tool["callId"], "tool": tool["tool"], "operationId": "lax-tool:" + key, "nativeCallbackReplayed": False})
+        return recovered
