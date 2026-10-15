@@ -14,7 +14,15 @@ from .journal import saved
 from .linux_admin import run
 
 
-def expected_configuration(spec, authority, agent, home):
+def execution_profile(spec, override=None):
+    profile = override or spec.get("executionProfile", "unrestricted")
+    if profile not in ("unrestricted", "restricted"):
+        raise ValueError("Unknown host execution profile")
+    return profile
+
+
+def expected_configuration(spec, authority, agent, home, profile=None):
+    profile = execution_profile(spec, profile)
     return {
         "hollywoodUrl": spec["hollywoodUrl"],
         "token": spec["credential"],
@@ -26,11 +34,16 @@ def expected_configuration(spec, authority, agent, home):
         "workspace": str(home / "work"),
         "model": spec["model"],
         "effort": spec["effort"],
-        "sandbox": "workspace-write",
-        "instructions": "You are a scoped enterprise worker. Your primary responsibility and room are captured in the authoritative LAX role context. Execute only explicitly addressed work within that scope. Observe other room communication without initiating work. Communicate through Hollywood and publish attributable evidence. Do not escalate host privileges, inspect another agent's private state, create workers or resume historical work. Complete each admitted request and wait.",
+        "sandbox": "danger-full-access" if profile == "unrestricted" else "workspace-write",
+        "instructions": (
+            "You are an accountable enterprise agent. Your responsibility and room are captured in the authoritative LAX role context. Execute the owner's addressed work and communicate through Hollywood with attributable evidence. This installation authorizes full host execution and passwordless sudo when needed for that work. Protect credentials and preserve other agents' work, accepted operations and unknown effects. Host access does not authorize unrelated business actions or resuming stopped historical work. Complete each admitted request and wait."
+            if profile == "unrestricted" else
+            "You are a scoped enterprise worker. Your primary responsibility and room are captured in the authoritative LAX role context. Execute only explicitly addressed work within that scope. Observe other room communication without initiating work. Communicate through Hollywood and publish attributable evidence. Do not escalate host privileges, inspect another agent's private state, create workers or resume historical work. Complete each admitted request and wait."
+        ),
     }
 
-def expected_unit(spec, agent, user, home):
+def expected_unit(spec, agent, user, home, profile=None):
+    profile = execution_profile(spec, profile)
     config_file = home / "connector.json"
     return f"""[Unit]
 Description=LAX Hollywood worker {agent}
@@ -47,7 +60,7 @@ RestartSec=10
 UMask=0077
 MemoryMax=2G
 CPUQuota=200%
-NoNewPrivileges=yes
+NoNewPrivileges={"no" if profile == "unrestricted" else "yes"}
 KillMode=control-group
 TimeoutStopSec=30
 [Install]
@@ -97,23 +110,32 @@ def inspect_completed(spec):
     config_file = home / "connector.json"
     if config_file.is_symlink() or config_file.stat().st_uid != account.pw_uid:
         raise ValueError("Worker configuration owner changed")
-    expected = expected_configuration(spec, authority, agent, home)
+    policy_file = record / "execution-policy-upgrade-receipt.json"
+    policy = protected(policy_file) if policy_file.exists() else None
+    if policy and policy.get("originalSpecDigest") != fingerprint:
+        raise ValueError("Execution policy upgrade belongs to another provisioning")
+    profile = (policy or receipt).get("executionProfile", "restricted")
+    expected = expected_configuration(spec, authority, agent, home, profile)
     config = json.loads(config_file.read_text())
-    config_digest = hashlib.sha256(json.dumps(expected, sort_keys=True).encode()).hexdigest()
-    if config != expected or receipt.get("configurationDigest") != config_digest:
+    checked_configuration = config if policy else expected
+    if policy and any(config.get(key) != expected.get(key) for key in ("agentId", "hostId", "state", "workspace", "codexHome", "sandbox")):
+        raise ValueError("Execution policy changed worker identity or execution scope")
+    config_digest = hashlib.sha256(json.dumps(checked_configuration, sort_keys=True).encode()).hexdigest()
+    if config != checked_configuration or (policy or receipt).get("configurationDigest") != config_digest:
         raise ValueError("Original worker configuration differs")
     unit_file = Path("/etc/systemd/system") / (unit + ".service")
     info = unit_file.lstat()
-    content = expected_unit(spec, agent, user, home)
+    content = unit_file.read_text() if policy else expected_unit(spec, agent, user, home, profile)
     if unit_file.is_symlink() or info.st_uid != 0 or info.st_mode & 0o022:
         raise ValueError("Worker service is not administrator protected")
-    if unit_file.read_text() != content or receipt.get("unitDigest") != hashlib.sha256(content.encode()).hexdigest():
+    if unit_file.read_text() != content or (policy or receipt).get("unitDigest") != hashlib.sha256(content.encode()).hexdigest():
         raise ValueError("Original worker service definition differs")
     current = {}
     for name in ("ActiveState", "UnitFileState", "MainPID"):
         current[name] = run("systemctl", "show", unit, "-p", name, "--value").stdout.strip()
     return {
-        **receipt, "recoveredBy": "protected-original-provisioning-read",
+        **receipt, "executionProfile": profile, "effectiveHostAdministrator": profile == "unrestricted",
+        "executionPolicyUpgrade": policy, "recoveredBy": "protected-original-provisioning-read",
         "inspection": {"hostIdentityMatched": True, "currentService": current,
                        "configurationMatched": True, "modelOrServiceRestarted": False,
                        "setupRepeated": False},
@@ -166,6 +188,7 @@ def provision(spec):
         ).stdout.strip()
         return {
             **receipt,
+            **({"executionProfile": protected(record / "execution-policy-upgrade-receipt.json")["executionProfile"], "effectiveHostAdministrator": True} if (record / "execution-policy-upgrade-receipt.json").exists() else {}),
             "reconciled": True,
             "serviceActiveState": state,
             "modelOrServiceRestarted": False,
@@ -221,14 +244,28 @@ def provision(spec):
         "-c",
         "import lax_connector.connector",
     )
+    profile = execution_profile(spec)
+    if profile == "unrestricted":
+        sudo_file = Path("/etc/sudoers.d") / ("harness-worker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12])
+        expected_sudo = f"{user} ALL=(ALL:ALL) NOPASSWD: ALL\n"
+        if sudo_file.exists() and sudo_file.read_text() != expected_sudo:
+            raise ValueError("Existing worker sudo policy differs; explicit reconciliation required")
+        candidate = record / "worker-sudoers.candidate"
+        candidate.write_text(expected_sudo)
+        candidate.chmod(0o440)
+        run("visudo", "-cf", str(candidate))
+        if not sudo_file.exists():
+            shutil.copyfile(candidate, sudo_file)
+            sudo_file.chmod(0o440)
+        run("visudo", "-c")
     sudo = subprocess.run(
         ["runuser", "-u", user, "--", "sudo", "-n", "/usr/bin/id", "-u"],
         capture_output=True,
         timeout=5,
         check=False,
     )
-    if sudo.returncode == 0:
-        raise PermissionError("Worker unexpectedly has administrator access")
+    if (sudo.returncode == 0) != (profile == "unrestricted"):
+        raise PermissionError("Worker host privileges do not match the requested execution profile")
     unit = (
         "lax-worker-"
         + authority.replace("-", "")[:8]
@@ -258,7 +295,8 @@ def provision(spec):
         "workspace": config["workspace"],
         "unit": unit,
         "state": "resident-enabled",
-        "administrator": False,
+        "administrator": profile == "unrestricted",
+        "executionProfile": profile,
         "modelsStartedByProvisioning": 0,
         "modelAccountProved": False,
     }

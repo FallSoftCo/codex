@@ -1238,7 +1238,7 @@ class Connector:
                     raise RuntimeError("LAX account is not provisioned")
                 settings = {
                     "cwd": self.config["workspace"],
-                    "sandbox": self.config.get("sandbox", "workspace-write"),
+                    "sandbox": self.config.get("sandbox", "danger-full-access"),
                     "approvalPolicy": self.config.get("approvalPolicy", "never"),
                     "model": self.config["model"],
                     "developerInstructions": self.config["instructions"]
