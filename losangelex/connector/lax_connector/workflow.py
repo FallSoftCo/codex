@@ -25,6 +25,7 @@ MUTATION_TOOLS = {
     "hollywood_execution_cancel",
     "hollywood_decision_set",
     "hollywood_work_revise",
+    "hollywood_work_recover",
     "hollywood_goal_create",
     "hollywood_cooperation_set",
     "hollywood_work_claim",
@@ -117,6 +118,19 @@ def definitions(spec):
                 "limit": {"type": "integer", "minimum": 1, "maximum": 100},
             },
             ["workId", "after", "limit"],
+        ),
+        spec(
+            "hollywood_work_recover",
+            "Goal manager: explicitly reopen an exactly reconciled pre-turn failed attempt without changing its task or starting execution. Inspect protected original receipts; stopped alone does not prove no effects. Supply their reconciliation SHA256, exact failure result and stopped executor. Unknown, possibly executed, reported or cancelled work cannot use this path. Preserve old attempts; assignment is separate.",
+            {
+                "workId": text, "revision": revision,
+                "priorDeliveryId": text, "resultEventId": text, "executorId": text,
+                "outcome": {"type": "string", "enum": ["pre_turn_denied"]},
+                "reconciliationSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "note": text,
+            },
+            ["workId", "revision", "priorDeliveryId", "resultEventId", "executorId",
+             "outcome", "reconciliationSha256", "note"],
         ),
         spec(
             "hollywood_work_revise",
