@@ -7,6 +7,7 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid5
 
 from .native_goals import bind, progress, sync_policy, workspace_id
+from .errors import ToolValidationError
 
 READ_TOOLS = {
     "hollywood_portfolio",
@@ -276,7 +277,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_review",
-            "Authorized independent verifier (or goal manager without a designated verifier): accept or reject submitted work only after execution completes and you independently inspect actual artifact evidence against its criteria. State what you verified.",
+            "Authorized independent verifier (or goal manager without a designated verifier): inspect completed execution and its evidence, then accept or reject submitted work. Completed blocked work may only be rejected, preserving its report and allowing explicit revised rework; blocked work cannot be accepted. State what you verified.",
             {
                 "workId": text,
                 "revision": revision,
@@ -519,8 +520,13 @@ async def invoke(c, name, args, operation):
             raise PermissionError("Only the captured native work may be reported")
         native = await progress(c)
         if args["state"] == "submitted" and native["status"] != "complete":
-            raise ValueError(
-                "Native goal remains unfinished; complete it only after verifying its objective"
+            raise ToolValidationError(
+                "NATIVE_WORK_GOAL_INCOMPLETE",
+                "This bounded native work goal remains unfinished.",
+                "Inspect get_goal and verify the assigned objective. If its criteria "
+                "are met, complete this work goal with update_goal, then submit using "
+                "the current work revision. Keep the parent enterprise goal open. "
+                "If a criterion is unmet, report the specific blocker instead.",
             )
         payload.pop("artifactPaths")
         try:

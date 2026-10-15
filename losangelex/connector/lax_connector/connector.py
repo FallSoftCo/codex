@@ -19,7 +19,7 @@ from aiohttp import ClientSession, ContentTypeError
 from .activity import Activity
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
-from .errors import HttpFailure
+from .errors import HttpFailure, ToolValidationError
 from .execution_lifecycle import ExecutionLifecycle
 from .effects import Effects
 from .journal import ExecutionJournals, saved
@@ -578,6 +578,7 @@ class Connector:
                     {
                         "error": type(error).__name__,
                         "effect": "rejected",
+                        **(error.public_details() if isinstance(error, ToolValidationError) else {}),
                         **(
                             {
                                 "status": error.status,
