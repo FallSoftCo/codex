@@ -261,3 +261,36 @@ terminal observation started no model. Both late human answers were rejected
 through authenticated HTTP. This is specific original-receipt recovery evidence,
 not general administration/MCP-effect reconciliation, cross-host adoption or
 production migration.
+
+
+## Explicit human guidance while native work is active
+
+The native-human-controls/v1 connector handles Hollywood guidance against the
+existing native thread and required expectedTurnId. It writes an intent before
+the single possible turn/steer submission and sets clientUserMessageId from the
+canonical control ID. An uncertain RPC never starts a replacement turn or
+automatically resends input. Original user-message history/clientId can establish
+that the guidance was recorded. Missing history alone cannot establish rejection.
+
+Authenticated application context identifies the human and captured control
+scope; the guidance text remains ordinary human input. Existing role, audience
+and tool permissions still apply. No model/effort setting changes. The Stop
+monitor runs independently of guidance transport. Guidance can wait for a
+running command/tool boundary; native admission is distinct from model use.
+
+The finite integration_native_steering.py scenario provisions a fresh isolated
+enterprise identity and Global/worker runtime, uses the authenticated NextComp
+gateway, loses actual HTTP and native acknowledgements, checks the original
+message identity and actual accepted artifact, then explicitly cancels separate
+owned work. It never targets historical product rooms. Its private evidence,
+cleanup and exact package receipts determine qualification; a source driver
+alone is not evidence that a run passed.
+
+The installed dev18/Hollywood dev14 finite native/gateway run passed: four real
+xhigh turns, one same-turn guidance control, accepted worker artifact, original
+receipt recovery after both intentionally lost acknowledgements and separate
+explicit cancellation. The original native store independently retained exactly
+one matching clientId message after all owned execution stopped. Preserve the
+captured native/sqlite store as well as rollout files during backup/restore.
+The new Android Guide UI, broader crash/read recovery, physical phone and
+multi-host work remain separate gates.

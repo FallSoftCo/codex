@@ -21,6 +21,7 @@ from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
 from .errors import HttpFailure
 from .journal import saved
+from .native_controls import NativeControls
 from .native_goals import (
     NativeAdmissionUnavailable,
     NativeGoalHeld,
@@ -62,6 +63,8 @@ def spec(name, description, properties, required):
         },
     }
 
+
+CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1']
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -214,10 +217,12 @@ class Connector:
         self.cancel_requested = False
         self.journal = self.state / "execution.json"
         self.interrupt_task = None
+        self.control_task = None
         self.uncertain_tools = False
         self.attention = Attention(self)
         self.native_items = {}
         self.activity = Activity(self)
+        self.controls = NativeControls(self)
 
     async def http(self, method, path, payload=None):
         async with self.session.request(
@@ -591,6 +596,18 @@ class Connector:
                 )
             await asyncio.sleep(1)
 
+    async def monitor_guidance(self, turn_id):
+        # Guidance transport must not serialize or delay the independent Stop lane.
+        while self.finished and not self.finished.done():
+            try:
+                await self.controls.tick(turn_id)
+            except Exception as error:
+                saved(self.state / "guidance-observation-gap.json", {
+                    "error": type(error).__name__, "deliveryId": self.active["delivery"]["id"],
+                    "nativeTurn": turn_id, "executionReplayed": False,
+                })
+            await asyncio.sleep(1)
+
     async def reconcile(self):
         """Recover the original owner using metadata only; never resume/start a turn."""
         record = json.loads(self.journal.read_text())
@@ -898,14 +915,7 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": [
-                        "native-role-goals/v1",
-                        "cooperation-plan/v1",
-                        "work-attempts/v1",
-                        "room-briefing/v1",
-                        "host-admission/v1",
-                        "portfolio-supervision/v1",
-                    ],
+                    "capabilities": CAPABILITIES,
                 },
             )
             self.active = await self.http(
@@ -914,14 +924,7 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": [
-                        "native-role-goals/v1",
-                        "cooperation-plan/v1",
-                        "work-attempts/v1",
-                        "room-briefing/v1",
-                        "host-admission/v1",
-                        "portfolio-supervision/v1",
-                    ],
+                    "capabilities": CAPABILITIES,
                 },
             )
             saved(self.state / "claim-receipt.json", self.active)
@@ -1198,9 +1201,19 @@ class Connector:
                         raise
                     # Cancellation may win between native acceptance and receipt
                     # publication. Interrupt the same owner; never replace it.
+                self.control_task = asyncio.create_task(self.monitor_guidance(turn_id))
                 turn = await asyncio.wait_for(
                     self.finished, self.config.get("turnDeadlineSeconds")
                 )
+                if self.interrupt_task:
+                    self.interrupt_task.cancel()
+                    await asyncio.gather(self.interrupt_task, return_exceptions=True)
+                    self.interrupt_task = None
+                if self.control_task:
+                    self.control_task.cancel()
+                    await asyncio.gather(self.control_task, return_exceptions=True)
+                    self.control_task = None
+                await self.controls.tick(turn_id, terminal=True)
                 await self.activity.flush()
                 if self.uncertain_tools:
                     raise RuntimeError(
@@ -1327,6 +1340,9 @@ class Connector:
                 # Durable native intent is left unsettled for operator/native readback.
                 raise
             finally:
+                if self.control_task:
+                    self.control_task.cancel()
+                    await asyncio.gather(self.control_task, return_exceptions=True)
                 if self.interrupt_task:
                     self.interrupt_task.cancel()
                     await asyncio.gather(self.interrupt_task, return_exceptions=True)
@@ -1358,14 +1374,7 @@ class Connector:
                         "connector/reviews",
                         {
                             "hostId": self.config["hostId"],
-                            "capabilities": [
-                                "native-role-goals/v1",
-                                "cooperation-plan/v1",
-                                "work-attempts/v1",
-                                "room-briefing/v1",
-                                "host-admission/v1",
-                                "portfolio-supervision/v1",
-                            ],
+                            "capabilities": CAPABILITIES,
                         },
                     )
                     await self.http(
@@ -1373,14 +1382,7 @@ class Connector:
                         "connector/supervision",
                         {
                             "hostId": self.config["hostId"],
-                            "capabilities": [
-                                "native-role-goals/v1",
-                                "cooperation-plan/v1",
-                                "work-attempts/v1",
-                                "room-briefing/v1",
-                                "host-admission/v1",
-                                "portfolio-supervision/v1",
-                            ],
+                            "capabilities": CAPABILITIES,
                         },
                     )
                     projection = await self.http(
@@ -1388,14 +1390,7 @@ class Connector:
                         "connector/observe",
                         {
                             "hostId": self.config["hostId"],
-                            "capabilities": [
-                                "native-role-goals/v1",
-                                "cooperation-plan/v1",
-                                "work-attempts/v1",
-                                "room-briefing/v1",
-                                "host-admission/v1",
-                                "portfolio-supervision/v1",
-                            ],
+                            "capabilities": CAPABILITIES,
                         },
                     )
                 path = self.state / "resident-claim.json"

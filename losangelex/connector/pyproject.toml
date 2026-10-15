@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lax-hollywood-connector"
-version = "0.1.0.dev17"
+version = "0.1.0.dev18"
 description = "Native LAX execution participant in Hollywood rooms"
 requires-python = ">=3.10"
 dependencies = ["aiohttp>=3.12,<4"]
