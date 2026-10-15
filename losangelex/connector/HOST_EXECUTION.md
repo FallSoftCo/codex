@@ -26,3 +26,21 @@ health do not prove provider, Git, SSH or build access. Verify actual operations
 under agent identities; a dry-run push can test write negotiation without making
 a remote branch. Complete enterprise credential enrollment and install/upgrade
 orchestration remain separate installer work.
+
+Managed-service upgrades must finish protected execution registration before
+being called ready. A healthy systemd process is insufficient. The administrator
+uses lax-service --authority <id> --host <id> --agent <id> --inspect to compare
+the actual unit/native image/invocation with its root-owned enrollment. It makes
+no changes and reports a stopped service without enabling it. After a deliberate
+drain and upgrade, use --approve-drained-upgrade with the two digests returned by
+inspection; old invocation manifests and upgrade receipts remain preserved.
+Unchanged service restarts use --register. None of these commands repairs,
+replays, cancels or claims an uncertain delivery.
+
+Worker provisioning now registers its actual service before returning execution
+readiness, and repeated inspection exposes registration drift separately from
+configuration and systemd health. For a launch denied before native birth, retain
+the failed attempt, establish independent stop evidence, and use the existing
+explicit work recover/assign lifecycle. Do not reset an unknown request to pending
+or delete its journal. Permission policy changes and execution enrollment belong
+to one upgrade procedure, even when the native binary did not change.

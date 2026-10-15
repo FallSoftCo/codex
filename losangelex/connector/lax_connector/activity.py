@@ -207,6 +207,11 @@ class Activity:
         self.wake.clear()
         c = self.connector
         for path in c.state.glob("activity-*.json"):
+            # Diagnostic files share the prefix, but are not outbox records.
+            # Preserve them as evidence without letting them block later work.
+            identity = path.name[len("activity-"):-len(".json")]
+            if len(identity) != 64 or any(v not in "0123456789abcdef" for v in identity):
+                continue
             record = json.loads(path.read_text())
             if (
                 record["state"] != "accepted"

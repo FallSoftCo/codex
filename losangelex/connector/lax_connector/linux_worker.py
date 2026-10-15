@@ -74,6 +74,12 @@ def protected(path):
         raise ValueError("Original provisioning evidence is not protected")
     return json.loads(path.read_text())
 
+def service_readiness(authority, host, agent):
+    # Inspection must never silently enable a deliberately stopped service.
+    from .service_admin import inspect
+    return inspect(authority, str(UUID(host)), agent)
+
+
 def inspect_completed(spec):
     """Read conclusive original setup acceptance without making setup changes."""
     if os.geteuid() != 0:
@@ -137,6 +143,7 @@ def inspect_completed(spec):
         **receipt, "executionProfile": profile, "effectiveHostAdministrator": profile == "unrestricted",
         "executionPolicyUpgrade": policy, "recoveredBy": "protected-original-provisioning-read",
         "inspection": {"hostIdentityMatched": True, "currentService": current,
+                       "executionRegistration": service_readiness(authority, spec["hostId"], agent),
                        "configurationMatched": True, "modelOrServiceRestarted": False,
                        "setupRepeated": False},
     }
@@ -301,7 +308,15 @@ def provision(spec):
         "modelAccountProved": False,
     }
     saved(record / "provision-receipt.json", receipt)
-    return receipt
+    # The owner receipt is required by the protected service registry. Do not
+    # report a usable executor from systemd health alone.
+    from .service_observer import register
+    registration = register(authority, str(UUID(spec["hostId"])), agent, unit + ".service")
+    saved(record / "service-registration-receipt.json", registration)
+    readiness = service_readiness(authority, spec["hostId"], agent)
+    if not readiness["ready"]:
+        raise RuntimeError("Installed worker execution registration is not ready")
+    return {**receipt, "executionRegistration": readiness}
 
 
 def main():
