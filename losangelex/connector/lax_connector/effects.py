@@ -50,6 +50,9 @@ class Effects:
             "requestId": c.active["request"]["id"], "nativeThread": c.thread,
             "nativeTurn": record.get("nativeTurn"), "callId": params["callId"],
             "tool": params["tool"],
+            "roleRevision": c.role_context.value["roleRevision"],
+            "contextId": c.context_id,
+            "nativeGoalId": binding["nativeGoalId"] if binding else None,
             "argumentsDigest": hashlib.sha256(json.dumps([params["tool"], params["arguments"]], sort_keys=True).encode()).hexdigest(),
             "bindingAtStart": {k: binding.get(k) for k in ("bindingKind", "goalId", "nativeGoalId")} if binding else None,
         }

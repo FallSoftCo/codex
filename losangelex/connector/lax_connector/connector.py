@@ -69,7 +69,7 @@ def spec(name, description, properties, required):
     }
 
 
-CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1']
+CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -236,6 +236,7 @@ class Connector:
         self.activity = Activity(self)
         self.effects = Effects(self)
         self.controls = NativeControls(self)
+        self.tool_admission = asyncio.Event()
 
     async def http(self, method, path, payload=None):
         marker = self.effects.before(method, path, payload)
@@ -254,11 +255,26 @@ class Connector:
         return result
 
     async def _http(self, method, path, payload=None):
+        headers = {"Authorization": "Bearer " + self.config["token"]}
+        context = self.effects.current.get()
+        if context and method in ("POST", "PUT", "PATCH", "DELETE"):
+            scope = context["scope"]
+            fields = (
+                "authorityId", "agentId", "hostId", "deliveryId", "claimId",
+                "generation", "requestId", "nativeThread", "nativeTurn",
+                "callId", "tool", "argumentsDigest", "roleRevision",
+                "contextId", "nativeGoalId",
+            )
+            headers["X-Hollywood-Native-Source"] = json.dumps(
+                {"schema": "hollywood-native-source/v1",
+                 **{key: scope[key] for key in fields}},
+                separators=(",", ":"),
+            )
         async with self.session.request(
             method,
             self.config["hollywoodUrl"] + "/hollywood/v3/" + path,
             json=payload,
-            headers={"Authorization": "Bearer " + self.config["token"]},
+            headers=headers,
         ) as response:
             try:
                 data = await response.json()
@@ -380,6 +396,12 @@ class Connector:
             )
 
     async def tool(self, method, params):
+        # The native reader must keep receiving turn/start's reply while an early
+        # callback waits. No dynamic tool or question may race the authoritative
+        # running receipt. Failed/cancelled submission closes these waiting tasks.
+        await self.tool_admission.wait()
+        if params.get("threadId", self.thread) != self.thread:
+            raise RuntimeError("Native callback context changed")
         with self.effects.tool_scope(method, params):
             return await self._tool(method, params)
 
@@ -1045,6 +1067,7 @@ class Connector:
                 "Unsettled native execution retained; do not replay it"
             )
         self.finished = None
+        self.tool_admission.clear()
         self.final = ""
         self.publications = []
         self.native_items = {}
@@ -1386,6 +1409,21 @@ class Connector:
                         raise
                     # Cancellation may win between native acceptance and receipt
                     # publication. Interrupt the same owner; never replace it.
+                current = await self.http(
+                    "GET", "deliveries/" + self.active["delivery"]["id"]
+                )
+                admitted = current["delivery"]
+                if (
+                    admitted["state"] == "running"
+                    and not admitted["cancellation_requested"]
+                    and admitted["native_thread"] == self.thread
+                    and admitted["native_turn"] == turn_id
+                    and admitted["generation"] == self.active["delivery"]["generation"]
+                    and admitted["claim_id"] == self.active["delivery"]["claim_id"]
+                ):
+                    self.tool_admission.set()
+                else:
+                    raise RuntimeError("Native tool admission changed before callbacks")
                 self.control_task = asyncio.create_task(self.monitor_guidance(turn_id))
                 turn = await asyncio.wait_for(
                     self.finished, self.config.get("turnDeadlineSeconds")
