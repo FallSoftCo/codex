@@ -103,8 +103,8 @@ TOOLS = [
     ),
     spec(
         "hollywood_request",
-        "Address a bounded execution request to another room's owner. This explicitly starts work and preserves its source request identity.",
-        {"roomId": STRING, "body": STRING},
+        "Address a bounded execution request to a specific authorized peer in a room. Supply recipientId for that peer; omission uses the room default. This starts work, preserves source identity and does not grant the peer new permissions.",
+        {"roomId": STRING, "body": STRING, "recipientId": {"type": ["string", "null"]}},
         ["roomId", "body"],
     ),
 ]
@@ -408,6 +408,10 @@ class Connector:
                 )
             elif name in ("hollywood_publish", "hollywood_request"):
                 room = arguments.get("roomId", self.active["request"]["room"])
+                recipient = arguments.get("recipientId") if name == "hollywood_request" else None
+                if (self.active["request"]["audience"] == "direct" and recipient
+                        and recipient != self.active["request"]["author"]):
+                    raise PermissionError("Private peer delegation requires an explicit sharing contract")
                 value = await self.http(
                     "POST",
                     f"rooms/{room}/messages",
@@ -419,7 +423,7 @@ class Connector:
                         **(
                             {"recipientId": self.active["request"]["author"]}
                             if self.active["request"]["audience"] == "direct"
-                            else {}
+                            else {"recipientId": str(UUID(recipient))} if recipient else {}
                         ),
                         "sourceEventId": self.active["request"]["id"],
                     },
@@ -844,7 +848,7 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": ["native-role-goals/v1"],
+                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1"],
                 },
             )
             self.active = await self.http(
@@ -853,7 +857,7 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": ["native-role-goals/v1"],
+                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1"],
                 },
             )
             saved(self.state / "claim-receipt.json", self.active)
@@ -1260,7 +1264,7 @@ class Connector:
                         "connector/reviews",
                         {
                             "hostId": self.config["hostId"],
-                            "capabilities": ["native-role-goals/v1"],
+                            "capabilities": ["native-role-goals/v1", "cooperation-plan/v1"],
                         },
                     )
                     projection = await self.http(

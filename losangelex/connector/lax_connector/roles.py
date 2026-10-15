@@ -86,6 +86,15 @@ class RoleContext:
             raise ValueError("Observation cannot admit an agent turn")
         if envelope.get("senderKind") not in ("human", "agent"):
             raise ValueError("Unverified sender kind")
+        cooperation = envelope.get("cooperation")
+        if cooperation is not None and (
+            cooperation.get("schema") != "cooperation-plan/v1"
+            or cooperation.get("policy") not in ("leader_award", "kanban_pull")
+            or cooperation.get("role")
+            not in ("planner", "executor", "verifier", "observer")
+            or cooperation.get("revision") != request["data"].get("cooperationRevision")
+        ):
+            raise ValueError("Cooperation context differs from admitted request")
         admin = validate_administration(
             envelope["primaryRole"], envelope["communicationAdministrator"], config
         )

@@ -8,9 +8,18 @@ from uuid import UUID, uuid5
 
 from .native_goals import bind, progress, sync_policy, workspace_id
 
-READ_TOOLS = {"hollywood_goal_read", "hollywood_work_read", "hollywood_supervision"}
+READ_TOOLS = {
+    "hollywood_goal_read",
+    "hollywood_work_read",
+    "hollywood_work_list",
+    "hollywood_supervision",
+    "hollywood_attention_read",
+    "hollywood_attention_list",
+}
 MUTATION_TOOLS = {
     "hollywood_goal_create",
+    "hollywood_cooperation_set",
+    "hollywood_work_claim",
     "hollywood_work_create",
     "hollywood_work_assign",
     "hollywood_work_report",
@@ -36,6 +45,63 @@ def definitions(spec):
             ["title", "objective", "acceptance", "reviewBudget"],
         ),
         spec(
+            "hollywood_attention_list",
+            "Read an authorized room's native questions/approvals and source identities once. Current participants/administrators only; this does not answer, resume or poll a model.",
+            {
+                "roomId": text,
+                "after": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+            ["roomId", "after", "limit"],
+        ),
+        spec(
+            "hollywood_attention_read",
+            "Read one authorized native question/approval, exact execution scope, response and attributable human. Reading does not answer or resume it.",
+            {"attentionId": text},
+            ["attentionId"],
+        ),
+        spec(
+            "hollywood_cooperation_set",
+            "Accountable goal planner: configure this goal's independent peers before any work admission. leader_award uses explicit assignments; kanban_pull allows only listed executors to claim open work. The designated verifier independently reviews and accepts; it cannot change the plan. Room defaults do not choose the planner. This does not start agents or authorize a model loop.",
+            {
+                "goalId": text,
+                "revision": revision,
+                "cooperationRevision": {"type": "integer", "minimum": 0},
+                "policy": {"type": "string", "enum": ["leader_award", "kanban_pull"]},
+                "reviewerId": {"type": ["string", "null"]},
+                "executorIds": {
+                    "type": "array",
+                    "items": text,
+                    "minItems": 1,
+                    "maxItems": 32,
+                },
+            },
+            [
+                "goalId",
+                "revision",
+                "cooperationRevision",
+                "policy",
+                "reviewerId",
+                "executorIds",
+            ],
+        ),
+        spec(
+            "hollywood_work_list",
+            "Read a bounded page of authorized room work without admitting execution. Discover exact ownership, prerequisites and open Kanban work; do not poll with model turns.",
+            {
+                "roomId": text,
+                "after": {"type": ["string", "null"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+            ["roomId", "after", "limit"],
+        ),
+        spec(
+            "hollywood_work_claim",
+            "Eligible Kanban executor: atomically claim one unowned ready work record. This queues its separate owned native execution; finish this coordination request and let that assignment execute. Do not implement it in the current unrelated turn. Claimed/unknown work is never stolen or re-admitted on timeout.",
+            {"workId": text, "revision": revision},
+            ["workId", "revision"],
+        ),
+        spec(
             "hollywood_goal_read",
             "Read an authorized canonical goal and its revisioned dependency plan. Read once when needed; never poll or wait with model turns.",
             {"goalId": text},
@@ -58,12 +124,12 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_create",
-            "Goal manager: add accountable work to the plan without execution. Prerequisites must belong to this goal and will require acceptance before admission.",
+            "Goal planner: add work without execution. Use null ownerId only for open Kanban work with an explicit executor set. Prerequisites must belong to this goal and require acceptance before admission.",
             {
                 "goalId": text,
                 "revision": revision,
                 "roomId": text,
-                "ownerId": text,
+                "ownerId": {"type": ["string", "null"]},
                 "specification": text,
                 "acceptance": text,
                 "dependencies": {"type": "array", "items": text, "maxItems": 16},
@@ -98,7 +164,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_review",
-            "Goal manager: accept or reject submitted work only after execution completes and you independently inspect the artifact evidence against its criteria. State what you verified.",
+            "Authorized independent verifier (or goal manager without a designated verifier): accept or reject submitted work only after execution completes and you independently inspect actual artifact evidence against its criteria. State what you verified.",
             {
                 "workId": text,
                 "revision": revision,
@@ -196,8 +262,38 @@ async def invoke(c, name, args, operation):
     def identity(key):
         return str(UUID(args[key]))
 
+    if name == "hollywood_attention_list":
+        return await c.http(
+            "GET",
+            "rooms/"
+            + identity("roomId")
+            + "/attention?after="
+            + str(args["after"])
+            + "&limit="
+            + str(args["limit"]),
+        )
+    if name == "hollywood_attention_read":
+        return await c.http("GET", "attention/" + identity("attentionId"))
     if name == "hollywood_goal_read":
         return await c.http("GET", "goals/" + identity("goalId"))
+    if name == "hollywood_work_list":
+        from urllib.parse import urlencode
+
+        query = {"limit": args["limit"]}
+        if args["after"]:
+            query["after"] = str(UUID(args["after"]))
+        return await c.http(
+            "GET", "rooms/" + identity("roomId") + "/work?" + urlencode(query)
+        )
+    if name == "hollywood_cooperation_set":
+        return await c.http(
+            "POST",
+            "goals/" + identity("goalId") + "/cooperation",
+            {
+                **{k: v for k, v in args.items() if k != "goalId"},
+                "operationId": operation,
+            },
+        )
     if name == "hollywood_work_read":
         return await c.http("GET", "work/" + identity("workId"))
     if name == "hollywood_supervision":
