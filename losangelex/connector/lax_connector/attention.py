@@ -19,7 +19,7 @@ class Attention:
         self.rpc_slots = {}
 
     async def wait(self, method, params, *, slot):
-        from .connector import saved
+        from .journal import saved
 
         c = self.connector
         journal = json.loads(c.journal.read_text())
@@ -108,7 +108,7 @@ class Attention:
             try:
                 current = await c.http("GET", "attention/" + identity)
             except Exception as error:
-                from .connector import HttpFailure
+                from .errors import HttpFailure
 
                 if isinstance(error, HttpFailure) and error.status in (400, 403, 409):
                     raise
@@ -161,7 +161,7 @@ class Attention:
         raise AttentionExpired("Original native turn ended before the human response")
 
     async def acknowledge(self, slot, state):
-        from .connector import saved
+        from .journal import saved
 
         c = self.connector
         item = self.pending.get(str(slot))

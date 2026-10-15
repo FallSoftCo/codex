@@ -10,15 +10,17 @@ import fcntl
 import hashlib
 import json
 import os
-import tempfile
+import time
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from aiohttp import ClientSession, ContentTypeError
 
 from .activity import Activity
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
+from .errors import HttpFailure
+from .journal import saved
 from .native_goals import (
     NativeAdmissionUnavailable,
     NativeGoalHeld,
@@ -30,6 +32,8 @@ from .native_goals import (
 from .native_goals import (
     progress as goal_progress,
 )
+from .native_goals import restore as restore_goal
+from .native_goals import settle as settle_goal
 from .roles import RoleContext, validate_administration
 from .rpc import AppServer
 from .workflow import (
@@ -42,21 +46,6 @@ from .workflow import (
 from .workflow import (
     invoke as workflow_tool,
 )
-
-
-def saved(path, value):
-    descriptor, filename = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
-    temporary = Path(filename)
-    with os.fdopen(descriptor, "w") as f:
-        json.dump(value, f, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    temporary.replace(path)
-    fd = os.open(path.parent, os.O_DIRECTORY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
 
 
 def spec(name, description, properties, required):
@@ -91,6 +80,18 @@ TOOLS = [
         "Read authorized room history without starting execution. Private audiences are filtered by Hollywood.",
         {"roomId": STRING, "after": {"type": "integer", "minimum": 0}},
         ["roomId", "after"],
+    ),
+    spec(
+        "hollywood_room_info",
+        "Inspect authorized room ownership, actors and current membership revisions before changing grants. Administrators can see all grants; others see their own.",
+        {"roomId": STRING},
+        ["roomId"],
+    ),
+    spec(
+        "hollywood_agent_info",
+        "Inspect an authorized agent's current primary role, home room and revision before updating its role.",
+        {"agentId": STRING},
+        ["agentId"],
     ),
     spec(
         "hollywood_publish",
@@ -152,7 +153,7 @@ TOOLS += [
     ),
     spec(
         "hollywood_create_room",
-        "Administrator: create a Hollywood room with an accountable agent owner and clear purpose.",
+        "Administrator: create a Hollywood room with an accountable agent owner and clear purpose. The owner initially receives read/post/request membership; inspect hollywood_room_info for its current revision before changing grants.",
         {"name": STRING, "purpose": STRING, "ownerId": STRING},
         ["name", "purpose", "ownerId"],
     ),
@@ -170,7 +171,7 @@ TOOLS += [
     ),
     spec(
         "hollywood_grant_room",
-        "Administrator: explicitly grant room observation, posting or execution-request rights; none of these grant host access.",
+        "Administrator: explicitly grant room observation, posting or execution-request rights; none grant host access. First inspect hollywood_room_info for the current membership revision; revision 0 means absent membership.",
         {
             "roomId": STRING,
             "principalId": STRING,
@@ -185,12 +186,6 @@ TOOLS += [
 
 
 TOOLS += workflow_definitions(spec)
-
-
-class HttpFailure(RuntimeError):
-    def __init__(self, status, message):
-        super().__init__(f"Hollywood {status}: {message}")
-        self.status = status
 
 
 class Connector:
@@ -340,6 +335,8 @@ class Connector:
             "hollywood_context",
             "hollywood_rooms",
             "hollywood_read_room",
+            "hollywood_room_info",
+            "hollywood_agent_info",
         )
         if self.uncertain_tools and not read_only:
             return output(
@@ -389,6 +386,14 @@ class Connector:
                 value = self.role_context.value
             elif name == "hollywood_rooms":
                 value = await self.http("GET", "rooms")
+            elif name == "hollywood_room_info":
+                value = await self.http(
+                    "GET", "rooms/" + str(UUID(arguments["roomId"]))
+                )
+            elif name == "hollywood_agent_info":
+                value = await self.http(
+                    "GET", "agents/" + str(UUID(arguments["agentId"])) + "/role"
+                )
             elif name == "hollywood_read_room":
                 value = await self.http(
                     "GET",
@@ -441,7 +446,20 @@ class Connector:
                 or (isinstance(error, HttpFailure) and error.status in (400, 403, 409))
             ):
                 result = output(
-                    {"error": type(error).__name__, "effect": "rejected"}, False
+                    {
+                        "error": type(error).__name__,
+                        "effect": "rejected",
+                        **(
+                            {
+                                "status": error.status,
+                                "message": str(error)[:250],
+                                "next": "Inspect the current authorized resource/revision before a corrected command",
+                            }
+                            if isinstance(error, HttpFailure)
+                            else {}
+                        ),
+                    },
+                    False,
                 )
                 saved(path, {**record, "state": "completed", "result": result})
                 return result
@@ -489,7 +507,9 @@ class Connector:
                 receipt = await self.http(
                     "GET", "deliveries/" + self.active["delivery"]["id"]
                 )
-                if receipt["delivery"]["state"] == "cancel_requested":
+                if receipt["delivery"]["state"] == "cancel_requested" or receipt[
+                    "delivery"
+                ].get("cancellation_requested"):
                     self.cancel_requested = True
                     record = json.loads(self.journal.read_text())
                     saved(self.journal, {**record, "cancelRequested": True})
@@ -524,44 +544,72 @@ class Connector:
             await asyncio.sleep(1)
 
     async def reconcile(self):
-        """Read the original native owner and reconcile metadata; never start a turn."""
+        """Recover the original owner using metadata only; never resume/start a turn."""
         record = json.loads(self.journal.read_text())
-        if record["state"] in ("completed", "failed", "cancelled"):
-            return {"state": record["state"], "nativeReplay": False}
         async with ClientSession() as self.session:
             self.active = await self.http(
                 "GET", "deliveries/" + record["delivery"]["id"]
             )
-            self.thread = record.get("nativeThread")
             d = self.active["delivery"]
             if (
                 d["generation"] != record["delivery"]["generation"]
+                or d["claim_id"] != record["delivery"]["claim_id"]
                 or d["host"] != self.config["hostId"]
+                or d["agent"] != self.config["agentId"]
             ):
                 raise RuntimeError(
                     "Native ownership changed; fenced reconciliation required"
                 )
-            if d["state"] in ("completed", "failed", "cancelled"):
+            self.thread = record.get("nativeThread")
+            if d.get("cancellation_requested") or d["state"] == "cancel_requested":
+                record = {**record, "cancelRequested": True}
+                saved(self.journal, record)
+            terminal = d["state"] in ("completed", "failed", "cancelled")
+            if terminal and (
+                d["native_turn"] != record.get("nativeTurn")
+                or d["native_thread"] != record.get("nativeThread")
+            ):
+                raise RuntimeError(
+                    "Terminal receipt refers to another native execution"
+                )
+            lifecycle_path = self.state / ("goal-lifecycle-" + d["id"] + ".json")
+            lifecycle = (
+                json.loads(lifecycle_path.read_text())
+                if lifecycle_path.exists()
+                else {}
+            )
+            settled = (
+                lifecycle.get("state") == "confirmed"
+                and lifecycle.get("intent", {}).get("generation") == d["generation"]
+            )
+            needs_goal = (
+                bool(self.active.get("nativeGoalBinding"))
+                and d["state"] in ("cancelled", "failed")
+                and not settled
+            )
+            if terminal and not needs_goal:
                 self.activity.start()
-                await self.activity.flush()
-                await self.activity.close()
-                if d["native_turn"] != record.get("nativeTurn") or d[
-                    "native_thread"
-                ] != record.get("nativeThread"):
-                    raise RuntimeError("Terminal receipt refers to another native turn")
-                if d["state"] == "completed" and not record.get("nativeTurn"):
-                    raise RuntimeError(
-                        "Cannot establish native completion without original native ownership"
-                    )
-                saved(self.journal, {**record, "state": d["state"], "reconciled": True})
+                try:
+                    await self.activity.flush()
+                finally:
+                    await self.activity.close()
+                saved(
+                    self.journal,
+                    {
+                        **record,
+                        "state": d["state"],
+                        "reconciled": True,
+                        "goalLifecyclePending": False,
+                    },
+                )
                 return {
                     "state": d["state"],
                     "nativeReplay": False,
                     "source": "Hollywood terminal receipt",
                 }
-            if not record.get("nativeTurn") or not record.get("nativeThread"):
+            if not record.get("nativeTurn") or not self.thread:
                 raise RuntimeError(
-                    "Native submission outcome lacks an authoritative turn ID; original effect remains unknown"
+                    "Original native turn identity is unconfirmed; no replay"
                 )
             self.rpc = AppServer(
                 self.config["binary"],
@@ -571,63 +619,99 @@ class Connector:
                 self.tool,
                 self.attention.submitted,
             )
+            self.goal_progress_closing = True
             self.activity.start()
             try:
                 await self.rpc.start()
-                snapshot = await self.rpc.call(
-                    "thread/read", {"threadId": self.thread, "includeTurns": True}
-                )
-                turns = [
-                    t
-                    for t in snapshot["thread"].get("turns", [])
-                    if t["id"] == record["nativeTurn"]
-                ]
-                saved(self.state / "native-reconciliation-readback.json", snapshot)
-                if len(turns) != 1 or turns[0]["status"] == "inProgress":
-                    raise RuntimeError(
-                        "Original native turn remains unsettled; no replay"
+                await external_admission(self.rpc)
+                await restore_goal(self, record)
+                if terminal:
+                    status, turn = d["state"], None
+                else:
+                    snapshot = await self.rpc.call(
+                        "thread/read", {"threadId": self.thread, "includeTurns": True}
                     )
-                turn = turns[0]
-                for item in turn.get("items", []):
-                    if item.get("type") in (
-                        "commandExecution",
-                        "dynamicToolCall",
-                    ) and item.get("status") not in ("completed", "failed", "declined"):
+                    saved(self.state / "native-reconciliation-readback.json", snapshot)
+                    turns = [
+                        t
+                        for t in snapshot["thread"].get("turns", [])
+                        if t["id"] == record["nativeTurn"]
+                    ]
+                    if len(turns) != 1 or turns[0]["status"] == "inProgress":
+                        if d["state"] != "unknown":
+                            await self.transition("unknown")
+                        raise RuntimeError(
+                            "Original native turn remains unsettled; no replay"
+                        )
+                    turn = turns[0]
+                    if turn["status"] not in ("completed", "failed", "interrupted"):
+                        raise RuntimeError(
+                            "Unrecognized original native terminal state"
+                        )
+                    if any(
+                        item.get("type") in ("commandExecution", "dynamicToolCall")
+                        and item.get("status")
+                        not in ("completed", "failed", "declined")
+                        for item in turn.get("items", [])
+                    ):
+                        if d["state"] != "unknown":
+                            await self.transition("unknown")
                         raise RuntimeError(
                             "Native turn has an unresolved tool effect; hold original delivery"
                         )
-                pending_tools = []
-                for path in self.state.glob("tool-*.json"):
-                    item = json.loads(path.read_text())
-                    if item["state"] != "completed":
-                        pending_tools.append(path.name)
-                if pending_tools:
-                    raise RuntimeError(
-                        "Unconfirmed Hollywood tool effects must be reconciled first"
+                    for path in self.state.glob("tool-*.json"):
+                        if json.loads(path.read_text())["state"] != "completed":
+                            raise RuntimeError(
+                                "Unconfirmed Hollywood tool effect; original receipts required"
+                            )
+                    status = (
+                        "completed"
+                        if turn["status"] == "completed"
+                        else (
+                            "cancelled"
+                            if turn["status"] == "interrupted"
+                            and record.get("cancelRequested")
+                            else "failed"
+                        )
+                    )
+                saved(
+                    self.journal,
+                    {
+                        **record,
+                        "state": "settling-native-terminal",
+                        "observedTerminalState": status,
+                        "goalLifecyclePending": needs_goal
+                        or status in ("cancelled", "failed"),
+                    },
+                )
+                await settle_goal(self, status)
+                if self.goal_binding:
+                    native = await goal_progress(self)
+                    self.activity.record(
+                        "hollywood/goalProgress",
+                        {
+                            "threadId": self.thread,
+                            "turnId": record["nativeTurn"],
+                            "goal": native,
+                        },
                     )
                 await self.activity.flush()
-                status = (
-                    "completed"
-                    if turn["status"] == "completed"
-                    else (
-                        "cancelled"
-                        if turn["status"] == "interrupted"
-                        and record.get("cancelRequested")
-                        else "failed"
+                if not terminal:
+                    last = next(
+                        (
+                            i.get("text", "")
+                            for i in reversed(turn.get("items", []))
+                            if i.get("type") == "agentMessage" and i.get("text")
+                        ),
+                        "",
                     )
-                )
-                last = next(
-                    (
-                        item.get("text", "")
-                        for item in reversed(turn.get("items", []))
-                        if item.get("type") == "agentMessage" and item.get("text")
-                    ),
-                    "",
-                )
-                transition_file = self.state / ("transition-" + status + ".json")
-                if transition_file.exists():
-                    original = json.loads(transition_file.read_text())
-                    if original["deliveryId"] == d["id"]:
+                    transition_file = self.state / ("transition-" + status + ".json")
+                    original = (
+                        json.loads(transition_file.read_text())
+                        if transition_file.exists()
+                        else None
+                    )
+                    if original and original["deliveryId"] == d["id"]:
                         out = await self.http(
                             "POST",
                             "deliveries/" + d["id"] + "/transition",
@@ -637,30 +721,91 @@ class Connector:
                         out = await self.transition(
                             status,
                             nativeThread=self.thread,
-                            nativeTurn=turn["id"],
+                            nativeTurn=record["nativeTurn"],
                             body=last
-                            or "Native terminal state reconciled without replay; inspect linked room reports.",
+                            or "Original native terminal state reconciled without replay; inspect linked reports.",
                         )
                 else:
-                    out = await self.transition(
-                        status,
-                        nativeThread=self.thread,
-                        nativeTurn=turn["id"],
-                        body=last
-                        or "Native terminal state reconciled without replay; inspect linked room reports.",
-                    )
+                    out = self.active
                 saved(
                     self.journal,
-                    {**record, "state": status, "reconciled": True, "receipt": out},
+                    {
+                        **record,
+                        "state": status,
+                        "reconciled": True,
+                        "goalLifecyclePending": False,
+                        "receipt": out,
+                    },
                 )
                 return {
                     "state": status,
                     "nativeReplay": False,
-                    "source": "Native persisted terminal turn",
+                    "source": "Original native ownership and terminal evidence",
                 }
+            except NativeGoalHeld:
+                current = json.loads(self.journal.read_text())
+                saved(
+                    self.journal,
+                    {
+                        **current,
+                        "state": "goal-reconciliation-required",
+                        "goalLifecyclePending": True,
+                    },
+                )
+                raise
             finally:
                 await self.activity.close()
                 await self.rpc.close()
+
+    async def paced_reconcile(self):
+        """Bound resident native metadata reads; persisted uncertainty never creates model work."""
+        record = json.loads(self.journal.read_text())
+        async with ClientSession() as self.session:
+            current = await self.http("GET", "deliveries/" + record["delivery"]["id"])
+        d = current["delivery"]
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                [
+                    d["id"],
+                    d["generation"],
+                    d["revision"],
+                    d["state"],
+                    d.get("cancellation_requested"),
+                    record.get("nativeThread"),
+                    record.get("nativeTurn"),
+                ]
+            ).encode()
+        ).hexdigest()
+        path = self.state / "recovery-observation.json"
+        prior = json.loads(path.read_text()) if path.exists() else {}
+        unchanged = prior.get("fingerprint") == fingerprint
+        attempts = prior.get("attempts", 0) if unchanged else 0
+        maximum = max(1, min(8, int(self.config.get("maxUnchangedRecoveryReads", 3))))
+        if unchanged and (
+            attempts >= maximum or time.time() < prior.get("nextReadAt", 0)
+        ):
+            saved(
+                self.state / "resident-status.json",
+                {
+                    "state": "held" if attempts >= maximum else "waiting-for-recovery",
+                    "deliveryId": d["id"],
+                    "nativeMetadataReads": attempts,
+                    "manualReconcileRequired": attempts >= maximum,
+                    "modelsStartedByObservation": 0,
+                },
+            )
+            return
+        delay = min(600, 30 * 2**attempts)
+        saved(
+            path,
+            {
+                "fingerprint": fingerprint,
+                "attempts": attempts + 1,
+                "nextReadAt": time.time() + delay,
+                "modelsStarted": 0,
+            },
+        )
+        await self.reconcile()
 
     async def once(self, claim_operation):
         journal = self.state / "execution.json"
@@ -823,6 +968,16 @@ class Connector:
                     await bind_goal(
                         self, request["data"]["goalId"], request["data"].get("workId")
                     )
+                elif request["data"].get("goalReferenceId"):
+                    previous_goal = self.state / (
+                        "native-goal-" + self.context_id + ".json"
+                    )
+                    if (
+                        previous_goal.exists()
+                        and json.loads(previous_goal.read_text()).get("goalId")
+                        == request["data"]["goalReferenceId"]
+                    ):
+                        await bind_goal(self, request["data"]["goalReferenceId"])
                 saved(
                     journal,
                     {
@@ -837,11 +992,20 @@ class Connector:
                     "GET", "deliveries/" + self.active["delivery"]["id"]
                 )
                 if fresh["delivery"]["state"] == "cancel_requested":
+                    await settle_goal(self, "cancelled")
                     await self.transition(
                         "cancelled",
                         body="Cancelled before native turn submission; no execution admitted",
                     )
-                    saved(journal, {**record, "state": "cancelled"})
+                    saved(
+                        journal,
+                        {
+                            **record,
+                            "state": "cancelled",
+                            "nativeThread": self.thread,
+                            "goalLifecyclePending": False,
+                        },
+                    )
                     return {"state": "cancelled", "modelsStarted": 0}
                 if fresh["delivery"]["state"] != "claimed":
                     raise RuntimeError("Delivery state changed before native admission")
@@ -935,10 +1099,22 @@ class Connector:
                     raise RuntimeError(
                         "Native result exceeds communication limit; artifact publication required"
                     )
+                current = json.loads(journal.read_text())
+                saved(
+                    journal,
+                    {
+                        **current,
+                        "state": "native-terminal-observed",
+                        "observedTerminalState": status,
+                        "goalLifecyclePending": bool(self.goal_binding)
+                        and status in ("failed", "cancelled"),
+                    },
+                )
                 if self.goal_binding:
                     self.goal_progress_closing = True
                     if self.goal_progress_task:
                         await asyncio.gather(self.goal_progress_task)
+                    await settle_goal(self, status)
                     native = await goal_progress(self)
                     self.activity.record(
                         "hollywood/goalProgress",
@@ -968,6 +1144,18 @@ class Connector:
                     "answer": answer,
                 }
             except NativeGoalHeld as error:
+                current = json.loads(journal.read_text())
+                if current.get("nativeTurn"):
+                    saved(
+                        journal,
+                        {
+                            **current,
+                            "state": "goal-reconciliation-required",
+                            "goalLifecyclePending": True,
+                        },
+                    )
+                    await self.transition("unknown")
+                    raise
                 receipt = await self.transition(
                     "failed",
                     body="Native goal admission held before model execution: "
@@ -1027,8 +1215,12 @@ class Connector:
             try:
                 if self.journal.exists():
                     previous = json.loads(self.journal.read_text())
-                    if previous["state"] not in ("completed", "failed", "cancelled"):
-                        await self.reconcile()
+                    if previous["state"] not in (
+                        "completed",
+                        "failed",
+                        "cancelled",
+                    ) or previous.get("goalLifecyclePending"):
+                        await self.paced_reconcile()
                         await asyncio.sleep(2)
                         continue
                 async with ClientSession() as self.session:

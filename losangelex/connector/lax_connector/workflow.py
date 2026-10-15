@@ -6,7 +6,7 @@ import stat
 from pathlib import PurePosixPath
 from uuid import UUID, uuid5
 
-from .native_goals import bind, progress, workspace_id
+from .native_goals import bind, progress, sync_policy, workspace_id
 
 READ_TOOLS = {"hollywood_goal_read", "hollywood_work_read", "hollywood_supervision"}
 MUTATION_TOOLS = {
@@ -115,7 +115,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_goal_state",
-            "Goal manager: change the canonical goal lifecycle with revision fencing. Acceptance requires all work accepted and a concrete review. Pause gates new admission; it does not interrupt active effects.",
+            "Goal manager: change lifecycle with revision fencing. Acceptance requires reviewed work. Pause gates new admission. Request cancelled to durably stop all goal work; cancel_requested remains until original acknowledgements settle. Do not poll model turns for cancellation.",
             {
                 "goalId": text,
                 "revision": revision,
@@ -238,14 +238,19 @@ async def invoke(c, name, args, operation):
             },
         )
     if name == "hollywood_goal_state":
-        return await c.http(
+        goal = identity("goalId")
+        receipt = await c.http(
             "POST",
-            "goals/" + identity("goalId") + "/state",
+            "goals/" + goal + "/state",
             {
                 **{k: v for k, v in args.items() if k not in ("goalId", "operationId")},
                 "operationId": operation,
             },
         )
+        control = await sync_policy(c, goal, args["state"], operation)
+        if control:
+            receipt["nativePolicy"] = control
+        return receipt
     work = identity("workId")
     action = name.removeprefix("hollywood_work_")
     payload = {

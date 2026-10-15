@@ -60,6 +60,7 @@ class RoleContext:
             "senderKind": request["data"].get("authorKind"),
             "sourceEventId": request["source"],
             "goalId": request["data"].get("goalId"),
+            "goalReferenceId": request["data"].get("goalReferenceId"),
             "workId": request["data"].get("workId"),
             "workAcceptance": request["data"].get("acceptance"),
             "goalReview": bool(request["data"].get("goalReview")),

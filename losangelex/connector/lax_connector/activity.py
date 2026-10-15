@@ -13,7 +13,7 @@ class Activity:
         self.wake = asyncio.Event()
 
     def record(self, method, params):
-        from .connector import saved
+        from .journal import saved
 
         c = self.connector
         if (
@@ -213,7 +213,7 @@ class Activity:
         self.wake.set()
 
     async def drain(self):
-        from .connector import saved
+        from .journal import saved
 
         c = self.connector
         while True:

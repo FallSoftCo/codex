@@ -42,7 +42,7 @@ def workspace_id(config):
 
 
 async def bind(connector, goal_id, work_id=None, new_goal=False):
-    from .connector import saved
+    from .journal import saved
 
     c = connector
     snapshot = await c.rpc.call("thread/goal/get", {"threadId": c.thread})
@@ -118,6 +118,10 @@ async def bind(connector, goal_id, work_id=None, new_goal=False):
         binding = {**binding, "nativeGoalId": result["goalId"], "state": "bound"}
         saved(path, binding)
         snapshot = result
+    if binding["goalId"] != goal_id:
+        raise NativeGoalHeld(
+            "Another unfinished coordination goal owns this native instance"
+        )
     if work_id and binding["workId"] != work_id:
         raise NativeGoalHeld("Another work assignment owns this native goal")
     if (work_id or c.active["request"]["data"].get("goalReview")) and snapshot["goal"][
@@ -166,6 +170,17 @@ async def progress(connector):
         "goal"
     ):
         raise RuntimeError("Native goal instance changed during admitted work")
+    expected_digest = c.goal_binding.get("objectiveDigest")
+    if not expected_digest and c.goal_binding.get("objective"):
+        expected_digest = hashlib.sha256(
+            c.goal_binding["objective"].encode()
+        ).hexdigest()
+    if (
+        expected_digest
+        and hashlib.sha256(snapshot["goal"]["objective"].encode()).hexdigest()
+        != expected_digest
+    ):
+        raise NativeGoalHeld("Native goal objective changed during bound work")
     return {
         "goalId": snapshot["goalId"],
         **{
@@ -173,3 +188,150 @@ async def progress(connector):
             for key in ("status", "tokensUsed", "timeUsedSeconds", "tokenBudget")
         },
     }
+
+
+async def restore(connector, record):
+    """Recover the server's original binding without creating/adopting a goal."""
+    c = connector
+    binding = c.active.get("nativeGoalBinding")
+    if not binding:
+        if c.active["request"]["data"].get("goalId"):
+            raise NativeGoalHeld("Accepted work has no confirmed native goal binding")
+        return None
+    if (
+        binding["native_thread"] != record.get("nativeThread")
+        or binding["context_id"] != record.get("contextId")
+        or binding["workspace_id"] != workspace_id(c.config)
+        or binding["delivery"] != c.active["delivery"]["id"]
+        or binding["generation"] != c.active["delivery"]["generation"]
+    ):
+        raise NativeGoalHeld("Recovery binding differs from original native ownership")
+    snapshot = await c.rpc.call("thread/goal/get", {"threadId": c.thread})
+    if (
+        snapshot.get("goalId") != binding["native_goal_id"]
+        or not snapshot.get("goal")
+        or hashlib.sha256(snapshot["goal"]["objective"].encode()).hexdigest()
+        != binding["objective_digest"]
+    ):
+        raise NativeGoalHeld("Original native goal was cleared, replaced or changed")
+    c.context_id = binding["context_id"]
+    c.goal_binding = {
+        "nativeThread": c.thread,
+        "contextId": c.context_id,
+        "nativeGoalId": binding["native_goal_id"],
+        "goalId": binding["goal"],
+        "workId": binding["work"],
+        "objectiveDigest": binding["objective_digest"],
+    }
+    return c.goal_binding
+
+
+async def settle(connector, status):
+    """Pause unfinished goals after a terminal stop/failure; never admit execution."""
+    from .journal import saved
+
+    c = connector
+    if not c.goal_binding or status not in ("cancelled", "failed"):
+        return None
+    before = await progress(c)
+    intent = {
+        "deliveryId": c.active["delivery"]["id"],
+        "generation": c.active["delivery"]["generation"],
+        "nativeThread": c.thread,
+        "nativeGoalId": c.goal_binding["nativeGoalId"],
+        "executionState": status,
+        "desiredStatus": "paused",
+    }
+    path = c.state / ("goal-lifecycle-" + intent["deliveryId"] + ".json")
+    if path.exists():
+        prior = json.loads(path.read_text())
+        if prior["intent"] != intent:
+            raise NativeGoalHeld("Native lifecycle intent changed ownership")
+    saved(path, {"state": "intent", "intent": intent, "before": before})
+    if before["status"] not in ("paused", "complete"):
+        try:
+            await c.rpc.call(
+                "thread/goal/set",
+                {
+                    "threadId": c.thread,
+                    "expectedGoalId": intent["nativeGoalId"],
+                    "status": "paused",
+                },
+            )
+        except Exception:
+            # Reconcile only metadata for the original instance, never a native turn.
+            after = await progress(c)
+            if after["status"] != "paused":
+                raise NativeGoalHeld("Original goal pause is unconfirmed")
+    after = await progress(c)
+    if after["status"] not in ("paused", "complete"):
+        raise NativeGoalHeld("Stopped execution retains an active native goal")
+    result = {
+        "state": "confirmed",
+        "intent": intent,
+        "before": before,
+        "after": after,
+        "modelTurnsStarted": 0,
+        "externalEffectsUndone": False,
+    }
+    saved(path, result)
+    return after
+
+
+async def sync_policy(connector, goal_id, state, operation):
+    """An explicit goal control changes only its existing matching native binding."""
+    from .journal import saved
+
+    c = connector
+    if not c.goal_binding or c.goal_binding["goalId"] != goal_id or state == "accepted":
+        return None
+    desired = "active" if state == "active" else "paused"
+    before = await progress(c)
+    if desired == "active" and before["status"] == "complete":
+        raise NativeGoalHeld(
+            "Completed native objective needs explicit new-instance reconciliation"
+        )
+    intent = {
+        "operationId": operation,
+        "canonicalGoalId": goal_id,
+        "requestedCanonicalState": state,
+        "deliveryId": c.active["delivery"]["id"],
+        "nativeThread": c.thread,
+        "nativeGoalId": c.goal_binding["nativeGoalId"],
+        "desiredStatus": desired,
+    }
+    path = c.state / (
+        "goal-policy-" + hashlib.sha256(operation.encode()).hexdigest() + ".json"
+    )
+    if path.exists() and json.loads(path.read_text())["intent"] != intent:
+        raise NativeGoalHeld("Original native policy operation changed")
+    saved(path, {"state": "intent", "intent": intent, "before": before})
+    if before["status"] not in (desired, "complete"):
+        try:
+            await c.rpc.call(
+                "thread/goal/set",
+                {
+                    "threadId": c.thread,
+                    "expectedGoalId": intent["nativeGoalId"],
+                    "status": desired,
+                },
+            )
+        except Exception:
+            observed = await progress(c)
+            if observed["status"] != desired:
+                raise NativeGoalHeld("Original native goal control remains unconfirmed")
+    after = await progress(c)
+    if after["status"] not in (desired, "complete"):
+        raise NativeGoalHeld(
+            "Native goal policy differs from its confirmed business control"
+        )
+    result = {
+        "state": "confirmed",
+        "intent": intent,
+        "after": after,
+        "modelTurnsStarted": 0,
+        "activeExecutionStopped": False,
+        "externalEffectsUndone": False,
+    }
+    saved(path, result)
+    return result

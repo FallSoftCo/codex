@@ -59,3 +59,55 @@ Business pause/cancellation and stopped native-goal reconciliation, process-cras
 recovery, plan editing/retries, second-host artifact retrieval, physical Android
 voice/push and production migration remain release gates. No old session or
 schedule is resumed by this candidate.
+
+
+## Cancellation and recovery candidate
+
+Cancellation intent is separate from observed execution state. Hollywood retains
+that intent even while execution is unknown; only an attributable stop
+acknowledgement cancels the associated work. LAX interrupts the captured turn and
+conditionally pauses its matching unfinished native goal, preserving instance
+identity and accounting. A completed native objective is retained as a fact;
+neither stop nor local completion means external effects were undone.
+
+Recovery reads the original delivery/claim/generation/host, native binding,
+thread/turn and persisted tool outcomes. It enables external admission before
+native reads and never starts or resumes a model turn. Two actual stopped native
+contexts (Global and worker) reconciled their original interrupted turns to failed
+execution without another model turn. Unresolved tool effects remain held.
+
+Resident native metadata reads use a persisted bounded backoff. Three unchanged
+reads park recovery by default until an authoritative delivery change or explicit
+`--reconcile`; a resident restart does not reset that budget. Ordinary HTTP queue
+observation remains deterministic and cannot admit unknown execution again.
+
+Administrative discovery exposes current room membership and role revisions.
+Known rejection of one atomic command remains rejected and can be corrected after
+a fresh authorized read. Unconfirmed multi-step effects remain fenced. Shared
+errors and durable journals live in canonical modules so console and `python -m`
+entrypoints classify the same exception identities.
+
+Source-bound human follow-ups retain a goal reference. They attach only a matching
+existing native binding and never overwrite another unfinished objective. The
+current native per-context goal is still a single instance. Global's broad role
+and multiple simultaneous business goals require an explicit role-versus-work
+lifecycle contract before release; business goal acceptance/cancellation must not
+silently complete or suspend supervision of unrelated goals. That extension is a
+remaining architecture gate, not a claim about the current candidate.
+
+
+The installed dev6 native cancellation probe now passes: one Global created and
+provisioned a worker, recovered a deliberate membership 409 through authoritative
+inspection, delegated a real helper/question, then handled a source-bound human
+stop in its existing context. The helper stopped before its deferred write;
+work/execution and business goal closed, native objectives paused and the stale
+human answer was denied. Three explicit provider turns ran, with no model polling.
+Owned services were stopped/disabled afterwards. The earlier namespace-PID guard
+failure and administrative classification failures remain in protected evidence;
+none of their original requests was resubmitted.
+
+Goal cancellation is a durable Hollywood operation, not a request for Global to
+poll workers. It can return cancel_requested while the service propagates stop
+and reconciles original acknowledgements. CLI/callback errors now share one
+canonical type; a known 409 cannot become an unknown effect merely because the
+connector was launched with `python -m`.

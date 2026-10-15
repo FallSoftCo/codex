@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from uuid import UUID
 
-from .connector import saved
+from .journal import saved
 from .linux_admin import run
 
 

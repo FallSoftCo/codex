@@ -14,7 +14,7 @@ class AdminEffectUnknown(RuntimeError):
 
 
 async def administer(connector, name, arguments, operation):
-    from .connector import saved
+    from .journal import saved
 
     if not connector.role_context.value["communicationAdministrator"]:
         raise PermissionError("Communication administrator required")
@@ -45,6 +45,26 @@ async def administer(connector, name, arguments, operation):
         )
         return result
     except Exception as error:
+        from .errors import HttpFailure
+
+        if (
+            name
+            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room")
+            and isinstance(error, HttpFailure)
+            and error.status in (400, 403, 409)
+        ):
+            saved(
+                path,
+                {
+                    "state": "rejected",
+                    "operationId": operation,
+                    "tool": name,
+                    "arguments": arguments,
+                    "status": error.status,
+                    "effect": "none; single atomic operation rejected",
+                },
+            )
+            raise
         # A workflow may have completed one step before another rejects or loses
         # its reply. Never label the entire workflow rejected or blindly repeat it.
         saved(
@@ -63,7 +83,7 @@ async def administer(connector, name, arguments, operation):
 
 
 async def _administer(connector, name, arguments, operation):
-    from .connector import saved
+    from .journal import saved
 
     if not connector.role_context.value["communicationAdministrator"]:
         raise PermissionError("Communication administrator required")
