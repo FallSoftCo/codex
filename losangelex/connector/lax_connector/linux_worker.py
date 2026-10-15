@@ -193,9 +193,14 @@ def provision(spec):
         state = run(
             "systemctl", "show", receipt["unit"], "-p", "ActiveState", "--value"
         ).stdout.strip()
+        policy_file = record / "execution-policy-upgrade-receipt.json"
+        policy = protected(policy_file) if policy_file.exists() else receipt
+        profile = policy.get("executionProfile", "restricted")
         return {
             **receipt,
-            **({"executionProfile": protected(record / "execution-policy-upgrade-receipt.json")["executionProfile"], "effectiveHostAdministrator": True} if (record / "execution-policy-upgrade-receipt.json").exists() else {}),
+            "executionProfile": profile,
+            "effectiveHostAdministrator": profile == "unrestricted",
+            "executionRegistration": service_readiness(authority, spec["hostId"], agent),
             "reconciled": True,
             "serviceActiveState": state,
             "modelOrServiceRestarted": False,
