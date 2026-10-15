@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from uuid import UUID, uuid4, uuid5
@@ -178,9 +179,11 @@ def enroll(spec):
 def observe_executors(config):
     """Independent host facts, coalesced and receipted; never a model wake."""
     from .service_observer import observe, digest
+
     root = Path(config["state"])
     after = None
     observed = 0
+    gaps = 0
     while True:
         route = "hosts/" + config["hostId"] + "/executors"
         if after:
@@ -195,28 +198,88 @@ def observe_executors(config):
                 try:
                     fact = observe(config, row)
                 except Exception as error:
+                    saved(root / ("executor-sensor-gap-" + row["id"] + ".json"), {
+                        "error": type(error).__name__, "detail": str(error)[:500],
+                        "executorId": row["id"], "descriptorDigest": row["descriptor_digest"],
+                        "selfStopAttested": False,
+                    })
                     d = row["descriptor"]
-                    fact = {"state": "unknown", "evidence": {
-                        "reason": "unverified-host-executor", "error": type(error).__name__,
-                        "originalBootId": d["bootId"], "observedBootId": None,
-                        "serviceUnit": d["serviceUnit"], "originalServiceInvocation": d["serviceInvocation"],
-                        "guardianPid": d["guardianPid"], "guardianStart": d["guardianStart"],
-                        "nativePid": d["nativePid"], "nativeStart": d["nativeStart"],
-                        "externalEffectsUndone": False}}
+                    fact = {
+                        "state": "unknown",
+                        "evidence": {
+                            "reason": "unverified-host-executor",
+                            "error": type(error).__name__,
+                            "originalBootId": d["bootId"],
+                            "observedBootId": None,
+                            "serviceUnit": d["serviceUnit"],
+                            "originalServiceInvocation": d["serviceInvocation"],
+                            "guardianPid": d["guardianPid"],
+                            "guardianStart": d["guardianStart"],
+                            "nativePid": d["nativePid"],
+                            "nativeStart": d["nativeStart"],
+                            "externalEffectsUndone": False,
+                        },
+                    }
                 fingerprint = digest(fact)
-                if prior and prior.get("fingerprint") == fingerprint:
+                if (
+                    prior
+                    and prior["state"] == "completed"
+                    and prior.get("fingerprint") == fingerprint
+                ):
                     continue
-                payload = {"operationId": str(uuid4()), "machineIdentity": config["machineIdentity"],
-                           "descriptorDigest": row["descriptor_digest"], **fact}
-                saved(path, {"state": "pending", "fingerprint": fingerprint, "payload": payload})
-            result = request(config["hollywoodUrl"], config["token"], "POST",
-                             "hosts/" + config["hostId"] + "/executors/" + row["id"] + "/observation", payload)
+                payload = {
+                    "operationId": str(uuid4()),
+                    "machineIdentity": config["machineIdentity"],
+                    "descriptorDigest": row["descriptor_digest"],
+                    **fact,
+                }
+                saved(
+                    path,
+                    {
+                        "state": "pending",
+                        "fingerprint": fingerprint,
+                        "payload": payload,
+                    },
+                )
+            try:
+                result = request(
+                    config["hollywoodUrl"],
+                    config["token"],
+                    "POST",
+                    "hosts/"
+                    + config["hostId"]
+                    + "/executors/"
+                    + row["id"]
+                    + "/observation",
+                    payload,
+                )
+            except Exception as error:
+                gaps += 1
+                original = json.loads(path.read_text())
+                rejected = isinstance(error, urllib.error.HTTPError) and error.code in (
+                    400,
+                    403,
+                    409,
+                )
+                saved(
+                    path,
+                    {
+                        **original,
+                        "state": "rejected" if rejected else "pending",
+                        "error": type(error).__name__,
+                    },
+                )
+                continue
             original = json.loads(path.read_text())
             saved(path, {**original, "state": "completed", "receipt": result})
             observed += 1
         after = page["nextAfter"]
         if not after:
             break
+    saved(
+        root / "executor-observation-summary.json",
+        {"observed": observed, "unconfirmed": gaps},
+    )
     return observed
 
 
@@ -249,9 +312,18 @@ def supervise(config, once=False):
             )
             saved(path, {"state": "completed", "payload": payload, "receipt": result})
             executor_observations = observe_executors(config)
+            executor_gaps = json.loads(
+                (root / "executor-observation-summary.json").read_text()
+            )["unconfirmed"]
             saved(
                 root / "status.json",
-                {"state": "healthy", "lastReceipt": result, "executorObservations": executor_observations, "modelsStarted": 0},
+                {
+                    "state": "observation-gaps" if executor_gaps else "healthy",
+                    "lastReceipt": result,
+                    "executorObservations": executor_observations,
+                    "executorObservationGaps": executor_gaps,
+                    "modelsStarted": 0,
+                },
             )
             if once:
                 return result

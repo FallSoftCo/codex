@@ -20,6 +20,7 @@ from .activity import Activity
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
 from .errors import HttpFailure
+from .execution_lifecycle import ExecutionLifecycle
 from .effects import Effects
 from .journal import ExecutionJournals, saved
 from .native_controls import NativeControls
@@ -68,7 +69,7 @@ def spec(name, description, properties, required):
     }
 
 
-CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1']
+CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1']
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -231,6 +232,7 @@ class Connector:
         self.uncertain_tools = False
         self.attention = Attention(self)
         self.native_items = {}
+        self.executor = None
         self.activity = Activity(self)
         self.effects = Effects(self)
         self.controls = NativeControls(self)
@@ -1045,6 +1047,8 @@ class Connector:
         self.finished = None
         self.final = ""
         self.publications = []
+        self.native_items = {}
+        self.executor = None
         self.goal_binding = None
         self.goal_progress_task = None
         self.goal_progress_closing = False
@@ -1176,6 +1180,7 @@ class Connector:
                 self.state / ("role-" + request["id"] + ".json"),
                 self.role_context.value,
             )
+            self.executor = ExecutionLifecycle(self)
             self.rpc = AppServer(
                 self.config["binary"],
                 Path(self.config["codexHome"]),
@@ -1183,8 +1188,12 @@ class Connector:
                 self.event,
                 self.tool,
                 self.attention.submitted,
+                on_spawn=self.executor.attach,
             )
             try:
+                await self.executor.prepare()
+                record = {**record, "executorId": self.executor.id}
+                saved(journal, record)
                 await self.rpc.start()
                 external_lifecycle = role_scope(self)
                 previous_goal = self.state / (
@@ -1315,6 +1324,7 @@ class Connector:
                     return {"state": "cancelled", "modelsStarted": 0}
                 if fresh["delivery"]["state"] != "claimed":
                     raise RuntimeError("Delivery state changed before native admission")
+                await self.executor.require_live()
                 params = {
                     "threadId": self.thread,
                     "model": self.config["model"],
@@ -1546,6 +1556,7 @@ class Connector:
                     )
                 await self.activity.close()
                 await self.rpc.close()
+                await self.executor.observe_close()
 
     async def serve(self):
         """Deterministic queue observer. Idle/unknown states never wake a model."""

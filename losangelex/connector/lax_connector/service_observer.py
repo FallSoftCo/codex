@@ -2,6 +2,7 @@
 
 No process is started/stopped here. Empty groups, not timeouts, establish drainage.
 """
+
 import hashlib
 import json
 import os
@@ -13,11 +14,14 @@ from uuid import UUID
 from .host import machine_identity
 from .journal import saved
 
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
+
 def boot_id():
     return str(UUID(Path("/proc/sys/kernel/random/boot_id").read_text().strip()))
+
 
 def process(pid):
     path = Path("/proc") / str(int(pid))
@@ -36,6 +40,7 @@ def process(pid):
     except (FileNotFoundError, ProcessLookupError):
         return None
 
+
 def properties(unit):
     result = subprocess.run(
         ["systemctl", "show", unit, "--no-pager",
@@ -45,15 +50,18 @@ def properties(unit):
     )
     return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
 
+
 def protected(path):
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
         raise PermissionError("Service observation registry is not administrator protected")
     return json.loads(path.read_text())
 
+
 def directory(authority, host, agent):
     values = [str(UUID(v)) for v in (authority, host, agent)]
     return Path("/var/lib/harness") / values[0] / "hosts" / values[1] / "services" / values[2]
+
 
 def expected_owner(authority, agent):
     base = Path("/var/lib/harness") / str(UUID(authority))
@@ -72,6 +80,21 @@ def expected_owner(authority, agent):
         raise PermissionError("Worker account home differs")
     return account.pw_uid, home, intent["binary"]
 
+
+def installed_unit(authority, agent):
+    """Only the administrator-installed participant unit is auto-enrolled."""
+    base = Path("/var/lib/harness") / str(UUID(authority))
+    global_receipt = protected(base / "global-admin-receipt.json")
+    if global_receipt["agentId"] == agent:
+        if not global_receipt.get("unit"):
+            raise PermissionError(
+                "Global installation needs explicit managed-service upgrade"
+            )
+        return properties(global_receipt["unit"])["Id"]
+    receipt = protected(base / "workers" / str(UUID(agent)) / "provision-receipt.json")
+    return properties(receipt["unit"])["Id"]
+
+
 def unit_definition(info):
     path = Path(info["FragmentPath"])
     metadata = path.lstat()
@@ -80,6 +103,7 @@ def unit_definition(info):
     if info["KillMode"] != "control-group":
         raise PermissionError("Service must use systemd control-group lifecycle")
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
 
 def register(authority, host, agent, unit):
     """Root installer records an actual running, owned service incarnation."""
@@ -131,6 +155,7 @@ def register(authority, host, agent, unit):
             "serviceInvocation": invocation, "bindingDigest": digest(manifest),
             "modelOrServiceStarted": False}
 
+
 def members(group):
     path = Path("/sys/fs/cgroup") / group.lstrip("/")
     if ".." in path.parts or not group.startswith("/"):
@@ -145,6 +170,7 @@ def members(group):
             pass
     return result
 
+
 def observe(config, row):
     """Return a conclusive signed-in-controller fact or explicit unknown."""
     if os.geteuid() != 0 or machine_identity() != config["machineIdentity"]:
@@ -154,55 +180,134 @@ def observe(config, row):
     manifest_path = root / (d["serviceInvocation"] + ".json")
     if not manifest_path.exists():
         # A service restart can be registered only against its unchanged root enrollment.
-        baseline = protected(root / "enrollment.json")
-        if baseline["unit"] != d["serviceUnit"]:
-            raise PermissionError("Executor service differs from enrollment")
-        register(config["authorityId"], config["hostId"], row["agent"], baseline["unit"])
+        enrollment = root / "enrollment.json"
+        unit = (
+            protected(enrollment)["unit"]
+            if enrollment.exists()
+            else installed_unit(config["authorityId"], str(row["agent"]))
+        )
+        if unit != d["serviceUnit"]:
+            raise PermissionError("Executor service differs from installed enrollment")
+        register(config["authorityId"], config["hostId"], row["agent"], unit)
     binding = protected(manifest_path)
     expected = {
-        "authorityId": config["authorityId"], "hostId": config["hostId"],
-        "agentId": str(row["agent"]), "unit": d["serviceUnit"],
-        "serviceInvocation": d["serviceInvocation"], "controlGroup": d["controlGroup"],
-        "guardianPid": d["guardianPid"], "guardianStart": d["guardianStart"],
-        "bootId": d["bootId"], "machineIdentity": d["machineIdentity"],
+        "authorityId": config["authorityId"],
+        "hostId": config["hostId"],
+        "agentId": str(row["agent"]),
+        "unit": d["serviceUnit"],
+        "serviceInvocation": d["serviceInvocation"],
+        "controlGroup": d["controlGroup"],
+        "guardianPid": d["guardianPid"],
+        "guardianStart": d["guardianStart"],
+        "bootId": d["bootId"],
+        "machineIdentity": d["machineIdentity"],
     }
     if any(binding.get(k) != v for k, v in expected.items()):
         raise PermissionError("Original executor/service incarnation mismatch")
-    evidence = {"originalBootId": d["bootId"], "observedBootId": boot_id(),
-                "serviceBindingDigest": digest(binding), "originalServiceInvocation": d["serviceInvocation"],
-                "serviceUnit": d["serviceUnit"], "guardianPid": d["guardianPid"],
-                "guardianStart": d["guardianStart"], "nativePid": d["nativePid"],
-                "nativeStart": d["nativeStart"], "externalEffectsUndone": False}
+    evidence = {
+        "originalBootId": d["bootId"],
+        "observedBootId": boot_id(),
+        "serviceBindingDigest": digest(binding),
+        "originalServiceInvocation": d["serviceInvocation"],
+        "serviceUnit": d["serviceUnit"],
+        "guardianPid": d["guardianPid"],
+        "guardianStart": d["guardianStart"],
+        "nativePid": d["nativePid"],
+        "nativeStart": d["nativeStart"],
+        "externalEffectsUndone": False,
+    }
     if evidence["observedBootId"] != d["bootId"]:
-        return {"state": "stopped", "evidence": {**evidence, "reason": "machine-boot-changed"}}
-    native = process(d["nativePid"])
+        return {
+            "state": "stopped",
+            "evidence": {**evidence, "reason": "machine-boot-changed"},
+        }
+    native = process(d["nativePid"]) if d["nativePid"] is not None else None
     native_original = native is not None and native["start"] == d["nativeStart"]
     info = properties(binding["unit"])
-    if info["InvocationID"] != binding["serviceInvocation"] or info["ActiveState"] in ("inactive", "failed"):
+    if info["InvocationID"] != binding["serviceInvocation"] or info["ActiveState"] in (
+        "inactive",
+        "failed",
+    ):
         if native_original:
-            return {"state": "unknown", "evidence": {**evidence, "reason": "old-native-process-still-exists"}}
-        return {"state": "stopped", "evidence": {**evidence, "reason": "registered-invocation-settled",
-                "currentServiceInvocation": info["InvocationID"], "currentServiceState": info["ActiveState"]}}
+            return {
+                "state": "unknown",
+                "evidence": {**evidence, "reason": "old-native-process-still-exists"},
+            }
+        return {
+            "state": "stopped",
+            "evidence": {
+                **evidence,
+                "reason": "registered-invocation-settled",
+                "currentServiceInvocation": info["InvocationID"],
+                "currentServiceState": info["ActiveState"],
+            },
+        }
     if unit_definition(info) != binding["unitDefinitionDigest"]:
         raise PermissionError("Registered service definition changed")
     guardian = process(d["guardianPid"])
-    guardian_ok = (guardian and guardian["start"] == d["guardianStart"] and guardian["uid"] == binding["uid"]
-                   and guardian["controlGroup"] == binding["controlGroup"]
-                   and int(info["MainPID"]) == d["guardianPid"])
+    guardian_ok = (
+        guardian
+        and guardian["start"] == d["guardianStart"]
+        and guardian["uid"] == binding["uid"]
+        and guardian["controlGroup"] == binding["controlGroup"]
+        and int(info["MainPID"]) == d["guardianPid"]
+    )
     current = members(binding["controlGroup"])
+    if row.get("launch_phase") == "reserved":
+        return {
+            "state": "unknown",
+            "evidence": {
+                **evidence,
+                "reason": "registered-launch-pending"
+                if guardian_ok
+                else "launch-guardian-unverified",
+                "nativeBirthUnconfirmed": True,
+            },
+        }
     if native_original:
-        valid = guardian_ok and native["uid"] == binding["uid"] and native["controlGroup"] == binding["controlGroup"]
-        valid = valid and native["executableDevice"] == binding["binaryDevice"] and native["executableInode"] == binding["binaryInode"]
+        valid = (
+            guardian_ok
+            and native["uid"] == binding["uid"]
+            and native["controlGroup"] == binding["controlGroup"]
+        )
+        valid = (
+            valid
+            and native["executableDevice"] == binding["binaryDevice"]
+            and native["executableInode"] == binding["binaryInode"]
+        )
         valid = valid and native["pid"] in current and guardian["pid"] in current
         if valid:
-            return {"state": "live", "evidence": {**evidence, "reason": "matched-live-incarnation"}}
-        return {"state": "unknown", "evidence": {**evidence, "reason": "native-incarnation-not-owned-by-registered-service"}}
+            return {
+                "state": "live",
+                "evidence": {**evidence, "reason": "matched-live-incarnation"},
+            }
+        return {
+            "state": "unknown",
+            "evidence": {
+                **evidence,
+                "reason": "native-incarnation-not-owned-by-registered-service",
+            },
+        }
     allowed = {d["guardianPid"]} if guardian_ok else set()
     remaining = sorted(current - allowed)
     if guardian_ok and not remaining and members(binding["controlGroup"]) <= allowed:
-        return {"state": "stopped", "evidence": {**evidence, "reason": "registered-unit-drained",
-                "remainingWorkPids": [], "remainingWorkProcessCount": 0,
-                "remainingWorkProcessDigest": digest([])}}
-    return {"state": "unknown", "evidence": {**evidence, "reason": "registered-unit-not-drained",
-            "remainingWorkPids": remaining[:64], "remainingWorkProcessCount": len(remaining),
-            "remainingWorkProcessDigest": digest(remaining)}}
+        return {
+            "state": "stopped",
+            "evidence": {
+                **evidence,
+                "reason": "registered-unit-drained",
+                "remainingWorkPids": [],
+                "remainingWorkProcessCount": 0,
+                "remainingWorkProcessDigest": digest([]),
+            },
+        }
+    return {
+        "state": "unknown",
+        "evidence": {
+            **evidence,
+            "reason": "registered-unit-not-drained",
+            "remainingWorkPids": remaining[:64],
+            "remainingWorkProcessCount": len(remaining),
+            "remainingWorkProcessDigest": digest(remaining),
+        },
+    }

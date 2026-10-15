@@ -25,10 +25,12 @@ class AppServer:
         on_event,
         on_request,
         on_submission=None,
+        on_spawn=None,
     ):
         self.binary, self.home, self.state = binary, home, state
         self.on_event, self.on_request = on_event, on_request
         self.on_submission = on_submission
+        self.on_spawn = on_spawn
         self.pending = {}
         self.requests = set()
         self.sequence = 0
@@ -62,6 +64,8 @@ class AppServer:
                 env=env,
                 limit=16 * 1024 * 1024,
             )
+        if self.on_spawn:
+            await self.on_spawn(self)
         self.reader = asyncio.create_task(self._read())
         await self.call(
             "initialize",

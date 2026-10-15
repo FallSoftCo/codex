@@ -201,6 +201,10 @@ class Activity:
         self.wake.set()
 
     def start(self):
+        if self.task and not self.task.done():
+            raise RuntimeError("Activity outbox already has a live scope")
+        self.pending.clear()
+        self.wake.clear()
         c = self.connector
         for path in c.state.glob("activity-*.json"):
             record = json.loads(path.read_text())

@@ -62,6 +62,17 @@ def provision(spec):
                 "authorityId": identity,
             },
         )
+    accepted = state / "global-admin-receipt.json"
+    if accepted.exists():
+        receipt = json.loads(accepted.read_text())
+        account = pwd.getpwnam(receipt["linuxUser"])
+        if (
+            receipt["authorityId"] != identity
+            or account.pw_uid != receipt["uid"]
+            or account.pw_dir != receipt["home"]
+        ):
+            raise ValueError("Existing Global installation identity changed")
+        return {**receipt, "reconciled": True, "modelOrServiceRestarted": False}
     home = state / "global"
     try:
         account = pwd.getpwnam(user)
@@ -144,6 +155,36 @@ def provision(spec):
     config_file = home / "connector.json"
     saved(config_file, config)
     os.chown(config_file, account.pw_uid, account.pw_gid)
+    unit = "lax-global-" + slug + ".service"
+    unit_file = Path("/etc/systemd/system") / unit
+    content = f"""[Unit]
+Description=LAX Hollywood Global {identity}
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+[Service]
+Type=simple
+User={user}
+WorkingDirectory={home / "work"}
+ExecStart={interpreter} -m lax_connector.connector --config {config_file} --serve
+Restart=on-failure
+RestartSec=10
+UMask=0077
+MemoryMax=4G
+CPUQuota=200%
+KillMode=control-group
+TimeoutStopSec=30
+[Install]
+WantedBy=multi-user.target
+"""
+    if unit_file.exists() and unit_file.read_text() != content:
+        raise ValueError(
+            "Existing Global service differs; explicit drain/upgrade required"
+        )
+    if not unit_file.exists():
+        unit_file.write_text(content)
+        unit_file.chmod(0o644)
+        run("systemctl", "daemon-reload")
     receipt = {
         "authorityId": identity,
         "agentId": config["agentId"],
@@ -151,6 +192,9 @@ def provision(spec):
         "uid": account.pw_uid,
         "home": str(home),
         "connectorConfig": str(config_file),
+        "unit": unit,
+        "serviceInstalled": True,
+        "serviceStarted": False,
         "sudoVerifiedUid": 0,
         "workerPrivilegesChanged": False,
         "modelAccountProved": False,

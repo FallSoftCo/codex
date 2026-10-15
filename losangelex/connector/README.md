@@ -327,3 +327,6 @@ are described in [NATIVE_TOOL_POLICY.md](NATIVE_TOOL_POLICY.md).
 
 Per-attempt authority and original execution recovery are described in
 [ATTEMPT_JOURNALS.md](ATTEMPT_JOURNALS.md).
+
+Managed process birth and independent provider-admission attestation are
+specified in [NATIVE_LAUNCH.md](NATIVE_LAUNCH.md).
