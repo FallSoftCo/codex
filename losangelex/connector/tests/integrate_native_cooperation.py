@@ -58,6 +58,8 @@ def cleanup(spec):
 def main(spec):
     os.umask(0o077)
     autonomous = spec.get("autonomousPeerRequest", False)
+    memory = spec.get("decisionMemory", False)
+    assert not memory or autonomous
     assert os.geteuid() == 0 and socket.gethostname() == "ozzz-aosp"
     root = Path(spec["evidence"])
     root.mkdir(mode=0o700)
@@ -151,7 +153,13 @@ def main(spec):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             assert api.poll() is None, "Owned API stopped"
-            value = read()
+            try:
+                value = read()
+            except urllib.error.HTTPError:
+                raise
+            except urllib.error.URLError:
+                time.sleep(0.2)
+                continue
             if predicate(value):
                 return value
             time.sleep(2)
@@ -306,8 +314,23 @@ def main(spec):
             ).returncode
             != 0
         )
-        marker = "HOLLYWOOD_PEER_COOPERATION_V1\n"
+        marker = "HOLLYWOOD_CURRENT_DECISION_V2\n" if memory else "HOLLYWOOD_PEER_COOPERATION_V1\n"
         artifact = work / "cooperation.txt"
+        memory_evidence = None
+        if memory:
+            seed = call("POST", "rooms/" + room + "/messages", {
+                "operationId": "decision-source-v1", "kind": "message",
+                "body": "Initial scoped artifact direction; a correction may arrive before implementation.",
+            })
+            decision_id = str(uuid4())
+            initial_decision = {
+                "operationId": "decision-v1", "id": decision_id,
+                "key": "artifact.content", "revision": 0, "goalId": None,
+                "state": "active", "body": "Write cooperation.txt with exactly HOLLYWOOD_CURRENT_DECISION_V1 followed by one newline.",
+                "sourceEventId": seed["event"]["id"],
+            }
+            original_decision = call("POST", "rooms/" + room + "/decisions", initial_decision)
+
         objective = (
             "Create one canonical goal from this human request, reviewBudget exactly 1 (one material verifier review is authorized). "
             "Then use hollywood_cooperation_set with policy kanban_pull, reviewerId "
@@ -316,8 +339,9 @@ def main(spec):
             + builder_id
             + "], cooperationRevision 0. "
             "Create exactly one open work record (ownerId null), no dependencies, in this current room. "
-            "Its specification must ask Builder to write cooperation.txt containing exactly "
-            + repr(marker)
+            "Its specification must ask Builder to "
+            + ("read hollywood_briefing and write cooperation.txt with exactly the current artifact.content decision's required contents"
+               if memory else "write cooperation.txt containing exactly " + repr(marker))
             + ", check it, complete the native work goal, and submit using hollywood_work_report with artifactPaths [cooperation.txt]. "
             "Its acceptance must require Verifier to independently read "
             + str(artifact)
@@ -341,6 +365,15 @@ def main(spec):
             )
             assert stakeholder["deliveries"] == []
             saved(root / "stakeholder-note.json", stakeholder)
+            if memory:
+                objective += (
+                    " Read hollywood_briefing before planning. The work specification and acceptance must reference the CURRENT artifact.content decision, not hard-code the first version's bytes. "
+                    "After creating the goal, cooperation contract and open work, BEFORE requesting Builder, "
+                    "use hollywood_ask exactly once with question id proceed, header Proceed, question 'Proceed after reviewing the current artifact decision?', "
+                    "and one option label Proceed, description Continue this finite mission. "
+                    "Wait for the attributable answer, then read hollywood_briefing again and use the corrected current decision. "
+                    "Tell Builder and Verifier to read their current briefings and independently validate against that decision. "
+                )
             objective += (
                 " After creating the open work, use hollywood_request to send exactly one bounded request directly to Builder "
                 + builder_id
@@ -361,6 +394,49 @@ def main(spec):
         )
         saved(root / "plan-request.json", request)
         plan_delivery = request["deliveries"][0]["id"]
+        if memory:
+            attention_page = wait_for(
+                "original-native-question",
+                lambda: call("GET", "rooms/" + room + "/attention?after=0&limit=100"),
+                lambda page: any(q["attention"]["state"] == "pending"
+                                 and q["attention"]["agent"] == planner["agentId"]
+                                 for q in page["attention"]), 240,
+            )
+            pending = [q for q in attention_page["attention"]
+                       if q["attention"]["state"] == "pending"
+                       and q["attention"]["agent"] == planner["agentId"]]
+            assert len(pending) == 1
+            attention = pending[0]
+            corrected_source = call("POST", "rooms/" + room + "/messages", {
+                "operationId": "decision-source-v2", "kind": "message",
+                "body": "Correct artifact.content to V2 before implementing. The original native question remains the same.",
+            })
+            corrected_decision = call("POST", "rooms/" + room + "/decisions", {
+                **initial_decision, "operationId": "decision-v2", "revision": 1,
+                "body": "Write cooperation.txt with exactly HOLLYWOOD_CURRENT_DECISION_V2 followed by one newline.",
+                "sourceEventId": corrected_source["event"]["id"],
+            })
+            api.terminate()
+            api.wait(timeout=20)
+            api = subprocess.Popen(api.args, stdout=log, stderr=subprocess.STDOUT)
+            wait_for("api-restart", lambda: call("GET", "rooms"),
+                     lambda page: bool(page), 30)
+            original = call("GET", "attention/" + attention["attention"]["id"])
+            assert original["scope"] == attention["scope"]
+            answered = call("POST", "attention/" + attention["attention"]["id"] + "/response", {
+                "operationId": "original-proceed-answer", "scope": original["scope"],
+                "response": {"answers": {"proceed": {"answers": ["Proceed"]}}},
+            })
+            memory_evidence = {
+                "originalDecision": original_decision,
+                "correctedDecision": corrected_decision,
+                "originalAttentionId": attention["attention"]["id"],
+                "sameAttentionAcrossAPIRestart": True,
+                "answerReceipt": answered,
+                "modelExecutionRequests": 1,
+                "questionAnswerIsNotReplacementExecution": True,
+            }
+            saved(root / "decision-memory.json", memory_evidence)
         wait_for(
             "planner-completion",
             lambda: call("GET", "deliveries/" + plan_delivery),
@@ -476,17 +552,22 @@ def main(spec):
         contexts = []
         for name, w in workers.items():
             state = Path(w["workspace"]).parent / "state"
-            for record in state.glob("execution-*.json"):
+            for record in state.glob("context-*.json"):
                 item = json.loads(record.read_text())
+                deliveries = [d for d in result["deliveries"]
+                              if d["native_thread"] == item["nativeThread"]]
+                assert len(deliveries) == 1
                 contexts.append(
                     {
                         "agent": name,
-                        "journal": str(record),
-                        "state": item.get("state"),
-                        "nativeThread": item.get("nativeThread"),
-                        "nativeTurn": item.get("nativeTurn"),
+                        "contextRecord": str(record),
+                        "contextId": item["contextId"],
+                        "state": deliveries[0]["state"],
+                        "nativeThread": item["nativeThread"],
+                        "nativeTurn": deliveries[0]["native_turn"],
                     }
                 )
+        assert len(contexts) == len(result["deliveries"])
         saved(
             root / "result.json",
             {
@@ -502,6 +583,7 @@ def main(spec):
                 "goalOwner": planner["agentId"],
                 "explicitHumanRequests": 1 if autonomous else 2,
                 "autonomousPeerRequest": autonomous,
+                "decisionMemory": memory_evidence,
                 "humanContributions": 2,
                 "distinctHumanPrincipals": [
                     owner["principalId"],

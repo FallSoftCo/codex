@@ -62,6 +62,7 @@ class RoleContext:
             "goalId": request["data"].get("goalId"),
             "goalReferenceId": request["data"].get("goalReferenceId"),
             "workId": request["data"].get("workId"),
+            "attemptId": request["data"].get("attemptId"),
             "workAcceptance": request["data"].get("acceptance"),
             "goalReview": bool(request["data"].get("goalReview")),
         }

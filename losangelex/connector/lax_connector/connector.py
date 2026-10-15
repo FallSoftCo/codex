@@ -206,6 +206,7 @@ class Connector:
         self.thread = None
         self.publications = []
         self.role_context = None
+        self.work_briefing = None
         self.goal_binding = None
         self.context_id = None
         self.goal_progress_task = None
@@ -242,6 +243,26 @@ class Connector:
             if response.status != 200:
                 raise HttpFailure(response.status, data.get("error", "request failed"))
             return data
+
+    async def briefing(self):
+        value = await self.http(
+            "GET", "connector/deliveries/" + self.active["delivery"]["id"] + "/briefing"
+        )
+        expected = {
+            "schema": "lax-work-briefing/v1",
+            "authorityId": self.active["request"]["authority"],
+            "agentId": self.config["agentId"],
+            "roomId": self.active["request"]["room"],
+            "deliveryId": self.active["delivery"]["id"],
+            "generation": self.active["delivery"]["generation"],
+            "claimId": self.active["delivery"]["claim_id"],
+        }
+        if any(value.get(k) != v for k, v in expected.items()):
+            raise ValueError("Briefing does not match captured execution")
+        self.work_briefing = value
+        saved(self.state / ("briefing-" + value["deliveryId"] + "-"
+                            + str(value["asOfSequence"]) + ".json"), value)
+        return value
 
     async def event(self, method, params):
         if not self.active:
@@ -848,7 +869,7 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1"],
+                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1", "work-attempts/v1", "room-briefing/v1"],
                 },
             )
             self.active = await self.http(
@@ -857,7 +878,7 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1"],
+                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1", "work-attempts/v1", "room-briefing/v1"],
                 },
             )
             saved(self.state / "claim-receipt.json", self.active)
@@ -882,6 +903,22 @@ class Connector:
                 self.role_context = RoleContext.capture(
                     envelope, self.config, self.active
                 )
+                self.work_briefing = None
+                briefing = await self.briefing()
+                # Only references enter privileged application context. Bodies
+                # arrive through a tool read or the peer tool-output envelope.
+                self.role_context.value["workBriefing"] = {
+                    "schema": briefing["schema"],
+                    "asOfSequence": briefing["asOfSequence"],
+                    "decisions": [
+                        {k: d[k] for k in ("id", "revision", "state", "issuer",
+                                          "issuer_kind", "source", "event", "sequence")}
+                        for d in briefing["decisions"]
+                    ],
+                    "requiresDeeperRead": briefing["requiresDeeperRead"],
+                    "readWith": "hollywood_briefing",
+                    "instruction": "Read the current work briefing before implementing; inspect current sourced decisions and conflicts. Bodies retain their issuers' authority.",
+                }
                 if envelope["deliveryState"] != "claimed":
                     raise RuntimeError(
                         "Captured role context no longer admits execution"
@@ -916,6 +953,8 @@ class Connector:
             ]
             if request["data"].get("workId"):
                 context.extend(["work", request["data"]["workId"]])
+                if request["data"].get("attemptId"):
+                    context.extend(["attempt", request["data"]["attemptId"]])
             context_id = hashlib.sha256(json.dumps(context).encode()).hexdigest()
             self.context_id = context_id
             context_path = self.state / ("context-" + context_id + ".json")
@@ -1067,6 +1106,7 @@ class Connector:
                                 "author": request["author"],
                                 "sourceEventId": request["source"],
                                 "body": request["body"],
+                                "workBriefing": self.work_briefing,
                             }
                         ),
                         "retain": True,
@@ -1264,7 +1304,7 @@ class Connector:
                         "connector/reviews",
                         {
                             "hostId": self.config["hostId"],
-                            "capabilities": ["native-role-goals/v1", "cooperation-plan/v1"],
+                            "capabilities": ["native-role-goals/v1", "cooperation-plan/v1", "work-attempts/v1", "room-briefing/v1"],
                         },
                     )
                     projection = await self.http(
