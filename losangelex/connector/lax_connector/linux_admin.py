@@ -29,6 +29,57 @@ def run(*args):
     )
 
 
+def ensure_supervision(spec, installation, state):
+    """Fresh installation wiring; preserve every existing policy and deliberate stop."""
+    from .host import request
+
+    agent = installation["credentials"]["Global"]["principalId"]
+    token = installation["credentials"]["Owner"]["token"]
+    route = "agents/" + agent + "/supervision"
+    current = request(spec["hollywoodUrl"], token, "GET", route)["policy"]
+    if current is None and spec.get("enablePortfolioSupervision", True):
+        payload = {
+            "operationId": "installer:global-supervision:" + installation["authorityId"],
+            "revision": 0, "roomId": installation["globalRoomId"], "enabled": True,
+            "reviewsPerWindow": spec.get("portfolioReviewsPerWindow", 4),
+            "windowSeconds": spec.get("portfolioWindowSeconds", 60),
+        }
+        intent = state / "global-supervision-intent.json"
+        if intent.exists() and json.loads(intent.read_text()) != payload:
+            raise ValueError("Original Global supervision intent changed")
+        if not intent.exists():
+            saved(intent, payload)
+        try:
+            request(spec["hollywoodUrl"], token, "PUT", route, payload)
+        except Exception as error:
+            from urllib.error import HTTPError
+            if isinstance(error, HTTPError) and error.code in (400, 403, 409):
+                raise
+            # Observe the persisted identity after an uncertain reply; never
+            # replay setup or turn on a policy that an operator disabled.
+            current = request(spec["hollywoodUrl"], token, "GET", route)["policy"]
+            if current is None:
+                raise RuntimeError("Original Global supervision setup remains unconfirmed") from None
+            if (current["room"], current["enabled"], current["reviews_per_window"],
+                    current["window_seconds"]) != (
+                    payload["roomId"], True, payload["reviewsPerWindow"], payload["windowSeconds"]):
+                raise RuntimeError("Global supervision changed; explicit reconciliation required") from None
+        current = request(spec["hollywoodUrl"], token, "GET", route)["policy"]
+        preserved = False
+    else:
+        preserved = current is not None
+    result = {
+        "enabled": bool(current and current["enabled"]),
+        "revision": current["revision"] if current else None,
+        "activationSequence": current["activation_seq"] if current else None,
+        "preservedExistingPolicy": preserved,
+        "historicalWorkResumed": False, "modelOrServiceStarted": False,
+        "semantics": "Only new typed material after activation can admit a deduplicated review. Passive chat and unchanged observations create no work.",
+    }
+    saved(state / "global-supervision-receipt.json", result)
+    return result
+
+
 def provision(spec):
     if os.geteuid() != 0 or platform.system() != "Linux":
         raise PermissionError("A verified Linux administrator must perform bootstrap")
@@ -185,7 +236,9 @@ WantedBy=multi-user.target
         unit_file.write_text(content)
         unit_file.chmod(0o644)
         run("systemctl", "daemon-reload")
+    supervision = ensure_supervision(spec, installation, state)
     receipt = {
+        "portfolioSupervision": supervision,
         "authorityId": identity,
         "agentId": config["agentId"],
         "linuxUser": user,

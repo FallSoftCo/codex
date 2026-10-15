@@ -44,3 +44,13 @@ the failed attempt, establish independent stop evidence, and use the existing
 explicit work recover/assign lifecycle. Do not reset an unknown request to pending
 or delete its journal. Permission policy changes and execution enrollment belong
 to one upgrade procedure, even when the native binary did not change.
+
+Fresh Global installation enables the existing portfolio supervision policy from
+its activation sequence. It coalesces typed material reports/incidents, retains
+one outstanding review and deduplicates unchanged snapshots. The default allows
+four material reviews per minute; excess material stays pending. Passive chat
+and a clock tick do not create model work. Existing policies, deliberate disabled
+supervision and stopped services are preserved during setup reconciliation.
+Previously returned reports need an explicit bounded handoff; installation never
+backfills historical work or replays it. A business goal's finite reviewBudget
+does not replace ongoing Global portfolio supervision.
