@@ -260,8 +260,17 @@ class Connector:
         if any(value.get(k) != v for k, v in expected.items()):
             raise ValueError("Briefing does not match captured execution")
         self.work_briefing = value
-        saved(self.state / ("briefing-" + value["deliveryId"] + "-"
-                            + str(value["asOfSequence"]) + ".json"), value)
+        saved(
+            self.state
+            / (
+                "briefing-"
+                + value["deliveryId"]
+                + "-"
+                + str(value["asOfSequence"])
+                + ".json"
+            ),
+            value,
+        )
         return value
 
     async def event(self, method, params):
@@ -429,10 +438,19 @@ class Connector:
                 )
             elif name in ("hollywood_publish", "hollywood_request"):
                 room = arguments.get("roomId", self.active["request"]["room"])
-                recipient = arguments.get("recipientId") if name == "hollywood_request" else None
-                if (self.active["request"]["audience"] == "direct" and recipient
-                        and recipient != self.active["request"]["author"]):
-                    raise PermissionError("Private peer delegation requires an explicit sharing contract")
+                recipient = (
+                    arguments.get("recipientId")
+                    if name == "hollywood_request"
+                    else None
+                )
+                if (
+                    self.active["request"]["audience"] == "direct"
+                    and recipient
+                    and recipient != self.active["request"]["author"]
+                ):
+                    raise PermissionError(
+                        "Private peer delegation requires an explicit sharing contract"
+                    )
                 value = await self.http(
                     "POST",
                     f"rooms/{room}/messages",
@@ -444,7 +462,9 @@ class Connector:
                         **(
                             {"recipientId": self.active["request"]["author"]}
                             if self.active["request"]["audience"] == "direct"
-                            else {"recipientId": str(UUID(recipient))} if recipient else {}
+                            else {"recipientId": str(UUID(recipient))}
+                            if recipient
+                            else {}
                         ),
                         "sourceEventId": self.active["request"]["id"],
                     },
@@ -869,7 +889,14 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1", "work-attempts/v1", "room-briefing/v1"],
+                    "capabilities": [
+                        "native-role-goals/v1",
+                        "cooperation-plan/v1",
+                        "work-attempts/v1",
+                        "room-briefing/v1",
+                        "host-admission/v1",
+                        "portfolio-supervision/v1",
+                    ],
                 },
             )
             self.active = await self.http(
@@ -878,7 +905,14 @@ class Connector:
                 {
                     "operationId": claim_operation,
                     "hostId": self.config["hostId"],
-                    "capabilities": ["native-role-goals/v1", "cooperation-plan/v1", "work-attempts/v1", "room-briefing/v1"],
+                    "capabilities": [
+                        "native-role-goals/v1",
+                        "cooperation-plan/v1",
+                        "work-attempts/v1",
+                        "room-briefing/v1",
+                        "host-admission/v1",
+                        "portfolio-supervision/v1",
+                    ],
                 },
             )
             saved(self.state / "claim-receipt.json", self.active)
@@ -911,8 +945,19 @@ class Connector:
                     "schema": briefing["schema"],
                     "asOfSequence": briefing["asOfSequence"],
                     "decisions": [
-                        {k: d[k] for k in ("id", "revision", "state", "issuer",
-                                          "issuer_kind", "source", "event", "sequence")}
+                        {
+                            k: d[k]
+                            for k in (
+                                "id",
+                                "revision",
+                                "state",
+                                "issuer",
+                                "issuer_kind",
+                                "source",
+                                "event",
+                                "sequence",
+                            )
+                        }
                         for d in briefing["decisions"]
                     ],
                     "requiresDeeperRead": briefing["requiresDeeperRead"],
@@ -1304,11 +1349,45 @@ class Connector:
                         "connector/reviews",
                         {
                             "hostId": self.config["hostId"],
-                            "capabilities": ["native-role-goals/v1", "cooperation-plan/v1", "work-attempts/v1", "room-briefing/v1"],
+                            "capabilities": [
+                                "native-role-goals/v1",
+                                "cooperation-plan/v1",
+                                "work-attempts/v1",
+                                "room-briefing/v1",
+                                "host-admission/v1",
+                                "portfolio-supervision/v1",
+                            ],
+                        },
+                    )
+                    await self.http(
+                        "POST",
+                        "connector/supervision",
+                        {
+                            "hostId": self.config["hostId"],
+                            "capabilities": [
+                                "native-role-goals/v1",
+                                "cooperation-plan/v1",
+                                "work-attempts/v1",
+                                "room-briefing/v1",
+                                "host-admission/v1",
+                                "portfolio-supervision/v1",
+                            ],
                         },
                     )
                     projection = await self.http(
-                        "GET", "connector/pending?hostId=" + self.config["hostId"]
+                        "POST",
+                        "connector/observe",
+                        {
+                            "hostId": self.config["hostId"],
+                            "capabilities": [
+                                "native-role-goals/v1",
+                                "cooperation-plan/v1",
+                                "work-attempts/v1",
+                                "room-briefing/v1",
+                                "host-admission/v1",
+                                "portfolio-supervision/v1",
+                            ],
+                        },
                     )
                 path = self.state / "resident-claim.json"
                 if path.exists():
@@ -1337,7 +1416,7 @@ class Connector:
                     path.unlink()
                 elif (
                     projection["enabled"]
-                    and projection["pending"]
+                    and projection["eligibleDeliveryId"]
                     and not projection["busy"]
                 ):
                     if not path.exists():
@@ -1351,7 +1430,11 @@ class Connector:
                     path.unlink()
                 saved(
                     self.state / "resident-status.json",
-                    {"state": "waiting", "modelsStartedByObservation": 0},
+                    {
+                        "state": "waiting",
+                        "modelsStartedByObservation": 0,
+                        "admission": projection,
+                    },
                 )
             except Exception as error:
                 saved(

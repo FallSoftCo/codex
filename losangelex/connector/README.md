@@ -189,3 +189,50 @@ were unchanged. The first empty-plan acceptance scenario and an overly strict
 metadata-notification verifier failed and remain recorded; their original native
 requests were not replayed. These checks do not qualify native push/voice or
 production migration.
+
+## Host controller and portfolio supervision candidate
+
+The command lax-host --enroll <private-spec.json> enrolls a dedicated host service
+identity and writes protected intent/config/receipts under the enterprise's host
+state. Enrollment requires root, the authenticated enterprise administrator
+credential, the existing host ID and explicit admission policy. It does not start
+models. A repeated enrollment verifies the original machine/controller and never
+silently overwrites another host's policy. Keep the input credential and
+controller state private; immutable runtime code must remain executable by the
+actual service UID.
+
+The command lax-host --serve <controller.json> holds one local process lock and
+publishes actual CPU-affinity/cgroup and available-memory observations.
+The --once command publishes one observation. The controller journals each
+operation before HTTP and resumes the same pending sample after a lost reply.
+A retry does not freshen old capacity. This supervisor has no public listener
+and no model or room membership. Sampling cadence is captured at enrollment;
+reducing policy freshness requires checking/reconfiguring that cadence.
+
+Resident connectors advertise host-admission/v1, observe eligibility and claim
+only ready work. Missing or stale host samples fail closed. Admission status
+includes the server's reason and timestamps; this replaces guessing whether
+queued work has started. Native unknown/cancellation-pending execution is never
+counted as a free reservation.
+
+The capability portfolio-supervision/v1 supports the explicitly enabled Global
+standing policy. Deterministic reconciliation creates bounded, coalesced,
+materially triggered reviews; idle observations and passive publications create
+no model turns. Private portfolio and shared human contexts remain separate.
+Native tools hollywood_portfolio, hollywood_execution_read and
+hollywood_execution_cancel expose current obligations and original execution
+control. Requesting cancellation is not acknowledgement that execution stopped.
+
+The owned integration drivers tests/integrate_native_admission.py and
+tests/integrate_native_cooperation.py exercise actual packaged models, separate
+Linux identities, delivered artifacts and independent verification on a private
+qualification endpoint. They require a prepared private installation/spec and
+stop their owned agents/controllers afterwards. They must not be pointed at
+existing product agents as a routine regression suite. Companion Hollywood
+HTTP probes deliberately use labeled synthetic native state for fault boundaries.
+
+The six-turn load proof used connector dev15/Hollywood dev12; the subsequent
+four-turn peer/decision/API-restart proof used dev16/dev13. Both used the pinned
+native model at xhigh. Neither qualifies cross-host artifact delivery or physical
+Android voice/push, active-turn Global steering, full enterprise installation
+or production cutover. Preserve those gates and the individual build receipts.

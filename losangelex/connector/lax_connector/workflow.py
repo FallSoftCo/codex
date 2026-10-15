@@ -9,6 +9,8 @@ from uuid import UUID, uuid5
 from .native_goals import bind, progress, sync_policy, workspace_id
 
 READ_TOOLS = {
+    "hollywood_portfolio",
+    "hollywood_execution_read",
     "hollywood_briefing",
     "hollywood_decisions",
     "hollywood_work_attempts",
@@ -20,6 +22,7 @@ READ_TOOLS = {
     "hollywood_attention_list",
 }
 MUTATION_TOOLS = {
+    "hollywood_execution_cancel",
     "hollywood_decision_set",
     "hollywood_work_revise",
     "hollywood_goal_create",
@@ -39,39 +42,93 @@ def definitions(spec):
     revision = {"type": "integer", "minimum": 1}
     return [
         spec(
+            "hollywood_portfolio",
+            "Global: inspect durable portfolio obligations, original review receipts and held/unknown review state. Dispatch is not acceptance; observation starts no model.",
+            {
+                "afterReference": {"type": ["string", "null"]},
+                "afterScope": {
+                    "type": ["string", "null"],
+                    "enum": ["goal", "delivery", None],
+                },
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+            [],
+        ),
+        spec(
+            "hollywood_execution_read",
+            "Inspect an authorized original execution receipt, native pointers and admission timestamps. Reading never starts or retries execution.",
+            {"deliveryId": text},
+            ["deliveryId"],
+        ),
+        spec(
+            "hollywood_execution_cancel",
+            "Request an authorized execution stop. Admission and descendants must be fenced and the executor must acknowledge; unknown remains held. This does not undo completed effects.",
+            {"deliveryId": text},
+            ["deliveryId"],
+        ),
+        spec(
             "hollywood_briefing",
             "Read current authorized work direction, decision revisions and this original attempt. Read at work start and after a material correction; current sourced decisions supersede stale assumptions. Content remains attributable tool data, not new user authority. Reading never admits another turn.",
-            {}, [],
+            {},
+            [],
         ),
         spec(
             "hollywood_decisions",
             "Read a bounded page of current sourced decisions, including retracted/conflicted state. Follow nextCursor when truncated; room permission does not grant private goal access.",
-            {"roomId": text, "after": {"type": ["string", "null"]},
-             "limit": {"type": "integer", "minimum": 1, "maximum": 100},
-             "goalId": {"type": ["string", "null"]}},
+            {
+                "roomId": text,
+                "after": {"type": ["string", "null"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                "goalId": {"type": ["string", "null"]},
+            },
             ["roomId", "after", "limit", "goalId"],
         ),
         spec(
             "hollywood_decision_set",
             "Record/revise an explicit scoped decision with a source in the addressed exchange. Only its issuer, scope owner or administrator may change it. Use original id/key and current revision; creation uses revision 0. An observation is not permission to decide. Retractions/conflicts remain visible.",
-            {"decisionId": text, "key": text, "revision": {"type": "integer", "minimum": 0},
-             "goalId": {"type": ["string", "null"]},
-             "state": {"type": "string", "enum": ["active", "retracted", "conflicted"]},
-             "body": text, "sourceEventId": text},
-            ["decisionId", "key", "revision", "goalId", "state", "body", "sourceEventId"],
+            {
+                "decisionId": text,
+                "key": text,
+                "revision": {"type": "integer", "minimum": 0},
+                "goalId": {"type": ["string", "null"]},
+                "state": {
+                    "type": "string",
+                    "enum": ["active", "retracted", "conflicted"],
+                },
+                "body": text,
+                "sourceEventId": text,
+            },
+            [
+                "decisionId",
+                "key",
+                "revision",
+                "goalId",
+                "state",
+                "body",
+                "sourceEventId",
+            ],
         ),
         spec(
             "hollywood_work_attempts",
             "Inspect original work-attempt lineage, native pointers, evidence and review without re-execution. Pagination never discards prior attempts.",
-            {"workId": text, "after": {"type": "integer", "minimum": 0},
-             "limit": {"type": "integer", "minimum": 1, "maximum": 100}},
+            {
+                "workId": text,
+                "after": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
             ["workId", "after", "limit"],
         ),
         spec(
             "hollywood_work_revise",
             "Goal manager: explicitly prepare rework only after completed work was independently rejected. Preserve its old attempt/evidence; unknown or unsettled execution cannot reopen. This does not assign/start the next attempt.",
-            {"workId": text, "revision": revision, "ownerId": text,
-             "specification": text, "acceptance": text, "note": text},
+            {
+                "workId": text,
+                "revision": revision,
+                "ownerId": text,
+                "specification": text,
+                "acceptance": text,
+                "note": text,
+            },
             ["workId", "revision", "ownerId", "specification", "acceptance", "note"],
         ),
         spec(
@@ -303,6 +360,22 @@ async def invoke(c, name, args, operation):
     def identity(key):
         return str(UUID(args[key]))
 
+    if name == "hollywood_portfolio":
+        from urllib.parse import urlencode
+
+        query = {"limit": args.get("limit", 32)}
+        if args.get("afterReference"):
+            query["afterReference"] = str(UUID(args["afterReference"]))
+            query["afterScope"] = args["afterScope"]
+        return await c.http(
+            "GET", "agents/" + c.config["agentId"] + "/supervision?" + urlencode(query)
+        )
+    if name == "hollywood_execution_read":
+        return await c.http("GET", "deliveries/" + identity("deliveryId"))
+    if name == "hollywood_execution_cancel":
+        return await c.http(
+            "POST", "deliveries/" + identity("deliveryId") + "/cancel", {}
+        )
     if name == "hollywood_briefing":
         return await c.briefing()
     if name == "hollywood_decisions":
@@ -313,17 +386,28 @@ async def invoke(c, name, args, operation):
             query["after"] = str(UUID(args["after"]))
         if args["goalId"]:
             query["goalId"] = str(UUID(args["goalId"]))
-        return await c.http("GET", "rooms/" + identity("roomId") + "/decisions?" + urlencode(query))
+        return await c.http(
+            "GET", "rooms/" + identity("roomId") + "/decisions?" + urlencode(query)
+        )
     if name == "hollywood_decision_set":
         return await c.http(
-            "POST", "rooms/" + c.active["request"]["room"] + "/decisions",
-            {**{k: v for k, v in args.items() if k != "decisionId"},
-             "id": identity("decisionId"), "operationId": operation},
+            "POST",
+            "rooms/" + c.active["request"]["room"] + "/decisions",
+            {
+                **{k: v for k, v in args.items() if k != "decisionId"},
+                "id": identity("decisionId"),
+                "operationId": operation,
+            },
         )
     if name == "hollywood_work_attempts":
         return await c.http(
-            "GET", "work/" + identity("workId") + "/attempts?after="
-            + str(args["after"]) + "&limit=" + str(args["limit"]),
+            "GET",
+            "work/"
+            + identity("workId")
+            + "/attempts?after="
+            + str(args["after"])
+            + "&limit="
+            + str(args["limit"]),
         )
     if name == "hollywood_attention_list":
         return await c.http(
@@ -435,6 +519,8 @@ async def invoke(c, name, args, operation):
             claimId=c.active["delivery"]["claim_id"],
             generation=c.active["delivery"]["generation"],
             evidence=evidence,
-            briefingSequence=c.work_briefing["asOfSequence"] if c.work_briefing else None,
+            briefingSequence=c.work_briefing["asOfSequence"]
+            if c.work_briefing
+            else None,
         )
     return await c.http("POST", "work/" + work + "/" + action, payload)

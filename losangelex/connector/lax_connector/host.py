@@ -1,0 +1,238 @@
+"""Protected Linux host controller: actual resource samples, no model execution."""
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+import time
+import urllib.request
+from pathlib import Path
+from uuid import UUID, uuid4, uuid5
+
+from .journal import saved
+
+
+def machine_identity():
+    return hashlib.sha256(Path("/etc/machine-id").read_bytes().strip()).hexdigest()
+
+
+def resources():
+    cpus = (
+        len(os.sched_getaffinity(0))
+        if hasattr(os, "sched_getaffinity")
+        else os.cpu_count()
+    )
+    values = dict(
+        line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines()
+    )
+    available = int(values["MemAvailable"].split()[0]) * 1024
+    root = Path("/sys/fs/cgroup")
+    groups = {root}
+    for line in Path("/proc/self/cgroup").read_text().splitlines():
+        hierarchy, controllers, relative = line.split(":", 2)
+        if hierarchy == "0" and not controllers:
+            current = root / relative.lstrip("/")
+            if ".." not in current.parts:
+                groups.update(
+                    p
+                    for p in (current, *current.parents)
+                    if p == root or root in p.parents
+                )
+    for group in groups:
+        try:
+            quota, period = (group / "cpu.max").read_text().split()
+            if quota != "max":
+                cpus = min(cpus, max(1, int(quota) // int(period)))
+        except (OSError, ValueError, ZeroDivisionError):
+            pass
+        try:
+            limit = (group / "memory.max").read_text().strip()
+            used = int((group / "memory.current").read_text())
+            if limit != "max":
+                available = min(available, max(0, int(limit) - used))
+        except (OSError, ValueError):
+            pass
+    return {"cpuSlots": max(1, cpus or 1), "availableMemoryBytes": available}
+
+
+def request(url, token, method, path, payload=None):
+    command = urllib.request.Request(
+        url.rstrip("/") + "/hollywood/v3/" + path,
+        data=None if payload is None else json.dumps(payload).encode(),
+        headers={
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+        },
+        method=method,
+    )
+    with urllib.request.urlopen(command, timeout=15) as response:
+        return json.load(response)
+
+
+def enroll(spec):
+    if os.geteuid() != 0:
+        raise PermissionError("Host enrollment writes protected installation state")
+    authority, host = str(UUID(spec["authorityId"])), str(UUID(spec["hostId"]))
+    identity = machine_identity()
+    directory = Path("/var/lib/harness") / authority / "hosts" / host
+    directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(directory, 0o700)
+    path = directory / "enrollment-intent.json"
+    if path.exists():
+        intent = json.loads(path.read_text())
+        if (
+            intent["authorityId"],
+            intent["hostId"],
+            intent["machineIdentity"],
+            intent["hollywoodUrl"],
+        ) != (
+            authority,
+            host,
+            identity,
+            spec["hollywoodUrl"],
+        ):
+            raise ValueError(
+                "Host enrollment identity changed; explicit migration required"
+            )
+    else:
+        import secrets
+
+        intent = {
+            "authorityId": authority,
+            "hostId": host,
+            "machineIdentity": identity,
+            "hollywoodUrl": spec["hollywoodUrl"],
+            "controllerId": str(uuid5(UUID(host), "lax-host-controller")),
+            "token": secrets.token_urlsafe(40),
+            "policyOperation": "host-policy:" + str(uuid4()),
+        }
+        saved(path, intent)
+    owner = spec["administratorCredential"]
+    call = lambda method, route, body=None: request(
+        intent["hollywoodUrl"], owner["token"], method, route, body
+    )
+    call(
+        "POST",
+        "principals",
+        {
+            "id": intent["controllerId"],
+            "name": "host-controller-" + host[:12],
+            "kind": "service",
+            "enrollmentCredential": intent["token"],
+        },
+    )
+    policy = call("GET", "hosts/" + host + "/admission")
+    if policy["policy"] is None:
+        call(
+            "PUT",
+            "hosts/" + host + "/admission",
+            {
+                **spec["policy"],
+                "operationId": intent["policyOperation"],
+                "revision": 0,
+                "controllerId": intent["controllerId"],
+                "machineIdentity": identity,
+            },
+        )
+        policy = call("GET", "hosts/" + host + "/admission")
+    elif (
+        str(policy["policy"]["controller"]),
+        policy["policy"]["machine_identity"],
+    ) != (
+        intent["controllerId"],
+        identity,
+    ):
+        raise ValueError(
+            "Existing host admission has a different controller; no overwrite"
+        )
+    config = {
+        **{
+            k: intent[k]
+            for k in (
+                "authorityId",
+                "hostId",
+                "machineIdentity",
+                "hollywoodUrl",
+                "token",
+            )
+        },
+        "state": str(directory),
+        "sampleSeconds": min(5, policy["policy"]["sample_max_age"] / 3),
+    }
+    config_path = directory / "controller.json"
+    saved(config_path, config)
+    receipt = {
+        "authorityId": authority,
+        "hostId": host,
+        "controllerId": intent["controllerId"],
+        "machineIdentity": identity,
+        "configPath": str(config_path),
+        "policyRevision": policy["policy"]["revision"],
+        "modelExecution": False,
+    }
+    saved(directory / "enrollment-receipt.json", receipt)
+    return receipt
+
+
+def supervise(config, once=False):
+    if machine_identity() != config["machineIdentity"]:
+        raise PermissionError("Controller config belongs to another machine")
+    root = Path(config["state"])
+    root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    lock = (root / "controller.lock").open("a")
+    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    path = root / "sample-intent.json"
+    while True:
+        try:
+            prior = json.loads(path.read_text()) if path.exists() else None
+            if prior and prior["state"] == "pending":
+                payload = prior["payload"]
+            else:
+                payload = {
+                    "operationId": str(uuid4()),
+                    "machineIdentity": config["machineIdentity"],
+                    **resources(),
+                }
+                saved(path, {"state": "pending", "payload": payload})
+            result = request(
+                config["hollywoodUrl"],
+                config["token"],
+                "POST",
+                "hosts/" + config["hostId"] + "/capacity",
+                payload,
+            )
+            saved(path, {"state": "completed", "payload": payload, "receipt": result})
+            saved(
+                root / "status.json",
+                {"state": "healthy", "lastReceipt": result, "modelsStarted": 0},
+            )
+            if once:
+                return result
+        except Exception as error:
+            saved(
+                root / "status.json",
+                {"state": "held", "error": type(error).__name__, "modelsStarted": 0},
+            )
+            if once:
+                raise
+        time.sleep(config.get("sampleSeconds", 5))
+
+
+def main():
+    os.umask(0o077)
+    parser = argparse.ArgumentParser()
+    actions = parser.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--enroll", type=Path)
+    actions.add_argument("--serve", type=Path)
+    actions.add_argument("--once", type=Path)
+    args = parser.parse_args()
+    path = args.enroll or args.serve or args.once
+    config = json.loads(path.read_text())
+    result = enroll(config) if args.enroll else supervise(config, once=bool(args.once))
+    if result is not None:
+        print(json.dumps(result))
+
+
+if __name__ == "__main__":
+    main()

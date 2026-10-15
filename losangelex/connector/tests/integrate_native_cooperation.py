@@ -16,6 +16,11 @@ from uuid import uuid4
 from hollywood_backbone.bootstrap import initialize
 from hollywood_backbone.store import Store
 from lax_connector.journal import saved
+from lax_connector.host import (
+    enroll as enroll_host,
+    supervise as sample_host,
+    resources,
+)
 from lax_connector.linux_admin import provision as provision_global
 from lax_connector.linux_worker import provision as provision_worker
 
@@ -82,6 +87,7 @@ def main(spec):
     python = str(runtime / "venv/bin/python")
     port = 18775
     with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(("127.0.0.1", port))
     initialize(
         json.loads(Path(spec["databaseConfig"]).read_text()),
@@ -122,6 +128,8 @@ def main(spec):
         stderr=subprocess.STDOUT,
     )
     store = None
+    controller = None
+    controller_log = None
     trace = []
     workers = {}
 
@@ -269,6 +277,49 @@ def main(spec):
             )
             workers[name] = receipt
             saved(root / (name + "-provision.json"), receipt)
+        host_enrollment = enroll_host(
+            {
+                "authorityId": authority,
+                "hostId": host,
+                "hollywoodUrl": base.removesuffix("/hollywood/v3/"),
+                "administratorCredential": owner,
+                "policy": {
+                    "maxConcurrent": resources()["cpuSlots"],
+                    "reservedInteractive": 1,
+                    "controlAgentIds": [
+                        install["credentials"]["Global"]["principalId"]
+                    ],
+                    "memoryPerTurnBytes": 512 * 1024**2,
+                    "reserveMemoryBytes": 1024**3,
+                    "sampleMaxAgeSeconds": 20,
+                    "connectorMaxAgeSeconds": 30,
+                },
+            }
+        )
+        saved(root / "host-enrollment.json", host_enrollment)
+        sample_host(
+            json.loads(Path(host_enrollment["configPath"]).read_text()), once=True
+        )
+        controller_log = (root / "controller.log").open("ab")
+        controller = subprocess.Popen(
+            [
+                python,
+                "-m",
+                "lax_connector.host",
+                "--serve",
+                host_enrollment["configPath"],
+            ],
+            stdout=controller_log,
+            stderr=subprocess.STDOUT,
+        )
+        saved(
+            root / "controller-process.json",
+            {
+                "pid": controller.pid,
+                "configPath": host_enrollment["configPath"],
+                "modelsStarted": 0,
+            },
+        )
         builder = workers["Builder"]
         verifier = workers["Verifier"]
         planner = workers["Planner"]
@@ -314,22 +365,37 @@ def main(spec):
             ).returncode
             != 0
         )
-        marker = "HOLLYWOOD_CURRENT_DECISION_V2\n" if memory else "HOLLYWOOD_PEER_COOPERATION_V1\n"
+        marker = (
+            "HOLLYWOOD_CURRENT_DECISION_V2\n"
+            if memory
+            else "HOLLYWOOD_PEER_COOPERATION_V1\n"
+        )
         artifact = work / "cooperation.txt"
         memory_evidence = None
         if memory:
-            seed = call("POST", "rooms/" + room + "/messages", {
-                "operationId": "decision-source-v1", "kind": "message",
-                "body": "Initial scoped artifact direction; a correction may arrive before implementation.",
-            })
+            seed = call(
+                "POST",
+                "rooms/" + room + "/messages",
+                {
+                    "operationId": "decision-source-v1",
+                    "kind": "message",
+                    "body": "Initial scoped artifact direction; a correction may arrive before implementation.",
+                },
+            )
             decision_id = str(uuid4())
             initial_decision = {
-                "operationId": "decision-v1", "id": decision_id,
-                "key": "artifact.content", "revision": 0, "goalId": None,
-                "state": "active", "body": "Write cooperation.txt with exactly HOLLYWOOD_CURRENT_DECISION_V1 followed by one newline.",
+                "operationId": "decision-v1",
+                "id": decision_id,
+                "key": "artifact.content",
+                "revision": 0,
+                "goalId": None,
+                "state": "active",
+                "body": "Write cooperation.txt with exactly HOLLYWOOD_CURRENT_DECISION_V1 followed by one newline.",
                 "sourceEventId": seed["event"]["id"],
             }
-            original_decision = call("POST", "rooms/" + room + "/decisions", initial_decision)
+            original_decision = call(
+                "POST", "rooms/" + room + "/decisions", initial_decision
+            )
 
         objective = (
             "Create one canonical goal from this human request, reviewBudget exactly 1 (one material verifier review is authorized). "
@@ -340,8 +406,11 @@ def main(spec):
             + "], cooperationRevision 0. "
             "Create exactly one open work record (ownerId null), no dependencies, in this current room. "
             "Its specification must ask Builder to "
-            + ("read hollywood_briefing and write cooperation.txt with exactly the current artifact.content decision's required contents"
-               if memory else "write cooperation.txt containing exactly " + repr(marker))
+            + (
+                "read hollywood_briefing and write cooperation.txt with exactly the current artifact.content decision's required contents"
+                if memory
+                else "write cooperation.txt containing exactly " + repr(marker)
+            )
             + ", check it, complete the native work goal, and submit using hollywood_work_report with artifactPaths [cooperation.txt]. "
             "Its acceptance must require Verifier to independently read "
             + str(artifact)
@@ -398,35 +467,58 @@ def main(spec):
             attention_page = wait_for(
                 "original-native-question",
                 lambda: call("GET", "rooms/" + room + "/attention?after=0&limit=100"),
-                lambda page: any(q["attention"]["state"] == "pending"
-                                 and q["attention"]["agent"] == planner["agentId"]
-                                 for q in page["attention"]), 240,
+                lambda page: any(
+                    q["attention"]["state"] == "pending"
+                    and q["attention"]["agent"] == planner["agentId"]
+                    for q in page["attention"]
+                ),
+                240,
             )
-            pending = [q for q in attention_page["attention"]
-                       if q["attention"]["state"] == "pending"
-                       and q["attention"]["agent"] == planner["agentId"]]
+            pending = [
+                q
+                for q in attention_page["attention"]
+                if q["attention"]["state"] == "pending"
+                and q["attention"]["agent"] == planner["agentId"]
+            ]
             assert len(pending) == 1
             attention = pending[0]
-            corrected_source = call("POST", "rooms/" + room + "/messages", {
-                "operationId": "decision-source-v2", "kind": "message",
-                "body": "Correct artifact.content to V2 before implementing. The original native question remains the same.",
-            })
-            corrected_decision = call("POST", "rooms/" + room + "/decisions", {
-                **initial_decision, "operationId": "decision-v2", "revision": 1,
-                "body": "Write cooperation.txt with exactly HOLLYWOOD_CURRENT_DECISION_V2 followed by one newline.",
-                "sourceEventId": corrected_source["event"]["id"],
-            })
+            corrected_source = call(
+                "POST",
+                "rooms/" + room + "/messages",
+                {
+                    "operationId": "decision-source-v2",
+                    "kind": "message",
+                    "body": "Correct artifact.content to V2 before implementing. The original native question remains the same.",
+                },
+            )
+            corrected_decision = call(
+                "POST",
+                "rooms/" + room + "/decisions",
+                {
+                    **initial_decision,
+                    "operationId": "decision-v2",
+                    "revision": 1,
+                    "body": "Write cooperation.txt with exactly HOLLYWOOD_CURRENT_DECISION_V2 followed by one newline.",
+                    "sourceEventId": corrected_source["event"]["id"],
+                },
+            )
             api.terminate()
             api.wait(timeout=20)
             api = subprocess.Popen(api.args, stdout=log, stderr=subprocess.STDOUT)
-            wait_for("api-restart", lambda: call("GET", "rooms"),
-                     lambda page: bool(page), 30)
+            wait_for(
+                "api-restart", lambda: call("GET", "rooms"), lambda page: bool(page), 30
+            )
             original = call("GET", "attention/" + attention["attention"]["id"])
             assert original["scope"] == attention["scope"]
-            answered = call("POST", "attention/" + attention["attention"]["id"] + "/response", {
-                "operationId": "original-proceed-answer", "scope": original["scope"],
-                "response": {"answers": {"proceed": {"answers": ["Proceed"]}}},
-            })
+            answered = call(
+                "POST",
+                "attention/" + attention["attention"]["id"] + "/response",
+                {
+                    "operationId": "original-proceed-answer",
+                    "scope": original["scope"],
+                    "response": {"answers": {"proceed": {"answers": ["Proceed"]}}},
+                },
+            )
             memory_evidence = {
                 "originalDecision": original_decision,
                 "correctedDecision": corrected_decision,
@@ -554,8 +646,11 @@ def main(spec):
             state = Path(w["workspace"]).parent / "state"
             for record in state.glob("context-*.json"):
                 item = json.loads(record.read_text())
-                deliveries = [d for d in result["deliveries"]
-                              if d["native_thread"] == item["nativeThread"]]
+                deliveries = [
+                    d
+                    for d in result["deliveries"]
+                    if d["native_thread"] == item["nativeThread"]
+                ]
                 assert len(deliveries) == 1
                 contexts.append(
                     {
@@ -613,6 +708,11 @@ def main(spec):
         if store:
             store.close()
         cleanup(spec)
+        if controller is not None and controller.poll() is None:
+            controller.terminate()
+            controller.wait(timeout=15)
+        if controller_log:
+            controller_log.close()
         if api.poll() is None:
             api.terminate()
             api.wait(timeout=20)
