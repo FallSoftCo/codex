@@ -1575,7 +1575,7 @@ class Connector:
                 }
             except Exception as error:
                 current = json.loads(journal.read_text())
-                saved(journal.parent / "execution-error.json", {
+                saved(journal.directory / "execution-error.json", {
                     "phase": current["state"],
                     "error": type(error).__name__,
                     "detail": str(error)[:2000],

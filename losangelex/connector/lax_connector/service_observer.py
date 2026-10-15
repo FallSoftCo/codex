@@ -156,6 +156,72 @@ def register(authority, host, agent, unit):
             "modelOrServiceStarted": False}
 
 
+
+def approve_drained_upgrade(authority, host, agent, expected_enrollment, expected_definition):
+    """Root CAS upgrade of an enrolled service after its prior invocations drained.
+
+    The new resident guardian may be running, but it must be alone in its group.
+    Old invocation manifests remain immutable evidence. This grants no model turn.
+    """
+    if os.geteuid() != 0:
+        raise PermissionError("Service upgrade requires verified administration")
+    authority, host, agent = [str(UUID(v)) for v in (authority, host, agent)]
+    root = directory(authority, host, agent)
+    enrollment = root / "enrollment.json"
+    old = protected(enrollment)
+    if digest(old) != expected_enrollment:
+        raise ValueError("Enrolled service changed; inspect the original upgrade")
+    uid, home, binary = expected_owner(authority, agent)
+    info = properties(installed_unit(authority, agent))
+    definition = unit_definition(info)
+    if definition != expected_definition:
+        raise ValueError("New protected service definition differs")
+    guardian = process(int(info["MainPID"]))
+    if (
+        info["ActiveState"] != "active" or not guardian
+        or guardian["uid"] != uid
+        or guardian["controlGroup"] != info["ControlGroup"]
+        or pwd.getpwnam(info["User"]).pw_uid != uid
+        or members(info["ControlGroup"]) != {guardian["pid"]}
+    ):
+        raise ValueError("New resident guardian is not alone in its owned group")
+    for path in root.glob("*.json"):
+        manifest = protected(path)
+        if manifest.get("schema") != "lax-service-incarnation/v1":
+            continue
+        previous = process(manifest["guardianPid"])
+        if previous and previous["start"] == manifest["guardianStart"]:
+            raise ValueError("A prior registered guardian is still running")
+    image = Path(binary).resolve(strict=True).stat()
+    if (
+        old["authorityId"], old["hostId"], old["agentId"], old["uid"],
+        old["home"], old["unit"], old["binaryDevice"], old["binaryInode"],
+        old["machineIdentity"], old["killMode"]
+    ) != (
+        authority, host, agent, uid, str(home), info["Id"], image.st_dev,
+        image.st_ino, machine_identity(), "control-group"
+    ):
+        raise ValueError("This upgrade cannot change identity, native image or host")
+    upgraded = {**old, "unitDefinitionDigest": definition}
+    receipt_path = root / ("upgrade-" + expected_enrollment + "-" + definition + ".json")
+    if receipt_path.exists():
+        raise ValueError("Original upgrade evidence exists; inspect it without replay")
+    archive = root / ("enrollment-before-" + expected_enrollment + ".json")
+    if archive.exists():
+        if protected(archive) != old:
+            raise ValueError("Original enrollment archive differs")
+    else:
+        saved(archive, old)
+    intent = {"schema": "lax-service-upgrade/v1", "priorEnrollmentDigest": expected_enrollment,
+              "newDefinitionDigest": definition, "priorInvocationsDrained": True,
+              "currentGuardianPid": guardian["pid"], "currentGuardianStart": guardian["start"],
+              "currentGuardianAlone": True, "modelsStarted": 0, "state": "intent"}
+    saved(receipt_path, intent)
+    saved(enrollment, upgraded)
+    receipt = {**intent, "state": "accepted", "newEnrollmentDigest": digest(upgraded)}
+    saved(receipt_path, receipt)
+    return receipt
+
 def members(group):
     path = Path("/sys/fs/cgroup") / group.lstrip("/")
     if ".." in path.parts or not group.startswith("/"):
