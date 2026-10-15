@@ -103,23 +103,23 @@ async def _administer(connector, name, arguments, operation):
         result = await connector.http(
             "POST",
             "principals",
-            {
+            {"operationId": operation + ":admin:principal", **({
                 "id": identity,
                 "name": arguments["name"],
                 "kind": "agent",
                 "enrollmentCredential": protected["token"],
-            },
+            })},
         )
         role = await connector.http("GET", "agents/" + identity + "/role")
         role = await connector.http(
             "PUT",
             "agents/" + identity + "/role",
-            {
+            {"operationId": operation + ":admin:role", **({
                 "primary": arguments["primary"],
                 "purpose": arguments["purpose"],
                 "homeRoomId": role["home_room"],
                 "revision": role["revision"],
-            },
+            })},
         )
         return {
             **result,
@@ -132,18 +132,18 @@ async def _administer(connector, name, arguments, operation):
         return await connector.http(
             "POST",
             "rooms",
-            {
+            {"operationId": operation + ":admin:room", **({
                 "id": identity,
                 "name": arguments["name"],
                 "purpose": arguments["purpose"],
                 "ownerId": arguments["ownerId"],
-            },
+            })},
         )
     if name == "hollywood_set_role":
         return await connector.http(
             "PUT",
             "agents/" + arguments["agentId"] + "/role",
-            {
+            {"operationId": operation + ":admin:role", **({
                 "primary": arguments["primary"],
                 "purpose": arguments["purpose"],
                 "homeRoomId": arguments["homeRoomId"],
@@ -153,13 +153,13 @@ async def _administer(connector, name, arguments, operation):
                     else {}
                 ),
                 "revision": arguments["revision"],
-            },
+            })},
         )
     if name == "hollywood_grant_room":
         return await connector.http(
             "PUT",
             "rooms/" + arguments["roomId"] + "/membership",
-            {
+            {"operationId": operation + ":admin:membership", **({
                 key: arguments[key]
                 for key in [
                     "principalId",
@@ -168,7 +168,7 @@ async def _administer(connector, name, arguments, operation):
                     "can_request",
                     "revision",
                 ]
-            },
+            })},
         )
     if name == "lax_provision_worker":
         if not connector.role_context.value["hostAdministrationVerified"]:
@@ -187,7 +187,7 @@ async def _administer(connector, name, arguments, operation):
         await connector.http(
             "POST",
             "placements",
-            {
+            {"operationId": operation + ":admin:placement", **({
                 "hostId": host,
                 "name": "Enrolled LAX host",
                 "identityFingerprint": hashlib.sha256(
@@ -195,7 +195,7 @@ async def _administer(connector, name, arguments, operation):
                 ).hexdigest(),
                 "capabilities": {"localProvisioning": True},
                 "agentId": agent,
-            },
+            })},
         )
         spec = {
             "authorityId": authority,
@@ -203,6 +203,7 @@ async def _administer(connector, name, arguments, operation):
             "credential": credential["token"],
             "hollywoodUrl": connector.config["hollywoodUrl"],
             "hostId": host,
+            "machineIdentity": hashlib.sha256(Path("/etc/machine-id").read_bytes()).hexdigest(),
             "approvedModelAuthFile": str(
                 Path(connector.config["codexHome"]) / "auth.json"
             ),
@@ -230,9 +231,23 @@ async def _administer(connector, name, arguments, operation):
             *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, _ = await process.communicate()
-        if process.returncode:
-            raise RuntimeError(
-                "Worker provisioning outcome requires inspection; private credentials retained"
+        try:
+            if process.returncode:
+                raise RuntimeError("Worker provisioning returned no accepted result")
+            return json.loads(stdout)
+        except Exception:
+            # Inspect original acceptance without repeating setup or enabling a unit.
+            inspect = await asyncio.create_subprocess_exec(
+                *command, "--inspect", stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-        return json.loads(stdout)
+            accepted, _ = await inspect.communicate()
+            if inspect.returncode:
+                raise RuntimeError(
+                    "Worker provisioning remains partial or unknown; no setup was repeated"
+                ) from None
+            result = json.loads(accepted)
+            if result["authorityId"] != authority or result["agentId"] != agent:
+                raise RuntimeError("Original provisioning receipt belongs to another identity")
+            return result
     raise ValueError("Unknown administrative tool")

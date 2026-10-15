@@ -14,10 +14,117 @@ from .journal import saved
 from .linux_admin import run
 
 
+def expected_configuration(spec, authority, agent, home):
+    return {
+        "hollywoodUrl": spec["hollywoodUrl"],
+        "token": spec["credential"],
+        "agentId": agent,
+        "hostId": spec["hostId"],
+        "state": str(home / "state"),
+        "binary": spec["binary"],
+        "codexHome": str(home / "codex-home"),
+        "workspace": str(home / "work"),
+        "model": spec["model"],
+        "effort": spec["effort"],
+        "sandbox": "workspace-write",
+        "instructions": "You are a scoped enterprise worker. Your primary responsibility and room are captured in the authoritative LAX role context. Execute only explicitly addressed work within that scope. Observe other room communication without initiating work. Communicate through Hollywood and publish attributable evidence. Do not escalate host privileges, inspect another agent's private state, create workers or resume historical work. Complete each admitted request and wait.",
+    }
+
+def expected_unit(spec, agent, user, home):
+    config_file = home / "connector.json"
+    return f"""[Unit]
+Description=LAX Hollywood worker {agent}
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+[Service]
+Type=simple
+User={user}
+WorkingDirectory={home / "work"}
+ExecStart={spec["interpreter"]} -m lax_connector.connector --config {config_file} --serve
+Restart=on-failure
+RestartSec=10
+UMask=0077
+MemoryMax=2G
+CPUQuota=200%
+NoNewPrivileges=yes
+KillMode=control-group
+TimeoutStopSec=30
+[Install]
+WantedBy=multi-user.target
+"""
+
+def protected(path):
+    import stat
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise ValueError("Original provisioning evidence is not protected")
+    return json.loads(path.read_text())
+
+def inspect_completed(spec):
+    """Read conclusive original setup acceptance without making setup changes."""
+    if os.geteuid() != 0:
+        raise PermissionError("Provisioning inspection requires verified administration")
+    authority, agent = str(UUID(spec["authorityId"])), str(UUID(spec["agentId"]))
+    machine = hashlib.sha256(Path("/etc/machine-id").read_bytes()).hexdigest()
+    if spec.get("machineIdentity") != machine:
+        raise ValueError("Original provisioning host identity differs")
+    base = Path("/var/lib/harness") / authority
+    record = base / "workers" / agent
+    for path in (base, base / "workers", record):
+        info = path.lstat()
+        if path.is_symlink() or not path.is_dir() or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError("Original provisioning owner changed")
+    intent = protected(record / "provision-intent.json")
+    fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
+    if intent.get("digest") != fingerprint or intent.get("spec") != spec:
+        raise ValueError("Original provisioning specification differs")
+    receipt = protected(record / "provision-receipt.json")
+    if receipt.get("schema") != "lax-worker-provision/v1" or receipt.get("specDigest") != fingerprint:
+        raise ValueError("Conclusive original provisioning receipt unavailable")
+    user = "hworker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12]
+    unit = "lax-worker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12]
+    home = record / "home"
+    account = pwd.getpwnam(user)
+    if (receipt["authorityId"], receipt["agentId"], receipt["linuxUser"], receipt["uid"],
+        receipt["workspace"], receipt["unit"], account.pw_dir) != (
+        authority, agent, user, account.pw_uid, str(home / "work"), unit, str(home)
+    ):
+        raise ValueError("Original worker identity differs")
+    for path in (home, home / "work", home / "state", home / "codex-home"):
+        if path.is_symlink() or not path.is_dir() or path.stat().st_uid != account.pw_uid:
+            raise ValueError("Original worker path ownership changed")
+    config_file = home / "connector.json"
+    if config_file.is_symlink() or config_file.stat().st_uid != account.pw_uid:
+        raise ValueError("Worker configuration owner changed")
+    expected = expected_configuration(spec, authority, agent, home)
+    config = json.loads(config_file.read_text())
+    config_digest = hashlib.sha256(json.dumps(expected, sort_keys=True).encode()).hexdigest()
+    if config != expected or receipt.get("configurationDigest") != config_digest:
+        raise ValueError("Original worker configuration differs")
+    unit_file = Path("/etc/systemd/system") / (unit + ".service")
+    info = unit_file.lstat()
+    content = expected_unit(spec, agent, user, home)
+    if unit_file.is_symlink() or info.st_uid != 0 or info.st_mode & 0o022:
+        raise ValueError("Worker service is not administrator protected")
+    if unit_file.read_text() != content or receipt.get("unitDigest") != hashlib.sha256(content.encode()).hexdigest():
+        raise ValueError("Original worker service definition differs")
+    current = {}
+    for name in ("ActiveState", "UnitFileState", "MainPID"):
+        current[name] = run("systemctl", "show", unit, "-p", name, "--value").stdout.strip()
+    return {
+        **receipt, "recoveredBy": "protected-original-provisioning-read",
+        "inspection": {"hostIdentityMatched": True, "currentService": current,
+                       "configurationMatched": True, "modelOrServiceRestarted": False,
+                       "setupRepeated": False},
+    }
+
 def provision(spec):
     if os.geteuid() != 0:
         raise PermissionError("Worker provisioning requires a verified administrator")
     authority, agent = str(UUID(spec["authorityId"])), str(UUID(spec["agentId"]))
+    if spec.get("machineIdentity") and spec["machineIdentity"] != hashlib.sha256(Path("/etc/machine-id").read_bytes()).hexdigest():
+        raise ValueError("Provisioning host identity differs")
     base = Path("/var/lib/harness") / authority
     if base.is_symlink() or not base.is_dir() or base.stat().st_uid != 0:
         raise ValueError("Administrator-owned enterprise installation required")
@@ -88,20 +195,7 @@ def provision(spec):
         path.mkdir(mode=0o700, exist_ok=True)
         path.chmod(0o700)
         os.chown(path, account.pw_uid, account.pw_gid)
-    config = {
-        "hollywoodUrl": spec["hollywoodUrl"],
-        "token": spec["credential"],
-        "agentId": agent,
-        "hostId": spec["hostId"],
-        "state": str(home / "state"),
-        "binary": spec["binary"],
-        "codexHome": str(home / "codex-home"),
-        "workspace": str(home / "work"),
-        "model": spec["model"],
-        "effort": spec["effort"],
-        "sandbox": "workspace-write",
-        "instructions": "You are a scoped enterprise worker. Your primary responsibility and room are captured in the authoritative LAX role context. Execute only explicitly addressed work within that scope. Observe other room communication without initiating work. Communicate through Hollywood and publish attributable evidence. Do not escalate host privileges, inspect another agent's private state, create workers or resume historical work. Complete each admitted request and wait.",
-    }
+    config = expected_configuration(spec, authority, agent, home)
     config_file = home / "connector.json"
     if config_file.exists() and json.loads(config_file.read_text()) != config:
         raise ValueError(
@@ -142,27 +236,7 @@ def provision(spec):
         + agent.replace("-", "")[:12]
     )
     unit_file = Path("/etc/systemd/system") / (unit + ".service")
-    content = f"""[Unit]
-Description=LAX Hollywood worker {agent}
-After=network-online.target
-StartLimitIntervalSec=60
-StartLimitBurst=3
-[Service]
-Type=simple
-User={user}
-WorkingDirectory={home / "work"}
-ExecStart={spec["interpreter"]} -m lax_connector.connector --config {config_file} --serve
-Restart=on-failure
-RestartSec=10
-UMask=0077
-MemoryMax=2G
-CPUQuota=200%
-NoNewPrivileges=yes
-KillMode=control-group
-TimeoutStopSec=30
-[Install]
-WantedBy=multi-user.target
-"""
+    content = expected_unit(spec, agent, user, home)
     if unit_file.exists() and unit_file.read_text() != content:
         raise ValueError(
             "Existing worker unit differs; explicit upgrade/drain required"
@@ -173,6 +247,10 @@ WantedBy=multi-user.target
         run("systemctl", "daemon-reload")
     run("systemctl", "enable", "--now", unit)
     receipt = {
+        "schema": "lax-worker-provision/v1",
+        "specDigest": fingerprint,
+        "configurationDigest": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
+        "unitDigest": hashlib.sha256(content.encode()).hexdigest(),
         "authorityId": authority,
         "agentId": agent,
         "linuxUser": user,
@@ -192,8 +270,10 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", type=Path, required=True)
+    parser.add_argument("--inspect", action="store_true")
     args = parser.parse_args()
-    print(json.dumps(provision(json.loads(args.spec.read_text()))))
+    method = inspect_completed if args.inspect else provision
+    print(json.dumps(method(json.loads(args.spec.read_text()))))
 
 
 if __name__ == "__main__":

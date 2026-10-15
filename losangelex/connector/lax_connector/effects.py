@@ -19,6 +19,14 @@ ATOMIC = {
     "hollywood_work_cancel", "hollywood_work_revise",
 }
 
+ADMIN_STAGES = {
+    "hollywood_create_agent": {"principal", "role"},
+    "hollywood_create_room": {"room"},
+    "hollywood_set_role": {"role"},
+    "hollywood_grant_room": {"membership"},
+    "lax_provision_worker": {"placement"},
+}
+
 class Effects:
     def __init__(self, connector):
         self.c = connector
@@ -67,11 +75,16 @@ class Effects:
         wire = json.loads(json.dumps({"method": method, "path": path, "body": payload}))
         operation = payload.get("operationId") if isinstance(payload, dict) else None
         supported = operation == "lax-tool:" + key
+        administrative = operation in {
+            "lax-tool:" + key + ":admin:" + stage
+            for stage in ADMIN_STAGES.get(scope["tool"], ())
+        }
         step = {
             "ordinal": len(group["steps"]), "state": "intent", "method": method, "path": path,
             "operationId": operation, "wireDigest": digest(wire),
             # Unsupported administrative requests can contain enrollment credentials.
             "wireRequest": wire if supported else None, "receiptSupported": supported,
+            "administrativeReceiptSupported": administrative,
         }
         group["steps"].append(step)
         saved(journal, group)
@@ -85,12 +98,54 @@ class Effects:
         step = group["steps"][index]
         if error is None:
             step["state"] = "confirmed"
-            if step["receiptSupported"]:
+            if step["receiptSupported"] or step.get("administrativeReceiptSupported"):
                 step["result"] = result
         else:
             step["state"] = "rejected" if isinstance(error, HttpFailure) and error.status in (400, 403, 409) else "unconfirmed"
             step["error"] = type(error).__name__
         saved(path, group)
+
+    async def recover_http(self, marker):
+        """Resolve a committed administrative child, then continue the live parent."""
+        context = self.current.get()
+        if marker is None or context is None:
+            return None
+        path, index = marker
+        group = json.loads(path.read_text())
+        if group["scope"] != context["scope"] or self.current_key(group) != context["key"]:
+            raise RuntimeError("Administrative callback scope changed")
+        c, scope = self.c, group["scope"]
+        expected = {
+            "authorityId": c.active["request"]["authority"], "agentId": c.config["agentId"],
+            "hostId": c.config["hostId"], "requestId": c.active["request"]["id"],
+            "deliveryId": c.active["delivery"]["id"],
+            "claimId": c.active["delivery"]["claim_id"],
+            "generation": c.active["delivery"]["generation"], "nativeThread": c.thread,
+        }
+        if any(scope.get(k) != v for k, v in expected.items()):
+            raise RuntimeError("Administrative operation ownership changed")
+        step = group["steps"][index]
+        expected_operations = {
+            "lax-tool:" + context["key"] + ":admin:" + stage
+            for stage in ADMIN_STAGES.get(scope["tool"], ())
+        }
+        if not step.get("administrativeReceiptSupported") or step["operationId"] not in expected_operations:
+            return None
+        receipt = await c.http("GET", "administration/commands/" + step["operationId"])
+        expected_receipt = {
+            "schema": "hollywood-administrative-command/v1",
+            "authorityId": scope["authorityId"], "actorId": scope["agentId"],
+            "operationId": step["operationId"], "method": step["method"],
+            "path": step["path"], "wireDigest": step["wireDigest"],
+        }
+        if any(receipt.get(k) != v for k, v in expected_receipt.items()):
+            raise RuntimeError("Original administrative acceptance conflicts")
+        if step["state"] == "confirmed" and step.get("result") != receipt["acceptedResult"]:
+            raise RuntimeError("Original administrative result conflicts")
+        step.update(state="confirmed", result=receipt["acceptedResult"],
+                    recoveredBy="original-administrative-command-read")
+        saved(path, group)
+        return receipt["acceptedResult"]
 
     def group(self, key):
         path = self.c.state / ("effects-" + key + ".json")

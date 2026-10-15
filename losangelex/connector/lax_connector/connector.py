@@ -232,6 +232,12 @@ class Connector:
             result = await self._http(method, path, payload)
         except Exception as error:
             self.effects.after(marker, error=error)
+            try:
+                recovered = await self.effects.recover_http(marker)
+            except Exception:
+                recovered = None
+            if recovered is not None:
+                return recovered
             raise
         self.effects.after(marker, result=result)
         return result
