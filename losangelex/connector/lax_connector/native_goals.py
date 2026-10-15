@@ -13,24 +13,169 @@ class NativeGoalHeld(RuntimeError):
     pass
 
 
-async def external_admission(rpc):
+async def external_admission(rpc, external_lifecycle=False):
+    required = {"goal_external_admission"}
+    if external_lifecycle:
+        required.add("goal_external_lifecycle")
+    available = set()
     cursor = None
     while True:
         page = await rpc.call(
             "experimentalFeature/list",
             {"limit": 100, **({"cursor": cursor} if cursor else {})},
         )
-        if any(f["name"] == "goal_external_admission" for f in page["data"]):
-            await rpc.call(
-                "experimentalFeature/enablement/set",
-                {"enablement": {"goal_external_admission": True}},
-            )
-            return
+        available.update(f["name"] for f in page["data"])
         cursor = page.get("nextCursor")
         if not cursor:
-            raise NativeAdmissionUnavailable(
-                "Native external goal admission is unavailable; no context loaded"
+            break
+    if required - available:
+        raise NativeAdmissionUnavailable(
+            "Native goal control unavailable; no context loaded: "
+            + ", ".join(sorted(required - available))
+        )
+    enablement = {"goal_external_admission": True}
+    if "goal_external_lifecycle" in available:
+        enablement["goal_external_lifecycle"] = external_lifecycle
+    await rpc.call("experimentalFeature/enablement/set", {"enablement": enablement})
+
+
+def role_scope(connector):
+    value = connector.role_context.value
+    return value.get("nativeGoalScope") == "role" and not value.get("workId")
+
+
+async def bind_role(c):
+    """Attach one externally owned responsibility; never adopt an old work goal."""
+    from .journal import saved
+
+    policy = c.role_context.value
+    role = {
+        key: policy[key]
+        for key in (
+            "authorityId",
+            "agentId",
+            "primaryRole",
+            "roleRevision",
+            "rolePurpose",
+            "homeRoomId",
+        )
+    }
+    role_digest = hashlib.sha256(json.dumps(role, sort_keys=True).encode()).hexdigest()
+    snapshot = await c.rpc.call("thread/goal/get", {"threadId": c.thread})
+    if "goalId" not in snapshot:
+        raise NativeGoalHeld("Native role goal fencing is unavailable")
+    path = c.state / ("native-goal-" + c.context_id + ".json")
+    binding = json.loads(path.read_text()) if path.exists() else None
+    if binding:
+        if (
+            binding.get("bindingKind") != "role"
+            or binding.get("roleDigest") != role_digest
+            or binding["nativeThread"] != c.thread
+        ):
+            raise NativeGoalHeld(
+                "Existing native objective needs explicit role reconciliation"
             )
+        if binding.get("nativeGoalId"):
+            if binding["nativeGoalId"] != snapshot["goalId"]:
+                raise NativeGoalHeld("Original role goal was cleared or replaced")
+        elif (
+            not snapshot["goal"]
+            or snapshot["goal"]["objective"] != binding["objective"]
+        ):
+            raise NativeGoalHeld("Original role goal creation remains unconfirmed")
+        else:
+            binding = {**binding, "nativeGoalId": snapshot["goalId"], "state": "bound"}
+            saved(path, binding)
+    else:
+        if snapshot["goal"]:
+            raise NativeGoalHeld(
+                "Existing native objective cannot silently become a role"
+            )
+        objective = (
+            "Ongoing Hollywood responsibility for agent "
+            + policy["agentId"]
+            + "; instance "
+            + str(uuid4())
+            + chr(10)
+            + "Primary: "
+            + policy["primaryRole"]
+            + chr(10)
+            + "Responsibility: "
+            + policy["rolePurpose"]
+            + chr(10)
+            + "This responsibility spans separately accepted business goals. "
+            "Completing, cancelling or failing one delivery does not finish this role. "
+            "Hollywood admits every turn; remain idle between addressed requests or authorized material reviews."
+        )
+        binding = {
+            "state": "create-intent",
+            "bindingKind": "role",
+            "roleDigest": role_digest,
+            "roleRevision": policy["roleRevision"],
+            "nativeThread": c.thread,
+            "contextId": c.context_id,
+            "nativeGoalId": None,
+            "objective": objective,
+            "goalId": None,
+            "workId": None,
+        }
+        saved(path, binding)
+        result = await c.rpc.call(
+            "thread/goal/set",
+            {
+                "threadId": c.thread,
+                "expectedGoalId": None,
+                "origin": "automatic",
+                "objective": objective,
+                "status": "active",
+            },
+        )
+        if not result.get("goalId") or result["goal"]["objective"] != objective:
+            raise NativeGoalHeld("Original role goal creation is unconfirmed")
+        binding = {**binding, "nativeGoalId": result["goalId"], "state": "bound"}
+        saved(path, binding)
+        snapshot = result
+    if (
+        not snapshot.get("goal")
+        or snapshot["goal"]["objective"] != binding["objective"]
+    ):
+        raise NativeGoalHeld("Original role responsibility changed")
+    if snapshot["goal"]["status"] != "active":
+        raise NativeGoalHeld(
+            "Stopped role responsibility requires explicit operator control"
+        )
+    payload = {
+        "claimId": c.active["delivery"]["claim_id"],
+        "generation": c.active["delivery"]["generation"],
+        "goalId": None,
+        "workId": None,
+        "bindingKind": "role",
+        "roleRevision": policy["roleRevision"],
+        "nativeThread": c.thread,
+        "nativeGoalId": binding["nativeGoalId"],
+        "contextId": c.context_id,
+        "workspaceId": workspace_id(c.config),
+        "objectiveDigest": hashlib.sha256(binding["objective"].encode()).hexdigest(),
+    }
+    intent = c.state / ("goal-link-" + c.active["delivery"]["id"] + ".json")
+    saved(intent, {"state": "intent", "payload": payload})
+    receipt = await c.http(
+        "POST",
+        "connector/deliveries/" + c.active["delivery"]["id"] + "/goal-binding",
+        payload,
+    )
+    saved(intent, {"state": "accepted", "payload": payload, "receipt": receipt})
+    c.goal_binding = binding
+    return {
+        key: binding[key]
+        for key in (
+            "bindingKind",
+            "nativeThread",
+            "nativeGoalId",
+            "contextId",
+            "roleRevision",
+        )
+    }
 
 
 def workspace_id(config):
@@ -222,6 +367,8 @@ async def restore(connector, record):
         "goalId": binding["goal"],
         "workId": binding["work"],
         "objectiveDigest": binding["objective_digest"],
+        "bindingKind": binding.get("binding_kind", "coordination"),
+        "roleRevision": binding.get("role_revision"),
     }
     return c.goal_binding
 
@@ -231,7 +378,11 @@ async def settle(connector, status):
     from .journal import saved
 
     c = connector
-    if not c.goal_binding or status not in ("cancelled", "failed"):
+    if (
+        not c.goal_binding
+        or c.goal_binding.get("bindingKind") == "role"
+        or status not in ("cancelled", "failed")
+    ):
         return None
     before = await progress(c)
     intent = {
@@ -283,7 +434,12 @@ async def sync_policy(connector, goal_id, state, operation):
     from .journal import saved
 
     c = connector
-    if not c.goal_binding or c.goal_binding["goalId"] != goal_id or state == "accepted":
+    if (
+        not c.goal_binding
+        or c.goal_binding.get("bindingKind") == "role"
+        or c.goal_binding["goalId"] != goal_id
+        or state == "accepted"
+    ):
         return None
     desired = "active" if state == "active" else "paused"
     before = await progress(c)

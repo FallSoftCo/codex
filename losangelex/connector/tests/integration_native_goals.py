@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from aiohttp import web
 from lax_connector.rpc import AppServer, RpcError
@@ -15,6 +16,7 @@ from lax_connector.native_goals import external_admission
 
 ROOT = Path(os.environ["NATIVE_GOAL_EVIDENCE"])
 BINARY = os.environ["NATIVE_GOAL_BINARY"]
+ROLE_SCOPE = os.environ.get("NATIVE_GOAL_SCOPE") == "role"
 
 
 async def main():
@@ -134,6 +136,7 @@ async def main():
         "sandbox": "workspace-write",
         "config": {
             "features.goal_external_admission": True,
+            "features.goal_external_lifecycle": ROLE_SCOPE,
             "features.goals": True,
             "model_provider": "goal_probe",
             "tools.update_plan.enabled": True,
@@ -151,7 +154,7 @@ async def main():
     async def open_runtime():
         r = AppServer(BINARY, home, native, event, request)
         await r.start()
-        await external_admission(r)
+        await external_admission(r, ROLE_SCOPE)
         return r
 
     try:
@@ -262,6 +265,23 @@ async def main():
         starts = [e for e in events if e["method"] == "turn/started"]
         assert len(starts) == 1, (len(starts), starts)
         assert len(requests) == 2, len(requests)
+
+        def names(value):
+            if isinstance(value, dict):
+                return ({value["name"]} if "name" in value else set()).union(
+                    *(names(v) for v in value.values())
+                )
+            if isinstance(value, list):
+                return set().union(*(names(v) for v in value))
+            return set()
+
+        tool_names = names(requests[0])
+        # Current Responses carries its tool catalog inside the first input item.
+        # Code Mode advertises callable native tools in its typed declaration.
+        tool_names.update(re.findall(r"\b(get_goal|create_goal|update_goal)\(args:", json.dumps(requests[0])))
+        assert "get_goal" in tool_names, tool_names
+        assert "create_goal" not in tool_names, tool_names
+        assert ("update_goal" in tool_names) is not ROLE_SCOPE, tool_names
         assert plans and plans[-1]["params"]["plan"][0]["status"] == "completed", plans
         assert (
             final["goal"]["status"] == "active" and final["goal"]["tokensUsed"] > 0
@@ -328,6 +348,9 @@ async def main():
             "automaticContinuations": 0,
             "structuredNativePlanObserved": True,
             "nativeGoalAccountingRetained": True,
+            "externalLifecycle": ROLE_SCOPE,
+            "modelLifecycleTools": "get only" if ROLE_SCOPE else "get/update",
+            "modelGoalCreationExcluded": True,
             "provider": "local deterministic Responses fixture",
             "realModelInference": False,
             "productionChanged": False,

@@ -390,6 +390,8 @@ pub enum Feature {
     Goals,
     /// Preserve goal state/accounting while an external owner admits every turn.
     GoalExternalAdmission,
+    /// Keep ongoing responsibility goals under external lifecycle control.
+    GoalExternalLifecycle,
     /// Add current context-window metadata to model-visible context.
     TokenBudget,
     /// Enables experimental context management.
@@ -1911,6 +1913,12 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::GoalExternalAdmission,
         key: "goal_external_admission",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::GoalExternalLifecycle,
+        key: "goal_external_lifecycle",
         stage: Stage::UnderDevelopment,
         default_enabled: false,
     },

@@ -86,6 +86,9 @@ pub(crate) fn thread_extensions(
                 external_admission: config
                     .features
                     .enabled(codex_features::Feature::GoalExternalAdmission),
+                external_lifecycle: config
+                    .features
+                    .enabled(codex_features::Feature::GoalExternalLifecycle),
                 max_goal_token_budget: config.max_goal_token_budget,
             },
         );

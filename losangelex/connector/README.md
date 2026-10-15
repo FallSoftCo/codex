@@ -55,10 +55,11 @@ idle model continuation occurred. Immutable package executables/directories use
 worker UIDs both executed the packaged binary. Credential/state directories keep
 their separate private permissions.
 
-Business pause/cancellation and stopped native-goal reconciliation, process-crash
-recovery, plan editing/retries, second-host artifact retrieval, physical Android
-voice/push and production migration remain release gates. No old session or
-schedule is resumed by this candidate.
+Finite native cancellation and original-turn recovery now have integration
+evidence; the ongoing-role qualification below supersedes the legacy Global
+coordination-goal lifecycle. Broader crash/fault cases, plan editing/retries,
+second-host artifact retrieval, physical Android voice/push and production
+migration remain release gates. No old session or schedule is resumed.
 
 
 ## Cancellation and recovery candidate
@@ -87,13 +88,10 @@ a fresh authorized read. Unconfirmed multi-step effects remain fenced. Shared
 errors and durable journals live in canonical modules so console and `python -m`
 entrypoints classify the same exception identities.
 
-Source-bound human follow-ups retain a goal reference. They attach only a matching
-existing native binding and never overwrite another unfinished objective. The
-current native per-context goal is still a single instance. Global's broad role
-and multiple simultaneous business goals require an explicit role-versus-work
-lifecycle contract before release; business goal acceptance/cancellation must not
-silently complete or suspend supervision of unrelated goals. That extension is a
-remaining architecture gate, not a claim about the current candidate.
+Source-bound human follow-ups retain an unambiguous goal reference. Multiple goals
+from one source do not manufacture a reference. Bounded work attaches only its
+original matching native instance; old coordination contexts require explicit
+reconciliation before conversion to ongoing responsibility.
 
 
 The installed dev6 native cancellation probe now passes: one Global created and
@@ -111,3 +109,83 @@ poll workers. It can return cancel_requested while the service propagates stop
 and reconciles original acknowledgements. CLI/callback errors now share one
 canonical type; a known 409 cannot become an unknown effect merely because the
 connector was launched with `python -m`.
+
+
+## Ongoing roles and bounded work
+
+Hollywood role policy now declares nativeGoalScope: role or work. Bootstrap
+Global has role scope; other agents default to work, and an administrator may
+explicitly give an ongoing primary responsibility to another agent. This field
+does not grant communication or operating-system permissions.
+
+A role context owns one native responsibility goal, independently of any business
+goal. Its objective comes from authenticated role metadata, without copying a
+human task or peer message into privileged role context. Hollywood records the
+native goal instance, role revision, context, host, workspace and audience.
+Subsequent deliveries must match; silent instance replacement, role changes,
+host migration and workspace substitution require explicit reconciliation.
+Different room/private audiences retain separate native contexts.
+
+The opt-in native goal_external_lifecycle feature exposes get_goal but excludes
+model create_goal/update_goal. Trusted metadata APIs keep their fenced control;
+native accounting and structured turn plans remain available. The separate
+goal_external_admission feature continues to prevent idle model turns. Bounded
+work retains get_goal/update_goal and its existing completion/evidence contract.
+
+Accepting or cancelling a business goal does not alter the ongoing responsibility.
+Stopping/failing one delivery also does not stop the role or imply effects were
+undone. Its assigned bounded worker execution still receives actual cancellation
+and its unfinished native goal is paused after acknowledgement. Stopped native
+role objectives refuse further execution until an explicit operator decision;
+a general enterprise role pause/resume interface is a remaining release gate.
+A role/definition change is deliberately held rather than silently overwriting
+the existing objective.
+
+This is an additive candidate protocol, not a production migration. Legacy
+coordination bindings remain readable and retain their original receipt digests.
+Converting existing live contexts needs a reviewed migration with preserved
+native identity/accounting and explicit operator intent.
+
+
+Role protocol upgrade and rollback: schema 7 moves role/binding metadata into a
+separate table, retaining the original ten-column binding row shape and every
+recorded digest. Claims and automatic review dispatch for role-scoped actors
+require the native-role-goals/v1 connector capability. A missing capability
+rejects admission without consuming work/review policy; original receipts remain
+readable through their authenticated read routes.
+
+An older server can read legacy binding records, but cannot execute new role
+semantics safely. Rollback therefore requires draining/stopping role writers and
+disabling their placements before switching the authority runtime. Preserve the
+database and new history; do not restore an old dump over accepted new work or
+start an old coordinator against a role context. Use the coupled current package
+to reconcile original receipts. Production migration remains held.
+
+
+## Qualification of ongoing responsibility
+
+A fresh installed enterprise completed six actual native provider turns: Global
+provisioned one separate worker UID and two business goals, delegated an exact
+artifact, performed one explicitly budgeted material review and independently
+verified/accepted that work and goal, assigned the second goal, cancelled its
+running helper/pending human question, then answered a third human request with
+a structured native plan. Four Global turns retained the same native context
+and role goal; the worker's two assignments used distinct bounded contexts.
+The role remained active, accepted work stayed accepted, the cancelled work goal
+paused, the helper stopped before its deferred write and a stale answer was
+denied. This is one-host evidence, not general autonomous enterprise completion.
+
+The actual native protocol fixture separately verifies role get-only versus
+bounded work get/update tools, stable goal IDs, accounting, cold resume and no
+automatic continuation. PostgreSQL/HTTP qualification covers role revision,
+instance/workspace substitution, legacy connector rejection, preserved receipts,
+and changed-role admission/review holds.
+
+After schema/transport changes, the installed dev9 stack read the original six
+deliveries and all three native goal instances/accounting without another model
+turn. Its authenticated cold connector found no pending work. No agent service
+was resumed. Qualification services were stopped; production and physical phone
+were unchanged. The first empty-plan acceptance scenario and an overly strict
+metadata-notification verifier failed and remain recorded; their original native
+requests were not replayed. These checks do not qualify native push/voice or
+production migration.

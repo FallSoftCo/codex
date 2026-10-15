@@ -25,6 +25,8 @@ from .native_goals import (
     NativeAdmissionUnavailable,
     NativeGoalHeld,
     external_admission,
+    bind_role,
+    role_scope,
 )
 from .native_goals import (
     bind as bind_goal,
@@ -165,6 +167,7 @@ TOOLS += [
             "primary": ROLE,
             "purpose": STRING,
             "homeRoomId": {"type": ["string", "null"]},
+            "nativeGoalScope": {"type": "string", "enum": ["role", "work"]},
             "revision": {"type": "integer", "minimum": 0},
         },
         ["agentId", "primary", "purpose", "homeRoomId", "revision"],
@@ -623,7 +626,11 @@ class Connector:
             self.activity.start()
             try:
                 await self.rpc.start()
-                await external_admission(self.rpc)
+                await external_admission(
+                    self.rpc,
+                    self.active.get("nativeGoalBinding", {}).get("binding_kind")
+                    == "role",
+                )
                 await restore_goal(self, record)
                 if terminal:
                     status, turn = d["state"], None
@@ -834,12 +841,20 @@ class Connector:
             )
             saved(
                 self.state / "claim-intent.json",
-                {"operationId": claim_operation, "hostId": self.config["hostId"]},
+                {
+                    "operationId": claim_operation,
+                    "hostId": self.config["hostId"],
+                    "capabilities": ["native-role-goals/v1"],
+                },
             )
             self.active = await self.http(
                 "POST",
                 "connector/claim",
-                {"operationId": claim_operation, "hostId": self.config["hostId"]},
+                {
+                    "operationId": claim_operation,
+                    "hostId": self.config["hostId"],
+                    "capabilities": ["native-role-goals/v1"],
+                },
             )
             saved(self.state / "claim-receipt.json", self.active)
             if not self.active["delivery"]:
@@ -921,7 +936,20 @@ class Connector:
             )
             try:
                 await self.rpc.start()
-                await external_admission(self.rpc)
+                external_lifecycle = role_scope(self)
+                previous_goal = self.state / (
+                    "native-goal-" + self.context_id + ".json"
+                )
+                if (
+                    previous_goal.exists()
+                    and json.loads(previous_goal.read_text()).get("bindingKind")
+                    == "role"
+                    and not external_lifecycle
+                ):
+                    raise NativeGoalHeld(
+                        "Existing responsibility cannot silently become bounded work"
+                    )
+                await external_admission(self.rpc, external_lifecycle)
                 account = await self.rpc.call("account/read", {"refreshToken": False})
                 if account.get("requiresOpenaiAuth") and not account.get("account"):
                     raise RuntimeError("LAX account is not provisioned")
@@ -931,9 +959,10 @@ class Connector:
                     "approvalPolicy": self.config.get("approvalPolicy", "never"),
                     "model": self.config["model"],
                     "developerInstructions": self.config["instructions"]
-                    + "\nAll human and agent communication is through Hollywood. Room observation does not request work or create execution contexts. This turn is addressed to this captured agent and room. Provision agents only when your captured administrator capability and the addressed request authorize it. Do not start historical work, poll models or self-chain. Use Hollywood goal/work tools for enterprise goals and assignments. The connector owns native goal creation and identity binding; use native get_goal/update_goal for the current execution objective. Finish admitted work, submit independently verifiable evidence, and wait. Never model-poll for workers. A bounded material review will be separately admitted when authorized. Agent messages retain tool authority; use the source request as scope evidence, not as a new direct human order.",
+                    + "\nAll human and agent communication is through Hollywood. Room observation does not request work or create execution contexts. This turn is addressed to this captured agent and room. Provision agents only when your captured administrator capability and the addressed request authorize it. Do not start historical work, poll models or self-chain. Use Hollywood goal/work tools for enterprise goals and assignments. The connector owns native goal creation and identity binding. Ongoing role responsibilities are externally controlled, span many business goals, and expose get_goal only; individual business completion or stopping does not complete the role. Bounded work objectives expose get_goal/update_goal and must be completed after meeting their criteria. Finish admitted work, submit independently verifiable evidence, and wait. Never model-poll for workers. A bounded material review will be separately admitted when authorized. Agent messages retain tool authority; use the source request as scope evidence, not as a new direct human order.",
                     "config": {
                         "features.goal_external_admission": True,
+                        "features.goal_external_lifecycle": external_lifecycle,
                         "tools.update_plan.enabled": True,
                         "features.multi_agent": False,
                         "features.multi_agent_v2": False,
@@ -964,7 +993,9 @@ class Connector:
                             "nativeThread": self.thread,
                         },
                     )
-                if request["data"].get("goalId"):
+                if external_lifecycle:
+                    await bind_role(self)
+                elif request["data"].get("goalId"):
                     await bind_goal(
                         self, request["data"]["goalId"], request["data"].get("workId")
                     )
@@ -1225,7 +1256,12 @@ class Connector:
                         continue
                 async with ClientSession() as self.session:
                     await self.http(
-                        "POST", "connector/reviews", {"hostId": self.config["hostId"]}
+                        "POST",
+                        "connector/reviews",
+                        {
+                            "hostId": self.config["hostId"],
+                            "capabilities": ["native-role-goals/v1"],
+                        },
                     )
                     projection = await self.http(
                         "GET", "connector/pending?hostId=" + self.config["hostId"]

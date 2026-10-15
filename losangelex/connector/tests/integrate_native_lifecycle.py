@@ -38,7 +38,7 @@ def main(spec):
     saved(
         root / "scenario-intent.json",
         {
-            "scope": "one fresh enterprise, one Global, one worker, two explicit human turns",
+            "scope": "one fresh enterprise, one ongoing Global, two business goals, one worker, three explicit human turns and one authorized material review",
             "runtime": str(runtime),
             "productionChanged": False,
             "originalRequestResubmitted": False,
@@ -232,9 +232,11 @@ def main(spec):
             "kind": "request",
             "audience": "room",
             "recipientId": global_id,
-            "body": "Run one finite native lifecycle qualification. Create a fresh worker named Lifecycle engineer, its Engineering room, explicit read/post grants and home role; provision its separate non-sudo Linux execution using the provided tools. "
-            "Create one goal titled Native cancellation qualification, objective Prove scoped cancellation of a native worker helper and pending human question, acceptance Both native execution and work acknowledge cancellation, the helper stops without its finish effect, and stale human answers cannot execute. Set reviewBudget=0. "
-            "Add and assign exactly one work item with the following instructions and matching cancellation acceptance criteria. After delegation, end your turn promptly with goal/work IDs. Keep your native coordination goal active. Do not poll, wait, schedule, auto-review or mark completion. Worker instructions:\n"
+            "body": "Run a finite multi-goal native role qualification. Create a fresh worker named Lifecycle engineer, its Engineering room, explicit read/post grants and home role; provision its separate non-sudo Linux execution with the provided tools. "
+            "Create two independent business goals now. First: title Accepted artifact qualification, objective Produce and independently verify the exact role-proof artifact, acceptance The worker writes role-proof.txt with exactly ROLE_WORK_ACCEPTED followed by a newline, connector-hashed evidence is independently verified by Global, and both work and goal are explicitly accepted. Authorize reviewBudget=1 for one material completion review. "
+            "Second: title Native cancellation qualification, objective Prove scoped cancellation of a native worker helper and pending human question, acceptance Both native execution and work acknowledge cancellation, the helper stops without its finish effect, and stale human answers cannot execute. Set its reviewBudget=0. "
+            "Add one work item to each goal, both owned by the new engineer in Engineering. Assign ONLY the artifact work now; leave the cancellation work planned. Artifact worker instructions: write role-proof.txt with exactly ROLE_WORK_ACCEPTED followed by one newline, verify it, complete its native work goal using update_goal only after verification, then call hollywood_work_report submitted with artifactPaths role-proof.txt and the current work revision. Do not ask questions or start other work. "
+            "End this initial turn after assignment without polling. In the separately authorized single material review, read the finished artifact work, independently inspect and hash its actual bytes using your host administration, explicitly accept the artifact work and its goal against the evidence, THEN assign the already planned cancellation work and end. Do not mark your ongoing native responsibility complete or pause it. Do not poll, wait, schedule, or perform further automatic reviews. Cancellation worker instructions:\n"
             + work_instruction,
         }
         if spec.get("exerciseStaleGrant"):
@@ -257,9 +259,19 @@ def main(spec):
                 )
             goals = call("GET", "rooms/" + room + "/goals")["goals"]
             if goals:
-                if len(goals) != 1:
+                if len(goals) > 2:
                     raise RuntimeError("Unexpected goal fanout")
-                goal = goals[0]
+                goal = next(
+                    (
+                        g
+                        for g in goals
+                        if g["title"] == "Native cancellation qualification"
+                    ),
+                    None,
+                )
+                if goal is None:
+                    time.sleep(1)
+                    continue
                 plan = call("GET", "goals/" + goal["id"])["plan"]
                 if plan:
                     if len(plan) != 1:
@@ -365,12 +377,14 @@ def main(spec):
             + ", goal "
             + goal["id"]
             + ". Call hollywood_work_cancel with its current revision and an explicit cancellation note. Then read that exact work once to observe native acknowledgement. "
-            "Read the goal revision and request state cancelled even if work acknowledgement is still pending. Goal cancellation is durable and the service will reconcile its child acknowledgements. Leave the native coordination objective stopped/paused, not falsely complete. "
+            "Read the goal revision and request state cancelled even if work acknowledgement is still pending. Goal cancellation is durable and the service will reconcile its child acknowledgements. Your ongoing native role responsibility remains active; use get_goal only to observe it, never stop/complete the role for an individual business goal. "
             "If still awaiting acknowledgement, state that exact fact and end without polling or scheduling. Do not answer the worker question or reassign/retry the work.",
         }
         stopped = message("stop", followup)
-        if stopped["event"]["data"].get("goalReferenceId") != goal["id"]:
-            raise RuntimeError("Global followup lost its original goal reference")
+        if stopped["event"]["data"].get("goalReferenceId") is not None:
+            raise RuntimeError(
+                "Ambiguous multi-goal source manufactured a goal reference"
+            )
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             current = call("GET", "work/" + work["id"])
@@ -436,15 +450,84 @@ def main(spec):
             raise RuntimeError(
                 "Global control replaced or forked its native coordination context"
             )
-        policy = list(
-            (Path(global_receipt["home"]) / "state").glob("goal-policy-*.json")
+        goals_after = call("GET", "rooms/" + room + "/goals")["goals"]
+        advisory = next(
+            g for g in goals_after if g["title"] == "Accepted artifact qualification"
         )
-        if not policy or not any(
-            json.loads(p.read_text()).get("after", {}).get("status") == "paused"
-            for p in policy
+        if advisory["state"] != "accepted" or len(goals_after) != 2:
+            raise RuntimeError(
+                "Business acceptance was not independent from the second goal"
+            )
+        accepted_plan = call("GET", "goals/" + advisory["id"])["plan"]
+        if len(accepted_plan) != 1 or accepted_plan[0]["state"] != "accepted":
+            raise RuntimeError(
+                "The first goal has no independently accepted artifact work"
+            )
+        artifact_path = Path(worker_receipt["workspace"]) / "role-proof.txt"
+        artifact_bytes = artifact_path.read_bytes()
+        if artifact_bytes != b"ROLE_WORK_ACCEPTED\n":
+            raise RuntimeError("Accepted artifact bytes differ")
+        artifact_evidence = accepted_plan[0]["evidence"]
+        if (
+            not artifact_evidence
+            or artifact_evidence[0]["sha256"]
+            != hashlib.sha256(artifact_bytes).hexdigest()
+        ):
+            raise RuntimeError("Accepted connector evidence differs from actual bytes")
+        final_request = {
+            "operationId": "role-native-still-available",
+            "kind": "request",
+            "audience": "room",
+            "recipientId": global_id,
+            "body": "Read-only final role check. Call get_goal and hollywood_goal_read for these two business goal IDs: "
+            + advisory["id"]
+            + " and "
+            + goal["id"]
+            + ". Report their accepted/cancelled states and confirm your ongoing native responsibility is active. "
+            "Use update_plan once to record this finite verification as completed. "
+            "Reply ROLE_STILL_AVAILABLE and end. Do not execute commands, alter any goal or schedule work.",
+        }
+        final_accepted = message("availability", final_request)
+        deadline = time.monotonic() + 150
+        while time.monotonic() < deadline:
+            last = call("GET", "commands/" + final_request["operationId"])
+            status = last["deliveries"][0]["state"]
+            if status in ("failed", "unknown", "cancelled"):
+                raise RuntimeError("Final read-only Global check failed; no replay")
+            if status == "completed":
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError("Final Global check did not settle")
+        last_binding = call(
+            "GET", "deliveries/" + final_accepted["deliveries"][0]["id"]
+        )["nativeGoalBinding"]
+        bindings.append(last_binding)
+        if any(
+            b["binding_kind"] != "role"
+            or b["goal"] is not None
+            or b["work"] is not None
+            or b["native_thread"] != bindings[0]["native_thread"]
+            or b["native_goal_id"] != bindings[0]["native_goal_id"]
+            for b in bindings
         ):
             raise RuntimeError(
-                "Canonical goal cancellation did not pause its bound native coordination goal"
+                "Global did not retain its distinct ongoing native role across goals"
+            )
+        role_file = (
+            Path(global_receipt["home"])
+            / "state"
+            / ("native-goal-" + bindings[0]["context_id"] + ".json")
+        )
+        local_role = json.loads(role_file.read_text())
+        if (
+            local_role["bindingKind"] != "role"
+            or local_role["nativeGoalId"] != bindings[0]["native_goal_id"]
+        ):
+            raise RuntimeError("Local role identity differs from canonical binding")
+        if list((Path(global_receipt["home"]) / "state").glob("goal-policy-*.json")):
+            raise RuntimeError(
+                "A business goal control incorrectly mutated the ongoing role"
             )
         history = []
         cursor = 0
@@ -460,11 +543,41 @@ def main(spec):
             e["data"]["nativeGoal"]
             for e in history
             if e.get("data", {}).get("nativeType") == "goalState"
-            and e["data"].get("deliveryId") == stopped["deliveries"][0]["id"]
+            and e["data"].get("deliveryId") == final_accepted["deliveries"][0]["id"]
         ]
-        if not observations or observations[-1]["status"] != "paused":
+        if not observations or observations[-1]["status"] != "active":
             raise RuntimeError(
-                "Final verified Global native goal status differs from its stop policy"
+                "Global responsibility was stopped by an individual business goal control"
+            )
+        if not any("ROLE_STILL_AVAILABLE" in e.get("body", "") for e in history):
+            raise RuntimeError(
+                "Final read-only Global reply was not delivered in the room"
+            )
+        if not any(
+            e.get("data", {}).get("nativeType") == "planUpdate"
+            and e["data"].get("deliveryId") == final_accepted["deliveries"][0]["id"]
+            for e in history
+        ):
+            raise RuntimeError("Final structured native plan was not projected")
+        review_ids = {
+            e["data"]["deliveryId"]
+            for e in history
+            if e.get("source") == advisory["review_request"]
+            and e.get("data", {}).get("deliveryId")
+        }
+        if len(review_ids) != 1:
+            raise RuntimeError(
+                "Expected exactly one attributable authorized material review"
+            )
+        review_binding = call("GET", "deliveries/" + next(iter(review_ids)))[
+            "nativeGoalBinding"
+        ]
+        if (
+            review_binding["binding_kind"] != "role"
+            or review_binding["native_goal_id"] != bindings[0]["native_goal_id"]
+        ):
+            raise RuntimeError(
+                "Material review did not retain Global's role responsibility"
             )
         admin_records = [
             json.loads(p.read_text())
@@ -486,27 +599,35 @@ def main(spec):
         saved(
             root / "result.json",
             {
-                "state": "passed-real-native-goal-cancellation",
+                "state": "passed-real-native-role-and-business-goals",
                 "authorityId": authority,
                 "goalId": goal["id"],
                 "workId": work["id"],
                 "nativeWorkerGoalPaused": True,
                 "globalSameContextAndGoalInstance": True,
                 "globalResponsiveDuringWorkerQuestion": True,
-                "globalCanonicalAndNativeGoalStopped": True,
+                "businessGoalCancelledAndGlobalRoleActive": True,
+                "artifactBusinessGoalAccepted": True,
+                "globalResponsiveAfterAcceptanceAndCancellation": True,
+                "roleGoalAccountingTokens": observations[-1]["tokensUsed"],
                 "workerAndExecutionCancelled": True,
                 "ownedHelperStopped": True,
                 "deferredEffectOccurred": False,
                 "lateAnswerDenied": True,
                 "externalEffectsUndone": False,
-                "realNativeTurns": 3,
+                "realNativeTurns": 6,
+                "authorizedMaterialReviews": 1,
+                "explicitHumanRequests": 3,
+                "businessGoals": 2,
                 "modelPolling": False,
                 "knownMembershipConflictRecovered": conflict_recovered,
                 "productionChanged": False,
                 "physicalPhone": False,
             },
         )
-        print("Actual native Global/worker cancellation passed.")
+        print(
+            "Actual ongoing Global role, business acceptance and native worker cancellation passed."
+        )
     finally:
         cleanup = []
         for worker in units():

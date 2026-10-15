@@ -55,6 +55,8 @@ pub struct GoalExtensionConfig {
     pub enabled: bool,
     /// External owner retains admission; goal persistence and accounting remain enabled.
     pub external_admission: bool,
+    /// External role controller owns creation and lifecycle, not the current model turn.
+    pub external_lifecycle: bool,
     pub max_goal_token_budget: Option<i64>,
 }
 
@@ -578,34 +580,26 @@ where
             .get::<GoalExtensionConfig>()
             .and_then(|config| config.max_goal_token_budget);
 
-        let mut tools = vec![
-            GoalToolExecutor::get(
-                runtime.thread_id(),
-                Arc::clone(&self.state_dbs),
-                runtime.accounting_state(),
-                self.analytics.clone(),
-                self.event_emitter.clone(),
-                self.metrics.clone(),
-            ),
-            GoalToolExecutor::update(
-                runtime.thread_id(),
-                Arc::clone(&self.state_dbs),
-                runtime.accounting_state(),
-                self.analytics.clone(),
-                self.event_emitter.clone(),
-                self.metrics.clone(),
-            ),
-        ];
-        // In externally managed execution, canonical work admission creates
-        // the native goal through the fenced API. Models retain get/update,
-        // without creating an unbound competing goal in this context.
-        if !thread_store
-            .get::<GoalExtensionConfig>()
-            .is_some_and(|config| config.external_admission)
-        {
-            tools.insert(
-                1,
-                GoalToolExecutor::create(
+        let config = thread_store.get::<GoalExtensionConfig>();
+        let external_lifecycle = config
+            .as_ref()
+            .is_some_and(|config| config.external_lifecycle);
+        let external_admission = config
+            .as_ref()
+            .is_some_and(|config| config.external_admission);
+        let mut tools = vec![GoalToolExecutor::get(
+            runtime.thread_id(),
+            Arc::clone(&self.state_dbs),
+            runtime.accounting_state(),
+            self.analytics.clone(),
+            self.event_emitter.clone(),
+            self.metrics.clone(),
+        )];
+        // Role objectives outlive individual work deliveries. Their trusted external
+        // controller owns lifecycle; native persistence, accounting and reads remain.
+        if !external_lifecycle {
+            if !external_admission {
+                tools.push(GoalToolExecutor::create(
                     runtime.thread_id(),
                     Arc::clone(&self.state_dbs),
                     runtime.accounting_state(),
@@ -613,8 +607,16 @@ where
                     self.event_emitter.clone(),
                     self.metrics.clone(),
                     max_goal_token_budget,
-                ),
-            );
+                ));
+            }
+            tools.push(GoalToolExecutor::update(
+                runtime.thread_id(),
+                Arc::clone(&self.state_dbs),
+                runtime.accounting_state(),
+                self.analytics.clone(),
+                self.event_emitter.clone(),
+                self.metrics.clone(),
+            ));
         }
         tools
             .into_iter()

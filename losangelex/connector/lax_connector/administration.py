@@ -147,6 +147,11 @@ async def _administer(connector, name, arguments, operation):
                 "primary": arguments["primary"],
                 "purpose": arguments["purpose"],
                 "homeRoomId": arguments["homeRoomId"],
+                **(
+                    {"nativeGoalScope": arguments["nativeGoalScope"]}
+                    if "nativeGoalScope" in arguments
+                    else {}
+                ),
                 "revision": arguments["revision"],
             },
         )

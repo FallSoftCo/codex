@@ -946,6 +946,9 @@
             "goal_external_admission": {
               "type": "boolean"
             },
+            "goal_external_lifecycle": {
+              "type": "boolean"
+            },
             "goals": {
               "type": "boolean"
             },
@@ -7309,6 +7312,9 @@
           "type": "boolean"
         },
         "goal_external_admission": {
+          "type": "boolean"
+        },
+        "goal_external_lifecycle": {
           "type": "boolean"
         },
         "goals": {
