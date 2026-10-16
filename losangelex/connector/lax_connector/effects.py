@@ -163,7 +163,7 @@ class Effects:
 
     def atomic(self, group):
         name = group["scope"]["tool"]
-        if name in ATOMIC:
+        if name in ATOMIC or (self.c.agent_binding and name in ("hollywood_goal_create","hollywood_goal_state")):
             return True
         binding = group["scope"]["bindingAtStart"]
         if binding is not None:

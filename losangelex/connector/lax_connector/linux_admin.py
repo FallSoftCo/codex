@@ -85,6 +85,9 @@ def provision(spec):
         raise PermissionError("A verified Linux administrator must perform bootstrap")
     installation = json.loads(Path(spec["installationIntent"]).read_text())
     identity = str(UUID(installation["authorityId"]))
+    if spec.get("environmentProfileFile"):
+        from .environment import install
+        install(identity,spec["environmentProfileFile"])
     slug = identity.replace("-", "")[:12]
     user = "hglobal-" + slug
     base = Path("/var/lib/harness")

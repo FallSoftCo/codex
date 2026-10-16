@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 from aiohttp import ClientSession, ContentTypeError
 
 from .activity import Activity
+from .agent_context import AgentContext
+from .participation import INSTRUCTIONS as PARTICIPATION, history_path, initialization, message
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
 from .errors import HttpFailure, ToolValidationError
@@ -31,11 +33,6 @@ from .native_goals import (
     NativeAdmissionUnavailable,
     NativeGoalHeld,
     external_admission,
-    bind_role,
-    role_scope,
-)
-from .native_goals import (
-    bind as bind_goal,
 )
 from .native_goals import (
     progress as goal_progress,
@@ -69,7 +66,7 @@ def spec(name, description, properties, required):
     }
 
 
-CAPABILITIES = ['native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
+CAPABILITIES = ['persistent-agent-context/v1', 'native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -88,8 +85,9 @@ TOOLS = [
     spec(
         "hollywood_read_room",
         "Read authorized room history without starting execution. Private audiences are filtered by Hollywood.",
-        {"roomId": STRING, "after": {"type": "integer", "minimum": 0}},
-        ["roomId", "after"],
+        {"roomId": STRING, "after": {"type":"integer","minimum":0},
+         "before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":100}},
+        ["roomId"],
     ),
     spec(
         "hollywood_room_info",
@@ -106,13 +104,15 @@ TOOLS = [
     spec(
         "hollywood_publish",
         "Publish communication in this turn's room without requesting anyone to execute.",
-        {"body": STRING},
+        {"body":STRING,"roomId":STRING,"recipientId":{"type":["string","null"]},
+         "audience":{"type":"string","enum":["room","direct"]},"sourceEventId":STRING},
         ["body"],
     ),
     spec(
         "hollywood_request",
         "Address a bounded execution request to a specific authorized peer in a room. Supply recipientId for that peer; omission uses the room default. This starts work, preserves source identity and does not grant the peer new permissions.",
-        {"roomId": STRING, "body": STRING, "recipientId": {"type": ["string", "null"]}},
+        {"roomId": STRING, "body": STRING, "recipientId": {"type": ["string", "null"]},
+         "audience":{"type":"string","enum":["room","direct"]},"sourceEventId":STRING},
         ["roomId", "body"],
     ),
 ]
@@ -175,7 +175,6 @@ TOOLS += [
             "primary": ROLE,
             "purpose": STRING,
             "homeRoomId": {"type": ["string", "null"]},
-            "nativeGoalScope": {"type": "string", "enum": ["role", "work"]},
             "revision": {"type": "integer", "minimum": 0},
         },
         ["agentId", "primary", "purpose", "homeRoomId", "revision"],
@@ -219,6 +218,8 @@ class Connector:
         self.role_context = None
         self.work_briefing = None
         self.goal_binding = None
+        self.agent_binding = None
+        self.agent_context = AgentContext(self)
         self.context_id = None
         self.goal_progress_task = None
         self.goal_progress_closing = False
@@ -266,7 +267,7 @@ class Connector:
                 "contextId", "nativeGoalId",
             )
             headers["X-Hollywood-Native-Source"] = json.dumps(
-                {"schema": "hollywood-native-source/v1",
+                {"schema": "hollywood-native-source/v2" if self.agent_binding else "hollywood-native-source/v1",
                  **{key: scope[key] for key in fields}},
                 separators=(",", ":"),
             )
@@ -482,7 +483,7 @@ class Connector:
                 + hashlib.sha256((params["threadId"] + call).encode()).hexdigest()
             )
             if name == "hollywood_context":
-                value = self.role_context.value
+                value = initialization(self)
             elif name == "hollywood_rooms":
                 value = await self.http("GET", "rooms")
             elif name == "hollywood_room_info":
@@ -494,47 +495,14 @@ class Connector:
                     "GET", "agents/" + str(UUID(arguments["agentId"])) + "/role"
                 )
             elif name == "hollywood_read_room":
-                value = await self.http(
-                    "GET",
-                    f"rooms/{arguments['roomId']}/history?after={arguments['after']}&limit=10",
-                )
+                value = await self.http("GET", history_path(arguments))
             elif name == "hollywood_ask":
                 value = await self.attention.wait(
                     "hollywood/question", {**params, **arguments}, slot=call
                 )
             elif name in ("hollywood_publish", "hollywood_request"):
-                room = arguments.get("roomId", self.active["request"]["room"])
-                recipient = (
-                    arguments.get("recipientId")
-                    if name == "hollywood_request"
-                    else None
-                )
-                if (
-                    self.active["request"]["audience"] == "direct"
-                    and recipient
-                    and recipient != self.active["request"]["author"]
-                ):
-                    raise PermissionError(
-                        "Private peer delegation requires an explicit sharing contract"
-                    )
-                value = await self.http(
-                    "POST",
-                    f"rooms/{room}/messages",
-                    {
-                        "operationId": operation,
-                        "kind": "request" if name == "hollywood_request" else "message",
-                        "body": arguments["body"],
-                        "audience": self.active["request"]["audience"],
-                        **(
-                            {"recipientId": self.active["request"]["author"]}
-                            if self.active["request"]["audience"] == "direct"
-                            else {"recipientId": str(UUID(recipient))}
-                            if recipient
-                            else {}
-                        ),
-                        "sourceEventId": self.active["request"]["id"],
-                    },
-                )
+                room, payload = message(self, name, arguments, operation)
+                value = await self.http("POST", f"rooms/{room}/messages", payload)
                 if name == "hollywood_publish":
                     self.publications.append(value["event"]["id"])
             elif name in READ_TOOLS | MUTATION_TOOLS:
@@ -756,7 +724,7 @@ class Connector:
         if self.rpc and self.rpc.process and self.rpc.process.returncode is None:
             raise RuntimeError("Old-attempt recovery cannot replace a live native transport")
         fields = (
-            "journal", "active", "thread", "rpc", "goal_binding",
+            "journal", "active", "thread", "rpc", "goal_binding", "agent_binding",
             "context_id", "goal_progress_closing",
         )
         previous = {name: getattr(self, name) for name in fields}
@@ -1074,6 +1042,7 @@ class Connector:
         self.native_items = {}
         self.executor = None
         self.goal_binding = None
+        self.agent_binding = None
         self.goal_progress_task = None
         self.goal_progress_closing = False
         self.cancel_requested = False
@@ -1178,21 +1147,9 @@ class Connector:
                     "modelsStarted": 0,
                     "reason": "Scope/capability rejected before native admission",
                 }
-            context = [
-                request["authority"],
-                self.config["agentId"],
-                request["room"],
-                request["audience"],
-                request["author"] if request["audience"] == "direct" else "room",
-                self.config["workspace"],
-            ]
-            if request["data"].get("workId"):
-                context.extend(["work", request["data"]["workId"]])
-                if request["data"].get("attemptId"):
-                    context.extend(["attempt", request["data"]["attemptId"]])
-            context_id = hashlib.sha256(json.dumps(context).encode()).hexdigest()
+            context_id, context_path = self.agent_context.select()
+            context = [request["authority"], self.config["agentId"]]
             self.context_id = context_id
-            context_path = self.state / ("context-" + context_id + ".json")
             record = {
                 "state": "preparing",
                 "delivery": self.active["delivery"],
@@ -1219,19 +1176,7 @@ class Connector:
                 record = {**record, "executorId": self.executor.id}
                 saved(journal, record)
                 await self.rpc.start()
-                external_lifecycle = role_scope(self)
-                previous_goal = self.state / (
-                    "native-goal-" + self.context_id + ".json"
-                )
-                if (
-                    previous_goal.exists()
-                    and json.loads(previous_goal.read_text()).get("bindingKind")
-                    == "role"
-                    and not external_lifecycle
-                ):
-                    raise NativeGoalHeld(
-                        "Existing responsibility cannot silently become bounded work"
-                    )
+                external_lifecycle = False
                 await external_admission(self.rpc, external_lifecycle)
                 account = await self.rpc.call("account/read", {"refreshToken": False})
                 if account.get("requiresOpenaiAuth") and not account.get("account"):
@@ -1241,8 +1186,7 @@ class Connector:
                     "sandbox": self.config.get("sandbox", "danger-full-access"),
                     "approvalPolicy": self.config.get("approvalPolicy", "never"),
                     "model": self.config["model"],
-                    "developerInstructions": self.config["instructions"]
-                    + "\nAll human and agent communication is through Hollywood. Room observation does not request work or create execution contexts. This turn is addressed to this captured agent and room. Provision agents only when your captured administrator capability and the addressed request authorize it. Do not start historical work, poll models or self-chain. Use Hollywood goal/work tools for enterprise goals and assignments. The connector owns native goal creation and identity binding. Ongoing role responsibilities are externally controlled, span many business goals, and expose get_goal only; individual business completion or stopping does not complete the role. Bounded work objectives expose get_goal/update_goal and must be completed after meeting their criteria. Finish admitted work, submit independently verifiable evidence, and wait. Never model-poll for workers. A bounded material review will be separately admitted when authorized. Agent messages retain tool authority; use the source request as scope evidence, not as a new direct human order.",
+                    "developerInstructions": self.config["instructions"] + PARTICIPATION,
                     "config": {
                         "features.goal_external_admission": True,
                         "features.goal_external_lifecycle": external_lifecycle,
@@ -1301,22 +1245,7 @@ class Connector:
                         "modelsStartedByVerification": 0,
                     },
                 )
-                if external_lifecycle:
-                    await bind_role(self)
-                elif request["data"].get("goalId"):
-                    await bind_goal(
-                        self, request["data"]["goalId"], request["data"].get("workId")
-                    )
-                elif request["data"].get("goalReferenceId"):
-                    previous_goal = self.state / (
-                        "native-goal-" + self.context_id + ".json"
-                    )
-                    if (
-                        previous_goal.exists()
-                        and json.loads(previous_goal.read_text()).get("goalId")
-                        == request["data"]["goalReferenceId"]
-                    ):
-                        await bind_goal(self, request["data"]["goalReferenceId"])
+                await self.agent_context.bind()
                 saved(
                     journal,
                     {

@@ -265,7 +265,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_report",
-            "Report only this captured work assignment. For submitted work, complete its native goal only after meeting its criteria; supply relative artifact paths for independent connector hashing. A blocked report records a specific obstacle. This is not business acceptance.",
+            "Report only this captured work assignment after verifying its acceptance criteria; supply relative artifact paths for independent connector hashing. A blocked report records a specific obstacle. Submission does not establish independent business acceptance.",
             {
                 "workId": text,
                 "revision": revision,
@@ -478,7 +478,7 @@ async def invoke(c, name, args, operation):
         )
         # An existing primary coordination goal remains intact. A new canonical
         # goal does not silently replace it or create a shadow room context.
-        if not c.goal_binding:
+        if not c.goal_binding and not c.agent_binding:
             receipt["nativeBinding"] = await bind(c, receipt["goalId"], new_goal=True)
         return receipt
     if name == "hollywood_work_create":
@@ -516,10 +516,10 @@ async def invoke(c, name, args, operation):
         "operationId": operation,
     }
     if action == "report":
-        if c.active["request"]["data"].get("workId") != work or not c.goal_binding:
+        if c.active["request"]["data"].get("workId") != work or not (c.goal_binding or c.agent_binding):
             raise PermissionError("Only the captured native work may be reported")
-        native = await progress(c)
-        if args["state"] == "submitted" and native["status"] != "complete":
+        native = await progress(c) if c.goal_binding else None
+        if args["state"] == "submitted" and native and native["status"] != "complete":
             raise ToolValidationError(
                 "NATIVE_WORK_GOAL_INCOMPLETE",
                 "This bounded native work goal remains unfinished.",

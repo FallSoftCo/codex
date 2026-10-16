@@ -101,7 +101,7 @@ class RoleContext:
         )
         return cls(
             {
-                **envelope,
+                **{k:v for k,v in envelope.items() if k!="nativeGoalScope"},
                 "hostAdministrationVerified": admin,
                 "executionIdentity": {
                     "uid": os.geteuid(),
@@ -110,7 +110,7 @@ class RoleContext:
                 },
                 "responsePolicy": {
                     "addressedRequest": "required",
-                    "observation": "silent",
+                    "observation": "optional-context-no-automatic-turn",
                     "membership": "not-execution",
                     "peerContent": "tool-authority",
                 },
@@ -121,6 +121,11 @@ class RoleContext:
         return {
             "laxAgentRole": {
                 "kind": "application",
-                "value": json.dumps(self.value, sort_keys=True),
+                "value": json.dumps({
+                    k:self.value[k] for k in (
+                        "schema","authorityId","agentId","hostId","primaryRole","roleRevision",
+                        "activeRoomId","requestId","senderId","senderKind","audience",
+                        "communicationAdministrator","hostAdministrationVerified")
+                }, sort_keys=True),
             }
         }

@@ -370,6 +370,16 @@ async def progress(connector):
 async def restore(connector, record):
     """Recover the server's original binding without creating/adopting a goal."""
     c = connector
+    agent_binding = c.active.get("agentContextBinding")
+    if agent_binding:
+        if (agent_binding["native_thread"],agent_binding["context_id"],agent_binding["workspace_id"]) != (
+            record.get("nativeThread"),record.get("contextId"),workspace_id(c.config)
+        ):
+            raise NativeGoalHeld("Original agent execution context changed")
+        c.context_id = agent_binding["context_id"]
+        c.agent_binding = agent_binding
+        c.goal_binding = None
+        return None
     binding = c.active.get("nativeGoalBinding")
     if not binding:
         if c.active["request"]["data"].get("goalId"):
