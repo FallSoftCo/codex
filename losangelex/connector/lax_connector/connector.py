@@ -67,6 +67,7 @@ def spec(name, description, properties, required):
 
 
 CAPABILITIES = ['persistent-agent-context/v1', 'native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
+CAPABILITIES += ['completed-work-report-reconciliation/v1']
 
 STRING = {"type": "string"}
 TOOLS = [

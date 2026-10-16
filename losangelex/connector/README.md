@@ -29,6 +29,11 @@ Business goals and plans remain available. Artifact submission and independent
 acceptance establish work delivery; completing a model turn or native goal alone
 does not establish an accepted outcome.
 
+Staged completed-original reporting is documented in
+[COMPLETED_REPORT_RECONCILIATION.md](COMPLETED_REPORT_RECONCILIATION.md). Its explicit
+later-participation tool preserves ordinary captured reporting and still requires
+matching server qualification and independent acceptance; no work is restarted.
+
 Cancellation retains desired stop and observed execution separately.
 Recovery reads original delivery/claim/generation, native thread/turn and tool
 receipts. It never repeats an unsettled model turn or external mutation.
