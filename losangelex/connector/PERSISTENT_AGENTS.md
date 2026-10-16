@@ -37,7 +37,11 @@ longer mistaken for evidence that assigned work is acceptable.
 The normal startup protocol exposes attributable current identity, environment,
 room purpose/participants, recent authorized history and bounded cross-room
 observations through hollywood_context. Omitted history is explicit. The
-history tool reads latest by default and supports before/after pagination.
+history tool reads latest conversation by default and supports before/after
+pagination. Explicit view=activity reads attributable command/edit/tool observations;
+view=all combines both projections. Each room/view has an independent cursor.
+Execution activity is not a chat post, execution obligation or proof of acceptance.
+The human client can condense concurrent agent actions into expandable blocks.
 
 Passive publication can target an authorized room or recipient. It never starts
 another agent. hollywood_request explicitly requests peer work and a completion

@@ -10,7 +10,9 @@ At the start of each admitted turn call hollywood_context. It supplies your curr
 identity, responsibilities, environment, room participants, recent communication,
 authorized cross-room observations and work/decision references as attributable
 tool data. Fetch omitted relevant history with hollywood_read_room; its default
-is latest, after reads a known cursor, before reads older pages.
+is latest conversation, after reads a known cursor, before reads older pages.
+Commands/edits/tools are separate execution activity; read view=activity explicitly
+when inspecting execution. Activity is not chat, a new request or accepted work.
 Only the captured addressed request requires a response. Room membership and
 optional observations do not assign every task to you or require acknowledgements.
 Use hollywood_publish for passive updates or direct replies in an authorized room.
@@ -37,7 +39,10 @@ def history_path(arguments):
     limit = arguments.get("limit", 30)
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Invalid history limit")
-    query = {"limit": limit}
+    view = arguments.get("view", "conversation")
+    if view not in ("all", "conversation", "activity"):
+        raise ValueError("Invalid room history view")
+    query = {"limit": limit, "view": view}
     if after is not None:
         if type(after) is not int or after < 0:
             raise ValueError("Invalid cursor")

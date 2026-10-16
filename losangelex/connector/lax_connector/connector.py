@@ -84,9 +84,10 @@ TOOLS = [
     ),
     spec(
         "hollywood_read_room",
-        "Read authorized room history without starting execution. Private audiences are filtered by Hollywood.",
+        "Read authorized room conversation (default), execution activity, or both without starting execution. Latest by default. Cursors belong to this room/view; private audiences are filtered by Hollywood.",
         {"roomId": STRING, "after": {"type":"integer","minimum":0},
-         "before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":100}},
+         "before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":100},
+         "view":{"type":"string","enum":["conversation","activity","all"]}},
         ["roomId"],
     ),
     spec(
@@ -496,6 +497,8 @@ class Connector:
                 )
             elif name == "hollywood_read_room":
                 value = await self.http("GET", history_path(arguments))
+                if value.get("view") != arguments.get("view", "conversation"):
+                    raise ValueError("Hollywood room projection is unavailable; reconcile server version")
             elif name == "hollywood_ask":
                 value = await self.attention.wait(
                     "hollywood/question", {**params, **arguments}, slot=call
