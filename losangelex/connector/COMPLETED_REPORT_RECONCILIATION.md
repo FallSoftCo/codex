@@ -14,7 +14,8 @@ The connector cannot determine semantic business success from artifact hashes.
 ## Wire contract for joint server review
 
 The native tool takes exactly `workId`, `revision`, `priorDeliveryId`, `state`
-(`submitted` or `blocked`), `note` (nonblank, at most4000 characters), and at most16
+(`submitted` or `blocked`), explicit `effectDisposition` (`reviewed` or `unknown`),
+`note` (nonblank, at most4000 characters), and at most16
 relative `artifactPaths`. It does not accept caller-supplied hashes, credentials,
 workspace roots or participation claims. Its operation ID is the existing durable
 `lax-tool:<SHA256(nativeThread + callId)>` identity.
@@ -35,11 +36,9 @@ The single mutation is `POST work/{workId}/report-reconcile`:
   "revision": 7,
   "priorDeliveryId": "<original completed delivery>",
   "state": "submitted",
+  "effectDisposition": "reviewed",
   "note": "<original receipt, effect and acceptance review>",
   "evidence": [{"hostId":"<original/current host>","workspaceId":"<original/current workspace>","relativePath":"result.txt","size":16,"sha256":"<connector digest>"}],
-  "currentDeliveryId": "<later current delivery>",
-  "currentClaimId": "<later current claim>",
-  "currentGeneration": 3,
   "briefingSequence": 123
 }
 ```
@@ -51,9 +50,12 @@ claim is presented as active. `briefingSequence` describes current participation
 the server must retain the original attempt's briefing and immutable history and
 separately record reconciliation provenance/current decision checks.
 
-These body names and the hyphenated route are the connector's proposed exact wire;
-the independently implemented server must be reviewed against this contract before
-joint native qualification. Connector-only tests are not proof of server agreement.
+These body names and the hyphenated route are selected by the pinned
+shared/review-gate-r02.json. No current identity hints are sent in the body;
+the current v2 source header supplies those identities. `effectDisposition` is
+required with no default or inference from note text/completion/stop. Submitted
+requires explicit reviewed disposition; blocked may preserve unknown. Exact model
+compatibility is checked separately from domain/SQL/native qualification.
 
 ## Evidence and mutation fences
 
@@ -72,8 +74,9 @@ posting rights, ownership, goal/cooperation, relevant decisions and cancellation
 atomically at mutation time. Client GET checks cannot close a revocation or
 report/cancel race. The proposed paused-goal semantics permit evidence-only
 reporting of an already completed original, without admitting work or resuming the
-goal; cancel_requested/cancelled must deny. The server cut must explicitly agree
-or fail closed before this proposal can be qualified.
+goal; cancel_requested/cancelled must deny. The selected server cut agrees with
+this pause policy; its independently qualified implementation is still required
+before native proof or activation.
 
 The new tool is a mutation under the existing uncertainty gate and exact native
 tool allowlist. It is an atomic effect: lost replies reconcile only the original
@@ -104,6 +107,13 @@ checks. They cover client original/current identity fences, captured-report
 compatibility, tool dispatch/caching/policy, actual local hashes and file races,
 native-source header attribution and original lost-reply receipt recovery. They
 do not replace authoritative server authorization/race tests or a real native run.
+
+For the selected server wire, run `tests/check_completed_report_wire.py` with
+`--server-source` pointing to the exact reviewed committed server.py snapshot.
+It extracts only the actual Pydantic model classes, validates the connector's
+captured body and rejects the superseded identity hints/missing attestation.
+This check starts no HTTP server, PostgreSQL or native runtime and reports the
+reviewed source hash. It does not execute the server's SQL or prove authority.
 
 ## One later staged integration and activation
 

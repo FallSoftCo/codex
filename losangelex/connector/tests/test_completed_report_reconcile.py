@@ -53,7 +53,8 @@ class Fixture:
                          "agentContextBinding": {**self.agent_binding, "delivery": self.prior,
                                                  "generation": 1, "role_revision": 1}}
         self.args = {"workId": self.work, "revision": 7, "priorDeliveryId": self.prior,
-                     "state": "submitted", "note": "Inspected original receipts and artifact; criteria verified. No effect replay.",
+                     "state": "submitted", "effectDisposition": "reviewed",
+                     "note": "Inspected original receipts and artifact; criteria verified. No effect replay.",
                      "artifactPaths": ["result.txt"]}
         (root / "result.txt").write_text("original-result\n")
         self.calls = []
@@ -103,9 +104,8 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
         payload = self.c.posts()[0][2]
         self.assertEqual(result["deliveryId"], self.c.prior)
         self.assertEqual(payload["priorDeliveryId"], self.c.prior)
-        self.assertEqual(payload["currentDeliveryId"], self.c.current)
-        self.assertEqual(payload["currentClaimId"], "current-claim")
-        self.assertEqual(payload["currentGeneration"], 3)
+        self.assertEqual(payload["effectDisposition"], "reviewed")
+        self.assertTrue({"currentDeliveryId", "currentClaimId", "currentGeneration"}.isdisjoint(payload))
         self.assertNotIn("claimId", payload)
         self.assertNotIn("artifactPaths", payload)
         self.assertEqual(payload["evidence"], [{"hostId": self.c.host,
@@ -115,10 +115,11 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
         self.c.rpc.call.assert_not_called()
 
     async def test_blocked_may_preserve_uncertainty_without_artifact(self):
-        args = {**self.c.args, "state": "blocked", "artifactPaths": [],
+        args = {**self.c.args, "state": "blocked", "artifactPaths": [], "effectDisposition": "unknown",
                 "note": "Original provider outcome remains unknown; no retry or success attested."}
         await self.invoke(args)
         self.assertEqual(self.c.posts()[0][2]["state"], "blocked")
+        self.assertEqual(self.c.posts()[0][2]["effectDisposition"], "unknown")
         self.assertEqual(self.c.posts()[0][2]["evidence"], [])
 
     async def test_original_snapshot_fences_before_any_post(self):
@@ -226,6 +227,15 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
                 await self.invoke({**self.c.args, **patch_args})
             self.assertFalse(self.c.calls)
 
+    async def test_effect_disposition_is_required_never_inferred_from_note_or_completion(self):
+        missing = {k: v for k, v in self.c.args.items() if k != "effectDisposition"}
+        for args in [missing, {**self.c.args, "effectDisposition": "unknown"},
+                     {**self.c.args, "effectDisposition": True},
+                     {**self.c.args, "effectDisposition": "stopped"}]:
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                await self.invoke(args)
+            self.assertFalse(self.c.calls)
+
     async def test_normal_report_stays_captured_and_native_goal_strict(self):
         with self.assertRaises(PermissionError):
             await workflow.invoke(self.c, "hollywood_work_report", self.c.args, "fixture")
@@ -330,6 +340,7 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
         tool = next(t for t in TOOLS if t["name"] == "hollywood_work_report_reconcile")
         self.assertFalse(tool["inputSchema"]["additionalProperties"])
         self.assertIn("priorDeliveryId", tool["inputSchema"]["required"])
+        self.assertIn("effectDisposition", tool["inputSchema"]["required"])
         self.assertNotIn("evidence", tool["inputSchema"]["properties"])
         self.assertIn(tool["name"], workflow.MUTATION_TOOLS)
         self.assertNotIn(tool["name"], workflow.READ_TOOLS)

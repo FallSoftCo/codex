@@ -278,16 +278,17 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_report_reconcile",
-            "Explicitly report your exact completed, unreported original assignment from later authenticated participation in the same persistent context and workspace. Inspect original receipts, effects and acceptance first; submitted attests verified criteria, blocked preserves uncertainty. Supply priorDeliveryId and relative original artifacts. Never restart/reassign work or infer no effects from stopped. Current authority/cancellation and independent review still apply; ordinary captured reporting stays strict.",
+            "Explicitly report your exact completed, unreported original assignment from later authenticated participation in the same persistent context and workspace. Inspect original receipts, effects and acceptance first. Explicitly attest effectDisposition reviewed or unknown; submitted requires reviewed and verified criteria, blocked preserves uncertainty. Supply priorDeliveryId and relative original artifacts. Never restart/reassign work or infer reviewed/no effects from stopped. Current authority/cancellation and independent review still apply; ordinary captured reporting stays strict.",
             {
                 "workId": text,
                 "revision": revision,
                 "priorDeliveryId": text,
                 "state": {"type": "string", "enum": ["submitted", "blocked"]},
+                "effectDisposition": {"type": "string", "enum": ["reviewed", "unknown"]},
                 "note": {"type": "string", "minLength": 1, "maxLength": 4000},
                 "artifactPaths": {"type": "array", "items": text, "maxItems": 16},
             },
-            ["workId", "revision", "priorDeliveryId", "state", "note", "artifactPaths"],
+            ["workId", "revision", "priorDeliveryId", "state", "effectDisposition", "note", "artifactPaths"],
         ),
         spec(
             "hollywood_work_review",
@@ -394,12 +395,14 @@ async def reconcile_report(c, args, operation):
     work_id, prior = str(UUID(args["workId"])), str(UUID(args["priorDeliveryId"]))
     if (type(args["revision"]) is not int or args["revision"] < 1
         or args["state"] not in ("submitted", "blocked")
+        or args.get("effectDisposition") not in ("reviewed", "unknown")
+        or (args["state"] == "submitted" and args["effectDisposition"] != "reviewed")
         or not isinstance(args["note"], str) or not args["note"].strip()
         or len(args["note"]) > 4000
         or not isinstance(args["artifactPaths"], list)
         or len(args["artifactPaths"]) > 16
         or any(not isinstance(p, str) for p in args["artifactPaths"])):
-        raise ValueError("Reconciliation requires a revision, evidence paths and effect-review note")
+        raise ValueError("Reconciliation requires explicit effect disposition; submitted needs reviewed effects")
     current = c.active
     binding = c.agent_binding
     if not current or not binding:
@@ -471,10 +474,8 @@ async def reconcile_report(c, args, operation):
     payload = {
         "revision": args["revision"], "priorDeliveryId": prior,
         "state": args["state"], "note": args["note"], "evidence": evidence,
+        "effectDisposition": args["effectDisposition"],
         "operationId": operation,
-        "currentDeliveryId": delivery["id"],
-        "currentClaimId": delivery["claim_id"],
-        "currentGeneration": delivery["generation"],
         "briefingSequence": c.work_briefing["asOfSequence"] if c.work_briefing else None,
     }
     # The normal v2 native-source header authenticates THIS participation, never

@@ -27,7 +27,8 @@ Ordinary hollywood_work_report reports only the captured assignment. For your ex
 completed but unreported original work, later normal participation in the same
 context/workspace may explicitly use hollywood_work_report_reconcile. Inspect the
 original receipts, effects and acceptance first; submitted attests verified criteria,
-blocked records uncertainty. Never restart work or infer no effects from a stop.
+and requires explicit effectDisposition reviewed; blocked may explicitly retain
+unknown. Never infer reviewed effects from completion or stop, or restart work.
 Submission still needs independent review and current authority/cancellation checks.
 Delegation does not discharge your responsibility until the peer accepts it and
 the requested outcome is accounted for. Preserve blocked and unfinished work.
