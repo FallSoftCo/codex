@@ -12,6 +12,7 @@ KEYS = {
     "authorityId",
     "repositories",
     "sshAliases",
+    "sshRoutes",
     "github",
     "build",
     "verificationReceipt",
@@ -62,6 +63,20 @@ def validate(value, authority):
         or any(not isinstance(v, str) for v in value["sshAliases"])
     ):
         raise ValueError("Invalid SSH aliases")
+    if "sshRoutes" in value:
+        if not isinstance(value["sshRoutes"], list) or len(value["sshRoutes"]) > 32:
+            raise ValueError("Invalid SSH route list")
+        for route in value["sshRoutes"]:
+            if (
+                not isinstance(route, dict)
+                or set(route) != {"name", "command"}
+                or not isinstance(route["name"], str)
+                or not isinstance(route["command"], list)
+                or not route["command"]
+                or len(route["command"]) > 32
+                or any(not isinstance(v, str) for v in route["command"])
+            ):
+                raise ValueError("Invalid explicit SSH route")
     return value
 
 
