@@ -8,7 +8,16 @@ The installed agent can create rooms/peers and delegate using ordinary tools.
 See [PERSISTENT_AGENTS.md](PERSISTENT_AGENTS.md) for the operating model,
 authentication, context migration and end-state acceptance. Native LAX remains
 the execution engine: model, commands, plans, questions, approvals and activity
-use the maintained upstream runtime without requiring its TUI.
+use the LAX-owned native runtime without requiring a TUI.
+
+Peer deliveries use the native hollywood/agentMessage API and remain
+agent-authored model input. Human deliveries retain human provenance. The
+installed LAX contract and Hollywood tools are selected together; upstream local
+subagent backends are disabled for this runtime. Canonical packaging supports the
+standalone headless app-server entrypoint as well as retained CLI packages.
+The focused native integration checks the actual mock-provider input, tool
+inventory and model-switch behavior; it does not establish live model cooperation
+or complete enterprise readiness.
 
 The LAX package provides:
 - lax-connect: deterministic resident agent or original-operation reconciliation.

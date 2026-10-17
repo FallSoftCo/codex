@@ -1,4 +1,9 @@
 Codex capabilities overlapping Losangelex and Hollywood
+
+> Historical source audit. Its architecture recommendations are superseded by
+> [the LAX fork contract](FORK_CONTRACT.md), adopted 2026-10-17. Retained source
+> findings and test receipts are evidence for their recorded revisions, not proof
+> of the current Hollywood-native system.
 ======================================================
 
 Comparison: upstream `44d76c6a6dd04fa2efc302b906ac8774267a1272` (July 23, 2026), the legacy fork's merge base, to `f8ab57359dde6b6d5de1aee613c18fe60b661aeb` (September 10). Dates below are upstream commit dates. This is a source and test inspection, not a claim that every feature is enabled in every distributed client or has been exercised in Losangelex.

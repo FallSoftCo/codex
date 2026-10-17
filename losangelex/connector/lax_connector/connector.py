@@ -29,6 +29,7 @@ from .execution_lifecycle import ExecutionLifecycle
 from .effects import Effects
 from .journal import ExecutionJournals, saved
 from .native_controls import NativeControls
+from .native_contract import BASE_INSTRUCTIONS as LAX_BASE_INSTRUCTIONS
 from .native_policy import NativeToolPolicyUnavailable
 from .native_policy import normalized as normalize_tool_policy
 from .native_policy import verify as verify_tool_policy
@@ -280,10 +281,6 @@ class Connector:
             raise
         self.effects.after(marker, result=result)
         return result
-
-    def native_child_admission_available(self):
-        from .collaboration_bridge import IMPLEMENTED_PORTS
-        return "native-child-admission" in IMPLEMENTED_PORTS
 
     async def _http(self, method, path, payload=None):
         headers = {"Authorization": "Bearer " + self.config["token"]}
@@ -1189,7 +1186,7 @@ class Connector:
                 self.work_briefing = None
                 briefing = await self.briefing()
                 # Only references enter privileged application context. Bodies
-                # arrive through a tool read or the peer tool-output envelope.
+                # arrive through a tool read or native agent-authored input.
                 self.role_context.value["workBriefing"] = {
                     "schema": briefing["schema"],
                     "asOfSequence": briefing["asOfSequence"],
@@ -1286,14 +1283,17 @@ class Connector:
                     "sandbox": self.config.get("sandbox", "danger-full-access"),
                     "approvalPolicy": self.config.get("approvalPolicy", "never"),
                     "model": self.config["model"],
+                    "baseInstructions": LAX_BASE_INSTRUCTIONS,
                     "developerInstructions": self.config["instructions"] + PARTICIPATION,
                     "config": {
                         "features.goal_external_admission": True,
                         "features.goal_external_lifecycle": external_lifecycle,
                         "tools.update_plan.enabled": True,
-                        # No local/hidden child fallback: native shared children require a real admitted port.
-                        "features.multi_agent": self.native_child_admission_available(),
-                        "features.multi_agent_v2": self.native_child_admission_available(),
+                        # Native peers use Hollywood tools, never the upstream
+                        # local parent/child backend, including on saved V2 history.
+                        "agents.enabled": False,
+                        "features.multi_agent": False,
+                        "features.multi_agent_v2": False,
                         "model_reasoning_effort": self.config["effort"],
                     },
                 }
@@ -1401,36 +1401,17 @@ class Connector:
                 if fresh["delivery"]["state"] != "claimed":
                     raise RuntimeError("Delivery state changed before native admission")
                 await self.executor.require_live()
-                params = {
-                    "threadId": self.thread,
-                    "model": self.config["model"],
-                    "effort": self.config["effort"],
-                    "input": [],
-                    "additionalContext": self.role_context.additional_context(),
-                }
-                if request["data"].get("authorKind") == "human":
-                    params.update(
-                        input=[{"type": "text", "text": request["body"]}],
-                        clientUserMessageId="hollywood-v3-" + request["id"],
-                    )
-                else:
-                    params["toolOutput"] = {
-                        "name": "room_message",
-                        "namespace": "hollywood",
-                        "output": json.dumps(
-                            {
-                                "roomId": request["room"],
-                                "requestId": request["id"],
-                                "author": request["author"],
-                                "sourceEventId": request["source"],
-                                "body": request["body"],
-                                "workBriefing": self.work_briefing,
-                                "causalTaskContext": self.causal_task_context,
-                            }
-                        ),
-                        "retain": True,
-                    }
-                result = await self.rpc.call("turn/start", params)
+                from .native_input import submission
+
+                method, params = submission(
+                    self.config["agentId"],
+                    self.active,
+                    self.thread,
+                    self.config["model"],
+                    self.config["effort"],
+                    self.role_context.additional_context(),
+                )
+                result = await self.rpc.call(method, params)
                 turn_id = result["turn"]["id"]
                 saved(
                     journal,

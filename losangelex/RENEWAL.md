@@ -1,4 +1,9 @@
 Losangelex renewal investigation, 2026-09-10
+
+> Historical source audit. Its architecture recommendations are superseded by
+> [the LAX fork contract](FORK_CONTRACT.md), adopted 2026-10-17. Retained source
+> findings and test receipts are evidence for their recorded revisions, not proof
+> of the current Hollywood-native system.
 =========================================
 
 Implementation update: the [shared Hollywood room](ROOM.md) now runs on this pinned upstream baseline with terminal and Android clients. [Captured evidence](evidence/README.md) covers real model coordination, session continuity and Android notifications. The comparisons below remain the original source audit; a general productivity benchmark is still outstanding.

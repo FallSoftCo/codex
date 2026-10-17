@@ -99,8 +99,15 @@ impl Session {
             };
             ModelInstructionsState::for_incremental_tools(&model_info.slug, instructions)
         } else {
-            let model_instructions = render_current_instructions();
-            let base_instructions = self.get_prompt_base_instructions().await.text;
+            let base = self.get_prompt_base_instructions().await;
+            // An installed harness contract belongs to the session, not the
+            // selected model's catalog. Preserve it on ordinary-window switches,
+            // just as incremental windows already do.
+            let model_instructions = match base.provenance {
+                Some(BaseInstructionsProvenance::Model { .. }) => render_current_instructions(),
+                Some(BaseInstructionsProvenance::Custom) | None => base.text.clone(),
+            };
+            let base_instructions = base.text;
             let previous_model = {
                 let state = self.state.lock().await;
                 state

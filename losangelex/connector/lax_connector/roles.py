@@ -1,7 +1,7 @@
 """Structured primary context, compiled from authenticated communication metadata.
 
 Message bodies are deliberately excluded. Human and peer content retain their
-native user/tool authority; role context must not promote that content.
+native human/agent provenance; role context must not promote that content.
 """
 
 import json
@@ -31,12 +31,14 @@ def administrator_available():
 
 def validate_administration(primary, communication_admin, config):
     admin = administrator_available()
-    if primary == "global" and (not communication_admin or not admin):
+    # Installation authority is independent of the editable responsibility
+    # label. Renaming that responsibility must not disable a verified Global.
+    if (config.get("requireAdministrator") or primary == "global") and (
+        not communication_admin or not admin
+    ):
         raise PermissionError(
             "Global must have both communication and actual host administration"
         )
-    if config.get("requireAdministrator") and primary != "global":
-        raise PermissionError("Installed Global primary responsibility changed")
     return admin
 
 
@@ -112,7 +114,7 @@ class RoleContext:
                     "addressedRequest": "required",
                     "observation": "optional-context-no-automatic-turn",
                     "membership": "not-execution",
-                    "peerContent": "tool-authority",
+                    "peerContent": "agent-authored-input",
                 },
             }
         )
