@@ -357,3 +357,74 @@ an explicit drained upgrade. This source change performs no live installation.
 ### Goals keep their own room scope
 
 With the canonical-goal-origins/v1 Hollywood implementation, native hollywood_goal_create accepts optional roomId and publishScopedIntent. The default retains the current request room and original wire. A different room requires explicit publishScopedIntent=true; Hollywood atomically records selected room-local planning intent and the Goal without creating a self-request or waking another model. Authenticated agent-origin planning does not claim a human ancestor or acquire external-effect permissions. The original room must remain room-visible; direct/private origin sharing retains its existing boundary. This chooses Goal collaboration scope and never replaces the agent context or grants anyone Global-room access.
+
+
+## Immutable software release transition (dev49)
+
+The reviewed release path is distinct from the legacy same-path image approval.
+Prepare a NEW root-owned release tree containing the complete canonical native
+package and installed connector interpreter/modules. Keep the previous tree
+unchanged. Every release entry is hashed; file symlinks also pin their protected
+resolved targets. External directory links, writable entries, nested old/new
+release roots and ambiguous executable paths are refused. Inspection is bounded
+to 20000 entries and 4GiB. Existing protected OS dependencies remain part of the
+host baseline; this does not snapshot the OS.
+
+Use a root-private review JSON with the exact current values:
+expectedEnrollment (canonical enrollment digest), expectedConfigurationSha256
+(raw connector.json SHA256), expectedDefinition (raw installed unit SHA256),
+oldReleaseRoot, newReleaseRoot, oldBinary, newBinary, oldInterpreter and
+newInterpreter. Inspect the current config/unit/enrollment separately; historical
+provisioning paths can differ. The old enrolled image must still match its
+recorded physical identity. Original provisioning intents/receipts are retained.
+
+    lax-service --authority A --host H --agent X \
+      --prepare-release /run/owned-release/review.json \
+      --output /run/owned-release/prepared
+
+Preparation starts only bounded no-model package/helper and connector-import
+probes as the actual NSS service UID. It writes no live configuration or unit.
+The root-private release-plan.json contains exact before/after bytes and complete
+closure/probe hashes; it includes credentials already in that agent's config and
+must stay private. Review the returned preparationDigest and exact two changes:
+connector.json.binary and the interpreter in the existing connector ExecStart.
+All other config and unit bytes, file modes/owners, model/effort, execution
+profile, permissions, private physical home/work/state/codex-home and canonical
+identity are preserved.
+
+Root deliberately pauses admission, independently settles/drains original
+executors, journals and permits, and stops the existing consumer/guardian. Old
+guardian PID/start and descendant groups must be conclusively absent. Keep
+placement disabled and privileged concurrent changes excluded through activation.
+
+    lax-service --authority A --host H --agent X \
+      --approve-release /run/owned-release/prepared \
+      --expected-preparation-sha256 PREPARATION_DIGEST
+
+This uses the existing protected registry and connector locks and image intent
+namespace. It archives original enrollment, records an immutable intent before
+publishing config, unit, enrollment, accepted image index and software pointer.
+An accepted release overlay supplies current binary/interpreter paths to service
+inspection and original-provisioning inspection; original provisioning receipts
+are never rewritten. The result is metadata acceptance with executionReady=false.
+No daemon reload, start, enable, admission or model/task replay occurs.
+
+    lax-service --authority A --host H --agent X --release-status
+    lax-service --authority A --host H --agent X \
+      --release-status --operation-id ORIGINAL_OPERATION
+    lax-service --authority A --host H --agent X \
+      --reconcile-release ORIGINAL_OPERATION \
+      --expected-intent-sha256 ORIGINAL_INTENT_DIGEST
+
+Status reports original stages and observed/expected hashes without raw config
+or fabricated tool results. Explicit reconciliation may finish only the exact
+established prefix of already reviewed metadata under fresh drain/closure checks.
+Unknown bytes, non-prefix publication, changed paths/helpers/journals or another
+unsettled transition remain held. Legacy uncertain image intents are reported
+held for original-effect review, never replayed.
+
+Root separately reloads systemd, starts/registers the managed service, explicitly
+renews restart approval using status.restartReview and the old policy digest,
+then resumes placement after canary qualification. Restart approvals are not
+changed by release approval. Rollback requires a new preparation with inverse
+old/new paths after independent drain; no database rewind or history rewrite.
