@@ -112,9 +112,9 @@ def inspect(authority, host, agent):
             require_settled_transition(fd)
     except (ValueError, BlockingIOError):
         return {**result, "ready": False, "reason": "native-image-transition-held"}
-    from .service_memory import approved_spec
+    from .native_release import runtime_spec
 
-    spec, _, _ = approved_spec(authority, agent)
+    spec, _, _ = runtime_spec(authority, agent)
     if spec.get("automaticRestartRegistration") and not restart_policy["enabled"]:
         return {
             **result,
@@ -160,6 +160,13 @@ def main():
         action="store_true",
         help="Approve a disabled, stopped, drained exact image; grants no readiness",
     )
+    actions.add_argument("--prepare-release", type=Path)
+    actions.add_argument("--approve-release", type=Path)
+    actions.add_argument("--release-status", action="store_true")
+    actions.add_argument("--reconcile-release")
+    parser.add_argument("--expected-preparation-sha256")
+    parser.add_argument("--expected-intent-sha256")
+    parser.add_argument("--operation-id")
     parser.add_argument("--expected-image-sha256")
     parser.add_argument("--expected-enrollment")
     parser.add_argument("--expected-definition")
@@ -167,6 +174,44 @@ def main():
     parser.add_argument("--expected-restart-policy")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    release_action = args.prepare_release or args.approve_release or args.release_status or args.reconcile_release
+    if release_action:
+        if any((args.expected_image_sha256, args.expected_enrollment, args.expected_definition,
+                args.expected_configuration_sha256, args.expected_restart_policy)):
+            parser.error("Release review uses the exact protected preparation, not legacy image arguments")
+        if args.prepare_release:
+            if not args.output or args.expected_preparation_sha256 or args.expected_intent_sha256 or args.operation_id:
+                parser.error("Release preparation requires only --output")
+            from .native_release import prepare
+            result = prepare(args.authority, args.host, args.agent,
+                             observer.protected(args.prepare_release), args.output)
+        elif args.approve_release:
+            if not args.expected_preparation_sha256 or args.output or args.expected_intent_sha256 or args.operation_id:
+                parser.error("Release approval requires only --expected-preparation-sha256")
+            from .native_release_transition import approve
+            result = approve(args.authority, args.host, args.agent,
+                             args.approve_release, args.expected_preparation_sha256)
+        else:
+            import re
+            operation = args.reconcile_release or args.operation_id
+            if operation and not re.fullmatch(r"[a-f0-9]{64}", operation):
+                parser.error("Original release operation must be an exact digest")
+            if args.output or args.expected_preparation_sha256 or args.operation_id and args.reconcile_release:
+                parser.error("Release inspection/reconciliation options differ")
+            from .native_release_transition import status, reconcile
+            if args.reconcile_release:
+                if not args.expected_intent_sha256:
+                    parser.error("Reconciliation requires --expected-intent-sha256")
+                result = reconcile(args.authority, args.host, args.agent,
+                                   operation, args.expected_intent_sha256)
+            else:
+                if args.expected_intent_sha256:
+                    parser.error("Inspection does not accept a reconciliation digest")
+                result = status(args.authority, args.host, args.agent, operation)
+        print(json.dumps(result))
+        return
+    if args.expected_preparation_sha256 or args.expected_intent_sha256 or args.operation_id:
+        parser.error("Release digest/operation options require a release action")
     reviewed = (
         args.approve_drained_upgrade
         or args.approve_image_upgrade

@@ -129,18 +129,29 @@ def inspect_completed(spec):
     profile = (policy or receipt).get("executionProfile", "restricted")
     expected = expected_configuration(spec, authority, agent, home, profile)
     config = json.loads(config_file.read_text())
-    checked_configuration = config if policy else expected
+    from .native_release import runtime_spec, CURRENT
+    from .service_observer import directory
+    release_file = directory(authority, spec["hostId"], agent) / CURRENT
+    software = protected(release_file) if release_file.exists() else None
+    if software:
+        import base64
+        runtime_spec(authority, agent)  # Verify immutable original provisioning/acceptance.
+        if config_file.read_bytes() != base64.b64decode(software["targets"][0]["after"], validate=True):
+            raise ValueError("Accepted release configuration differs")
+    checked_configuration = config if policy or software else expected
     if policy and any(config.get(key) != expected.get(key) for key in ("agentId", "hostId", "state", "workspace", "codexHome", "sandbox")):
         raise ValueError("Execution policy changed worker identity or execution scope")
     config_digest = hashlib.sha256(json.dumps(checked_configuration, sort_keys=True).encode()).hexdigest()
-    if config != checked_configuration or (policy or receipt).get("configurationDigest") != config_digest:
+    if config != checked_configuration or (not software and (policy or receipt).get("configurationDigest") != config_digest):
         raise ValueError("Original worker configuration differs")
     unit_file = Path("/etc/systemd/system") / (unit + ".service")
     info = unit_file.lstat()
-    content = unit_file.read_text() if policy else expected_unit(spec, agent, user, home, profile)
+    content = unit_file.read_text() if policy or software else expected_unit(spec, agent, user, home, profile)
     if unit_file.is_symlink() or info.st_uid != 0 or info.st_mode & 0o022:
         raise ValueError("Worker service is not administrator protected")
-    if unit_file.read_text() != content or (policy or receipt).get("unitDigest") != hashlib.sha256(content.encode()).hexdigest():
+    enrollment = protected(directory(authority, spec["hostId"], agent) / "enrollment.json") if software else None
+    expected_unit_digest = enrollment["unitDefinitionDigest"] if software else (policy or receipt).get("unitDigest")
+    if unit_file.read_text() != content or expected_unit_digest != hashlib.sha256(content.encode()).hexdigest():
         raise ValueError("Original worker service definition differs")
     current = {}
     for name in ("ActiveState", "UnitFileState", "MainPID"):

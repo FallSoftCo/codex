@@ -129,7 +129,9 @@ def provision(spec):
             or account.pw_dir != receipt["home"]
         ):
             raise ValueError("Existing Global installation identity changed")
-        package = preflight_as_owner(spec["binary"], spec["interpreter"], account.pw_uid, Path(receipt["home"]))
+        from .native_release import runtime_spec
+        software, _, _ = runtime_spec(identity, receipt["agentId"])
+        package = preflight_as_owner(software["binary"], software["interpreter"], account.pw_uid, Path(receipt["home"]))
         return {**receipt, "reconciled": True, "modelOrServiceRestarted": False,
                 "nativePackage": package}
     home = state / "global"

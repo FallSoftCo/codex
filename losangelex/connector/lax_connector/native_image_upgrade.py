@@ -152,7 +152,7 @@ def require_settled_transition(fd, *, check_image=True):
                 "Original native image transition requires explicit reconciliation"
             ) from None
         if (
-            intent.get("schema") != "lax-native-image-upgrade/v1"
+            intent.get("schema") not in {"lax-native-image-upgrade/v1", "lax-native-release-upgrade/v1"}
             or intent.get("state") != "intent"
             or accepted != {**intent, "state": "accepted"}
         ):
@@ -162,7 +162,7 @@ def require_settled_transition(fd, *, check_image=True):
     except FileNotFoundError:
         return
     if (
-        current.get("schema") != "lax-native-image-upgrade/v1"
+        current.get("schema") not in {"lax-native-image-upgrade/v1", "lax-native-release-upgrade/v1"}
         or current.get("state") != "accepted"
     ):
         raise ValueError(
@@ -184,6 +184,12 @@ def require_settled_transition(fd, *, check_image=True):
         raise ValueError(
             "Accepted native image transition no longer matches enrollment"
         )
+    if current.get("schema") == "lax-native-release-upgrade/v1":
+        from .native_release import CURRENT
+        if _json(fd, CURRENT) != current:
+            raise ValueError("Accepted release software publication requires reconciliation")
+        from .native_release_transition import _closure_identity
+        _closure_identity(current)
     if not check_image:
         return
     parent = _open_directory(Path(approved["binary"]).parent)
@@ -517,7 +523,8 @@ def approve_image_upgrade(
             if global_receipt["agentId"] == agent
             else base / "workers" / agent / "provision-intent.json"
         )
-        spec = observer.protected(intent_path)["spec"]
+        from .native_release import active_spec
+        spec = active_spec(observer.protected(intent_path)["spec"], authority, host, agent)
         package = preflight_as_owner(binary, spec["interpreter"], uid, home)
         if package["assets"]["entrypoint"]["sha256"] != expected_image_sha256:
             raise ValueError("Service-identity package probe saw another native image")

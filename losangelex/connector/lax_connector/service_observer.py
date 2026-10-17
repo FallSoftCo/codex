@@ -69,7 +69,9 @@ def expected_owner(authority, agent):
     global_receipt = protected(base / "global-admin-receipt.json")
     if global_receipt["agentId"] == agent:
         intent = protected(base / "global-admin-intent.json")["spec"]
-        return global_receipt["uid"], Path(global_receipt["home"]), intent["binary"]
+        from .native_release import active_spec
+        software = active_spec(intent, authority, intent["hostId"], agent)
+        return global_receipt["uid"], Path(global_receipt["home"]), software["binary"]
     record = base / "workers" / str(UUID(agent))
     intent = protected(record / "provision-intent.json")["spec"]
     if (intent["authorityId"], intent["agentId"]) != (authority, agent):
@@ -79,7 +81,9 @@ def expected_owner(authority, agent):
     home = record / "home"
     if account.pw_dir != str(home):
         raise PermissionError("Worker account home differs")
-    return account.pw_uid, home, intent["binary"]
+    from .native_release import active_spec
+    software = active_spec(intent, authority, intent["hostId"], agent)
+    return account.pw_uid, home, software["binary"]
 
 
 def installed_unit(authority, agent):
