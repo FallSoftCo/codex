@@ -134,6 +134,8 @@ class Bridge:
         protected_directory(Path(configuration).parent)
         self.config = protected(Path(configuration))
         self.state = protected_directory(self.config["collaborationState"])
+        from .collaboration_upgrade import require_settled_upgrades
+        require_settled_upgrades(self.state)
         protected_directory(self.state / "channels")
         protected_directory(self.state / "commands")
         self.http = lambda method, route, body=None: request(
@@ -210,11 +212,27 @@ class Bridge:
         require(stat.S_ISDIR(info.st_mode) and (info.st_dev, info.st_ino) == (root["device"], root["inode"]), "Registered root handle changed")
         environment_sha = digest({"hostId": root["hostId"], "environmentId": root["environmentId"]})
         identity_sha = digest({"hostId": root["hostId"], "environmentSha256": environment_sha, "device": info.st_dev, "inode": info.st_ino})
-        registry = self.http("GET", "collaboration/physical-targets/" + str(UUID(body["command"]["workId"])))
-        require(registry["workRevision"] == body["command"]["workRevision"], "Current resource work revision changed")
+        if body.get("scope") == "delivery":
+            require(record.get("scope") == "delivery" and record.get("work") is None,
+                    "Captured delivery scope required for direct target observation")
+            registry = self.http("GET", "collaboration/delivery-targets/" + str(UUID(body["source"]["deliveryId"])))
+            require(registry["schema"] == "hollywood-agent-physical-target-registry/v1"
+                    and str(registry["deliveryId"]) == body["source"]["deliveryId"]
+                    and str(registry["principalId"]) == body["source"]["agentId"],
+                    "Direct target registry belongs to another captured execution")
+        else:
+            registry = self.http("GET", "collaboration/physical-targets/" + str(UUID(body["command"]["workId"])))
+            require(registry["workRevision"] == body["command"]["workRevision"], "Current resource work revision changed")
         matches = [row for row in registry["targets"] if str(row["id"]) == root["workspaceId"]]
         require(len(matches) == 1, "Physical root has no current explicit work grant")
         registered = matches[0]
+        if body.get("scope") == "delivery":
+            require(registered["grant_revision"] == root["agentGrantRevision"]
+                    and registered["revision"] == root["registryRevision"]
+                    and registered["state"] == "active" and registered["grant_state"] == "active"
+                    and registered["can_read"] is True and registered["can_write"] is True
+                    and str(registered["execution_host"]) == self.config["hostId"],
+                    "Captured agent resource authority/revision changed")
         require(registered["root_path"] == root["root"] and str(registered["host"]) == root["hostId"]
                 and registered["environment_sha256"] == environment_sha and registered["root_identity_sha256"] == identity_sha,
                 "Server registration differs from independently observed physical root/environment")
@@ -237,7 +255,14 @@ class Bridge:
                 "executorId": record["executorId"], "descriptorDigest": record["descriptorDigest"],
                 "serviceBindingDigest": record["serviceBindingDigest"], "channel": "captured-app-server-rpc/v1",
                 "command": command}
+        if port in PATCH_PORTS and record.get("scope") == "delivery":
+            from .delivery_edit import SCHEMA, normalized_envelope
+            route = "collaboration/delivery-edits"
+            body = normalized_envelope({**body, "schema": SCHEMA, "scope": "delivery"})
         body["target"] = self.attestation(record, body, root, paths)
+        if body.get("scope") == "delivery":
+            require(len(json.dumps(body).encode()) <= 16000,
+                    "Delivery edit envelope exceeds exact request bound")
         fingerprint = digest(body)
         path = self.state / "commands" / (digest(operation) + ".json")
         if path.exists():
@@ -265,6 +290,13 @@ class Bridge:
             require(result.get("replayed") is False and result.get("admission", {}).get("mayApply") is True,
                     "Original one-shot mutation grant unavailable")
         return result
+
+    def briefing_sequence(self, record):
+        if self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2":
+            from .owner_briefing import sequence
+            return sequence(self, record)
+        from .delivery_edit import briefing_sequence
+        return briefing_sequence(record)
 
     def plan_pointer(self, record, root):
         return self.state / "commands" / ("plan-" + digest([record["sourceBase"]["agentId"], record["work"]["id"], root["workspaceId"]]) + ".json")
@@ -294,6 +326,10 @@ class Bridge:
 
     def patch(self, record, source, frame):
         require(source["tool"] == "apply_patch" and isinstance(frame["arguments"], str), "Real native apply_patch callback required")
+        if record.get("scope") == "delivery":
+            from .delivery_edit import patch
+            return patch(self, record, source, frame)
+        require(record.get("work"), "Captured structured work required for planned patch semantics")
         root, observed = self.resource(record, frame["evidence"])
         # Stable context IDs are not physical edited-resource IDs. Never silently conflate them.
         pointer = protected(self.plan_pointer(record, root))
@@ -310,20 +346,23 @@ class Bridge:
                     "Native verified patch target differs from consented before/after bytes")
         require(str(plan["plan"]["integrator_work"]) == record["work"]["id"], "Current work is not plan integrator")
         work = record["work"]
-        common = {"planId": str(plan["plan"]["id"]), "planRevision": plan["plan"]["revision"],
-                  "workId": work["id"], "workRevision": work["revision"],
-                  "briefingSequence": work["briefingSequence"], "note": "Actual protected native patch phase",
-                  "patchSha256": hashlib.sha256(frame["arguments"].encode()).hexdigest(),
-                  "sourceRevision": plan["manifest"]["sourceRevision"], "filesObserved": observed}
         phase = frame["port"]
         key = self.state / "commands" / ("permit-" + digest([source["nativeThread"], source["callId"]]) + ".json")
+        original = protected(key) if phase != "patch-preflight" else None
+        sequence = (work["briefingSequence"] if "briefingSequence" in work else self.briefing_sequence(record)) if original is None else original.get("briefingSequence", work.get("briefingSequence"))
+        require(type(sequence) is int and sequence >= 0, "Original planned briefing watermark required")
+        common = {"planId": str(plan["plan"]["id"]), "planRevision": plan["plan"]["revision"],
+                  "workId": work["id"], "workRevision": work["revision"],
+                  "briefingSequence": sequence, "note": "Actual protected native patch phase",
+                  "patchSha256": hashlib.sha256(frame["arguments"].encode()).hexdigest(),
+                  "sourceRevision": plan["manifest"]["sourceRevision"], "filesObserved": observed}
         if phase == "patch-preflight":
             require(not key.exists(), "Original patch already has a permit/unknown outcome")
             command = {**common, "action": "preflight", "permitId": str(uuid5(UUID(record["executorId"]), source["callId"])),
                        "manifestSha256": plan["manifestSha256"], "consentSetDigest": plan["consentSetDigest"], "leaseSeconds": 15}
             result = self.relay(record, source, phase, command, root, [item["relativePath"] for item in observed])
             saved(key, {"schema": "lax-original-patch-permit/v1", "planId": common["planId"], "permitId": command["permitId"],
-                        "permitRevision": 1, "patchSha256": common["patchSha256"], "source": source})
+                        "permitRevision": 1, "briefingSequence": sequence, "patchSha256": common["patchSha256"], "source": source})
             return result
         original = protected(key)
         require(original["source"] == source and original["patchSha256"] == common["patchSha256"], "Original native patch source changed")
@@ -349,6 +388,11 @@ class Bridge:
         require(port in record["ports"], "Native port is not enrolled")
         if port in PATCH_PORTS:
             require(policy.get("patchPermits") is True and policy.get("physicalTargets") is True, "Canonical mutation permits unavailable")
+            if record.get("scope") == "delivery":
+                require(self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2"
+                        and policy.get("deliveryEdits") is True
+                        and policy.get("deliveryEditSchema") == "canonical-delivery-edits/v1",
+                        "Canonical delivery edit protocol unavailable; no legacy fallback")
             result = self.patch(record, source, frame)
         else:
             arguments = frame["arguments"]
@@ -362,7 +406,8 @@ class Bridge:
             else:
                 require(port == "coordination" and source["tool"] == "coordination_act", "Unimplemented canonical native port")
             require(policy.get("physicalTargets") is True and policy["bridge"]["protocol"] == "canonical-edit-plans/v2", "Registered physical-target protocol unavailable")
-            require(command["workId"] == record["work"]["id"], "Native intent differs from captured admitted work")
+            require(record.get("work") is not None and command["workId"] == record["work"]["id"],
+                    "Planned native intent requires captured admitted work; ordinary patches use delivery scope")
             cwd = local_uri(frame["evidence"]["cwd"])
             roots = [root for root in record["resources"] if root["environmentId"] == frame["evidence"]["environmentId"]
                      and cwd.is_relative_to(Path(root["root"]))]
@@ -433,9 +478,15 @@ class Bridge:
                         # Reject unrelated kernel peers before reading any frame bytes.
                         actual = process(peer[0])
                         require(actual and actual["uid"] == peer[1], "Kernel peer incarnation vanished")
+                        owner, capture = None, None
                         if self.config.get("automaticCapture"):
                             from .collaboration_capture import AutomaticCapture
-                            AutomaticCapture(self).peer(peer)
+                            capture = AutomaticCapture(self)
+                            try:
+                                capture.peer(peer)
+                            except Exception:
+                                from .owner_briefing import guardian_peer
+                                owner = guardian_peer(capture, peer)
                         channels = list((self.state / "channels").glob("*.json"))
                         require(len(channels) <= 256, "Protected channel registry exceeds bound")
                         admitted = False
@@ -448,9 +499,13 @@ class Bridge:
                                 admitted = admitted or uid == peer[1]
                         require(admitted or self.config.get("automaticCapture"), "Peer has no protected captured native process registration")
                         size = struct.unpack("!I", receive(connection, 4))[0]
-                        require(0 < size <= FRAME_LIMIT, "Native frame bound exceeded")
+                        require(0 < size <= (65536 if owner is not None else FRAME_LIMIT), "Native frame bound exceeded")
                         frame = strict_json(receive(connection, size))
-                        response = self.handle(peer, frame)
+                        if owner is not None:
+                            from .owner_briefing import carry
+                            response = carry(capture, peer, frame, owner)
+                        else:
+                            response = self.handle(peer, frame)
                     except Exception as error:
                         response = {"success": False, "result": None, "canonicalReceipt": None, "holdReason": str(error)[:500]}
                     wire = json.dumps(response, separators=(",", ":")).encode()

@@ -49,7 +49,7 @@ async def administer(connector, name, arguments, operation):
 
         if (
             name
-            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room")
+            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource")
             and isinstance(error, HttpFailure)
             and error.status in (400, 403, 409)
         ):
@@ -170,6 +170,13 @@ async def _administer(connector, name, arguments, operation):
                 ]
             })},
         )
+    if name == "hollywood_grant_resource":
+        workspace, agent, host = [str(UUID(arguments[key])) for key in ("workspaceId", "agentId", "executionHost")]
+        return await connector.http(
+            "PUT", "physical-workspaces/" + workspace + "/agent-grants/" + agent,
+            {"operationId": operation + ":admin:resource-grant", "executionHost": host,
+             **{key: arguments[key] for key in ("revision", "workspaceRevision", "state", "canRead", "canWrite")}},
+        )
     if name == "lax_provision_worker":
         if not connector.role_context.value["hostAdministrationVerified"]:
             raise PermissionError("Host administration not verified")
@@ -212,6 +219,8 @@ async def _administer(connector, name, arguments, operation):
             "model": connector.config["model"],
             "effort": connector.config["effort"],
         }
+        if connector.config.get("nativeCollaborationChannel"):
+            spec["nativeCollaborationChannel"] = connector.config["nativeCollaborationChannel"]
         path = connector.state / ("worker-provision-" + agent + ".json")
         if path.exists() and json.loads(path.read_text()) != spec:
             raise ValueError(

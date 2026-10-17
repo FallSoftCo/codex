@@ -137,11 +137,11 @@ class AutomaticCapture:
         self.config, self.state = bridge.config, bridge.state
         self.policy = self.config["automaticCapture"]
         require(
-            self.policy["schema"] == "lax-automatic-native-capture/v1",
+            self.policy["schema"] in {"lax-automatic-native-capture/v1", "lax-automatic-native-capture/v2"},
             "Protected automatic capture policy required",
         )
         require(
-            1 <= len(self.policy["agents"]) <= 32
+            (self.policy["schema"] == "lax-automatic-native-capture/v2" or 1 <= len(self.policy["agents"]) <= 32)
             and 1 <= len(self.policy["resources"]) <= 8,
             "Bounded installed capture policy required",
         )
@@ -309,6 +309,9 @@ class AutomaticCapture:
                 and policy["bridge"]["protocol"] == "canonical-edit-plans/v2",
                 "Current protected physical collaboration enrollment required",
             )
+            if self.policy["schema"] == "lax-automatic-native-capture/v2":
+                from .request_capture import ensure
+                return ensure(self, base, snapshot, row, native, fact, policy, path)
             work_id = event.get("data", {}).get("workId")
             require(
                 work_id,

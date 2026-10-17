@@ -1,12 +1,13 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev43`. Its installer and automatic
+The candidate connector is version `0.1.0.dev44`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
 
 The enrolled host-controller credential relays native operations. A separate
-administrator credential registers physical roots and grants existing work.
+administrator credential registers physical roots and canonical per-agent access.
+Structured assignments additionally retain their existing work grants.
 Neither credential enters the native descriptor, model arguments or model
 context. The bridge authenticates the exact native process and independently
 observed service incarnation before consuming frame bytes, then derives the
@@ -83,7 +84,7 @@ in chat or in the policy example below.
   "controllerConfig": "/protected/host/controller.json",
   "administratorConfig": "/protected/host/administrator.json",
   "interpreter": "/protected/runtime/bin/python",
-  "resources": [{"name": "shared", "root": "/absolute/full-git-checkout", "environmentId": "local"}],
+  "resources": [{"name": "shared", "root": "/absolute/approved-resource", "environmentId": "local"}],
   "agents": {
     "<existing-agent-UUID>": {"resources": ["shared"], "defaultResource": "shared"}
   }
@@ -124,34 +125,115 @@ this descriptor without editing a worker's private configuration. For an
 isolated custom descriptor path, an explicitly configured
 `nativeCollaborationChannel` remains supported.
 
-The host observer proactively captures running native turns. The first native
-IPC also performs protected capture, so an operator does not seed per-turn
-identity, source or resource grants. The actual canonical running delivery,
-claim, generation, native thread/turn, current role and persistent execution
-binding must agree. Root grants only that already-admitted owned work against
-the named installation roots; revocation and changed/unknown authority hold.
-Closed original channels are archived only after terminal delivery and stopped
-executor evidence. Unsettled records and original command journals are retained.
+The v2 host observer captures current native turns from canonical delivery and
+per-agent resource grants. An installer seed is reviewed initial access intent,
+not a runtime whitelist: grant/revoke access with `hollywood_grant_resource` using
+exact current workspace and grant CAS revisions. New managed workers inherit an
+explicit custom descriptor path and need no bridge configuration rewrite.
+Root/resource identities, actual local process root view and grant revisions are
+checked again on native IPC. A revoked/changed grant holds an existing channel;
+it never silently replaces that channel's original authority.
+
+The original actor, delivery, claim, generation, native thread/turn, current role
+and persistent context binding must agree. Ordinary source requests have no Work,
+Goal or plan. A request actually carrying workId retains the original planned
+work grant, consent and integrator checks; a caller cannot switch it to delivery
+scope. Closed original channels are archived only after terminal delivery and
+stopped executor evidence. Unsettled channels and command journals are retained.
 
 ## Normal authorized task path
 
-A public room task remains the agent's original obligation. If editing needs
-structured work, the agent uses the existing authorized Hollywood goal/work
-workflow and its separately admitted assignment; it does not invent a captured
-work ID. For that assignment it reads current direction, uses the typed
-collaborative-edit/coordination tools to propose and consent to the intended
-files, then invokes normal native apply_patch. No operator creates its work or
-plan, and the controller does not silently create goals, work, plans or models.
-The original issuer and outcome still need an accountable completion.
+An admitted ordinary room request can use native apply_patch on absolute paths in
+its approved local resource. The captured adapter posts the exported
+`canonical-delivery-edits/v1` preflight/begin/settle envelope. It does not create
+work or a plan. Git is optional: direct regular-file patches explicitly carry
+`sourceRevision: null`, exact before/after hashes and the actual physical target.
+The target action digest covers the normalized complete non-target envelope.
 
-The installation-approved default intent root is distinct from the private
-execution cwd. It selects relative plan/claim intent when cwd is outside the
-registered edit roots. Native patch paths still come from the real selected
-filesystem/PathUri; the bridge checks the actual process root view and exact
-before/after bytes. Only an original one-shot begin grant authorizes mutation;
-receipts/replays never grant a second application. Uncertain effects remain held.
-Model-facing canonical replies are bounded to8192 ASCII bytes without truncation;
-large accepted receipts stay in the original private journal for bounded review.
+Before turn/start, and after an explicit owner briefing read, the actual managed
+connector guardian carries that owner-authenticated briefing's exact scope and
+asOfSequence into the root-protected `briefings` store through the metadata port
+`owner-briefing/v1`. Kernel PID/UID, original managed enrollment/incarnation,
+canonical claim/context and role must match. Native children cannot use this
+metadata source. The bridge cannot impersonate the owner to fetch its briefing;
+v2 never substitutes zero, Work revision, a global head or the owner-writable
+briefing cache. The observed watermark freezes with the original permit. This
+records authenticated observation, not model understanding or full read coverage.
+A metadata gap permits ordinary reads/commands while editing remains held.
+
+A structured assignment still uses typed plan/coordination intent and the
+existing planned mutation protocol. The installation's defaultResource is only
+reviewed intended metadata in `agent-access-seeds.json`. Backend b02b1ff/schema27
+has no explicit canonical default selector or bounded native resource catalog.
+This candidate does not infer a first/sole grant or treat that seed as a live
+default. Relative planned intent from a private execution cwd therefore holds
+until the separately owned additive backend/default integration is supplied.
+Absolute native patch paths must already resolve into an approved physical root;
+context/thread/cwd are not relocated to make that happen.
+
+Both paths share the server's existing physical path/permit conflict domain.
+Only the original non-replayed one-shot begin response permits application.
+A lost begin is inspected through the original command receipt; a recovered
+receipt never supplies a second grant. Cancellation, unknown outcomes and held
+permits retain their locks. Direct GET uses effectiveState, never raw permit
+state, to judge settlement. Model-facing replies retain the existing 8192-byte
+bound. The wire requires explicit deliveryEdits capability and exact schema;
+there is no legacy mutation fallback.
+
+## Existing bridge: reviewed drained upgrade
+
+Fresh `--apply` deliberately refuses changed installed artifacts. Use a new
+immutable preparation for the reviewed dev44 adapter, then inspect the actual
+original files and canonical bridge revision. Keep the original setup receipt.
+The upgrade preserves the same authority, host, machine, credential, socket,
+state directory and actual physical root inodes. List every affected consumer;
+existing channel owners and all protected services on that host must be included.
+No unrelated authority or consumer is changed.
+
+Disable the scoped placements, settle original effects, and stop the scoped
+consumers, host controller and bridge through Root's admitted orchestration.
+The upgrader requires disabled/no-busy/no-pending agent placements, no nonstopped
+canonical host executors, stopped/empty consumer and bridge cgroups, exclusive
+connector and protected service registry locks, settled read-only execution/tool
+journals and settled bridge permits. It changes no placement or service state.
+Privileged concurrent placement/configuration changes must remain excluded by
+that orchestration; this local operation is not a server admission lease.
+
+```sh
+lax-collaboration --upgrade /run/owned-setup/prepared \
+  --expected-bridge-revision 7 \
+  --controller-unit <installed-controller.service> \
+  --expected-controller-unit-sha256 <SHA256-of-installed-controller-unit-bytes> \
+  --expected-config-sha256 <SHA256-of-installed-bridge.json-bytes> \
+  --expected-unit-sha256 <SHA256-of-installed-unit-bytes> \
+  --expected-descriptor-sha256 <SHA256-of-installed-channel.json-bytes> \
+  --scope-agent-id <first-consumer-UUID> \
+  --scope-agent-id <second-consumer-UUID>
+```
+
+The revision and hashes above are examples/placeholders; use the inspected
+original values. Under `state/upgrades/<operation>-before`, it durably archives
+original config, unit, descriptor and setup receipt before an immutable intent
+and one canonical bridge CAS. That administrative PUT uses original-operation
+receipt recovery and is never repeated on an uncertain response. Repeated drain
+and artifact checks precede local replacement. Old channel/command/permit and
+administrative records are preserved; seed grants have stable original operation
+identities. An accepted result requires separate Root-controlled adapter rollout,
+daemon reload, controller/bridge start and native qualification. No startup,
+reload, model call or native rebuild occurs inside preparation/upgrade.
+
+An interrupted intent holds subsequent upgrades **and bridge startup**, including
+an interruption after canonical acceptance but before local publication. Do not
+remove it or retry apply to bypass the hold. Inspect its exact archive, original
+administration journal and `GET administration/commands/{operationId}`, plus the
+current canonical bridge and actual artifacts. Unknown receipts remain held.
+Recovery/rollback is an explicitly reviewed original-effect transition: reconcile
+the exact accepted original revision first, retain its immutable evidence, and
+prepare a new fenced inverse CAS/local restoration if rollback is required. The
+upgrader intentionally provides no automatic resume or rollback that might
+repeat an unknown effect. A transition interrupted here needs that separately
+reviewed recovery before activation; the happy-path fixture is not recovery or
+installed-runtime acceptance.
 
 ## Continuation and qualification boundaries
 
@@ -168,10 +250,10 @@ continuation claim.
 Runtime acceptance still needs an ordinary authorized room task that edits,
 runs and reports through the actual installed candidate, followed by genuine
 same-root collaboration and accountable continuation among the existing owners.
-Root owns those tests and deployment orchestration. The current ports support
-local regular files in full Git checkouts. Linked-worktree external Git metadata,
-nongit roots, remote/directory mutations and enterprise native child admission
-remain unavailable. Arbitrary shell writes remain a cooperative boundary, not a
+Root owns those tests and deployment orchestration. Direct patches support local regular files with no Git requirement. Planned
+editing retains its full-checkout Git checks. Linked-worktree external Git
+metadata for planned editing, remote/directory mutations and enterprise native
+child admission remain unavailable. Arbitrary shell writes remain a cooperative boundary, not a
 filesystem transaction guarantee. The service/controller setup does not claim a
 durable solution to heavy-command isolation or general enterprise readiness.
 

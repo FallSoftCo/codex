@@ -25,6 +25,7 @@ ADMIN_STAGES = {
     "hollywood_create_room": {"room"},
     "hollywood_set_role": {"role"},
     "hollywood_grant_room": {"membership"},
+    "hollywood_grant_resource": {"resource-grant"},
     "lax_provision_worker": {"placement"},
 }
 
@@ -225,7 +226,7 @@ class Effects:
         return evidence["acceptedResult"]
 
     def completed_administration(self, key, name):
-        if name not in ("hollywood_create_agent", "hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "lax_provision_worker"):
+        if name not in ("hollywood_create_agent", "hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "lax_provision_worker"):
             return None
         operation = "lax-tool:" + key
         path = self.c.state / ("administration-" + hashlib.sha256(operation.encode()).hexdigest() + ".json")

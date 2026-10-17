@@ -57,6 +57,11 @@ def write_original(path, value, mode=0o600):
         file.write(data)
         file.flush()
         os.fsync(file.fileno())
+    directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def adapter_digest():
@@ -206,10 +211,9 @@ def prepare(spec, destination):
             "defaultWorkspaceId": named[default],
         }
     automatic = {
-        "schema": "lax-automatic-native-capture/v1",
+        "schema": "lax-automatic-native-capture/v2",
         "administratorConfig": str(admin_path),
         "resources": resources,
-        "agents": agents,
     }
     bridge = {
         k: controller[k]
@@ -219,7 +223,7 @@ def prepare(spec, destination):
     descriptor = {
         "schema": "lax-native-collaboration-channel/v1",
         "socket": str(socket_directory / "bridge.sock"),
-        "ports": sorted(IMPLEMENTED_PORTS),
+        "ports": sorted(IMPLEMENTED_PORTS | {"owner-briefing/v1"}),
     }
     adapter = adapter_digest()
     bridge["adapterSha256"] = adapter
@@ -272,6 +276,7 @@ def prepare(spec, destination):
             Path(spec.get("unitDirectory", "/etc/systemd/system")) / unit_name
         ),
         "adapterSha256": adapter,
+        "agentAccessSeedsSha256": digest(agents),
         "enrollmentSha256": digest(automatic),
         "descriptorSha256": digest(descriptor),
         "bridgeConfigurationSha256": digest(bridge),
@@ -284,6 +289,7 @@ def prepare(spec, destination):
         ("bridge.prepared.json", bridge),
         ("channel.prepared.json", descriptor),
         ("setup.json", result),
+        ("agent-access-seeds.json", agents),
     ]:
         write_original(out / name, value)
     write_original(out / "bridge.prepared.service", unit.encode())
@@ -304,6 +310,8 @@ def apply(directory):
     bridge = protected(directory / "bridge.prepared.json")
     descriptor = protected(directory / "channel.prepared.json")
     unit = (directory / "bridge.prepared.service").read_bytes()
+    seeds = protected(directory / "agent-access-seeds.json")
+    require(digest(seeds) == manifest["agentAccessSeedsSha256"], "Reviewed agent access seeds changed")
     require(
         (digest(bridge), digest(descriptor), hashlib.sha256(unit).hexdigest())
         == (
@@ -314,7 +322,7 @@ def apply(directory):
         "Reviewed setup artifact changed",
     )
     state = protected_tree(manifest["stateDirectory"], 0o700)
-    for name in ("channels", "channels/archive", "commands", "administration"):
+    for name in ("channels", "channels/archive", "commands", "administration", "briefings"):
         protected_tree(state / name, 0o700)
     runtime = protected_tree(manifest["runtimeDirectory"], 0o755)
     sockets = protected_tree(manifest["socketDirectory"], 0o755)
@@ -400,6 +408,15 @@ def apply(directory):
             payload,
         )
         resources.append({**root, "registryRevision": result["workspace"]["revision"]})
+    by_workspace = {root["workspaceId"]: root for root in resources}
+    for agent, policy in seeds.items():
+        for workspace in policy["workspaceIds"]:
+            root = by_workspace[workspace]
+            payload = {"operationId": "install-agent-access:" + digest([agent, workspace, root["registryRevision"]]),
+                       "revision": 0, "workspaceRevision": root["registryRevision"],
+                       "executionHost": host, "state": "active", "canRead": True, "canWrite": True}
+            administrative_put(state, administrative,
+                "physical-workspaces/" + workspace + "/agent-grants/" + str(UUID(agent)), payload)
     bridge["automaticCapture"]["resources"] = resources
     write_original(Path(manifest["configPath"]), bridge)
     write_original(runtime / "channel.json", descriptor, 0o644)
@@ -444,8 +461,30 @@ def main():
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--prepare", type=Path)
     actions.add_argument("--apply", type=Path)
+    actions.add_argument("--upgrade", type=Path)
+    parser.add_argument("--expected-bridge-revision", type=int)
+    parser.add_argument("--expected-config-sha256")
+    parser.add_argument("--expected-unit-sha256")
+    parser.add_argument("--expected-descriptor-sha256")
+    parser.add_argument("--controller-unit")
+    parser.add_argument("--expected-controller-unit-sha256")
+    parser.add_argument("--scope-agent-id", action="append", default=[])
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    upgrade_args = [args.expected_bridge_revision, args.expected_config_sha256,
+                    args.expected_unit_sha256, args.expected_descriptor_sha256,
+                    args.controller_unit, args.expected_controller_unit_sha256]
+    if args.upgrade:
+        if not all(upgrade_args) or not args.scope_agent_id or args.output:
+            parser.error("Upgrade requires original bridge/config/unit/descriptor CAS values and explicit --scope-agent-id; no output")
+        from .collaboration_upgrade import upgrade
+        print(json.dumps(upgrade(args.upgrade, expected_revision=args.expected_bridge_revision,
+              expected_config_sha256=args.expected_config_sha256, expected_unit_sha256=args.expected_unit_sha256,
+              expected_descriptor_sha256=args.expected_descriptor_sha256,
+              controller_unit=args.controller_unit, expected_controller_unit_sha256=args.expected_controller_unit_sha256, agents=args.scope_agent_id)))
+        return
+    if any(value is not None for value in upgrade_args) or args.scope_agent_id:
+        parser.error("Upgrade CAS/scope options require --upgrade")
     if args.prepare:
         parser.error(
             "--output required for immutable reviewed preparation"

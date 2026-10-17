@@ -200,6 +200,18 @@ TOOLS += [
 ]
 
 
+TOOLS.append(spec(
+    "hollywood_grant_resource",
+    "Administrator: revise canonical access to an already registered physical resource for an enrolled placed agent. Inspect current resource/grant revisions first; absent grants deny access. Metadata grants do not change Unix permissions, admit a turn, or start a service.",
+    {"workspaceId": STRING, "agentId": STRING, "executionHost": STRING,
+     "revision": {"type": "integer", "minimum": 0},
+     "workspaceRevision": {"type": "integer", "minimum": 1},
+     "state": {"type": "string", "enum": ["active", "revoked"]},
+     "canRead": {"type": "boolean"}, "canWrite": {"type": "boolean"}},
+    ["workspaceId", "agentId", "executionHost", "revision", "workspaceRevision", "state", "canRead", "canWrite"],
+))
+
+
 TOOLS += workflow_definitions(spec)
 
 
@@ -332,6 +344,9 @@ class Connector:
         if target == self.active["delivery"]["id"]:
             self.work_briefing = value
         saved(self.state / ("briefing-" + target + "-" + str(value["asOfSequence"]) + ".json"), value)
+        if target == self.active["delivery"]["id"] and getattr(self, "owner_briefing_delivery", None) == target:
+            from .owner_briefing import publish
+            await publish(self, value)
         return value
 
     async def event(self, method, params):
@@ -530,6 +545,7 @@ class Connector:
                 "hollywood_create_room",
                 "hollywood_set_role",
                 "hollywood_grant_room",
+                "hollywood_grant_resource",
                 "lax_provision_worker",
             ):
                 value = await administer(self, name, arguments, operation)
@@ -1106,6 +1122,7 @@ class Connector:
         self.executor = None
         self.goal_binding = None
         self.agent_binding = None
+        self.owner_briefing_delivery = None
         self.goal_progress_task = None
         self.goal_progress_closing = False
         self.cancel_requested = False
@@ -1321,6 +1338,9 @@ class Connector:
                     },
                 )
                 await self.agent_context.bind()
+                self.owner_briefing_delivery = self.active["delivery"]["id"]
+                from .owner_briefing import publish as publish_owner_briefing
+                await publish_owner_briefing(self, self.work_briefing)
                 # Thread was normally loaded above; observation never starts it.
                 self.passive_receiver = None
                 self.passive_readback = None

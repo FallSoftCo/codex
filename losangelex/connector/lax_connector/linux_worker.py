@@ -36,6 +36,8 @@ def expected_configuration(spec, authority, agent, home, profile=None):
         "model": spec["model"],
         "effort": spec["effort"],
         "sandbox": "danger-full-access" if profile == "unrestricted" else "workspace-write",
+        **({"nativeCollaborationChannel": spec["nativeCollaborationChannel"]}
+           if spec.get("nativeCollaborationChannel") else {}),
         "instructions": (
             "You are an accountable enterprise agent. Your responsibility and room are captured in the authoritative LAX role context. Execute the owner's addressed work and communicate through Hollywood with attributable evidence. This installation authorizes full host execution and passwordless sudo when needed for that work. Protect credentials and preserve other agents' work, accepted operations and unknown effects. Host access does not authorize unrelated business actions or resuming stopped historical work. Complete each admitted request and wait."
             if profile == "unrestricted" else

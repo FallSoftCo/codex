@@ -52,3 +52,11 @@ its historical proofs remain in Git at c8e264cfe5adb27aca6c7fa6134a000fdb59faec.
 They are historical evidence, not the current operating contract. The six-turn
 journey is a bounded one-host proof; it is not physical-phone voice/push,
 second-host migration or autonomous business/revenue qualification.
+
+The dev44 request-editing candidate adds ordinary captured delivery-scoped native
+patches and dynamic canonical per-agent resource grants. See
+[NATIVE_COLLABORATION_SETUP.md](NATIVE_COLLABORATION_SETUP.md) for the protected
+owner briefing projection, exact schema gates and reviewed offline installed
+bridge transition. Structured work retains planned consent semantics. Canonical
+default-selection/resource discovery and actual native runtime acceptance are
+separate outstanding gates; no deployment is implied by this source package.

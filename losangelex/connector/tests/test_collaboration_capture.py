@@ -58,6 +58,7 @@ class CaptureFixture:
         }
         self.config = {"hostId": self.host, "authorityId": self.authority}
         self.policy = {
+            "schema": "lax-automatic-native-capture/v1",
             "agents": {
                 self.agent: {
                     "workspaceIds": [self.resource],
@@ -532,6 +533,8 @@ class InstallerTests(unittest.TestCase):
                 return {"bridge": None}
             if route.endswith("/collaboration-bridge"):
                 return {"bridge": {"revision": 1}}
+            if route.startswith("physical-workspaces/") and "/agent-grants/" in route:
+                return {"grant": {"revision": 1}}
             if "/physical-workspaces/" in route:
                 return {"workspace": {"revision": 1}}
             raise AssertionError(route)
