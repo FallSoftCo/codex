@@ -29,7 +29,7 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
     };
     let observed = responses::mount_sse_sequence(
         &server,
-        vec![response("peer-response"), response("human-response")],
+        vec![response("peer-response"), response("human-response"), response("review-response")],
     )
     .await;
     let home = TempDir::new()?;
@@ -89,7 +89,7 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
     )
     .await??;
     app.start_turn_and_wait_for_completion(TurnStartParams {
-        thread_id: thread.id,
+        thread_id: thread.id.clone(),
         model: Some("mock-model-override".to_string()),
         input: vec![UserInput::Text {
             text: "Now incorporate the review.".to_string(),
@@ -98,8 +98,35 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
         ..Default::default()
     })
     .await?;
+    // Real Hollywood worker-report review events are addressed to their own
+    // owner under the server's bounded lifecycle policy, not a peer self-loop.
+    let review_event = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    let review_body = "Review the newly submitted worker report against the accepted goal.";
+    let _: HollywoodAgentMessageResponse = app
+        .request(|request_id| ClientRequest::HollywoodAgentMessage {
+            request_id,
+            params: HollywoodAgentMessageParams {
+                thread_id: thread.id.clone(),
+                authority_id: authority.to_string(),
+                room_id: room.to_string(),
+                event_id: review_event.to_string(),
+                author_id: recipient.to_string(),
+                recipient_id: recipient.to_string(),
+                body: review_body.to_string(),
+                audience: HollywoodEventAudience::Room,
+                kind: HollywoodEventKind::Request,
+                source_event_id: Some(event.to_string()),
+                expects_reply: false,
+            },
+        })
+        .await?;
+    timeout(
+        std::time::Duration::from_secs(15),
+        app.read_stream_until_notification_message("turn/completed"),
+    )
+    .await??;
     let requests = observed.requests();
-    assert_eq!(requests.len(), 2);
+    assert_eq!(requests.len(), 3);
     let expected = json!({
         "type": "agent_message",
         "author": author,
@@ -118,7 +145,7 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
             }).to_string(),
         }],
     });
-    for request in requests {
+    for (index, request) in requests.iter().enumerate() {
         let request_body = request.body_json();
         let tool_specs = request_body["tools"].to_string();
         assert!(tool_specs.contains("\"name\":\"hollywood_context\""));
@@ -145,10 +172,20 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
             .iter()
             .filter(|item| item["type"] == "agent_message")
             .collect();
-        assert_eq!(peers.len(), 1);
+        assert_eq!(peers.len(), if index == 2 { 2 } else { 1 });
         let mut peer = peers[0].clone();
         peer.as_object_mut().unwrap().remove("id");
         assert_eq!(peer, expected);
+        if index == 2 {
+            assert_eq!(peers[1]["author"], recipient);
+            assert_eq!(peers[1]["recipient"], recipient);
+            let content: Value = serde_json::from_str(
+                peers[1]["content"][0]["text"].as_str().unwrap(),
+            )?;
+            assert_eq!(content["eventId"], review_event);
+            assert_eq!(content["sourceEventId"], event);
+            assert_eq!(content["body"], review_body);
+        }
         assert!(!input.iter().any(|item| {
             matches!(item["role"].as_str(), Some("user" | "developer"))
                 && item.to_string().contains(body)

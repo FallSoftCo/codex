@@ -33,8 +33,8 @@ def submission(agent_id, active, thread_id, model, effort, additional_context):
         }
     if kind != "agent":
         raise ValueError("Unsupported Hollywood author kind for conversational input")
-    if author == recipient:
-        raise ValueError("Self-authored events do not initiate peer execution")
+    # The server rejects arbitrary self-requests, but admits bounded, sourced
+    # work-review events for the owner. Preserve that canonical author too.
     return "hollywood/agentMessage", {
         "threadId": thread_id,
         "authorityId": authority,

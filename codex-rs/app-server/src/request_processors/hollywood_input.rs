@@ -59,11 +59,9 @@ fn model_input(
         .as_deref()
         .map(|value| identity(value, "sourceEventId"))
         .transpose()?;
-    if author == recipient {
-        return Err(invalid_request(
-            "A peer input must have distinct author and recipient identities",
-        ));
-    }
+    // Hollywood owns execution admission. Its bounded work-review policy may
+    // address the owner with an event carrying that same authenticated author.
+    // This private input transport must preserve, not reinterpret, that identity.
     let content = serde_json::json!({
         "authorityId": authority,
         "roomId": room,

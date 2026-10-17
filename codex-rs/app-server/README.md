@@ -671,7 +671,9 @@ message endpoint and does not itself authenticate a Hollywood principal.
 The app-server admits the event through Core's normal start-or-steer path as an
 agent_message item, preserving peer authorship in model history. It does not
 manufacture a user message, developer instruction, function call or tool result.
-Human messages retain their existing input path. The returned turn identifies
+Canonical work-review events may have the same owner as author and recipient.
+Hollywood validates their bounded lifecycle policy; this transport preserves
+those identities. Human messages retain their existing input path. The returned turn identifies
 native admission, not successful execution or completion of the peer request.
 The transport retains the original operation journal and reconciles uncertain
 admission before retrying.
