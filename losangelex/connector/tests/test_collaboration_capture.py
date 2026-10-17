@@ -365,6 +365,10 @@ class AutomaticCaptureTests(unittest.TestCase):
             "nextAfter": None,
         }
         with (
+            patch(
+                "lax_connector.collaboration_capture.installed_native_owner",
+                return_value=(self.f.agent, sys.executable),
+            ),
             patch("lax_connector.collaboration_capture.process", return_value=actual),
             patch(
                 "lax_connector.collaboration_capture.expected_owner",
@@ -389,6 +393,10 @@ class AutomaticCaptureTests(unittest.TestCase):
         )
         with (
             patch(
+                "lax_connector.collaboration_capture.installed_native_owner",
+                return_value=(self.f.agent, "/usr/bin/python3"),
+            ),
+            patch(
                 "lax_connector.collaboration_capture.process",
                 return_value=self.f.native,
             ),
@@ -407,6 +415,10 @@ class AutomaticCaptureTests(unittest.TestCase):
             "nextAfter": None,
         }
         with (
+            patch(
+                "lax_connector.collaboration_capture.installed_native_owner",
+                return_value=(self.f.agent, "/usr/bin/python3"),
+            ),
             patch(
                 "lax_connector.collaboration_capture.process",
                 return_value=self.f.native,
@@ -546,7 +558,8 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertTrue(
             all(
-                token == (
+                token
+                == (
                     "synthetic-administrator"
                     if route.endswith("/collaboration-bridge")
                     else "synthetic-controller"

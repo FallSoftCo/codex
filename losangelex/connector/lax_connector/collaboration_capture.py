@@ -9,6 +9,7 @@ import fcntl
 import hashlib
 import json
 import os
+import pwd
 import time
 import urllib.error
 from pathlib import Path
@@ -97,6 +98,39 @@ def administrative_put(state, http, route, payload):
     return result
 
 
+def installed_native_owner(authority, uid):
+    """Derive a kernel UID's agent from NSS and protected installation records.
+
+    An installed resource policy is not an agent whitelist. No client frame or
+    canonical query chooses the identity or executable used for this first gate.
+    """
+    authority = str(UUID(authority))
+    base = Path("/var/lib/harness") / authority
+    account = pwd.getpwuid(uid)
+    global_receipt = protected(base / "global-admin-receipt.json")
+    if global_receipt["uid"] == uid and Path(global_receipt["home"]) == Path(
+        account.pw_dir
+    ):
+        agent = str(UUID(global_receipt["agentId"]))
+    else:
+        try:
+            parts = Path(account.pw_dir).relative_to(base / "workers").parts
+            require(
+                len(parts) == 2 and parts[1] == "home",
+                "Peer NSS home is not an installed worker",
+            )
+            agent = str(UUID(parts[0]))
+            require(agent == parts[0], "Peer worker identity is not canonical")
+        except (ValueError, KeyError):
+            raise Held("Peer NSS home is outside this enrolled installation") from None
+    expected_uid, home, binary = expected_owner(authority, agent)
+    require(
+        (expected_uid, str(home)) == (uid, account.pw_dir),
+        "Peer NSS identity differs from protected installation owner",
+    )
+    return agent, binary
+
+
 class AutomaticCapture:
     def __init__(self, bridge):
         self.bridge = bridge
@@ -132,19 +166,12 @@ class AutomaticCapture:
         """Authenticate kernel identity before consuming any client bytes."""
         actual = process(peer[0])
         require(actual and actual["uid"] == peer[1], "Kernel peer incarnation vanished")
-        eligible = []
-        for agent in self.policy["agents"]:
-            uid, _, binary = expected_owner(self.config["authorityId"], agent)
-            if uid == peer[1]:
-                image = Path(binary).resolve(strict=True).stat()
-                if (actual.get("executableDevice"), actual.get("executableInode")) == (
-                    image.st_dev,
-                    image.st_ino,
-                ):
-                    eligible.append(agent)
+        agent, binary = installed_native_owner(self.config["authorityId"], peer[1])
+        image = Path(binary).resolve(strict=True).stat()
         require(
-            eligible,
-            "Peer is not an installed native image/owner; no frame or server query admitted",
+            (actual.get("executableDevice"), actual.get("executableInode"))
+            == (image.st_dev, image.st_ino),
+            "Peer is not its installed native image; no frame or server query admitted",
         )
         rows, after = [], None
         for _ in range(4):
@@ -167,11 +194,11 @@ class AutomaticCapture:
         )
         row = rows[0]
         require(
-            str(row["agent"]) in eligible
+            str(row["agent"]) == agent
             and row["launch_phase"] == "attached"
             and row["state"] == "live"
             and str(row["host"]) == self.config["hostId"],
-            "Native executor has no current installed capture policy",
+            "Native executor differs from the protected installed owner",
         )
         uid, _, _ = expected_owner(self.config["authorityId"], str(row["agent"]))
         require(
