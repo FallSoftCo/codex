@@ -13,6 +13,7 @@ from uuid import UUID
 from .journal import saved
 from .linux_admin import run
 from .native_package import preflight_as_owner
+from .service_memory import provisioning_spec, unit_limit
 
 
 def execution_profile(spec, override=None):
@@ -35,6 +36,7 @@ def expected_configuration(spec, authority, agent, home, profile=None):
         "workspace": str(home / "work"),
         "model": spec["model"],
         "effort": spec["effort"],
+        **({"serviceMemoryMaxBytes": spec["serviceMemoryMaxBytes"]} if "serviceMemoryMaxBytes" in spec else {}),
         "sandbox": "danger-full-access" if profile == "unrestricted" else "workspace-write",
         **({"nativeCollaborationChannel": spec["nativeCollaborationChannel"]}
            if spec.get("nativeCollaborationChannel") else {}),
@@ -61,7 +63,7 @@ ExecStart={spec["interpreter"]} -m lax_connector.connector --config {config_file
 Restart=on-failure
 RestartSec=10
 UMask=0077
-MemoryMax=2G
+MemoryMax={unit_limit(spec, "2G")}
 CPUQuota=200%
 NoNewPrivileges={"no" if profile == "unrestricted" else "yes"}
 KillMode=control-group
@@ -98,6 +100,7 @@ def inspect_completed(spec):
         if path.is_symlink() or not path.is_dir() or info.st_uid != 0 or info.st_mode & 0o022:
             raise ValueError("Original provisioning owner changed")
     intent = protected(record / "provision-intent.json")
+    spec = provisioning_spec(spec, record / "provision-intent.json")
     fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
     if intent.get("digest") != fingerprint or intent.get("spec") != spec:
         raise ValueError("Original provisioning specification differs")
@@ -171,6 +174,7 @@ def provision(spec):
     record.mkdir(mode=0o711, exist_ok=True)
     record.chmod(0o711)
     intent = record / "provision-intent.json"
+    spec = provisioning_spec(spec, intent)
     fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
     if intent.exists():
         if json.loads(intent.read_text())["digest"] != fingerprint:
@@ -315,6 +319,7 @@ def provision(spec):
         "modelsStartedByProvisioning": 0,
         "modelAccountProved": False,
         "nativePackage": package,
+        "serviceMemoryMaxBytes": spec.get("serviceMemoryMaxBytes", 2 * 1024**3),
     }
     saved(record / "provision-receipt.json", receipt)
     # The owner receipt is required by the protected service registry. Do not

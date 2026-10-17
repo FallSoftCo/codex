@@ -45,7 +45,8 @@ def properties(unit):
     result = subprocess.run(
         ["systemctl", "show", unit, "--no-pager",
          "-p", "Id", "-p", "ActiveState", "-p", "MainPID", "-p", "InvocationID",
-         "-p", "ControlGroup", "-p", "User", "-p", "KillMode", "-p", "FragmentPath"],
+         "-p", "ControlGroup", "-p", "User", "-p", "KillMode", "-p", "FragmentPath",
+         "-p", "MemoryMax", "-p", "MemoryCurrent", "-p", "MemoryPeak"],
         check=True, capture_output=True, text=True,
     )
     return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
@@ -105,7 +106,7 @@ def unit_definition(info):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _register(authority, host, agent, unit):
+def _register(authority, host, agent, unit, *, expected_binding=None):
     """Root installer records an actual running, owned service incarnation."""
     if os.geteuid() != 0:
         raise PermissionError("Root service registration required")
@@ -146,6 +147,8 @@ def _register(authority, host, agent, unit):
     manifest = {**baseline, "schema": "lax-service-incarnation/v1", "bootId": boot_id(),
                 "serviceInvocation": invocation, "controlGroup": info["ControlGroup"],
                 "guardianPid": guardian["pid"], "guardianStart": guardian["start"]}
+    if expected_binding is not None and manifest != expected_binding:
+        raise ValueError("Observed restart incarnation changed before publication")
     target = root / (invocation + ".json")
     if target.exists() and protected(target) != manifest:
         raise ValueError("Original registered service incarnation changed")
@@ -158,14 +161,20 @@ def _register(authority, host, agent, unit):
 
 
 def register(authority, host, agent, unit):
-    """Serialize existing enrollment writers against explicit native transitions."""
+    """Explicit registration; only fresh reviewed provisioning can seed approval."""
+    from .service_restart import validate_fresh
+    validate_fresh(authority, host, agent)
     root = directory(authority, host, agent)
     if not root.exists():
-        return _register(authority, host, agent, unit)
-    from .native_image_upgrade import registry_lock, require_settled_transition
-    with registry_lock(root) as fd:
-        require_settled_transition(fd)
-        return _register(authority, host, agent, unit)
+        result = _register(authority, host, agent, unit)
+    else:
+        from .native_image_upgrade import registry_lock, require_settled_transition
+        with registry_lock(root) as fd:
+            require_settled_transition(fd)
+            result = _register(authority, host, agent, unit)
+    from .service_restart import approve_fresh
+    approval = approve_fresh(authority, host, agent)
+    return {**result, **({"automaticRestartApproval": approval} if approval else {})}
 
 
 def approve_drained_upgrade(authority, host, agent, expected_enrollment, expected_definition):
@@ -264,16 +273,9 @@ def observe(config, row):
     root = directory(config["authorityId"], config["hostId"], row["agent"])
     manifest_path = root / (d["serviceInvocation"] + ".json")
     if not manifest_path.exists():
-        # A service restart can be registered only against its unchanged root enrollment.
-        enrollment = root / "enrollment.json"
-        unit = (
-            protected(enrollment)["unit"]
-            if enrollment.exists()
-            else installed_unit(config["authorityId"], str(row["agent"]))
-        )
-        if unit != d["serviceUnit"]:
-            raise PermissionError("Executor service differs from installed enrollment")
-        register(config["authorityId"], config["hostId"], row["agent"], unit)
+        # The controller's separate approved-service pass has the complete host
+        # executor view, including idle restarts. A single row is insufficient.
+        raise ValueError("Managed incarnation awaits protected controller registration")
     binding = protected(manifest_path)
     expected = {
         "authorityId": config["authorityId"],
@@ -337,6 +339,13 @@ def observe(config, row):
         and guardian["controlGroup"] == binding["controlGroup"]
         and int(info["MainPID"]) == d["guardianPid"]
     )
+    if guardian_ok and (row.get("launch_phase") == "reserved" or native_original):
+        from .service_memory import approved_spec
+        from .service_restart import inspection as restart_inspection
+        restart_policy = restart_inspection(config["authorityId"], config["hostId"], str(row["agent"]))
+        spec, _, _ = approved_spec(config["authorityId"], str(row["agent"]))
+        if restart_policy.get("reason") == "restart-approval-changed" or (spec.get("automaticRestartRegistration") and not restart_policy["enabled"]):
+            guardian_ok = False
     current = members(binding["controlGroup"])
     if row.get("launch_phase") == "reserved":
         return {

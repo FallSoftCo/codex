@@ -100,6 +100,8 @@ def provision(spec):
     state.mkdir(parents=True, exist_ok=True, mode=0o711)
     state.chmod(0o711)
     intent = state / "global-admin-intent.json"
+    from .service_memory import provisioning_spec, unit_limit
+    spec = provisioning_spec(spec, intent)
     fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
     if intent.exists():
         original = json.loads(intent.read_text())
@@ -207,6 +209,8 @@ def provision(spec):
         "effort": spec["effort"],
         "sandbox": "danger-full-access",
         "requireAdministrator": True,
+        **({"serviceMemoryMaxBytes": spec["serviceMemoryMaxBytes"]} if "serviceMemoryMaxBytes" in spec else {}),
+        "workerServiceMemoryMaxBytes": spec.get("workerServiceMemoryMaxBytes", 8 * 1024**3),
         "instructions": "You are Global: the enterprise coordinator and ultimate administrator. You may provision and repair the enrolled environment within the human's authorized work. Communicate through Hollywood; assign scoped work to accountable owners and observe their rooms without routine replies or creating shadow contexts. Your actual host administrator capability is checked at startup. Protect credentials; never print or publish tokens. Preserve accepted work and uncertain effects. Do not restart stopped historical workers or schedules.",
     }
     config_file = home / "connector.json"
@@ -227,7 +231,7 @@ ExecStart={interpreter} -m lax_connector.connector --config {config_file} --serv
 Restart=on-failure
 RestartSec=10
 UMask=0077
-MemoryMax=4G
+MemoryMax={unit_limit(spec, "4G")}
 CPUQuota=200%
 KillMode=control-group
 TimeoutStopSec=30
@@ -253,6 +257,9 @@ WantedBy=multi-user.target
         "connectorConfig": str(config_file),
         "unit": unit,
         "serviceInstalled": True,
+        "configurationDigest": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
+        "unitDigest": hashlib.sha256(content.encode()).hexdigest(),
+        "serviceMemoryMaxBytes": spec.get("serviceMemoryMaxBytes", 4 * 1024**3),
         "serviceStarted": False,
         "sudoVerifiedUid": 0,
         "workerPrivilegesChanged": False,

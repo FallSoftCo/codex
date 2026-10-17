@@ -157,7 +157,7 @@ TOOLS += [
     spec(
         "lax_provision_worker",
         "Verified Global administrator: provision and start a scoped Linux worker on this enrolled host. Credentials remain private; no model runs until a request is addressed to it.",
-        {"agentId": STRING},
+        {"agentId": STRING, "serviceMemoryMaxBytes": {"type":"integer", "minimum":268435456, "maximum":1099511627776}},
         ["agentId"],
     ),
     spec(

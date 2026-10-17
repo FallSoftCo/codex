@@ -355,11 +355,28 @@ def seed_defaults(state, http, authority, host, seeds, roots):
                 and pointer["grant_revision"] == grant["revision"],
                 "Existing default differs; explicit administrator CAS selection required",
             )
-            receipts.append(view)
-            continue
+            if not (
+                view["effectiveState"] == "held"
+                and view["holdReason"] == "participation-invalidated"
+            ):
+                receipts.append(view)
+                continue
+            from .placement_control import (
+                capabilities as placement_capabilities,
+                view as placement_view,
+            )
+
+            placement_capabilities(policy)
+            placed = placement_view(
+                http("GET", "placements/" + agent), authority, agent, host
+            )
+            require(
+                placed["state"] == "paused",
+                "Reviewed default reselection requires paused placement",
+            )
         payload = selection_payload(
             {
-                "revision": 0,
+                "revision": view["selectionRevision"],
                 "state": "selected",
                 "workspaceId": workspace_id,
                 "workspaceRevision": workspace["revision"],
@@ -368,6 +385,7 @@ def seed_defaults(state, http, authority, host, seeds, roots):
             "install-resource-default:"
             + digest(
                 [agent, host, workspace_id, workspace["revision"], grant["revision"]]
+                + ([view["selectionRevision"]] if view["selectionRevision"] else [])
             ),
         )
         result = administrative_put(state, http, route, payload)

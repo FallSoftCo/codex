@@ -328,15 +328,18 @@ def supervise(config, once=False):
             )
             saved(path, {"state": "completed", "payload": payload, "receipt": result})
             executor_observations = observe_executors(config)
+            from .service_restart import reconcile_services
+            service_incarnations = reconcile_services(config)
             executor_gaps = json.loads(
                 (root / "executor-observation-summary.json").read_text()
             )["unconfirmed"]
             saved(
                 root / "status.json",
                 {
-                    "state": "observation-gaps" if executor_gaps else "healthy",
+                    "state": "observation-gaps" if executor_gaps or service_incarnations["held"] else "healthy",
                     "lastReceipt": result,
                     "executorObservations": executor_observations,
+                    "serviceIncarnations": service_incarnations,
                     "executorObservationGaps": executor_gaps,
                     "modelsStarted": 0,
                 },
