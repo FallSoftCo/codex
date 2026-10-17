@@ -5000,7 +5000,10 @@ async fn resume_thread_subagent_restores_stored_metadata() {
         .session
         .persist_rollout_items(&[RolloutItem::TurnContext(child_turn_context)])
         .await;
-    child_thread.session.ensure_rollout_materialized().await;
+    child_thread
+        .session
+        .ensure_rollout_materialized(PersistContext::Standard)
+        .await;
     child_thread
         .session
         .flush_rollout()

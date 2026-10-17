@@ -46,6 +46,7 @@ use core_test_support::test_codex::local;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
+use regex_lite::Regex;
 use serde_json::Value;
 use serde_json::json;
 use test_case::test_case;

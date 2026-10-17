@@ -2214,6 +2214,7 @@ fn record_items_truncates_code_mode_custom_tool_output_content() {
     let call = ResponseItem::CustomToolCall {
         id: None,
         status: None,
+        encrypted_content: None,
         call_id: "call-1".to_string(),
         name: "exec".to_string(),
         namespace: None,
@@ -2231,8 +2232,8 @@ fn record_items_truncates_code_mode_custom_tool_output_content() {
     history.record_items([&call, &output], policy);
 
     assert_eq!(history.items.len(), 2);
-    assert_eq!(history.items[0], call);
-    match &history.items[1] {
+    assert_eq!(history.items[0].item, call);
+    match &history.items[1].item {
         ResponseItem::CustomToolCallOutput { output, .. } => {
             let output = output.text_content().unwrap_or_default();
             assert!(

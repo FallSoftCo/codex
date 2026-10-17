@@ -14,7 +14,6 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ExecCommandBeginEvent;
 use codex_protocol::protocol::ExecCommandEndEvent;
-use codex_protocol::protocol::Op;
 use codex_protocol::protocol::ThreadSettingsOverrides;
 use codex_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
@@ -40,6 +39,12 @@ use serial_test::serial;
 use tokio::sync::oneshot;
 
 async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
+    submit_turn(test, prompt).await?;
+    wait_for_event(&test.codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
+    Ok(())
+}
+
+async fn submit_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
     let session_model = test.session_configured.model.clone();
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
@@ -68,43 +73,6 @@ async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
         )
         .await?;
 
-    wait_for_event(&test.codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
-
-    Ok(())
-}
-
-async fn submit_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
-    let session_model = test.session_configured.model.clone();
-    let (sandbox_policy, permission_profile) =
-        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
-
-    test.codex
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: prompt.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: codex_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(test.config.cwd.clone())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(codex_protocol::config_types::CollaborationMode {
-                    mode: codex_protocol::config_types::ModeKind::Default,
-                    settings: codex_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
-
     Ok(())
 }
 
@@ -123,6 +91,11 @@ async fn expect_shell_call_events(test: &TestCodex, call_ids: [&str; 2]) -> anyh
                 begins.push(event);
             }
             EventMsg::ExecCommandEnd(event) if call_ids.contains(&event.call_id.as_str()) => {
+                assert_eq!(
+                    begins.len(),
+                    call_ids.len(),
+                    "both shell calls must start before either ends"
+                );
                 ends.push(event);
             }
             EventMsg::TurnComplete(_) => break,
@@ -232,8 +205,8 @@ async fn shell_tools_run_in_parallel() -> anyhow::Result<()> {
     ]);
     mount_sse_sequence(&server, vec![first_response, second_response]).await;
 
-    let duration = run_turn_and_measure(&test, "run exec_command twice").await?;
-    assert_parallel_duration(duration);
+    submit_turn(&test, "run exec_command twice").await?;
+    expect_shell_call_events(&test, ["call-1", "call-2"]).await?;
 
     Ok(())
 }

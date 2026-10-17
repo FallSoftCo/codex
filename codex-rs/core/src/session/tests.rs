@@ -109,6 +109,7 @@ use codex_utils_path_uri::PathUri;
 use std::collections::BTreeMap;
 use tracing::Span;
 
+use crate::TryStartTurnIfIdleRejectionReason;
 use crate::connectors::AppInfo;
 use crate::responses_metadata::CodexResponsesRequestKind;
 use crate::responses_metadata::CompactionTurnMetadata;
@@ -12756,7 +12757,10 @@ async fn try_start_turn_if_idle_rejects_active_turn_without_injecting() {
     assert_eq!(vec![item], err.into_input());
     assert_eq!(
         Vec::<TurnInput>::new(),
-        sess.input_queue.get_pending_input(&sess.active_turn).await
+        sess.input_queue
+            .get_pending_input(&sess.active_turn)
+            .await
+            .0
     );
 
     sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
@@ -12769,7 +12773,8 @@ async fn try_start_turn_if_idle_rejects_plan_mode_without_injecting() {
     collaboration_mode.mode = ModeKind::Plan;
     {
         let mut state = sess.state.lock().await;
-        state.session_configuration.collaboration_mode = collaboration_mode;
+        Arc::make_mut(&mut state.session_configuration.step_settings).collaboration_mode =
+            collaboration_mode;
     }
 
     let item = user_message("synthetic idle input");
@@ -12783,7 +12788,10 @@ async fn try_start_turn_if_idle_rejects_plan_mode_without_injecting() {
     assert!(sess.active_turn.lock().await.is_none());
     assert_eq!(
         Vec::<TurnInput>::new(),
-        sess.input_queue.get_pending_input(&sess.active_turn).await
+        sess.input_queue
+            .get_pending_input(&sess.active_turn)
+            .await
+            .0
     );
 }
 
@@ -12791,13 +12799,16 @@ async fn try_start_turn_if_idle_rejects_plan_mode_without_injecting() {
 async fn try_start_turn_if_idle_rejects_pending_trigger_turn_without_injecting() {
     let (sess, _tc, _rx) = make_session_and_context_with_rx().await;
     sess.input_queue
-        .enqueue_mailbox_communication(InterAgentCommunication::new(
-            AgentPath::root(),
-            AgentPath::root(),
-            Vec::new(),
-            "pending trigger".to_string(),
-            /*trigger_turn*/ true,
-        ))
+        .enqueue_mailbox_communication(
+            InterAgentCommunication::new(
+                AgentPath::root(),
+                AgentPath::root(),
+                Vec::new(),
+                "pending trigger".to_string(),
+                /*trigger_turn*/ true,
+            ),
+            Default::default(),
+        )
         .await;
 
     let item = user_message("synthetic idle input");
@@ -12838,7 +12849,10 @@ async fn try_start_turn_if_idle_rejects_active_review_turn_without_injecting() {
     assert_eq!(vec![item], err.into_input());
     assert_eq!(
         Vec::<TurnInput>::new(),
-        sess.input_queue.get_pending_input(&sess.active_turn).await
+        sess.input_queue
+            .get_pending_input(&sess.active_turn)
+            .await
+            .0
     );
 
     sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
@@ -12909,11 +12923,16 @@ async fn hollywood_input_is_developer_context_not_user_message() {
     )
     .await;
 
-    let pending_input = sess.input_queue.get_pending_input(&sess.active_turn).await;
-    let [TurnInput::ResponseItem(ResponseItem::Message { role, content, .. })] =
-        pending_input.as_slice()
-    else {
+    let pending_input = sess
+        .input_queue
+        .get_pending_input(&sess.active_turn)
+        .await
+        .0;
+    let [TurnInput::ResponseItem(envelope)] = pending_input.as_slice() else {
         panic!("expected one developer response item, got {pending_input:?}");
+    };
+    let ResponseItem::Message { role, content, .. } = &envelope.item else {
+        panic!("expected a message response item");
     };
     assert_eq!(role, "developer");
     let [ContentItem::InputText { text }] = content.as_slice() else {
@@ -12935,113 +12954,95 @@ async fn hollywood_input_is_developer_context_not_user_message() {
 #[tokio::test]
 async fn steer_input_requires_active_turn() {
     let (sess, _tc, _rx) = make_session_and_context_with_rx().await;
-    let input = vec![UserInput::Text {
-        text: "steer".to_string(),
-        text_elements: Vec::new(),
-    }];
-
-    let err = sess
-        .steer_input(
-            input,
-            /*additional_context*/ Default::default(),
-            /*expected_turn_id*/ None,
-            /*client_user_message_id*/ None,
-            /*responsesapi_client_metadata*/ None,
-        )
-        .await
-        .expect_err("steering without active turn should fail");
-
-    assert!(matches!(err, SteerInputError::NoActiveTurn(_)));
+    let submission = submit_steer_only(
+        &sess,
+        vec![UserInput::Text {
+            text: "steer".to_string(),
+            text_elements: Vec::new(),
+        }],
+        "missing-turn",
+    )
+    .await;
+    assert_eq!(
+        submission,
+        TurnInputSubmission::NotSubmitted {
+            reason: codex_protocol::turn_input::NotSubmittedReason::NoActiveTurn,
+        }
+    );
 }
 
 #[tokio::test]
 async fn steer_input_enforces_expected_turn_id() {
     let (sess, tc, _rx) = make_session_and_context_with_rx().await;
-    let input = vec![TurnInput::UserInput {
-        content: vec![UserInput::Text {
-            text: "hello".to_string(),
-            text_elements: Vec::new(),
-        }],
-        client_id: None,
-    }];
     sess.spawn_task(
         Arc::clone(&tc),
-        input,
+        Vec::new(),
         NeverEndingTask {
             kind: TaskKind::Regular,
-            listen_to_cancellation_token: false,
+            listen_to_cancellation_token: true,
         },
     )
     .await;
-
-    let steer_input = vec![UserInput::Text {
-        text: "steer".to_string(),
-        text_elements: Vec::new(),
-    }];
-    let err = sess
-        .steer_input(
-            steer_input,
-            /*additional_context*/ Default::default(),
-            Some("different-turn-id"),
-            /*client_user_message_id*/ None,
-            /*responsesapi_client_metadata*/ None,
-        )
-        .await
-        .expect_err("mismatched expected turn id should fail");
-
-    match err {
-        SteerInputError::ExpectedTurnMismatch { expected, actual } => {
-            assert_eq!(
-                (expected, actual),
-                ("different-turn-id".to_string(), tc.sub_id.clone())
-            );
+    let submission = submit_steer_only(
+        &sess,
+        vec![UserInput::Text {
+            text: "steer".to_string(),
+            text_elements: Vec::new(),
+        }],
+        "different-turn-id",
+    )
+    .await;
+    assert_eq!(
+        submission,
+        TurnInputSubmission::NotSubmitted {
+            reason: codex_protocol::turn_input::NotSubmittedReason::ExpectedTurnMismatch {
+                expected: "different-turn-id".to_string(),
+                actual: tc.sub_id.clone(),
+            },
         }
-        other => panic!("unexpected error: {other:?}"),
-    }
+    );
+    sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
 }
 
 #[tokio::test]
 async fn steer_input_rejects_non_regular_turns() {
     for (task_kind, turn_kind) in [
-        (TaskKind::Review, NonSteerableTurnKind::Review),
-        (TaskKind::Compact, NonSteerableTurnKind::Compact),
+        (
+            TaskKind::Review,
+            codex_protocol::protocol::NonSteerableTurnKind::Review,
+        ),
+        (
+            TaskKind::Compact,
+            codex_protocol::protocol::NonSteerableTurnKind::Compact,
+        ),
     ] {
-        let (sess, _tc, _rx) = make_session_and_context_with_rx().await;
-        let input = vec![TurnInput::UserInput {
-            content: vec![UserInput::Text {
-                text: "hello".to_string(),
-                text_elements: Vec::new(),
-            }],
-            client_id: None,
-        }];
-        let turn_context = sess.new_default_turn_with_sub_id("turn".to_string()).await;
+        let (sess, tc, _rx) = make_session_and_context_with_rx().await;
         sess.spawn_task(
-            turn_context,
-            input,
+            Arc::clone(&tc),
+            Vec::new(),
             NeverEndingTask {
                 kind: task_kind,
                 listen_to_cancellation_token: true,
             },
         )
         .await;
-
-        let steer_input = vec![UserInput::Text {
-            text: "steer".to_string(),
-            text_elements: Vec::new(),
-        }];
-        let err = sess
-            .steer_input(
-                steer_input,
-                /*additional_context*/ Default::default(),
-                /*expected_turn_id*/ None,
-                /*client_user_message_id*/ None,
-                /*responsesapi_client_metadata*/ None,
-            )
-            .await
-            .expect_err("steering a non-regular turn should fail");
-
-        assert_eq!(err, SteerInputError::ActiveTurnNotSteerable { turn_kind });
-
+        let submission = submit_steer_only(
+            &sess,
+            vec![UserInput::Text {
+                text: "steer".to_string(),
+                text_elements: Vec::new(),
+            }],
+            &tc.sub_id,
+        )
+        .await;
+        assert_eq!(
+            submission,
+            TurnInputSubmission::NotSubmitted {
+                reason: codex_protocol::turn_input::NotSubmittedReason::ActiveTurnNotSteerable {
+                    turn_kind
+                },
+            }
+        );
         sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
     }
 }
@@ -13049,40 +13050,30 @@ async fn steer_input_rejects_non_regular_turns() {
 #[tokio::test]
 async fn steer_input_returns_active_turn_id() {
     let (sess, tc, _rx) = make_session_and_context_with_rx().await;
-    let input = vec![TurnInput::UserInput {
-        content: vec![UserInput::Text {
-            text: "hello".to_string(),
-            text_elements: Vec::new(),
-        }],
-        client_id: None,
-    }];
     sess.spawn_task(
         Arc::clone(&tc),
-        input,
+        Vec::new(),
         NeverEndingTask {
             kind: TaskKind::Regular,
-            listen_to_cancellation_token: false,
+            listen_to_cancellation_token: true,
         },
     )
     .await;
-
-    let steer_input = vec![UserInput::Text {
-        text: "steer".to_string(),
-        text_elements: Vec::new(),
-    }];
-    let turn_id = sess
-        .steer_input(
-            steer_input,
-            /*additional_context*/ Default::default(),
-            Some(&tc.sub_id),
-            /*client_user_message_id*/ None,
-            /*responsesapi_client_metadata*/ None,
-        )
-        .await
-        .expect("steering with matching expected turn id should succeed");
-
+    let submission = submit_steer_only(
+        &sess,
+        vec![UserInput::Text {
+            text: "steer".to_string(),
+            text_elements: Vec::new(),
+        }],
+        &tc.sub_id,
+    )
+    .await;
+    let TurnInputSubmission::Steered { turn_id, .. } = submission else {
+        panic!("matching regular turn should accept steering");
+    };
     assert_eq!(turn_id, tc.sub_id);
     assert!(sess.input_queue.has_pending_input(&sess.active_turn).await);
+    sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
 }
 
 #[tokio::test]

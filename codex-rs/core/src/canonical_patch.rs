@@ -80,18 +80,17 @@ impl PatchPermit {
                 move_path: Some(target),
                 ..
             } = change
+                && target != path
             {
-                if target != path {
-                    let target_before =
-                        match fs.read_file_text(target, Default::default(), sandbox).await {
-                            Ok(text) => content(&text),
-                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => absent(),
-                            Err(error) => return Err(held(error)),
-                        };
-                    files.push(json!({"pathUri":target.to_string(),"beforeSha256":target_before["sha256"],"beforeSize":target_before["size"],"afterSha256":after["sha256"],"afterSize":after["size"]}));
-                    files.push(json!({"pathUri":path.to_string(),"beforeSha256":before["sha256"],"beforeSize":before["size"],"afterSha256":"absent","afterSize":0}));
-                    continue;
-                }
+                let target_before =
+                    match fs.read_file_text(target, Default::default(), sandbox).await {
+                        Ok(text) => content(&text),
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => absent(),
+                        Err(error) => return Err(held(error)),
+                    };
+                files.push(json!({"pathUri":target.to_string(),"beforeSha256":target_before["sha256"],"beforeSize":target_before["size"],"afterSha256":after["sha256"],"afterSize":after["size"]}));
+                files.push(json!({"pathUri":path.to_string(),"beforeSha256":before["sha256"],"beforeSize":before["size"],"afterSha256":"absent","afterSize":0}));
+                continue;
             }
             files.push(json!({"pathUri":path.to_string(),"beforeSha256":before["sha256"],"beforeSize":before["size"],"afterSha256":after["sha256"],"afterSize":after["size"]}));
         }
