@@ -126,7 +126,7 @@ ROLE = {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
 TOOLS += [
     spec(
         "hollywood_ask",
-        "Ask the attributable human a necessary scoped question and wait for their authenticated answer. Do not request secrets in chat. Observation alone does not require a question.",
+        "Ask the attributable human a necessary scoped question through Hollywood. Returns a durable pending receipt immediately; retain the unfinished outcome and continue other obligations or end this inference slice. The authenticated answer later arrives as primary input in your same context. Do not claim an answer or completed work from acceptance. Do not request secrets in chat.",
         {
             "questions": {
                 "type": "array",
@@ -523,9 +523,7 @@ class Connector:
                 if value.get("view") != arguments.get("view", "conversation"):
                     raise ValueError("Hollywood room projection is unavailable; reconcile server version")
             elif name == "hollywood_ask":
-                value = await self.attention.wait(
-                    "hollywood/question", {**params, **arguments}, slot=call
-                )
+                value = await self.attention.ask({**params, **arguments}, slot=call)
             elif name in ("hollywood_publish", "hollywood_request"):
                 room, payload = message(self, name, arguments, operation)
                 value = await self.http("POST", f"rooms/{room}/messages", payload)

@@ -104,3 +104,16 @@ accepted/interrupt records remain immutable and readable. A bounded 32 MiB
 compatibility budget covers the captured legacy 18 MiB interrupted record; both
 writes and reads enforce the same ceiling. Reconciliation still requires the
 original operation/digest and the unchanged offline scope.
+
+## Native human questions
+
+In the Hollywood-native runtime, hollywood_ask returns a durable pending
+Attention receipt without holding the inference turn. Hollywood retains a
+question with request.isBlocking=false after that input is handled and queues
+the attributable human's authenticated answer into the same agent context.
+The native runtime excludes the competing upstream single-user UI tools.
+The server's canRespond and responseMode fields describe current actionability;
+an accepted answer and completed semantic work remain separate. Command and
+file approvals retain their original callback and permission scope.
+This requires the matching Hollywood human-continuation implementation; older
+servers cannot silently supply the native continuation contract.

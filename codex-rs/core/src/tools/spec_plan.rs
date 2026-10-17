@@ -1307,7 +1307,9 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, registry: &mut Tool
         );
     }
 
-    if turn_context.config.experimental_request_user_input_enabled {
+    if turn_context.config.experimental_request_user_input_enabled
+        && !crate::enterprise_native_collaboration_enabled()
+    {
         registry.add_with_exposure(
             RequestUserInputHandler {
                 available_modes: request_user_input_available_modes(features),
@@ -1317,6 +1319,7 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, registry: &mut Tool
     }
 
     if turn_context.config.experimental_request_user_input_enabled
+        && !crate::enterprise_native_collaboration_enabled()
         && !turn_context.session_source.is_non_root_agent()
         && context
             .model_info
@@ -1345,6 +1348,7 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, registry: &mut Tool
     }
 
     if !turn_context.session_source.is_non_root_agent()
+        && !crate::enterprise_native_collaboration_enabled()
         && (features.enabled(Feature::SendMessageToUserAsync)
             || context
                 .model_info

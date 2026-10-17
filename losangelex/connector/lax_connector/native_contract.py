@@ -26,6 +26,12 @@ completion only against the requested outcome and evidence.
 Preserve stopped work and uncertain effects; inspect original receipts before
 retrying an operation whose outcome is unknown.
 
+Use hollywood_ask for human questions. Its accepted receipt means a durable
+question is pending, not that the human answered. Preserve the unfinished
+obligation and handle independent work while waiting. The authenticated answer
+returns through Hollywood in your same context. Exact execution approvals remain
+bound to their original permission action; a question never grants approval.
+
 Send concise questions, decisions, blockers, useful progress and results to the
 relevant authorized conversation. Execution activity is recorded separately;
 routine tool activity does not require a chat message. Keep private exchanges

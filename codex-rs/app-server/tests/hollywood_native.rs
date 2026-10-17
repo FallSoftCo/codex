@@ -39,7 +39,22 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
     )
     .await;
     let home = TempDir::new()?;
-    MockResponsesConfig::new(&server.uri()).write(home.path())?;
+    // Advertise the same competing native UI tools as the captured live model.
+    // Hollywood-native mode must exclude them even when the catalog enables them.
+    let config = core_test_support::load_default_config_for_test(&home).await;
+    let mut model = codex_core::test_support::construct_model_info_offline("mock-model", &config);
+    model.experimental_supported_tools = vec![
+        "request_user_input_async".to_string(),
+        "send_message_to_user_async".to_string(),
+    ];
+    let catalog = home.path().join("models.json");
+    std::fs::write(&catalog, serde_json::to_vec(&json!({"models": [model]}))?)?;
+    MockResponsesConfig::new(&server.uri())
+        .with_root_config(&format!(
+            "model_catalog_json = {}",
+            serde_json::to_string(&catalog)?
+        ))
+        .write(home.path())?;
     let legacy_url = format!("{}/legacy-hollywood", server.uri());
     let mut app = TestAppServer::builder()
         .with_codex_home(home.path())
@@ -180,7 +195,15 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
         let request_body = request.body_json();
         let tool_specs = request_body["tools"].to_string();
         assert!(tool_specs.contains("\"name\":\"hollywood_context\""));
-        for upstream_tool in ["spawn_agent", "send_message", "wait_agent", "close_agent"] {
+        for upstream_tool in [
+            "spawn_agent",
+            "send_message",
+            "wait_agent",
+            "close_agent",
+            "request_user_input",
+            "request_user_input_async",
+            "send_message_to_user_async",
+        ] {
             assert!(!tool_specs.contains(&format!("\"name\":\"{upstream_tool}\"")));
         }
         let input = request_body["input"].as_array().unwrap().clone();

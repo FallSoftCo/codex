@@ -18,7 +18,7 @@ class Attention:
         self.pending = {}
         self.rpc_slots = {}
 
-    async def wait(self, method, params, *, slot):
+    async def create(self, method, params, *, slot, response_mode):
         from .journal import saved
 
         c = self.connector
@@ -37,10 +37,15 @@ class Attention:
             raise RuntimeError(
                 "Original native attention intent exists; reconcile it without replay"
             )
+        if response_mode not in ("native-callback", "agent-continuation"):
+            raise ValueError("Unknown human response mode")
         if method in QUESTION:
-            request = {"questions": params["questions"], "isBlocking": True}
+            request = {"questions": params["questions"],
+                       "isBlocking": response_mode == "native-callback"}
             summary = "\n".join(q["question"] for q in params["questions"])
         elif method in APPROVAL:
+            if response_mode != "native-callback":
+                raise ValueError("Execution approvals require their original callback")
             item = c.native_items.get(params.get("itemId"), {})
             request = {
                 "command": params.get("command"),
@@ -97,13 +102,35 @@ class Attention:
                 raise RuntimeError(
                     "Attention readback belongs to another native execution"
                 )
-        self.pending[str(slot)] = {
-            "identity": identity,
-            "path": path,
-            "receipt": receipt,
+        if response_mode == "native-callback":
+            self.pending[str(slot)] = {
+                "identity": identity, "path": path, "receipt": receipt,
+            }
+            self.rpc_slots[str(params["_rpcRequestId"])] = str(slot)
+        saved(path, {"state": "waiting", "payload": payload, "receipt": receipt,
+                     "responseMode": response_mode})
+        return identity, path, receipt
+
+    async def ask(self, params, *, slot):
+        identity, _, receipt = await self.create(
+            "hollywood/question", params, slot=slot, response_mode="agent-continuation"
+        )
+        if receipt.get("responseMode") != "same-agent-context-input":
+            raise RuntimeError(
+                "Hollywood lacks native human continuations; retain the original question receipt, do not repeat it"
+            )
+        return {
+            "accepted": True, "attentionId": identity,
+            "state": receipt["attention"]["state"], "scope": receipt["scope"],
+            "responseMode": "same-agent-context-input",
+            "instruction": "The question is durable and awaiting an authenticated human answer. Keep the unfinished outcome pending. You may finish this inference slice and handle other obligations; the answer becomes a new input in your existing context. Do not poll models or repeat the question.",
         }
-        self.rpc_slots[str(params["_rpcRequestId"])] = str(slot)
-        saved(path, {"state": "waiting", "payload": payload, "receipt": receipt})
+
+    async def wait(self, method, params, *, slot):
+        c = self.connector
+        identity, path, receipt = await self.create(
+            method, params, slot=slot, response_mode="native-callback"
+        )
         while not c.finished.done():
             try:
                 current = await c.http("GET", "attention/" + identity)
