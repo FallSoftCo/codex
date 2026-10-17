@@ -8,6 +8,7 @@ from uuid import UUID, uuid5
 
 from .native_goals import bind, progress, sync_policy, workspace_id
 from .errors import ToolValidationError
+from .artifact_routing import collect as collect_artifacts
 
 from .resource_routing import READ_TOOLS as RESOURCE_READ_TOOLS
 from .placement_control import READ_TOOL as PLACEMENT_READ_TOOL
@@ -275,19 +276,20 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_report",
-            "Report only this captured work assignment after verifying its acceptance criteria; supply relative artifact paths for independent connector hashing. A blocked report records a specific obstacle. Submission does not establish independent business acceptance.",
+            "Report only this captured work assignment after verifying its acceptance criteria; supply paths relative to optional artifactWorkspaceId (own registered physical root UUID), or the selected resource default, for independent hashing. A blocked report records a specific obstacle. Submission does not establish independent business acceptance.",
             {
                 "workId": text,
                 "revision": revision,
                 "state": {"type": "string", "enum": ["submitted", "blocked"]},
                 "note": text,
                 "artifactPaths": {"type": "array", "items": text, "maxItems": 16},
+                "artifactWorkspaceId": {"type": "string", "format": "uuid"},
             },
             ["workId", "revision", "state", "note", "artifactPaths"],
         ),
         spec(
             "hollywood_work_report_reconcile",
-            "Explicitly report your exact completed, unreported original assignment from later authenticated participation in the same persistent context and workspace. Inspect original receipts, effects and acceptance first. Explicitly attest effectDisposition reviewed or unknown; submitted requires reviewed and verified criteria, blocked preserves uncertainty. Supply priorDeliveryId and relative original artifacts. Never restart/reassign work or infer reviewed/no effects from stopped. Current authority/cancellation and independent review still apply; ordinary captured reporting stays strict.",
+            "Explicitly report your exact completed, unreported original assignment from later authenticated participation in the same persistent context and workspace. Inspect original receipts, effects and acceptance first. Explicitly attest effectDisposition reviewed or unknown; submitted requires reviewed and verified criteria, blocked preserves uncertainty. Supply priorDeliveryId and original artifact paths relative to optional artifactWorkspaceId (own currently authorized physical root UUID), or the selected resource default. Never restart/reassign work or infer reviewed/no effects from stopped. Current authority/cancellation and independent review still apply; ordinary captured reporting stays strict.",
             {
                 "workId": text,
                 "revision": revision,
@@ -296,6 +298,7 @@ def definitions(spec):
                 "effectDisposition": {"type": "string", "enum": ["reviewed", "unknown"]},
                 "note": {"type": "string", "minLength": 1, "maxLength": 4000},
                 "artifactPaths": {"type": "array", "items": text, "maxItems": 16},
+                "artifactWorkspaceId": {"type": "string", "format": "uuid"},
             },
             ["workId", "revision", "priorDeliveryId", "state", "effectDisposition", "note", "artifactPaths"],
         ),
@@ -472,17 +475,7 @@ async def reconcile_report(c, args, operation):
     from .report_scope import proof_for_report
     scope_proof, original_sequence = proof_for_report(c, work, original)
 
-    # The root descriptor pins one original workspace directory for every file.
-    # Paths and hashes cannot be supplied by a remote caller. Unlike the legacy
-    # report helper this refuses a symlink at the configured workspace root.
-    try:
-        root = os.open(c.config["workspace"], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try:
-            evidence = artifacts(c.config, args["artifactPaths"], root_fd=root)
-        finally:
-            os.close(root)
-    except OSError as error:
-        raise ValueError("Original artifact is unavailable or outside its pinned workspace") from error
+    evidence = await collect_artifacts(c, args, artifacts)
     payload = {
         "revision": args["revision"], "priorDeliveryId": prior,
         "state": args["state"], "note": args["note"], "evidence": evidence,
@@ -675,12 +668,8 @@ async def invoke(c, name, args, operation):
                 "If a criterion is unmet, report the specific blocker instead.",
             )
         payload.pop("artifactPaths")
-        try:
-            evidence = artifacts(c.config, args["artifactPaths"])
-        except OSError as error:
-            raise ValueError(
-                "Artifact is unavailable or outside the allowed file boundary"
-            ) from error
+        payload.pop("artifactWorkspaceId", None)
+        evidence = await collect_artifacts(c, args, artifacts)
         payload.update(
             claimId=c.active["delivery"]["claim_id"],
             generation=c.active["delivery"]["generation"],

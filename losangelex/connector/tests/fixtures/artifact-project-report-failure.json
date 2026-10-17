@@ -1,0 +1,10 @@
+{
+  "schema": "lax-artifact-report-failure-fixture/v1",
+  "attribution": "Root coordinator's direct r18 request; no independent live QA observation",
+  "sourceRequestId": "46768164-4bf9-470e-ba46-341ddb7766bd",
+  "runtime": "dev52/H34/native32708",
+  "artifactPath": "environment_report.py",
+  "reportedOutcome": "Native applied settlement and commands passed; submitted work report raised ValueError because workflow.artifacts opened the persistent private workspace instead of the registered shared project.",
+  "originalBlockedReportPrefix": "4c536a40",
+  "fixtureBoundary": "Only the reported failure facts are captured. Files, identities, canonical metadata and HTTP responses in the test journey are synthetic."
+}

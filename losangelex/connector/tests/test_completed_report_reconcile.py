@@ -34,7 +34,7 @@ class Fixture:
                                    "claim_id": "current-claim", "event": str(uuid4()), "state": "running"},
                        "request": {"authority": self.authority, "room": self.room, "data": {}}}
         self.active["request"]["id"] = self.active["delivery"]["event"]
-        self.role_context = SimpleNamespace(value={"roleRevision": 2})
+        self.role_context = SimpleNamespace(value={"roleRevision": 2, "communicationAdministrator": True})
         self.agent_binding = {"delivery": self.current, "generation": 3, "principal": self.agent,
                               "native_thread": self.thread, "context_id": self.context_id,
                               "workspace_id": self.config["workspaceId"], "role_revision": 2}
@@ -94,9 +94,36 @@ class Fixture:
         self.publications = []
         self.effects = Effects(self)
         self.post_error = None
+        self.register_artifact_root(root)
+
+    def register_artifact_root(self, root):
+        # Canonical metadata is fixture data; physical identity uses real files.
+        environment = digest({"hostId": self.host, "environmentId": "local"})
+        info = root.stat()
+        workspace = {"id": str(uuid4()), "authority": self.authority, "host": self.host,
+            "root_path": str(root), "revision": 1, "state": "active",
+            "environment_sha256": environment, "root_identity_sha256": digest({"hostId": self.host,
+                "environmentSha256": environment, "device": info.st_dev, "inode": info.st_ino})}
+        grant = {"workspace": workspace["id"], "principal": self.agent, "execution_host": self.host,
+                 "revision": 1, "state": "active", "can_read": True, "can_write": False}
+        self.resource = {"workspace": workspace, "grant": grant}
+        self.resource_default = {"schema": "hollywood-agent-resource-default/v1",
+            "authorityId": self.authority, "agentId": self.agent, "executionHost": self.host,
+            "selectionRevision": 1, "effectiveState": "selected", "mayApply": False,
+            "resource": self.resource, "selection": {"authority": self.authority,
+                "principal": self.agent, "execution_host": self.host, "revision": 1,
+                "state": "selected", "workspace": workspace["id"], "workspace_revision": 1, "grant_revision": 1}}
+        self.artifact_root = {"schema": "hollywood-artifact-root/v1", "workspaceId": workspace["id"],
+            "workspaceRevision": 1, "grantRevision": 1, "environmentSha256": environment,
+            "rootIdentitySha256": workspace["root_identity_sha256"]}
 
     async def http(self, method, path, payload=None):
         self.calls.append((method, path, copy.deepcopy(payload)))
+        if method == "GET" and path == "hosts/" + self.host + "/collaboration-bridge":
+            return {"resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True,
+                    "resourceMetadata": True}
+        if method == "GET" and path == "agents/" + self.agent + "/resource-defaults/" + self.host:
+            return copy.deepcopy(self.resource_default)
         if method == "GET" and path == "work/" + self.work:
             return copy.deepcopy(self.work_response)
         if method == "GET" and path == "deliveries/" + self.prior:
@@ -137,7 +164,8 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("artifactPaths", payload)
         self.assertEqual(payload["evidence"], [{"hostId": self.c.host,
             "workspaceId": self.c.config["workspaceId"], "relativePath": "result.txt",
-            "sha256": hashlib.sha256(b"original-result\n").hexdigest(), "size": 16}])
+            "sha256": hashlib.sha256(b"original-result\n").hexdigest(), "size": 16,
+            "artifactRoot": self.c.artifact_root}])
         self.assertEqual(before, (self.c.active, self.c.agent_binding, self.c.original, self.c.work_response))
         self.c.rpc.call.assert_not_called()
 
@@ -258,7 +286,7 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
         (self.root / "dirlink").symlink_to(self.root, target_is_directory=True)
         os.mkfifo(self.root / "fifo")
         for path in ["../result.txt", "/etc/passwd", "", "missing", "link", "dirlink/result.txt", "fifo"]:
-            with self.subTest(path=path), self.assertRaises(ValueError):
+            with self.subTest(path=path), self.assertRaises((ValueError, PermissionError)):
                 await self.invoke({**self.c.args, "artifactPaths": [path]})
             self.assertFalse(self.c.posts())
         self.c.config["artifactEvidenceMaxBytes"] = 1
@@ -269,7 +297,7 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
     async def test_workspace_root_symlink_denied(self):
         link = self.root / "workspace-link"
         link.symlink_to(self.root, target_is_directory=True)
-        self.c.config["workspace"] = str(link)
+        self.c.resource["workspace"]["root_path"] = str(link)
         with self.assertRaises(ValueError):
             await self.invoke()
         self.assertFalse(self.c.posts())
@@ -279,15 +307,16 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
         workspace = self.root / "workspace"
         workspace.mkdir()
         (workspace / "result.txt").write_text("original-result\n")
-        self.c.config["workspace"] = str(workspace)
+        self.c.register_artifact_root(workspace)
         def replace_path(config, paths, *, root_fd):
             workspace.rename(self.root / "retained-workspace")
             workspace.mkdir()
             (workspace / "result.txt").write_text("replacement\n")
             return original(config, paths, root_fd=root_fd)
         with patch.object(workflow, "artifacts", replace_path):
-            await self.invoke()
-        self.assertEqual(self.c.posts()[0][2]["evidence"][0]["sha256"], hashlib.sha256(b"original-result\n").hexdigest())
+            with self.assertRaisesRegex(PermissionError, "physical root identity"):
+                await self.invoke()
+        self.assertFalse(self.c.posts())
 
     async def test_file_changed_during_hash_rejected(self):
         real = hashlib.sha256
@@ -297,7 +326,7 @@ class ReconcileTests(unittest.IsolatedAsyncioTestCase):
                 inner.hash.update(block)
                 (self.root / "result.txt").write_text("changed\n")
             def hexdigest(inner): return inner.hash.hexdigest()
-        with patch.object(workflow.hashlib, "sha256", MutatingHash):
+        with patch.object(workflow, "hashlib", SimpleNamespace(sha256=MutatingHash)):
             with self.assertRaisesRegex(ValueError, "changed"):
                 await self.invoke()
         self.assertFalse(self.c.posts())
