@@ -353,3 +353,7 @@ with its separate administrator credential. Host-admission reads and runtime rel
 continue to use the enrolled controller credential. Preparation must be regenerated
 for the new adapter digest; existing changed or revoked installations still require
 an explicit drained upgrade. This source change performs no live installation.
+
+### Goals keep their own room scope
+
+With the canonical-goal-origins/v1 Hollywood implementation, native hollywood_goal_create accepts optional roomId and publishScopedIntent. The default retains the current request room and original wire. A different room requires explicit publishScopedIntent=true; Hollywood atomically records selected room-local planning intent and the Goal without creating a self-request or waking another model. Authenticated agent-origin planning does not claim a human ancestor or acquire external-effect permissions. The original room must remain room-visible; direct/private origin sharing retains its existing boundary. This chooses Goal collaboration scope and never replaces the agent context or grants anyone Global-room access.
