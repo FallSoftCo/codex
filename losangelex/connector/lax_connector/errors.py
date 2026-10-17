@@ -22,3 +22,20 @@ class ToolValidationError(ValueError):
             "message": self.message,
             "next": self.next_action,
         }
+
+
+def validate_workflow_note(value):
+    """A rejected metadata input can be corrected without repeating file effects."""
+    if not isinstance(value, str) or not value.strip():
+        raise ToolValidationError(
+            "WORKFLOW_NOTE_REQUIRED",
+            "Supply a nonempty outcome note.",
+            "Use a concise outcome and canonical evidence references.",
+        )
+    if len(value) > 4000:
+        raise ToolValidationError(
+            "WORKFLOW_NOTE_TOO_LONG",
+            f"Note is {len(value)} characters; the limit is 4000.",
+            "Shorten the note and reference existing evidence IDs. This input was rejected before HTTP. "
+            "Correct it only within current authorization; do not repeat file or external effects.",
+        )

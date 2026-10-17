@@ -7,7 +7,7 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid5
 
 from .native_goals import bind, progress, sync_policy, workspace_id
-from .errors import ToolValidationError
+from .errors import ToolValidationError, validate_workflow_note
 from .artifact_routing import collect as collect_artifacts
 
 from .resource_routing import READ_TOOLS as RESOURCE_READ_TOOLS
@@ -48,6 +48,8 @@ MUTATION_TOOLS = {
 
 def definitions(spec):
     text = {"type": "string"}
+    note = {"type": "string", "minLength": 1, "maxLength": 4000,
+            "description": "Concise outcome and evidence references, at most4000 characters; do not copy full transcripts."}
     revision = {"type": "integer", "minimum": 1}
     from .resource_routing import definitions as resource_definitions
     from .placement_control import definitions as placement_definitions
@@ -137,7 +139,7 @@ def definitions(spec):
                 "priorDeliveryId": text, "resultEventId": text, "executorId": text,
                 "outcome": {"type": "string", "enum": ["pre_turn_denied"]},
                 "reconciliationSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-                "note": text,
+                "note": note,
             },
             ["workId", "revision", "priorDeliveryId", "resultEventId", "executorId",
              "outcome", "reconciliationSha256", "note"],
@@ -151,7 +153,7 @@ def definitions(spec):
                 "ownerId": text,
                 "specification": text,
                 "acceptance": text,
-                "note": text,
+                "note": note,
             },
             ["workId", "revision", "ownerId", "specification", "acceptance", "note"],
         ),
@@ -281,7 +283,7 @@ def definitions(spec):
                 "workId": text,
                 "revision": revision,
                 "state": {"type": "string", "enum": ["submitted", "blocked"]},
-                "note": text,
+                "note": note,
                 "artifactPaths": {"type": "array", "items": text, "maxItems": 16},
                 "artifactWorkspaceId": {"type": "string", "format": "uuid"},
             },
@@ -296,7 +298,7 @@ def definitions(spec):
                 "priorDeliveryId": text,
                 "state": {"type": "string", "enum": ["submitted", "blocked"]},
                 "effectDisposition": {"type": "string", "enum": ["reviewed", "unknown"]},
-                "note": {"type": "string", "minLength": 1, "maxLength": 4000},
+                "note": note,
                 "artifactPaths": {"type": "array", "items": text, "maxItems": 16},
                 "artifactWorkspaceId": {"type": "string", "format": "uuid"},
             },
@@ -309,14 +311,14 @@ def definitions(spec):
                 "workId": text,
                 "revision": revision,
                 "decision": {"type": "string", "enum": ["accepted", "rejected"]},
-                "note": text,
+                "note": note,
             },
             ["workId", "revision", "decision", "note"],
         ),
         spec(
             "hollywood_work_cancel",
             "Goal manager: request cancellation of this work. A cancellation request never proves external effects stopped or were undone.",
-            {"workId": text, "revision": revision, "note": text},
+            {"workId": text, "revision": revision, "note": note},
             ["workId", "revision", "note"],
         ),
         spec(
@@ -329,7 +331,7 @@ def definitions(spec):
                     "type": "string",
                     "enum": ["active", "paused", "accepted", "cancelled"],
                 },
-                "note": text,
+                "note": note,
             },
             ["goalId", "revision", "state", "note"],
         ),
@@ -404,6 +406,7 @@ def artifacts(config, paths, *, root_fd=None):
 
 async def reconcile_report(c, args, operation):
     """Evidence-only submission: the original is never selected as active work."""
+    validate_workflow_note(args.get("note"))
     work_id, prior = str(UUID(args["workId"])), str(UUID(args["priorDeliveryId"]))
     if (type(args["revision"]) is not int or args["revision"] < 1
         or args["state"] not in ("submitted", "blocked")
@@ -501,6 +504,8 @@ async def invoke(c, name, args, operation):
         return await read(c, name, args)
     if name == "hollywood_work_report_reconcile":
         return await reconcile_report(c, args, operation)
+    if name in MUTATION_TOOLS and "note" in args:
+        validate_workflow_note(args["note"])
     if name == "hollywood_portfolio":
         from urllib.parse import urlencode
 
