@@ -24,6 +24,7 @@ use codex_app_server_protocol::TurnStartedNotification;
 use codex_app_server_protocol::TurnStatus;
 use codex_app_server_protocol::UserInput as V2UserInput;
 use codex_protocol::ThreadId;
+use codex_utils_absolute_path::test_support::PathExt;
 use core_test_support::responses;
 use core_test_support::skip_if_remote;
 use pretty_assertions::assert_eq;
@@ -370,7 +371,7 @@ async fn cancelled_coordination_wake_interrupts_active_turn() -> Result<()> {
     std::fs::create_dir(&working_directory)?;
 
     let server = create_mock_responses_server_sequence_unchecked(vec![
-        create_shell_command_sse_response(
+        create_command_execution_sse_response(
             shell_command,
             Some(&working_directory),
             Some(30_000),
@@ -423,8 +424,11 @@ async fn cancelled_coordination_wake_interrupts_active_turn() -> Result<()> {
         })
         .await?;
 
-    let state_db =
-        codex_state::StateRuntime::init(codex_home.clone(), "mock_provider".to_string()).await?;
+    let state_db = codex_state::StateRuntime::init(
+        codex_state::SqliteConfig::new_for_testing(codex_home.abs()),
+        "mock_provider".to_string(),
+    )
+    .await?;
     let creator = ThreadId::from_string(canceller_thread.id.as_str()).expect("creator");
 
     state_db

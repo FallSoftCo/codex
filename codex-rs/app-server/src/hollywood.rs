@@ -1609,6 +1609,7 @@ mod tests {
         });
         let turn = codex_app_server_protocol::Turn {
             id: "turn-live".to_string(),
+            root_turn_id: None,
             items: vec![codex_app_server_protocol::ThreadItem::UserMessage {
                 id: "item-1".to_string(),
                 client_id: None,

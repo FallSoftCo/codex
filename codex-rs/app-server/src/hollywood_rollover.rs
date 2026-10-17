@@ -148,12 +148,7 @@ async fn collect_local_peers(
     }
 
     let loaded_statuses = thread_watch_manager
-        .loaded_statuses_for_threads(
-            peer_thread_ids
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
-        )
+        .loaded_statuses_for_threads(peer_thread_ids.iter().map(ToString::to_string))
         .await;
 
     let mut peers = Vec::new();

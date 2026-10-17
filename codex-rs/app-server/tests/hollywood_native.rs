@@ -6,8 +6,8 @@ use codex_app_server_protocol::HollywoodAgentMessageParams;
 use codex_app_server_protocol::HollywoodAgentMessageResponse;
 use codex_app_server_protocol::HollywoodEventAudience;
 use codex_app_server_protocol::HollywoodEventKind;
+use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ThreadHollywoodAttachParams;
-use codex_app_server_protocol::ThreadHollywoodAttachResponse;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::TurnStartParams;
 use codex_app_server_protocol::UserInput;
@@ -71,22 +71,23 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
         })
         .await?
         .thread;
-    let legacy_attach: Result<ThreadHollywoodAttachResponse> = app
-        .request(|request_id| ClientRequest::ThreadHollywoodAttach {
-            request_id,
-            params: ThreadHollywoodAttachParams {
+    let legacy_attach = app
+        .send_request(
+            "thread/hollywood/attach",
+            Some(serde_json::to_value(ThreadHollywoodAttachParams {
                 thread_id: thread.id.clone(),
                 url: Some(legacy_url.clone()),
                 room: Some("legacy-room".to_string()),
                 ..Default::default()
-            },
-        })
-        .await;
-    assert!(
-        legacy_attach
-            .expect_err("legacy ingress must be disabled")
-            .to_string()
-            .contains("Legacy room attachment is disabled")
+            })?),
+        )
+        .await?;
+    let rejected = app
+        .read_stream_until_error_message(RequestId::Integer(legacy_attach))
+        .await?;
+    assert_eq!(
+        rejected.error.message,
+        "Legacy room attachment is disabled in Hollywood-native mode"
     );
     let authority = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     let room = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

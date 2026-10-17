@@ -473,9 +473,12 @@ async fn marketplace_upgrade_rejects_unknown_or_non_git_marketplace() -> Result<
 
     for marketplace_name in ["missing", "local-only"] {
         let request_id = mcp
-            .send_marketplace_upgrade_request(MarketplaceUpgradeParams {
-                marketplace_name: Some(marketplace_name.to_string()),
-            })
+            .send_request(
+                "marketplace/upgrade",
+                Some(serde_json::to_value(MarketplaceUpgradeParams {
+                    marketplace_name: Some(marketplace_name.to_string()),
+                })?),
+            )
             .await?;
 
         let err = timeout(

@@ -1402,6 +1402,7 @@ async fn skills_changed_notification_is_emitted_after_skill_change() -> Result<(
             selected_capability_roots: None,
             mock_experimental_field: None,
             hollywood: None,
+            tool_policy: None,
             experimental_raw_events: false,
         })
         .await?;

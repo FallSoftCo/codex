@@ -749,16 +749,15 @@ async fn guardian_review_session_config_bounds_expanded_local_template() {
         if expected_success {
             assert_eq!(
                 result.expect("valid local template").base_instructions,
-                Some(
-                    GuardianPolicyInstructions::new(
-                        parent_config.guardian_transcript_mode,
-                        &policy,
-                        &extra_policy,
-                        &template,
-                        guardian_output_contract_prompt(),
-                    )
-                    .render()
+                GuardianPolicyInstructions::new(
+                    parent_config.guardian_transcript_mode,
+                    &policy,
+                    &extra_policy,
+                    &template,
+                    guardian_output_contract_prompt(),
                 )
+                .render()
+                .into_text()
             );
         } else {
             assert_eq!(
