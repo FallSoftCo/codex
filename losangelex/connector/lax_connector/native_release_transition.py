@@ -19,6 +19,29 @@ def optional(fd, name):
         return None
 
 
+REFERENCE_SCHEMA = "lax-release-record-reference/v1"
+
+
+def prior_reference(value):
+    """Pin the original immutable receipt without recursively embedding history."""
+    if value is None:
+        return None
+    return {"schema": REFERENCE_SCHEMA, "operationId": value["operationId"],
+            "recordSchema": value["schema"], "state": value["state"],
+            "digest": observer.digest(value)}
+
+
+def matches_prior(value, reference):
+    # Existing accepted and interrupted v1 records retain their original bytes.
+    if not isinstance(reference, dict) or reference.get("schema") != REFERENCE_SCHEMA:
+        return value == reference
+    return (isinstance(value, dict)
+            and value.get("operationId") == reference["operationId"]
+            and value.get("schema") == reference["recordSchema"]
+            and value.get("state") == reference["state"]
+            and observer.digest(value) == reference["digest"])
+
+
 def states(plan, root_fd):
     result = []
     for target in plan["targets"]:
@@ -105,13 +128,13 @@ def status_locked(fd, operation=None):
         pointer = optional(fd, release.CURRENT)
         if accepted is not None and accepted != {**intent, "state": "accepted"}:
             raise ValueError("Original immutable accepted record differs")
-        if current not in (intent["priorIndex"], intent, accepted):
+        if current not in (intent, accepted) and not matches_prior(current, intent["priorIndex"]):
             raise ValueError("Original image transition pointer is uncertain")
-        if pointer not in (intent["priorRelease"], accepted):
+        if pointer != accepted and not matches_prior(pointer, intent["priorRelease"]):
             raise ValueError("Original accepted software pointer is uncertain")
         if (accepted is not None and stages != [1, 1, 1]
                 or pointer == accepted and accepted is not None and current != accepted
-                or current == intent["priorIndex"] and stages != [0, 0, 0]):
+                or matches_prior(current, intent["priorIndex"]) and stages != [0, 0, 0]):
             raise ValueError("Accepted/pointer stages disagree with original metadata prefix")
         complete = stages == [1, 1, 1] and accepted and current == accepted and pointer == accepted
         result.update(state="accepted" if complete else "pending", metadataStages=stages,
@@ -282,10 +305,10 @@ def approve(authority, host, agent, prepared, expected_preparation):
         finally:
             os.close(state_fd)
             os.close(controller_fd)
-        prior = optional(fd, image.INDEX)
+        prior = prior_reference(optional(fd, image.INDEX))
         operation = observer.digest([expected_preparation, prior])
         intent = {**plan, "state": "intent", "operationId": operation,
-                  "priorIndex": prior, "priorRelease": optional(fd, release.CURRENT),
+                  "priorIndex": prior, "priorRelease": prior_reference(optional(fd, release.CURRENT)),
                   "journalSnapshotDigest": observer.digest(journals),
                   "controllerDigest": observer.digest(controller)}
         # Offline evidence precedes intent; full closure/probes are rechecked
@@ -325,7 +348,7 @@ def reconcile(authority, host, agent, operation, expected_intent):
                 if optional(fd, name.removesuffix("-intent.json") + "-accepted.json") != {**value, "state": "accepted"}:
                     raise ValueError("Another original image/release transition remains unsettled")
         # An intent may be durable just before its pointer was published.
-        if optional(fd, image.INDEX) == intent["priorIndex"]:
+        if matches_prior(optional(fd, image.INDEX), intent["priorIndex"]):
             if states(intent, fd) != [0, 0, 0]:
                 raise ValueError("Missing transition pointer with changed metadata is uncertain")
             image._write(fd, image.INDEX, intent, replace=True)

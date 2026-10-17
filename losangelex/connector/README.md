@@ -97,3 +97,10 @@ connector module and configuration path. Matching files on disk alone do not
 establish which installed release is running. A pending manager reload or mismatched
 launcher stays unavailable until the approved lifecycle completes. A busy inspection
 lock is reported separately from an unsettled image transition; it grants no execution.
+
+Release transitions pin predecessor receipts by operation identity and canonical
+digest; they do not recursively embed the entire previous release. Original
+accepted/interrupt records remain immutable and readable. A bounded 32 MiB
+compatibility budget covers the captured legacy 18 MiB interrupted record; both
+writes and reads enforce the same ceiling. Reconciliation still requires the
+original operation/digest and the unchanged offline scope.

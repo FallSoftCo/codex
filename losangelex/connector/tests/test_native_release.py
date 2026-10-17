@@ -313,6 +313,35 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.originals["unit"], self.unit.read_bytes())
         self.assertEqual(release.active_spec(self.spec, self.authority, self.host, self.agent), self.spec)
 
+    def test_repeated_upgrades_reference_history_without_recursive_growth(self):
+        roots = [(self.package, self.binary, self.python),
+                 (self.new_root, self.new_binary, self.new_python)]
+        sizes = []
+        prior = None
+        for step in range(4):
+            old, new = roots[step % 2], roots[(step + 1) % 2]
+            enrollment = json.loads((self.registry / "enrollment.json").read_text())
+            self.request_spec.update(
+                expectedEnrollment=observer.digest(enrollment),
+                expectedConfigurationSha256=hashlib.sha256(
+                    (self.home / "connector.json").read_bytes()).hexdigest(),
+                expectedDefinition=hashlib.sha256(self.unit.read_bytes()).hexdigest(),
+                oldReleaseRoot=str(old[0]), newReleaseRoot=str(new[0]),
+                oldBinary=str(old[1]), newBinary=str(new[1]),
+                oldInterpreter=str(old[2]), newInterpreter=str(new[2]))
+            self.prepared = self.root / ("prepared-repeat-" + str(step))
+            self.prepare()
+            accepted = self.approve()
+            record = json.loads((self.registry / release.CURRENT).read_text())
+            self.assertEqual(record["priorIndex"], transition.prior_reference(prior))
+            if prior is not None:
+                self.assertEqual(record["priorIndex"]["digest"], observer.digest(prior))
+                self.assertNotIn("closure", record["priorIndex"])
+            sizes.append(len(json.dumps(record)))
+            self.assertEqual(accepted["state"], "accepted")
+            prior = record
+        self.assertLess(max(sizes) - min(sizes), 1024)
+
     def test_restrictive_umask_does_not_change_original_config_or_unit_modes(self):
         self.prepare()
         before = [(self.home / "connector.json").stat().st_mode & 0o777,

@@ -67,16 +67,21 @@ def _open_directory(path, uid=0):
         raise
 
 
+# Retain bounded compatibility with an already-published legacy 18 MiB intent.
+# New release records use constant-size predecessor references.
+MAX_EVIDENCE_BYTES = 32 * 1024 * 1024
+
+
 def _read(fd, name, uid=0):
     handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
     try:
         before = os.fstat(handle)
         _owned(before, uid)
-        if before.st_size > 16 * 1024 * 1024:
+        if before.st_size > MAX_EVIDENCE_BYTES:
             raise ValueError("Transition evidence exceeds finite read budget")
         with os.fdopen(os.dup(handle), "rb") as stream:
-            data = stream.read(16 * 1024 * 1024 + 1)
-        if len(data) > 16 * 1024 * 1024 or _identity(before) != _identity(
+            data = stream.read(MAX_EVIDENCE_BYTES + 1)
+        if len(data) > MAX_EVIDENCE_BYTES or _identity(before) != _identity(
             os.fstat(handle)
         ):
             raise ValueError("Transition evidence changed while reading")
@@ -91,6 +96,8 @@ def _json(fd, name, uid=0):
 
 def _write(fd, name, value, *, replace=False):
     data = (json.dumps(value, indent=2) + "\n").encode()
+    if len(data) > MAX_EVIDENCE_BYTES:
+        raise ValueError("Transition evidence exceeds finite write budget")
     temporary = ".image-transition-" + os.urandom(16).hex()
     handle = os.open(
         temporary,
