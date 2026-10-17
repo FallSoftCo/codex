@@ -21,7 +21,7 @@ from test_resource_routing import fixture_view
 
 
 CAPTURE = json.loads((Path(__file__).parent / "fixtures/artifact-project-report-failure.json").read_text())
-POLICY = {"resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True,
+POLICY = {"artifactResourceEvidence": True, "artifactRootPolicy": "hollywood-artifact-root/v1", "resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True,
           "resourceMetadata": True}
 
 
@@ -222,6 +222,12 @@ class ArtifactJourneyTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((await self.invoke(True, artifactWorkspaceId=self.workspace["id"]))["success"])
         self.assertFalse(self.posts)
         self.assertFalse(self.c.uncertain_tools)
+
+    async def test_server_missing_artifact_capability_refuses_without_read_or_post(self):
+        with patch.dict(POLICY, {"artifactResourceEvidence": False}):
+            self.assertFalse((await self.invoke())["success"])
+        self.assertEqual(self.metadata_reads, 0)
+        self.assertFalse(self.posts)
 
     async def test_no_private_fallback_or_foreign_root_or_scope(self):
         (self.private / self.relative).write_bytes(b"private decoy")

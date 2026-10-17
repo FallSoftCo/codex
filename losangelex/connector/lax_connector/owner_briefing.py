@@ -213,6 +213,8 @@ def carry(capture, peer, frame, owner):
             "resourceRouting",
             "resourceDefaults",
             "resourceMetadata",
+            "artifactResourceEvidence",
+            "artifactRootPolicy",
             "placementControl",
             "pausedResourceSetup",
         )

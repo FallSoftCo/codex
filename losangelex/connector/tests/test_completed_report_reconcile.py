@@ -120,7 +120,7 @@ class Fixture:
     async def http(self, method, path, payload=None):
         self.calls.append((method, path, copy.deepcopy(payload)))
         if method == "GET" and path == "hosts/" + self.host + "/collaboration-bridge":
-            return {"resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True,
+            return {"artifactResourceEvidence": True, "artifactRootPolicy": "hollywood-artifact-root/v1", "resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True,
                     "resourceMetadata": True}
         if method == "GET" and path == "agents/" + self.agent + "/resource-defaults/" + self.host:
             return copy.deepcopy(self.resource_default)

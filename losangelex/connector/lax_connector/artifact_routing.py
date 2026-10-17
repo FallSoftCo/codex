@@ -5,7 +5,7 @@ from uuid import UUID
 
 from .collaboration_bridge import Held, canonical_relative, digest, require
 from .collaboration_resources import open_root
-from .resource_routing import read
+from .resource_routing import connector_capabilities, read
 
 
 def validated(c, resource, selection=None):
@@ -113,6 +113,10 @@ async def _collect(c, args, reader):
         explicit = str(UUID(explicit))
     if not paths:
         return []
+    policy = await connector_capabilities(c)
+    require(policy.get("artifactResourceEvidence") is True
+            and policy.get("artifactRootPolicy") == "hollywood-artifact-root/v1",
+            "Server artifact resource evidence capability unavailable; no report submitted")
     pinned = await resolve(c, explicit)
     try:
         fd = open_root(pinned["root"])
