@@ -67,6 +67,8 @@ class AppServer:
         # Pin the executable; inherited launcher overrides must not choose another build.
         for key in ("CODEX_CLI_PATH", "CODEX_EXECUTABLE", "CODEX_EXEC_SERVER_URL"):
             env.pop(key, None)
+        # MCP configuration belongs to this explicit CODEX_HOME. Leave server
+        # discovery and enablement to upstream without imposing a CLI table.
         with (self.state / "app-server.log").open("ab") as log:
             self.process = await asyncio.create_subprocess_exec(
                 self.binary,
@@ -77,8 +79,6 @@ class AppServer:
                 f"sqlite_home={json.dumps(str(self.state / 'sqlite'))}",
                 "-c",
                 f"log_dir={json.dumps(str(self.state / 'logs'))}",
-                "-c",
-                "mcp_servers={}",
                 "-c",
                 "check_for_update_on_startup=false",
                 stdin=asyncio.subprocess.PIPE,
