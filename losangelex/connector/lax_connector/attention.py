@@ -1,8 +1,10 @@
-"""Deliver authenticated Hollywood human controls to the exact waiting LAX call."""
+"""Durable Hollywood human questions and exact native execution approvals."""
 
 import asyncio
 import json
 from uuid import UUID, uuid5
+
+from .journal import saved
 
 QUESTION = ("hollywood/question", "item/tool/requestUserInput")
 APPROVAL = ("item/commandExecution/requestApproval", "item/fileChange/requestApproval")
@@ -19,8 +21,6 @@ class Attention:
         self.rpc_slots = {}
 
     async def create(self, method, params, *, slot, response_mode):
-        from .journal import saved
-
         c = self.connector
         journal = json.loads(c.journal.read_text())
         turn = journal.get("nativeTurn")
@@ -131,6 +131,7 @@ class Attention:
         identity, path, receipt = await self.create(
             method, params, slot=slot, response_mode="native-callback"
         )
+        payload = json.loads(path.read_text())["payload"]
         while not c.finished.done():
             try:
                 current = await c.http("GET", "attention/" + identity)
@@ -188,8 +189,6 @@ class Attention:
         raise AttentionExpired("Original native turn ended before the human response")
 
     async def acknowledge(self, slot, state):
-        from .journal import saved
-
         c = self.connector
         item = self.pending.get(str(slot))
         if not item:
