@@ -1,0 +1,27 @@
+{
+  "schema": "captured-native-room-summary-failure/v1",
+  "source": "actual disposable native QA",
+  "sourcePath": "/home/aosp/.local/state/lax/native-fork-reconciliation-20261016-r01/ROOT-ASYNC-COMMUNICATION-FAILURE-20261017-r01.json",
+  "sourceSha256": "bc113940bc16db65a404216afd8c974b5fe86e44f725a570bcccc2a565186af3",
+  "case": {
+    "id": "632640f2-872a-4d20-a895-522e44a2f422",
+    "agent": "37167261-54d8-4937-a685-012aa2d0833d",
+    "event": "269e0cd3-f6c6-4662-bbee-f23b32f9a30f",
+    "result_event": "99b7a2cb-fb5f-4349-b620-8dc4ae639c34",
+    "kind": "request",
+    "audience": "direct",
+    "author": "37167261-54d8-4937-a685-012aa2d0833d",
+    "recipient": "37167261-54d8-4937-a685-012aa2d0833d",
+    "source": "e49ba39f-404c-4822-bafc-7d5b61b9f943",
+    "data": {
+      "authorKind": "agent",
+      "triggerDigest": "af00a1309344a422c4591783dea759787ef0b53aa873b7ff720f40a3279d1229",
+      "goalReferenceId": "f7241fdf-5fc7-5975-8180-2ae1406ec410",
+      "portfolioReview": true,
+      "materialSequence": 478,
+      "deliveryReferenceId": null
+    }
+  },
+  "observedFailure": "Private sharing requires an explicit sharing contract",
+  "privacy": "Original outcome body omitted from repo fixture; causal GET facts in transport scenario are explicitly synthetic."
+}

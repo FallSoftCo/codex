@@ -324,7 +324,41 @@ def audit_event(row, delivery_id=None):
                     "after": row["seq"] - 1, "limit": 1, "view": "conversation"}}
 
 
-def compact_fragment(task, task_delivery, result, audit, inspection):
+class VerifiedContext(dict):
+    """JSON carries only the bounded view; canonical reply proof stays in memory."""
+
+    def __init__(self, fragment, proof=None):
+        super().__init__(fragment)
+        self._reply_proof = proof
+
+
+def reply_view(scopes, kind):
+    if not scopes:
+        return None
+    value = {**scopes[0], "kind": kind}
+    if len(scopes) == 2:
+        value["goalRoomId"] = scopes[1]["roomId"]
+    return value
+
+
+def verified_reply_scope(c, room):
+    context = getattr(c, "causal_task_context", None)
+    require(isinstance(context, VerifiedContext), "VERIFIED_REPLY_SCOPE_REQUIRED")
+    proof = context._reply_proof
+    require(proof is not None and proof["binding"] == origin_reference(c.active)
+            and c.active["delivery"]["agent"] == c.config["agentId"]
+            and c.active["delivery"]["state"] == "running"
+            and not c.active["delivery"]["cancellation_requested"]
+            and context.get("ancestry", {}).get("sha256") == proof["audit"]
+            and context.get("replyScope") == reply_view(proof["scopes"], proof["kind"]),
+            "CURRENT_REPLY_SCOPE_CHANGED")
+    matches = [scope for scope in proof["scopes"] if scope["roomId"] == room]
+    require(len(matches) == 1, "ORIGINAL_REPLY_ROOM_REQUIRED")
+    return matches[0]
+
+
+def compact_fragment(task, task_delivery, result, audit, inspection, scopes=(), kind="peer"):
+
     value = {"schema": SCHEMA, "contentAuthority": "tool-data",
              "task": {"requestId": task["id"], "deliveryId": task_delivery,
                       "by": [task["data"]["authorKind"], task["author"]],
@@ -337,6 +371,8 @@ def compact_fragment(task, task_delivery, result, audit, inspection):
              "ancestry": {"depth": len(audit["hops"]), "sha256": digest(audit)},
              "outcome": "unassessed", "accountTaskFirst": True,
              "historicalInspectionOnly": inspection, "requiresDeeperRead": True}
+    if scopes:
+        value["replyScope"] = reply_view(scopes, kind)
     # Canonical task/result references and attribution are never trimmed. The
     # audit retains fuller source excerpts/acceptance and all hop identities.
     for budget in range(160, -1, -8):
@@ -447,8 +483,124 @@ async def build_context(get, captured, resolve, *, inspection=False):
              "lineageCancelledOrUnknown": cancelled, "outcome": "unassessed",
              "executionStates": {k: v["delivery"]["state"] for k, v in records.items()}}
     require(len(encoded(audit)) <= MAX_AUDIT_BYTES, "AUDIT_BUDGET_EXCEEDED")
-    return {"fragment": compact_fragment(task, task_delivery["id"], latest_result, audit, inspection),
-            "audit": audit}
+    scopes = [{"roomId": task["room"], "sourceEventId": task["id"]}] if (
+        task["audience"] == "room" and not inspection) else []
+    return {"fragment": compact_fragment(task, task_delivery["id"], latest_result, audit,
+                                        inspection, scopes),
+            "audit": audit, "scopes": scopes, "kind": "peer"}
+
+
+async def portfolio_item(get, actor, goal):
+    path, seen = "agents/" + actor + "/supervision?limit=32", set()
+    for _ in range(4):
+        value = await read(get, path)
+        items = value.get("items")
+        require(isinstance(items, list) and len(items) <= 32, "PORTFOLIO_PAGE_HELD")
+        matches = [item for item in items if item.get("scope") == "goal"
+                   and item.get("reference") == goal]
+        require(len(matches) <= 1, "PORTFOLIO_AMBIGUOUS")
+        if matches:
+            return value.get("policy"), matches[0], path
+        cursor = value.get("nextCursor")
+        if cursor is None:
+            break
+        require(isinstance(cursor, dict) and cursor.get("scope") in ("goal", "delivery"),
+                "PORTFOLIO_CURSOR_HELD")
+        key = (identity(cursor.get("reference")), cursor["scope"])
+        require(key not in seen, "PORTFOLIO_CURSOR_HELD")
+        seen.add(key)
+        path = ("agents/" + actor + "/supervision?limit=32&afterReference=" +
+                key[0] + "&afterScope=" + key[1])
+    raise ContextHeld("PORTFOLIO_REVIEW_NOT_FOUND")
+
+
+async def portfolio_context(get, captured, ledger):
+    """A dispatch flag is a candidate; canonical policy/item/Goal prove its scope."""
+    cd, ce = receipt(captured)
+    actor, authority = cd["agent"], cd["authority"]
+    data = ce["data"]
+    require(data.get("portfolioReview") is True and data.get("deliveryReferenceId") is None
+            and ce["audience"] == "direct" and ce["author"] == ce["recipient"] == actor
+            and data["authorKind"] == "agent", "PORTFOLIO_SCOPE_HELD")
+    goal_id = identity(data.get("goalReferenceId"))
+    current = await read(get, "deliveries/" + cd["id"])
+    compare_reference(origin_reference(captured), current)
+    cd, ce = receipt(current)
+    require(cd["state"] == "claimed" and not cd["cancellation_requested"],
+            "CONTINUATION_NOT_CLAIMED")
+    policy, item, path = await portfolio_item(get, actor, goal_id)
+
+    def admission(policy, item):
+        require(isinstance(policy, dict) and policy.get("principal") == actor
+                and policy.get("authority") == authority and policy.get("enabled") is True
+                and policy.get("room") == ce["room"]
+                and item.get("principal") == actor and item.get("goal") == goal_id
+                and item.get("request_event") == ce["id"] and item.get("review_delivery") == cd["id"]
+                and isinstance(data.get("triggerDigest"), str)
+                and len(data["triggerDigest"]) == 64
+                and item.get("dispatched_digest") == data["triggerDigest"],
+                "CANONICAL_PORTFOLIO_REVIEW_REQUIRED")
+    admission(policy, item)
+    goal = (await read(get, "goals/" + goal_id)).get("goal")
+    require(isinstance(goal, dict) and goal.get("id") == goal_id
+            and goal.get("authority") == authority and actor in (goal.get("owner"), goal.get("creator")),
+            "ORIGINAL_GOAL_SCOPE_HELD")
+    source = event((await read(get, "inbox/events/" + identity(goal.get("source")))).get("event"))
+    require(source["authority"] == authority and source["room"] == goal["room"]
+            and source["audience"] == "room", "PRIVATE_GOAL_ORIGIN_HELD")
+    origin_id = source["id"]
+    if source["kind"] != "request":
+        require(source["kind"] == "message" and source["author"] == goal.get("creator") == actor
+                and source["data"].get("type") == "goalOrigin"
+                and source["data"].get("scope") == "explicit-planning-intent/v1"
+                and source["data"].get("goalId") == goal_id
+                and source["source"] == source["data"].get("originRequestId"),
+                "EXPLICIT_GOAL_ORIGIN_REQUIRED")
+        origin_id = identity(source["source"])
+    ref = ledger.unique(origin_id)
+    origin = await read(get, "deliveries/" + identity(ref.get("deliveryId")))
+    compare_reference(ref, origin)
+    od, task = receipt(origin)
+    require(od["agent"] == actor and od["authority"] == authority
+            and task["audience"] == "room" and task["recipient"] in (None, actor)
+            and not od["cancellation_requested"]
+            and od["state"] not in ("cancel_requested", "cancelled", "unknown"),
+            "ORIGINAL_PUBLIC_TASK_REQUIRED")
+    if source["id"] != task["id"]:
+        require(task["room"] == source["data"].get("originRoomId")
+                and task["data"]["authorKind"] == source["data"].get("originAuthorKind"),
+                "GOAL_ORIGIN_LINK_CHANGED")
+    material = event((await read(get, "inbox/events/" + identity(ce["source"]))).get("event"))
+    require(material["authority"] == authority
+            and type(data.get("materialSequence")) is int
+            and material["seq"] == data["materialSequence"] < ce["seq"]
+            and task["seq"] <= source["seq"] < material["seq"],
+            "PORTFOLIO_MATERIAL_LINK_CHANGED")
+    again = await read(get, path)
+    fresh = [i for i in again.get("items", []) if i.get("scope") == "goal"
+             and i.get("reference") == goal_id]
+    require(len(fresh) == 1, "CANONICAL_PORTFOLIO_REVIEW_REQUIRED")
+    admission(again.get("policy"), fresh[0])
+    latest = await read(get, "deliveries/" + cd["id"])
+    parent = await read(get, "deliveries/" + od["id"])
+    fresh_goal = (await read(get, "goals/" + goal_id)).get("goal", {})
+    require(latest["delivery"] == cd and event_digest(event(latest["request"])) == event_digest(ce)
+            and parent["delivery"] == od and event_digest(event(parent["request"])) == event_digest(task)
+            and all(fresh_goal.get(k) == goal.get(k) for k in
+                    ("id", "authority", "room", "owner", "creator", "source")),
+            "LINEAGE_CHANGED_DURING_READ")
+    scopes = [{"roomId": task["room"], "sourceEventId": task["id"]}]
+    if source["room"] != task["room"]:
+        scopes.append({"roomId": source["room"], "sourceEventId": source["id"]})
+    audit = {"schema": "lax-causal-audit/v2", "continuationKind": "portfolioGoalReview",
+             "authorityId": authority, "agentId": actor, "historicalInspectionOnly": False,
+             "current": origin_reference(captured), "task": audit_event(task, od["id"]),
+             "goal": {k: goal[k] for k in ("id", "room", "owner", "creator", "source")},
+             "goalSource": audit_event(source), "material": audit_event(material),
+             "hops": [], "lineageCancelledOrUnknown": False, "outcome": "unassessed"}
+    require(len(encoded(audit)) <= MAX_AUDIT_BYTES, "AUDIT_BUDGET_EXCEEDED")
+    return {"fragment": compact_fragment(task, od["id"], material, audit, False, scopes, "goal"),
+            "audit": audit, "scopes": scopes, "kind": "goal"}
 
 
 async def prepare_context(get, state_directory, captured):
@@ -458,10 +610,21 @@ async def prepare_context(get, state_directory, captured):
         ledger = LocatorLedger(Path(state_directory) / "causal-locators-v2")
         ledger.remember(captured)
         built = await build_context(get, captured, ledger.resolve)
+        if built is None and captured["request"]["data"].get("portfolioReview") is True:
+            try:
+                built = await portfolio_context(get, captured, ledger)
+            except ContextHeld as error:
+                # A review can retain its original private communication even
+                # when no public reporting scope can be established.
+                return VerifiedContext({"schema": SCHEMA, "contentAuthority": "tool-data",
+                                        "continuationKind": "portfolioGoalReview",
+                                        "replyScopeHeld": error.code, "requiresDeeperRead": True})
         if built is None:
             return None
         ledger.retain_audit(built["audit"])
-        return built["fragment"]
+        proof = {"binding": origin_reference(captured), "scopes": built["scopes"],
+                 "kind": built["kind"], "audit": digest(built["audit"])} if built["scopes"] else None
+        return VerifiedContext(built["fragment"], proof)
     except ContextHeld:
         raise
     except (OSError, ValueError, TypeError):

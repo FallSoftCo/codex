@@ -35,6 +35,10 @@ the requested outcome is accounted for. Preserve blocked and unfinished work.
 Optional observations never start model work. Do not poll models or resume stopped
 historical work/schedules. Finish admitted work or report a concrete blocker and wait.
 Private exchange contents require explicit authority before sharing more broadly.
+A private peer/portfolio continuation may expose a verified replyScope. Publish a
+newly authored status summary there only with explicit roomId and audience=room;
+a supplied sourceEventId must match that scope. Reading private results does not
+authorize copying their contents into the public summary.
 """
 
 
@@ -72,16 +76,26 @@ def message(c, name, args, operation):
     )
     if audience not in ("room", "direct"):
         raise ValueError("Invalid audience")
+    source = str(UUID(args.get("sourceEventId") or request["id"]))
     if request["audience"] == "direct":
-        if (
-            room != request["room"]
-            or audience != "direct"
-            or recipient not in (None, request["author"])
-        ):
-            raise PermissionError(
-                "Private sharing requires an explicit sharing contract"
-            )
-        recipient = request["author"]
+        private_reply = (room == request["room"] and audience == "direct"
+                         and recipient in (None, request["author"]))
+        if private_reply:
+            recipient = request["author"]
+        else:
+            from .continuation_context import ContextHeld, verified_reply_scope
+            try:
+                if (name != "hollywood_publish" or args.get("audience") != "room"
+                        or not args.get("roomId") or recipient is not None):
+                    raise ContextHeld("EXPLICIT_ORIGINAL_REPORT_REQUIRED")
+                scope = verified_reply_scope(c, room)
+                if args.get("sourceEventId") and source != scope["sourceEventId"]:
+                    raise ContextHeld("NONANCESTOR_REPLY_SOURCE")
+            except ContextHeld:
+                raise PermissionError(
+                    "Private sharing requires an explicit sharing contract"
+                ) from None
+            source = scope["sourceEventId"]
     if audience == "direct" and not recipient:
         raise ValueError("Direct communication requires recipient")
     return room, {
@@ -91,7 +105,7 @@ def message(c, name, args, operation):
         "audience": audience,
         **({"expectsReply": True} if name == "hollywood_request" else {}),
         **({"recipientId": recipient} if recipient else {}),
-        "sourceEventId": str(UUID(args.get("sourceEventId") or request["id"])),
+        "sourceEventId": source,
     }
 
 
