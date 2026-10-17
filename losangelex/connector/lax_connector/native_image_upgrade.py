@@ -352,10 +352,9 @@ def _canonical(config, controller, host, agent):
     if (
         pending["enabled"] is not False
         or pending["busy"] is not None
-        or pending["pending"] is not None
     ):
         raise ValueError(
-            "Canonical placement must stay disabled with no busy or pending work"
+            "Canonical placement must stay disabled with no busy work; queued work is preserved"
         )
     after, seen = None, set()
     for _ in range(16):

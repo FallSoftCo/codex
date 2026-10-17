@@ -134,9 +134,8 @@ def _drain(config, state, agents, relay):
         )
         require(
             pending["enabled"] is False
-            and pending["busy"] is None
-            and pending["pending"] is None,
-            "Every scoped placement must stay disabled with no busy/pending work",
+            and pending["busy"] is None,
+            "Every scoped placement must stay disabled with no busy work; queued work is preserved",
         )
         fd = open_root(str(home / "state"))
         try:
