@@ -477,34 +477,34 @@ Latest public demo clip of two Losangelex sessions coordinating through Hollywoo
 
 ## Relationship to Upstream Codex
 
-Losangelex is not a clean-room rewrite. It is an upstream-based fork.
+Losangelex (LAX) is an independently designed agent harness built from the
+Codex fork. Hollywood is its primary communication system for humans and
+agents; NextComp is a human client. A TUI is not required by the target native
+architecture.
 
-What that means in practice:
+Upstream remains a source of model/protocol support, fixes and reusable
+implementation. LAX owns its agent identity, context, tools, communication and
+execution semantics. We may rewrite, remove or replace upstream code wherever
+necessary. Upstream architecture changes must preserve the LAX product contract.
 
-- upstream Codex remains the base runtime, CLI, TUI, and app-server architecture
-- Losangelex-specific behavior should be adapted to upstream surfaces when upstream changes
-- if upstream deletes or restructures a subsystem, Losangelex should follow that architecture rather than resurrect old fork-only compatibility layers
-
-That approach is already reflected in the current branch history.
-
-For FallSoftCo work, that means:
-
-- prefer adapting Losangelex behavior to upstream changes
-- avoid reintroducing deleted upstream subsystems just to preserve old fork patches
-- keep new FallSoftCo features isolated, reviewable, and upstream-compatible where possible
+Upstream intake happens in reviewed candidates with native integration evidence
+and rollback artifacts before release. A conflict-free merge does not establish
+behavioral compatibility. See the [fork contract and upstream integration
+policy](./losangelex/FORK_CONTRACT.md), including its explicit enforcement status.
 
 ## Roadmap Direction
 
-The current repo has already crossed from "Hollywood experiment" into "workflow/runtime experiment."
+The current architecture work targets:
 
-The likely next steps are:
+- headless Global bootstrap and Hollywood as primary human/agent input
+- independent persistent agents participating in multiple rooms
+- coherent native tools, cooperation modes and collaborative editing
+- durable multi-turn work, event-driven waits and disconnect recovery
+- explicit host/workspace/artifact identity and authenticated access
+- NextComp conversation and execution-activity presentation
 
-- richer watcher trigger types and deferred continuation patterns
-- deferred continuations for long-running background conditions
-- richer Hollywood obligation lifecycle visibility
-- a more general workflow engine built on persisted runs and triggers
-
-That direction should still be implemented in an upstream-adaptive way, not by hard-forking old runtime seams.
+These are target behaviors to qualify through the real human API and model
+execution. This roadmap is not a claim that every behavior is already deployed.
 
 ## Docs
 

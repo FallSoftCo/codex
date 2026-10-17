@@ -1,5 +1,25 @@
 # Rust/codex-rs
 
+## LAX product ownership and upstream integration
+
+- LAX owns its product architecture. Upstream Codex is reusable source, not an
+  authority over LAX behavior. Rewrite or replace upstream implementation where
+  necessary to satisfy the LAX/Hollywood contract.
+- Read [the fork contract](losangelex/FORK_CONTRACT.md) before upstream intake or
+  changes to model instructions, tool planning, communication or lifecycle.
+- Preserve Hollywood as primary human/agent communication, independent agent
+  contexts, native cooperation/editing and event-driven continuation.
+- Keep model-visible tools, executable handlers and role instructions coherent.
+  Upstream root/subagent, final-to-parent and shared-filesystem assumptions must
+  not silently return through imports, model defaults or restored sessions.
+- Integrate upstream in reviewed candidates; qualify the native end-to-end
+  journey before release. Upstream deletions and conflict-free merges do not
+  authorize capability loss. These LAX rules take precedence over conflicting
+  upstream-adaptation guidance elsewhere in the repository.
+- This authority permits changes inside LAX; it does not authorize destructive
+  production migrations, additional components or resuming deliberately stopped
+  work.
+
 ## Losangelex Remote Policy
 
 - This repo is maintained as a FallSoftCo Losangelex fork of upstream `openai/codex`.
