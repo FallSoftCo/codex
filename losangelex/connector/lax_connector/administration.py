@@ -49,7 +49,7 @@ async def administer(connector, name, arguments, operation):
 
         if (
             name
-            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource")
+            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "hollywood_select_resource_default", "hollywood_placement_set")
             and isinstance(error, HttpFailure)
             and error.status in (400, 403, 409)
         ):
@@ -170,6 +170,12 @@ async def _administer(connector, name, arguments, operation):
                 ]
             })},
         )
+    if name == "hollywood_placement_set":
+        from .placement_control import set_state
+        return await set_state(connector, arguments, operation)
+    if name == "hollywood_select_resource_default":
+        from .resource_routing import select
+        return await select(connector, arguments, operation)
     if name == "hollywood_grant_resource":
         workspace, agent, host = [str(UUID(arguments[key])) for key in ("workspaceId", "agentId", "executionHost")]
         return await connector.http(

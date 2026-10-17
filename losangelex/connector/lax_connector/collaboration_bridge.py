@@ -408,16 +408,20 @@ class Bridge:
             require(policy.get("physicalTargets") is True and policy["bridge"]["protocol"] == "canonical-edit-plans/v2", "Registered physical-target protocol unavailable")
             require(record.get("work") is not None and command["workId"] == record["work"]["id"],
                     "Planned native intent requires captured admitted work; ordinary patches use delivery scope")
-            cwd = local_uri(frame["evidence"]["cwd"])
-            roots = [root for root in record["resources"] if root["environmentId"] == frame["evidence"]["environmentId"]
-                     and cwd.is_relative_to(Path(root["root"]))]
-            if not roots:
-                # The protected installed default is an edited resource, never a
-                # replacement for this agent's unchanged private execution cwd.
-                roots = [root for root in record["resources"] if root.get("defaultForIntent")
-                         and root["environmentId"] == frame["evidence"]["environmentId"]]
-            require(len(roots) == 1, "One explicit physical resource is required for native intent")
-            root = roots[0]
+            if self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2":
+                from .resource_routing import intent_root
+                root = intent_root(self, record, policy, frame["evidence"]["environmentId"])
+            else:
+                cwd = local_uri(frame["evidence"]["cwd"])
+                roots = [root for root in record["resources"] if root["environmentId"] == frame["evidence"]["environmentId"]
+                         and cwd.is_relative_to(Path(root["root"]))]
+                if not roots:
+                    # The protected installed default is an edited resource, never a
+                    # replacement for this agent's unchanged private execution cwd.
+                    roots = [root for root in record["resources"] if root.get("defaultForIntent")
+                             and root["environmentId"] == frame["evidence"]["environmentId"]]
+                require(len(roots) == 1, "One explicit physical resource is required for native intent")
+                root = roots[0]
             info = Path(root["root"]).lstat()
             require((info.st_dev, info.st_ino) == (root["device"], root["inode"]) and stat.S_ISDIR(info.st_mode), "Physical root changed")
             declared = command.get("manifest", {}).get("sourceRevision") if port == "edit-plans" else command.get("sourceRevision")

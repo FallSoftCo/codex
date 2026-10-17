@@ -530,7 +530,7 @@ class InstallerTests(unittest.TestCase):
             if method == "GET" and route.endswith("/collaboration-bridge"):
                 if token != "synthetic-administrator":
                     raise PermissionError("403: bridge is not enrolled yet")
-                return {"bridge": None}
+                return {"bridge": None, "resourceRouting":"canonical-agent-resources/v1", "resourceDefaults":True, "resourceMetadata":True}
             if route.endswith("/collaboration-bridge"):
                 return {"bridge": {"revision": 1}}
             if route.startswith("physical-workspaces/") and "/agent-grants/" in route:
@@ -541,6 +541,7 @@ class InstallerTests(unittest.TestCase):
 
         with (
             patch("lax_connector.collaboration_install.request", side_effect=http),
+            patch("lax_connector.resource_routing.seed_defaults", return_value=[]),
             patch("subprocess.run") as start,
         ):
             receipt = apply(self.root / "prepared")

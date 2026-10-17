@@ -53,10 +53,11 @@ They are historical evidence, not the current operating contract. The six-turn
 journey is a bounded one-host proof; it is not physical-phone voice/push,
 second-host migration or autonomous business/revenue qualification.
 
-The dev44 request-editing candidate adds ordinary captured delivery-scoped native
-patches and dynamic canonical per-agent resource grants. See
-[NATIVE_COLLABORATION_SETUP.md](NATIVE_COLLABORATION_SETUP.md) for the protected
-owner briefing projection, exact schema gates and reviewed offline installed
-bridge transition. Structured work retains planned consent semantics. Canonical
-default-selection/resource discovery and actual native runtime acceptance are
-separate outstanding gates; no deployment is implied by this source package.
+The dev45 candidate consumes canonical bounded resource discovery, revisioned
+agent/host defaults and placement pause/resume. Relative intent uses an explicit
+current default while ordinary absolute native patches remain independent.
+Reviewed installer seeds now publish routing metadata through supported APIs,
+including held setup for paused placements. See
+[NATIVE_COLLABORATION_SETUP.md](NATIVE_COLLABORATION_SETUP.md) for exact gates,
+protected capture and the maintained drained bridge transition. Root owns actual
+installed/native acceptance and rollout; this source package performs no deployment.

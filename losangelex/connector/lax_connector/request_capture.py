@@ -10,23 +10,47 @@ from .journal import saved
 from .service_observer import protected
 
 
-def resources(capture, base, native):
-    value = capture.bridge.http(
-        "GET", "collaboration/delivery-targets/" + str(UUID(base["deliveryId"]))
-    )
-    require(
-        value["schema"] == "hollywood-agent-physical-target-registry/v1"
-        and str(value["deliveryId"]) == base["deliveryId"]
-        and str(value["principalId"]) == base["agentId"]
-        and value.get("mayApply") is False,
-        "Exact current-agent resource registry required",
-    )
-    require(
-        isinstance(value["targets"], list) and 1 <= len(value["targets"]) <= 32,
-        "Bounded explicit canonical agent grants required",
-    )
+def resources(capture, base, native, *, policy=None, structured=False):
+    if structured:
+        from .resource_routing import agent_rows
+
+        rows = agent_rows(
+            capture.admin_http,
+            policy,
+            base["authorityId"],
+            base["agentId"],
+            base["hostId"],
+        )
+        targets = [
+            {
+                **row["workspace"],
+                "grant_revision": row["grant"]["revision"],
+                "grant_state": row["grant"]["state"],
+                **{
+                    key: row["grant"][key]
+                    for key in ("execution_host", "can_read", "can_write")
+                },
+            }
+            for row in rows
+        ]
+    else:
+        value = capture.bridge.http(
+            "GET", "collaboration/delivery-targets/" + str(UUID(base["deliveryId"]))
+        )
+        require(
+            value["schema"] == "hollywood-agent-physical-target-registry/v1"
+            and str(value["deliveryId"]) == base["deliveryId"]
+            and str(value["principalId"]) == base["agentId"]
+            and value.get("mayApply") is False,
+            "Exact current-agent resource registry required",
+        )
+        require(
+            isinstance(value["targets"], list) and 1 <= len(value["targets"]) <= 32,
+            "Bounded explicit canonical agent grants required",
+        )
+        targets = value["targets"]
     roots, physical = [], set()
-    for target in value["targets"]:
+    for target in targets:
         if target["state"] != "active" or target["grant_state"] != "active":
             continue
         # Mutation rights remain mandatory at each canonical permit phase too.
@@ -85,8 +109,8 @@ def resources(capture, base, native):
         verify_native_path(root, "", native["pid"])
         roots.append(root)
     require(roots, "No current canonical writable resource grant")
-    # r01 has no published default selector. Absolute native file URIs need no
-    # default; relative planned intent stays held until that contract is supplied.
+    # Absolute file URIs do not depend on routing. The current canonical default
+    # is resolved separately when relative intent is submitted.
     return sorted(roots, key=lambda root: root["workspaceId"])
 
 
@@ -112,7 +136,7 @@ def ensure(capture, base, snapshot, row, native, fact, policy, path):
         require(
             goal["state"] == "active", "Original planned goal does not admit editing"
         )
-    roots = resources(capture, base, native)
+    roots = resources(capture, base, native, policy=policy, structured=work is not None)
     if work is not None:
         from .collaboration_capture import administrative_put
 

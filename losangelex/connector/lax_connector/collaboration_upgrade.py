@@ -449,6 +449,10 @@ def upgrade(
         current = administrative(
             "GET", "hosts/" + old["hostId"] + "/collaboration-bridge"
         )
+        from .resource_routing import capabilities
+        from .placement_control import capabilities as placement_capabilities
+
+        placement_capabilities(capabilities(current))
         policy = current["bridge"]
         require(
             policy
@@ -573,12 +577,18 @@ def upgrade(
                     "physical-workspaces/" + workspace + "/agent-grants/" + agent,
                     grant,
                 )
+        from .resource_routing import seed_defaults
+
+        routing_defaults = seed_defaults(
+            state, administrative, old["authorityId"], old["hostId"], seeds, old_roots
+        )
         result = {
             **intent,
             "state": "accepted",
             "canonicalTransition": canonical,
             "configurationSha256": digest(new),
             "activationRequired": True,
+            "resourceDefaults": routing_defaults,
             "genuineNativeProof": False,
             "servicesReloaded": False,
         }

@@ -546,6 +546,8 @@ class Connector:
                 "hollywood_set_role",
                 "hollywood_grant_room",
                 "hollywood_grant_resource",
+                "hollywood_select_resource_default",
+                "hollywood_placement_set",
                 "lax_provision_worker",
             ):
                 value = await administer(self, name, arguments, operation)

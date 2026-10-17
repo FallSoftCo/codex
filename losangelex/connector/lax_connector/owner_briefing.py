@@ -204,12 +204,26 @@ def carry(capture, peer, frame, owner):
         )
     else:
         saved(path, record)
+    policy = capture.bridge.http(
+        "GET", "hosts/" + capture.config["hostId"] + "/collaboration-bridge"
+    )
+    resource_capabilities = {
+        key: policy.get(key)
+        for key in (
+            "resourceRouting",
+            "resourceDefaults",
+            "resourceMetadata",
+            "placementControl",
+            "pausedResourceSetup",
+        )
+    }
     return {
         "success": True,
         "result": {
             "schema": "lax-owner-briefing-receipt/v1",
             "asOfSequence": brief["asOfSequence"],
             "projectionSha256": digest(record),
+            "resourceCapabilities": resource_capabilities,
             "mayApply": False,
         },
         "canonicalReceipt": None,

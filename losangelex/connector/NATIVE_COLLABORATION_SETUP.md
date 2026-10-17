@@ -1,6 +1,6 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev44`. Its installer and automatic
+The candidate connector is version `0.1.0.dev45`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
@@ -162,14 +162,39 @@ records authenticated observation, not model understanding or full read coverage
 A metadata gap permits ordinary reads/commands while editing remains held.
 
 A structured assignment still uses typed plan/coordination intent and the
-existing planned mutation protocol. The installation's defaultResource is only
-reviewed intended metadata in `agent-access-seeds.json`. Backend b02b1ff/schema27
-has no explicit canonical default selector or bounded native resource catalog.
-This candidate does not infer a first/sole grant or treat that seed as a live
-default. Relative planned intent from a private execution cwd therefore holds
-until the separately owned additive backend/default integration is supplied.
-Absolute native patch paths must already resolve into an approved physical root;
-context/thread/cwd are not relocated to make that happen.
+existing planned mutation protocol. Its current resource list comes from the
+administrator-authorized bounded agent catalog: the ordinary-only controller
+`delivery-targets` route must never be used for a Work request. Current per-work
+grant revisions, consent and integrator ownership remain separate from agent
+grant/default-pointer revisions. This release does not change Work editing mode.
+
+Relative v2 plan/claim intent resolves the explicit canonical agent/host default
+through `collaboration/delivery-resource-default/{delivery}` at that intent call.
+It requires `resourceRouting=canonical-agent-resources/v1`, `resourceDefaults=true`
+and `resourceMetadata=true`. Missing, cleared, held, incompatible or unsupported
+routing holds the relative intent even when cwd happens to lie in an approved
+root. There is no first/sole/cwd fallback. Absolute native patch paths retain
+their independent approved physical-root checks. Context/thread/cwd stay intact.
+
+The reviewed `defaultResource` seed is now published through the exact canonical
+default-selection API after the explicitly reviewed agent access seed. Selection
+pins current root and agent-grant revisions and has its own CAS revision. An
+existing clear or changed selection is never overwritten by an installer retry;
+matching existing held metadata remains held. Accepted metadata receipts are
+historical evidence, not fresh routing authority. Original operation IDs and
+administrative GET receipt recovery are reused without repeating uncertain PUTs.
+
+Native tools expose one bounded page of registered roots (administrator only),
+agent resources (administrator or owner), and the current default. Use
+`hollywood_resource_roots`, `hollywood_agent_resources` and
+`hollywood_resource_default`; inspect revisions before
+`hollywood_select_resource_default`. Clear requires explicit null workspace and
+root/grant revisions. Pages default to four rows, cap at eight and 32768 ASCII
+bytes; each page reauthorizes and returns its own nextCursor. Oversize responses
+hold without truncation. Normal owner agents obtain the capability flags through
+the existing protected guardian briefing receipt, since the canonical bridge
+capability endpoint itself is restricted to enrolled controllers/administrators.
+This changes no backend authorization or model admission.
 
 Both paths share the server's existing physical path/permit conflict domain.
 Only the original non-replayed one-shot begin response permits application.
@@ -183,12 +208,28 @@ there is no legacy mutation fallback.
 ## Existing bridge: reviewed drained upgrade
 
 Fresh `--apply` deliberately refuses changed installed artifacts. Use a new
-immutable preparation for the reviewed dev44 adapter, then inspect the actual
+immutable preparation for the reviewed dev45 adapter, then inspect the actual
 original files and canonical bridge revision. Keep the original setup receipt.
 The upgrade preserves the same authority, host, machine, credential, socket,
 state directory and actual physical root inodes. List every affected consumer;
 existing channel owners and all protected services on that host must be included.
 No unrelated authority or consumer is changed.
+
+Schema29 adds `hollywood_placement_read` and `hollywood_placement_set` for the
+published `canonical-placement-control/v1` interface. The setter requires an
+inspected revision and the same host, uses current native provenance and original
+administrative receipt recovery, and preserves registration/generation. Pause is
+not process drainage and cannot withdraw an already-issued apply grant. Resume
+admits no work itself; a paused agent cannot bypass the backend's current-source
+fence to resume itself. Root uses an independently authorized administrator.
+
+A drained upgrade requires both that placement capability and
+`pausedResourceSetup=true` before publishing its bridge transition intent/CAS.
+Agent grants and a new default pointer can then be prepared while paused using
+unchanged DTOs. The prepared default is held until explicit resume and current
+root/access pins match. A selection invalidated when pause occurred stays held
+and needs explicit administrator reselection; setup never silently revives it.
+The upgraded result records the default views, including held states.
 
 Disable the scoped placements, settle original effects, and stop the scoped
 consumers, host controller and bridge through Root's admitted orchestration.

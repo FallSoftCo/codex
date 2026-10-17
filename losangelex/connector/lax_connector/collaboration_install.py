@@ -350,7 +350,10 @@ def apply(directory):
     )
     host = manifest["hostId"]
     policy = relay("GET", "hosts/" + host + "/admission")["policy"]
-    existing = administrative("GET", "hosts/" + host + "/collaboration-bridge").get("bridge")
+    resource_policy = administrative("GET", "hosts/" + host + "/collaboration-bridge")
+    from .resource_routing import capabilities
+    capabilities(resource_policy)
+    existing = resource_policy.get("bridge")
     if existing:
         require(
             existing["state"] == "active"
@@ -417,6 +420,8 @@ def apply(directory):
                        "executionHost": host, "state": "active", "canRead": True, "canWrite": True}
             administrative_put(state, administrative,
                 "physical-workspaces/" + workspace + "/agent-grants/" + str(UUID(agent)), payload)
+    from .resource_routing import seed_defaults
+    routing_defaults = seed_defaults(state, administrative, manifest["authorityId"], host, seeds, by_workspace)
     bridge["automaticCapture"]["resources"] = resources
     write_original(Path(manifest["configPath"]), bridge)
     write_original(runtime / "channel.json", descriptor, 0o644)
@@ -448,6 +453,7 @@ def apply(directory):
         "servicesStarted": 0,
         "modelsStarted": 0,
         "workerConfigurationChanged": False,
+        "resourceDefaults": routing_defaults,
         "activation": "Explicit owner-controlled controller reload and bridge start; preserve live contexts and existing unknown effects",
         "genuineNativeProof": False,
     }

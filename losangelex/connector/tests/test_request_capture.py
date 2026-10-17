@@ -37,9 +37,16 @@ class DynamicCaptureTests(unittest.TestCase):
                         "revision": 1,
                         "protocol": "canonical-edit-plans/v2",
                     },
+                    "resourceRouting":"canonical-agent-resources/v1", "resourceDefaults":True, "resourceMetadata":True,
                     "deliveryEdits": True,
                     "deliveryEditSchema": "canonical-delivery-edits/v1",
                 }
+            if route.startswith("agents/" + self.f.agent + "/resources?"):
+                workspace = {k:v for k,v in self.metadata.items() if k not in {"grant_state","grant_revision","can_read","can_write","execution_host"}}
+                grant = {"revision":self.metadata["grant_revision"],"state":self.metadata["grant_state"],
+                         **{k:self.metadata[k] for k in ("can_read","can_write","execution_host")}}
+                return {"schema":"hollywood-agent-resources/v1","authorityId":self.f.authority,"agentId":self.f.agent,"executionHost":self.f.host,
+                        "resources":[{"workspace":workspace,"grant":grant}],"nextCursor":None,"limit":8,"mayApply":False}
             if route.startswith("collaboration/delivery-targets/"):
                 self.f.calls.append((method, route, body))
                 return {

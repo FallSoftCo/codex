@@ -68,6 +68,7 @@ class BridgeUpgradeTests(unittest.TestCase):
             + str(self.controller)
             + "\n"
         )
+        self.enterContext(patch("lax_connector.resource_routing.seed_defaults", return_value=[]))
         self.calls = []
         self.info = {
             "ActiveState": "inactive",
@@ -116,6 +117,8 @@ class BridgeUpgradeTests(unittest.TestCase):
             self.calls.append((token, method, route, copy.deepcopy(body)))
             if method == "GET" and route.endswith("/collaboration-bridge"):
                 return {
+                    "resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True, "resourceMetadata": True,
+                    "placementControl": "canonical-placement-control/v1", "pausedResourceSetup": True,
                     "bridge": {
                         "state": "active",
                         "protocol": "canonical-edit-plans/v2",

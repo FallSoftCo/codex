@@ -9,7 +9,11 @@ from uuid import UUID, uuid5
 from .native_goals import bind, progress, sync_policy, workspace_id
 from .errors import ToolValidationError
 
-READ_TOOLS = {
+from .resource_routing import READ_TOOLS as RESOURCE_READ_TOOLS
+from .placement_control import READ_TOOL as PLACEMENT_READ_TOOL
+
+READ_TOOLS = RESOURCE_READ_TOOLS | {
+    PLACEMENT_READ_TOOL,
     "hollywood_portfolio",
     "hollywood_execution_read",
     "hollywood_briefing",
@@ -43,7 +47,9 @@ MUTATION_TOOLS = {
 def definitions(spec):
     text = {"type": "string"}
     revision = {"type": "integer", "minimum": 1}
-    return [
+    from .resource_routing import definitions as resource_definitions
+    from .placement_control import definitions as placement_definitions
+    return resource_definitions(spec) + placement_definitions(spec) + [
         spec(
             "hollywood_portfolio",
             "Global: inspect durable portfolio obligations, original review receipts and held/unknown review state. Dispatch is not acceptance; observation starts no model.",
@@ -491,6 +497,12 @@ async def invoke(c, name, args, operation):
     def identity(key):
         return str(UUID(args[key]))
 
+    if name == PLACEMENT_READ_TOOL:
+        from .placement_control import read
+        return await read(c, args)
+    if name in RESOURCE_READ_TOOLS:
+        from .resource_routing import read
+        return await read(c, name, args)
     if name == "hollywood_work_report_reconcile":
         return await reconcile_report(c, args, operation)
     if name == "hollywood_portfolio":
