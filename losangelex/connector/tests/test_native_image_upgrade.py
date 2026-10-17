@@ -464,6 +464,29 @@ class ImageTransitionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already enrolled"):
             self.approve()
 
+    def test_orphan_intent_before_pointer_write_holds_registration_without_replay(self):
+        original = image._write
+
+        def crash(fd, name, value, **kwargs):
+            if name == image.INDEX:
+                raise RuntimeError("injected-before-pointer")
+            original(fd, name, value, **kwargs)
+
+        with patch.object(image, "_write", side_effect=crash):
+            with self.assertRaisesRegex(RuntimeError, "injected-before-pointer"):
+                self.approve()
+        self.assertFalse((self.registry / image.INDEX).exists())
+        self.assertEqual(len(list(self.registry.glob("image-*-intent.json"))), 1)
+        self.assert_unchanged()
+        with patch.object(observer, "_register") as register:
+            with self.assertRaisesRegex(ValueError, "explicit reconciliation"):
+                observer.register(
+                    self.authority, self.host, self.agent, self.info["Id"]
+                )
+            register.assert_not_called()
+        with self.assertRaisesRegex(ValueError, "explicit reconciliation"):
+            self.approve()
+
     def test_cli_image_transition_does_not_inspect_or_activate(self):
         args = [
             "lax-service",

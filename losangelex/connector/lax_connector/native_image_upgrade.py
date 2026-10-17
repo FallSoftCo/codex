@@ -135,6 +135,28 @@ def registry_lock(root):
 
 
 def require_settled_transition(fd, *, check_image=True):
+    # The immutable intent can precede the mutable pointer at a crash boundary.
+    intents = sorted(
+        name
+        for name in os.listdir(fd)
+        if name.startswith("image-") and name.endswith("-intent.json")
+    )
+    if len(intents) > 4096:
+        raise ValueError("Native transition history inspection budget exhausted")
+    for name in intents:
+        intent = _json(fd, name)
+        try:
+            accepted = _json(fd, name.removesuffix("-intent.json") + "-accepted.json")
+        except FileNotFoundError:
+            raise ValueError(
+                "Original native image transition requires explicit reconciliation"
+            ) from None
+        if (
+            intent.get("schema") != "lax-native-image-upgrade/v1"
+            or intent.get("state") != "intent"
+            or accepted != {**intent, "state": "accepted"}
+        ):
+            raise ValueError("Original native image transition evidence changed")
     try:
         current = _json(fd, INDEX)
     except FileNotFoundError:
