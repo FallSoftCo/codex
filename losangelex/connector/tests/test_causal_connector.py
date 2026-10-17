@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from lax_connector.connector import Connector
 from test_completed_report_reconcile import Fixture
+from test_canonical_delegation import native_proof
 
 
 class CausalConnectorTests(unittest.IsolatedAsyncioTestCase):
@@ -65,6 +66,10 @@ class CausalConnectorTests(unittest.IsolatedAsyncioTestCase):
             "delivery": self.accepted["deliveries"][0],
             "request": self.accepted["event"],
         }
+        self.c.active["delivery"]["native_thread"] = self.c.thread
+        self.c.active["agentContextBinding"] = copy.deepcopy(self.c.agent_binding)
+        self.child_receipt["delivery"].update(generation=1, claim_id="fixture-child-claim", revision=1,
+            state="pending", cancellation_requested=False, host=self.c.host)
         self.get_failed = False
         self.reply_lost = False
         self.c.http = self.http
@@ -77,6 +82,8 @@ class CausalConnectorTests(unittest.IsolatedAsyncioTestCase):
             return copy.deepcopy(self.accepted)
         if self.get_failed:
             raise PermissionError("synthetic locator read refused")
+        if path == "deliveries/" + self.child_delivery + "/delegation":
+            return native_proof(self.child_receipt, self.c.active)
         if path == "deliveries/" + self.child_delivery:
             return copy.deepcopy(self.child_receipt)
         if path == "deliveries/" + self.c.current:
@@ -103,7 +110,7 @@ class CausalConnectorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, again)
         self.assertEqual(self.posts, 1)
         self.assertEqual(
-            len(list((self.c.state / "causal-locators-v2/edges").rglob("*.json"))), 1
+            len(list((self.c.state / "causal-locators-v2/native-edges").rglob("*.json"))), 1
         )
         self.assertEqual(self.c.active, before)
         self.c.rpc.call.assert_not_called()
@@ -131,5 +138,5 @@ class CausalConnectorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.posts, 1)
         self.c.effects.recover_live.assert_awaited_once()
         self.assertEqual(
-            len(list((self.c.state / "causal-locators-v2/edges").rglob("*.json"))), 1
+            len(list((self.c.state / "causal-locators-v2/native-edges").rglob("*.json"))), 1
         )

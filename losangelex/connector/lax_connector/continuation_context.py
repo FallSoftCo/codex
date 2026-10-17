@@ -2,8 +2,9 @@
 
 ``get(path)`` MUST be the connector's authenticated GET transport, never a
 model-supplied reader. An origin reference is only a delivery locator: every
-body, relation, audience and cancellation state is reread canonically. Missing
-old locators hold; there is no transcript search or cached-body fallback.
+body, relation, audience and cancellation state is reread canonically. Native
+execution parents come from accepted-effect provenance, never conversation
+sources or local edges. There is no transcript search or cached-body fallback.
 """
 
 import asyncio
@@ -135,7 +136,7 @@ def excerpt(text, budget):
 
 
 # Hard bounds include Unicode/JSON escaping in the exact connector serializer.
-MAX_DEPTH = 4
+AUDIT_PAGE_HOPS = 4
 MAX_FRAGMENT_BYTES = 960
 MAX_AUDIT_BYTES = 131072
 MAX_LOCATORS_PER_REQUEST = 64
@@ -262,6 +263,15 @@ class LocatorLedger:
                 value["parent"].get("requestId") == child["source"], "EDGE_CONFLICT")
         return value["parent"]
 
+    def native_edge(self, child, child_delivery, parent, provenance):
+        # A new namespace preserves original v1 edges and failed indexing facts.
+        # This is an audit hint only; every continuation rereads native provenance.
+        value = {"schema": "lax-causal-edge/v2", "childRequestId": child["id"],
+                 "childDeliveryId": child_delivery, "childRequestSha256": event_digest(child),
+                 "conversationSourceEventId": child["source"], "parent": parent,
+                 "nativeProvenanceSha256": digest(provenance)}
+        return self._put("native-edges/" + child["id"] + "/" + child_delivery + ".json", value)
+
     def retain_audit(self, audit):
         return self._put("audits/" + digest(audit) + ".json", audit)
 
@@ -292,17 +302,12 @@ async def index_accepted_delegation(get, ledger, captured, accepted):
         actual_event = event(canonical.get("request"))
         require(all(actual.get(k) == pending.get(k) for k in ("id", "event", "authority", "agent"))
                 and event_digest(actual_event) == event_digest(child), "ACCEPTED_CHILD_CHANGED")
-        if child["source"] == ce["id"]:
-            ref = ledger.remember(captured)
-        else:
-            ref = ledger.unique(child["source"])
-        parent = await read(get, "deliveries/" + identity(ref.get("deliveryId")))
-        compare_reference(ref, parent)
-        pd, pe = receipt(parent)
-        require(pd["agent"] == cd["agent"] and pd["authority"] == cd["authority"] and
-                pe["seq"] < child["seq"] and not pd["cancellation_requested"] and
-                pd["state"] not in ("cancel_requested", "cancelled", "unknown"), "PARENT_SCOPE_HELD")
-        ledger.edge(child, child_id, ref)
+        from .delegation_provenance import parent_for
+        proved = await parent_for(get, canonical, cd["agent"], cd["authority"])
+        ref = proved["reference"]
+        require(ref == origin_reference(captured), "ACCEPTED_EXECUTION_PARENT_MISMATCH")
+        ledger.remember(proved["canonical"])
+        ledger.native_edge(child, child_id, ref, proved["provenance"])
         return {**accepted, "causalLocator": {"state": "recorded"}}
     except Exception as error:
         code = error.code if isinstance(error, ContextHeld) else "LOCATOR_IO_HELD"
@@ -368,11 +373,18 @@ def compact_fragment(task, task_delivery, result, audit, inspection, scopes=(), 
                         "read": {"tool": "hollywood_read_room", "roomId": result["room"],
                                  "after": result["seq"] - 1, "limit": 1},
                         "text": ""},
-             "ancestry": {"depth": len(audit["hops"]), "sha256": digest(audit)},
+             "ancestry": {"depth": audit.get("depth", len(audit["hops"])), "sha256": digest(audit)},
              "outcome": "unassessed", "accountTaskFirst": True,
-             "historicalInspectionOnly": inspection, "requiresDeeperRead": True}
+             "requiresDeeperRead": True}
+    if inspection:
+        value["historicalInspectionOnly"] = True
     if scopes:
         value["replyScope"] = reply_view(scopes, kind)
+    if audit.get("goal"):
+        # The exact delivery target remains; the Goal ID replaces a redundant
+        # tool-name hint so both anchors fit the existing native byte budget.
+        value["task"].pop("readWith")
+        value["task"]["goalId"] = audit["goal"]["id"]
     # Canonical task/result references and attribution are never trimmed. The
     # audit retains fuller source excerpts/acceptance and all hop identities.
     for budget in range(160, -1, -8):
@@ -383,12 +395,12 @@ def compact_fragment(task, task_delivery, result, audit, inspection, scopes=(), 
     raise ContextHeld("FRAGMENT_BUDGET_EXCEEDED")
 
 
-async def build_context(get, captured, resolve, *, inspection=False):
-    """Read one bounded causal chain and recheck it; never admit any execution.
+async def build_context(get, captured, resolve, *, inspection=False, retain_page=None):
+    """Follow exact canonical parents in bounded pages; admit no execution.
 
-    resolve(child_event, child_delivery_id) returns a private identifier locator.
-    Production requires a claimed current delivery; inspection permits frozen
-    historical evidence only. Actor/role/context/goal/native input stay intact.
+    The legacy resolver supplies only its ledger for verified Goal/task lookup;
+    it never selects an execution parent. Production requires a claimed current
+    delivery; inspection permits frozen evidence only. No workflow-depth cap.
     """
     cd, ce = receipt(captured)
     if pointer(ce) is None:
@@ -413,17 +425,47 @@ async def build_context(get, captured, resolve, *, inspection=False):
             "COMPLETION_RECIPIENT_MISMATCH")
     if not inspection:
         require(d["state"] == "claimed", "CONTINUATION_NOT_CLAIMED")
-    hops, seen, latest_result = [], set(), None
+    hops, latest_result, depth, page_count, page_head = [], None, 0, 0, None
+    anchor, cancelled = None, False
+
+    async def flush_page(carry):
+        nonlocal page_head, page_count, cancelled
+        if not hops:
+            return
+        cancelled |= any(v["delivery"]["cancellation_requested"] or v["delivery"]["state"] in
+                         ("cancel_requested", "cancelled", "unknown") for v in records.values())
+        if not inspection:
+            require(not cancelled, "CANCELLED_OR_UNKNOWN_LINEAGE")
+        require(len(records) <= 2 * AUDIT_PAGE_HOPS + 3, "ANCESTRY_PAGE_READ_BOUND")
+        again = await asyncio.gather(*(read(get, "deliveries/" + key) for key in records))
+        for before, after in zip(records.values(), again):
+            require(after["delivery"] == before["delivery"]
+                    and event_digest(event(after["request"])) == event_digest(before["request"])
+                    and after.get("agentContextBinding") == before.get("agentContextBinding"),
+                    "LINEAGE_CHANGED_DURING_READ")
+        page = {"schema": "lax-causal-audit-page/v1", "authorityId": authority,
+                "agentId": actor, "index": page_count, "previousSha256": page_head,
+                "hops": list(hops)}
+        require(len(encoded(page)) <= MAX_AUDIT_BYTES, "AUDIT_BUDGET_EXCEEDED")
+        if retain_page:
+            retain_page(page)
+        page_head, page_count = digest(page), page_count + 1
+        hops.clear()
+        records.clear()
+        records.update(carry)
     while True:
         nd, ne = receipt(current)
-        key = (ne["id"], nd["id"], nd["generation"])
-        require(key not in seen, "CYCLIC_LINEAGE")
-        seen.add(key)
         p = pointer(ne)
         if p is None:
-            task, task_delivery = ne, nd
+            if ne["data"].get("portfolioReview") is True:
+                ledger = getattr(resolve, "__self__", None)
+                require(isinstance(ledger, LocatorLedger), "PORTFOLIO_ANCHOR_LOCATOR_REQUIRED")
+                anchor = await portfolio_context(get, current, ledger, historical=True)
+                task_delivery, task = receipt(anchor["taskRecord"])
+            else:
+                task, task_delivery = ne, nd
+                private_scope(task, outer, actor)
             break
-        require(len(hops) < MAX_DEPTH, "ANCESTRY_DEPTH_HELD")
         require(nd["agent"] == actor and ne["recipient"] == actor and
                 ne["data"]["authorKind"] == "agent", "COMPLETION_RECIPIENT_MISMATCH")
         child_id = ne["data"]["replyToDelivery"]
@@ -435,13 +477,11 @@ async def build_context(get, captured, resolve, *, inspection=False):
                 de["data"].get("authorKind") == "agent" and
                 de["data"].get("expectsReply") is True and
                 de["source"] == p["originRequestId"], "CHILD_ORIGIN_MISMATCH")
-        ref = resolve(de, child_id)
-        require(isinstance(ref, dict) and ref.get("requestId") == p["originRequestId"],
-                "ORIGIN_LOCATOR_MISMATCH")
-        origin = await delivery(identity(ref.get("deliveryId")))
-        compare_reference(ref, origin)
+        from .delegation_provenance import parent_for
+        proved = await parent_for(get, child, actor, authority)
+        ref, origin = proved["reference"], proved["canonical"]
         od, oe = receipt(origin)
-        require((oe["id"], od["id"], od["generation"]) not in seen, "CYCLIC_LINEAGE")
+        records[od["id"]] = origin
         require(len({nd["id"], dd["id"], od["id"]}) == 3, "CYCLIC_LINEAGE")
         require(od["agent"] == actor and oe["recipient"] in (None, actor), "ORIGIN_ACTOR_MISMATCH")
         rv = await read(get, "inbox/events/" + p["resultEventId"])
@@ -457,33 +497,43 @@ async def build_context(get, captured, resolve, *, inspection=False):
                 (ne["audience"] != "direct" or result["recipient"] == actor), "RESULT_SCOPE_MISMATCH")
         require(oe["seq"] < de["seq"] < result["seq"] < ne["seq"], "LINEAGE_ORDER_MISMATCH")
         # Check every deeper private item against the outer injected audience.
-        for item in (oe, de, result, ne):
+        for item in (de, result, ne):
             private_scope(item, outer, actor)
-        hops.append({"continuation": origin_reference(current),
+        if oe["data"].get("portfolioReview") is not True:
+            private_scope(oe, outer, actor)
+        hop = {"continuation": origin_reference(current),
                      "origin": ref, "child": origin_reference(child),
                      "childRequest": audit_event(de, dd["id"]),
-                     "result": audit_event(result), "completion": audit_event(ne, nd["id"])})
+                     "result": audit_event(result), "completion": audit_event(ne, nd["id"]),
+                     "nativeDelegation": proved["provenance"]}
+        if hops and len(encoded(hops + [hop])) > MAX_AUDIT_BYTES - 2048:
+            await flush_page({nd["id"]: current, dd["id"]: child, od["id"]: origin})
+        hops.append(hop)
+        depth += 1
         if latest_result is None:
             latest_result = result
         current = origin
-    require(len(records) <= 2 * MAX_DEPTH + 1, "ANCESTRY_READ_BOUND")
-    cancelled = any(v["delivery"]["cancellation_requested"] or v["delivery"]["state"] in
-                    ("cancel_requested", "cancelled", "unknown") for v in records.values())
-    if not inspection:
-        require(not cancelled, "CANCELLED_OR_UNKNOWN_LINEAGE")
-    # Re-read each exact delivery once. No waiting, scanning or state mutation.
-    again = await asyncio.gather(*(read(get, "deliveries/" + k) for k in records))
-    for before, after in zip(records.values(), again):
-        ad, ae = receipt(after)
-        require(ad == before["delivery"] and event_digest(ae) == event_digest(before["request"]),
-                "LINEAGE_CHANGED_DURING_READ")
+        if len(hops) >= AUDIT_PAGE_HOPS:
+            await flush_page({od["id"]: origin})
+    await flush_page({})
+    # Recheck current admission after all exact-edge pages; no local checkpoint
+    # grants ancestry. Strictly decreasing canonical event sequences terminate it.
+    final = await read(get, "deliveries/" + cd["id"])
+    require(final["delivery"] == d and event_digest(event(final["request"])) == event_digest(outer),
+            "LINEAGE_CHANGED_DURING_READ")
     audit = {"schema": "lax-causal-audit/v2", "authorityId": authority, "agentId": actor,
              "historicalInspectionOnly": inspection, "current": origin_reference(captured),
-             "task": audit_event(task, task_delivery["id"]), "hops": hops,
-             "lineageCancelledOrUnknown": cancelled, "outcome": "unassessed",
-             "executionStates": {k: v["delivery"]["state"] for k, v in records.items()}}
+             "task": audit_event(task, task_delivery["id"]), "hops": [], "depth": depth,
+             "ancestryPages": {"headSha256": page_head, "count": page_count},
+             "lineageCancelledOrUnknown": cancelled, "outcome": "unassessed"}
+    if anchor:
+        audit["goal"] = anchor["audit"]["goal"]
+        audit["goalAnchorSha256"] = digest(anchor["audit"])
+        if retain_page:
+            retain_page(anchor["audit"])
     require(len(encoded(audit)) <= MAX_AUDIT_BYTES, "AUDIT_BUDGET_EXCEEDED")
-    scopes = [{"roomId": task["room"], "sourceEventId": task["id"]}] if (
+    scopes = (anchor["scopes"] if anchor else
+              [{"roomId": task["room"], "sourceEventId": task["id"]}]) if (
         task["audience"] == "room" and not inspection) else []
     return {"fragment": compact_fragment(task, task_delivery["id"], latest_result, audit,
                                         inspection, scopes),
@@ -514,7 +564,7 @@ async def portfolio_item(get, actor, goal):
     raise ContextHeld("PORTFOLIO_REVIEW_NOT_FOUND")
 
 
-async def portfolio_context(get, captured, ledger):
+async def portfolio_context(get, captured, ledger, *, historical=False):
     """A dispatch flag is a candidate; canonical policy/item/Goal prove its scope."""
     cd, ce = receipt(captured)
     actor, authority = cd["agent"], cd["authority"]
@@ -526,7 +576,8 @@ async def portfolio_context(get, captured, ledger):
     current = await read(get, "deliveries/" + cd["id"])
     compare_reference(origin_reference(captured), current)
     cd, ce = receipt(current)
-    require(cd["state"] == "claimed" and not cd["cancellation_requested"],
+    require((historical or cd["state"] == "claimed") and not cd["cancellation_requested"]
+            and cd["state"] not in ("cancel_requested", "cancelled", "unknown"),
             "CONTINUATION_NOT_CLAIMED")
     policy, item, path = await portfolio_item(get, actor, goal_id)
 
@@ -600,7 +651,7 @@ async def portfolio_context(get, captured, ledger):
              "hops": [], "lineageCancelledOrUnknown": False, "outcome": "unassessed"}
     require(len(encoded(audit)) <= MAX_AUDIT_BYTES, "AUDIT_BUDGET_EXCEEDED")
     return {"fragment": compact_fragment(task, od["id"], material, audit, False, scopes, "goal"),
-            "audit": audit, "scopes": scopes, "kind": "goal"}
+            "audit": audit, "scopes": scopes, "kind": "goal", "taskRecord": origin}
 
 
 async def prepare_context(get, state_directory, captured):
@@ -609,7 +660,7 @@ async def prepare_context(get, state_directory, captured):
     try:
         ledger = LocatorLedger(Path(state_directory) / "causal-locators-v2")
         ledger.remember(captured)
-        built = await build_context(get, captured, ledger.resolve)
+        built = await build_context(get, captured, ledger.resolve, retain_page=ledger.retain_audit)
         if built is None and captured["request"]["data"].get("portfolioReview") is True:
             try:
                 built = await portfolio_context(get, captured, ledger)

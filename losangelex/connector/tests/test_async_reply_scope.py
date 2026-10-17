@@ -16,6 +16,7 @@ from lax_connector import participation
 from lax_connector.connector import Connector
 from lax_connector.effects import digest
 from test_completed_report_reconcile import Fixture
+from test_canonical_delegation import native_proof
 
 
 def uid(n):
@@ -48,7 +49,10 @@ class ReplyTransportTests(unittest.IsolatedAsyncioTestCase):
             return {"delivery": {"id": identity, "authority": self.authority, "agent": agent,
                                  "host": self.host, "event": request["id"], "generation": generation,
                                  "claim_id": "fixture-claim", "revision": 2, "state": state,
-                                 "cancellation_requested": False}, "request": request}
+                                 "cancellation_requested": False, "native_thread": self.c.thread},
+                    "request": request, "agentContextBinding": {"delivery": identity,
+                        "generation": generation, "principal": agent, "context_id": self.c.context_id,
+                        "native_thread": self.c.thread, "role_revision": 2}}
         self.event = event
         self.delivery = delivery
         self.origin = delivery(self.original_delivery, event(
@@ -155,6 +159,7 @@ class ReplyTransportTests(unittest.IsolatedAsyncioTestCase):
         child_receipt = self.delivery(child, child_request, peer, "completed")
         child_receipt["delivery"]["result_event"] = result
         self.rows["deliveries/" + child] = child_receipt
+        self.rows["deliveries/" + child + "/delegation"] = native_proof(child_receipt, self.origin)
         self.rows["inbox/events/" + result] = {"event": self.event(
             result, self.goal_room, peer, 470, kind="result", audience="direct", recipient=self.actor,
             source=child_request["id"], data={"deliveryId": child, "generation": 1, "state": "completed"})}
