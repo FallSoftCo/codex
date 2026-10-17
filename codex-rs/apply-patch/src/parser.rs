@@ -197,14 +197,21 @@ fn parse_patch_text(patch: &str, mode: ParseMode) -> Result<ApplyPatchArgs, Pars
         ParseMode::Lenient => check_patch_boundaries_lenient(&lines)?,
     };
 
-    let patch = patch_lines.join("\n");
+    let normalized_patch = patch_lines.join("\n");
     let mut parser = StreamingPatchParser::default();
-    parser.push_delta(&patch)?;
+    parser.push_delta(&normalized_patch)?;
     let hunks = parser.finish()?;
     let environment_id = parser.environment_id().map(str::to_owned);
     Ok(ApplyPatchArgs {
         hunks,
-        patch,
+        // Native collaborative permission pins the actual PATCH argument.
+        // Parsing normalization must not change that consented byte identity.
+        // Lenient heredoc input still exposes only its unwrapped patch body.
+        patch: if check_patch_boundaries_strict(&lines).is_ok() {
+            patch.to_owned()
+        } else {
+            normalized_patch
+        },
         workdir: None,
         environment_id,
     })
@@ -680,3 +687,7 @@ fn test_parse_patch_environment_id_preamble() {
         ))
     );
 }
+
+#[cfg(test)]
+#[path = "parser_identity_tests.rs"]
+mod parser_identity_tests;
