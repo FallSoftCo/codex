@@ -143,8 +143,10 @@ def require_settled_transition(fd, *, check_image=True):
     )
     if len(intents) > 4096:
         raise ValueError("Native transition history inspection budget exhausted")
+    has_release = False
     for name in intents:
         intent = _json(fd, name)
+        has_release = has_release or intent.get("schema") == "lax-native-release-upgrade/v1"
         try:
             accepted = _json(fd, name.removesuffix("-intent.json") + "-accepted.json")
         except FileNotFoundError:
@@ -160,6 +162,8 @@ def require_settled_transition(fd, *, check_image=True):
     try:
         current = _json(fd, INDEX)
     except FileNotFoundError:
+        if has_release:
+            raise ValueError("Original accepted release index is missing; reconcile its metadata")
         return
     if (
         current.get("schema") not in {"lax-native-image-upgrade/v1", "lax-native-release-upgrade/v1"}

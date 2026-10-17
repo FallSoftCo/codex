@@ -321,6 +321,30 @@ class ReleaseTests(unittest.TestCase):
             self.recover()
         self.assertEqual(self.inspect()["metadataStages"], [1, 1, 0])
 
+    def test_legacy_intent_before_index_is_reported_held_without_replay(self):
+        original = image._write
+        self.definition = observer.unit_definition(self.info)
+        def interrupted(fd, name, value, **kwargs):
+            if name == image.INDEX:
+                raise RuntimeError("legacy pointer not published")
+            return original(fd, name, value, **kwargs)
+        with patch.object(image, "_write", side_effect=interrupted):
+            with self.assertRaises(RuntimeError):
+                fixtures.ImageTransitionTests.approve(self)
+        self.assertFalse((self.registry / image.INDEX).exists())
+        value = self.inspect()
+        self.assertEqual(value["state"], "held")
+        self.assertTrue(value["operations"][0]["intentDigest"])
+
+    def test_lost_accepted_release_index_never_grants_registration(self):
+        self.prepare()
+        self.approve()
+        (self.registry / image.INDEX).unlink()
+        with image.registry_lock(self.registry) as fd:
+            with self.assertRaisesRegex(ValueError, "index is missing"):
+                image.require_settled_transition(fd)
+        self.assertEqual(self.inspect()["state"], "held")
+
     def test_legacy_same_path_api_and_receipt_remain_compatible(self):
         self.definition = observer.unit_definition(self.info)
         result = fixtures.ImageTransitionTests.approve(self)

@@ -38,12 +38,21 @@ def states(plan, root_fd):
 
 
 def status_locked(fd, operation=None):
-    candidates = []
+    candidates, legacy = [], []
     for name in os.listdir(fd):
         if name.startswith("image-") and name.endswith("-intent.json"):
             value = image._json(fd, name)
             if value.get("schema") == release.SCHEMA:
                 candidates.append(value)
+            elif optional(fd, name.removesuffix("-intent.json") + "-accepted.json") != {**value, "state": "accepted"}:
+                legacy.append(value)
+    if legacy:
+        return {"state": "held", "reason": "Original legacy/unknown image intent requires review; no replay",
+                "operations": [{"operationId": v.get("operationId"),
+                                "intentDigest": observer.digest(v),
+                                "approvedEnrollmentDigest": observer.digest(v.get("approvedEnrollment"))}
+                               for v in legacy],
+                "observedEnrollmentDigest": observer.digest(image._json(fd, "enrollment.json"))}
     if len(candidates) > 4096:
         raise ValueError("Release history budget exhausted")
     if operation:
