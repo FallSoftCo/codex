@@ -5,10 +5,51 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
-from .collaboration_bridge import require
+from .collaboration_bridge import require, digest
 
 READ_TOOL = "hollywood_mutation_read"
 ADMIN_TOOLS = {"hollywood_mutation_observe", "hollywood_mutation_reconcile"}
+
+
+def view(result):
+    """Keep complete receipts private; inject one bounded status/manifest view."""
+    receipt = result.get("receipt", result)
+    permit = receipt["permit"]
+    proof, source = permit["proof"], permit["source"]
+    observation = permit.get("observation") or {}
+    settlement = permit.get("settlement") or {}
+    observed = {f["relativePath"]: f for f in observation.get("filesObserved", [])}
+    value = {
+        "schema": "lax-mutation-view/v1", "scope": "delivery",
+        "permitId": permit["id"], "permitRevision": permit["revision"],
+        "state": permit["state"], "effectiveState": result.get("effectiveState", permit["state"]),
+        "mayApply": False, "newExecutionAdmitted": False,
+        "receiptEventId": receipt.get("eventId"), "replayed": result.get("replayed", False),
+        "source": {k: source[k] for k in ("agentId", "hostId", "requestId", "deliveryId", "callId")},
+        "workspaceId": proof["workspaceId"], "patchSha256": proof["patchSha256"],
+        "fileManifestSha256": digest(proof["files"]), "fileCount": len(proof["files"]),
+        "files": [{**f, **({"observedSha256": observed[f["relativePath"]]["sha256"],
+                           "observedSize": observed[f["relativePath"]]["size"]}
+                          if f["relativePath"] in observed else {})}
+                  for f in proof["files"]],
+        "observation": {k: observation[k] for k in
+                        ("outcome", "observedAt", "controllerId", "executorId")
+                        if k in observation},
+        "observationDigest": receipt.get("observationDigest") or
+                             (digest(observation) if observation else None),
+        "settlement": {k: settlement[k] for k in
+                       ("outcome", "holds", "effectDisposition", "classification",
+                        "observationDigest", "externalEffectsUndone", "reconciliationOnly")
+                       if k in settlement},
+        "originalOutcome": (settlement.get("originalSettlement") or settlement).get("outcome"),
+    }
+    # Large literal path sets remain in the full canonical receipt. This view
+    # never truncates JSON or drops an accepted effect/receipt identity.
+    if len(json.dumps(value).encode()) > 8192:
+        value["files"] = []
+        value["filesOmitted"] = True
+    require(len(json.dumps(value).encode()) <= 8192, "Mutation view exceeds context bound")
+    return value
 
 
 def definitions(spec):
@@ -34,11 +75,11 @@ async def administer(c, name, args, operation):
     require(c.role_context.value["communicationAdministrator"], "Administrator required")
     identity = str(UUID(args["permitId"]))
     if name == "hollywood_mutation_reconcile":
-        return await c.http("POST", "collaboration/delivery-edits/" + identity + "/reconcile",
-                            {"operationId": operation + ":admin:mutation-reconcile",
-                             "effectDisposition": "reviewed",
-                             **{k: args[k] for k in
-                                ("permitRevision", "observationDigest", "outcome", "note")}})
+        return view(await c.http("POST", "collaboration/delivery-edits/" + identity + "/reconcile",
+                                 {"operationId": operation + ":admin:mutation-reconcile",
+                                  "effectDisposition": "reviewed",
+                                  **{k: args[k] for k in
+                                     ("permitRevision", "observationDigest", "outcome", "note")}}))
     require(name == "hollywood_mutation_observe"
             and c.role_context.value["hostAdministrationVerified"],
             "Verified local host administrator required for physical observation")
@@ -56,4 +97,4 @@ async def administer(c, name, args, operation):
     stdout, _ = await process.communicate()
     require(process.returncode == 0,
             "Protected original observation failed/unconfirmed; inspect the original permit/operation; never repeat a mutation")
-    return json.loads(stdout)
+    return view(json.loads(stdout))
