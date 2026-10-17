@@ -1,6 +1,6 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev46`. Its installer and automatic
+The candidate connector is version `0.1.0.dev47`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
@@ -135,11 +135,11 @@ checked again on native IPC. A revoked/changed grant holds an existing channel;
 it never silently replaces that channel's original authority.
 
 The original actor, delivery, claim, generation, native thread/turn, current role
-and persistent context binding must agree. Ordinary source requests have no Work,
-Goal or plan. A request actually carrying workId retains the original planned
-work grant, consent and integrator checks; a caller cannot switch it to delivery
-scope. Closed original channels are archived only after terminal delivery and
-stopped executor evidence. Unsettled channels and command journals are retained.
+and persistent context binding must agree. Captured business Work retains its
+original work, goal, attempt, request and private context identifiers. It uses
+Sourcev2 with explicit nativeGoalId=null, just as ordinary delivery editing does.
+Closed original channels are archived only after terminal delivery and stopped
+executor evidence. Unsettled channels and command journals are retained.
 
 ## Normal authorized task path
 
@@ -161,12 +161,27 @@ briefing cache. The observed watermark freezes with the original permit. This
 records authenticated observation, not model understanding or full read coverage.
 A metadata gap permits ordinary reads/commands while editing remains held.
 
-A structured assignment still uses typed plan/coordination intent and the
-existing planned mutation protocol. Its current resource list comes from the
-administrator-authorized bounded agent catalog: the ordinary-only controller
-`delivery-targets` route must never be used for a Work request. Current per-work
-grant revisions, consent and integrator ownership remain separate from agent
-grant/default-pointer revisions. This release does not change Work editing mode.
+An assigned business Work can use the same delivery envelope without making a
+file plan. This requires workDeliveryEdits=true and
+workDeliveryEditPolicy=canonical-work-delivery-edits/v1, alongside the original
+delivery capability. The backend derives current Work/attempt/goal/cooperation,
+source, placement, decisions and cancellation authority from canonical facts.
+The consumer pins the complete additive permit.proof.workAuthority at preflight,
+then checks it on begin, settlement and permit read. Older ordinary permits with
+an absent/null workAuthority remain ordinary. No Work identifiers are added to
+the unchanged command DTO or trusted as caller-selected authority.
+
+Both ordinary and assigned Work obtain independently writable agent resources
+from the current delivery-targets registry. Explicit native coordination or
+collaborative_edit_plan callbacks retain per-work grants, consent, integrator
+and physical-target checks. Only the plan pointer recorded by those callbacks
+can select a planned patch, and only for its ready file scope; no plan search or
+arbitrary selection occurs. Collecting/settled/withdrawn metadata and unrelated
+ready files do not turn the entire Work into a file plan. Actual unreleased
+claims, ready scopes and unsettled permits remain enforced by the backend in one
+physical lock domain, including same-actor conflicts. A planned failure never
+falls back to direct mutation. Each original permit fixes its protocol for all
+later callbacks; lost/replayed begin responses never grant another application.
 
 Relative v2 plan/claim intent resolves the explicit canonical agent/host default
 through `collaboration/delivery-resource-default/{delivery}` at that intent call.
@@ -208,7 +223,7 @@ there is no legacy mutation fallback.
 ## Existing bridge: reviewed drained upgrade
 
 Fresh `--apply` deliberately refuses changed installed artifacts. Use a new
-immutable preparation for the reviewed dev46 adapter, then inspect the actual
+immutable preparation for the reviewed dev47 adapter, then inspect the actual
 original files and canonical bridge revision. Keep the original setup receipt.
 The upgrade preserves the same authority, host, machine, credential, socket,
 state directory and actual physical root inodes. List every affected consumer;

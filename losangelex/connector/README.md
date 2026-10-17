@@ -67,3 +67,14 @@ controller after genuine service restarts, explicit fresh service memory ceiling
 and reviewed memory previews. See [NATIVE_LAUNCH.md](NATIVE_LAUNCH.md) for one-time
 activation pins and existing-service upgrade requirements. The controller starts
 no stopped service or task, and a higher ceiling is not a memory leak fix.
+
+
+Connector dev47 consumes the published canonical-work-delivery-edits/v1
+capability. An original assigned business Work can use native delivery edits
+under its independent writable resource grant. The backend derives Work
+authority; the consumer pins its additive permit proof without changing the
+delivery DTO or dropping original identifiers. Explicit native plan callbacks
+retain consent/integrator checks, and claims, ready scopes and unsettled permits
+continue to share the physical conflict domain. See NATIVE_COLLABORATION_SETUP.md
+for the maintained drained upgrade; include Global and all three team consumers
+in the explicit scope before activating a four-agent installation.

@@ -213,7 +213,7 @@ class Bridge:
         environment_sha = digest({"hostId": root["hostId"], "environmentId": root["environmentId"]})
         identity_sha = digest({"hostId": root["hostId"], "environmentSha256": environment_sha, "device": info.st_dev, "inode": info.st_ino})
         if body.get("scope") == "delivery":
-            require(record.get("scope") == "delivery" and record.get("work") is None,
+            require(record.get("scope") == "delivery",
                     "Captured delivery scope required for direct target observation")
             registry = self.http("GET", "collaboration/delivery-targets/" + str(UUID(body["source"]["deliveryId"])))
             require(registry["schema"] == "hollywood-agent-physical-target-registry/v1"
@@ -255,7 +255,7 @@ class Bridge:
                 "executorId": record["executorId"], "descriptorDigest": record["descriptorDigest"],
                 "serviceBindingDigest": record["serviceBindingDigest"], "channel": "captured-app-server-rpc/v1",
                 "command": command}
-        if port in PATCH_PORTS and record.get("scope") == "delivery":
+        if port in PATCH_PORTS and "planId" not in command and record.get("scope") == "delivery":
             from .delivery_edit import SCHEMA, normalized_envelope
             route = "collaboration/delivery-edits"
             body = normalized_envelope({**body, "schema": SCHEMA, "scope": "delivery"})
@@ -327,8 +327,10 @@ class Bridge:
     def patch(self, record, source, frame):
         require(source["tool"] == "apply_patch" and isinstance(frame["arguments"], str), "Real native apply_patch callback required")
         if record.get("scope") == "delivery":
-            from .delivery_edit import patch
-            return patch(self, record, source, frame)
+            from .work_delivery import planned_patch
+            if not planned_patch(self, record, source, frame):
+                from .delivery_edit import patch
+                return patch(self, record, source, frame)
         require(record.get("work"), "Captured structured work required for planned patch semantics")
         root, observed = self.resource(record, frame["evidence"])
         # Stable context IDs are not physical edited-resource IDs. Never silently conflate them.
@@ -393,6 +395,8 @@ class Bridge:
                         and policy.get("deliveryEdits") is True
                         and policy.get("deliveryEditSchema") == "canonical-delivery-edits/v1",
                         "Canonical delivery edit protocol unavailable; no legacy fallback")
+                from .work_delivery import capability
+                capability(record.get("work"), policy)
             result = self.patch(record, source, frame)
         else:
             arguments = frame["arguments"]

@@ -225,7 +225,7 @@ def normalized_envelope(body):
 
 def patch(bridge, record, source, frame):
     require(
-        record.get("scope") == "delivery" and record.get("work") is None,
+        record.get("scope") == "delivery" and source["nativeGoalId"] is None,
         "Direct editing requires exact captured delivery scope, never a caller hint",
     )
     root, observed = bridge.resource(record, frame["evidence"])
@@ -288,6 +288,9 @@ def patch(bridge, record, source, frame):
         )
         command = {**common, "action": "preflight", "files": files, "leaseSeconds": 15}
         result = bridge.relay(record, source, phase, command, root, paths)
+        from .work_delivery import permit_authority
+
+        authority = permit_authority(record, source, result.get("receipt", result))
         saved(
             key,
             {
@@ -300,6 +303,7 @@ def patch(bridge, record, source, frame):
                 "patchSha256": common["patchSha256"],
                 "files": files,
                 "workspaceId": root["workspaceId"],
+                "workAuthority": authority,
             },
         )
         return result
@@ -320,6 +324,13 @@ def patch(bridge, record, source, frame):
     if phase == "patch-settle":
         command["outcome"] = frame["evidence"]["outcome"]
     result = bridge.relay(record, source, phase, command, root, paths)
+    from .work_delivery import permit_authority
+
+    authority = permit_authority(record, source, result.get("receipt", result))
+    require(
+        authority == original.get("workAuthority"),
+        "Original server-derived Work authority changed; retain permit and locks",
+    )
     if phase == "patch-begin":
         admission = result.get("admission")
         require(
@@ -339,6 +350,10 @@ def patch(bridge, record, source, frame):
         )
         require(
             snapshot.get("mayApply") is False, "Permit read must never grant mutation"
+        )
+        require(
+            permit_authority(record, source, snapshot) == original.get("workAuthority"),
+            "Original Work permit read differs; retain uncertainty",
         )
         result["settlementState"] = snapshot["effectiveState"]
     return result
