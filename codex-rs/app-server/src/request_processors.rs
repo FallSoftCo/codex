@@ -556,6 +556,7 @@ mod feedback_rollout_history;
 mod feedback_thread_index;
 mod fs_processor;
 mod git_processor;
+mod hollywood_input;
 mod initialize_processor;
 mod marketplace_processor;
 mod mcp_event_stream;

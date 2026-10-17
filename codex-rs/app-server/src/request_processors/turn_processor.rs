@@ -187,6 +187,7 @@ impl TurnRequestProcessor {
             params,
             app_server_client_name,
             app_server_client_version,
+            /*agent_input*/ None,
         )
         .await
         .map(|response| Some(response.into()))
@@ -522,12 +523,13 @@ impl TurnRequestProcessor {
         Ok(())
     }
 
-    async fn turn_start_inner(
+    pub(super) async fn turn_start_inner(
         &self,
         request_id: ConnectionRequestId,
         params: TurnStartParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
+        agent_input: Option<ResponseItem>,
     ) -> Result<TurnStartResponse, JSONRPCErrorError> {
         let (thread_id, thread) =
             self.load_thread(&params.thread_id)
@@ -597,7 +599,9 @@ impl TurnRequestProcessor {
 
         let additional_context = map_additional_context(params.additional_context);
         let turn_has_input = !params.input.is_empty();
-        let input = if let Some(tool_output) = params.tool_output {
+        let input = if let Some(item) = agent_input {
+            TurnInput::ResponseItem(item)
+        } else if let Some(tool_output) = params.tool_output {
             let item = ResponseItem::FunctionCallOutput {
                 id: None,
                 call_id: None,

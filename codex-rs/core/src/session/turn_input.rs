@@ -64,6 +64,8 @@ mod tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TurnStartKind {
     User,
+    /// Explicit peer input, with agent authorship retained throughout the turn.
+    Agent,
     Automatic,
     Recovery,
 }
@@ -71,7 +73,7 @@ enum TurnStartKind {
 impl TurnStartKind {
     fn permits_mode(self, mode: ModeKind) -> bool {
         match self {
-            Self::User | Self::Recovery => true,
+            Self::User | Self::Agent | Self::Recovery => true,
             Self::Automatic => mode != ModeKind::Plan,
         }
     }
@@ -164,7 +166,7 @@ impl PreparedTurnInputSettings {
             cyber_access_program,
         };
         let turn_context = match kind {
-            TurnStartKind::User | TurnStartKind::Recovery => Some(
+            TurnStartKind::User | TurnStartKind::Agent | TurnStartKind::Recovery => Some(
                 session
                     .new_turn_with_sub_id(submission_id.clone(), updates, options)
                     .await?,
@@ -241,6 +243,11 @@ pub(super) async fn handle(
                 SubmittedTurnInput::UserInput { content, .. } if !content.is_empty() => {
                     TurnStartKind::User
                 }
+                SubmittedTurnInput::ResponseItem(ResponseItem::AgentMessage { .. })
+                | SubmittedTurnInput::AnnotatedResponseItem(AnnotatedResponseItem {
+                    item: ResponseItem::AgentMessage { .. },
+                    ..
+                }) => TurnStartKind::Agent,
                 SubmittedTurnInput::UserInput { .. }
                 | SubmittedTurnInput::ResponseItem(_)
                 | SubmittedTurnInput::AnnotatedResponseItem(_)
@@ -346,8 +353,13 @@ async fn start_or_steer(
         ..
     } = request;
     let origin = UserInputOrigin::from_turn_trigger(start.turn_trigger.as_deref());
-    let has_explicit_input = match &input {
-        SubmittedTurnInput::UserInput { content, .. } => !content.is_empty(),
+    let (kind, has_explicit_input) = match &input {
+        SubmittedTurnInput::UserInput { content, .. } => (TurnStartKind::User, !content.is_empty()),
+        SubmittedTurnInput::ResponseItem(ResponseItem::AgentMessage { .. })
+        | SubmittedTurnInput::AnnotatedResponseItem(AnnotatedResponseItem {
+            item: ResponseItem::AgentMessage { .. },
+            ..
+        }) => (TurnStartKind::Agent, true),
         SubmittedTurnInput::ResponseItem(ResponseItem::FunctionCallOutput {
             call_id: None,
             ..
@@ -355,10 +367,10 @@ async fn start_or_steer(
         | SubmittedTurnInput::AnnotatedResponseItem(AnnotatedResponseItem {
             item: ResponseItem::FunctionCallOutput { call_id: None, .. },
             ..
-        }) => true,
+        }) => (TurnStartKind::User, true),
         _ => {
             return Err(CodexErr::InvalidRequest(
-                "only user input or standalone function-call outputs can start or steer a turn"
+                "only user input, agent messages or standalone function-call outputs can start or steer a turn"
                     .to_string(),
             ));
         }
@@ -416,10 +428,10 @@ async fn start_or_steer(
                 Some(admission)
             };
             let Some(turn_context) = settings
-                .apply_started(session, submission_id.clone(), TurnStartKind::User)
+                .apply_started(session, submission_id.clone(), kind)
                 .await?
             else {
-                unreachable!("explicit user input can enter Plan mode");
+                unreachable!("explicit human or agent input can enter Plan mode");
             };
             turn_context
                 .turn_metadata_state
@@ -602,8 +614,10 @@ async fn start_if_idle(
     let mut task_input = merge_additional_context_input(session, additional_context).await;
     let sender_messages = capture_sender_user_messages(session, &mut input).await;
     match kind {
-        TurnStartKind::User => {
-            session.clear_connector_selection().await;
+        TurnStartKind::User | TurnStartKind::Agent => {
+            if kind == TurnStartKind::User {
+                session.clear_connector_selection().await;
+            }
             if let SubmittedTurnInput::UserInput { content, .. } = &input {
                 turn_context.session_telemetry.user_prompt(content);
             }

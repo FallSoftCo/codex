@@ -1096,6 +1096,11 @@ client_request_definitions! {
         serialization: global("config"),
         response: v2::PluginUninstallResponse,
     },
+    HollywoodAgentMessage => "hollywood/agentMessage" {
+        params: v2::HollywoodAgentMessageParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::HollywoodAgentMessageResponse,
+    },
     TurnStart => "turn/start" {
         params: v2::TurnStartParams,
         inspect_params: true,

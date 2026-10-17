@@ -1990,6 +1990,16 @@ class HollywoodAttentionSettings(BaseModel):
     mode: HollywoodAttentionMode
 
 
+class HollywoodEventAudience(Enum):
+    room = "room"
+    direct = "direct"
+
+
+class HollywoodEventKind(Enum):
+    message = "message"
+    request = "request"
+
+
 class HollywoodMessageAttention(Enum):
     focused = "focused"
     broadcast = "broadcast"
@@ -8634,6 +8644,24 @@ class NetworkAccessGuardianApprovalReviewAction(BaseModel):
     ]
 
 
+class HollywoodAgentMessageParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    audience: HollywoodEventAudience
+    author_id: Annotated[str, Field(alias="authorId")]
+    authority_id: Annotated[str, Field(alias="authorityId")]
+    body: str
+    event_id: Annotated[str, Field(alias="eventId")]
+    expects_reply: Annotated[bool | None, Field(alias="expectsReply")] = False
+    kind: HollywoodEventKind
+    recipient_id: Annotated[str, Field(alias="recipientId")]
+    room_id: Annotated[str, Field(alias="roomId")]
+    source_event_id: Annotated[str | None, Field(alias="sourceEventId")] = None
+    thread_id: Annotated[str, Field(alias="threadId")]
+
+
 class HollywoodMessage(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -11024,6 +11052,17 @@ class PluginShareUpdateTargetsRequest(BaseModel):
     params: PluginShareUpdateTargetsParams
 
 
+class HollywoodAgentMessageRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[
+        Literal["hollywood/agentMessage"], Field(title="Hollywood/agentMessageRequestMethod")
+    ]
+    params: HollywoodAgentMessageParams
+
+
 class TurnSteerRequest(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -12296,6 +12335,13 @@ class ExternalAgentConfigImportParams(BaseModel):
     ] = None
 
 
+class HollywoodAgentMessageResponse(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    turn: Turn
+
+
 class ItemCompletedNotification(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -13098,6 +13144,7 @@ class ClientRequest(
         | SkillsConfigWriteRequest
         | PluginInstallRequest
         | PluginUninstallRequest
+        | HollywoodAgentMessageRequest
         | TurnStartRequest
         | TurnSteerRequest
         | TurnInterruptRequest
@@ -13209,6 +13256,7 @@ class ClientRequest(
         | SkillsConfigWriteRequest
         | PluginInstallRequest
         | PluginUninstallRequest
+        | HollywoodAgentMessageRequest
         | TurnStartRequest
         | TurnSteerRequest
         | TurnInterruptRequest

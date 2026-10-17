@@ -1724,6 +1724,30 @@
             },
             "method": {
               "enum": [
+                "hollywood/agentMessage"
+              ],
+              "title": "Hollywood/agentMessageRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/HollywoodAgentMessageParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Hollywood/agentMessageRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
                 "turn/start"
               ],
               "title": "Turn/startRequestMethod",
@@ -13305,6 +13329,76 @@
         "title": "GuardianWarningNotification",
         "type": "object"
       },
+      "HollywoodAgentMessageParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false,
+        "description": "A verified Hollywood peer event submitted by the private LAX transport. The transport authenticates and authorizes the canonical event before calling this method. Human clients submit human input through their existing API.",
+        "properties": {
+          "audience": {
+            "$ref": "#/definitions/v2/HollywoodEventAudience"
+          },
+          "authorId": {
+            "type": "string"
+          },
+          "authorityId": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "expectsReply": {
+            "default": false,
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/definitions/v2/HollywoodEventKind"
+          },
+          "recipientId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "sourceEventId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threadId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "audience",
+          "authorId",
+          "authorityId",
+          "body",
+          "eventId",
+          "kind",
+          "recipientId",
+          "roomId",
+          "threadId"
+        ],
+        "title": "HollywoodAgentMessageParams",
+        "type": "object"
+      },
+      "HollywoodAgentMessageResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "turn": {
+            "$ref": "#/definitions/v2/Turn"
+          }
+        },
+        "required": [
+          "turn"
+        ],
+        "title": "HollywoodAgentMessageResponse",
+        "type": "object"
+      },
       "HollywoodAttentionMode": {
         "enum": [
           "focused",
@@ -13331,6 +13425,20 @@
           "mode"
         ],
         "type": "object"
+      },
+      "HollywoodEventAudience": {
+        "enum": [
+          "room",
+          "direct"
+        ],
+        "type": "string"
+      },
+      "HollywoodEventKind": {
+        "enum": [
+          "message",
+          "request"
+        ],
+        "type": "string"
       },
       "HollywoodMessage": {
         "properties": {

@@ -659,3 +659,19 @@ registration hashes use canonical sorted compact JSON: environment is
 root. External worktree Git metadata, directory claims, remote physical mutation
 and native child admission remain unavailable until their own implementations
 and qualification exist. Receipts and cached replies never confer an apply grant.
+
+## Native Hollywood peer input
+
+The private LAX transport submits an authenticated canonical peer event through
+hollywood/agentMessage. It supplies the target runtime thread and the verified
+authority, room, event, author, recipient, audience, kind and reply relationship.
+The transport must obtain these from Hollywood; this RPC is not a public human
+message endpoint and does not itself authenticate a Hollywood principal.
+
+The app-server admits the event through Core's normal start-or-steer path as an
+agent_message item, preserving peer authorship in model history. It does not
+manufacture a user message, developer instruction, function call or tool result.
+Human messages retain their existing input path. The returned turn identifies
+native admission, not successful execution or completion of the peer request.
+The transport retains the original operation journal and reconciles uncertain
+admission before retrying.

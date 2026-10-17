@@ -302,6 +302,51 @@ pub struct TurnStartParams {
     pub cyber_access_program: Option<CyberAccessProgram>,
 }
 
+/// A verified Hollywood peer event submitted by the private LAX transport.
+/// The transport authenticates and authorizes the canonical event before calling
+/// this method. Human clients submit human input through their existing API.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct HollywoodAgentMessageParams {
+    pub thread_id: String,
+    pub authority_id: String,
+    pub room_id: String,
+    pub event_id: String,
+    pub author_id: String,
+    pub recipient_id: String,
+    pub body: String,
+    pub audience: HollywoodEventAudience,
+    pub kind: HollywoodEventKind,
+    #[ts(optional = nullable)]
+    pub source_event_id: Option<String>,
+    #[serde(default)]
+    pub expects_reply: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodEventAudience {
+    Room,
+    Direct,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum HollywoodEventKind {
+    Message,
+    Request,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct HollywoodAgentMessageResponse {
+    pub turn: Turn,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]

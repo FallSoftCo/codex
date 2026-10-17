@@ -1006,6 +1006,7 @@ impl MessageProcessor {
             | ClientRequest::ThreadDelete { .. }
             | ClientRequest::ThreadArchive { .. } => (Some(self.turn_admission.admit()?), false),
             ClientRequest::TurnStart { .. }
+            | ClientRequest::HollywoodAgentMessage { .. }
             | ClientRequest::TurnSteer { .. }
             | ClientRequest::ReviewStart { .. }
             | ClientRequest::ThreadCompactStart { .. }
@@ -1683,6 +1684,16 @@ impl MessageProcessor {
             ClientRequest::MockExperimentalMethod { params, .. } => {
                 self.catalog_processor
                     .mock_experimental_method(params)
+                    .await
+            }
+            ClientRequest::HollywoodAgentMessage { params, .. } => {
+                self.turn_processor
+                    .hollywood_agent_message(
+                        request_id.clone(),
+                        params,
+                        app_server_client_name.clone(),
+                        client_version.clone(),
+                    )
                     .await
             }
             ClientRequest::TurnStart { params, .. } => {
