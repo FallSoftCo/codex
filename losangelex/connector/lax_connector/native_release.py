@@ -161,8 +161,9 @@ def prepare(authority, host, agent, request, output):
         old_python, new_python = [Path(request[k]) for k in ("oldInterpreter", "newInterpreter")]
         for path, release in ((old_binary, old_root), (old_python, old_root),
                               (new_binary, new_root), (new_python, new_root)):
-            if not path.is_absolute() or ".." in path.parts or not path.is_relative_to(release):
-                raise ValueError("Exact old/new paths must belong to their reviewed release")
+            if (not path.is_absolute() or ".." in path.parts or not path.is_relative_to(release)
+                    or not re.fullmatch(r"/[A-Za-z0-9_./+-]+", str(path))):
+                raise ValueError("Exact old/new paths must belong to their reviewed release and be literal unit paths")
         if old_root == new_root or old_root.is_relative_to(new_root) or new_root.is_relative_to(old_root):
             raise ValueError("Distinct nonnested immutable release paths required")
         h = image._open_directory(old_root)
@@ -195,7 +196,8 @@ def prepare(authority, host, agent, request, output):
         if config_path.read_bytes() != config_bytes or unit_path.read_bytes() != before_unit:
             raise ValueError("Original configuration/unit changed during review")
         new_config = (json.dumps({**config, "binary": str(new_binary)}, indent=2) + "\n").encode()
-        new_unit = before_unit.decode().replace(before_exec, after_exec).encode()
+        new_unit = "\n".join(after_exec if line == before_exec else line
+                             for line in before_unit.decode().split("\n")).encode()
         image_info = new_binary.stat()
         upgraded = {**old, "binary": str(new_binary),
                     "binaryDevice": image_info.st_dev, "binaryInode": image_info.st_ino,

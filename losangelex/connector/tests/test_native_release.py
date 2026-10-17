@@ -116,6 +116,20 @@ class ReleaseTests(unittest.TestCase):
             str(self.python).encode(), str(self.new_python).encode()))
         self.assertEqual(result["modelsStarted"], 0)
 
+    def test_execstart_text_inside_comments_is_preserved(self):
+        import base64
+        comment = ("# retain ExecStart=" + str(self.python) +
+                   " -m lax_connector.connector --config " +
+                   str(self.home / "connector.json") + " --serve\n").encode()
+        self.unit.write_bytes(self.unit.read_bytes() + comment)
+        self.old["unitDefinitionDigest"] = hashlib.sha256(self.unit.read_bytes()).hexdigest()
+        fixtures.write(self.registry / "enrollment.json", self.old)
+        self.request_spec.update(expectedEnrollment=observer.digest(self.old),
+                                 expectedDefinition=self.old["unitDefinitionDigest"])
+        self.prepare()
+        plan = json.loads((self.prepared / "release-plan.json").read_text())
+        self.assertTrue(base64.b64decode(plan["targets"][1]["after"]).endswith(comment))
+
     def test_full_transition_preserves_identity_state_history_and_restart_pins(self):
         self.prepare()
         restart = self.registry / "restart-approval.json"
