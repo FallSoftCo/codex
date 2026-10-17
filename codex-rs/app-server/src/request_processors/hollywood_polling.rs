@@ -18,7 +18,7 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 
 pub(super) fn hollywood_polling_enabled() -> bool {
-    collaboration_first_policy_enabled()
+    !codex_core::enterprise_native_collaboration_enabled() && collaboration_first_policy_enabled()
 }
 
 pub(super) async fn poll_hollywood_for_thread(

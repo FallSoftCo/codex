@@ -102,11 +102,7 @@ pub async fn inter_agent_communication(
 /// Delivers Hollywood room traffic as collaboration context, not user input.
 pub async fn hollywood_input(sess: &Arc<Session>, sub_id: String, message: HollywoodInputMessage) {
     if crate::canonical_collaboration::enterprise() {
-        let items = vec![ContextualUserFragment::into(HollywoodMessage::new(
-            &message,
-        ))];
-        sess.inject_no_new_turn(items, /*current_turn_context*/ None)
-            .await;
+        warn!("Rejected legacy Hollywood context input in native mode");
         return;
     }
     sess.add_hollywood_obligation(&message).await;

@@ -6,6 +6,8 @@ use codex_app_server_protocol::HollywoodAgentMessageParams;
 use codex_app_server_protocol::HollywoodAgentMessageResponse;
 use codex_app_server_protocol::HollywoodEventAudience;
 use codex_app_server_protocol::HollywoodEventKind;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
+use codex_app_server_protocol::ThreadHollywoodAttachResponse;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::TurnStartParams;
 use codex_app_server_protocol::UserInput;
@@ -29,13 +31,24 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
     };
     let observed = responses::mount_sse_sequence(
         &server,
-        vec![response("peer-response"), response("human-response"), response("review-response")],
+        vec![
+            response("peer-response"),
+            response("human-response"),
+            response("review-response"),
+        ],
     )
     .await;
     let home = TempDir::new()?;
     MockResponsesConfig::new(&server.uri()).write(home.path())?;
+    let legacy_url = format!("{}/legacy-hollywood", server.uri());
     let mut app = TestAppServer::builder()
         .with_codex_home(home.path())
+        .with_env_overrides(&[
+            ("LAX_NATIVE_ENTERPRISE", Some("1")),
+            ("LAX_CANONICAL_NATIVE_CHANNEL", None),
+            ("HOLLYWOOD_AUTO_ATTACH", Some("1")),
+            ("HOLLYWOOD_URL", Some(legacy_url.as_str())),
+        ])
         .build_initialized()
         .await?;
     let native_contract = "LAX-owned-native-contract: communicate as independent Hollywood peers.";
@@ -58,6 +71,23 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
         })
         .await?
         .thread;
+    let legacy_attach: Result<ThreadHollywoodAttachResponse> = app
+        .request(|request_id| ClientRequest::ThreadHollywoodAttach {
+            request_id,
+            params: ThreadHollywoodAttachParams {
+                thread_id: thread.id.clone(),
+                url: Some(legacy_url.clone()),
+                room: Some("legacy-room".to_string()),
+                ..Default::default()
+            },
+        })
+        .await;
+    assert!(
+        legacy_attach
+            .expect_err("legacy ingress must be disabled")
+            .to_string()
+            .contains("Legacy room attachment is disabled")
+    );
     let authority = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     let room = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     let event = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -156,8 +186,7 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
         // The current provider client serializes the owned base as a dedicated
         // developer prefix item, rather than the top-level instructions field.
         assert!(input.iter().any(|item| {
-            item["role"] == "developer"
-                && item["content"][0]["text"] == native_contract
+            item["role"] == "developer" && item["content"][0]["text"] == native_contract
         }));
         for text in input
             .iter()
@@ -179,9 +208,8 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
         if index == 2 {
             assert_eq!(peers[1]["author"], recipient);
             assert_eq!(peers[1]["recipient"], recipient);
-            let content: Value = serde_json::from_str(
-                peers[1]["content"][0]["text"].as_str().unwrap(),
-            )?;
+            let content: Value =
+                serde_json::from_str(peers[1]["content"][0]["text"].as_str().unwrap())?;
             assert_eq!(content["eventId"], review_event);
             assert_eq!(content["sourceEventId"], event);
             assert_eq!(content["body"], review_body);
@@ -191,5 +219,14 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
                 && item.to_string().contains(body)
         }));
     }
+    let http = server
+        .received_requests()
+        .await
+        .expect("HTTP observation enabled");
+    assert!(
+        !http
+            .iter()
+            .any(|request| request.url.path().starts_with("/legacy-hollywood"))
+    );
     Ok(())
 }

@@ -208,6 +208,9 @@ fn thread_start_hollywood_config(
     auto_attach_hollywood_on_start: bool,
     cwd: &std::path::Path,
 ) -> Option<HollywoodConfig> {
+    if codex_core::enterprise_native_collaboration_enabled() {
+        return None;
+    }
     if let Some(hollywood) = hollywood {
         let default_room = default_hollywood_room_for_cwd(cwd);
         let room = hollywood.room.unwrap_or(default_room);
@@ -680,6 +683,11 @@ impl ThreadRequestProcessor {
         request_id: ConnectionRequestId,
         params: ThreadHollywoodAttachParams,
     ) -> Result<ThreadHollywoodAttachResponse, JSONRPCErrorError> {
+        if codex_core::enterprise_native_collaboration_enabled() {
+            return Err(invalid_request(
+                "Legacy room attachment is disabled in Hollywood-native mode",
+            ));
+        }
         let (thread_id, thread) = self.load_thread(&params.thread_id).await?;
         let config_snapshot = thread.config_snapshot().await;
         let default_room = default_hollywood_room_for_cwd(config_snapshot.cwd().as_path());
@@ -1046,6 +1054,9 @@ impl ThreadRequestProcessor {
         thread_name: Option<&str>,
         inject_context: bool,
     ) -> Result<(), JSONRPCErrorError> {
+        if codex_core::enterprise_native_collaboration_enabled() {
+            return Ok(());
+        }
         {
             let thread_state = context.thread_state_manager.thread_state(thread_id).await;
             let mut thread_state = thread_state.lock().await;

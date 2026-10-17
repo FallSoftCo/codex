@@ -62,6 +62,9 @@ pub(crate) struct HollywoodConfig {
 impl HollywoodConfig {
     #[allow(dead_code)]
     pub(crate) fn from_env() -> Option<Self> {
+        if codex_core::enterprise_native_collaboration_enabled() {
+            return None;
+        }
         let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
         let has_explicit_config =
             env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
@@ -109,6 +112,9 @@ impl HollywoodConfig {
     }
 
     pub(crate) fn auto_attach_for_cwd(cwd: &Path) -> Option<Self> {
+        if codex_core::enterprise_native_collaboration_enabled() {
+            return None;
+        }
         let auto_attach = env::var("HOLLYWOOD_AUTO_ATTACH").ok();
         let has_explicit_config =
             env::var("HOLLYWOOD_URL").is_ok() || env::var("HOLLYWOOD_ROOM").is_ok();
