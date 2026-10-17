@@ -71,6 +71,23 @@ class PackageTests(PackageFixture, unittest.TestCase):
         self.assertFalse(out["toolExecutionProved"])
         self.assertEqual(out["modelsStarted"], 0)
 
+    def test_headless_upstream_package_uses_its_declared_entrypoint(self):
+        package = self.root / "headless-package"
+        prepare_package_dir(package, force=False)
+        build_package_dir(
+            package,
+            "0.163.0-test",
+            PACKAGE_VARIANTS["codex-app-server"],
+            TARGET_SPECS[self.target],
+            PackageInputs(self.binary, self.binary, self.binary, self.binary, None, None),
+        )
+        out = inspect_package(package / "bin/codex-app-server", expected_uid=os.geteuid())
+        self.assertEqual(out["metadata"]["variant"], "codex-app-server")
+        self.assertEqual(out["metadata"]["entrypoint"], "bin/codex-app-server")
+        self.assertEqual(len(out["startupChecks"]), 4)
+        self.assertFalse(out["toolExecutionProved"])
+        self.assertEqual(out["modelsStarted"], 0)
+
     def test_missing_code_host_rejected_before_any_diagnostic(self):
         (self.package / "bin/codex-code-mode-host").unlink()
         with patch("lax_connector.native_package.subprocess.run") as run:

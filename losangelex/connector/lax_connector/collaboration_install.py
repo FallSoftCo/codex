@@ -31,7 +31,9 @@ def protected_tree(path, mode):
     require(path.is_absolute(), "Absolute protected installation path required")
     for parent in reversed((path, *path.parents)):
         if not parent.exists():
-            parent.mkdir(mode=mode if parent == path else 0o755)
+            desired_mode = mode if parent == path else 0o755
+            parent.mkdir(mode=desired_mode)
+            parent.chmod(desired_mode)
         protected_directory(parent)
     return path
 
@@ -54,6 +56,7 @@ def write_original(path, value, mode=0o600):
         return
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
     with os.fdopen(fd, "wb") as file:
+        os.fchmod(file.fileno(), mode)
         file.write(data)
         file.flush()
         os.fsync(file.fileno())

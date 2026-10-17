@@ -1,6 +1,6 @@
 """Preflight the canonical Linux Codex package under its execution identity.
 
-Contract: scripts/codex_package/layout.py, layoutVersion1, codex CLI variant.
+Contract: scripts/codex_package/layout.py, layoutVersion1, codex CLI or headless app-server variant.
 This checks package files and bounded no-model startup commands. It does not
 prove sandbox/tool execution, model access or an enterprise end-to-end outcome.
 """
@@ -36,7 +36,7 @@ class PackageError(RuntimeError):
         }
         super().__init__(
             f"Native package preflight failed for {component}: {reason}. "
-            "Use scripts/build_codex_package.py and its complete package bin/codex."
+            "Use scripts/build_codex_package.py and its complete package entrypoint."
         )
 
 
@@ -48,13 +48,8 @@ def _hash(path):
     return value.hexdigest()
 
 
-def inspect_package(binary, *, expected_uid=None):
-    """Run as the actual service UID, never infer access from root's mode bits."""
-    uid = os.geteuid()
-    if expected_uid is not None and uid != expected_uid:
-        raise PackageError("serviceIdentity", "execution UID differs")
-    if platform.system() != "Linux":
-        raise PackageError("target", "maintained service preflight requires Linux")
+def _layout(binary):
+    """Read declared package identity without launching or requiring its helpers."""
     try:
         entrypoint = Path(binary).resolve(strict=True)
     except (OSError, RuntimeError):
@@ -69,20 +64,53 @@ def inspect_package(binary, *, expected_uid=None):
         raise PackageError(
             "codex-package.json", "missing, inaccessible or invalid metadata"
         ) from None
+    variant = metadata.get("variant") if isinstance(metadata, dict) else None
+    entrypoint_name = ({"codex": "codex", "codex-app-server": "codex-app-server"}.get(variant)
+                       if isinstance(variant, str) else None)
+    target = metadata.get("target") if isinstance(metadata, dict) else None
+    if entrypoint_name and isinstance(target, str) and target.endswith("-pc-windows-msvc"):
+        entrypoint_name += ".exe"
     required = {
         "layoutVersion": 1,
-        "variant": "codex",
-        "entrypoint": "bin/codex",
+        "variant": variant,
+        "entrypoint": "bin/" + (entrypoint_name or ""),
         "resourcesDir": "codex-resources",
         "pathDir": "codex-path",
     }
-    if not isinstance(metadata, dict) or any(
+    if entrypoint_name is None or not isinstance(metadata, dict) or any(
         metadata.get(k) != v for k, v in required.items()
     ):
-        raise PackageError("codex-package.json", "unsupported canonical CLI layout")
+        raise PackageError("codex-package.json", "unsupported canonical CLI layout or headless app-server layout")
     version = metadata.get("version")
     if not isinstance(version, str) or not version or len(version) > 128:
         raise PackageError("codex-package.json", "invalid package version")
+    if entrypoint != root / "bin" / entrypoint_name:
+        raise PackageError(
+            "entrypoint", "configured executable is not the declared package entrypoint"
+        )
+    return entrypoint, root, metadata, entrypoint_name
+
+
+def runtime_command(binary):
+    """Use the canonical headless entrypoint, retaining bare historical CLI readers."""
+    manifest = Path(binary).resolve(strict=True).parent.parent / "codex-package.json"
+    if not manifest.exists():
+        # Read-only reconciliation may use an older standalone CLI without a
+        # complete package. Enterprise execution still requires full preflight.
+        return [binary, "app-server"]
+    _, _, metadata, _ = _layout(binary)
+    return ([binary] if metadata["variant"] == "codex-app-server"
+            else [binary, "app-server"])
+
+
+def inspect_package(binary, *, expected_uid=None):
+    """Run as the actual service UID, never infer access from root's mode bits."""
+    uid = os.geteuid()
+    if expected_uid is not None and uid != expected_uid:
+        raise PackageError("serviceIdentity", "execution UID differs")
+    if platform.system() != "Linux":
+        raise PackageError("target", "maintained service preflight requires Linux")
+    entrypoint, root, metadata, entrypoint_name = _layout(binary)
     machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(
         platform.machine().lower(), platform.machine().lower()
     )
@@ -91,16 +119,13 @@ def inspect_package(binary, *, expected_uid=None):
         machine + "-unknown-linux-musl",
     }:
         raise PackageError("target", "package does not match the service host")
-    if entrypoint != root / "bin/codex":
-        raise PackageError(
-            "entrypoint", "configured executable is not package bin/codex"
-        )
     for name in ("bin", "codex-resources", "codex-path"):
         if not (root / name).is_dir():
             raise PackageError(name, "missing or inaccessible package directory")
     assets = {}
+    package_assets = {**ASSETS, "entrypoint": ("bin/" + entrypoint_name, ["--version"])}
     # Validate the complete layout before executing even a version command.
-    for label, (relative, _) in ASSETS.items():
+    for label, (relative, _) in package_assets.items():
         path = root / relative
         try:
             info = path.lstat()
@@ -124,7 +149,7 @@ def inspect_package(binary, *, expected_uid=None):
                 relative, "missing or inaccessible required package asset"
             ) from None
     probes = []
-    for label, (_, arguments) in ASSETS.items():
+    for label, (_, arguments) in package_assets.items():
         try:
             result = subprocess.run(
                 [assets[label]["path"], *arguments],
@@ -159,7 +184,7 @@ def inspect_package(binary, *, expected_uid=None):
         "binary": str(entrypoint),
         "packageRoot": str(root),
         "metadata": metadata,
-        "metadataSha256": _hash(manifest),
+        "metadataSha256": _hash(root / "codex-package.json"),
         "assets": assets,
         "startupChecks": probes,
         "modelsStarted": 0,

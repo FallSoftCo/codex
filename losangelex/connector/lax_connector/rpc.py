@@ -1,4 +1,4 @@
-"""Bounded JSON-RPC transport over a private Codex app-server stdio connection."""
+"""Bounded JSON-RPC transport over a private native app-server stdio connection."""
 
 import asyncio
 import json
@@ -69,10 +69,13 @@ class AppServer:
             env.pop(key, None)
         # MCP configuration belongs to this explicit CODEX_HOME. Leave server
         # discovery and enablement to upstream without imposing a CLI table.
+        # Canonical packaging already supports a headless entrypoint. Its CLI
+        # accepts transport arguments directly; the full CLI needs its subcommand.
+        from .native_package import runtime_command
+        command = runtime_command(self.binary)
         with (self.state / "app-server.log").open("ab") as log:
             self.process = await asyncio.create_subprocess_exec(
-                self.binary,
-                "app-server",
+                *command,
                 "--listen",
                 "stdio://",
                 "-c",

@@ -103,8 +103,20 @@ def install(authority, source):
     if os.geteuid() != 0:
         raise PermissionError("Installation administrator required")
     value = validate(json.loads(Path(source).read_text()), authority)
-    path = Path("/etc/harness") / str(UUID(authority)) / "environment.json"
-    path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    root = Path("/etc/harness")
+    root.mkdir(mode=0o755, exist_ok=True)
+    root_info = root.lstat()
+    if not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != 0 or root_info.st_mode & 0o022:
+        raise PermissionError("Installation metadata root is not protected")
+    root.chmod(stat.S_IMODE(root_info.st_mode) | 0o111)
+    path = root / str(UUID(authority)) / "environment.json"
+    path.parent.mkdir(mode=0o755, exist_ok=True)
+    info = path.parent.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise PermissionError("Installation environment directory is not protected")
+    # This directory contains declared non-secret installation metadata. An
+    # installer's private umask must not hide it from the installed agent.
+    path.parent.chmod(0o755)
     if path.exists() and json.loads(path.read_text()) != value:
         raise ValueError(
             "Existing environment differs; explicit installation reconciliation required"

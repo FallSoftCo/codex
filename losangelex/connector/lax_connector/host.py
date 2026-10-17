@@ -19,11 +19,9 @@ def machine_identity():
 
 
 def resources():
-    cpus = (
-        len(os.sched_getaffinity(0))
-        if hasattr(os, "sched_getaffinity")
-        else os.cpu_count()
-    )
+    # Executors run in sibling managed services. The observer's private CPU
+    # affinity/quota and memory ceiling are not the execution pool's capacity.
+    cpus = os.cpu_count()
     values = dict(
         line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines()
     )
@@ -37,10 +35,20 @@ def resources():
             if ".." not in current.parts:
                 groups.update(
                     p
-                    for p in (current, *current.parents)
+                    for p in current.parents
                     if p == root or root in p.parents
                 )
     for group in groups:
+        try:
+            cpuset = (group / "cpuset.cpus.effective").read_text().strip()
+            if cpuset:
+                count = 0
+                for part in cpuset.split(","):
+                    start, separator, end = part.partition("-")
+                    count += int(end) - int(start) + 1 if separator else 1
+                cpus = min(cpus or count, count)
+        except (OSError, ValueError):
+            pass
         try:
             quota, period = (group / "cpu.max").read_text().split()
             if quota != "max":
