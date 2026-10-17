@@ -47,11 +47,25 @@ async def administer(connector, name, arguments, operation):
     except Exception as error:
         from .errors import HttpFailure
 
-        if (
-            name
-            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "hollywood_select_resource_default", "hollywood_placement_set", "hollywood_mutation_reconcile")
-            and isinstance(error, HttpFailure)
-            and error.status in (400, 403, 409)
+        # These workflows route all remote mutations through Effects. Worker
+        # provisioning records its placement before starting the host process,
+        # so a later host failure cannot satisfy safe_rejection().
+        tracked = name in (
+            "hollywood_create_agent", "hollywood_create_room", "hollywood_set_role",
+            "hollywood_grant_room", "hollywood_grant_resource",
+            "hollywood_select_resource_default", "hollywood_placement_set",
+            "lax_provision_worker",
+        )
+        known_rejection = (
+            tracked and connector.effects.safe_rejection()
+            and (
+                isinstance(error, (ValueError, PermissionError))
+                or isinstance(error, HttpFailure) and error.status in (400, 403, 409)
+            )
+        )
+        if known_rejection or (
+            name == "hollywood_mutation_reconcile"
+            and isinstance(error, HttpFailure) and error.status in (400, 403, 409)
         ):
             saved(
                 path,
@@ -60,8 +74,9 @@ async def administer(connector, name, arguments, operation):
                     "operationId": operation,
                     "tool": name,
                     "arguments": arguments,
-                    "status": error.status,
-                    "effect": "none; single atomic operation rejected",
+                    "status": error.status if isinstance(error, HttpFailure) else None,
+                    "error": type(error).__name__,
+                    "effect": "none; no mutation accepted",
                 },
             )
             raise
@@ -196,9 +211,9 @@ async def _administer(connector, name, arguments, operation):
         authority = connector.active["request"]["authority"]
         if credential["authorityId"] != authority:
             raise PermissionError("Credential belongs to another enterprise")
-        role = await connector.http("GET", "agents/" + agent + "/role")
-        if role["home_room"] is None:
-            raise ValueError("An accountable home room is required before provisioning")
+        # An agent may be provisioned before joining any room. Membership is
+        # checked by Hollywood when work is addressed; it is not runtime identity.
+        await connector.http("GET", "agents/" + agent + "/role")
         host = connector.config["hostId"]
         await connector.http(
             "POST",
