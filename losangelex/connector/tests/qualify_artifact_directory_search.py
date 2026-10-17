@@ -50,7 +50,11 @@ def main():
         p.error("Explicit absolute artifact and installed interpreter required")
     if len(a.user) > 32 or not a.user:
         p.error("One to32 actual installation accounts required")
-    if hashlib.file_digest(a.artifact.open("rb"), "sha256").hexdigest() != a.sha256:
+    original_hash = hashlib.sha256()
+    with a.artifact.open("rb") as stream:
+        for block in iter(lambda: stream.read(1048576), b""):
+            original_hash.update(block)
+    if original_hash.hexdigest() != a.sha256:
         p.error("Original artifact hash changed before qualification")
     with tempfile.TemporaryDirectory(prefix="lax-artifact-search-", dir="/run") as tmp:
         root = Path(tmp)

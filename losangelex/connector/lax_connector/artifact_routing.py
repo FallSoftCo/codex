@@ -1,10 +1,12 @@
 """Hash reports through current canonical roots without changing execution context."""
 
+import errno
 import os
 from uuid import UUID
 
 from .collaboration_bridge import Held, canonical_relative, digest, require
 from .collaboration_resources import open_root
+from .errors import ToolValidationError
 from .resource_routing import connector_capabilities, read
 
 
@@ -135,4 +137,9 @@ async def _collect(c, args, reader):
         finally:
             os.close(fd)
     except OSError as error:
-        raise ValueError("Artifact is unavailable or outside its authorized physical root") from error
+        raise ToolValidationError(
+            "ARTIFACT_READ_UNAVAILABLE",
+            "Artifact cannot be read by this agent (" + errno.errorcode.get(error.errno, "OS_ERROR") + ")",
+            "Inspect the registered root's directory-search and file-read permissions for this Unix account. "
+            "Retain the original Work/delivery and existing files; do not copy or reimplement them.",
+        ) from error
