@@ -131,7 +131,8 @@
         "patchSha256": {
           "pattern": "^[a-f0-9]{64}$",
           "title": "Patchsha256",
-          "type": "string"
+          "type": "string",
+          "description": "SHA-256 of the exact original UTF-8 PATCH argument passed to apply_patch, including any final newline. Parsing normalization does not change the consented byte identity."
         },
         "sourceRevision": {
           "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
@@ -380,7 +381,8 @@
         "patchSha256": {
           "pattern": "^[a-f0-9]{64}$",
           "title": "Patchsha256",
-          "type": "string"
+          "type": "string",
+          "description": "SHA-256 of the exact original UTF-8 PATCH argument passed to apply_patch, including any final newline. Parsing normalization does not change the consented byte identity."
         }
       },
       "required": [
@@ -574,7 +576,8 @@
         "patchSha256": {
           "pattern": "^[a-f0-9]{64}$",
           "title": "Patchsha256",
-          "type": "string"
+          "type": "string",
+          "description": "SHA-256 of the exact original UTF-8 PATCH argument passed to apply_patch, including any final newline. Parsing normalization does not change the consented byte identity."
         },
         "sourceRevision": {
           "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
@@ -956,7 +959,8 @@
         "patchSha256": {
           "pattern": "^[a-f0-9]{64}$",
           "title": "Patchsha256",
-          "type": "string"
+          "type": "string",
+          "description": "SHA-256 of the exact original UTF-8 PATCH argument passed to apply_patch, including any final newline. Parsing normalization does not change the consented byte identity."
         },
         "sourceRevision": {
           "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",

@@ -251,7 +251,7 @@ pub(crate) fn specification(name: &str) -> codex_tools::ToolSpec {
     let (schema, description) = if name == "collaborative_edit_plan" {
         (
             include_str!("canonical_collaboration/edit_plan.schema.json"),
-            "Create, revise and explicitly consent to a canonical revision/content-bound edit plan for admitted work. Participants, integrator and physical source mapping are canonical. This tool cannot issue a mutation grant; apply_patch obtains its own one-shot preflight/begin/settlement.",
+            "Create, revise and explicitly consent to a canonical revision/content-bound edit plan for admitted work. Participants, integrator and physical source mapping are canonical. Compute patchSha256 from the exact UTF-8 PATCH argument passed to apply_patch, including a final newline when present. This tool cannot issue a mutation grant; apply_patch obtains its own one-shot preflight/begin/settlement.",
         )
     } else {
         (
