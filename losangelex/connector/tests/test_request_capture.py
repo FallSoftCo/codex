@@ -130,17 +130,39 @@ class DynamicCaptureTests(unittest.TestCase):
         with self.assertRaisesRegex(Held, "authority changed"):
             self.f.ensure()
 
-    def test_structured_source_stays_planned_and_keeps_original_work_grants(self):
-        self.f.snapshot["request"]["data"] = {"workId": self.f.work}
+    def assigned_work(self):
+        self.f.snapshot["request"].update(kind="request", recipient=self.f.agent, room=uid(91))
+        self.f.snapshot["request"]["data"] = {
+            "workId": self.f.work, "workRevision": 4, "goalId": self.f.goal,
+            "attemptId": self.f.delivery, "attemptNumber": 1,
+            "workCompletionPolicy": "report-required/v1",
+        }
+        self.f.work_row["room"] = uid(91)
+        original = self.f.bridge.http
+
+        def http(method, route, body=None):
+            result = original(method, route, body)
+            if route.endswith("/collaboration-bridge"):
+                result.update(workDeliveryEdits=True, workDeliveryEditPolicy="canonical-work-delivery-edits/v1")
+            return result
+
+        self.f.bridge.http = http
+        self.f.capture.admin_http = http
+
+    def test_structured_business_work_uses_delivery_without_planned_grant_write(self):
+        self.assigned_work()
         record = self.f.ensure()
-        self.assertEqual(record["scope"], "plan")
-        self.assertEqual(record["work"], {"id": self.f.work, "revision": 4})
-        self.assertEqual(len([call for call in self.f.calls if call[0] == "PUT"]), 1)
+        self.assertEqual(record["scope"], "delivery")
+        self.assertEqual(record["work"]["id"], self.f.work)
+        self.assertEqual(record["work"]["attemptId"], self.f.delivery)
+        self.assertEqual(record["work"]["goalId"], self.f.goal)
+        self.assertIsNone(record["sourceBase"]["nativeGoalId"])
+        self.assertEqual([call for call in self.f.calls if call[0] == "PUT"], [])
 
     def test_cancelled_or_foreign_structured_assignment_cannot_fall_back_to_direct(
         self,
     ):
-        self.f.snapshot["request"]["data"] = {"workId": self.f.work}
+        self.assigned_work()
         self.f.work_row["owner"] = uid(99)
         with self.assertRaises(Held):
             self.f.ensure()

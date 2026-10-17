@@ -27,6 +27,8 @@ POLICY = {
     "physicalTargets": True,
     "deliveryEdits": True,
     "deliveryEditSchema": "canonical-delivery-edits/v1",
+    "workDeliveryEdits": True,
+    "workDeliveryEditPolicy": "canonical-work-delivery-edits/v1",
     "bridge": {"revision": 1, "state": "active", "protocol": "canonical-edit-plans/v2"},
 }
 
@@ -284,6 +286,13 @@ class PlannedRoutingTests(unittest.TestCase):
         self.f = CaptureFixture(Path(self.tmp.name))
         self.f.policy["schema"] = "lax-automatic-native-capture/v2"
         self.f.policy.pop("agents")
+        self.f.snapshot["request"].update(kind="request", recipient=self.f.agent, room=uid(91))
+        self.f.snapshot["request"]["data"] = {
+            "workId": self.f.work, "workRevision": 4, "goalId": self.f.goal,
+            "attemptId": self.f.delivery, "attemptNumber": 1,
+            "workCompletionPolicy": "report-required/v1",
+        }
+        self.f.work_row["room"] = uid(91)
         root = self.f.physical
         env = digest({"hostId": self.f.host, "environmentId": "local"})
         self.workspace = {
@@ -346,19 +355,29 @@ class PlannedRoutingTests(unittest.TestCase):
                     "mayApply": False,
                 }
             if route.startswith("collaboration/delivery-targets/"):
-                raise AssertionError(
-                    "Ordinary-only targets route must not be used for Work"
-                )
+                return {
+                    "schema": "hollywood-agent-physical-target-registry/v1",
+                    "deliveryId": self.f.delivery, "principalId": self.f.agent,
+                    "mayApply": False,
+                    "targets": [{**copy.deepcopy(self.workspace),
+                                 "grant_revision": self.grant["revision"],
+                                 "grant_state": self.grant["state"],
+                                 **{k: self.grant[k] for k in
+                                    ("can_read", "can_write", "execution_host")}}],
+                }
             return self.original(method, route, body)
 
         self.http = http
         self.f.bridge.http = http
         self.f.capture.admin_http = http
 
-    def test_structured_capture_uses_admin_metadata_and_distinct_work_grant_revision(
+    def test_business_capture_and_explicit_plan_keep_distinct_agent_work_grants(
         self,
     ):
-        record = self.f.ensure()
+        record = self.f.capture.ensure(
+            (os.getpid(), os.geteuid(), 0),
+            {"threadId": "thread", "turnId": "turn", "port": "coordination"},
+        )
         root = record["resources"][0]
         self.assertEqual(root["agentGrantRevision"], 7)
         bridge = object.__new__(Bridge)
@@ -374,7 +393,9 @@ class PlannedRoutingTests(unittest.TestCase):
             ["demo.txt"],
         )
         self.assertEqual(target["grantRevision"], 1)
-        self.assertEqual(record["work"], {"id": self.f.work, "revision": 4})
+        self.assertEqual(record["scope"], "delivery")
+        self.assertEqual(record["work"]["id"], self.f.work)
+        self.assertEqual(record["work"]["revision"], 4)
 
     def test_current_explicit_default_routes_relative_intent_without_changing_capture_or_cwd(
         self,

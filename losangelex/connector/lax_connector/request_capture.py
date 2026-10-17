@@ -114,30 +114,23 @@ def resources(capture, base, native, *, policy=None, structured=False):
     return sorted(roots, key=lambda root: root["workspaceId"])
 
 
-def ensure(capture, base, snapshot, row, native, fact, policy, path):
+def ensure(capture, base, snapshot, row, native, fact, policy, path, frame=None):
     require(
         policy.get("deliveryEdits") is True
         and policy.get("deliveryEditSchema") == "canonical-delivery-edits/v1",
         "Canonical delivery editing capability unavailable; no legacy fallback",
     )
-    event, delivery = snapshot["request"], snapshot["delivery"]
-    work_id = event.get("data", {}).get("workId")
-    work = None
-    if work_id is not None:
-        work = capture.admin_http("GET", "work/" + str(UUID(work_id)))["work"]
-        require(
-            work["owner"] == row["agent"]
-            and work["delivery"] == delivery["id"]
-            and work["request_event"] == event["id"]
-            and work["state"] == "assigned",
-            "Current canonical structured assignment required; direct bypass forbidden",
-        )
-        goal = capture.admin_http("GET", "goals/" + str(UUID(work["goal"])))["goal"]
-        require(
-            goal["state"] == "active", "Original planned goal does not admit editing"
-        )
-    roots = resources(capture, base, native, policy=policy, structured=work is not None)
-    if work is not None:
+    from .work_delivery import assignment
+
+    work = assignment(capture, snapshot, row, policy)
+    work_id = work["id"] if work else None
+    # The published delivery protocol derives Work authority on the server.
+    # Keep its explicit null; canonical native goal bindings remain unchanged.
+    base = {**base, "nativeGoalId": None}
+    roots = resources(capture, base, native)
+    # Explicit native coordination/plan callbacks still establish their original
+    # per-Work grants. Ordinary business edits never manufacture planned scope.
+    if work and frame and frame.get("port") in {"coordination", "edit-plans"}:
         from .collaboration_capture import administrative_put
 
         grants = capture.bridge.http(
@@ -208,10 +201,8 @@ def ensure(capture, base, snapshot, row, native, fact, policy, path):
         "serviceBindingDigest": fact["evidence"]["serviceBindingDigest"],
         "bridgeRevision": policy["bridge"]["revision"],
         "ports": sorted(IMPLEMENTED_PORTS),
-        "scope": "plan" if work is not None else "delivery",
-        "work": {"id": str(work_id), "revision": work["revision"]}
-        if work is not None
-        else None,
+        "scope": "delivery",
+        "work": work,
         "resources": roots,
     }
     if path.exists():

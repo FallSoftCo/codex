@@ -311,7 +311,7 @@ class AutomaticCapture:
             )
             if self.policy["schema"] == "lax-automatic-native-capture/v2":
                 from .request_capture import ensure
-                return ensure(self, base, snapshot, row, native, fact, policy, path)
+                return ensure(self, base, snapshot, row, native, fact, policy, path, frame)
             work_id = event.get("data", {}).get("workId")
             require(
                 work_id,
