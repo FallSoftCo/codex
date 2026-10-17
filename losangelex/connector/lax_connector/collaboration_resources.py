@@ -11,12 +11,15 @@ def open_root(root):
     if not path.is_absolute() or str(path) != str(root):
         raise ValueError("Literal absolute physical root required")
     flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_DIRECTORY
-    fd = os.open("/", flags)
+    # Traversing a search-only parent must not require directory enumeration.
+    # Keep the returned root readable for existing descriptor consumers.
+    search_flags = (flags & ~os.O_RDONLY) | getattr(os, "O_PATH", os.O_RDONLY)
+    fd = os.open("/", flags if len(path.parts) == 1 else search_flags)
     try:
-        for part in path.parts[1:]:
+        for index, part in enumerate(path.parts[1:], 1):
             if part in ("", ".", ".."):
                 raise ValueError("Canonical root components required")
-            child = os.open(part, flags, dir_fd=fd)
+            child = os.open(part, flags if index == len(path.parts) - 1 else search_flags, dir_fd=fd)
             os.close(fd)
             fd = child
         result, fd = fd, None
