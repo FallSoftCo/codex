@@ -20,7 +20,8 @@ Global and worker provisioning require the complete Linux CLI package produced b
 `codex-path/rg` in the upstream layout. Copying the CLI alone cannot pass.
 
 Provisioning and registered service readiness run the package preflight through
-the installed interpreter as the recorded service UID and home. The check verifies
+the installed interpreter in isolated mode as the recorded service UID and home.
+The writable work cwd and `PYTHONPATH` cannot select its module. The check verifies
 metadata, host target, readable executable assets and their SHA-256 hashes, then
 runs four bounded startup diagnostics: CLI version, code-mode-host help, bubblewrap
 version and ripgrep version. It never widens private directory permissions. Normal

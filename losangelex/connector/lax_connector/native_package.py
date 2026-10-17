@@ -187,6 +187,7 @@ def preflight_as_owner(binary, interpreter, uid, home):
         account.pw_name,
         "--",
         str(interpreter),
+        "-I",  # Use installed modules, never the writable work cwd or PYTHONPATH.
         "-m",
         "lax_connector.native_package",
         "--binary",

@@ -9,6 +9,7 @@ import os
 import platform
 import pwd
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -104,20 +105,34 @@ class PackageTests(PackageFixture, unittest.TestCase):
     def test_administrator_drops_to_existing_native_service_identity(self):
         # Existing current worker identity; no account/service/context is created or resumed.
         account = pwd.getpwuid(int(os.environ["LAX_TEST_SERVICE_UID"]))
-        # A readable installed-runtime copy; the source checkout remains private.
-        site = self.root / "site"
-        module = site / "lax_connector"
-        module.mkdir(parents=True)
-        site.chmod(0o755)
-        module.chmod(0o755)
+        # A readable isolated installed runtime; the source checkout stays private.
+        runtime = self.root / "runtime"
+        subprocess.run(
+            ["/usr/bin/python3", "-m", "venv", "--without-pip", str(runtime)],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        sites = list((runtime / "lib").glob("python*/site-packages"))
+        self.assertEqual(len(sites), 1)
+        module = sites[0] / "lax_connector"
+        module.mkdir()
+        for directory in [
+            runtime,
+            *[p for p in runtime.rglob("*") if p.is_dir() and not p.is_symlink()],
+        ]:
+            directory.chmod(0o755)
         for name in ("__init__.py", "native_package.py"):
             shutil.copyfile(
                 REPO / "losangelex/connector/lax_connector" / name, module / name
             )
             (module / name).chmod(0o644)
-        with patch.dict(os.environ, {"PYTHONPATH": str(site)}):
+        # An invalid import override must be ignored by isolated-mode Python.
+        with patch.dict(
+            os.environ, {"PYTHONPATH": "/missing/untrusted-module-override"}
+        ):
             out = preflight_as_owner(
-                self.binary, "/usr/bin/python3", account.pw_uid, account.pw_dir
+                self.binary, runtime / "bin/python3", account.pw_uid, account.pw_dir
             )
         self.assertEqual(out["uid"], account.pw_uid)
         self.assertNotEqual(out["uid"], os.geteuid())
