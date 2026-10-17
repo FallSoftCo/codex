@@ -53,7 +53,7 @@ They are historical evidence, not the current operating contract. The six-turn
 journey is a bounded one-host proof; it is not physical-phone voice/push,
 second-host migration or autonomous business/revenue qualification.
 
-The dev45 candidate consumes canonical bounded resource discovery, revisioned
+The connector consumes canonical bounded resource discovery, revisioned
 agent/host defaults and placement pause/resume. Relative intent uses an explicit
 current default while ordinary absolute native patches remain independent.
 Reviewed installer seeds now publish routing metadata through supported APIs,
@@ -61,3 +61,9 @@ including held setup for paused placements. See
 [NATIVE_COLLABORATION_SETUP.md](NATIVE_COLLABORATION_SETUP.md) for exact gates,
 protected capture and the maintained drained bridge transition. Root owns actual
 installed/native acceptance and rollout; this source package performs no deployment.
+
+Dev46 adds approved same-image guardian registration through the existing host
+controller after genuine service restarts, explicit fresh service memory ceilings
+and reviewed memory previews. See [NATIVE_LAUNCH.md](NATIVE_LAUNCH.md) for one-time
+activation pins and existing-service upgrade requirements. The controller starts
+no stopped service or task, and a higher ceiling is not a memory leak fix.

@@ -225,9 +225,17 @@ async def _administer(connector, name, arguments, operation):
             "model": connector.config["model"],
             "effort": connector.config["effort"],
         }
+        from .service_memory import validate, DEFAULT_BYTES
+        spec["serviceMemoryMaxBytes"] = validate(arguments.get("serviceMemoryMaxBytes", connector.config.get("workerServiceMemoryMaxBytes", DEFAULT_BYTES)))
         if connector.config.get("nativeCollaborationChannel"):
             spec["nativeCollaborationChannel"] = connector.config["nativeCollaborationChannel"]
         path = connector.state / ("worker-provision-" + agent + ".json")
+        if path.exists() and "serviceMemoryMaxBytes" not in arguments:
+            original = json.loads(path.read_text())
+            if "serviceMemoryMaxBytes" in original:
+                spec["serviceMemoryMaxBytes"] = original["serviceMemoryMaxBytes"]
+            else:
+                spec.pop("serviceMemoryMaxBytes", None)
         if path.exists() and json.loads(path.read_text()) != spec:
             raise ValueError(
                 "Original worker provisioning differs; reconcile explicit upgrade"

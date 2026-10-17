@@ -1,6 +1,6 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev45`. Its installer and automatic
+The candidate connector is version `0.1.0.dev46`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
@@ -208,7 +208,7 @@ there is no legacy mutation fallback.
 ## Existing bridge: reviewed drained upgrade
 
 Fresh `--apply` deliberately refuses changed installed artifacts. Use a new
-immutable preparation for the reviewed dev45 adapter, then inspect the actual
+immutable preparation for the reviewed dev46 adapter, then inspect the actual
 original files and canonical bridge revision. Keep the original setup receipt.
 The upgrade preserves the same authority, host, machine, credential, socket,
 state directory and actual physical root inodes. List every affected consumer;
@@ -227,8 +227,13 @@ A drained upgrade requires both that placement capability and
 `pausedResourceSetup=true` before publishing its bridge transition intent/CAS.
 Agent grants and a new default pointer can then be prepared while paused using
 unchanged DTOs. The prepared default is held until explicit resume and current
-root/access pins match. A selection invalidated when pause occurred stays held
-and needs explicit administrator reselection; setup never silently revives it.
+root/access pins match. A selection invalidated when pause occurred stays held. During a reviewed
+paused upgrade, an exact matching seed now explicitly CAS-reselects only the
+known `participation-invalidated` case with unchanged current root/grant pins.
+The successor remains held while paused and can become eligible on explicit
+resume. Cleared/different/unknown access is never silently rebound, and unknown
+hold reasons remain held. Initial r13 operation identities and uncertain original
+receipt recovery are preserved.
 The upgraded result records the default views, including held states.
 
 Disable the scoped placements, settle original effects, and stop the scoped
