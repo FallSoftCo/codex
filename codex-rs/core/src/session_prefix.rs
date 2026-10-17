@@ -35,7 +35,12 @@ pub(crate) fn format_inter_agent_completion_message(
         AgentStatus::NotFound => "Agent was not found.".to_string(),
         AgentStatus::PendingInit | AgentStatus::Running | AgentStatus::Interrupted => return None,
     };
-    Some(InterAgentCompletionMessage::new(task_name, sender, payload).render())
+    Some(
+        InterAgentCompletionMessage::new(task_name, sender, payload)
+            .render()
+            .into_text()
+            .unwrap_or_default(),
+    )
 }
 
 pub(crate) fn format_guardian_interruption_message(
@@ -45,7 +50,10 @@ pub(crate) fn format_guardian_interruption_message(
 ) -> String {
     let error = truncate_text(error, TruncationPolicy::Tokens(ERROR_MAX_TOKENS));
     let payload = format!("Agent interrupted by Guardian: {error}\n\n{GUARDIAN_NEXT_ACTION}");
-    InterAgentCompletionMessage::new(task_name, sender, payload).render()
+    InterAgentCompletionMessage::new(task_name, sender, payload)
+        .render()
+        .into_text()
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

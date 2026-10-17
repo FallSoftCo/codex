@@ -96,6 +96,7 @@ members = [
     "realtime-webrtc",
     "voice-host",
     "protocol",
+    "protocol/tests/support",
     "prompts",
     "rollout",
     "rollout-trace",
@@ -266,6 +267,7 @@ codex-plugin = { path = "plugin" }
 codex-model-provider = { path = "model-provider" }
 codex-process-hardening = { path = "process-hardening" }
 codex-protocol = { path = "protocol" }
+codex-protocol-test-support = { path = "protocol/tests/support" }
 codex-prompts = { path = "prompts" }
 codex-queue-extension = { path = "ext/queue" }
 codex-responses-api-proxy = { path = "responses-api-proxy" }
@@ -554,7 +556,18 @@ whoami = "1.6.1"
 wildmatch = "2.6.1"
 winapi-util = "0.1.11"
 windows-sys = "0.61.2"
-zip = "2.4.2"
+# Keep the zip 2.x feature set. In zip 9, `bzip2-rs` selects the bzip2-sys
+# backend we already build; the default selects libbz2-rs-sys instead.
+zip = { version = "9.0.0", default-features = false, features = [
+    "aes-crypto",
+    "bzip2-rs",
+    "deflate",
+    "deflate64",
+    "lzma",
+    "time",
+    "xz",
+    "zstd",
+] }
 zstd = "0.13"
 
 wiremock = "0.6"

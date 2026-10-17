@@ -1,3 +1,5 @@
+use codex_protocol::models::ContentItem;
+use codex_protocol::models::input_text;
 use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::HollywoodSyntheticBrief;
 
@@ -80,8 +82,8 @@ impl ContextualUserFragment for HollywoodMessage {
         (Self::START_MARKER, Self::END_MARKER)
     }
 
-    fn body(&self) -> String {
-        format!(
+    fn body(&self) -> ContentItem {
+        input_text(format!(
             "\n{}",
             serde_json::json!({
                 "instruction": self.instruction(),
@@ -96,6 +98,6 @@ impl ContextualUserFragment for HollywoodMessage {
                 "synthetic_brief": self.synthetic_brief,
                 "requires_response": self.requires_response,
             })
-        )
+        ))
     }
 }
