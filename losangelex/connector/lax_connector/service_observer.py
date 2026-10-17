@@ -46,7 +46,8 @@ def properties(unit):
         ["systemctl", "show", unit, "--no-pager",
          "-p", "Id", "-p", "ActiveState", "-p", "MainPID", "-p", "InvocationID",
          "-p", "ControlGroup", "-p", "User", "-p", "KillMode", "-p", "FragmentPath",
-         "-p", "MemoryMax", "-p", "MemoryCurrent", "-p", "MemoryPeak"],
+         "-p", "MemoryMax", "-p", "MemoryCurrent", "-p", "MemoryPeak",
+         "-p", "NeedDaemonReload"],
         check=True, capture_output=True, text=True,
     )
     return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
@@ -126,6 +127,8 @@ def _register(authority, host, agent, unit, *, expected_binding=None):
         raise PermissionError("Actual service guardian owner differs")
     if pwd.getpwnam(info["User"]).pw_uid != uid:
         raise PermissionError("Service user differs from installed agent")
+    from .service_runtime import require_configured_guardian
+    require_configured_guardian(authority, agent, home=home, service=info, guardian=guardian)
     definition = unit_definition(info)
     image = Path(binary).resolve(strict=True).stat()
     baseline = {"schema": "lax-service-enrollment/v1", "authorityId": authority,

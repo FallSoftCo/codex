@@ -4,6 +4,7 @@ import base64
 import contextlib
 import hashlib
 import os
+import subprocess
 from pathlib import Path
 
 from . import native_image_upgrade as image, native_release as release
@@ -243,6 +244,11 @@ def finish(root, fd, intent):
         if not drained()[2]:
             image._write(fd, "enrollment.json", intent["approvedEnrollment"], replace=True)
         drained()
+        # Publish approved metadata to the manager before accepting the release.
+        # This starts no service. A failure leaves the original intent resumable.
+        subprocess.run(["systemctl", "daemon-reload"], check=True, capture_output=True)
+        if observer.properties(intent["priorEnrollment"]["unit"]).get("NeedDaemonReload") == "yes":
+            raise ValueError("Approved service metadata is not loaded by systemd")
         accepted = {**intent, "state": "accepted"}
         name = "image-" + intent["operationId"] + "-accepted.json"
         if optional(fd, name) is None:

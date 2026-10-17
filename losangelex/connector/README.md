@@ -87,3 +87,13 @@ retain consent/integrator checks, and claims, ready scopes and unsettled permits
 continue to share the physical conflict domain. See NATIVE_COLLABORATION_SETUP.md
 for the maintained drained upgrade; include Global and all three team consumers
 in the explicit scope before activating a four-agent installation.
+
+### Approved service runtime
+
+Release approval reloads the reviewed unit metadata into systemd before publishing
+its accepted software pointer; it does not start a service or admit a model turn.
+Registration and readiness also verify the live guardian's configured interpreter,
+connector module and configuration path. Matching files on disk alone do not
+establish which installed release is running. A pending manager reload or mismatched
+launcher stays unavailable until the approved lifecycle completes. A busy inspection
+lock is reported separately from an unsettled image transition; it grants no execution.

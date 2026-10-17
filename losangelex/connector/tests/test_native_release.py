@@ -22,6 +22,8 @@ class ReleaseTests(unittest.TestCase):
 
     def setUp(self):
         fixtures.ImageTransitionTests.setUp(self)
+        # Synthetic units must never reload the real host service manager.
+        self.reload = self.enterContext(patch.object(transition.subprocess, "run"))
         for p in (self.home / "work", self.home / "codex-home"):
             p.mkdir()
         self.python = self.package / "venv/bin/python"
@@ -115,6 +117,29 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(after_unit, self.originals["unit"].replace(
             str(self.python).encode(), str(self.new_python).encode()))
         self.assertEqual(result["modelsStarted"], 0)
+
+    def test_failed_manager_reload_retains_original_intent_for_reconciliation(self):
+        self.prepare()
+        self.reload.side_effect = transition.subprocess.CalledProcessError(
+            1, ["systemctl", "daemon-reload"]
+        )
+        with self.assertRaises(transition.subprocess.CalledProcessError):
+            self.approve()
+        current = self.inspect()
+        self.assertEqual(current["metadataStages"], [1, 1, 1])
+        self.assertEqual(current["state"], "pending")
+        self.assertFalse(current["acceptedRecord"])
+        self.reload.assert_called_once_with(
+            ["systemctl", "daemon-reload"], check=True, capture_output=True
+        )
+        self.reload.side_effect = None
+        self.info["NeedDaemonReload"] = "yes"
+        with self.assertRaisesRegex(ValueError, "not loaded by systemd"):
+            self.recover()
+        self.info["NeedDaemonReload"] = "no"
+        accepted = self.recover()
+        self.assertEqual(accepted["operationId"], current["operationId"])
+        self.assertEqual(accepted["state"], "accepted")
 
     def test_execstart_text_inside_comments_is_preserved(self):
         import base64

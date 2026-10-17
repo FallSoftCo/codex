@@ -29,6 +29,8 @@ def inspect(authority, host, agent):
         "modelOrServiceStarted": False,
         "deliveryOrEffectStateChanged": False,
     }
+    if info.get("NeedDaemonReload") == "yes":
+        return {**result, "ready": False, "reason": "service-manager-reload-required"}
     from .service_memory import inspection as memory_inspection
 
     result["serviceMemory"] = memory_inspection(authority, agent, info)
@@ -110,11 +112,21 @@ def inspect(authority, host, agent):
     try:
         with registry_lock(root) as fd:
             require_settled_transition(fd)
-    except (ValueError, BlockingIOError):
+    except BlockingIOError:
+        return {**result, "ready": False, "reason": "service-inspection-busy", "retryable": True}
+    except ValueError:
         return {**result, "ready": False, "reason": "native-image-transition-held"}
     from .native_release import runtime_spec
 
     spec, _, _ = runtime_spec(authority, agent)
+    from .service_runtime import RuntimeMismatch, require_configured_guardian
+
+    try:
+        result["serviceRuntime"] = require_configured_guardian(
+            authority, agent, home=home, service=info, guardian=guardian
+        )
+    except RuntimeMismatch as error:
+        return {**result, "ready": False, "reason": str(error)}
     if spec.get("automaticRestartRegistration") and not restart_policy["enabled"]:
         return {
             **result,
