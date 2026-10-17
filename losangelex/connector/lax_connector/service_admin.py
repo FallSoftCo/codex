@@ -64,6 +64,12 @@ def inspect(authority, host, agent):
     binding = observer.protected(manifest_path)
     if binding != expected:
         raise PermissionError("Registered invocation differs from actual service")
+    from .native_image_upgrade import registry_lock, require_settled_transition
+    try:
+        with registry_lock(root) as fd:
+            require_settled_transition(fd)
+    except (ValueError, BlockingIOError):
+        return {**result, "ready": False, "reason": "native-image-transition-held"}
     base = Path("/var/lib/harness") / authority
     global_receipt = observer.protected(base / "global-admin-receipt.json")
     intent = (base / "global-admin-intent.json" if global_receipt["agentId"] == agent
@@ -90,13 +96,25 @@ def main():
     actions.add_argument("--inspect", action="store_true")
     actions.add_argument("--register", action="store_true")
     actions.add_argument("--approve-drained-upgrade", action="store_true")
+    actions.add_argument("--approve-image-upgrade", action="store_true",
+                         help="Approve a disabled, stopped, drained exact image; grants no readiness")
+    parser.add_argument("--expected-image-sha256")
     parser.add_argument("--expected-enrollment")
     parser.add_argument("--expected-definition")
     args = parser.parse_args()
-    if args.approve_drained_upgrade != bool(args.expected_enrollment and args.expected_definition):
+    if (args.approve_drained_upgrade or args.approve_image_upgrade) != bool(args.expected_enrollment and args.expected_definition):
         parser.error("A drained upgrade requires both previously inspected digests")
-    if (args.expected_enrollment or args.expected_definition) and not args.approve_drained_upgrade:
+    if (args.expected_enrollment or args.expected_definition) and not (args.approve_drained_upgrade or args.approve_image_upgrade):
         parser.error("Upgrade digests are only valid for an explicit drained upgrade")
+    if bool(args.expected_image_sha256) != args.approve_image_upgrade:
+        parser.error("Only an explicit image upgrade requires --expected-image-sha256")
+    if args.approve_image_upgrade:
+        from .native_image_upgrade import approve_image_upgrade
+        result = approve_image_upgrade(args.authority, args.host, args.agent,
+                                       args.expected_enrollment, args.expected_definition,
+                                       args.expected_image_sha256)
+        print(json.dumps({"imageUpgrade": result}))
+        return
     result = {}
     if args.approve_drained_upgrade:
         result["upgrade"] = observer.approve_drained_upgrade(

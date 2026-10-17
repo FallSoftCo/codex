@@ -1,6 +1,6 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev42`. Its installer and automatic
+The candidate connector is version `0.1.0.dev43`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
@@ -33,6 +33,33 @@ The `nativePackage` receipt proves only these package and startup checks. It doe
 not prove sandbox/tool execution, model access or a successful ordinary task.
 Root must still qualify the installed complete package through the original task
 and same-context continuation before accepting the runtime.
+
+## Explicit offline native image transition
+
+`lax-service --approve-image-upgrade` is a separate administrator operation from
+`--approve-drained-upgrade`; the latter still forbids image changes. Supply the
+original `--expected-enrollment`, reviewed `--expected-definition` and exact
+`--expected-image-sha256`, together with authority, host and agent IDs.
+
+Before invoking it, the administrator must disable the agent's canonical
+placement, settle all original deliveries/executors, and stop its managed service
+with empty original cgroups. The operation never changes admission, starts a
+service, registers a guardian or resumes a model. It requires the unchanged
+identity, unit, binary path and private home, exclusive connector and registry
+locks, read-only settled journals, disabled placement with no busy/pending work,
+independently stopped canonical executors, the complete package preflight under
+the actual service UID, and a root-protected exact image. Directory/file handles,
+SHA-256 and repeated identity checks fence local path replacement and changes.
+
+Original enrollment and transition intent/acceptance records are retained.
+An interrupted intent holds registration and readiness for explicit original-effect
+reconciliation; repeating the command never recovers or reapplies it. The operation
+returns `executionReady: false`. Root separately starts and registers the reviewed
+service, qualifies actual tasks/continuations, and only then re-enables placement.
+A disabled placement is an administrator-maintained admission boundary, not a
+server lease: concurrent privileged re-enablement, transfer or manual registry
+writes are outside this local operation. Production requires that coordinated
+boundary and independent installed-runtime qualification. Fixtures do not prove it.
 
 ## One installation, automatic current-turn capture
 

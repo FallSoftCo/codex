@@ -233,6 +233,17 @@ class ReadinessTests(PackageFixture, unittest.TestCase):
             stack.enter_context(
                 patch.object(service_admin.observer, "protected", side_effect=protected)
             )
+            from contextlib import nullcontext
+
+            stack.enter_context(
+                patch(
+                    "lax_connector.native_image_upgrade.registry_lock",
+                    return_value=nullcontext(0),
+                )
+            )
+            stack.enter_context(
+                patch("lax_connector.native_image_upgrade.require_settled_transition")
+            )
             check = stack.enter_context(
                 patch.object(
                     service_admin,

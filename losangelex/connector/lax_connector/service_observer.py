@@ -105,7 +105,7 @@ def unit_definition(info):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def register(authority, host, agent, unit):
+def _register(authority, host, agent, unit):
     """Root installer records an actual running, owned service incarnation."""
     if os.geteuid() != 0:
         raise PermissionError("Root service registration required")
@@ -157,7 +157,26 @@ def register(authority, host, agent, unit):
 
 
 
+def register(authority, host, agent, unit):
+    """Serialize existing enrollment writers against explicit native transitions."""
+    root = directory(authority, host, agent)
+    if not root.exists():
+        return _register(authority, host, agent, unit)
+    from .native_image_upgrade import registry_lock, require_settled_transition
+    with registry_lock(root) as fd:
+        require_settled_transition(fd)
+        return _register(authority, host, agent, unit)
+
+
 def approve_drained_upgrade(authority, host, agent, expected_enrollment, expected_definition):
+    """Definition-only upgrade; its original native-image prohibition is retained."""
+    from .native_image_upgrade import registry_lock, require_settled_transition
+    with registry_lock(directory(authority, host, agent)) as fd:
+        require_settled_transition(fd)
+        return _approve_drained_upgrade(authority, host, agent, expected_enrollment, expected_definition)
+
+
+def _approve_drained_upgrade(authority, host, agent, expected_enrollment, expected_definition):
     """Root CAS upgrade of an enrolled service after its prior invocations drained.
 
     The new resident guardian may be running, but it must be alone in its group.
