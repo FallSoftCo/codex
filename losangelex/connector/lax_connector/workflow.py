@@ -13,6 +13,7 @@ from .resource_routing import READ_TOOLS as RESOURCE_READ_TOOLS
 from .placement_control import READ_TOOL as PLACEMENT_READ_TOOL
 
 READ_TOOLS = RESOURCE_READ_TOOLS | {
+    "hollywood_mutation_read",
     PLACEMENT_READ_TOOL,
     "hollywood_portfolio",
     "hollywood_execution_read",

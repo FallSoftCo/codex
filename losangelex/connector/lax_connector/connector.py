@@ -213,6 +213,8 @@ TOOLS.append(spec(
 
 
 TOOLS += workflow_definitions(spec)
+from .mutation_tools import definitions as mutation_definitions
+TOOLS += mutation_definitions(spec)
 
 
 class Connector:
@@ -538,6 +540,8 @@ class Connector:
                     )
                 if name == "hollywood_publish":
                     self.publications.append(value["event"]["id"])
+            elif name == "hollywood_mutation_read":
+                value = await self.http("GET", "collaboration/delivery-edits/" + str(UUID(arguments["permitId"])))
             elif name in READ_TOOLS | MUTATION_TOOLS:
                 value = await workflow_tool(self, name, arguments, operation)
             elif name in (
@@ -548,6 +552,8 @@ class Connector:
                 "hollywood_grant_resource",
                 "hollywood_select_resource_default",
                 "hollywood_placement_set",
+                "hollywood_mutation_observe",
+                "hollywood_mutation_reconcile",
                 "lax_provision_worker",
             ):
                 value = await administer(self, name, arguments, operation)

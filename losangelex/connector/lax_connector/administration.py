@@ -49,7 +49,7 @@ async def administer(connector, name, arguments, operation):
 
         if (
             name
-            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "hollywood_select_resource_default", "hollywood_placement_set")
+            in ("hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "hollywood_select_resource_default", "hollywood_placement_set", "hollywood_mutation_reconcile")
             and isinstance(error, HttpFailure)
             and error.status in (400, 403, 409)
         ):
@@ -87,6 +87,9 @@ async def _administer(connector, name, arguments, operation):
 
     if not connector.role_context.value["communicationAdministrator"]:
         raise PermissionError("Communication administrator required")
+    if name in ("hollywood_mutation_observe", "hollywood_mutation_reconcile"):
+        from .mutation_tools import administer
+        return await administer(connector, name, arguments, operation)
     identity = str(uuid5(UUID(connector.config["agentId"]), operation))
     if name == "hollywood_create_agent":
         credential = connector.state / ("agent-credential-" + identity + ".json")
