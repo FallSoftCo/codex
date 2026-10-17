@@ -45,9 +45,12 @@ where
     } = limits;
     assert!(max_attempts > 0, "guardian review must run at least once");
     let mut attempt_count = 1;
+    let mut context_changed = false;
     loop {
         let (outcome, mut analytics_result, evidence) = run_attempt(deadline).await;
         analytics_result.attempt_count = attempt_count;
+        context_changed |= analytics_result.context_changed;
+        analytics_result.context_changed = context_changed;
         if attempt_count >= max_attempts || !should_retry_guardian_review(&outcome) {
             return (outcome, analytics_result, evidence);
         }

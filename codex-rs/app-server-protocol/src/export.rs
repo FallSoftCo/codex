@@ -2413,9 +2413,15 @@ mod tests {
                         && field_prefix.trim() == "loginId?")
                     || (path == Path::new("v2/MisalignmentErrorDetails.ts")
                         && field_prefix.trim() == "reviewTarget?");
+                // A tool-policy selector is nested in startup/resume requests and
+                // echoed in the effective ceiling. Its optional namespace accepts
+                // both omission and null for a default-namespace tool.
+                let tool_policy_optional_nullable_field = path == Path::new("v2/ThreadToolName.ts")
+                    && field_prefix.trim() == "namespace?";
                 if field_prefix.chars().rev().find(|c| !c.is_whitespace()) == Some('?')
                     && !allow_optional_nullable
                     && !legacy_optional_nullable_field
+                    && !tool_policy_optional_nullable_field
                 {
                     let line_number =
                         contents[..abs_idx].chars().filter(|c| *c == '\n').count() + 1;

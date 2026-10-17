@@ -101,6 +101,7 @@ async fn snapshot_failure_retries_are_bounded_and_single_flight(
             /*runtime_paths*/ None,
             /*network_policy_decider*/ None,
             /*network_policy_audit_observer*/ None,
+            &codex_network_proxy::RemoteCredentialBrokerCache::default(),
             &ProcessTelemetry::default(),
         )
         .await
@@ -111,6 +112,7 @@ async fn snapshot_failure_retries_are_bounded_and_single_flight(
             /*runtime_paths*/ None,
             /*network_policy_decider*/ None,
             /*network_policy_audit_observer*/ None,
+            &codex_network_proxy::RemoteCredentialBrokerCache::default(),
             &ProcessTelemetry::default(),
         )
         .await
@@ -121,10 +123,11 @@ async fn snapshot_failure_retries_are_bounded_and_single_flight(
         } else {
             CapturePurpose::Execution
         };
+        let credential_brokers = codex_network_proxy::RemoteCredentialBrokerCache::default();
         let (first, second) = tokio::join!(
             biased;
-            cache.prepare(&params, &mut prepared, &telemetry, purpose),
-            cache.prepare(&params, &mut concurrent, &telemetry, CapturePurpose::Execution),
+            cache.prepare(&params, &mut prepared, &telemetry, purpose, &credential_brokers),
+            cache.prepare(&params, &mut concurrent, &telemetry, CapturePurpose::Execution, &credential_brokers),
         );
         let first = if prewarming {
             first.expect_err("prewarm must report failure without caching it");
@@ -136,8 +139,9 @@ async fn snapshot_failure_retries_are_bounded_and_single_flight(
         for (prepared, reader) in [(&mut prepared, first), (&mut concurrent, second)] {
             if let Some(reader) = reader {
                 let fd = std::os::fd::AsRawFd::as_raw_fd(&reader);
-                prepared.command[2] =
-                    prepared.command[2].replace(&format!("/dev/fd/{fd}"), "/dev/fd/SNAPSHOT");
+                for argument in &mut prepared.command {
+                    *argument = argument.replace(&format!("/dev/fd/{fd}"), "/dev/fd/SNAPSHOT");
+                }
             }
         }
         assert_eq!(
@@ -160,6 +164,7 @@ async fn snapshot_failure_retries_are_bounded_and_single_flight(
                     &mut prepared,
                     &telemetry,
                     CapturePurpose::Execution,
+                    &credential_brokers,
                 )
                 .await
                 .expect("capture must stay cached during backoff");

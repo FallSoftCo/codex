@@ -88,6 +88,15 @@ impl ExecutorFileSystem for ApplyPatchTurnFileSystem<'_> {
         })
     }
 
+    fn write_file_stream<'a>(
+        &'a self,
+        path: &'a PathUri,
+        contents: futures::stream::BoxStream<'a, io::Result<Bytes>>,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, u64> {
+        self.inner.write_file_stream(path, contents, sandbox)
+    }
+
     fn write_file<'a>(
         &'a self,
         path: &'a PathUri,
@@ -152,5 +161,51 @@ impl ExecutorFileSystem for ApplyPatchTurnFileSystem<'_> {
     ) -> ExecutorFileSystemFuture<'a, ()> {
         self.inner
             .copy(source_path, destination_path, copy_options, sandbox)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use codex_exec_server::LOCAL_FS;
+    use codex_utils_absolute_path::AbsolutePathBuf;
+    use futures::StreamExt;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn streaming_replace_uses_selected_executor_and_preserves_io_failure() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let path = dir.path().join("target.txt");
+        std::fs::write(&path, b"old content beyond new length").expect("seed target");
+        let uri = PathUri::from_abs_path(
+            &AbsolutePathBuf::from_absolute_path(&path).expect("absolute target"),
+        );
+        let fs = ApplyPatchTurnFileSystem::new(LOCAL_FS.as_ref(), HashMap::new());
+        let chunks = futures::stream::iter([
+            Ok(Bytes::from_static(b"first")),
+            Ok(Bytes::from_static(b"second")),
+        ])
+        .boxed();
+        assert_eq!(fs.write_file_stream(&uri, chunks, None).await.unwrap(), 11);
+        assert_eq!(std::fs::read(&path).unwrap(), b"firstsecond");
+
+        // An upstream streaming failure may leave a partial target. It must not
+        // become Unsupported at the turn adapter or report a completed write.
+        let chunks = futures::stream::iter([
+            Ok(Bytes::from_static(b"partial")),
+            Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "source interrupted",
+            )),
+        ])
+        .boxed();
+        assert_eq!(
+            fs.write_file_stream(&uri, chunks, None)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::Interrupted,
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"partial");
     }
 }

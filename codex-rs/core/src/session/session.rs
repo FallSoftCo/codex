@@ -808,6 +808,7 @@ impl Session {
         analytics_events_client: Option<AnalyticsEventsClient>,
         image_store: Arc<dyn AttachmentStore>,
         thread_store: Arc<dyn ThreadStore>,
+        resume_preparation: Option<ThreadStoreResumePreparation>,
         parent_rollout_thread_trace: ThreadTraceContext,
         attestation_provider: Option<Arc<dyn AttestationProvider>>,
         external_time_provider: Option<Arc<dyn TimeProvider>>,
@@ -1139,8 +1140,13 @@ impl Session {
                         let (context_tx, context_rx) = tokio::sync::oneshot::channel();
                         let live_thread = guard
                             .acquire(async move {
-                                let (live_thread, history) =
-                                    LiveThread::resume(store, history_mode, params).await?;
+                                let (live_thread, history) = LiveThread::resume(
+                                    store,
+                                    history_mode,
+                                    params,
+                                    resume_preparation,
+                                )
+                                .await?;
                                 // Cancellation still leaves the writer with the acquisition guard.
                                 let _ = context_tx.send(history);
                                 Ok(live_thread)

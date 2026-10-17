@@ -237,6 +237,7 @@ mod managed_worktree_creation;
 mod misalignment_policy;
 mod model_defaults;
 mod new_session;
+mod quick_dials;
 mod turn_tips;
 pub(crate) use new_session::has_launch_setting;
 mod clipboard;
@@ -277,6 +278,7 @@ mod thread_settings;
 mod thread_title;
 mod transcript_export;
 mod tui_mode_picker;
+mod user_turn_submission;
 mod user_verification;
 mod user_verification_errors;
 mod user_verification_requests;
@@ -875,6 +877,12 @@ impl App {
         {
             self.discard_startup_modal_input(tui)?;
             return Ok(AppRunControl::Continue);
+        }
+        if matches!(&event, TuiEvent::Key(key) if key.kind != KeyEventKind::Release)
+            || matches!(&event, TuiEvent::Paste(text) if !text.is_empty())
+            || matches!(&event, TuiEvent::Mouse(mouse) if mouse.kind != crossterm::event::MouseEventKind::Moved)
+        {
+            self.chat_widget.acknowledge_program_status();
         }
         let idle_draw = matches!(event, TuiEvent::Draw);
         if self.handle_rendered_selection_event(tui, &event)? {

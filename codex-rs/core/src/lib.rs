@@ -83,6 +83,11 @@ mod agent_message_board;
 pub use agent_message_board::install_agent_message_board;
 mod attestation;
 pub(crate) mod canonical_collaboration;
+
+/// Whether this process requires canonical authority for enterprise collaboration.
+pub fn enterprise_native_collaboration_enabled() -> bool {
+    canonical_collaboration::enterprise()
+}
 pub(crate) mod canonical_patch;
 mod code_mode_host;
 mod codex_delegate;
