@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import UUID
 
 from . import service_observer as observer
+from .native_package import PackageError, preflight_as_owner
 
 
 def inspect(authority, host, agent):
@@ -63,6 +64,17 @@ def inspect(authority, host, agent):
     binding = observer.protected(manifest_path)
     if binding != expected:
         raise PermissionError("Registered invocation differs from actual service")
+    base = Path("/var/lib/harness") / authority
+    global_receipt = observer.protected(base / "global-admin-receipt.json")
+    intent = (base / "global-admin-intent.json" if global_receipt["agentId"] == agent
+              else base / "workers" / agent / "provision-intent.json")
+    spec = observer.protected(intent)["spec"]
+    try:
+        package = preflight_as_owner(binary, spec["interpreter"], uid, home)
+    except PackageError as error:
+        return {**result, "ready": False, "reason": "native-package-preflight-failed",
+                "nativePackage": error.details}
+    result["nativePackage"] = package
     return {**result, "ready": True, "reason": "execution-registration-ready",
             "serviceInvocation": expected["serviceInvocation"],
             "bindingDigest": observer.digest(binding)}

@@ -16,6 +16,7 @@ from pathlib import Path
 from uuid import UUID
 
 from .journal import saved
+from .native_package import preflight_as_owner
 
 
 def run(*args):
@@ -126,7 +127,9 @@ def provision(spec):
             or account.pw_dir != receipt["home"]
         ):
             raise ValueError("Existing Global installation identity changed")
-        return {**receipt, "reconciled": True, "modelOrServiceRestarted": False}
+        package = preflight_as_owner(spec["binary"], spec["interpreter"], account.pw_uid, Path(receipt["home"]))
+        return {**receipt, "reconciled": True, "modelOrServiceRestarted": False,
+                "nativePackage": package}
     home = state / "global"
     try:
         account = pwd.getpwnam(user)
@@ -176,7 +179,7 @@ def provision(spec):
     binary = Path(spec["binary"])
     interpreter = Path(spec["interpreter"])
     # A role label cannot hide inaccessible runtime artifacts or absent sudo.
-    run("runuser", "-u", user, "--", str(binary), "--version")
+    package = preflight_as_owner(binary, interpreter, account.pw_uid, home)
     run(
         "runuser",
         "-u",
@@ -254,6 +257,7 @@ WantedBy=multi-user.target
         "sudoVerifiedUid": 0,
         "workerPrivilegesChanged": False,
         "modelAccountProved": False,
+        "nativePackage": package,
         "enterpriseInstallationComplete": False,
     }
     saved(state / "global-admin-receipt.json", receipt)

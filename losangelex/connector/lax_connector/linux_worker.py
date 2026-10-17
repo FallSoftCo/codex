@@ -12,6 +12,7 @@ from uuid import UUID
 
 from .journal import saved
 from .linux_admin import run
+from .native_package import preflight_as_owner
 
 
 def execution_profile(spec, override=None):
@@ -246,7 +247,7 @@ def provision(spec):
         shutil.copyfile(source_auth, auth)
     auth.chmod(0o600)
     os.chown(auth, account.pw_uid, account.pw_gid)
-    run("runuser", "-u", user, "--", spec["binary"], "--version")
+    package = preflight_as_owner(spec["binary"], spec["interpreter"], account.pw_uid, home)
     run(
         "runuser",
         "-u",
@@ -311,6 +312,7 @@ def provision(spec):
         "executionProfile": profile,
         "modelsStartedByProvisioning": 0,
         "modelAccountProved": False,
+        "nativePackage": package,
     }
     saved(record / "provision-receipt.json", receipt)
     # The owner receipt is required by the protected service registry. Do not

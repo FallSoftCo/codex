@@ -103,7 +103,7 @@ existing generic404 policy; do not retry it on an older backend.
 
 The connector advertises `completed-work-report-reconciliation/v1` and
 `completed-report-scope/v1`, paired with reviewed Hollywood bb6149c35f52, and package
-version0.1.0.dev41. Deploy only with its matching independently reviewed server;
+version0.1.0.dev42. Deploy only with its matching independently reviewed server;
 an older native tool ceiling must be explicitly reconciled to expose the new tool.
 No Rust/native runtime change is required. Submission remains separate from
 independent review/acceptance against the original completed execution.

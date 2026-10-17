@@ -42,6 +42,11 @@ class AppServer:
         self.reader = None
 
     async def start(self):
+        if self.enterprise:
+            from .native_package import inspect_package
+            # The current execution UID must be able to launch every packaged asset.
+            # Read-only recovery connections remain available for older native stores.
+            self.package_preflight = await asyncio.to_thread(inspect_package, self.binary)
         self.home.mkdir(parents=True, exist_ok=True)
         self.state.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, CODEX_HOME=str(self.home))

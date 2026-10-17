@@ -1744,7 +1744,15 @@ def main():
     args = parser.parse_args()
     if bool(args.reconcile_delivery) != (args.generation is not None):
         parser.error("--reconcile-delivery requires --generation; neither starts a model")
-    connector = Connector(json.loads(args.config.read_text()))
+    config = json.loads(args.config.read_text())
+    package = None
+    if args.serve or args.claim_id:
+        from .native_package import inspect_package
+        # Fail before queue admission, native startup or model sampling.
+        package = inspect_package(config["binary"])
+    connector = Connector(config)
+    if package is not None:
+        saved(connector.state / "native-package-preflight.json", package)
     if args.list_attempts:
         print(json.dumps({
             "attempts": [

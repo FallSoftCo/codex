@@ -1,6 +1,6 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev41`. Its installer and automatic
+The candidate connector is version `0.1.0.dev42`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
@@ -11,6 +11,27 @@ Neither credential enters the native descriptor, model arguments or model
 context. The bridge authenticates the exact native process and independently
 observed service incarnation before consuming frame bytes, then derives the
 running turn and unchanged private context from canonical receipts.
+
+## Native package installation preflight
+
+Global and worker provisioning require the complete Linux CLI package produced by
+`scripts/build_codex_package.py`. Configure its `bin/codex` entrypoint and retain
+`codex-package.json`, `bin/codex-code-mode-host`, `codex-resources/bwrap` and
+`codex-path/rg` in the upstream layout. Copying the CLI alone cannot pass.
+
+Provisioning and registered service readiness run the package preflight through
+the installed interpreter as the recorded service UID and home. The check verifies
+metadata, host target, readable executable assets and their SHA-256 hashes, then
+runs four bounded startup diagnostics: CLI version, code-mode-host help, bubblewrap
+version and ripgrep version. It never widens private directory permissions. Normal
+connector admission and enterprise native startup repeat the check under their
+actual execution identity; a missing or inaccessible helper prevents readiness
+and startup. Read-only historical recovery modes remain available.
+
+The `nativePackage` receipt proves only these package and startup checks. It does
+not prove sandbox/tool execution, model access or a successful ordinary task.
+Root must still qualify the installed complete package through the original task
+and same-context continuation before accepting the runtime.
 
 ## One installation, automatic current-turn capture
 
