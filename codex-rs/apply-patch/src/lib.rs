@@ -2,15 +2,13 @@ mod collaborative_replacements;
 mod file_update;
 mod invocation;
 mod parser;
+mod path_locks;
 mod seek_sequence;
 mod standalone_executable;
 mod streaming_parser;
 mod text_file;
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::fs::File;
-use std::fs::OpenOptions;
 use std::io;
 use std::path::PathBuf;
 
@@ -46,9 +44,7 @@ pub use standalone_executable::main;
 
 use crate::invocation::ExtractHeredocError;
 
-struct PatchPathLockGuards {
-    _lock_files: Vec<File>,
-}
+use path_locks::lock_hunk_paths;
 
 /// Special argv[1] flag used when the Codex executable self-invokes to run the
 /// internal `apply_patch` path.
@@ -425,7 +421,7 @@ async fn apply_hunks_with_options(
     let path_locks = match lock_hunk_paths(hunks, cwd).await {
         Ok(path_locks) => path_locks,
         Err(error) => {
-            let msg = error.to_string();
+            let msg = format!("{error:#}");
             writeln!(stderr, "{msg}").map_err(|error| {
                 ApplyPatchFailure::new(ApplyPatchError::from(error), delta.clone())
             })?;
@@ -450,7 +446,7 @@ async fn apply_hunks_with_options(
             Ok(delta)
         }
         Err(error) => {
-            let msg = error.to_string();
+            let msg = format!("{error:#}");
             writeln!(stderr, "{msg}").map_err(|error| {
                 ApplyPatchFailure::new(ApplyPatchError::from(error), delta.clone())
             })?;
@@ -465,78 +461,6 @@ async fn apply_hunks_with_options(
             Err(ApplyPatchFailure::new(error, delta))
         }
     }
-}
-
-fn collect_hunk_lock_paths(hunks: &[Hunk], cwd: &PathUri) -> anyhow::Result<Vec<String>> {
-    let mut paths = BTreeSet::new();
-    for hunk in hunks {
-        let path_uri = hunk.resolve_path(cwd)?;
-        paths.insert(path_uri.to_string());
-        if let Hunk::UpdateFile {
-            move_path: Some(dest),
-            ..
-        } = hunk
-        {
-            paths.insert(cwd.join(&dest.to_string_lossy())?.to_string());
-        }
-    }
-    Ok(paths.into_iter().collect())
-}
-
-async fn lock_hunk_paths(hunks: &[Hunk], cwd: &PathUri) -> anyhow::Result<PatchPathLockGuards> {
-    let paths = collect_hunk_lock_paths(hunks, cwd)?;
-    tokio::task::spawn_blocking(move || lock_hunk_paths_blocking(paths))
-        .await
-        .context("failed to join apply_patch path lock task")?
-}
-
-fn lock_hunk_paths_blocking(paths: Vec<String>) -> anyhow::Result<PatchPathLockGuards> {
-    let lock_root = apply_patch_lock_root();
-    std::fs::create_dir_all(&lock_root).with_context(|| {
-        format!(
-            "failed to create apply_patch lock directory {}",
-            lock_root.display()
-        )
-    })?;
-
-    let mut lock_files = Vec::with_capacity(paths.len());
-    for path in paths {
-        let lock_path = lock_root.join(format!("{}.lock", apply_patch_lock_key(&path)));
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&lock_path)
-            .with_context(|| {
-                format!(
-                    "failed to open apply_patch lock file {}",
-                    lock_path.display()
-                )
-            })?;
-        file.lock()
-            .with_context(|| format!("failed to lock apply_patch path {path}"))?;
-        lock_files.push(file);
-    }
-    Ok(PatchPathLockGuards {
-        _lock_files: lock_files,
-    })
-}
-
-fn apply_patch_lock_root() -> PathBuf {
-    std::env::temp_dir().join("codex-apply-patch-locks")
-}
-
-fn apply_patch_lock_key(path: &str) -> String {
-    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-    const FNV_PRIME: u64 = 0x100000001b3;
-
-    let mut hash = FNV_OFFSET;
-    for byte in path.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(FNV_PRIME);
-    }
-    format!("{hash:016x}-{}", path.len())
 }
 
 /// Applies each parsed patch hunk to the filesystem.

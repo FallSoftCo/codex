@@ -2477,6 +2477,7 @@ dependencies = [
  "codex-utils-cargo-bin",
  "codex-utils-path-uri",
  "pretty_assertions",
+ "rustix 1.1.4",
  "similar",
  "tempfile",
  "thiserror 2.0.18",

@@ -203,6 +203,7 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
         let stdout = String::from_utf8_lossy(&stdout).into_owned();
         let stderr = String::from_utf8_lossy(&stderr).into_owned();
         let failed = result.is_err();
+        let patch_failure = result.as_ref().err().map(ToString::to_string);
 
         let exit_code = if failed { 1 } else { 0 };
         let delta = match result {
@@ -233,10 +234,23 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
         }
         self.committed_delta.append(delta);
         if let Some(permit) = permit {
-            permit
-                .settle(req, ctx, !failed)
-                .await
-                .map_err(|error| ToolError::Rejected(error.to_string()))?;
+            permit.settle(req, ctx, !failed).await.map_err(|error| {
+                // Settlement can hold even a failed filesystem operation. Keep the
+                // original diagnostic while retaining the hold and prohibiting retry.
+                let diagnostic = if stderr.is_empty() {
+                    patch_failure.as_deref()
+                } else {
+                    Some(stderr.as_str())
+                };
+                let message = match diagnostic {
+                    Some(diagnostic) => {
+                        let bounded: String = diagnostic.chars().take(4096).collect();
+                        format!("{error}\nOriginal patch failure: {bounded}")
+                    }
+                    None => error.to_string(),
+                };
+                ToolError::Rejected(message)
+            })?;
         }
 
         let output = ExecToolCallOutput {
