@@ -93,7 +93,7 @@ def probe(binary, interpreter, uid, home, release):
               "'module':c.__file__,'prefix':sys.prefix}))")
     result = subprocess.run(
         ["runuser", "-u", account.pw_name, "--", str(interpreter), "-I", "-B", "-c", script],
-        env={"PATH": "/usr/bin:/bin", "HOME": str(home),
+        env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": str(home),
              "CODEX_HOME": str(home / "codex-home")},
         stdin=subprocess.DEVNULL, capture_output=True, timeout=10,
     )
