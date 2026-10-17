@@ -6,6 +6,7 @@ use codex_config::ConfigLayerSource;
 use codex_config::ConfigLayerStack;
 use codex_config::default_project_root_markers;
 use codex_config::merge_toml_values;
+use codex_config::project_root_marker_exists;
 use codex_config::project_root_markers_from_config;
 use codex_exec_server::ExecutorFileSystem;
 use codex_exec_server::GetMetadataOptions;
@@ -215,25 +216,20 @@ async fn find_project_root(
     let mut probes = Vec::new();
     for ancestor in cwd.ancestors() {
         for marker in project_root_markers {
-            probes.push((ancestor.clone(), ancestor.join(marker)));
+            probes.push((ancestor.clone(), ancestor.join(marker), marker.clone()));
         }
     }
     let mut results = futures::stream::iter(probes)
-        .map(|(ancestor, marker_path)| async move {
-            let marker_path_uri = PathUri::from_abs_path(&marker_path);
-            let result = repository_file_system
-                .get_metadata(
-                    &marker_path_uri,
-                    GetMetadataOptions::default(),
-                    /*sandbox*/ None,
-                )
-                .await;
+        .map(|(ancestor, marker_path, marker)| async move {
+            let result =
+                project_root_marker_exists(repository_file_system, &marker_path, &marker).await;
             (ancestor, marker_path, result)
         })
         .buffered(MAX_CONCURRENT_ANCESTOR_PROBES);
     while let Some((ancestor, marker_path, result)) = results.next().await {
         match result {
-            Ok(_) => return ancestor,
+            Ok(true) => return ancestor,
+            Ok(false) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => {
                 tracing::warn!(

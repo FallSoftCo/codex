@@ -1,9 +1,17 @@
 //! Session-wide mutable state.
 
+use crate::hollywood::HollywoodSessionConfig;
 use codex_protocol::models::BaseInstructionsProvenance;
 #[cfg(test)]
 use codex_protocol::models::ResponseItem;
 use codex_protocol::openai_models::ReasoningEffort;
+use codex_protocol::protocol::HollywoodInputMessage;
+use codex_protocol::protocol::RateLimitSnapshot;
+use codex_protocol::protocol::SessionAgentTask;
+use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::TokenUsageInfo;
+use codex_protocol::protocol::TurnContextItem;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
@@ -22,11 +30,7 @@ use codex_history::ResponseItemEnvelope;
 use codex_history::TurnAttribution;
 use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
-use codex_protocol::protocol::RateLimitSnapshot;
-use codex_protocol::protocol::TokenUsage;
-use codex_protocol::protocol::TokenUsageInfo;
 use codex_protocol::protocol::TokenUsageRecord;
-use codex_protocol::protocol::TurnContextItem;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -100,10 +104,22 @@ pub(crate) struct SessionState {
     pub(crate) startup_prewarm: Option<SessionStartupPrewarmHandle>,
     /// Retained after completion so later turns do not repeat speculative captures.
     pub(crate) shell_snapshot_prewarm: Option<AbortOnDropHandle<()>>,
+    pub(crate) agent_task: Option<SessionAgentTask>,
     pub(crate) current_time_reminder: CurrentTimeReminderState,
     pub(crate) active_connector_selection: HashSet<String>,
     pub(crate) pending_session_start_sources: VecDeque<codex_hooks::SessionStartSource>,
     next_turn_is_first: bool,
+    hollywood_session_config: Option<HollywoodSessionConfig>,
+    outstanding_hollywood_obligations: Vec<HollywoodObligation>,
+    hollywood_send_rooms_by_turn: HashMap<String, HashSet<String>>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct HollywoodObligation {
+    pub(crate) message_id: i64,
+    pub(crate) room: String,
+    pub(crate) sender_id: String,
+    pub(crate) body: String,
 }
 
 impl SessionState {
@@ -142,10 +158,14 @@ impl SessionState {
             shutting_down: false,
             startup_prewarm: None,
             shell_snapshot_prewarm: None,
+            agent_task: None,
             current_time_reminder: CurrentTimeReminderState::default(),
             active_connector_selection: HashSet::new(),
             pending_session_start_sources: VecDeque::new(),
             next_turn_is_first: true,
+            hollywood_session_config: None,
+            outstanding_hollywood_obligations: Vec::new(),
+            hollywood_send_rooms_by_turn: HashMap::new(),
         }
     }
 
@@ -400,6 +420,18 @@ impl SessionState {
         self.startup_prewarm.take()
     }
 
+    pub(crate) fn agent_task(&self) -> Option<SessionAgentTask> {
+        self.agent_task.clone()
+    }
+
+    pub(crate) fn set_agent_task(&mut self, agent_task: SessionAgentTask) {
+        self.agent_task = Some(agent_task);
+    }
+
+    pub(crate) fn clear_agent_task(&mut self) {
+        self.agent_task = None;
+    }
+
     // Adds connector IDs to the active set and returns the merged selection.
     pub(crate) fn merge_connector_selection<I>(&mut self, connector_ids: I) -> HashSet<String>
     where
@@ -430,6 +462,63 @@ impl SessionState {
         &mut self,
     ) -> Option<codex_hooks::SessionStartSource> {
         self.pending_session_start_sources.pop_front()
+    }
+
+    pub(crate) fn hollywood_session_config(&self) -> Option<HollywoodSessionConfig> {
+        self.hollywood_session_config.clone()
+    }
+
+    pub(crate) fn set_hollywood_session_config(&mut self, config: Option<HollywoodSessionConfig>) {
+        self.hollywood_session_config = config;
+    }
+
+    pub(crate) fn add_hollywood_obligation(&mut self, message: &HollywoodInputMessage) {
+        if message.sender_id == "hollywood-system" {
+            return;
+        }
+        let duplicate = self
+            .outstanding_hollywood_obligations
+            .iter()
+            .any(|obligation| {
+                (message.message_id > 0 && obligation.message_id == message.message_id)
+                    || (obligation.room == message.room
+                        && obligation.sender_id == message.sender_id
+                        && obligation.body == message.body)
+            });
+        if duplicate {
+            return;
+        }
+        self.outstanding_hollywood_obligations
+            .push(HollywoodObligation {
+                message_id: message.message_id,
+                room: message.room.clone(),
+                sender_id: message.sender_id.clone(),
+                body: message.body.clone(),
+            });
+    }
+
+    pub(crate) fn mark_hollywood_send_for_turn(&mut self, turn_id: &str, room: &str) {
+        self.hollywood_send_rooms_by_turn
+            .entry(turn_id.to_string())
+            .or_default()
+            .insert(room.to_string());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn resolve_hollywood_obligations_for_turn(
+        &mut self,
+        turn_id: &str,
+    ) -> Vec<HollywoodObligation> {
+        let Some(handled_rooms) = self.hollywood_send_rooms_by_turn.remove(turn_id) else {
+            return self.outstanding_hollywood_obligations.clone();
+        };
+        self.outstanding_hollywood_obligations
+            .retain(|obligation| !handled_rooms.contains(&obligation.room));
+        self.outstanding_hollywood_obligations.clone()
+    }
+
+    pub(crate) fn hollywood_obligation_count(&self) -> usize {
+        self.outstanding_hollywood_obligations.len()
     }
 }
 

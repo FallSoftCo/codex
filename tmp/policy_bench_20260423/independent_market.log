@@ -1,0 +1,6 @@
+completed scenario=feature_patch_chain policy=independent_market repeat=1
+completed scenario=feature_patch_chain policy=independent_market repeat=2
+completed scenario=feature_patch_chain policy=independent_market repeat=3
+completed scenario=broad_qa_cleanup policy=independent_market repeat=1
+completed scenario=broad_qa_cleanup policy=independent_market repeat=2
+completed scenario=broad_qa_cleanup policy=independent_market repeat=3

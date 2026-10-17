@@ -26,6 +26,7 @@ def main() -> None:
         action="store_true",
         help="regenerate the precomputed experimental exports",
     )
+    parser.add_argument("--python-sdk-interpreter", type=Path, help="Use an existing qualified Python SDK environment without installing or syncing dependencies")
     args = parser.parse_args()
 
     workspace_root = Path(__file__).resolve().parents[2]
@@ -61,6 +62,13 @@ def main() -> None:
         and schema_root.resolve() == repository_schema_root.resolve()
     ):
         sdk_root = workspace_root.parent / "sdk" / "python"
+        sdk_args = [str(sdk_root / "scripts" / "update_sdk_artifacts.py"), "generate-types", "--schema-dir", str(schema_root / "json")]
+        if args.python_sdk_interpreter:
+            sdk_env = os.environ.copy()
+            sdk_env["PATH"] = str(args.python_sdk_interpreter.parent) + os.pathsep + sdk_env.get("PATH", "")
+            sdk_env["PYTHONDONTWRITEBYTECODE"] = "1"
+            subprocess.run([str(args.python_sdk_interpreter), "-B", *sdk_args], cwd=workspace_root, env=sdk_env, check=True)
+            return
         subprocess.run(
             [
                 "uv",

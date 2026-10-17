@@ -497,12 +497,12 @@ async fn exec_resume_last_accepts_prompt_after_flag_in_json_mode() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn exec_resume_last_respects_cwd_filter_and_all_flag() -> anyhow::Result<()> {
+async fn exec_resume_last_respects_cwd_filter() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let test = test_codex_exec();
     let server = MockServer::start().await;
-    let _response_mock = mount_exec_responses(&server, /*count*/ 5).await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 3).await;
 
     let dir_a = TempDir::new()?;
     let dir_b = TempDir::new()?;
@@ -528,35 +528,71 @@ async fn exec_resume_last_respects_cwd_filter_and_all_flag() -> anyhow::Result<(
         .success();
 
     let sessions_dir = test.home_path().join("sessions");
+    let path_a = find_session_file_containing_marker(&sessions_dir, &marker_a)
+        .expect("no session file found for marker_a");
+    find_session_file_containing_marker(&sessions_dir, &marker_b)
+        .expect("no session file found for marker_b");
+
+    let marker_a2 = format!("resume-cwd-a-2-{}", Uuid::new_v4());
+    let prompt_a2 = format!("echo {marker_a2}");
+    test.cmd_with_server(&server)
+        .arg("--skip-git-repo-check")
+        .arg("-C")
+        .arg(dir_a.path())
+        .arg("resume")
+        .arg("--last")
+        .arg(&prompt_a2)
+        .assert()
+        .success();
+
+    let resumed_path_cwd = find_session_file_containing_marker(&sessions_dir, &marker_a2)
+        .expect("no resumed session file containing marker_a2");
+    assert_eq!(
+        resumed_path_cwd, path_a,
+        "resume --last should prefer sessions whose latest turn context matches the current cwd"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn exec_resume_last_all_ignores_cwd_filter() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let test = test_codex_exec();
+    let server = MockServer::start().await;
+    let _response_mock = mount_exec_responses(&server, /*count*/ 3).await;
+
+    let dir_a = TempDir::new()?;
+    let dir_b = TempDir::new()?;
+
+    let marker_a = format!("resume-cwd-all-a-{}", Uuid::new_v4());
+    let prompt_a = format!("echo {marker_a}");
+    test.cmd_with_server(&server)
+        .arg("--skip-git-repo-check")
+        .arg("-C")
+        .arg(dir_a.path())
+        .arg(&prompt_a)
+        .assert()
+        .success();
+
+    let marker_b = format!("resume-cwd-all-b-{}", Uuid::new_v4());
+    let prompt_b = format!("echo {marker_b}");
+    test.cmd_with_server(&server)
+        .arg("--skip-git-repo-check")
+        .arg("-C")
+        .arg(dir_b.path())
+        .arg(&prompt_b)
+        .assert()
+        .success();
+
+    let sessions_dir = test.home_path().join("sessions");
     find_session_file_containing_marker(&sessions_dir, &marker_a)
         .expect("no session file found for marker_a");
     let path_b = find_session_file_containing_marker(&sessions_dir, &marker_b)
         .expect("no session file found for marker_b");
 
-    // `updated_at` is second-granularity, so ensure the touch lands in a later second
-    // than the initial session creation on fast CI (especially Windows).
-    std::thread::sleep(std::time::Duration::from_millis(1100));
-
-    // Make thread B deterministically newest according to rollout metadata.
-    let session_id_b = extract_conversation_id(&path_b);
-    let marker_b_touch = format!("resume-cwd-b-touch-{}", Uuid::new_v4());
-    let prompt_b_touch = format!("echo {marker_b_touch}");
-    test.cmd_with_server(&server)
-        .arg("--skip-git-repo-check")
-        .arg("-C")
-        .arg(dir_b.path())
-        .arg("resume")
-        .arg(&session_id_b)
-        .arg(&prompt_b_touch)
-        .assert()
-        .success();
-
-    // `resume --last` sorts by `updated_at`, which is second-granularity. Sleep so
-    // the upcoming `resume --last --all` write lands in a later second and becomes
-    // deterministically newest (instead of tying and falling back to UUID order).
-    std::thread::sleep(std::time::Duration::from_millis(1100));
-
-    let marker_b2 = format!("resume-cwd-b-2-{}", Uuid::new_v4());
+    let marker_b2 = format!("resume-cwd-all-b-2-{}", Uuid::new_v4());
     let prompt_b2 = format!("echo {marker_b2}");
     test.cmd_with_server(&server)
         .arg("--skip-git-repo-check")

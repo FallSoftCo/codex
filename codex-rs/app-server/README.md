@@ -616,3 +616,46 @@ and out-of-scope item IDs return invalid params (`-32602`) with
 Omitted or null cursors preserve normal first-page behavior. Continue anchored
 pages with the returned opaque string `nextCursor`; response fields and
 `backwardsCursor` semantics are unchanged.
+
+### Standalone Hollywood compatibility
+
+The fork retains the typed `thread/hollywood/attach`, `thread/hollywood/detach`,
+`thread/hollywood/attention/set` and `thread/hollywood/message` interface for
+explicit standalone room attachment. Enterprise collaboration uses the protected
+canonical native channel and actual current participation; legacy room traffic
+is contextual data and cannot start an enterprise execution. Edit-plan and patch
+permit availability is negotiated separately from physical claims and child
+admission. See the retained Hollywood integration source documentation for the
+standalone wire; a compiled candidate is not native runtime qualification.
+
+
+### Protected canonical native collaboration adapter
+
+Enterprise launches set `LAX_NATIVE_ENTERPRISE=1`. A separately installed,
+administrator-owned `LAX_CANONICAL_NATIVE_CHANNEL` descriptor identifies the
+Unix RPC socket and implemented ports. The connector clears inherited channel
+variables before launch and validates any configured descriptor. Actual built-in
+`coordination_act` and `collaborative_edit_plan` calls carry command intent plus
+the captured step environment/CWD. Both approved patch entry points enter the
+same mutation runtime, which re-verifies the approved action and obtains a
+short original preflight/begin grant immediately before mutation. Settlement
+observes the actual outcome; unknown or lost results retain canonical ownership.
+
+The protected bridge checks kernel native PID/start/executable/cgroup and the
+fresh enrolled executor/service binding. Canonical source-v2 retains the agent's
+private context identity. Physical target-v1 independently identifies a
+registered host/environment/root and current work grant. Every action digest
+covers the exact operation, native source, executor proof and command. The
+bridge opens target components without symlink traversal and verifies actual
+source/content bytes. Shared physical roots use the same registered resource ID
+across private contexts; neither relative paths nor a private execution workspace
+ID establish a resource grant.
+
+`lax_connector.collaboration_bridge` is an explicit administrator entry point;
+source integration does not install, register, start or activate it. Resource
+registration hashes use canonical sorted compact JSON: environment is
+`{hostId, environmentId}` and root identity is
+`{hostId, environmentSha256, device, inode}` from the independently opened local
+root. External worktree Git metadata, directory claims, remote physical mutation
+and native child admission remain unavailable until their own implementations
+and qualification exist. Receipts and cached replies never confer an apply grant.

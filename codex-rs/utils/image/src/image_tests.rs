@@ -309,6 +309,29 @@ async fn detail_modes_apply_expected_budgets() {
     }
 }
 
+#[test]
+fn output_dimensions_respect_dimension_and_patch_budgets() {
+    let high_limits = PromptImageResizeLimits {
+        max_dimension: 2048,
+        max_patches: 2_500,
+    };
+    let original_limits = PromptImageResizeLimits {
+        max_dimension: 6000,
+        max_patches: 10_000,
+    };
+
+    for (input, limits, expected) in [
+        ((1601, 1601), high_limits, (1600, 1600)),
+        ((6401, 100), original_limits, (6000, 94)),
+        ((3201, 3201), original_limits, (3200, 3200)),
+    ] {
+        assert_eq!(
+            prompt_image_output_dimensions_for_limits(input.0, input.1, limits),
+            expected
+        );
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn fails_cleanly_for_invalid_images() {
     let err = load_for_prompt_bytes(

@@ -274,6 +274,10 @@ async fn prompt_tools_are_consistent_across_requests(
         "request_user_input",
         "apply_patch",
         "view_image",
+        "restart_client",
+        "collaborative_edit_plan",
+        "coordination_act",
+        "list_coordination_tasks",
         "tool_search",
         "web_search",
     ]);

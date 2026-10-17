@@ -115,6 +115,10 @@ impl LegacyRolloutCanonicalizer {
         let bytes_before = self.bytes_written;
         match line.item {
             RolloutItem::SessionMeta(_) => return Ok(0),
+            RolloutItem::SessionState(state) => {
+                self.write_item(writer, &timestamp, RolloutItem::SessionState(state))
+                    .await?;
+            }
             RolloutItem::ResponseItem(response) => {
                 if matches!(&response.item, ResponseItem::Other) {
                     return Err(migration_error(

@@ -53,7 +53,9 @@ use crate::tools::handlers::tool_search_spec::ToolSearchSourceListing;
 use crate::tools::handlers::view_image_spec::ViewImageToolOptions;
 use crate::tools::hosted_spec::WebSearchToolOptions;
 use crate::tools::hosted_spec::create_web_search_tool;
+use crate::tools::losangelex_spec::append_losangelex_tool_executors;
 use crate::tools::multi_agent_tool::multi_agent_v2_handler;
+use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::RegisteredTool;
 use crate::tools::registry::ToolExposure;
 use crate::tools::registry::ToolRegistry;
@@ -1194,6 +1196,7 @@ fn add_core_tool_sources(context: &CoreToolPlanContext<'_>, registry: &mut ToolR
     add_mcp_resource_tools(context, registry);
     add_core_utility_tools(context, registry);
     add_collaboration_tools(context, registry);
+    add_losangelex_tools(context, registry);
 }
 
 fn standalone_web_search_enabled(turn_context: &TurnContext, model_info: &ModelInfo) -> bool {
@@ -1621,6 +1624,18 @@ fn append_dynamic_tool_runtimes(dynamic_tools: &[DynamicToolSpec], registry: &mu
                 }
             }
         }
+    }
+}
+
+fn add_losangelex_tools(_context: &CoreToolPlanContext<'_>, registry: &mut ToolRegistry) {
+    let mut runtimes: Vec<Arc<dyn CoreToolRuntime>> = Vec::new();
+    append_losangelex_tool_executors(
+        &mut runtimes,
+        true,
+        crate::hollywood::HollywoodSessionConfig::from_env().is_some(),
+    );
+    for runtime in runtimes {
+        registry.register_trusted(runtime);
     }
 }
 

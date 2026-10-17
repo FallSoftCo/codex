@@ -7,6 +7,7 @@ use super::AdditionalContextUserFragment;
 use super::AgentMessageBoardNotification;
 use super::ContextualUserFragment;
 use super::GuardianRetainedInstructions;
+use super::HollywoodMessage;
 use super::InternalModelContextFragment;
 use super::LegacyApplyPatchExecCommandWarning;
 use super::LegacyModelMismatchWarning;
@@ -34,6 +35,7 @@ const CONTEXTUAL_USER_FRAGMENT_MATCHERS: &[fn(&str) -> bool] = &[
     LegacyUnifiedExecProcessLimitWarning::matches_text,
     LegacyApplyPatchExecCommandWarning::matches_text,
     LegacyModelMismatchWarning::matches_text,
+    HollywoodMessage::matches_text,
 ];
 
 /// Hidden runtime context is not user authorization. Explicit user goal edits are.

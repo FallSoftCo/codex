@@ -148,6 +148,10 @@ impl WsStream {
             .await
     }
 
+    fn is_closed(&self) -> bool {
+        self.pump_task.is_finished()
+    }
+
     async fn next(&mut self) -> Option<Result<Message, WsError>> {
         self.rx_message.recv().await
     }
@@ -230,7 +234,7 @@ impl ResponsesWebsocketConnection {
             .lock()
             .await
             .as_ref()
-            .is_none_or(|stream| stream.pump_task.is_finished())
+            .is_none_or(WsStream::is_closed)
     }
 
     #[instrument(
@@ -1036,6 +1040,7 @@ mod tests {
     use super::*;
     use crate::common::ResponseCreateWsRequest;
     use crate::common::ResponsesApiRequest;
+    use codex_http_client::OutboundProxyPolicy;
     use codex_protocol::ResponseItemId;
     use codex_protocol::models::ContentItem;
     use codex_protocol::models::ResponseItem;
@@ -1046,6 +1051,13 @@ mod tests {
     use serde_json::value::to_raw_value;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::net::TcpListener;
+    use tokio::net::TcpStream;
+    use tokio::time::timeout;
+    use tokio_tungstenite::WebSocketStream;
+    use tokio_tungstenite::accept_async;
+    use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 
     #[test]
     fn direct_serialization_preserves_websocket_request_payload() {
@@ -1346,6 +1358,61 @@ mod tests {
             merged.get("x-default-only"),
             Some(&HeaderValue::from_static("default-only"))
         );
+    }
+
+    #[tokio::test]
+    async fn connection_reports_closed_after_peer_close_frame() {
+        let (client_stream, mut server_stream) = connected_websocket_pair().await;
+        let connection = ResponsesWebsocketConnection::new(
+            WsStream::new(client_stream),
+            Duration::from_secs(5),
+            /*server_reasoning_included*/ false,
+            /*models_etag*/ None,
+            /*server_model*/ None,
+            /*telemetry*/ None,
+        );
+
+        server_stream
+            .send(TungsteniteMessage::Close(None))
+            .await
+            .expect("server close frame should send");
+
+        timeout(Duration::from_secs(1), async {
+            loop {
+                if connection.is_closed().await {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("connection should observe peer close");
+    }
+
+    async fn connected_websocket_pair() -> (WebSocketConnection, WebSocketStream<TcpStream>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener should bind");
+        let addr = listener.local_addr().expect("listener addr");
+        let accept_task = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("server should accept");
+            accept_async(stream)
+                .await
+                .expect("server websocket should accept")
+        });
+        let url = format!("ws://{addr}");
+        let request = url
+            .as_str()
+            .into_client_request()
+            .expect("websocket request should build");
+        let factory = HttpClientFactory::new(OutboundProxyPolicy::ReqwestDefault);
+        let connector = WebSocketConnector::new(&factory).expect("connector should build");
+        let (client_stream, _response) = connector
+            .connect(request, WebSocketConfig::default())
+            .await
+            .expect("client websocket should connect");
+        let server_stream = accept_task.await.expect("accept task should join");
+        (client_stream, server_stream)
     }
 
     #[test]

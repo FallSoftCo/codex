@@ -138,7 +138,7 @@ impl TestToolServer {
             Self::echo_dash_tool(),
             encrypted_output_tool,
             thread_hint_tool,
-            Self::client_capabilities_tool(),
+            Self::capability_status_tool(),
             Self::cwd_tool(),
             Self::sync_tool(),
             Self::sync_readonly_tool(),
@@ -266,7 +266,7 @@ impl TestToolServer {
         tool
     }
 
-    fn client_capabilities_tool() -> Tool {
+    fn capability_status_tool() -> Tool {
         #[expect(clippy::expect_used)]
         let schema: JsonObject = serde_json::from_value(serde_json::json!({
             "type": "object",
@@ -276,7 +276,7 @@ impl TestToolServer {
         .expect("client capabilities tool schema should deserialize");
 
         let mut tool = Tool::new(
-            Cow::Borrowed("client_capabilities"),
+            Cow::Borrowed("capability_status"),
             Cow::Borrowed("Return capabilities advertised by the MCP client."),
             Arc::new(schema),
         );
@@ -680,7 +680,7 @@ impl ServerHandler for TestToolServer {
                     Err(McpError::invalid_params("unsupported test js source", None))
                 }
             }
-            "client_capabilities" => Ok(Self::structured_result(json!({
+            "client_capabilities" | "capability_status" => Ok(Self::structured_result(json!({
                 "supportsOpenaiFormElicitation": self
                     .supports_openai_form_elicitation
                     .load(Ordering::Relaxed),

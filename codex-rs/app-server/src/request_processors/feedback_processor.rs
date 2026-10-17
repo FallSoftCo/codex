@@ -759,6 +759,7 @@ mod tests {
                 timestamp: "2026-07-24T00:00:01Z".to_string(),
                 ordinal: None,
                 item: RolloutItem::TurnContext(TurnContextItem {
+                    multi_agent_mode: None,
                     turn_id: Some((*turn_id).to_string()),
                     root_turn_id: None,
                     disabled_plugin_ids: None,

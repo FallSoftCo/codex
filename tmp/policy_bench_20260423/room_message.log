@@ -1,0 +1,6 @@
+completed scenario=feature_patch_chain policy=room_message repeat=1
+completed scenario=feature_patch_chain policy=room_message repeat=2
+completed scenario=feature_patch_chain policy=room_message repeat=3
+completed scenario=broad_qa_cleanup policy=room_message repeat=1
+completed scenario=broad_qa_cleanup policy=room_message repeat=2
+completed scenario=broad_qa_cleanup policy=room_message repeat=3

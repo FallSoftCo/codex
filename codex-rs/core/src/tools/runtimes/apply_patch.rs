@@ -120,7 +120,7 @@ impl Sandboxable for ApplyPatchRuntime {
         SandboxablePreference::Auto
     }
     fn escalate_on_failure(&self) -> bool {
-        true
+        !crate::canonical_collaboration::enterprise()
     }
 }
 
@@ -176,6 +176,9 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
         let started_at = Instant::now();
         let fs = req.turn_environment.environment.get_filesystem();
         let sandbox = Self::file_system_sandbox_context_for_attempt(req, attempt);
+        let permit = crate::canonical_patch::PatchPermit::reserve(req, ctx, sandbox.as_ref())
+            .await
+            .map_err(|error| ToolError::Rejected(error.to_string()))?;
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
         let result = codex_apply_patch::apply_patch_with_options(
@@ -200,6 +203,7 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
         let stdout = String::from_utf8_lossy(&stdout).into_owned();
         let stderr = String::from_utf8_lossy(&stderr).into_owned();
         let failed = result.is_err();
+
         let exit_code = if failed { 1 } else { 0 };
         let delta = match result {
             Ok(delta) => delta,
@@ -228,6 +232,13 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
             }
         }
         self.committed_delta.append(delta);
+        if let Some(permit) = permit {
+            permit
+                .settle(req, ctx, !failed)
+                .await
+                .map_err(|error| ToolError::Rejected(error.to_string()))?;
+        }
+
         let output = ExecToolCallOutput {
             exit_code,
             stdout: StreamOutput::new(stdout.clone()),

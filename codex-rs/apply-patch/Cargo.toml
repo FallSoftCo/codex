@@ -23,7 +23,7 @@ codex-utils-absolute-path = { workspace = true }
 codex-utils-path-uri = { workspace = true }
 similar = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 tree-sitter = { workspace = true }
 tree-sitter-bash = { workspace = true }
 

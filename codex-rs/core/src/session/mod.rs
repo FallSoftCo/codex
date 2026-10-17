@@ -250,6 +250,7 @@ pub(crate) mod extension_metrics;
 mod guardian_checkpoint;
 mod handlers;
 mod inject;
+pub(crate) mod legacy_hollywood_idle;
 mod reasoning_effort;
 mod submission;
 pub(crate) use reasoning_effort::RequestEffortUsage;
@@ -1493,6 +1494,99 @@ impl Session {
 
     pub(crate) fn state_db(&self) -> Option<state_db::StateDbHandle> {
         self.services.state_db.clone()
+    }
+
+    pub(crate) async fn thread_name(&self) -> Option<String> {
+        let state = self.state.lock().await;
+        state.session_configuration.thread_name.clone()
+    }
+
+    pub(crate) async fn hollywood_session_config(
+        &self,
+    ) -> Option<crate::hollywood::HollywoodSessionConfig> {
+        let state = self.state.lock().await;
+        state
+            .hollywood_session_config()
+            .or_else(crate::hollywood::HollywoodSessionConfig::from_env)
+    }
+
+    pub(crate) async fn set_hollywood_session_config(
+        &self,
+        config: Option<crate::hollywood::HollywoodSessionConfig>,
+    ) {
+        let mut state = self.state.lock().await;
+        state.set_hollywood_session_config(config);
+    }
+
+    pub(crate) async fn set_hollywood_session_meta(
+        &self,
+        meta: Option<codex_protocol::protocol::HollywoodSessionMeta>,
+    ) {
+        let config = meta.map(|value| crate::hollywood::HollywoodSessionConfig {
+            url: value.url,
+            room: value.room,
+            observed_rooms: value.observed_rooms,
+            wake_rooms: value.wake_rooms,
+            attention_mode: value.attention_mode,
+        });
+        self.set_hollywood_session_config(config).await;
+    }
+
+    pub(crate) async fn add_hollywood_obligation(
+        &self,
+        message: &codex_protocol::protocol::HollywoodInputMessage,
+    ) {
+        if crate::hollywood::identities(self.thread_id(), None)
+            .iter()
+            .any(|identity| {
+                crate::hollywood::live_identity_matches_target(&message.sender_id, identity)
+            })
+        {
+            return;
+        }
+        let mut state = self.state.lock().await;
+        state.add_hollywood_obligation(message);
+    }
+
+    pub(crate) async fn submit_hollywood_followup(
+        self: &Arc<Self>,
+        message: codex_protocol::protocol::HollywoodInputMessage,
+    ) -> CodexResult<()> {
+        handlers::hollywood_input(self, format!("hollywood-{}", message.message_id), message).await;
+        Ok(())
+    }
+
+    pub(crate) async fn mark_hollywood_send_for_turn(&self, turn_id: &str, room: &str) {
+        let mut state = self.state.lock().await;
+        state.mark_hollywood_send_for_turn(turn_id, room);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn resolve_hollywood_obligations_for_turn(
+        &self,
+        turn_id: &str,
+    ) -> Vec<crate::state::HollywoodObligation> {
+        let mut state = self.state.lock().await;
+        state.resolve_hollywood_obligations_for_turn(turn_id)
+    }
+
+    pub(crate) async fn hollywood_obligation_count(&self) -> usize {
+        let state = self.state.lock().await;
+        state.hollywood_obligation_count()
+    }
+
+    pub(crate) async fn request_client_restart(
+        &self,
+        turn_context: &TurnContext,
+        reason: Option<String>,
+    ) {
+        self.send_event_raw(Event {
+            id: turn_context.sub_id.clone(),
+            msg: EventMsg::ClientRestartRequested(
+                codex_protocol::protocol::ClientRestartRequestedEvent { reason },
+            ),
+        })
+        .await;
     }
 
     pub(crate) fn live_thread_for_persistence(

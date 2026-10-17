@@ -1,11 +1,21 @@
+use super::hollywood_polling::hollywood_polling_enabled;
+use super::hollywood_polling::poll_hollywood_for_thread;
 use super::*;
 use crate::extensions::send_thread_warning;
+use crate::hollywood::HOLLYWOOD_POLL_INTERVAL;
+use crate::hollywood::HOLLYWOOD_REGISTRY_SYNC_INTERVAL;
+use crate::hollywood::publish_registry_snapshot;
+use crate::hollywood::thread_status_name;
 use codex_app_server_protocol::ThreadQueueChangedNotification;
 use codex_core::ThreadEvictionOutcome;
 use codex_extension_api::ThreadIdleCause;
 use codex_protocol::config_types::MultiAgentMode;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::SessionSource;
+use reqwest::Client;
+use tokio::time::MissedTickBehavior;
+
+pub(super) const THREAD_UNLOADING_DELAY: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Clone)]
 pub(super) struct ListenerTaskContext {
@@ -16,6 +26,7 @@ pub(super) struct ListenerTaskContext {
     pub(super) thread_watch_manager: ThreadWatchManager,
     pub(super) codex_home: PathBuf,
     pub(super) thread_unload_delay: Duration,
+    pub(super) state_db: Option<StateDbHandle>,
     pub(super) skills_watcher: Arc<SkillsWatcher>,
     pub(super) turn_cost_worker: Option<crate::turn_cost_worker::TurnCostWorkerHandle>,
 }
@@ -292,9 +303,16 @@ pub(super) async fn ensure_listener_task_running(
         thread_watch_manager,
         codex_home,
         turn_cost_worker,
+        state_db: _,
         ..
     } = listener_task_context;
     let outgoing_for_task = Arc::clone(&outgoing);
+    let registry_client = Client::new();
+    let mut registry_sync_interval = tokio::time::interval(HOLLYWOOD_REGISTRY_SYNC_INTERVAL);
+    registry_sync_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let hollywood_poll_enabled = hollywood_polling_enabled();
+    let mut hollywood_poll_interval = tokio::time::interval(HOLLYWOOD_POLL_INTERVAL);
+    hollywood_poll_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -348,10 +366,8 @@ pub(super) async fn ensure_listener_task_running(
                             .then(|| thread_state.turn_summary.clone());
                         (thread_state.experimental_raw_events, terminal)
                     };
-                    if matches!(
-                        &event.msg,
-                        EventMsg::RawResponseItem(_) | EventMsg::RawResponseCompleted(_)
-                    ) && !raw_events_enabled
+                    if matches!(&event.msg, EventMsg::RawResponseCompleted(_))
+                        && !raw_events_enabled
                     {
                         continue;
                     }
@@ -376,6 +392,29 @@ pub(super) async fn ensure_listener_task_running(
                             &outgoing_for_task, conversation_id,
                         ).await;
                     }
+                    if let EventMsg::RawResponseItem(raw_response_item_event) = &event.msg
+                        && !raw_events_enabled
+                    {
+                        maybe_interrupt_superseded_coordination_owner(
+                            &raw_response_item_event.item,
+                            conversation_id,
+                            thread_manager.as_ref(),
+                        )
+                        .await;
+                        maybe_emit_hook_prompt_item_completed(
+                            conversation_id,
+                            &event.id,
+                            &raw_response_item_event.item,
+                            &thread_outgoing,
+                        )
+                        .await;
+                        continue;
+                    }
+
+                    let sync_registry_after_event = matches!(
+                        &event.msg,
+                        EventMsg::TurnStarted(_) | EventMsg::TurnComplete(_)
+                    );
                     apply_bespoke_event_handling(
                         event.clone(),
                         conversation_id,
@@ -394,6 +433,36 @@ pub(super) async fn ensure_listener_task_running(
                     {
                         let _ = completion_tx.send(());
                     }
+                    if sync_registry_after_event {
+                        sync_hollywood_registry_for_thread(
+                            &registry_client,
+                            conversation_id,
+                            &conversation,
+                            &thread_state,
+                            &thread_watch_manager,
+                        )
+                        .await;
+                    }
+                }
+                _ = registry_sync_interval.tick() => {
+                    sync_hollywood_registry_for_thread(
+                        &registry_client,
+                        conversation_id,
+                        &conversation,
+                        &thread_state,
+                        &thread_watch_manager,
+                    )
+                    .await;
+                }
+                _ = hollywood_poll_interval.tick(), if hollywood_poll_enabled => {
+                    poll_hollywood_for_thread(
+                        &registry_client,
+                        conversation_id,
+                        &conversation,
+                        &thread_state,
+                        &thread_watch_manager,
+                    )
+                    .await;
                 }
                 unloading_watchers_open = unloading_state.wait_for_unloading_trigger() => {
                     if !unloading_watchers_open {
@@ -546,6 +615,58 @@ pub(super) async fn ensure_listener_task_running(
         }
     });
     Ok(())
+}
+
+async fn sync_hollywood_registry_for_thread(
+    client: &Client,
+    conversation_id: ThreadId,
+    conversation: &Arc<CodexThread>,
+    thread_state: &Arc<Mutex<ThreadState>>,
+    thread_watch_manager: &ThreadWatchManager,
+) {
+    let status = thread_watch_manager
+        .loaded_status_for_thread(&conversation_id.to_string())
+        .await;
+    let status_name = thread_status_name(&status);
+    let now = Instant::now();
+    let registry_snapshot = {
+        let thread_state = thread_state.lock().await;
+        if !thread_state
+            .hollywood
+            .should_sync_registry(now, &status_name)
+        {
+            None
+        } else {
+            thread_state
+                .hollywood
+                .config()
+                .map(|config| (config, thread_state.hollywood.clone()))
+        }
+    };
+    let Some((config, runtime_state)) = registry_snapshot else {
+        return;
+    };
+
+    if let Err(err) = publish_registry_snapshot(
+        client,
+        conversation_id,
+        conversation,
+        &config,
+        &runtime_state,
+        &status,
+    )
+    .await
+    {
+        warn!("failed to refresh Hollywood registry for thread {conversation_id}: {err}");
+        return;
+    }
+
+    let mut thread_state = thread_state.lock().await;
+    if thread_state.hollywood.config().as_ref() == Some(&config) {
+        thread_state
+            .hollywood
+            .note_registry_synced(Instant::now(), status_name);
+    }
 }
 
 pub(super) async fn wait_for_thread_shutdown(thread: &Arc<CodexThread>) -> ThreadShutdownResult {

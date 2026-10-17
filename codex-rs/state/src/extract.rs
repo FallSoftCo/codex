@@ -32,6 +32,7 @@ pub fn apply_rollout_item(
 ) {
     match item {
         RolloutItem::SessionMeta(meta_line) => apply_session_meta_from_item(metadata, meta_line),
+        RolloutItem::SessionState(_) => {}
         RolloutItem::TurnContext(turn_ctx) => apply_turn_context(metadata, turn_ctx),
         RolloutItem::EventMsg(event) => apply_event_msg(metadata, event),
         RolloutItem::ResponseItem(item) => apply_response_item(metadata, &item.item),
@@ -66,7 +67,8 @@ pub fn rollout_item_affects_thread_metadata(item: &RolloutItem) -> bool {
         {
             true
         }
-        RolloutItem::EventMsg(_)
+        RolloutItem::SessionState(_)
+        | RolloutItem::EventMsg(_)
         | RolloutItem::ResponseItem(_)
         | RolloutItem::InterAgentCommunication(_)
         | RolloutItem::InterAgentCommunicationMetadata { .. }
@@ -117,6 +119,7 @@ fn apply_session_meta_from_item(metadata: &mut ThreadMetadata, meta_line: &Sessi
         metadata.git_branch = git.branch.clone();
         metadata.git_origin_url = git.repository_url.clone();
     }
+    metadata.hollywood = meta_line.meta.hollywood.clone();
 }
 
 fn apply_turn_context(metadata: &mut ThreadMetadata, turn_ctx: &TurnContextItem) {
@@ -552,6 +555,7 @@ mod tests {
                     selected_capability_roots: Vec::new(),
                     memory_mode: None,
                     history_mode: Default::default(),
+                    hollywood: None,
                     history_base: None,
                     subagent_history_start_ordinal: None,
                     multi_agent_version: None,
@@ -564,6 +568,7 @@ mod tests {
         apply_rollout_item(
             &mut metadata,
             &RolloutItem::TurnContext(TurnContextItem {
+                multi_agent_mode: None,
                 turn_id: Some("turn-1".to_string()),
                 root_turn_id: None,
                 disabled_plugin_ids: None,
@@ -608,6 +613,7 @@ mod tests {
         apply_rollout_item(
             &mut metadata,
             &RolloutItem::TurnContext(TurnContextItem {
+                multi_agent_mode: None,
                 turn_id: Some("turn-1".to_string()),
                 root_turn_id: None,
                 disabled_plugin_ids: None,
@@ -652,6 +658,7 @@ mod tests {
         apply_rollout_item(
             &mut metadata,
             &RolloutItem::TurnContext(TurnContextItem {
+                multi_agent_mode: None,
                 turn_id: Some("turn-1".to_string()),
                 root_turn_id: None,
                 disabled_plugin_ids: None,
@@ -685,6 +692,7 @@ mod tests {
         apply_rollout_item(
             &mut metadata,
             &RolloutItem::TurnContext(TurnContextItem {
+                multi_agent_mode: None,
                 turn_id: Some("turn-1".to_string()),
                 root_turn_id: None,
                 disabled_plugin_ids: None,
@@ -800,6 +808,7 @@ mod tests {
                     selected_capability_roots: Vec::new(),
                     memory_mode: None,
                     history_mode: ThreadHistoryMode::Legacy,
+                    hollywood: None,
                     history_base: None,
                     subagent_history_start_ordinal: None,
                     multi_agent_version: None,
@@ -854,6 +863,7 @@ mod tests {
             git_sha: None,
             git_branch: None,
             git_origin_url: None,
+            hollywood: None,
         }
     }
 

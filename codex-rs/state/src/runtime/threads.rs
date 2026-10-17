@@ -54,7 +54,12 @@ SELECT
     threads.daybreak_enabled,
     threads.git_sha,
     threads.git_branch,
-    threads.git_origin_url
+    threads.git_origin_url,
+    threads.hollywood_url,
+    threads.hollywood_room,
+    threads.hollywood_attention_mode,
+    threads.hollywood_include_at_all,
+    threads.hollywood_include_at_room
 FROM threads
 WHERE threads.id = ?
             "#,
@@ -433,10 +438,51 @@ ON CONFLICT(child_thread_id) DO NOTHING
         archived_only: bool,
         cwd: Option<&Path>,
     ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
+        self.find_thread_by_exact_title_inner(
+            title,
+            allowed_sources,
+            model_providers,
+            archived_only,
+            cwd,
+            /*require_first_user_message*/ true,
+        )
+        .await
+    }
+
+    /// Find the newest thread whose user-facing title exactly matches `title`, including freshly
+    /// named threads that have not yet recorded a first user message.
+    pub async fn find_thread_by_exact_title_including_empty_history(
+        &self,
+        title: &str,
+        allowed_sources: &[String],
+        model_providers: Option<&[String]>,
+        archived_only: bool,
+        cwd: Option<&Path>,
+    ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
+        self.find_thread_by_exact_title_inner(
+            title,
+            allowed_sources,
+            model_providers,
+            archived_only,
+            cwd,
+            /*require_first_user_message*/ false,
+        )
+        .await
+    }
+
+    async fn find_thread_by_exact_title_inner(
+        &self,
+        title: &str,
+        allowed_sources: &[String],
+        model_providers: Option<&[String]>,
+        archived_only: bool,
+        cwd: Option<&Path>,
+        require_first_user_message: bool,
+    ) -> anyhow::Result<Option<crate::ThreadMetadata>> {
         let mut builder = QueryBuilder::<Sqlite>::new("");
         push_thread_select_columns(&mut builder);
         builder.push(" FROM threads");
-        push_thread_filters(
+        push_thread_filters_with_preview(
             &mut builder,
             ThreadFilterOptions {
                 archived_only,
@@ -451,6 +497,7 @@ ON CONFLICT(child_thread_id) DO NOTHING
                 search_term: None,
             },
             /*include_thread_id_tiebreaker*/ false,
+            /*include_empty_preview*/ !require_first_user_message,
         );
         builder.push(" AND threads.title = ");
         builder.push_bind(title);
@@ -463,7 +510,7 @@ ON CONFLICT(child_thread_id) DO NOTHING
             crate::SortKey::UpdatedAt,
             SortDirection::Desc,
             OrderByIndex::Enabled,
-            /*include_thread_id_tiebreaker*/ false,
+            /*include_thread_id_tiebreaker*/ true,
             /*limit*/ 1,
         );
 
@@ -659,10 +706,15 @@ INSERT INTO threads (
     git_sha,
     git_branch,
     git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room,
     memory_mode,
     project_id,
     daybreak_enabled
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO NOTHING
             "#,
         )
@@ -713,6 +765,36 @@ ON CONFLICT(id) DO NOTHING
         .bind(metadata.git_sha.as_deref())
         .bind(metadata.git_branch.as_deref())
         .bind(metadata.git_origin_url.as_deref())
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.url.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.room.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.attention_mode.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_all),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_room),
+        )
         .bind("enabled")
         .bind(metadata.project_id.as_deref())
         .bind(metadata.daybreak_enabled)
@@ -907,6 +989,34 @@ WHERE id = ?
         Ok(result.rows_affected() > 0)
     }
 
+    pub async fn update_thread_hollywood(
+        &self,
+        thread_id: ThreadId,
+        hollywood: Option<&codex_protocol::protocol::HollywoodSessionMeta>,
+    ) -> anyhow::Result<bool> {
+        let result = sqlx::query(
+            r#"
+UPDATE threads
+SET
+    hollywood_url = ?,
+    hollywood_room = ?,
+    hollywood_attention_mode = ?,
+    hollywood_include_at_all = ?,
+    hollywood_include_at_room = ?
+WHERE id = ?
+            "#,
+        )
+        .bind(hollywood.map(|value| value.url.as_str()))
+        .bind(hollywood.map(|value| value.room.as_str()))
+        .bind(hollywood.map(|value| value.attention_mode.as_str()))
+        .bind(hollywood.map(|value| value.include_at_all))
+        .bind(hollywood.map(|value| value.include_at_room))
+        .bind(thread_id.to_string())
+        .execute(self.pool.as_ref())
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     async fn upsert_thread_with_creation_memory_mode(
         &self,
         metadata: &crate::ThreadMetadata,
@@ -959,10 +1069,15 @@ INSERT INTO threads (
     git_sha,
     git_branch,
     git_origin_url,
+    hollywood_url,
+    hollywood_room,
+    hollywood_attention_mode,
+    hollywood_include_at_all,
+    hollywood_include_at_room,
     memory_mode,
     project_id,
     daybreak_enabled
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     rollout_path = excluded.rollout_path,
     created_at = excluded.created_at,
@@ -999,7 +1114,12 @@ ON CONFLICT(id) DO UPDATE SET
     archived_at = excluded.archived_at,
     git_sha = COALESCE(threads.git_sha, excluded.git_sha),
     git_branch = COALESCE(threads.git_branch, excluded.git_branch),
-    git_origin_url = COALESCE(threads.git_origin_url, excluded.git_origin_url)
+    git_origin_url = COALESCE(threads.git_origin_url, excluded.git_origin_url),
+    hollywood_url = COALESCE(threads.hollywood_url, excluded.hollywood_url),
+    hollywood_room = COALESCE(threads.hollywood_room, excluded.hollywood_room),
+    hollywood_attention_mode = COALESCE(threads.hollywood_attention_mode, excluded.hollywood_attention_mode),
+    hollywood_include_at_all = COALESCE(threads.hollywood_include_at_all, excluded.hollywood_include_at_all),
+    hollywood_include_at_room = COALESCE(threads.hollywood_include_at_room, excluded.hollywood_include_at_room)
             "#,
         )
         .bind(metadata.id.to_string())
@@ -1049,6 +1169,36 @@ ON CONFLICT(id) DO UPDATE SET
         .bind(metadata.git_sha.as_deref())
         .bind(metadata.git_branch.as_deref())
         .bind(metadata.git_origin_url.as_deref())
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.url.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.room.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.attention_mode.as_str()),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_all),
+        )
+        .bind(
+            metadata
+                .hollywood
+                .as_ref()
+                .map(|hollywood| hollywood.include_at_room),
+        )
         .bind(creation_memory_mode.unwrap_or("enabled"))
         .bind(metadata.project_id.as_deref())
         .bind(metadata.daybreak_enabled)
@@ -1080,6 +1230,7 @@ ON CONFLICT(id) DO UPDATE SET
         }
         if let Some(existing_metadata) = existing_metadata.as_ref() {
             metadata.prefer_existing_git_info(existing_metadata);
+            metadata.prefer_existing_hollywood_info(existing_metadata);
         }
         let updated_at = match updated_at_override {
             Some(updated_at) => Some(updated_at),
@@ -1362,7 +1513,12 @@ SELECT
     threads.daybreak_enabled,
     threads.git_sha,
     threads.git_branch,
-    threads.git_origin_url
+    threads.git_origin_url,
+    threads.hollywood_url,
+    threads.hollywood_room,
+    threads.hollywood_attention_mode,
+    threads.hollywood_include_at_all,
+    threads.hollywood_include_at_room
 "#,
     );
 }
@@ -1370,7 +1526,8 @@ SELECT
 pub(super) fn extract_memory_mode(items: &[RolloutItem]) -> Option<String> {
     items.iter().rev().find_map(|item| match item {
         RolloutItem::SessionMeta(meta_line) => meta_line.meta.memory_mode.clone(),
-        RolloutItem::ResponseItem(_)
+        RolloutItem::SessionState(_)
+        | RolloutItem::ResponseItem(_)
         | RolloutItem::InterAgentCommunication(_)
         | RolloutItem::InterAgentCommunicationMetadata { .. }
         | RolloutItem::Compacted(_)
@@ -2829,6 +2986,7 @@ mod tests {
                 selected_capability_roots: Vec::new(),
                 memory_mode: Some("polluted".to_string()),
                 history_mode: Default::default(),
+                hollywood: None,
                 history_base: None,
                 subagent_history_start_ordinal: None,
                 multi_agent_version: None,
@@ -2903,6 +3061,7 @@ mod tests {
                 selected_capability_roots: Vec::new(),
                 memory_mode: None,
                 history_mode: Default::default(),
+                hollywood: None,
                 history_base: None,
                 subagent_history_start_ordinal: None,
                 multi_agent_version: None,
@@ -2936,6 +3095,101 @@ mod tests {
         assert_eq!(
             persisted.git_origin_url.as_deref(),
             Some("git@example.com:openai/codex.git")
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_rollout_items_preserves_existing_hollywood_metadata_when_rollout_omits_it() {
+        let codex_home = unique_temp_dir();
+        let runtime = StateRuntime::init(
+            crate::SqliteConfig::new_for_testing(codex_home.as_path().abs()),
+            "test-provider".to_string(),
+        )
+        .await
+        .expect("state db should initialize");
+        let thread_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000458").expect("valid thread id");
+        let mut metadata = test_thread_metadata(&codex_home, thread_id, codex_home.clone());
+        metadata.hollywood = Some(codex_protocol::protocol::HollywoodSessionMeta {
+            url: "http://127.0.0.1:8765".to_string(),
+            room: "repo/losangelex".to_string(),
+            observed_rooms: vec!["main".to_string()],
+            wake_rooms: vec!["repo/losangelex".to_string()],
+            attention_mode: "focused".to_string(),
+            include_at_all: true,
+            include_at_room: true,
+        });
+
+        runtime
+            .upsert_thread(&metadata)
+            .await
+            .expect("initial upsert should succeed");
+
+        let created_at = metadata.created_at.to_rfc3339();
+        let builder = ThreadMetadataBuilder::new(
+            thread_id,
+            metadata.rollout_path.clone(),
+            metadata.created_at,
+            SessionSource::Cli,
+        );
+        let items = vec![RolloutItem::SessionMeta(SessionMetaLine {
+            meta: SessionMeta {
+                session_id: thread_id.into(),
+                id: thread_id,
+                forked_from_id: None,
+                parent_thread_id: None,
+                timestamp: created_at,
+                cwd: PathBuf::new(),
+                originator: String::new(),
+                cli_version: String::new(),
+                source: SessionSource::Cli,
+                thread_source: None,
+                creator_user_id: None,
+                creator_account_id: None,
+                forked_from_ordinal_exclusive: None,
+                runtime_workspace_roots: None,
+                agent_path: None,
+                agent_nickname: None,
+                agent_role: None,
+                model_provider: None,
+                base_instructions: None,
+                dynamic_tools: None,
+                selected_capability_roots: Vec::new(),
+                memory_mode: None,
+                history_mode: Default::default(),
+                hollywood: None,
+                history_base: None,
+                subagent_history_start_ordinal: None,
+                multi_agent_version: None,
+                context_window: None,
+            },
+            git: None,
+        })];
+
+        runtime
+            .apply_rollout_items(
+                &builder, &items, /*new_thread_memory_mode*/ None,
+                /*updated_at_override*/ None,
+            )
+            .await
+            .expect("apply_rollout_items should succeed");
+
+        let persisted = runtime
+            .get_thread(thread_id)
+            .await
+            .expect("thread should load")
+            .expect("thread should exist");
+        assert_eq!(
+            persisted.hollywood,
+            Some(codex_protocol::protocol::HollywoodSessionMeta {
+                url: "http://127.0.0.1:8765".to_string(),
+                room: "repo/losangelex".to_string(),
+                observed_rooms: Vec::new(),
+                wake_rooms: Vec::new(),
+                attention_mode: "focused".to_string(),
+                include_at_all: true,
+                include_at_room: true,
+            })
         );
     }
 
@@ -3295,6 +3549,60 @@ mod tests {
             Some("first-user-message")
         );
         assert_eq!(persisted.preview.as_deref(), Some("first-user-message"));
+    }
+
+    #[tokio::test]
+    async fn find_thread_by_exact_title_including_empty_history_prefers_newest_named_thread() {
+        let codex_home = unique_temp_dir();
+        let runtime = StateRuntime::init(
+            crate::SqliteConfig::new_for_testing(codex_home.as_path().abs()),
+            "test-provider".to_string(),
+        )
+        .await
+        .expect("state db should initialize");
+        let older_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000811").expect("valid thread id");
+        let fresh_id =
+            ThreadId::from_string("00000000-0000-0000-0000-000000000812").expect("valid thread id");
+
+        let mut older = test_thread_metadata(&codex_home, older_id, codex_home.clone());
+        older.title = "james".to_string();
+        older.first_user_message = Some("older thread".to_string());
+        older.updated_at = DateTime::<Utc>::from_timestamp(1_700_001_200, 0).expect("timestamp");
+        runtime
+            .upsert_thread(&older)
+            .await
+            .expect("older upsert should succeed");
+
+        let mut fresh = test_thread_metadata(&codex_home, fresh_id, codex_home.clone());
+        fresh.title = "james".to_string();
+        fresh.first_user_message = None;
+        fresh.preview = None;
+        fresh.updated_at = DateTime::<Utc>::from_timestamp(1_700_001_260, 0).expect("timestamp");
+        runtime
+            .upsert_thread(&fresh)
+            .await
+            .expect("fresh upsert should succeed");
+
+        let older_lookup = runtime
+            .find_thread_by_exact_title("james", &[], None, false, Some(codex_home.as_path()))
+            .await
+            .expect("legacy exact-title lookup should succeed")
+            .expect("legacy lookup should find the older thread");
+        assert_eq!(older_lookup.id, older_id);
+
+        let fresh_lookup = runtime
+            .find_thread_by_exact_title_including_empty_history(
+                "james",
+                &[],
+                None,
+                false,
+                Some(codex_home.as_path()),
+            )
+            .await
+            .expect("inclusive exact-title lookup should succeed")
+            .expect("inclusive lookup should find the newest named thread");
+        assert_eq!(fresh_lookup.id, fresh_id);
     }
 
     #[tokio::test]

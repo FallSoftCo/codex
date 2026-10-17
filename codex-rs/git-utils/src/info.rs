@@ -1,3 +1,8 @@
+use codex_file_system::ExecutorFileSystem;
+use codex_file_system::FindUpErrorPolicy;
+use codex_file_system::find_nearest_native_ancestor_with_markers;
+use codex_utils_absolute_path::AbsolutePathBuf;
+use codex_utils_path_uri::PathUri;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -35,6 +40,51 @@ pub fn get_git_repo_root(base_dir: &Path) -> Option<PathBuf> {
         base_dir.parent()?
     };
     find_ancestor_git_entry(base).map(|(repo_root, _)| repo_root)
+}
+
+fn is_valid_git_entry(dot_git: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(dot_git) else {
+        return false;
+    };
+
+    if metadata.is_dir() {
+        return std::fs::metadata(dot_git.join("HEAD")).is_ok_and(|head| head.is_file());
+    }
+
+    if metadata.is_file() {
+        return std::fs::read_to_string(dot_git)
+            .ok()
+            .is_some_and(|contents| contents.trim_start().starts_with("gitdir:"));
+    }
+
+    false
+}
+
+/// Return the repository root for `cwd` using the provided filesystem.
+///
+/// This mirrors [`get_git_repo_root`] for local paths, but works when `cwd`
+/// only exists inside a selected remote environment.
+pub async fn get_git_repo_root_with_fs(
+    fs: &dyn ExecutorFileSystem,
+    cwd: &AbsolutePathBuf,
+) -> Option<AbsolutePathBuf> {
+    let cwd_uri = PathUri::from_abs_path(cwd);
+    let base = match fs
+        .get_metadata(&cwd_uri, Default::default(), /*sandbox*/ None)
+        .await
+    {
+        Ok(metadata) if metadata.is_directory => cwd.clone(),
+        _ => cwd.parent()?,
+    };
+    find_nearest_native_ancestor_with_markers(
+        fs,
+        &base,
+        vec![".git".to_string()],
+        FindUpErrorPolicy::Ignore,
+        /*sandbox*/ None,
+    )
+    .await
+    .ok()?
 }
 
 /// Timeout for git commands to prevent freezing on large repositories
@@ -777,13 +827,12 @@ async fn diff_against_sha(git: &Path, cwd: &Path, sha: &GitSha) -> Option<String
 #[cfg(test)]
 #[path = "diff_tests.rs"]
 mod diff_tests;
-
 fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {
     let mut dir = base_dir.to_path_buf();
 
     loop {
         let dot_git = dir.join(".git");
-        if dot_git.exists() && (!dot_git.is_dir() || dot_git.join("HEAD").exists()) {
+        if is_valid_git_entry(&dot_git) {
             return Some((dir, dot_git));
         }
 

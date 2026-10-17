@@ -218,7 +218,7 @@ fn source_model_items(items: &[RolloutItem]) -> Option<Vec<SourceModelItem<'_>>>
     let mut append_start_index = None;
     for (index, item) in items.iter().enumerate() {
         match item {
-            RolloutItem::SessionMeta(_)
+            RolloutItem::SessionState(_) | RolloutItem::SessionMeta(_)
             | RolloutItem::InterAgentCommunicationMetadata { .. }
             | RolloutItem::TokenUsageRecord(_)
             | RolloutItem::RealtimeItem(_) => {}
@@ -258,7 +258,7 @@ fn history_model_items(items: &[RolloutItem]) -> Option<Vec<&ResponseItem>> {
     let mut model_items = Vec::new();
     for item in items {
         match item {
-            RolloutItem::SessionMeta(_)
+            RolloutItem::SessionState(_) | RolloutItem::SessionMeta(_)
             | RolloutItem::InterAgentCommunicationMetadata { .. }
             | RolloutItem::TokenUsageRecord(_)
             | RolloutItem::RealtimeItem(_)

@@ -31,6 +31,7 @@ use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_core::config::set_project_trust_level;
+use codex_features::Feature;
 use codex_http_client::HttpClientBuilder;
 use codex_protocol::config_types::TrustLevel;
 use codex_rmcp_client::McpOAuthCallbackMode;
@@ -71,6 +72,8 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(10);
+const SLOW_INVENTORY_DELAY: Duration = Duration::from_secs(/*secs*/ 10);
+const FAST_STATUS_RESPONSE_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 5);
 
 /// Selected status reads return the thread's tools without repeating MCP discovery.
 #[tokio::test]
@@ -707,6 +710,7 @@ async fn mcp_server_status_list_returns_raw_server_and_tool_names(plugin: bool) 
         format!("[mcp_servers.some-server]\nurl = {endpoint:?}\n")
     };
     mock_responses_config(&server.uri())
+        .disable_feature(Feature::Plugins)
         .with_extra_config(&format!(
             "{http_config}[mcp_servers.broken-server]\ncommand = {}",
             toml::Value::String(
@@ -1309,7 +1313,7 @@ impl ServerHandler for SlowInventoryServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<rmcp::service::RoleServer>,
     ) -> Result<ListResourcesResult, rmcp::ErrorData> {
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(SLOW_INVENTORY_DELAY).await;
         Ok(ListResourcesResult::with_all_items(Vec::new()))
     }
 
@@ -1318,7 +1322,7 @@ impl ServerHandler for SlowInventoryServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<rmcp::service::RoleServer>,
     ) -> Result<ListResourceTemplatesResult, rmcp::ErrorData> {
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(SLOW_INVENTORY_DELAY).await;
         Ok(ListResourceTemplatesResult::with_all_items(Vec::new()))
     }
 }
@@ -1329,6 +1333,7 @@ async fn mcp_server_status_list_tools_and_auth_only_skips_slow_inventory_calls()
     let (mcp_server_url, mcp_server_handle) = start_slow_inventory_mcp_server("lookup").await?;
     let codex_home = TempDir::new()?;
     mock_responses_config(&server.uri())
+        .disable_feature(Feature::Plugins)
         .with_extra_config(&format!(
             "[mcp_servers.some-server]\nurl = \"{mcp_server_url}/mcp\""
         ))
@@ -1350,7 +1355,7 @@ async fn mcp_server_status_list_tools_and_auth_only_skips_slow_inventory_calls()
         })
         .await?;
     let response: ListMcpServerStatusResponse =
-        timeout(Duration::from_millis(500), mcp.read_response(request_id)).await??;
+        timeout(FAST_STATUS_RESPONSE_TIMEOUT, mcp.read_response(request_id)).await??;
 
     assert_eq!(response.next_cursor, None);
     assert_eq!(response.data.len(), 1);
@@ -1378,6 +1383,7 @@ async fn mcp_server_status_list_keeps_tools_for_sanitized_name_collisions() -> R
         start_mcp_server("underscore_lookup", /*tools_error*/ None).await?;
     let codex_home = TempDir::new()?;
     mock_responses_config(&server.uri())
+        .disable_feature(Feature::Plugins)
         .with_extra_config(&format!(
             r#"[mcp_servers.some-server]
 url = "{dash_server_url}/mcp"

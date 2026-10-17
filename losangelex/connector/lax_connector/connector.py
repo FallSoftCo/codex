@@ -18,6 +18,7 @@ from aiohttp import ClientSession, ContentTypeError
 
 from .activity import Activity
 from .agent_context import AgentContext
+from .continuation_context import LocatorLedger, prepare_context, index_accepted_delegation
 from .participation import INSTRUCTIONS as PARTICIPATION, history_path, initialization, message
 from .administration import administer
 from .attention import APPROVAL, QUESTION, Attention, AttentionExpired
@@ -67,6 +68,7 @@ def spec(name, description, properties, required):
 
 
 CAPABILITIES = ['persistent-agent-context/v1', 'native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
+CAPABILITIES += ['completed-work-report-reconciliation/v1', 'completed-report-scope/v1']
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -218,6 +220,10 @@ class Connector:
         self.publications = []
         self.role_context = None
         self.work_briefing = None
+        self.causal_task_context = None
+        self.work_briefings = {}
+        self.report_scope_reads = {}
+        self.report_scope_briefings = {}
         self.goal_binding = None
         self.agent_binding = None
         self.agent_context = AgentContext(self)
@@ -255,6 +261,10 @@ class Connector:
             raise
         self.effects.after(marker, result=result)
         return result
+
+    def native_child_admission_available(self):
+        from .collaboration_bridge import IMPLEMENTED_PORTS
+        return "native-child-admission" in IMPLEMENTED_PORTS
 
     async def _http(self, method, path, payload=None):
         headers = {"Authorization": "Bearer " + self.config["token"]}
@@ -296,33 +306,27 @@ class Connector:
                 raise HttpFailure(response.status, data.get("error", "request failed"))
             return data
 
-    async def briefing(self):
-        value = await self.http(
-            "GET", "connector/deliveries/" + self.active["delivery"]["id"] + "/briefing"
-        )
+    async def briefing(self, delivery_id=None):
+        # An explicit original-delivery read preserves current execution identity.
+        if not self.active:
+            raise PermissionError("Briefing requires current participation")
+        target = str(UUID(delivery_id)) if delivery_id else self.active["delivery"]["id"]
+        captured = self.active if target == self.active["delivery"]["id"] else await self.http("GET", "deliveries/" + target)
+        delivery, request = captured["delivery"], captured["request"]
+        if delivery["agent"] != self.config["agentId"] or request["authority"] != self.active["request"]["authority"]:
+            raise PermissionError("Original briefing belongs to a different participant")
+        value = await self.http("GET", "connector/deliveries/" + target + "/briefing")
         expected = {
-            "schema": "lax-work-briefing/v1",
-            "authorityId": self.active["request"]["authority"],
-            "agentId": self.config["agentId"],
-            "roomId": self.active["request"]["room"],
-            "deliveryId": self.active["delivery"]["id"],
-            "generation": self.active["delivery"]["generation"],
-            "claimId": self.active["delivery"]["claim_id"],
+            "schema": "lax-work-briefing/v1", "authorityId": request["authority"],
+            "agentId": self.config["agentId"], "roomId": request["room"],
+            "deliveryId": target, "generation": delivery["generation"], "claimId": delivery["claim_id"],
         }
         if any(value.get(k) != v for k, v in expected.items()):
-            raise ValueError("Briefing does not match captured execution")
-        self.work_briefing = value
-        saved(
-            self.state
-            / (
-                "briefing-"
-                + value["deliveryId"]
-                + "-"
-                + str(value["asOfSequence"])
-                + ".json"
-            ),
-            value,
-        )
+            raise ValueError("Briefing does not match exact original execution scope")
+        self.work_briefings[target] = value
+        if target == self.active["delivery"]["id"]:
+            self.work_briefing = value
+        saved(self.state / ("briefing-" + target + "-" + str(value["asOfSequence"]) + ".json"), value)
         return value
 
     async def event(self, method, params):
@@ -506,6 +510,12 @@ class Connector:
             elif name in ("hollywood_publish", "hollywood_request"):
                 room, payload = message(self, name, arguments, operation)
                 value = await self.http("POST", f"rooms/{room}/messages", payload)
+                if name == "hollywood_request":
+                    value = await index_accepted_delegation(
+                        lambda path: self.http("GET", path),
+                        LocatorLedger(self.state / "causal-locators-v2"),
+                        self.active, value,
+                    )
                 if name == "hollywood_publish":
                     self.publications.append(value["event"]["id"])
             elif name in READ_TOOLS | MUTATION_TOOLS:
@@ -530,6 +540,12 @@ class Connector:
                 except Exception:
                     recovered = None  # Original uncertainty remains fenced.
                 if recovered is not None:
+                    if params["tool"] == "hollywood_request":
+                        recovered = await index_accepted_delegation(
+                            lambda path: self.http("GET", path),
+                            LocatorLedger(self.state / "causal-locators-v2"),
+                            self.active, recovered,
+                        )
                     if params["tool"] == "hollywood_publish":
                         event_id = recovered["event"]["id"]
                         if event_id not in self.publications:
@@ -1130,6 +1146,9 @@ class Connector:
                     raise RuntimeError(
                         "Captured role context no longer admits execution"
                     )
+                self.causal_task_context = await prepare_context(
+                    lambda path: self.http("GET", path), self.state, self.active,
+                )
             except (ValueError, PermissionError) as error:
                 receipt = await self.transition(
                     "failed",
@@ -1173,6 +1192,13 @@ class Connector:
                 self.tool,
                 self.attention.submitted,
                 on_spawn=self.executor.attach,
+                enterprise=True,
+                collaboration_channel=self.config.get("nativeCollaborationChannel") or (
+                    str(Path("/etc/harness") / request["authority"] / "collaboration" /
+                        self.config["hostId"] / "channel.json")
+                    if (Path("/etc/harness") / request["authority"] / "collaboration" /
+                        self.config["hostId"] / "channel.json").is_file() else None
+                ),
             )
             try:
                 await self.executor.prepare()
@@ -1194,8 +1220,9 @@ class Connector:
                         "features.goal_external_admission": True,
                         "features.goal_external_lifecycle": external_lifecycle,
                         "tools.update_plan.enabled": True,
-                        "features.multi_agent": False,
-                        "features.multi_agent_v2": False,
+                        # No local/hidden child fallback: native shared children require a real admitted port.
+                        "features.multi_agent": self.native_child_admission_available(),
+                        "features.multi_agent_v2": self.native_child_admission_available(),
                         "model_reasoning_effort": self.config["effort"],
                     },
                 }
@@ -1305,6 +1332,7 @@ class Connector:
                                 "sourceEventId": request["source"],
                                 "body": request["body"],
                                 "workBriefing": self.work_briefing,
+                                "causalTaskContext": self.causal_task_context,
                             }
                         ),
                         "retain": True,

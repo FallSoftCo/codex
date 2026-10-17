@@ -144,6 +144,23 @@ fn extract_summary_user_text(request: &Value, summary_text: &str) -> String {
         .expect("expected summary message")
 }
 
+fn normalize_dynamic_user_text(text: &str) -> String {
+    normalize_line_endings_str(text)
+        .lines()
+        .map(|line| {
+            if line.trim_start().starts_with("<identity>")
+                && line.trim_end().ends_with("</identity>")
+            {
+                let indent = line.len() - line.trim_start().len();
+                format!("{}<identity><ID></identity>", " ".repeat(indent))
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn json_message_input_texts(request: &Value, role: &str) -> Vec<String> {
     request
         .get("input")
@@ -160,7 +177,7 @@ fn json_message_input_texts(request: &Value, role: &str) -> Vec<String> {
                 .and_then(|content| content.first())
                 .and_then(|entry| entry.get("text"))
                 .and_then(Value::as_str)
-                .map(str::to_string)
+                .map(normalize_dynamic_user_text)
         })
         .collect()
 }

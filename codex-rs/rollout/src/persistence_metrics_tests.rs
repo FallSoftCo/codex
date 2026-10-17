@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use codex_history::RolloutItem;
 use codex_protocol::ThreadId;
 use codex_protocol::items::CommandExecutionItem;
 use codex_protocol::items::CommandExecutionStatus;
@@ -16,6 +17,7 @@ use codex_protocol::protocol::ExecCommandSource;
 use codex_protocol::protocol::ExitedReviewModeEvent;
 use codex_protocol::protocol::ItemCompletedEvent;
 use codex_protocol::protocol::ReviewTarget;
+use codex_protocol::protocol::SessionStateUpdate;
 use codex_protocol::protocol::ThreadHistoryMode;
 use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
@@ -419,5 +421,18 @@ fn review_mode_persistence_depends_on_history_mode() {
     assert_eq!(
         serde_json::to_value(persisted_paginated).expect("serialize persisted items"),
         serde_json::to_value(completed_items).expect("serialize expected items")
+    );
+}
+
+#[test]
+fn session_state_reports_dropped_type() {
+    let item = RolloutItem::SessionState(SessionStateUpdate::default());
+
+    let (_, measurement) = measure_and_filter_rollout_items(&[item], ThreadHistoryMode::Legacy);
+
+    assert_eq!(measurement.items[0].rollout_item_type, "session_state");
+    assert_eq!(
+        measurement.items[0].decision,
+        super::PersistenceDecision::Dropped
     );
 }

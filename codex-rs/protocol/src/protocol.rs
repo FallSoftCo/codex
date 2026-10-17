@@ -521,6 +521,50 @@ pub enum ConversationTextRole {
     Assistant,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct HollywoodSyntheticBrief {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wake_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_phase: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_epoch: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub facts: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggested_actions: Vec<String>,
+    #[serde(default)]
+    pub stay_silent_if_no_actionable_delta: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct HollywoodInputMessage {
+    pub message_id: i64,
+    pub room: String,
+    pub sender_id: String,
+    pub body: String,
+    #[serde(default)]
+    pub mentions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attention: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obligation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synthetic_brief: Option<HollywoodSyntheticBrief>,
+    #[serde(default)]
+    pub requires_response: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConversationSpeechParams {
     pub text: String,
@@ -708,6 +752,13 @@ pub enum Op {
         mode: TurnInputMode,
         reply: oneshot::Sender<CodexResult<TurnInputSubmission>>,
     },
+
+    /// External room traffic delivered into the collaboration context for the
+    /// current or next regular turn.
+    ///
+    /// This is contextual coordination input for reasoning, not direct user
+    /// task input.
+    HollywoodInput { message: HollywoodInputMessage },
 
     /// Resume an interrupted regular turn.
     #[debug("RecoverTurn {{ requested_settings: {thread_settings:?} }}")]
@@ -1053,6 +1104,7 @@ impl Op {
             Self::TurnInput { .. } => "turn_input",
             Self::RecoverTurn { .. } => "recover_turn",
             Self::SuspendTurnAndShutdown { .. } => "suspend_turn_and_shutdown",
+            Self::HollywoodInput { .. } => "hollywood_input",
             Self::ThreadSettings { .. } => "thread_settings",
             Self::TurnSettings { .. } => "turn_settings",
             Self::InterAgentCommunication { .. } => "inter_agent_communication",
@@ -1597,6 +1649,9 @@ pub enum EventMsg {
     RequestPermissions(RequestPermissionsEvent),
 
     RequestUserInput(RequestUserInputEvent),
+
+    /// Request that the interactive client restart and resume this thread.
+    ClientRestartRequested(ClientRestartRequestedEvent),
 
     DynamicToolCallRequest(DynamicToolCallRequest),
 
@@ -2220,6 +2275,13 @@ pub struct AuthRecoveryEvent {
     pub provider: String,
     /// User-facing description of the authentication recovery stage.
     pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct ClientRestartRequestedEvent {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "string | null", optional)]
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
@@ -3202,6 +3264,40 @@ impl fmt::Display for InternalSessionSource {
     }
 }
 
+/// Persisted agent-task details that let a resumed thread keep using the same backend task.
+///
+/// `agent_runtime_id` is validation metadata for the globally registered agent identity, not a
+/// separate session-scoped identity. Resume only restores this task after confirming that runtime
+/// id still matches the globally registered identity; otherwise the cached task is discarded and a
+/// fresh task can be registered.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, TS)]
+pub struct SessionAgentTask {
+    pub agent_runtime_id: String,
+    pub task_id: String,
+    pub registered_at: String,
+}
+
+/// Session-scoped state updates that can be appended after the canonical SessionMeta line.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, TS, Default)]
+pub struct SessionStateUpdate {
+    #[serde(default)]
+    pub agent_task: Option<SessionAgentTask>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HollywoodSessionMeta {
+    pub url: String,
+    pub room: String,
+    #[serde(default)]
+    pub observed_rooms: Vec<String>,
+    #[serde(default)]
+    pub wake_rooms: Vec<String>,
+    pub attention_mode: String,
+    pub include_at_all: bool,
+    pub include_at_room: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
@@ -3316,6 +3412,8 @@ pub struct SessionMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subagent_history_start_ordinal: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub hollywood: Option<HollywoodSessionMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub multi_agent_version: Option<MultiAgentVersion>,
     /// Initial context-window identity for consumers that tail rollout JSONL before compaction.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3351,6 +3449,7 @@ impl Default for SessionMeta {
             history_mode: ThreadHistoryMode::default(),
             history_base: None,
             subagent_history_start_ordinal: None,
+            hollywood: None,
             multi_agent_version: None,
             context_window: None,
         }
@@ -3447,6 +3546,10 @@ pub struct TurnContextItem {
     pub collaboration_mode: Option<CollaborationMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multi_agent_version: Option<MultiAgentVersion>,
+    /// Legacy effective mode retained when reading older LAX rollouts; current state uses WorldState.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub multi_agent_mode: Option<crate::config_types::MultiAgentMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub realtime_active: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -6322,6 +6425,7 @@ mod tests {
     #[test]
     fn turn_context_item_serializes_split_policy_and_summary() -> Result<()> {
         let item = TurnContextItem {
+            multi_agent_mode: None,
             turn_id: None,
             root_turn_id: None,
             disabled_plugin_ids: None,

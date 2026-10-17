@@ -7,7 +7,9 @@
 )]
 
 use crate::DbTelemetry;
+use crate::STATE_DB_FILENAME;
 use crate::migrations::repair_legacy_recency_migration_version;
+use crate::runtime::reconcile_legacy_state_migration_versions;
 use crate::runtime::recovery::RuntimeDbInitError;
 use crate::telemetry;
 use crate::telemetry::DbKind;
@@ -35,7 +37,6 @@ const LOGS_DB_FILENAME: &str = "logs_2.sqlite";
 const GOALS_DB_FILENAME: &str = "goals_1.sqlite";
 const MEMORIES_DB_FILENAME: &str = "memories_1.sqlite";
 const QUEUE_DB_FILENAME: &str = "queue_1.sqlite";
-const STATE_DB_FILENAME: &str = "state_5.sqlite";
 const THREAD_HISTORY_DB_FILENAME: &str = "thread_history_1.sqlite";
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -183,7 +184,9 @@ impl SqliteConfig {
 
     /// Return the path to the primary state database.
     pub fn state_db_path(&self) -> PathBuf {
-        STATE_DB.path(self.home())
+        // Initialization rejects ambiguous lineages; diagnostics retain the default on error.
+        crate::state_layout::state_database_path(self.home())
+            .unwrap_or_else(|_| STATE_DB.path(self.home()))
     }
 
     /// Return the path to the logs database.
@@ -230,7 +233,11 @@ impl SqliteConfig {
             .iter()
             .map(|spec| RuntimeDbPath {
                 label: spec.label,
-                path: spec.path(self.home()),
+                path: if matches!(spec.kind, DbKind::State) {
+                    self.state_db_path()
+                } else {
+                    spec.path(self.home())
+                },
                 background_reclamation: spec.background_reclamation,
             })
             .collect()
@@ -299,7 +306,11 @@ impl SqliteConfig {
         migrator: &Migrator,
         telemetry_override: Option<&dyn DbTelemetry>,
     ) -> anyhow::Result<SqlitePool> {
-        let path = spec.path(self.home());
+        let path = if matches!(spec.kind, DbKind::State) {
+            crate::state_layout::state_database_path(self.home())?
+        } else {
+            spec.path(self.home())
+        };
         let started = Instant::now();
         let pool_result = self
             .open_read_write_pool_with_spec(path.as_path(), Some(spec), telemetry_override)
@@ -314,12 +325,37 @@ impl SqliteConfig {
         let pool = pool_result.map_err(|source| {
             RuntimeDbInitError::new(spec.label, "open", path.as_path(), source)
         })?;
+        if matches!(spec.kind, DbKind::State) {
+            let started = Instant::now();
+            let reconcile_result = reconcile_legacy_state_migration_versions(&pool).await;
+            telemetry::record_init_result(
+                telemetry_override,
+                spec.kind,
+                "reconcile_state_migrations",
+                started.elapsed(),
+                &reconcile_result,
+            );
+            if let Err(source) = reconcile_result {
+                pool.close().await;
+                return Err(RuntimeDbInitError::new(
+                    spec.label,
+                    "reconcile",
+                    path.as_path(),
+                    source,
+                )
+                .into());
+            }
+        }
         let started = Instant::now();
         let migrate_result = async {
             if matches!(spec.kind, DbKind::State) {
                 repair_legacy_recency_migration_version(&pool, migrator).await?;
             }
-            migrator.run(&pool).await.map_err(anyhow::Error::from)
+            migrator.run(&pool).await?;
+            if matches!(spec.kind, DbKind::State) {
+                crate::migrations::runtime_lax_migrator().run(&pool).await?;
+            }
+            Ok::<(), anyhow::Error>(())
         }
         .await;
         telemetry::record_init_result(

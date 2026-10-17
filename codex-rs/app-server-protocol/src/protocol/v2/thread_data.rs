@@ -1,4 +1,5 @@
 use super::CodexErrorInfo;
+use super::HollywoodSessionState;
 use super::ThreadEnvironment;
 use super::ThreadItem;
 use super::ThreadStatus;
@@ -283,6 +284,8 @@ pub struct Thread {
     pub git_info: Option<GitInfo>,
     /// Optional user-facing thread title.
     pub name: Option<String>,
+    /// Optional Hollywood coordination state when attached.
+    pub hollywood: Option<HollywoodSessionState>,
     /// Saved Daybreak choice, independent of turn execution. Null if unset.
     #[experimental("thread.daybreakEnabled")]
     pub daybreak_enabled: Option<bool>,
@@ -333,6 +336,7 @@ struct ThreadCompatibility {
     agent_role: Option<String>,
     git_info: Option<GitInfo>,
     name: Option<String>,
+    hollywood: Option<super::HollywoodSessionState>,
     daybreak_enabled: Option<bool>,
     turns: Vec<Turn>,
 }
@@ -375,6 +379,7 @@ impl<'de> Deserialize<'de> for Thread {
             git_info: thread.git_info,
             name: thread.name,
             daybreak_enabled: thread.daybreak_enabled,
+            hollywood: thread.hollywood,
             turns: thread.turns,
         })
     }

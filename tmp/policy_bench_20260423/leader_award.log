@@ -1,0 +1,6 @@
+completed scenario=feature_patch_chain policy=leader_award repeat=1
+completed scenario=feature_patch_chain policy=leader_award repeat=2
+completed scenario=feature_patch_chain policy=leader_award repeat=3
+completed scenario=broad_qa_cleanup policy=leader_award repeat=1
+completed scenario=broad_qa_cleanup policy=leader_award repeat=2
+completed scenario=broad_qa_cleanup policy=leader_award repeat=3

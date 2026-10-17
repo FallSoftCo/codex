@@ -1,0 +1,1114 @@
+{
+  "type": "object",
+  "properties": {
+    "command": {
+      "discriminator": {
+        "mapping": {
+          "begin": "#/$defs/Begin",
+          "consent": "#/$defs/Consent",
+          "preflight": "#/$defs/Preflight",
+          "propose": "#/$defs/Propose",
+          "reconcile": "#/$defs/Reconcile",
+          "revise": "#/$defs/Revise",
+          "revoke": "#/$defs/Revoke",
+          "settle": "#/$defs/Settle",
+          "withdraw": "#/$defs/Withdraw"
+        },
+        "propertyName": "action"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Propose"
+        },
+        {
+          "$ref": "#/$defs/Revise"
+        },
+        {
+          "$ref": "#/$defs/Consent"
+        },
+        {
+          "$ref": "#/$defs/Revoke"
+        },
+        {
+          "$ref": "#/$defs/Reconcile"
+        },
+        {
+          "$ref": "#/$defs/Withdraw"
+        }
+      ],
+      "title": "Command"
+    }
+  },
+  "required": [
+    "command"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "sliceId": {
+          "format": "uuid",
+          "title": "Sliceid",
+          "type": "string"
+        },
+        "relativePath": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sliceId",
+        "relativePath",
+        "sha256",
+        "size"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "Begin": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "permitId": {
+          "format": "uuid",
+          "title": "Permitid",
+          "type": "string"
+        },
+        "permitRevision": {
+          "minimum": 1,
+          "title": "Permitrevision",
+          "type": "integer"
+        },
+        "action": {
+          "const": "begin",
+          "title": "Action",
+          "type": "string"
+        },
+        "patchSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Patchsha256",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "filesObserved": {
+          "items": {
+            "$ref": "#/$defs/ObservedFile"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Filesobserved",
+          "type": "array"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "permitId",
+        "permitRevision",
+        "action",
+        "patchSha256",
+        "sourceRevision",
+        "filesObserved"
+      ],
+      "title": "Begin",
+      "type": "object"
+    },
+    "Consent": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "consent",
+          "title": "Action",
+          "type": "string"
+        },
+        "consentRevision": {
+          "minimum": 0,
+          "title": "Consentrevision",
+          "type": "integer"
+        },
+        "manifestSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Manifestsha256",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "maxItems": 16,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "imports": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "maxItems": 16,
+          "title": "Imports",
+          "type": "array"
+        },
+        "participantConsentDigest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Participantconsentdigest"
+        },
+        "settlementDigest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Settlementdigest"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "consentRevision",
+        "manifestSha256",
+        "sourceRevision",
+        "artifacts",
+        "imports",
+        "participantConsentDigest",
+        "settlementDigest"
+      ],
+      "title": "Consent",
+      "type": "object"
+    },
+    "File": {
+      "additionalProperties": false,
+      "properties": {
+        "relativePath": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "minimum": 1,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "beforeSha256": {
+          "pattern": "^(absent|[a-f0-9]{64})$",
+          "title": "Beforesha256",
+          "type": "string"
+        },
+        "beforeSize": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "title": "Beforesize",
+          "type": "integer"
+        },
+        "afterSha256": {
+          "pattern": "^(absent|[a-f0-9]{64})$",
+          "title": "Aftersha256",
+          "type": "string"
+        },
+        "afterSize": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "title": "Aftersize",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relativePath",
+        "claimId",
+        "claimRevision",
+        "beforeSha256",
+        "beforeSize",
+        "afterSha256",
+        "afterSize"
+      ],
+      "title": "File",
+      "type": "object"
+    },
+    "Manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "logicalSource": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Logicalsource",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "integratorWorkId": {
+          "format": "uuid",
+          "title": "Integratorworkid",
+          "type": "string"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/Participant"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Participants",
+          "type": "array"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "slices": {
+          "items": {
+            "$ref": "#/$defs/Slice"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Slices",
+          "type": "array"
+        },
+        "patchSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Patchsha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logicalSource",
+        "sourceRevision",
+        "integratorWorkId",
+        "participants",
+        "files",
+        "slices",
+        "patchSha256"
+      ],
+      "title": "Manifest",
+      "type": "object"
+    },
+    "ObservedFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relativePath": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^(absent|[a-f0-9]{64})$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relativePath",
+        "sha256",
+        "size"
+      ],
+      "title": "ObservedFile",
+      "type": "object"
+    },
+    "Participant": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "sourceRevision"
+      ],
+      "title": "Participant",
+      "type": "object"
+    },
+    "PhysicalTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "hollywood-physical-target/v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "workspaceId": {
+          "format": "uuid",
+          "title": "Workspaceid",
+          "type": "string"
+        },
+        "workspaceRevision": {
+          "minimum": 1,
+          "title": "Workspacerevision",
+          "type": "integer"
+        },
+        "grantRevision": {
+          "minimum": 1,
+          "title": "Grantrevision",
+          "type": "integer"
+        },
+        "environmentSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Environmentsha256",
+          "type": "string"
+        },
+        "rootIdentitySha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Rootidentitysha256",
+          "type": "string"
+        },
+        "resolution": {
+          "const": "beneath-no-symlinks/v1",
+          "title": "Resolution",
+          "type": "string"
+        },
+        "actionDigest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Actiondigest",
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "$ref": "#/$defs/ResolvedPath"
+          },
+          "maxItems": 32,
+          "title": "Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema",
+        "workspaceId",
+        "workspaceRevision",
+        "grantRevision",
+        "environmentSha256",
+        "rootIdentitySha256",
+        "resolution",
+        "actionDigest",
+        "paths"
+      ],
+      "title": "PhysicalTarget",
+      "type": "object"
+    },
+    "Preflight": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "preflight",
+          "title": "Action",
+          "type": "string"
+        },
+        "permitId": {
+          "format": "uuid",
+          "title": "Permitid",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Manifestsha256",
+          "type": "string"
+        },
+        "consentSetDigest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Consentsetdigest",
+          "type": "string"
+        },
+        "patchSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Patchsha256",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "filesObserved": {
+          "items": {
+            "$ref": "#/$defs/ObservedFile"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Filesobserved",
+          "type": "array"
+        },
+        "leaseSeconds": {
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Leaseseconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "permitId",
+        "manifestSha256",
+        "consentSetDigest",
+        "patchSha256",
+        "sourceRevision",
+        "filesObserved",
+        "leaseSeconds"
+      ],
+      "title": "Preflight",
+      "type": "object"
+    },
+    "Propose": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "maximum": 0,
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "propose",
+          "title": "Action",
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/Manifest"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "manifest"
+      ],
+      "title": "Propose",
+      "type": "object"
+    },
+    "Reconcile": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "permitId": {
+          "format": "uuid",
+          "title": "Permitid",
+          "type": "string"
+        },
+        "permitRevision": {
+          "minimum": 1,
+          "title": "Permitrevision",
+          "type": "integer"
+        },
+        "action": {
+          "const": "reconcile",
+          "title": "Action",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "notApplied"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "observationDigest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Observationdigest",
+          "type": "string"
+        },
+        "effectDisposition": {
+          "const": "reviewed",
+          "title": "Effectdisposition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "permitId",
+        "permitRevision",
+        "action",
+        "outcome",
+        "observationDigest",
+        "effectDisposition"
+      ],
+      "title": "Reconcile",
+      "type": "object"
+    },
+    "ResolvedPath": {
+      "additionalProperties": false,
+      "properties": {
+        "relativePath": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "resolvedPath": {
+          "maxLength": 3072,
+          "minLength": 2,
+          "title": "Resolvedpath",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relativePath",
+        "resolvedPath"
+      ],
+      "title": "ResolvedPath",
+      "type": "object"
+    },
+    "Revise": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "revise",
+          "title": "Action",
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/Manifest"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "manifest"
+      ],
+      "title": "Revise",
+      "type": "object"
+    },
+    "Revoke": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "revoke",
+          "title": "Action",
+          "type": "string"
+        },
+        "consentRevision": {
+          "minimum": 1,
+          "title": "Consentrevision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "consentRevision"
+      ],
+      "title": "Revoke",
+      "type": "object"
+    },
+    "Settle": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "permitId": {
+          "format": "uuid",
+          "title": "Permitid",
+          "type": "string"
+        },
+        "permitRevision": {
+          "minimum": 1,
+          "title": "Permitrevision",
+          "type": "integer"
+        },
+        "action": {
+          "const": "settle",
+          "title": "Action",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "notApplied",
+            "unknown"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "patchSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Patchsha256",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "filesObserved": {
+          "items": {
+            "$ref": "#/$defs/ObservedFile"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Filesobserved",
+          "type": "array"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "permitId",
+        "permitRevision",
+        "action",
+        "outcome",
+        "patchSha256",
+        "sourceRevision",
+        "filesObserved"
+      ],
+      "title": "Settle",
+      "type": "object"
+    },
+    "Slice": {
+      "additionalProperties": false,
+      "properties": {
+        "sliceId": {
+          "format": "uuid",
+          "title": "Sliceid",
+          "type": "string"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "relativePath": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "beforeSha256": {
+          "pattern": "^(absent|[a-f0-9]{64})$",
+          "title": "Beforesha256",
+          "type": "string"
+        },
+        "byteStart": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "title": "Bytestart",
+          "type": "integer"
+        },
+        "byteEnd": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "title": "Byteend",
+          "type": "integer"
+        },
+        "hunkSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Hunksha256",
+          "type": "string"
+        },
+        "artifactSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Artifactsha256",
+          "type": "string"
+        },
+        "artifactSize": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Artifactsize",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sliceId",
+        "workId",
+        "relativePath",
+        "beforeSha256",
+        "byteStart",
+        "byteEnd",
+        "hunkSha256",
+        "artifactSha256",
+        "artifactSize"
+      ],
+      "title": "Slice",
+      "type": "object"
+    },
+    "Withdraw": {
+      "additionalProperties": false,
+      "properties": {
+        "planId": {
+          "format": "uuid",
+          "title": "Planid",
+          "type": "string"
+        },
+        "planRevision": {
+          "minimum": 0,
+          "title": "Planrevision",
+          "type": "integer"
+        },
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "withdraw",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "planId",
+        "planRevision",
+        "workId",
+        "workRevision",
+        "briefingSequence",
+        "note",
+        "action"
+      ],
+      "title": "Withdraw",
+      "type": "object"
+    }
+  }
+}

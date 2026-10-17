@@ -22,6 +22,7 @@ use codex_file_system::EnvironmentAccess;
 use codex_file_system::FileSystemEnvironmentAccessor;
 use codex_file_system::FileSystemSandboxContext;
 use codex_model_provider::SharedModelProvider;
+use codex_models_manager::manager::SharedModelsManager;
 use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
 use codex_protocol::config_types::ShellEnvironmentPolicy;
@@ -891,6 +892,7 @@ impl TurnContext {
         #[allow(deprecated)]
         let cwd = self.cwd.clone();
         TurnContextItem {
+            multi_agent_mode: None,
             turn_id: Some(self.sub_id.clone()),
             root_turn_id: self.turn_metadata_state.root_turn_id(),
             disabled_plugin_ids: Some(self.disabled_plugin_ids.clone()),

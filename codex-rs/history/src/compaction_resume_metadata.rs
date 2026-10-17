@@ -43,7 +43,8 @@ pub fn resume_multi_agent_version(item: &RolloutItem) -> Option<MultiAgentVersio
             .resume_metadata
             .as_ref()
             .and_then(|metadata| metadata.multi_agent_version),
-        RolloutItem::SessionMeta(_)
+        RolloutItem::SessionState(_)
+        | RolloutItem::SessionMeta(_)
         | RolloutItem::ResponseItem(_)
         | RolloutItem::InterAgentCommunication(_)
         | RolloutItem::InterAgentCommunicationMetadata { .. }

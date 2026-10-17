@@ -84,6 +84,18 @@ fn code_mode_tool_names_do_not_prefix_the_default_namespace() {
 }
 
 #[test]
+fn code_mode_name_for_tool_name_preserves_app_and_mcp_conventions() {
+    assert_eq!(
+        code_mode_name_for_tool_name(&ToolName::namespaced("codex_app", "hidden_dynamic_tool")),
+        "codex_app_hidden_dynamic_tool"
+    );
+    assert_eq!(
+        code_mode_name_for_tool_name(&ToolName::namespaced("mcp__rmcp", "echo")),
+        "mcp__rmcp__echo"
+    );
+}
+
+#[test]
 fn augment_tool_spec_for_code_mode_augments_function_tools() {
     assert_eq!(
         augment_tool_spec_for_code_mode(ToolSpec::Function(ResponsesApiTool {

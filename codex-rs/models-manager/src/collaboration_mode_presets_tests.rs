@@ -32,3 +32,20 @@ fn default_mode_instructions_follow_user_input_tool_availability() {
         default_instructions.contains("Ask the user directly with one concise plain-text question")
     );
 }
+
+#[test]
+fn default_mode_instructions_describe_default_mode_behavior() {
+    let default_instructions = default_preset()
+        .developer_instructions
+        .expect("default preset should include instructions")
+        .expect("default instructions should be set");
+
+    assert!(default_instructions.contains(
+        "In Default mode, strongly prefer making reasonable assumptions and executing the user's request"
+    ));
+    assert!(
+        default_instructions
+            .contains("Never write a multiple choice question as a textual assistant message")
+    );
+    assert!(!default_instructions.contains("prefer Hollywood coordination"));
+}

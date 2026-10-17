@@ -114,6 +114,13 @@ async fn stop_waits_for_live_reservation_to_resolve() {
         // Let stop() remove the stale PID file under the reservation lock.
         // Deleting it here would race with the backend's read on Windows.
         drop(reservation);
+        if let Err(err) = tokio::fs::remove_file(pid_file).await {
+            assert_eq!(
+                err.kind(),
+                std::io::ErrorKind::NotFound,
+                "remove pid file: {err}"
+            );
+        }
     });
 
     backend.stop().await.expect("stop");

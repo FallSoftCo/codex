@@ -3,7 +3,11 @@ use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command as StdCommand;
+use std::process::Stdio;
 use tempfile::tempdir;
+
+const COLLABORATIVE_STRESS_EDITORS: usize = 200;
 
 fn run_apply_patch_in_dir(dir: &Path, patch: &str) -> anyhow::Result<assert_cmd::assert::Assert> {
     let mut cmd = Command::new(codex_utils_cargo_bin::cargo_bin("apply_patch")?);
@@ -101,6 +105,64 @@ fn test_apply_patch_cli_rejects_overlapping_end_of_file_chunks() -> anyhow::Resu
         ));
 
     assert_eq!(fs::read_to_string(target_path)?, "one\n");
+    Ok(())
+}
+
+#[test]
+fn test_apply_patch_cli_concurrent_processes_same_file_preserve_all_edits() -> anyhow::Result<()> {
+    let tmp = tempdir()?;
+    let target_path = tmp.path().join("shared.rs");
+    let mut initial = String::new();
+    let mut expected = String::new();
+    let mut patches = Vec::new();
+    for agent_id in 0..COLLABORATIVE_STRESS_EDITORS {
+        let separator = if agent_id + 1 == COLLABORATIVE_STRESS_EDITORS {
+            "\n"
+        } else {
+            "\n\n"
+        };
+        let initial_label = format!("agent-{agent_id}-v0");
+        let edited_label = format!("agent-{agent_id}-process-edit");
+        initial.push_str(&format!(
+            "pub fn section_{agent_id}() -> &'static str {{\n    \"{initial_label}\"\n}}{separator}"
+        ));
+        expected.push_str(&format!(
+            "pub fn section_{agent_id}() -> &'static str {{\n    \"{edited_label}\"\n}}{separator}"
+        ));
+        patches.push(format!(
+            "*** Begin Patch\n*** Update File: shared.rs\n@@\n pub fn section_{agent_id}() -> &'static str {{\n-    \"{initial_label}\"\n+    \"{edited_label}\"\n }}\n*** End Patch"
+        ));
+    }
+    fs::write(&target_path, initial)?;
+
+    let apply_patch_bin = codex_utils_cargo_bin::cargo_bin("apply_patch")?;
+    let mut children = Vec::new();
+    for patch in patches {
+        children.push(
+            StdCommand::new(&apply_patch_bin)
+                .current_dir(tmp.path())
+                .arg(patch)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?,
+        );
+    }
+
+    for child in children {
+        let output = child.wait_with_output()?;
+        assert!(
+            output.status.success(),
+            "apply_patch process failed with stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout)?,
+            "Success. Updated the following files:\nM shared.rs\n"
+        );
+        assert_eq!(String::from_utf8(output.stderr)?, "");
+    }
+    assert_eq!(fs::read_to_string(target_path)?, expected);
+
     Ok(())
 }
 

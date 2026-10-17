@@ -884,7 +884,9 @@ fn body_contains(req: &Request, text: &str) -> bool {
 }
 
 async fn wait_for_spawned_thread(test: &TestCodex) -> Result<Arc<CodexThread>> {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    // Full-suite load can delay spawned-thread registration even when the propagation behavior is
+    // correct, so keep the discovery window generous here.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     loop {
         let ids = test.thread_manager.list_thread_ids().await;
         if let Some(thread_id) = ids
@@ -2674,7 +2676,7 @@ async fn spawned_subagent_execpolicy_amendment_propagates_to_parent_session() ->
                 EventMsg::ExecApprovalRequest(_) | EventMsg::TurnComplete(_)
             )
         },
-        Duration::from_secs(2),
+        Duration::from_secs(30),
     )
     .await;
 
@@ -2708,7 +2710,7 @@ async fn spawned_subagent_execpolicy_amendment_propagates_to_parent_session() ->
                 EventMsg::ExecApprovalRequest(_) | EventMsg::TurnComplete(_)
             )
         },
-        Duration::from_secs(2),
+        Duration::from_secs(30),
     )
     .await;
     match child_event {

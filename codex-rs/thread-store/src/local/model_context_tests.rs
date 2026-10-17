@@ -681,6 +681,7 @@ fn completed_user_message(turn_id: &str, message: &str) -> RolloutItem {
 
 fn turn_context(root: &Path, turn_id: &str) -> RolloutItem {
     RolloutItem::TurnContext(TurnContextItem {
+        multi_agent_mode: None,
         turn_id: Some(turn_id.to_string()),
         root_turn_id: None,
         disabled_plugin_ids: None,

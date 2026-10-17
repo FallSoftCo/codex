@@ -185,6 +185,9 @@ pub(super) fn server_notification_thread_target(
         | ServerNotification::AuthRecoveryCompleted(notification) => {
             Some(notification.thread_id.as_str())
         }
+        ServerNotification::ThreadHollywoodMessage(notification) => {
+            Some(notification.thread_id.as_str())
+        }
         ServerNotification::Warning(notification) => notification.thread_id.as_deref(),
         ServerNotification::GuardianWarning(notification) => Some(notification.thread_id.as_str()),
         ServerNotification::McpServerOauthLoginCompleted(notification) => {

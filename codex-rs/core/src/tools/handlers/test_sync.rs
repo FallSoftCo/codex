@@ -106,7 +106,7 @@ impl TestSyncHandler {
         }
 
         if let Some(barrier) = args.barrier {
-            wait_on_barrier(barrier).await?;
+            wait_on_barrier(invocation.session.thread_id().to_string(), barrier).await?;
         }
 
         if args.wait_for_git_enrichment {
@@ -138,7 +138,7 @@ impl TestSyncHandler {
 
 impl CoreToolRuntime for TestSyncHandler {}
 
-async fn wait_on_barrier(args: BarrierArgs) -> Result<(), FunctionCallError> {
+async fn wait_on_barrier(session_id: String, args: BarrierArgs) -> Result<(), FunctionCallError> {
     if args.participants == 0 {
         return Err(FunctionCallError::RespondToModel(
             "barrier participants must be greater than zero".to_string(),
@@ -151,7 +151,7 @@ async fn wait_on_barrier(args: BarrierArgs) -> Result<(), FunctionCallError> {
         ));
     }
 
-    let barrier_id = args.id.clone();
+    let barrier_id = format!("{session_id}:{}", args.id);
     let barrier = {
         let mut map = barrier_map().lock().await;
         match map.entry(barrier_id.clone()) {

@@ -12,10 +12,37 @@ use super::thread_input::can_accept_direct_input;
 use super::thread_input::ensure_direct_input_allowed;
 use super::*;
 use crate::error_code::method_not_found;
+use crate::hollywood::DEFAULT_HOLLYWOOD_URL;
+use crate::hollywood::HollywoodConfig;
+use crate::hollywood::format_hollywood_context_message;
+use crate::hollywood::hollywood_session_diagnostics_from_runtime;
+use crate::hollywood::hollywood_session_state_from_runtime;
+use crate::hollywood::hollywood_session_status_from_thread_status;
+use crate::hollywood::publish_registry_snapshot;
+use crate::hollywood::thread_status_name;
+use codex_app_server_protocol::HollywoodSessionAttachOptions;
 use codex_app_server_protocol::SelectedCapabilityRoot;
 use codex_app_server_protocol::ThreadHistoryMode as ApiThreadHistoryMode;
+use codex_app_server_protocol::ThreadHollywoodAttachParams;
+use codex_app_server_protocol::ThreadHollywoodAttachResponse;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetParams;
+use codex_app_server_protocol::ThreadHollywoodAttentionSetResponse;
+use codex_app_server_protocol::ThreadHollywoodDetachParams;
+use codex_app_server_protocol::ThreadHollywoodDetachResponse;
+use codex_app_server_protocol::ThreadHollywoodListParams;
+use codex_app_server_protocol::ThreadHollywoodListResponse;
 use codex_app_server_protocol::ThreadItemsListAnchor;
 use codex_app_server_protocol::ThreadItemsListCursor;
+use codex_app_server_protocol::ThreadOwnershipClaimParams;
+use codex_app_server_protocol::ThreadOwnershipClaimResponse;
+use codex_app_server_protocol::ThreadOwnershipListParams;
+use codex_app_server_protocol::ThreadOwnershipListResponse;
+use codex_app_server_protocol::ThreadOwnershipPathClaim;
+use codex_app_server_protocol::ThreadOwnershipPathClaimConflict;
+use codex_app_server_protocol::ThreadOwnershipPathKind;
+use codex_app_server_protocol::ThreadOwnershipPathSpec;
+use codex_app_server_protocol::ThreadOwnershipReleaseParams;
+use codex_app_server_protocol::ThreadOwnershipReleaseResponse;
 use codex_app_server_protocol::ThreadRevertParams;
 use codex_app_server_protocol::ThreadRevertResponse;
 use codex_app_server_protocol::ThreadRevertedNotification;
@@ -26,6 +53,8 @@ use codex_app_server_protocol::ThreadSectionMoveResponse;
 use codex_app_server_protocol::ThreadToolName;
 use codex_app_server_protocol::ThreadToolPolicy;
 use codex_config::types::WindowsSandboxModeToml;
+use codex_core::default_hollywood_observed_rooms;
+use codex_core::default_hollywood_room_for_cwd;
 use codex_extension_api::AdditionalToolAllowlist;
 use codex_extension_api::ExtensionDataInit;
 use codex_extension_api::ThreadIdleCause;
@@ -33,7 +62,11 @@ use codex_protocol::SanitizedGitUrl;
 use codex_protocol::config_types::MultiAgentMode;
 use codex_protocol::error::CodexErrorDetails;
 use codex_protocol::mcp::ClientMcpExtensions;
+use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
+use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
+use codex_protocol::models::ContentItem;
 use codex_protocol::models::PermissionProfile;
+use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::ThreadHistoryMode;
 use codex_thread_store::PersistContext;
@@ -162,6 +195,36 @@ struct ThreadRevertRuntimeSnapshot {
     config: Config,
     settings: CodexThreadSettingsOverrides,
     client_mcp_extensions: ClientMcpExtensions,
+}
+
+struct HollywoodRuntimeAttachContext<'a> {
+    thread_state_manager: &'a ThreadStateManager,
+    thread_watch_manager: &'a ThreadWatchManager,
+    fallback_state_db: Option<StateDbHandle>,
+}
+
+fn thread_start_hollywood_config(
+    hollywood: Option<HollywoodSessionAttachOptions>,
+    auto_attach_hollywood_on_start: bool,
+    cwd: &std::path::Path,
+) -> Option<HollywoodConfig> {
+    if let Some(hollywood) = hollywood {
+        let default_room = default_hollywood_room_for_cwd(cwd);
+        let room = hollywood.room.unwrap_or(default_room);
+        return Some(HollywoodConfig {
+            url: hollywood
+                .url
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room: room.clone(),
+            observed_rooms: default_hollywood_observed_rooms(&room, hollywood.observed_rooms),
+            wake_rooms: hollywood.wake_rooms,
+            attention: hollywood.attention.unwrap_or_default(),
+        });
+    }
+
+    auto_attach_hollywood_on_start
+        .then(|| HollywoodConfig::auto_attach_for_cwd(cwd))
+        .flatten()
 }
 
 fn collect_resume_override_mismatches(
@@ -610,6 +673,455 @@ impl ThreadRequestProcessor {
         self.thread_unsubscribe_response_inner(params, request_id.connection_id)
             .await
             .map(|response| Some(response.into()))
+    }
+
+    pub(crate) async fn thread_hollywood_attach(
+        &self,
+        request_id: ConnectionRequestId,
+        params: ThreadHollywoodAttachParams,
+    ) -> Result<ThreadHollywoodAttachResponse, JSONRPCErrorError> {
+        let (thread_id, thread) = self.load_thread(&params.thread_id).await?;
+        let config_snapshot = thread.config_snapshot().await;
+        let default_room = default_hollywood_room_for_cwd(config_snapshot.cwd().as_path());
+        let room = params.room.unwrap_or(default_room);
+        let hollywood_config = HollywoodConfig {
+            url: params
+                .url
+                .unwrap_or_else(|| DEFAULT_HOLLYWOOD_URL.to_string()),
+            room: room.clone(),
+            observed_rooms: default_hollywood_observed_rooms(&room, params.observed_rooms),
+            wake_rooms: params.wake_rooms,
+            attention: params.attention.unwrap_or_default(),
+        };
+        let stored_thread_name = self
+            .thread_store
+            .read_thread(StoreReadThreadParams {
+                thread_id,
+                include_archived: true,
+                include_history: false,
+            })
+            .await
+            .ok()
+            .and_then(|stored_thread| stored_thread.name)
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty());
+        let thread_name = stored_thread_name
+            .as_deref()
+            .or(config_snapshot.thread_name.as_deref());
+        Self::attach_thread_hollywood_runtime(
+            HollywoodRuntimeAttachContext {
+                thread_state_manager: &self.thread_state_manager,
+                thread_watch_manager: &self.thread_watch_manager,
+                fallback_state_db: self.state_db.clone(),
+            },
+            thread_id,
+            &thread,
+            hollywood_config,
+            thread_name,
+            /*inject_context*/ true,
+        )
+        .await?;
+        self.try_attach_thread_listener(thread_id, vec![request_id.connection_id])
+            .await;
+        Ok(ThreadHollywoodAttachResponse {})
+    }
+
+    pub(crate) async fn thread_hollywood_detach(
+        &self,
+        params: ThreadHollywoodDetachParams,
+    ) -> Result<ThreadHollywoodDetachResponse, JSONRPCErrorError> {
+        let (thread_id, thread) = self.load_thread(&params.thread_id).await?;
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        thread_state.lock().await.hollywood.detach();
+        thread.set_hollywood_session_meta(None).await;
+        self.persist_thread_hollywood_metadata(thread_id, &thread, None)
+            .await?;
+        Ok(ThreadHollywoodDetachResponse {})
+    }
+
+    pub(crate) async fn thread_hollywood_attention_set(
+        &self,
+        params: ThreadHollywoodAttentionSetParams,
+    ) -> Result<ThreadHollywoodAttentionSetResponse, JSONRPCErrorError> {
+        let (thread_id, thread) = self.load_thread(&params.thread_id).await?;
+        let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+        let persisted = {
+            let mut thread_state = thread_state.lock().await;
+            if !thread_state.hollywood.set_attention(params.attention) {
+                None
+            } else {
+                thread_state.hollywood.config()
+            }
+        };
+        let Some(persisted) = persisted else {
+            return Err(invalid_request("Hollywood is not attached for this thread"));
+        };
+        thread
+            .set_hollywood_session_meta(Some((&persisted).into()))
+            .await;
+        self.persist_thread_hollywood_metadata(thread_id, &thread, Some(&persisted))
+            .await?;
+        Ok(ThreadHollywoodAttentionSetResponse {})
+    }
+
+    pub(crate) async fn thread_hollywood_list(
+        &self,
+        params: ThreadHollywoodListParams,
+    ) -> Result<ThreadHollywoodListResponse, JSONRPCErrorError> {
+        let ThreadHollywoodListParams {
+            cursor,
+            limit,
+            rooms,
+            statuses,
+        } = params;
+        let mut thread_ids = self
+            .thread_state_manager
+            .thread_ids()
+            .await
+            .into_iter()
+            .map(|thread_id| thread_id.to_string())
+            .collect::<Vec<_>>();
+        thread_ids.sort();
+
+        let start = match cursor {
+            Some(cursor) => match ThreadId::from_string(&cursor) {
+                Ok(cursor_id) => match thread_ids.binary_search(&cursor_id.to_string()) {
+                    Ok(idx) => idx + 1,
+                    Err(idx) => idx,
+                },
+                Err(err) => return Err(invalid_request(format!("invalid cursor: {err}"))),
+            },
+            None => 0,
+        };
+        let effective_limit = limit.unwrap_or(thread_ids.len() as u32).max(1) as usize;
+        let mut data = Vec::new();
+        let mut scan_index = start;
+
+        while scan_index < thread_ids.len() && data.len() < effective_limit {
+            let thread_id_str = &thread_ids[scan_index];
+            scan_index += 1;
+            let Ok(thread_id) = ThreadId::from_string(thread_id_str) else {
+                continue;
+            };
+            let Ok(loaded_thread) = self.thread_manager.get_thread(thread_id).await else {
+                continue;
+            };
+            let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+            let (config, runtime_state, active_turn) = {
+                let thread_state = thread_state.lock().await;
+                (
+                    thread_state.hollywood.config(),
+                    thread_state.hollywood.clone(),
+                    thread_state.active_turn_snapshot_if_running(),
+                )
+            };
+            let Some(config) = config else {
+                continue;
+            };
+
+            let config_snapshot = loaded_thread.config_snapshot().await;
+            let mut thread = build_thread_from_snapshot(
+                thread_id,
+                loaded_thread.startup_metadata().session_id.to_string(),
+                loaded_thread.multi_agent_version(),
+                &config_snapshot,
+                loaded_thread.rollout_path(),
+            );
+            self.attach_thread_name(thread_id, &mut thread).await;
+            let status = self
+                .thread_watch_manager
+                .loaded_status_for_thread(thread_id_str)
+                .await;
+            thread.status = status.clone();
+            let hollywood = hollywood_session_state_from_runtime(
+                thread_id,
+                thread.name.as_deref(),
+                &config,
+                &runtime_state,
+                hollywood_session_status_from_thread_status(&status),
+                hollywood_session_diagnostics_from_runtime(
+                    &runtime_state,
+                    active_turn.as_ref(),
+                    loaded_thread.hollywood_obligation_count().await,
+                ),
+            );
+
+            let matches_filters = statuses
+                .as_deref()
+                .is_none_or(|statuses| statuses.contains(&hollywood.status))
+                && rooms.as_deref().is_none_or(|rooms| {
+                    rooms.iter().any(|room| {
+                        room == &hollywood.primary_room
+                            || hollywood
+                                .observed_rooms
+                                .iter()
+                                .any(|candidate| candidate == room)
+                            || hollywood
+                                .wake_rooms
+                                .iter()
+                                .any(|candidate| candidate == room)
+                    })
+                });
+            if matches_filters {
+                thread.hollywood = Some(hollywood);
+                data.push(thread);
+            }
+        }
+
+        let next_cursor = if scan_index < thread_ids.len() {
+            Some(thread_ids[scan_index - 1].clone())
+        } else {
+            None
+        };
+        Ok(ThreadHollywoodListResponse { data, next_cursor })
+    }
+
+    pub(crate) async fn thread_ownership_claim(
+        &self,
+        params: ThreadOwnershipClaimParams,
+    ) -> Result<ThreadOwnershipClaimResponse, JSONRPCErrorError> {
+        let (thread_id, thread) = self.load_thread(&params.thread_id).await?;
+        let state_db = self.thread_ownership_state_db(&thread)?;
+        let lease_seconds = params
+            .lease_seconds
+            .unwrap_or(codex_state::DEFAULT_PATH_CLAIM_LEASE_SECONDS);
+        if lease_seconds <= 0 {
+            return Err(invalid_request(format!(
+                "leaseSeconds must be > 0, got {lease_seconds}"
+            )));
+        }
+
+        let config_snapshot = thread.config_snapshot().await;
+        let claims =
+            resolve_thread_ownership_specs(&params.claims, config_snapshot.cwd().as_path())
+                .map_err(invalid_request)?;
+        let result = state_db
+            .claim_path_ownership(
+                thread_id,
+                &claims,
+                Duration::from_secs(u64::try_from(lease_seconds).unwrap_or(u64::MAX)),
+            )
+            .await
+            .map_err(|err| internal_error(format!("failed to claim thread ownership: {err}")))?;
+
+        Ok(ThreadOwnershipClaimResponse {
+            acquired: result.acquired,
+            data: result
+                .claims
+                .into_iter()
+                .map(thread_ownership_claim_from_state)
+                .collect(),
+            conflicts: result
+                .conflicts
+                .into_iter()
+                .map(thread_ownership_conflict_from_state)
+                .collect(),
+        })
+    }
+
+    pub(crate) async fn thread_ownership_release(
+        &self,
+        params: ThreadOwnershipReleaseParams,
+    ) -> Result<ThreadOwnershipReleaseResponse, JSONRPCErrorError> {
+        let (thread_id, thread) = self.load_thread(&params.thread_id).await?;
+        let state_db = self.thread_ownership_state_db(&thread)?;
+        let config_snapshot = thread.config_snapshot().await;
+        let claims =
+            resolve_thread_ownership_specs(&params.claims, config_snapshot.cwd().as_path())
+                .map_err(invalid_request)?;
+        let released = state_db
+            .release_path_claims(thread_id, &claims)
+            .await
+            .map_err(|err| internal_error(format!("failed to release thread ownership: {err}")))?;
+        Ok(ThreadOwnershipReleaseResponse {
+            released: u32::try_from(released).unwrap_or(u32::MAX),
+        })
+    }
+
+    pub(crate) async fn thread_ownership_list(
+        &self,
+        params: ThreadOwnershipListParams,
+    ) -> Result<ThreadOwnershipListResponse, JSONRPCErrorError> {
+        let ThreadOwnershipListParams {
+            thread_id,
+            cursor,
+            limit,
+            owner_thread_id,
+        } = params;
+        let (_, thread) = self.load_thread(&thread_id).await?;
+        let state_db = self.thread_ownership_state_db(&thread)?;
+        let owner_thread_id = match owner_thread_id {
+            Some(owner_thread_id) => Some(
+                ThreadId::from_string(&owner_thread_id)
+                    .map_err(|err| invalid_request(format!("invalid ownerThreadId: {err}")))?,
+            ),
+            None => None,
+        };
+        let claims = state_db
+            .list_path_claims(owner_thread_id)
+            .await
+            .map_err(|err| {
+                internal_error(format!("failed to list thread ownership claims: {err}"))
+            })?
+            .into_iter()
+            .map(thread_ownership_claim_from_state)
+            .collect::<Vec<_>>();
+
+        let start = match cursor {
+            Some(cursor) => match claims.iter().position(|claim| claim.id == cursor) {
+                Some(index) => index + 1,
+                None => return Err(invalid_request(format!("invalid cursor: {cursor}"))),
+            },
+            None => 0,
+        };
+        let effective_limit = limit.unwrap_or(claims.len() as u32).max(1) as usize;
+        let end = start.saturating_add(effective_limit).min(claims.len());
+        let page = claims[start..end].to_vec();
+        let next_cursor = page
+            .last()
+            .filter(|_| end < claims.len())
+            .map(|claim| claim.id.clone());
+        Ok(ThreadOwnershipListResponse {
+            data: page,
+            next_cursor,
+        })
+    }
+
+    fn thread_ownership_state_db(
+        &self,
+        thread: &Arc<CodexThread>,
+    ) -> Result<StateDbHandle, JSONRPCErrorError> {
+        thread
+            .state_db()
+            .or_else(|| self.state_db.clone())
+            .ok_or_else(|| {
+                internal_error(format!(
+                    "thread ownership state is unavailable (sqlite_home: {})",
+                    self.config.sqlite.home().display()
+                ))
+            })
+    }
+
+    async fn persist_thread_hollywood_metadata(
+        &self,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        hollywood_config: Option<&HollywoodConfig>,
+    ) -> Result<(), JSONRPCErrorError> {
+        Self::persist_thread_hollywood_metadata_with_state_db(
+            self.state_db.clone(),
+            thread_id,
+            thread,
+            hollywood_config,
+        )
+        .await
+    }
+
+    async fn persist_thread_hollywood_metadata_with_state_db(
+        fallback_state_db: Option<StateDbHandle>,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        hollywood_config: Option<&HollywoodConfig>,
+    ) -> Result<(), JSONRPCErrorError> {
+        let Some(state_db) = thread.state_db().or_else(|| fallback_state_db.clone()) else {
+            return Ok(());
+        };
+        let persisted = hollywood_config.map(codex_protocol::protocol::HollywoodSessionMeta::from);
+        state_db
+            .update_thread_hollywood(thread_id, persisted.as_ref())
+            .await
+            .map_err(|err| {
+                internal_error(format!(
+                    "failed to persist Hollywood metadata for thread {thread_id}: {err}"
+                ))
+            })?;
+        Ok(())
+    }
+
+    async fn attach_thread_hollywood_runtime(
+        context: HollywoodRuntimeAttachContext<'_>,
+        thread_id: ThreadId,
+        thread: &Arc<CodexThread>,
+        hollywood_config: HollywoodConfig,
+        thread_name: Option<&str>,
+        inject_context: bool,
+    ) -> Result<(), JSONRPCErrorError> {
+        {
+            let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+            let mut thread_state = thread_state.lock().await;
+            thread_state
+                .hollywood
+                .attach(hollywood_config.clone(), "attached", None);
+            thread_state
+                .hollywood
+                .set_registry_thread_name(thread_name.map(ToOwned::to_owned));
+        }
+        thread
+            .set_hollywood_session_meta(Some((&hollywood_config).into()))
+            .await;
+        Self::persist_thread_hollywood_metadata_with_state_db(
+            context.fallback_state_db.clone(),
+            thread_id,
+            thread,
+            Some(&hollywood_config),
+        )
+        .await?;
+        if inject_context {
+            let text = format_hollywood_context_message(
+                thread_id,
+                thread_name,
+                &hollywood_config,
+                thread
+                    .state_db()
+                    .or_else(|| context.fallback_state_db.clone())
+                    .is_some(),
+            );
+            thread
+                .inject_response_items(vec![ResponseItem::Message {
+                    id: None,
+                    role: "developer".to_string(),
+                    content: vec![ContentItem::InputText { text }],
+                    phase: None,
+                    internal_chat_message_metadata_passthrough: None,
+                    encrypted_content: None,
+                    status: None,
+                }])
+                .await
+                .map_err(|err| {
+                    internal_error(format!(
+                        "failed to inject Hollywood context for thread {thread_id}: {err}"
+                    ))
+                })?;
+        }
+        let runtime_state = {
+            let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+            thread_state.lock().await.hollywood.clone()
+        };
+        let status = context
+            .thread_watch_manager
+            .loaded_status_for_thread(&thread_id.to_string())
+            .await;
+        let status_name = thread_status_name(&status);
+        if let Err(err) = publish_registry_snapshot(
+            &reqwest::Client::new(),
+            thread_id,
+            thread,
+            &hollywood_config,
+            &runtime_state,
+            &status,
+        )
+        .await
+        {
+            warn!("failed to publish Hollywood registry attach for thread {thread_id}: {err}");
+        } else {
+            let thread_state = context.thread_state_manager.thread_state(thread_id).await;
+            thread_state
+                .lock()
+                .await
+                .hollywood
+                .note_registry_synced(Instant::now(), status_name);
+        }
+        Ok(())
     }
 
     pub(crate) async fn thread_resume(
@@ -1156,6 +1668,7 @@ impl ThreadRequestProcessor {
             thread_watch_manager: self.thread_watch_manager.clone(),
             codex_home: self.config.codex_home.to_path_buf(),
             thread_unload_delay: self.config.thread_unload_delay,
+            state_db: self.state_db.clone(),
             skills_watcher: Arc::clone(&self.skills_watcher),
             turn_cost_worker: self.turn_cost_worker.clone(),
         }
@@ -1229,6 +1742,7 @@ impl ThreadRequestProcessor {
             project_id,
             daybreak_enabled,
             environments,
+            hollywood,
         } = params;
         let additional_tool_allowlist = additional_tool_allowlist(tool_policy.as_ref())?;
         if matches!(
@@ -1289,6 +1803,7 @@ impl ThreadRequestProcessor {
             thread_watch_manager: self.thread_watch_manager.clone(),
             codex_home: self.config.codex_home.to_path_buf(),
             thread_unload_delay: self.config.thread_unload_delay,
+            state_db: self.state_db.clone(),
             skills_watcher: Arc::clone(&self.skills_watcher),
             turn_cost_worker: self.turn_cost_worker.clone(),
         };
@@ -1308,6 +1823,7 @@ impl ThreadRequestProcessor {
                 app_server_client_version,
                 client_mcp_extensions,
                 config,
+                hollywood,
                 typesafe_overrides,
                 dynamic_tools,
                 additional_tool_allowlist,
@@ -1391,6 +1907,7 @@ impl ThreadRequestProcessor {
         app_server_client_version: Option<String>,
         client_mcp_extensions: ClientMcpExtensions,
         config_overrides: Option<HashMap<String, serde_json::Value>>,
+        hollywood: Option<HollywoodSessionAttachOptions>,
         typesafe_overrides: ConfigOverrides,
         dynamic_tools: Option<Vec<DynamicToolSpec>>,
         additional_tool_allowlist: Option<AdditionalToolAllowlist>,
@@ -1522,6 +2039,8 @@ impl ThreadRequestProcessor {
         if !dynamic_tools.is_empty() {
             validate_dynamic_tools(&dynamic_tools).map_err(invalid_request)?;
         }
+        let auto_attach_hollywood_on_start =
+            !matches!(service_name.as_deref(), Some("losangelex-team"));
         // Count callable functions rather than top-level namespace containers.
         let dynamic_tool_count: usize = dynamic_tools
             .iter()
@@ -1616,6 +2135,7 @@ impl ThreadRequestProcessor {
             }
         };
         let session_telemetry = thread.session_telemetry();
+        let codex_thread = Arc::clone(&thread);
         session_telemetry.record_startup_phase(
             "thread_start_create_thread",
             create_thread_started_at.elapsed(),
@@ -1623,14 +2143,14 @@ impl ThreadRequestProcessor {
         );
 
         Self::set_app_server_client_info(
-            thread.as_ref(),
+            codex_thread.as_ref(),
             app_server_client_name,
             app_server_client_version,
         )
         .await?;
 
-        let instruction_sources = thread.legacy_instruction_sources().await;
-        let config_snapshot = thread
+        let instruction_sources = codex_thread.legacy_instruction_sources().await;
+        let config_snapshot = codex_thread
             .config_snapshot()
             .instrument(tracing::info_span!(
                 "app_server.thread_start.config_snapshot",
@@ -1641,7 +2161,7 @@ impl ThreadRequestProcessor {
         let mut thread = build_thread_from_snapshot(
             thread_id,
             session_configured.session_id.to_string(),
-            thread.multi_agent_version(),
+            codex_thread.multi_agent_version(),
             &config_snapshot,
             session_configured.rollout_path.clone(),
         );
@@ -1666,6 +2186,48 @@ impl ThreadRequestProcessor {
             request_id.connection_id,
             "thread",
         );
+
+        if let Some(hollywood_config) = thread_start_hollywood_config(
+            hollywood,
+            auto_attach_hollywood_on_start,
+            config_snapshot.cwd().as_path(),
+        ) {
+            let thread_name = config_snapshot.thread_name.as_deref();
+            Self::attach_thread_hollywood_runtime(
+                HollywoodRuntimeAttachContext {
+                    thread_state_manager: &listener_task_context.thread_state_manager,
+                    thread_watch_manager: &listener_task_context.thread_watch_manager,
+                    fallback_state_db: listener_task_context.state_db.clone(),
+                },
+                thread_id,
+                &codex_thread,
+                hollywood_config.clone(),
+                thread_name,
+                /*inject_context*/ true,
+            )
+            .await?;
+            let thread_state = listener_task_context
+                .thread_state_manager
+                .thread_state(thread_id)
+                .await;
+            let runtime_state = thread_state.lock().await.hollywood.clone();
+            let status = listener_task_context
+                .thread_watch_manager
+                .loaded_status_for_thread(&thread_id.to_string())
+                .await;
+            thread.hollywood = Some(hollywood_session_state_from_runtime(
+                thread_id,
+                thread_name,
+                &hollywood_config,
+                &runtime_state,
+                hollywood_session_status_from_thread_status(&status),
+                hollywood_session_diagnostics_from_runtime(
+                    &runtime_state,
+                    /*active_turn*/ None,
+                    codex_thread.hollywood_obligation_count().await,
+                ),
+            ));
+        }
 
         listener_task_context
             .thread_watch_manager
@@ -1944,6 +2506,15 @@ impl ThreadRequestProcessor {
             )
             .await
             .map_err(|err| core_thread_write_error("set thread name", err))?;
+        {
+            let thread_state = self.thread_state_manager.thread_state(thread_id).await;
+            let mut thread_state = thread_state.lock().await;
+            if thread_state.hollywood.config().is_some() {
+                thread_state
+                    .hollywood
+                    .set_registry_thread_name(Some(name.clone()));
+            }
+        }
 
         Ok((
             ThreadSetNameResponse {},
@@ -6527,6 +7098,7 @@ pub(crate) fn thread_from_stored_thread(
         git_info,
         name: thread.name,
         daybreak_enabled: thread.daybreak_enabled,
+        hollywood: None,
         turns: Vec::new(),
     };
     (thread, history)
@@ -6713,7 +7285,75 @@ fn build_thread_from_snapshot(
         git_info: None,
         name: None,
         daybreak_enabled: None,
+        hollywood: None,
         turns: Vec::new(),
+    }
+}
+
+fn resolve_thread_ownership_specs(
+    claims: &[ThreadOwnershipPathSpec],
+    cwd: &Path,
+) -> Result<Vec<codex_state::PathClaimSpec>, String> {
+    if claims.is_empty() {
+        return Err("claims must not be empty".to_string());
+    }
+
+    let cwd = AbsolutePathBuf::from_absolute_path(cwd)
+        .map_err(|err| format!("thread cwd is not absolute: {err}"))?;
+
+    claims
+        .iter()
+        .map(|claim| {
+            if claim.path.trim().is_empty() {
+                return Err("claim paths must not be empty".to_string());
+            }
+            Ok(codex_state::PathClaimSpec {
+                kind: thread_ownership_kind_to_state(claim.kind),
+                path: AbsolutePathBuf::resolve_path_against_base(
+                    Path::new(claim.path.as_str()),
+                    &cwd,
+                )
+                .into_path_buf(),
+            })
+        })
+        .collect()
+}
+
+fn thread_ownership_kind_to_state(kind: ThreadOwnershipPathKind) -> codex_state::PathClaimKind {
+    match kind {
+        ThreadOwnershipPathKind::File => codex_state::PathClaimKind::File,
+        ThreadOwnershipPathKind::Directory => codex_state::PathClaimKind::Directory,
+    }
+}
+
+fn thread_ownership_kind_from_state(kind: codex_state::PathClaimKind) -> ThreadOwnershipPathKind {
+    match kind {
+        codex_state::PathClaimKind::File => ThreadOwnershipPathKind::File,
+        codex_state::PathClaimKind::Directory => ThreadOwnershipPathKind::Directory,
+    }
+}
+
+fn thread_ownership_claim_from_state(claim: codex_state::PathClaim) -> ThreadOwnershipPathClaim {
+    ThreadOwnershipPathClaim {
+        id: claim.id,
+        owner_thread_id: claim.owner_thread_id,
+        kind: thread_ownership_kind_from_state(claim.kind),
+        path: claim.path.display().to_string(),
+        claimed_at: claim.claimed_at.timestamp(),
+        updated_at: claim.updated_at.timestamp(),
+        lease_expires_at: claim.lease_expires_at.timestamp(),
+    }
+}
+
+fn thread_ownership_conflict_from_state(
+    conflict: codex_state::PathClaimConflict,
+) -> ThreadOwnershipPathClaimConflict {
+    ThreadOwnershipPathClaimConflict {
+        requested: ThreadOwnershipPathSpec {
+            kind: thread_ownership_kind_from_state(conflict.requested.kind),
+            path: conflict.requested.path.display().to_string(),
+        },
+        blocking_claim: thread_ownership_claim_from_state(conflict.blocking_claim),
     }
 }
 

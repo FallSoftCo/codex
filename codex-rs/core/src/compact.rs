@@ -13,6 +13,8 @@ use crate::context::world_state::WorldState;
 use crate::context::world_state::WorldStateSnapshot;
 use crate::context::world_state::split_prefix_updates;
 use crate::context_manager::updates::merge_world_state_updates;
+#[cfg(test)]
+use crate::event_mapping::is_contextual_user_message_content;
 use crate::hook_runtime::PostCompactHookOutcome;
 use crate::hook_runtime::PreCompactHookOutcome;
 use crate::hook_runtime::run_post_compact_hooks;
@@ -588,6 +590,7 @@ pub(crate) struct CompactedUserMessage<'a> {
 pub(crate) fn collect_user_messages(items: &[ResponseItem]) -> Vec<CompactedUserMessage<'_>> {
     items
         .iter()
+        .filter(|item| !matches!(item, ResponseItem::Message { role, content, .. } if role == "user" && is_contextual_user_message_content(content)))
         .filter_map(|item| compacted_user_message(item, /*harness_metadata*/ None))
         .collect()
 }

@@ -29,6 +29,7 @@ from .v2_all import FuzzyFileSearchSessionCompletedNotification
 from .v2_all import FuzzyFileSearchSessionUpdatedNotification
 from .v2_all import GatewayOAuthChangedNotification
 from .v2_all import GuardianWarningNotification
+from .v2_all import HollywoodMessageNotification
 from .v2_all import HookCompletedNotification
 from .v2_all import HookStartedNotification
 from .v2_all import ItemCompletedNotification
@@ -114,6 +115,7 @@ KnownNotificationPayload: TypeAlias = (
     | FuzzyFileSearchSessionUpdatedNotification
     | GatewayOAuthChangedNotification
     | GuardianWarningNotification
+    | HollywoodMessageNotification
     | HookCompletedNotification
     | HookStartedNotification
     | ItemCompletedNotification
@@ -233,6 +235,7 @@ NOTIFICATION_MODELS: dict[str, type[KnownNotificationPayload]] = {
     "thread/environment/disconnected": EnvironmentConnectionNotification,
     "thread/goal/cleared": ThreadGoalClearedNotification,
     "thread/goal/updated": ThreadGoalUpdatedNotification,
+    "thread/hollywood/message": HollywoodMessageNotification,
     "thread/name/updated": ThreadNameUpdatedNotification,
     "thread/prediction/updated": ThreadPredictionUpdatedNotification,
     "thread/project/updated": ThreadProjectUpdatedNotification,

@@ -10,6 +10,9 @@ Effective changes to Codex require architectural context, an understanding of sy
 
 Community expertise is most valuable when shared through detailed bug reports, reproduction steps, logs, root-cause analysis, and design discussions in issues. Understanding the problem, identifying the right solution, and prioritizing the work are typically the hard parts; implementation is comparatively straightforward with the help of Codex itself.
 
+Issues and Discussions may receive an initial response from a maintainer agent. Those replies are meant to speed up triage, request missing details, and route feedback to the right surface. Human maintainers still make roadmap, architecture, and merge decisions.
+
+
 For these reasons, we focus community contributions on issue reports, analysis, and feedback, while the Codex team handles code changes.
 
 ### Reporting bugs

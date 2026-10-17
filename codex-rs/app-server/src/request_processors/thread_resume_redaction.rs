@@ -234,6 +234,7 @@ mod tests {
             agent_role: None,
             git_info: None,
             name: None,
+            hollywood: None,
             turns: vec![Turn {
                 id: "turn-1".to_string(),
                 root_turn_id: None,

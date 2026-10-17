@@ -1,3 +1,4 @@
+pub(crate) mod apply_patch_turn_fs;
 mod approvals;
 pub(crate) mod call_trace;
 mod catalog_parameters;
@@ -10,6 +11,7 @@ pub(crate) mod handlers;
 pub(crate) mod hook_names;
 pub(crate) mod hosted_spec;
 pub(crate) mod lifecycle;
+pub(crate) mod losangelex_spec;
 pub(crate) mod metadata_metrics;
 mod multi_agent_tool;
 pub(crate) mod network_approval;

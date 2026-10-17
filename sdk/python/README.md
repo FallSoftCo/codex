@@ -68,8 +68,10 @@ Use Python's standard `help(openai_codex)`, `help(Codex)`, or
 - [Getting started](https://github.com/openai/codex/blob/main/sdk/python/docs/getting-started.md)
 - [API reference](https://github.com/openai/codex/blob/main/sdk/python/docs/api-reference.md)
 - [Untrusted external messages](https://github.com/openai/codex/blob/main/sdk/python/docs/api-reference.md#externalmessage)
+- [Realtime audio](https://github.com/openai/codex/blob/main/sdk/python/docs/realtime-audio.md)
 - [FAQ](https://github.com/openai/codex/blob/main/sdk/python/docs/faq.md)
 - [Examples](https://github.com/openai/codex/blob/main/sdk/python/examples/README.md)
+- [Jupyter walkthrough](https://github.com/openai/codex/blob/main/sdk/python/notebooks/sdk_walkthrough.ipynb)
 
 The package is licensed under the
 [repository Apache License 2.0](https://github.com/openai/codex/blob/main/LICENSE).

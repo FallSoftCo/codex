@@ -65,6 +65,18 @@ pub(crate) use process::UnifiedExecProcess;
 pub(crate) use stdin_approval::TerminalPermissions;
 pub(crate) use stdin_approval::TerminalSandboxSource;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProcessObservation {
+    Running {
+        call_id: String,
+    },
+    Exited {
+        exit_code: Option<i32>,
+        failure_message: Option<String>,
+    },
+    Unknown,
+}
+
 pub(crate) const MIN_YIELD_TIME_MS: u64 = 250;
 pub(crate) const WINDOWS_INITIAL_EXEC_YIELD_TIME_FLOOR_MS: u64 = 10_000;
 // Minimum yield time for an empty `write_stdin`.
@@ -149,6 +161,7 @@ impl std::fmt::Debug for WriteStdinInteractionEvent<'_> {
 #[derive(Default)]
 pub(crate) struct ProcessStore {
     processes: HashMap<i32, ProcessEntry>,
+    completed_processes: HashMap<i32, CompletedProcessObservation>,
     reserved_process_ids: HashSet<i32>,
 }
 
@@ -159,6 +172,13 @@ impl ProcessStore {
         }
         self.processes.remove(&process_id)
     }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CompletedProcessObservation {
+    pub(crate) call_id: String,
+    pub(crate) exit_code: Option<i32>,
+    pub(crate) failure_message: Option<String>,
 }
 
 pub(crate) struct UnifiedExecProcessManager {
@@ -173,6 +193,42 @@ impl UnifiedExecProcessManager {
             max_write_stdin_yield_time_ms: max_write_stdin_yield_time_ms
                 .max(MIN_EMPTY_YIELD_TIME_MS),
         }
+    }
+
+    pub(crate) async fn process_observation(&self, process_id: i32) -> ProcessObservation {
+        let mut store = self.process_store.lock().await;
+        if let Some(entry) = store.processes.get(&process_id) {
+            if entry.process.has_exited() {
+                let exit_code = entry.process.exit_code();
+                let failure_message = None;
+                let call_id = entry.call_id.clone();
+                let _ = store.remove(process_id);
+                store.completed_processes.insert(
+                    process_id,
+                    CompletedProcessObservation {
+                        call_id,
+                        exit_code,
+                        failure_message: failure_message.clone(),
+                    },
+                );
+                return ProcessObservation::Exited {
+                    exit_code,
+                    failure_message,
+                };
+            }
+            return ProcessObservation::Running {
+                call_id: entry.call_id.clone(),
+            };
+        }
+
+        if let Some(completed) = store.completed_processes.get(&process_id) {
+            return ProcessObservation::Exited {
+                exit_code: completed.exit_code,
+                failure_message: completed.failure_message.clone(),
+            };
+        }
+
+        ProcessObservation::Unknown
     }
 }
 

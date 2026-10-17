@@ -94,6 +94,7 @@ use codex_protocol::ThreadId;
 use codex_protocol::items::CollabAgentTool as CoreCollabAgentTool;
 use codex_protocol::items::ModelInvocationContext;
 use codex_protocol::items::TurnItem as CoreTurnItem;
+use codex_protocol::items::parse_hook_prompt_message;
 use codex_protocol::models::AdditionalPermissionProfile as CoreAdditionalPermissionProfile;
 use codex_protocol::plan_tool::UpdatePlanArgs;
 use codex_protocol::protocol::Event;
@@ -117,6 +118,7 @@ use codex_utils_path_uri::LegacyAppPathString;
 use codex_utils_path_uri::PathUri;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use tokio::sync::Mutex;
@@ -159,7 +161,8 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .note_turn_started(&conversation_id.to_string())
                 .await;
             let turn = {
-                let state = thread_state.lock().await;
+                let mut state = thread_state.lock().await;
+                state.hollywood.note_turn_started(Instant::now());
                 let mut turn = state.active_turn_snapshot().unwrap_or_else(|| Turn {
                     id: payload.turn_id.clone(),
                     root_turn_id: payload.root_turn_id.clone(),
@@ -188,9 +191,18 @@ pub(crate) async fn apply_bespoke_event_handling(
             outgoing.abort_pending_server_requests().await;
             respond_to_pending_interrupts(&thread_state, &outgoing).await;
             let turn_failed = thread_state.lock().await.turn_summary.last_error.is_some();
+            if let Some(state_db) = conversation.state_db() {
+                clear_stale_cancelled_coordination_notifications_for_thread(
+                    &state_db,
+                    conversation_id,
+                    turn_complete_event.completed_at,
+                )
+                .await;
+            }
             thread_watch_manager
                 .note_turn_completed(&conversation_id.to_string(), turn_failed)
                 .await;
+            thread_state.lock().await.hollywood.note_turn_finished();
             handle_turn_complete(
                 conversation_id,
                 event_turn_id,
@@ -1165,6 +1177,19 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .await;
         }
         EventMsg::RawResponseItem(mut raw_response_item_event) => {
+            maybe_interrupt_superseded_coordination_owner(
+                &raw_response_item_event.item,
+                conversation_id,
+                thread_manager.as_ref(),
+            )
+            .await;
+            maybe_emit_hook_prompt_item_completed(
+                conversation_id,
+                &event_turn_id,
+                &raw_response_item_event.item,
+                &outgoing,
+            )
+            .await;
             // Keep warehouse metadata out of app-server notifications.
             raw_response_item_event.item.clear_executed_tool_calls();
             let mut notification = ServerNotification::RawResponseItemCompleted(
@@ -1492,6 +1517,155 @@ async fn complete_command_execution_item(
         turn_id,
         completed_at_ms: now_unix_timestamp_ms(),
         item,
+    };
+    outgoing
+        .send_server_notification(ServerNotification::ItemCompleted(notification))
+        .await;
+}
+
+pub(crate) async fn maybe_interrupt_superseded_coordination_owner(
+    item: &codex_protocol::models::ResponseItem,
+    conversation_id: ThreadId,
+    thread_manager: &ThreadManager,
+) {
+    let codex_protocol::models::ResponseItem::FunctionCallOutput { output, .. } = item else {
+        return;
+    };
+    let Some(output_text) = output.body.to_text() else {
+        return;
+    };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&output_text) else {
+        return;
+    };
+    let Some(owner_thread_id) =
+        superseded_coordination_owner_to_interrupt(&payload, &conversation_id)
+    else {
+        return;
+    };
+
+    let Ok(owner_thread) = thread_manager.get_thread(owner_thread_id).await else {
+        return;
+    };
+    if let Err(err) = owner_thread.submit(Op::Interrupt).await {
+        tracing::debug!(
+            owner_thread_id = %owner_thread_id,
+            "failed to interrupt superseded coordination owner turn: {err}"
+        );
+    }
+}
+
+fn superseded_coordination_owner_to_interrupt(
+    payload: &serde_json::Value,
+    conversation_id: &ThreadId,
+) -> Option<ThreadId> {
+    let conversation_id = conversation_id.to_string();
+    if let Some(owner_thread_id) = payload
+        .get("superseded_owner_thread_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|thread_id| !thread_id.is_empty() && *thread_id != conversation_id)
+    {
+        return ThreadId::from_string(owner_thread_id).ok();
+    }
+
+    let act_kind = payload
+        .get("act")
+        .and_then(|value| value.get("kind"))
+        .and_then(serde_json::Value::as_str);
+    if act_kind != Some("cancel") {
+        return None;
+    }
+
+    let task = payload.get("task")?;
+    if task.get("status").and_then(serde_json::Value::as_str) != Some("cancelled") {
+        return None;
+    }
+
+    let owner_thread_id = task
+        .get("owner_thread_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|thread_id| !thread_id.is_empty() && *thread_id != conversation_id)?;
+    ThreadId::from_string(owner_thread_id).ok()
+}
+
+async fn clear_stale_cancelled_coordination_notifications_for_thread(
+    state_db: &Arc<codex_state::StateRuntime>,
+    thread_id: ThreadId,
+    completed_at: Option<i64>,
+) {
+    let Some(completed_at) = completed_at else {
+        return;
+    };
+    let Ok(scheduled_tasks) = state_db.list_scheduled_tasks(Some(thread_id)).await else {
+        return;
+    };
+    let thread_id_string = thread_id.to_string();
+
+    for scheduled_task in scheduled_tasks {
+        if !scheduled_task.title.starts_with("coordination:cancelled:") {
+            continue;
+        }
+        let Some(task_id) = coordination_task_id_from_prompt(scheduled_task.prompt.as_str()) else {
+            continue;
+        };
+        let Ok(Some(task)) = state_db.get_coordination_task(task_id).await else {
+            continue;
+        };
+        if task.status != codex_state::CoordinationTaskStatus::Cancelled {
+            continue;
+        }
+        if task.owner_thread_id.as_deref() != Some(thread_id_string.as_str()) {
+            continue;
+        }
+        if task.updated_at.timestamp() > completed_at {
+            continue;
+        }
+        let _ = state_db.delete_scheduled_task(&scheduled_task.id).await;
+    }
+}
+
+fn coordination_task_id_from_prompt(prompt: &str) -> Option<&str> {
+    prompt
+        .lines()
+        .find_map(|line| line.strip_prefix("task_id: ").map(str::trim))
+        .filter(|task_id| !task_id.is_empty())
+}
+
+pub(crate) async fn maybe_emit_hook_prompt_item_completed(
+    conversation_id: ThreadId,
+    turn_id: &str,
+    item: &codex_protocol::models::ResponseItem,
+    outgoing: &ThreadScopedOutgoingMessageSender,
+) {
+    let codex_protocol::models::ResponseItem::Message {
+        role, content, id, ..
+    } = item
+    else {
+        return;
+    };
+
+    if role != "user" {
+        return;
+    }
+
+    let Some(hook_prompt) = parse_hook_prompt_message(
+        id.as_ref().map(codex_protocol::ResponseItemId::as_str),
+        content,
+    ) else {
+        return;
+    };
+
+    let notification = ItemCompletedNotification {
+        thread_id: conversation_id.to_string(),
+        turn_id: turn_id.to_string(),
+        completed_at_ms: now_unix_timestamp_ms(),
+        item: ThreadItem::HookPrompt {
+            id: hook_prompt.id,
+            fragments: hook_prompt
+                .fragments
+                .into_iter()
+                .map(codex_app_server_protocol::HookPromptFragment::from)
+                .collect(),
+        },
     };
     outgoing
         .send_server_notification(ServerNotification::ItemCompleted(notification))

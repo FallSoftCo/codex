@@ -1,0 +1,725 @@
+use crate::tools::context::ToolInvocation;
+use crate::tools::handlers::CollaborativeEditPlanHandler;
+use crate::tools::handlers::CoordinationHandler;
+use crate::tools::handlers::HollywoodReadHandler;
+use crate::tools::handlers::HollywoodSendHandler;
+use crate::tools::handlers::HollywoodStatusHandler;
+use crate::tools::handlers::HollywoodTeamMemberUpdateHandler;
+use crate::tools::handlers::HollywoodTeamStatusHandler;
+use crate::tools::handlers::HollywoodTeamUpHandler;
+use crate::tools::handlers::LosangelexTeamLaunchHandler;
+use crate::tools::handlers::RestartClientHandler;
+use crate::tools::registry::CoreToolRuntime;
+use crate::tools::registry::ToolExecutor;
+use codex_tools::JsonSchema;
+use codex_tools::ResponsesApiTool;
+use codex_tools::ToolExposure;
+use codex_tools::ToolName;
+use codex_tools::ToolSpec;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+pub(crate) fn append_losangelex_tool_executors(
+    executors: &mut Vec<Arc<dyn CoreToolRuntime>>,
+    state_db_available: bool,
+    hollywood_tools_available: bool,
+) {
+    executors.push(losangelex_tool(
+        RestartClientHandler,
+        create_restart_client_tool(),
+    ));
+
+    if state_db_available && !crate::canonical_collaboration::enterprise() {
+        executors.push(losangelex_tool(
+            CollaborativeEditPlanHandler,
+            create_collaborative_edit_plan_tool(),
+        ));
+        executors.push(losangelex_tool(
+            CoordinationHandler::new("coordination_act"),
+            create_coordination_act_tool(),
+        ));
+        executors.push(losangelex_tool(
+            CoordinationHandler::new("list_coordination_tasks"),
+            create_list_coordination_tasks_tool(),
+        ));
+    }
+
+    if crate::canonical_collaboration::implements("edit-plans") {
+        executors.push(losangelex_tool(
+            CollaborativeEditPlanHandler,
+            create_collaborative_edit_plan_tool(),
+        ));
+    }
+    if crate::canonical_collaboration::implements("coordination") {
+        executors.push(losangelex_tool(
+            CoordinationHandler::new("coordination_act"),
+            create_coordination_act_tool(),
+        ));
+    }
+    if hollywood_tools_available && !crate::canonical_collaboration::enterprise() {
+        executors.push(losangelex_tool(
+            HollywoodStatusHandler,
+            create_hollywood_status_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodReadHandler,
+            create_hollywood_read_tool(),
+        ));
+        executors.push(losangelex_tool(
+            LosangelexTeamLaunchHandler,
+            create_losangelex_team_launch_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodSendHandler,
+            create_hollywood_send_tool(state_db_available),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodTeamUpHandler,
+            create_hollywood_team_up_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodTeamStatusHandler,
+            create_hollywood_team_status_tool(),
+        ));
+        executors.push(losangelex_tool(
+            HollywoodTeamMemberUpdateHandler,
+            create_hollywood_team_member_update_tool(),
+        ));
+    }
+}
+
+fn losangelex_tool<T>(handler: T, spec: ToolSpec) -> Arc<dyn CoreToolRuntime>
+where
+    T: ToolExecutor<ToolInvocation> + 'static,
+{
+    Arc::new(LosangelexToolRuntime { handler, spec })
+}
+
+struct LosangelexToolRuntime<T> {
+    handler: T,
+    spec: ToolSpec,
+}
+
+impl<T> ToolExecutor<ToolInvocation> for LosangelexToolRuntime<T>
+where
+    T: ToolExecutor<ToolInvocation> + 'static,
+{
+    fn tool_name(&self) -> ToolName {
+        self.handler.tool_name()
+    }
+
+    fn spec(&self) -> ToolSpec {
+        self.spec.clone()
+    }
+
+    fn exposure(&self) -> ToolExposure {
+        self.handler.exposure()
+    }
+
+    fn supports_parallel_tool_calls(&self) -> bool {
+        self.handler.supports_parallel_tool_calls()
+    }
+
+    fn handle<'a>(&'a self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'a>
+    where
+        ToolInvocation: 'a,
+    {
+        self.handler.handle(invocation)
+    }
+}
+
+impl<T> CoreToolRuntime for LosangelexToolRuntime<T> where T: ToolExecutor<ToolInvocation> + 'static {}
+
+fn object_schema(
+    properties: BTreeMap<String, JsonSchema>,
+    required: Option<Vec<String>>,
+) -> JsonSchema {
+    JsonSchema::object(properties, required, Some(false.into()))
+}
+
+pub(crate) fn create_hollywood_status_tool() -> ToolSpec {
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_status".to_string(),
+        description: "Check whether Hollywood is configured and reachable for this session. Use this first when the user asks you to work with teammates, peers, or other existing agents so you can coordinate with existing attached Losangelex agents before considering `spawn_agent`.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(BTreeMap::new(), Some(Vec::new())),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_coordination_act_tool() -> ToolSpec {
+    if crate::canonical_collaboration::enterprise() {
+        return crate::canonical_collaboration::specification("coordination_act");
+    }
+    let path_claim_schema = JsonSchema::object(
+        BTreeMap::from([
+            (
+                "kind".to_string(),
+                JsonSchema::string(Some("`file` or `directory`.".to_string())),
+            ),
+            (
+                "path".to_string(),
+                JsonSchema::string(Some(
+                    "Absolute path or path relative to the current cwd.".to_string(),
+                )),
+            ),
+        ]),
+        Some(vec!["kind".to_string(), "path".to_string()]),
+        Some(false.into()),
+    );
+    let properties = BTreeMap::from([
+        (
+            "action".to_string(),
+            JsonSchema::string(Some(
+                "Coordination act to record: `open_task`, `accept`, `done`, `cancel`, `handoff`, or `yield`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "task_id".to_string(),
+            JsonSchema::string(Some(
+                "Existing coordination task id for actions other than `open_task`.".to_string(),
+            )),
+        ),
+        (
+            "title".to_string(),
+            JsonSchema::string(Some(
+                "Task summary for `open_task`. Keep it short and concrete.".to_string(),
+            )),
+        ),
+        (
+            "details".to_string(),
+            JsonSchema::string(Some("Optional longer task details or handoff notes.".to_string())),
+        ),
+        (
+            "kind".to_string(),
+            JsonSchema::string(Some(
+                "Optional task kind for `open_task`: `general`, `implementation`, `review`, `investigation`, `qa`, or `handoff`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "owner".to_string(),
+            JsonSchema::string(Some(
+                "Optional target agent thread id or alias. Use this for directed awards or handoffs."
+                    .to_string(),
+            )),
+        ),
+        (
+            "team_id".to_string(),
+            JsonSchema::string(Some("Optional coordination team id to associate with the task.".to_string())),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some("Optional Hollywood room associated with the task.".to_string())),
+        ),
+        (
+            "capability".to_string(),
+            JsonSchema::string(Some("Optional requested capability or specialty for the task.".to_string())),
+        ),
+        (
+            "depends_on".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Blocking coordination task id.".to_string())),
+                Some("Optional dependency task ids that must be done before this task becomes actionable.".to_string()),
+            ),
+        ),
+        (
+            "summary".to_string(),
+            JsonSchema::string(Some(
+                "Concise durable act summary. Required for `done`, `cancel`, `handoff`, and `yield`; use a concrete result or reason, not placeholder text.".to_string(),
+            )),
+        ),
+        (
+            "notify_room".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, also post a concise Hollywood room summary for visibility. Defaults to true."
+                    .to_string(),
+            )),
+        ),
+        (
+            "claim_paths".to_string(),
+            JsonSchema::array(
+                path_claim_schema.clone(),
+                Some("Optional exact ownership claims. For `accept`, these claims become active scope. For directed implementation `open_task`, they reserve exact scope for the awarded owner. For same-file collaboration, pair the claim with a Hollywood edit plan, patch proposal, or serial handoff instead of treating the file as off-limits to peer input.".to_string()),
+            ),
+        ),
+        (
+            "release_paths".to_string(),
+            JsonSchema::array(
+                path_claim_schema,
+                Some("Optional ownership claims to release while finishing, handing off, or yielding the task.".to_string()),
+            ),
+        ),
+        (
+            "lease_seconds".to_string(),
+            JsonSchema::number(Some(
+                "Optional active-lease duration for `accept`. Defaults to a long development-friendly lease."
+                    .to_string(),
+            )),
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "coordination_act".to_string(),
+        description: "Record a durable team-work commitment. Use this when natural-language coordination becomes an actual assignment, acceptance, completion, cancellation, handoff, or yield so Losangelex can persist the commitment, wake the right peer, and survive restart or rolling deploy.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(vec!["action".to_string()])),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_collaborative_edit_plan_tool() -> ToolSpec {
+    if crate::canonical_collaboration::enterprise() {
+        return crate::canonical_collaboration::specification("collaborative_edit_plan");
+    }
+    let properties = BTreeMap::from([
+        (
+            "file".to_string(),
+            JsonSchema::string(Some(
+                "File path to edit. Use an absolute path or a path relative to the current cwd."
+                    .to_string(),
+            )),
+        ),
+        (
+            "slice".to_string(),
+            JsonSchema::string(Some(
+                "The narrow slice/function/section you intend to edit in this file.".to_string(),
+            )),
+        ),
+        (
+            "intent".to_string(),
+            JsonSchema::string(Some(
+                "The intended hunk or change shape. Keep this concrete enough that a peer can see where your patch belongs."
+                    .to_string(),
+            )),
+        ),
+        (
+            "peers".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some(
+                    "Peer session id, alias, or agent name involved in this shared edit."
+                        .to_string(),
+                )),
+                Some("Optional peers who own, review, integrate, or depend on this file.".to_string()),
+            ),
+        ),
+        (
+            "handoff".to_string(),
+            JsonSchema::string(Some(
+                "Optional edit order or handoff expectation, for example `I patch parser first; reviewer patches tests after`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "integrator".to_string(),
+            JsonSchema::string(Some(
+                "Optional peer or role responsible for integrating the shared file.".to_string(),
+            )),
+        ),
+        (
+            "report_back".to_string(),
+            JsonSchema::string(Some(
+                "Optional report-back point, for example `after apply_patch` or `after tests pass`."
+                    .to_string(),
+            )),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood room for this edit plan. Defaults to the attached room when available."
+                    .to_string(),
+            )),
+        ),
+        (
+            "notify_room".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, also post this plan to Hollywood for teammates. Defaults to true."
+                    .to_string(),
+            )),
+        ),
+        (
+            "lease_seconds".to_string(),
+            JsonSchema::number(Some(
+                "Optional active duration for this plan. Defaults to one hour.".to_string(),
+            )),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "collaborative_edit_plan".to_string(),
+        description: "Record a durable collaborative editing plan before applying a patch that touches a file another Losangelex peer owns or is also editing. Use this to make same-file collaboration first-class: name the file, slice/function/section, intended hunk, handoff/order, integrator, and report-back point. `apply_patch` checks these active plans when it sees peer-owned paths.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(
+            properties,
+            Some(vec![
+                "file".to_string(),
+                "slice".to_string(),
+                "intent".to_string(),
+            ]),
+        ),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_list_coordination_tasks_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "owner".to_string(),
+            JsonSchema::string(Some("Optional owner agent thread id or alias filter.".to_string())),
+        ),
+        (
+            "creator".to_string(),
+            JsonSchema::string(Some("Optional creator agent thread id or alias filter.".to_string())),
+        ),
+        (
+            "statuses".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Task status filter.".to_string())),
+                Some("Optional task statuses to include.".to_string()),
+            ),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional room filter. Defaults to the current attached Hollywood room when available."
+                    .to_string(),
+            )),
+        ),
+        (
+            "include_history".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, include durable coordination acts alongside the task list.".to_string(),
+            )),
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "list_coordination_tasks".to_string(),
+        description: "Inspect durable Losangelex coordination tasks and, optionally, their act history. When this session is attached to Hollywood, the current attached room is the default scope unless overridden.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(Vec::new())),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_restart_client_tool() -> ToolSpec {
+    let properties = BTreeMap::from([(
+        "reason".to_string(),
+        JsonSchema::string(Some(
+            "Optional concise reason for the restart request, for example `rolling deploy`, `latest build available`, or `resume on new client generation`.".to_string(),
+        )),
+    )]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "restart_client".to_string(),
+        description: "Request that the current Losangelex client exit and auto-resume this root thread through the launcher when available. This restarts the interactive client only; it does not create a new thread or subagent.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(Vec::new())),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_hollywood_read_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional room to read from. Defaults to the configured Hollywood room."
+                    .to_string(),
+            )),
+        ),
+        (
+            "after_id".to_string(),
+            JsonSchema::number(Some(
+                "Optional message id cursor. When provided, only newer messages are returned."
+                    .to_string(),
+            )),
+        ),
+        (
+            "limit".to_string(),
+            JsonSchema::number(Some(
+                "Optional maximum number of messages to return. Defaults to 20, max 100."
+                    .to_string(),
+            )),
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_read".to_string(),
+        description: "Read messages and attached peer sessions from the configured Hollywood room. Use this when teammate or peer requests require current room context beyond the ambient runtime stream, and before deciding to work solo when collaboration may help.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(Vec::new())),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_losangelex_team_launch_tool() -> ToolSpec {
+    let agent_schema = JsonSchema::object(
+        BTreeMap::from([
+            (
+                "name".to_string(),
+                JsonSchema::string(Some(
+                    "Short human-readable peer name, for example `reviewer` or `qa`."
+                        .to_string(),
+                )),
+            ),
+            (
+                "task".to_string(),
+                JsonSchema::string(Some(
+                    "Concrete initial assignment for this peer. Include exact scope, expected output, and coordination expectations. For shared-file work, include the collaborative edit slice, handoff/integrator expectation, and report-back point."
+                        .to_string(),
+                )),
+            ),
+        ]),
+        Some(vec!["name".to_string(), "task".to_string()]),
+        Some(false.into()),
+    );
+    let properties = BTreeMap::from([
+        (
+            "agents".to_string(),
+            JsonSchema::array(
+                agent_schema,
+                Some(
+                    "Peers to launch. Keep this small and purposeful; at most eight peers are accepted."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "workspace".to_string(),
+            JsonSchema::string(Some(
+                "Optional absolute workspace path. Defaults to this session's current local workspace."
+                    .to_string(),
+            )),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood room to attach peers to. Defaults to this session's configured room."
+                    .to_string(),
+            )),
+        ),
+        (
+            "observed_rooms".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Additional room to observe.".to_string())),
+                Some(
+                    "Optional observed rooms for launched peers. Defaults to this session's observed rooms."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "wake_rooms".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Room that may wake the peer.".to_string())),
+                Some(
+                    "Optional wake rooms for launched peers. Defaults to this session's wake rooms."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "attention_mode".to_string(),
+            JsonSchema::string(Some(
+                "Optional Hollywood attention mode for peers: `focused`, `ambient`, or `broad`. Defaults to this session's mode."
+                    .to_string(),
+            )),
+        ),
+        (
+            "model".to_string(),
+            JsonSchema::string(Some(
+                "Optional model override for launched peers. Omit to let app-server use its configured default."
+                    .to_string(),
+            )),
+        ),
+        (
+            "model_provider".to_string(),
+            JsonSchema::string(Some(
+                "Optional model provider override for launched peers.".to_string(),
+            )),
+        ),
+        (
+            "start_turns".to_string(),
+            JsonSchema::boolean(Some(
+                "When false, create and attach peers without starting their initial task turns. Defaults to true."
+                    .to_string(),
+            )),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "losangelex_team_launch".to_string(),
+        description: "Start app-server-hosted Losangelex peer sessions and attach them to the current Hollywood room. Use this when the user asks to form/start a Losangelex team, or when collaboration would materially help and no suitable attached peers already exist. Prefer this native tool over shelling out to `losangelex team`; it launches real Losangelex peer sessions, not Codex subagents.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(vec!["agents".to_string()])),
+        output_schema: None,
+    })
+}
+
+fn durable_coordination_tool_text(state_db_available: bool) -> &'static str {
+    if state_db_available {
+        "When the conversation becomes a real assignment, acceptance, handoff, dependency, or completion, pair the room update with `coordination_act` so the commitment is durable."
+    } else {
+        "This session does not currently expose durable coordination tools, so keep Hollywood ownership updates current and treat them as best-effort until durable coordination returns."
+    }
+}
+
+pub(crate) fn create_hollywood_send_tool(state_db_available: bool) -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "text".to_string(),
+            JsonSchema::string(Some(
+                "Message body to send to Hollywood. Use @mentions when you need another agent's attention, make ownership claims concrete with exact files, modules, directories, or narrow globs, and for shared-file edits name the slice/function/section, intended hunk, edit order or handoff, integrator, and report-back point."
+                    .to_string(),
+            )),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional room override. Defaults to the current attached Hollywood room.".to_string(),
+            )),
+        ),
+        (
+            "to".to_string(),
+            JsonSchema::string(Some(
+                "Optional direct recipient session id or alias. When omitted, the message goes to the room."
+                    .to_string(),
+            )),
+        ),
+        (
+            "broadcast".to_string(),
+            JsonSchema::boolean(Some(
+                "When true, mark this as an explicit room-wide broadcast that should wake idle attached agents."
+                    .to_string(),
+            )),
+        ),
+        (
+            "response_policy".to_string(),
+            JsonSchema::string(Some(
+                "Optional reply contract for the message: `required`, `optional`, or `none`. Use `required` for direct peer asks that block your plan, request a narrow lane, or need review before you mark work done. A required direct message is one pending ask; do not send duplicate nudges for the same question while waiting for the peer's reply."
+                    .to_string(),
+            )),
+        ),
+    ]);
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_send".to_string(),
+        description: format!(
+            "Send a message to Hollywood as this agent. Use this to coordinate with other existing attached Losangelex agents through the local Hollywood room. For direct requests where you need a peer to take work, review, answer, or unblock you, set `response_policy` to `required` and wait for the reply before finalizing. Treat each required direct as one pending ask; do not send a duplicate nudge for the same question unless the prior reply is ambiguous, declined, superseded, or the human asks you to follow up. {}",
+            durable_coordination_tool_text(state_db_available)
+        ),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(vec!["text".to_string()])),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_hollywood_team_up_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "purpose".to_string(),
+            JsonSchema::string(Some("Shared purpose for the team.".to_string())),
+        ),
+        (
+            "targets".to_string(),
+            JsonSchema::array(
+                JsonSchema::string(Some("Target session id or alias.".to_string())),
+                Some("Sessions to invite onto the team.".to_string()),
+            ),
+        ),
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional control room for the team record. Defaults to main.".to_string(),
+            )),
+        ),
+        (
+            "task_room".to_string(),
+            JsonSchema::string(Some(
+                "Optional working room members should join after accepting.".to_string(),
+            )),
+        ),
+        (
+            "team_id".to_string(),
+            JsonSchema::string(Some("Optional explicit team id.".to_string())),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_team_up".to_string(),
+        description: "Create a structured Hollywood team with a leader, purpose, and invited member sessions.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(vec!["purpose".to_string(), "targets".to_string()])),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_hollywood_team_status_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        (
+            "room".to_string(),
+            JsonSchema::string(Some(
+                "Optional room to inspect. Defaults to the configured Hollywood room.".to_string(),
+            )),
+        ),
+        (
+            "limit".to_string(),
+            JsonSchema::number(Some(
+                "Maximum number of teams to return. Defaults to 20.".to_string(),
+            )),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_team_status".to_string(),
+        description: "Inspect structured Hollywood teams and member state for a room.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(Vec::new())),
+        output_schema: None,
+    })
+}
+
+pub(crate) fn create_hollywood_team_member_update_tool() -> ToolSpec {
+    let properties = BTreeMap::from([
+        ("team_id".to_string(), JsonSchema::string(Some("Team id to update.".to_string()))),
+        (
+            "session_id".to_string(),
+            JsonSchema::string(Some(
+                "Optional session id or alias to update. Defaults to this session.".to_string(),
+            )),
+        ),
+        ("role".to_string(), JsonSchema::string(Some("Optional updated role.".to_string()))),
+        ("state".to_string(), JsonSchema::string(Some("Optional updated team state.".to_string()))),
+        (
+            "joined_room".to_string(),
+            JsonSchema::string(Some("Optional joined working room for this member.".to_string())),
+        ),
+        ("task".to_string(), JsonSchema::string(Some("Optional current task summary for this member.".to_string()))),
+        (
+            "scope".to_string(),
+            JsonSchema::string(Some(
+                "Optional scope or ownership summary for this member. Prefer exact files, modules, directories, or narrow globs over vague area names.".to_string(),
+            )),
+        ),
+    ]);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: "hollywood_team_member_update".to_string(),
+        description: "Update structured team-member state in Hollywood.".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: object_schema(properties, Some(vec!["team_id".to_string()])),
+        output_schema: None,
+    })
+}
+
+#[cfg(test)]
+#[path = "losangelex_spec_tests.rs"]
+mod tests;

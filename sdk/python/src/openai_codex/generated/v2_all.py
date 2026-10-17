@@ -1975,6 +1975,73 @@ class GuardianWarningNotification(BaseModel):
     ]
 
 
+class HollywoodAttentionMode(Enum):
+    focused = "focused"
+    ambient = "ambient"
+    broad = "broad"
+
+
+class HollywoodAttentionSettings(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    include_at_all: Annotated[bool | None, Field(alias="includeAtAll")] = True
+    include_at_room: Annotated[bool | None, Field(alias="includeAtRoom")] = True
+    mode: HollywoodAttentionMode
+
+
+class HollywoodMessageAttention(Enum):
+    focused = "focused"
+    broadcast = "broadcast"
+    ambient = "ambient"
+    broad = "broad"
+
+
+class HollywoodMessageKind(Enum):
+    ambient = "ambient"
+    broadcast = "broadcast"
+    direct = "direct"
+
+
+class HollywoodResponsePolicy(Enum):
+    required = "required"
+    optional = "optional"
+    none = "none"
+
+
+class HollywoodSessionAttachOptions(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    attention: HollywoodAttentionSettings | None = None
+    observed_rooms: Annotated[list[str] | None, Field(alias="observedRooms")] = []
+    room: str | None = None
+    url: str | None = None
+    wake_rooms: Annotated[list[str] | None, Field(alias="wakeRooms")] = []
+
+
+class HollywoodSessionDiagnostics(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    active_turn_id: Annotated[str | None, Field(alias="activeTurnId")] = None
+    active_turn_item_count: Annotated[int, Field(alias="activeTurnItemCount", ge=0)]
+    active_turn_started_at: Annotated[int | None, Field(alias="activeTurnStartedAt")] = None
+    autonomous_turn_pending: Annotated[bool, Field(alias="autonomousTurnPending")]
+    current_turn_open: Annotated[bool, Field(alias="currentTurnOpen")]
+    outstanding_obligation_count: Annotated[int, Field(alias="outstandingObligationCount", ge=0)]
+    pending_semantic_wake_count: Annotated[int, Field(alias="pendingSemanticWakeCount", ge=0)]
+    startup_turn_pending: Annotated[bool, Field(alias="startupTurnPending")]
+
+
+class HollywoodSessionStatus(Enum):
+    persisted = "persisted"
+    idle = "idle"
+    active = "active"
+    waiting = "waiting"
+    blocked = "blocked"
+
+
 class HookErrorInfo(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -5707,6 +5774,19 @@ class ThreadNameUpdatedNotification(BaseModel):
     thread_name: Annotated[str | None, Field(alias="threadName")] = None
 
 
+class ThreadOwnershipPathKind(Enum):
+    file = "file"
+    directory = "directory"
+
+
+class ThreadOwnershipPathSpec(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    kind: ThreadOwnershipPathKind
+    path: str
+
+
 class CompletedThreadPredictionResult(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -8512,6 +8592,51 @@ class NetworkAccessGuardianApprovalReviewAction(BaseModel):
     ]
 
 
+class HollywoodMessage(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    body: str
+    created_at: Annotated[str, Field(alias="createdAt")]
+    id: int
+    mentions: list[str]
+    message_kind: Annotated[HollywoodMessageKind | None, Field(alias="messageKind")] = "ambient"
+    recipient_id: Annotated[str | None, Field(alias="recipientId")] = None
+    response_policy: Annotated[HollywoodResponsePolicy | None, Field(alias="responsePolicy")] = (
+        "optional"
+    )
+    room: str
+    sender_id: Annotated[str | None, Field(alias="senderId")] = None
+
+
+class HollywoodMessageNotification(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    attention: HollywoodMessageAttention
+    mentioned: bool
+    message: HollywoodMessage
+    self_authored: Annotated[bool, Field(alias="selfAuthored")]
+    thread_id: Annotated[str, Field(alias="threadId")]
+
+
+class HollywoodSessionState(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    attached: bool
+    attention: HollywoodAttentionSettings
+    diagnostics: HollywoodSessionDiagnostics | None = None
+    identities: list[str]
+    observed_rooms: Annotated[list[str], Field(alias="observedRooms")]
+    primary_room: Annotated[str, Field(alias="primaryRoom")]
+    resumed_from: Annotated[str | None, Field(alias="resumedFrom")] = None
+    session_kind: Annotated[str | None, Field(alias="sessionKind")] = None
+    status: HollywoodSessionStatus
+    url: str
+    wake_rooms: Annotated[list[str], Field(alias="wakeRooms")]
+
+
 class HookMetadata1(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -9839,6 +9964,24 @@ class ThreadRealtimeClosedServerNotification(BaseModel):
     params: ThreadRealtimeClosedNotification
 
 
+class ThreadHollywoodMessageServerNotification(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    emitted_at_ms: Annotated[
+        int | None,
+        Field(
+            alias="emittedAtMs",
+            description="Unix timestamp (in milliseconds) when app-server emitted this notification.",
+        ),
+    ] = None
+    method: Annotated[
+        Literal["thread/hollywood/message"],
+        Field(title="Thread/hollywood/messageNotificationMethod"),
+    ]
+    params: HollywoodMessageNotification
+
+
 class WindowsWorldWritableWarningServerNotification(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -10305,6 +10448,27 @@ class ThreadListParams(BaseModel):
             description="If true, return from the state DB without scanning JSONL rollouts to repair thread metadata. Omitted or false preserves scan-and-repair behavior.",
         ),
     ] = None
+
+
+class ThreadOwnershipPathClaim(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    claimed_at: Annotated[int, Field(alias="claimedAt")]
+    id: str
+    kind: ThreadOwnershipPathKind
+    lease_expires_at: Annotated[int, Field(alias="leaseExpiresAt")]
+    owner_thread_id: Annotated[str, Field(alias="ownerThreadId")]
+    path: str
+    updated_at: Annotated[int, Field(alias="updatedAt")]
+
+
+class ThreadOwnershipPathClaimConflict(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    blocking_claim: Annotated[ThreadOwnershipPathClaim, Field(alias="blockingClaim")]
+    requested: ThreadOwnershipPathSpec
 
 
 class ThreadReadState(BaseModel):
@@ -12333,6 +12497,10 @@ class Thread(BaseModel):
             description="Persisted thread history contract selected when this thread was created.",
         ),
     ] = "legacy"
+    hollywood: Annotated[
+        HollywoodSessionState | None,
+        Field(description="Optional Hollywood coordination state when attached."),
+    ] = None
     id: Annotated[
         str, Field(description="Identifier for this thread. Codex-generated thread IDs are UUIDv7.")
     ]
@@ -13291,6 +13459,7 @@ class ServerNotification(
         | ThreadRealtimeSdpServerNotification
         | ThreadRealtimeErrorServerNotification
         | ThreadRealtimeClosedServerNotification
+        | ThreadHollywoodMessageServerNotification
         | WindowsWorldWritableWarningServerNotification
         | WindowsSandboxSetupCompletedServerNotification
         | AccountLoginCompletedServerNotification
@@ -13382,6 +13551,7 @@ class ServerNotification(
         | ThreadRealtimeSdpServerNotification
         | ThreadRealtimeErrorServerNotification
         | ThreadRealtimeClosedServerNotification
+        | ThreadHollywoodMessageServerNotification
         | WindowsWorldWritableWarningServerNotification
         | WindowsSandboxSetupCompletedServerNotification
         | AccountLoginCompletedServerNotification,

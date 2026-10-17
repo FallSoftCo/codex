@@ -1,5 +1,7 @@
 use codex_protocol::AgentPath;
 use codex_protocol::protocol::AgentStatus;
+#[cfg(test)]
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_utils_output_truncation::TruncationPolicy;
 use codex_utils_output_truncation::truncate_text;
 
@@ -57,5 +59,32 @@ pub(crate) fn format_subagent_context_line(
     match agent_nickname.filter(|nickname| !nickname.is_empty()) {
         Some(agent_nickname) => format!("- {agent_reference}: {agent_nickname}"),
         None => format!("- {agent_reference}"),
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn hollywood_obligation_instruction(message: &HollywoodInputMessage) -> Option<String> {
+    if message.sender_id == "hollywood-system" {
+        return match message.obligation.as_deref() {
+            Some("attention") => Some(
+                "Internal Hollywood runtime coordination context was attached to this turn. Keep it internal unless it materially changes the task or requires a concrete coordination action."
+                    .to_string(),
+            ),
+            _ => None,
+        };
+    }
+
+    match message.obligation.as_deref() {
+        Some("obligation") => Some(format!(
+            "Hollywood coordination obligation: a {} message in room `{}` from `{}` needs explicit analysis and, if relevant, a concrete response, claim, join, handoff, or action. Do not silently ignore it.",
+            message.message_kind.as_deref().unwrap_or("contextual"),
+            message.room,
+            message.sender_id,
+        )),
+        Some("attention") => Some(format!(
+            "Hollywood attention update: inspect the attached Hollywood message from `{}` in room `{}`. Keep it internal unless it materially changes your work or requires a concrete coordination action; do not send a routine acknowledgment by default.",
+            message.sender_id, message.room,
+        )),
+        _ => None,
     }
 }

@@ -501,6 +501,10 @@ impl EnvironmentManager {
         )
     }
 
+    pub async fn current(&self) -> Result<Option<Arc<Environment>>, ExecServerError> {
+        Ok(self.default_environment())
+    }
+
     /// Adds or replaces a direct environment with trusted host-owned connection options.
     ///
     /// Invalid headers and WebSocket-controlled handshake headers are rejected
@@ -720,6 +724,12 @@ impl Environment {
             ))),
             local_runtime_paths: None,
         }
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self::default_for_tests()
     }
 }
 

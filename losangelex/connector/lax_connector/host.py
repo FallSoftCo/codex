@@ -225,6 +225,7 @@ def observe_executors(config):
                     prior
                     and prior["state"] == "completed"
                     and prior.get("fingerprint") == fingerprint
+                    and not config.get("nativeCollaborationCaptureConfig")
                 ):
                     continue
                 payload = {
@@ -273,6 +274,21 @@ def observe_executors(config):
             original = json.loads(path.read_text())
             saved(path, {**original, "state": "completed", "receipt": result})
             observed += 1
+            capture = config.get("nativeCollaborationCaptureConfig")
+            native_pid = row["descriptor"].get("nativePid")
+            if capture and native_pid and payload["state"] == "live":
+                try:
+                    from .collaboration_bridge import Bridge
+                    from .collaboration_capture import AutomaticCapture
+                    from .service_observer import process
+                    native = process(native_pid)
+                    if native:
+                        AutomaticCapture(Bridge(capture)).ensure((native_pid,native["uid"],0))
+                except Exception as error:
+                    saved(root / ("collaboration-capture-gap-"+row["id"]+".json"), {
+                        "executorId":row["id"],"state":"held","reason":type(error).__name__,
+                        "modelsStarted":0,"effectReplayed":False,
+                    })
         after = page["nextAfter"]
         if not after:
             break

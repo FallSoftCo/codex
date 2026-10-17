@@ -1,3 +1,4 @@
+use crate::collaborative_replacements::augment_pattern_with_target_insertions;
 use codex_exec_server::ExecutorFileSystem;
 use codex_exec_server::FileSystemSandboxContext;
 use codex_exec_server::ReadFileOptions;
@@ -122,35 +123,58 @@ fn compute_replacements(
         }
 
         if let Some(start_idx) = found {
-            // Context lines occur in both sides of a patch chunk. Keep those
-            // original lines in place so their exact contents and terminators
-            // survive, especially when the file has mixed line endings.
-            let mut old_start = 0;
-            let mut new_start = 0;
-            for &(old_context, new_context) in &chunk.context_line_indices {
-                // A trailing empty context line can be removed from `pattern`
-                // and `new_slice` above when it represents the final newline.
-                if old_context >= pattern.len() || new_context >= new_slice.len() {
-                    break;
-                }
-                if old_start != old_context || new_start != new_context {
-                    replacements.push((
-                        start_idx + old_start,
-                        old_context - old_start,
-                        new_slice[new_start..new_context].to_vec(),
-                    ));
-                }
-                old_start = old_context + 1;
-                new_start = new_context + 1;
-            }
-            if old_start != pattern.len() || new_start != new_slice.len() {
-                replacements.push((
-                    start_idx + old_start,
-                    pattern.len() - old_start,
-                    new_slice[new_start..].to_vec(),
-                ));
-            }
+            append_context_replacements(
+                &mut replacements,
+                start_idx,
+                pattern.len(),
+                new_slice,
+                &chunk.context_line_indices,
+            );
             line_index = start_idx + pattern.len();
+        } else if let Some(augmented) =
+            augment_pattern_with_target_insertions(original_lines, pattern, new_slice, line_index)
+        {
+            let start_idx = seek_sequence::seek_sequence(
+                original_lines,
+                &augmented.lines,
+                line_index,
+                chunk.is_end_of_file,
+            )
+            .ok_or_else(|| {
+                ApplyPatchError::ComputeReplacements(format!(
+                    "Failed to align cooperative patch in {path}"
+                ))
+            })?;
+            let mut preserved_context = chunk
+                .context_line_indices
+                .iter()
+                .filter_map(|&(old, new)| {
+                    augmented
+                        .original_indices
+                        .get(old)
+                        .map(|&index| (index, new))
+                })
+                .chain(augmented.preserved_insertions.iter().copied())
+                .collect::<Vec<_>>();
+            // Preserve only parser context and positively identified existing
+            // peer insertions. An explicit -same/+same remains a replacement.
+            preserved_context.sort_unstable();
+            if preserved_context
+                .windows(2)
+                .any(|pair| pair[0].0 >= pair[1].0 || pair[0].1 >= pair[1].1)
+            {
+                return Err(ApplyPatchError::ComputeReplacements(format!(
+                    "Ambiguous cooperative patch context in {path}; reread and rebase"
+                )));
+            }
+            append_context_replacements(
+                &mut replacements,
+                start_idx,
+                augmented.lines.len(),
+                new_slice,
+                &preserved_context,
+            );
+            line_index = start_idx + augmented.lines.len();
         } else {
             return Err(ApplyPatchError::ComputeReplacements(format!(
                 "Failed to find expected lines in {}:\n{}",
@@ -163,6 +187,40 @@ fn compute_replacements(
     replacements.sort_by_key(|(index, _, _)| *index);
 
     Ok(replacements)
+}
+
+// Keep unchanged context lines and their original line terminators. This is
+// also required when the fork fallback matches a partially applied insertion.
+fn append_context_replacements(
+    replacements: &mut Vec<Replacement>,
+    start_idx: usize,
+    matched_old_len: usize,
+    new_slice: &[String],
+    context_indices: &[(usize, usize)],
+) {
+    let mut old_start = 0;
+    let mut new_start = 0;
+    for &(old_context, new_context) in context_indices {
+        if old_context >= matched_old_len || new_context >= new_slice.len() {
+            break;
+        }
+        if old_start != old_context || new_start != new_context {
+            replacements.push((
+                start_idx + old_start,
+                old_context - old_start,
+                new_slice[new_start..new_context].to_vec(),
+            ));
+        }
+        old_start = old_context + 1;
+        new_start = new_context + 1;
+    }
+    if old_start != matched_old_len || new_start != new_slice.len() {
+        replacements.push((
+            start_idx + old_start,
+            matched_old_len - old_start,
+            new_slice[new_start..].to_vec(),
+        ));
+    }
 }
 
 /// Intended result of a file update for apply_patch.

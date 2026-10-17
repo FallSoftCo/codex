@@ -214,6 +214,18 @@ class AsyncCodexClient:
         """Start thread compaction using the wrapped sync client."""
         return await self._call_sync(self._sync.thread_compact, thread_id)
 
+    async def thread_realtime_start(self, thread_id: str, prompt: str):
+        return await self._call_sync(self._sync.thread_realtime_start, thread_id, prompt)
+
+    async def thread_realtime_append_audio(self, thread_id: str, audio):
+        return await self._call_sync(self._sync.thread_realtime_append_audio, thread_id, audio)
+
+    async def thread_realtime_append_text(self, thread_id: str, text: str):
+        return await self._call_sync(self._sync.thread_realtime_append_text, thread_id, text)
+
+    async def thread_realtime_stop(self, thread_id: str):
+        return await self._call_sync(self._sync.thread_realtime_stop, thread_id)
+
     async def thread_goal_clear(self, thread_id: str) -> ThreadGoalClearResponse:
         """Clear the persisted goal through the wrapped sync client."""
         return await self._call_sync(self._sync.thread_goal_clear, thread_id)

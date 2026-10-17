@@ -45,6 +45,8 @@ pub(super) fn cached_attribution_policy(
 
 // Auth recovery crosses several I/O boundaries; tests use the production deadline.
 const POLICY_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const POLICY_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(2);
 pub(super) const POLICY_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 pub(super) async fn resolve_attribution_policy(

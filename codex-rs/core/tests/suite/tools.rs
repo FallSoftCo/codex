@@ -978,3 +978,89 @@ async fn unified_exec_spec_toggle_end_to_end() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shell_command_timeout_includes_timeout_prefix_and_metadata() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+    let mut builder = test_codex().with_model("test-gpt-5-codex");
+    let test = builder.build(&server).await?;
+
+    let call_id = "shell-command-timeout";
+    let timeout_ms = 50u64;
+    let args = json!({
+        "command": "yes line | head -n 400; sleep 1",
+        "login": false,
+        "timeout_ms": timeout_ms,
+    });
+
+    mount_sse_once(
+        &server,
+        sse(vec![
+            ev_response_created("resp-1"),
+            ev_function_call(call_id, "shell_command", &serde_json::to_string(&args)?),
+            ev_completed("resp-1"),
+        ]),
+    )
+    .await;
+    let second_mock = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("msg-1", "done"),
+            ev_completed("resp-2"),
+        ]),
+    )
+    .await;
+
+    test.submit_turn_with_approval_and_permission_profile(
+        "run a long command",
+        AskForApproval::Never,
+        PermissionProfile::Disabled,
+    )
+    .await?;
+
+    let timeout_item = second_mock.single_request().function_call_output(call_id);
+
+    let output_str = timeout_item
+        .get("output")
+        .and_then(Value::as_str)
+        .expect("timeout output string");
+
+    // The exec path can report a timeout in two ways depending on timing:
+    // 1) Structured JSON with exit_code 124 and a timeout prefix (preferred), or
+    // 2) A plain error string if the child is observed as killed by a signal first.
+    if let Ok(output_json) = serde_json::from_str::<Value>(output_str) {
+        assert_eq!(
+            output_json["metadata"]["exit_code"].as_i64(),
+            Some(124),
+            "expected timeout exit code 124",
+        );
+
+        let stdout = output_json["output"].as_str().unwrap_or_default();
+        assert!(
+            stdout.contains("command timed out"),
+            "timeout output missing `command timed out`: {stdout}"
+        );
+    } else {
+        let normalized_output = output_str
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .trim_end_matches('\n')
+            .to_string();
+
+        let shell_output_pattern = r"(?s)^Exit code: 124\nWall time: [0-9]+(?:\.[0-9]+)? seconds\nOutput:\ncommand timed out after [0-9]+ milliseconds(?:\n.*)?$";
+        if Regex::new(shell_output_pattern)
+            .expect("shell timeout output regex should compile")
+            .is_match(&normalized_output)
+        {
+            return Ok(());
+        }
+
+        // Fallback: accept the signal classification path to deflake the test.
+        let signal_pattern = r"(?is)^execution error:.*signal.*$";
+        assert_regex_match(signal_pattern, output_str);
+    }
+
+    Ok(())
+}

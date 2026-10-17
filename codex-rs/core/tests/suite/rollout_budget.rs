@@ -55,6 +55,21 @@ fn wire_request_contains(request: &wiremock::Request, text: &str) -> bool {
     std::str::from_utf8(&request.body).is_ok_and(|body| body.contains(text))
 }
 
+fn wire_request_input_contains_type(request: &wiremock::Request, ty: &str) -> bool {
+    serde_json::from_slice::<serde_json::Value>(&request.body)
+        .ok()
+        .and_then(|body| {
+            body.get("input")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+        })
+        .is_some_and(|input| {
+            input
+                .iter()
+                .any(|item| item.get("type").and_then(serde_json::Value::as_str) == Some(ty))
+        })
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[test_case(None ; "weighted token usage")]
 #[test_case(Some(40.5) ; "provider budget units")]
@@ -204,7 +219,7 @@ async fn subagent_usage_draws_from_the_shared_budget() -> Result<()> {
     .await;
     mount_sse_once_match(
         &server,
-        |request: &wiremock::Request| wire_request_contains(request, "\"type\":\"agent_message\""),
+        |request: &wiremock::Request| wire_request_input_contains_type(request, "agent_message"),
         sse(vec![
             ev_response_created("child-1"),
             ev_completed_with_tokens("child-1", /*total_tokens*/ 30),
@@ -215,7 +230,7 @@ async fn subagent_usage_draws_from_the_shared_budget() -> Result<()> {
         &server,
         |request: &wiremock::Request| {
             wire_request_contains(request, SPAWN_CALL_ID)
-                && !wire_request_contains(request, "\"type\":\"agent_message\"")
+                && !wire_request_input_contains_type(request, "agent_message")
         },
         sse(vec![
             ev_response_created("root-2"),

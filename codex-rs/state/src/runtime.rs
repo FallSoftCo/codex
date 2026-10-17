@@ -36,10 +36,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
+use std::time::Duration;
 use std::time::Instant;
 use tracing::warn;
 
 mod backfill;
+mod collaborative_edit;
+mod coordination;
 mod external_agent_config_imports;
 mod goals;
 mod guardian_feedback;
@@ -47,20 +50,25 @@ mod logs;
 mod logs_maintenance;
 mod memories;
 mod memory_versions;
+mod path_claims;
 mod projects;
 mod queued_items;
 pub(crate) mod reclamation;
 pub(crate) mod recovery;
 mod remote_control;
 mod rollout_migration;
+mod schedules;
+mod task_watches;
 #[cfg(test)]
 pub(crate) mod test_support;
+mod testers;
 mod thread_attachments;
 mod thread_metadata;
 mod thread_read_state;
 mod thread_section_order;
 mod thread_sections;
 mod threads;
+mod watchers;
 
 pub use external_agent_config_imports::ExternalAgentConfigImportDetailsRecord;
 pub use external_agent_config_imports::ExternalAgentConfigImportFailureRecord;
@@ -295,6 +303,21 @@ impl StateRuntime {
         &self.sqlite
     }
 
+    /// Re-run state migrations against an already-open runtime.
+    ///
+    /// Long-lived processes can call this before touching newer continuation
+    /// tables so upgraded binaries adopt the current state schema without
+    /// forcing an immediate process restart.
+    pub async fn ensure_state_schema_current(&self) -> anyhow::Result<()> {
+        reconcile_legacy_state_migration_versions(self.pool.as_ref()).await?;
+        let migrator = runtime_state_migrator();
+        migrator.run(self.pool.as_ref()).await?;
+        crate::migrations::runtime_lax_migrator()
+            .run(self.pool.as_ref())
+            .await?;
+        Ok(())
+    }
+
     pub fn thread_goals(&self) -> &GoalStore {
         &self.thread_goals
     }
@@ -366,6 +389,12 @@ pub async fn open_thread_history_db(sqlite: &SqliteConfig) -> anyhow::Result<Sql
     sqlite
         .open_thread_history_db(&migrator, /*telemetry_override*/ None)
         .await
+}
+
+pub(super) async fn reconcile_legacy_state_migration_versions(
+    pool: &SqlitePool,
+) -> anyhow::Result<()> {
+    crate::legacy_migrations::reconcile_legacy_state_migration_versions(pool).await
 }
 
 pub(super) async fn ensure_backfill_state_row_in_pool(
@@ -475,6 +504,7 @@ mod tests {
     use codex_protocol::ThreadId;
     use codex_utils_absolute_path::test_support::PathExt;
     use pretty_assertions::assert_eq;
+    use sqlx::Row;
     use sqlx::SqlitePool;
     use sqlx::migrate::MigrateError;
     use std::collections::BTreeMap;
@@ -702,6 +732,7 @@ mod tests {
         let expected = [
             "open_state",
             "migrate_state",
+            "reconcile_state_migrations",
             "open_logs",
             "migrate_logs",
             "open_goals",

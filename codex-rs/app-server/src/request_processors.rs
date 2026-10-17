@@ -1,4 +1,6 @@
 use crate::bespoke_event_handling::apply_bespoke_event_handling;
+use crate::bespoke_event_handling::maybe_emit_hook_prompt_item_completed;
+use crate::bespoke_event_handling::maybe_interrupt_superseded_coordination_owner;
 use crate::command_exec::CommandExecManager;
 use crate::command_exec::StartCommandExecParams;
 use crate::config_manager::ConfigManager;
@@ -705,6 +707,7 @@ fn resolve_runtime_workspace_roots(workspace_roots: Vec<AbsolutePathBuf>) -> Vec
 }
 
 mod config_errors;
+mod hollywood_polling;
 mod request_errors;
 mod thread_delete;
 mod thread_goal_processor;

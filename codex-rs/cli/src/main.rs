@@ -1,3 +1,5 @@
+use chrono::DateTime;
+use chrono::Utc;
 use clap::Args;
 use clap::CommandFactory;
 use clap::Parser;
@@ -24,8 +26,6 @@ use codex_exec::Command as ExecCommand;
 use codex_exec::ReviewArgs;
 use codex_execpolicy::ExecPolicyCheckCommand;
 use codex_responses_api_proxy::Args as ResponsesApiProxyArgs;
-use codex_rollout_trace::REDUCED_STATE_FILE_NAME;
-use codex_rollout_trace::replay_bundle;
 use codex_state::StateRuntime;
 use codex_tui::AppExitInfo;
 use codex_tui::Cli as TuiCli;
@@ -36,6 +36,7 @@ use codex_utils_cli::CliConfigOverrides;
 use codex_utils_cli::ProfileV2Name;
 use codex_utils_cli::SharedCliOptions;
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::io::Write;
 use std::path::PathBuf;
@@ -107,6 +108,7 @@ use codex_login::is_workload_identity_selected;
 use codex_memories_write::clear_memory_roots_contents;
 use codex_models_manager::bundled_models_response;
 use codex_models_manager::manager::RefreshStrategy;
+use codex_protocol::ThreadId;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::user_input::UserInput;
 use codex_terminal_detection::TerminalName;
@@ -124,7 +126,8 @@ use codex_terminal_detection::TerminalName;
     // `codex-x86_64-unknown-linux-musl`, but the help output should always use
     // the generic `codex` command name that users run.
     bin_name = "codex",
-    override_usage = "codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]"
+    override_usage = "codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]",
+    after_long_help = "Interactive shorthand:\n  codex name <NAME> [PROMPT]\n  codex resume name <NAME> [SESSION_ID]\n  codex fork name <NAME> [SESSION_ID]\nThese are aliases for --agent-name <NAME> on interactive start/resume/fork."
 )]
 struct MultitoolCli {
     #[clap(flatten)]
@@ -224,6 +227,18 @@ enum Subcommand {
     /// Fork a previous interactive session (picker by default; use --last to fork the most recent).
     Fork(ForkCommand),
 
+    /// Manage persisted scheduled thread wakeups.
+    Schedule(ScheduleCommand),
+
+    /// Manage periodic task watches.
+    TaskWatch(TaskWatchCommand),
+
+    /// Manage persisted deferred process-exit watchers.
+    Watcher(WatcherCommand),
+
+    /// Manage interactive tester runtimes.
+    Tester(TesterCommand),
+
     /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
     #[clap(name = "cloud", alias = "cloud-tasks")]
     Cloud(CloudTasksCli),
@@ -266,10 +281,6 @@ enum DebugSubcommand {
 
     /// Render the model-visible prompt input list as JSON.
     PromptInput(DebugPromptInputCommand),
-
-    /// Replay a rollout trace bundle and write reduced state JSON.
-    #[clap(hide = true)]
-    TraceReduce(DebugTraceReduceCommand),
 
     /// Internal: reset local memory state for a fresh start.
     #[clap(hide = true)]
@@ -500,6 +511,430 @@ struct UnsupportedSandboxArgs {
 }
 
 #[derive(Debug, Parser)]
+struct ScheduleCommand {
+    #[command(subcommand)]
+    subcommand: ScheduleSubcommand,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchCommand {
+    #[command(subcommand)]
+    subcommand: TaskWatchSubcommand,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum ScheduleSubcommand {
+    /// Schedule a one-shot wakeup for a thread at a specific UTC timestamp.
+    AddAt(ScheduleAddAtCommand),
+
+    /// Schedule a periodic wakeup for a thread at a fixed interval.
+    AddEvery(ScheduleAddEveryCommand),
+
+    /// List scheduled tasks.
+    List(ScheduleListCommand),
+
+    /// List scheduled task runs.
+    Runs(ScheduleRunsCommand),
+
+    /// Delete a scheduled task.
+    Remove(ScheduleRemoveCommand),
+
+    /// Trigger a scheduled task immediately.
+    RunNow(ScheduleRunNowCommand),
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum TaskWatchSubcommand {
+    /// Create a periodic task watch for a thread.
+    Add(TaskWatchAddCommand),
+
+    /// List task watches.
+    List(TaskWatchListCommand),
+
+    /// List task watch runs.
+    Runs(TaskWatchRunsCommand),
+
+    /// Update a task watch in place.
+    Update(TaskWatchUpdateCommand),
+
+    /// Stop a task watch.
+    Stop(TaskWatchStopCommand),
+
+    /// Trigger a task watch immediately.
+    RunNow(TaskWatchRunNowCommand),
+}
+
+#[derive(Debug, Args)]
+struct ScheduleTaskBaseArgs {
+    /// Thread/session id to wake when the schedule fires.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: String,
+
+    /// Short human-readable label for the scheduled task.
+    #[arg(long, value_name = "TITLE")]
+    title: String,
+
+    /// Prompt injected into the thread when the schedule fires.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+
+    /// Mark the wakeup as requiring a response.
+    #[arg(long, default_value_t = true)]
+    requires_response: bool,
+}
+
+#[derive(Debug, Args)]
+struct TaskWatchBaseArgs {
+    /// Thread/session id to wake when the task watch fires.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: String,
+
+    /// Short human-readable label for the task watch.
+    #[arg(long, value_name = "TITLE")]
+    title: String,
+
+    /// Human-readable objective the agent is periodically reevaluating.
+    #[arg(long, value_name = "OBJECTIVE")]
+    objective: String,
+
+    /// Prompt injected into the thread when the task watch fires.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+
+    /// Mark the wakeup as requiring a response.
+    #[arg(long, default_value_t = true)]
+    requires_response: bool,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleAddAtCommand {
+    #[command(flatten)]
+    task: ScheduleTaskBaseArgs,
+
+    /// UTC timestamp in RFC3339 format, for example 2026-04-08T13:00:00Z.
+    #[arg(long, value_name = "RFC3339_UTC")]
+    at: String,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleAddEveryCommand {
+    #[command(flatten)]
+    task: ScheduleTaskBaseArgs,
+
+    /// Fixed interval like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    every: String,
+
+    /// Optional UTC timestamp in RFC3339 format for the first run.
+    #[arg(long, value_name = "RFC3339_UTC")]
+    start_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchAddCommand {
+    #[command(flatten)]
+    task_watch: TaskWatchBaseArgs,
+
+    /// Fixed interval like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    every: String,
+
+    /// Optional UTC timestamp in RFC3339 format for the first check.
+    #[arg(long, value_name = "RFC3339_UTC")]
+    start_at: Option<String>,
+
+    /// Optional cap on how many checks the watch may run before auto-stopping.
+    #[arg(long, value_name = "COUNT")]
+    max_checks: Option<i64>,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleListCommand {
+    /// Optional thread/session id filter.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchListCommand {
+    /// Optional thread/session id filter.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleRunsCommand {
+    /// Optional scheduled task id filter.
+    #[arg(long, value_name = "TASK_ID")]
+    task_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchRunsCommand {
+    /// Optional task watch id filter.
+    #[arg(long, value_name = "TASK_WATCH_ID")]
+    task_watch_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleRemoveCommand {
+    /// Scheduled task id.
+    #[arg(value_name = "TASK_ID")]
+    task_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct ScheduleRunNowCommand {
+    /// Scheduled task id.
+    #[arg(value_name = "TASK_ID")]
+    task_id: String,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum TaskWatchUpdateActionArg {
+    Continue,
+    Backoff,
+    Snooze,
+    Complete,
+    Stop,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchUpdateCommand {
+    /// Task watch id.
+    #[arg(value_name = "TASK_WATCH_ID")]
+    task_watch_id: String,
+
+    /// How this update should affect the task watch.
+    #[arg(long, value_enum)]
+    action: TaskWatchUpdateActionArg,
+
+    /// Optional new recurring cadence like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    every: Option<String>,
+
+    /// Optional one-off delay like 30s, 5m, 1h, or 1d before the next check.
+    #[arg(long, value_name = "DURATION")]
+    delay: Option<String>,
+
+    /// Optional updated maximum check cap.
+    #[arg(long, value_name = "COUNT")]
+    max_checks: Option<i64>,
+
+    /// Optional short decision label to persist on the task watch.
+    #[arg(long, value_name = "TEXT")]
+    decision: Option<String>,
+
+    /// Optional short observation summary to persist on the task watch.
+    #[arg(long, value_name = "TEXT")]
+    observation: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchStopCommand {
+    /// Task watch id.
+    #[arg(value_name = "TASK_WATCH_ID")]
+    task_watch_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct TaskWatchRunNowCommand {
+    /// Task watch id.
+    #[arg(value_name = "TASK_WATCH_ID")]
+    task_watch_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct TesterCommand {
+    #[command(subcommand)]
+    subcommand: TesterSubcommand,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherCommand {
+    #[command(subcommand)]
+    subcommand: WatcherSubcommand,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum WatcherSubcommand {
+    /// Create a process-exit watcher tied to an exec_command session id.
+    AddProcessExit(WatcherAddProcessExitCommand),
+
+    /// List persisted watchers.
+    List(WatcherListCommand),
+
+    /// List watcher runs.
+    Runs(WatcherRunsCommand),
+
+    /// Stop a watcher.
+    Remove(WatcherRemoveCommand),
+}
+
+#[derive(Debug, Parser)]
+struct WatcherAddProcessExitCommand {
+    /// Thread/session id to wake when the watcher fires.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: String,
+
+    /// Short human-readable label for the watcher.
+    #[arg(long, value_name = "TITLE")]
+    title: String,
+
+    /// Prompt injected into the thread when the watched process exits.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+
+    /// Running exec_command session id to watch.
+    #[arg(long, value_name = "SESSION_ID")]
+    session_id: i32,
+
+    /// Optional timeout like 30s, 5m, 1h, or 1d.
+    #[arg(long, value_name = "DURATION")]
+    timeout: Option<String>,
+
+    /// Mark the wakeup as requiring a response.
+    #[arg(long, default_value_t = true)]
+    requires_response: bool,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherListCommand {
+    /// Optional thread/session id filter.
+    #[arg(long, value_name = "THREAD_ID")]
+    thread_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherRunsCommand {
+    /// Optional watcher id filter.
+    #[arg(long, value_name = "WATCHER_ID")]
+    watcher_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WatcherRemoveCommand {
+    /// Watcher id.
+    #[arg(value_name = "WATCHER_ID")]
+    watcher_id: String,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum TesterSubcommand {
+    /// Create a managed tester run that the app-server will supervise.
+    Create(TesterCreateCommand),
+
+    /// List tester runs.
+    List,
+
+    /// List persisted tester run reports.
+    Reports(TesterReportsCommand),
+
+    /// List persisted tester run artifacts.
+    Artifacts(TesterArtifactsCommand),
+
+    /// Queue a prompt into an existing tester run thread.
+    Prompt(TesterPromptCommand),
+
+    /// Stop a tester run from receiving further runtime updates.
+    Stop(TesterStopCommand),
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum TesterExecutionClassArg {
+    TerminalFullAccess,
+    TerminalSandboxed,
+}
+
+impl From<TesterExecutionClassArg> for codex_state::TesterExecutionClass {
+    fn from(value: TesterExecutionClassArg) -> Self {
+        match value {
+            TesterExecutionClassArg::TerminalFullAccess => Self::TerminalFullAccess,
+            TesterExecutionClassArg::TerminalSandboxed => Self::TerminalSandboxed,
+        }
+    }
+}
+
+#[derive(Debug, Parser)]
+struct TesterCreateCommand {
+    /// Human-readable tester name.
+    #[arg(long, value_name = "NAME")]
+    name: String,
+
+    /// Objective the tester should pursue interactively.
+    #[arg(long, value_name = "OBJECTIVE")]
+    objective: String,
+
+    /// Optional background/context for the tester.
+    #[arg(long, value_name = "TEXT")]
+    background: Option<String>,
+
+    /// Optional skill-level label, for example novice or intermediate.
+    #[arg(long, value_name = "LEVEL")]
+    skill_level: Option<String>,
+
+    /// Optional temperament label, for example impatient or persistent.
+    #[arg(long, value_name = "TEMPERAMENT")]
+    temperament: Option<String>,
+
+    /// Starting knowledge the tester is allowed to rely on.
+    #[arg(long = "starting-knowledge", value_name = "TEXT")]
+    starting_knowledge: Vec<String>,
+
+    /// Constraint the tester must obey. May be passed multiple times.
+    #[arg(long = "constraint", value_name = "TEXT")]
+    constraints: Vec<String>,
+
+    /// Allowed interface label. May be passed multiple times.
+    #[arg(long = "allowed-interface", value_name = "INTERFACE")]
+    allowed_interfaces: Vec<String>,
+
+    /// Execution environment contract for the tester run.
+    #[arg(long, value_enum, default_value_t = TesterExecutionClassArg::TerminalFullAccess)]
+    execution_class: TesterExecutionClassArg,
+
+    /// Optional controller thread that should be woken when the tester reports state changes.
+    #[arg(long, value_name = "THREAD_ID")]
+    controller_thread_id: Option<String>,
+
+    /// Optional working directory for the tester runtime.
+    #[arg(long, value_name = "PATH")]
+    cwd: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+struct TesterReportsCommand {
+    /// Optional tester run id filter.
+    #[arg(long = "run-id", value_name = "RUN_ID")]
+    run_id: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct TesterArtifactsCommand {
+    /// Tester run id.
+    #[arg(value_name = "RUN_ID")]
+    run_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct TesterPromptCommand {
+    /// Tester run id.
+    #[arg(value_name = "RUN_ID")]
+    run_id: String,
+
+    /// Prompt to inject into the tester thread immediately.
+    #[arg(long, value_name = "PROMPT")]
+    prompt: String,
+}
+
+#[derive(Debug, Parser)]
+struct TesterStopCommand {
+    /// Tester run id.
+    #[arg(value_name = "RUN_ID")]
+    run_id: String,
+}
+
+#[derive(Debug, Parser)]
 struct ExecpolicyCommand {
     #[command(subcommand)]
     sub: ExecpolicySubcommand,
@@ -581,7 +1016,7 @@ struct AppServerCommand {
     strict_config: bool,
 
     /// Transport endpoint URL. Supported values: `stdio://` (default),
-    /// `unix://`, `unix://PATH`, `ws://IP:PORT`, `off`.
+    /// `ws://IP:PORT`, `off`.
     #[arg(
         long = "listen",
         value_name = "URL",
@@ -1038,6 +1473,135 @@ fn main() -> anyhow::Result<()> {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NameShorthandContext {
+    Root,
+    Resume,
+    Fork,
+    Other,
+}
+
+fn parse_multitool_cli_from<I, T>(args: I) -> Result<MultitoolCli, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString>,
+{
+    MultitoolCli::try_parse_from(rewrite_name_shorthand_args(args))
+}
+
+fn rewrite_name_shorthand_args<I, T>(args: I) -> Vec<OsString>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString>,
+{
+    let mut args: Vec<OsString> = args.into_iter().map(Into::into).collect();
+    if args.len() < 2 {
+        return args;
+    }
+
+    let mut context = NameShorthandContext::Root;
+    let mut positional_seen = false;
+    let mut awaiting_option_value = false;
+    let mut passthrough_positionals = false;
+
+    for i in 1..args.len() {
+        let token = args[i].to_string_lossy();
+
+        if awaiting_option_value {
+            awaiting_option_value = false;
+            continue;
+        }
+
+        if passthrough_positionals {
+            positional_seen = true;
+            continue;
+        }
+
+        if token == "--" {
+            passthrough_positionals = true;
+            continue;
+        }
+
+        if let Some(expects_value) = option_expects_value(&token) {
+            awaiting_option_value = expects_value;
+            continue;
+        }
+
+        if token.starts_with('-') {
+            continue;
+        }
+
+        if !positional_seen
+            && matches!(
+                context,
+                NameShorthandContext::Root
+                    | NameShorthandContext::Resume
+                    | NameShorthandContext::Fork
+            )
+            && token == "name"
+        {
+            args[i] = OsString::from("--agent-name");
+            awaiting_option_value = true;
+            continue;
+        }
+
+        match context {
+            NameShorthandContext::Root if token == "resume" => {
+                context = NameShorthandContext::Resume;
+                positional_seen = false;
+            }
+            NameShorthandContext::Root if token == "fork" => {
+                context = NameShorthandContext::Fork;
+                positional_seen = false;
+            }
+            NameShorthandContext::Root => {
+                context = NameShorthandContext::Other;
+                positional_seen = true;
+            }
+            _ => {
+                positional_seen = true;
+            }
+        }
+    }
+
+    args
+}
+
+fn option_expects_value(token: &str) -> Option<bool> {
+    if token.starts_with("--") {
+        let (name, has_inline_value) = token
+            .split_once('=')
+            .map(|(name, _)| (name, true))
+            .unwrap_or((token, false));
+        let expects_value = matches!(
+            name,
+            "--config"
+                | "--enable"
+                | "--disable"
+                | "--remote"
+                | "--remote-auth-token-env"
+                | "--agent-name"
+                | "--thread-name"
+                | "--image"
+                | "--model"
+                | "--local-provider"
+                | "--profile"
+                | "--sandbox"
+                | "--cd"
+                | "--add-dir"
+                | "--ask-for-approval"
+        );
+        return Some(expects_value && !has_inline_value);
+    }
+
+    if token.starts_with('-') && token.len() == 2 {
+        let expects_value = matches!(token, "-c" | "-i" | "-m" | "-p" | "-s" | "-C" | "-a");
+        return Some(expects_value);
+    }
+
+    None
+}
+
 async fn cli_main(
     arg0_paths: Arg0DispatchPaths,
     remote_control_disabled: bool,
@@ -1048,7 +1612,7 @@ async fn cli_main(
         remote,
         mut interactive,
         subcommand,
-    } = MultitoolCli::parse();
+    } = parse_multitool_cli_from(std::env::args_os()).unwrap_or_else(|err| err.exit());
     // Retain the launch target through TUI exit, even if a launcher changes selection.
     let daemon_cli_executable = arg0_paths
         .codex_self_exe
@@ -1608,6 +2172,38 @@ async fn cli_main(
             .await?;
             handle_app_exit(exit_info, daemon_cli_executable.as_deref())?;
         }
+        Some(Subcommand::Schedule(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "schedule",
+            )?;
+            run_schedule_command(cmd, &root_config_overrides, &interactive).await?;
+        }
+        Some(Subcommand::TaskWatch(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "task-watch",
+            )?;
+            run_task_watch_command(cmd, &root_config_overrides, &interactive).await?;
+        }
+        Some(Subcommand::Watcher(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "watcher",
+            )?;
+            run_watcher_command(cmd, &root_config_overrides, &interactive).await?;
+        }
+        Some(Subcommand::Tester(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "tester",
+            )?;
+            run_tester_command(cmd, &root_config_overrides, &interactive).await?;
+        }
         Some(Subcommand::Login(mut login_cli)) => {
             reject_remote_mode_for_subcommand(
                 root_remote.as_deref(),
@@ -1799,14 +2395,6 @@ async fn cli_main(
                     arg0_paths.clone(),
                 )
                 .await?;
-            }
-            DebugSubcommand::TraceReduce(cmd) => {
-                reject_remote_mode_for_subcommand(
-                    root_remote.as_deref(),
-                    root_remote_auth_token_env.as_deref(),
-                    "debug trace-reduce",
-                )?;
-                run_debug_trace_reduce_command(cmd).await?;
             }
             DebugSubcommand::ClearMemories => {
                 reject_remote_mode_for_subcommand(
@@ -2018,19 +2606,6 @@ fn maybe_print_under_development_feature_warning(codex_home: &std::path::Path, f
     );
 }
 
-async fn run_debug_trace_reduce_command(cmd: DebugTraceReduceCommand) -> anyhow::Result<()> {
-    let output = cmd
-        .output
-        .unwrap_or_else(|| cmd.trace_bundle.join(REDUCED_STATE_FILE_NAME));
-
-    let trace = replay_bundle(&cmd.trace_bundle)?;
-    let reduced_json = serde_json::to_vec_pretty(&trace)?;
-    tokio::fs::write(&output, reduced_json).await?;
-    println!("{}", output.display());
-
-    Ok(())
-}
-
 async fn run_debug_prompt_input_command(
     cmd: DebugPromptInputCommand,
     root_config_overrides: CliConfigOverrides,
@@ -2190,6 +2765,585 @@ async fn run_debug_clear_memories_command(
     Ok(())
 }
 
+async fn run_schedule_command(
+    cmd: ScheduleCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite.clone(), config.model_provider_id.clone()).await?;
+    match cmd.subcommand {
+        ScheduleSubcommand::AddAt(args) => {
+            let thread_id = parse_thread_id_arg(args.task.thread_id.as_str())?;
+            let at = parse_utc_timestamp(args.at.as_str())?;
+            state_db
+                .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    thread_id: thread_id.to_string(),
+                    title: args.task.title,
+                    prompt: args.task.prompt,
+                    kind: codex_state::ScheduledTaskKind::Once,
+                    next_run_at: at,
+                    interval_seconds: None,
+                    requires_response: args.task.requires_response,
+                })
+                .await?;
+            println!("Scheduled one-shot wakeup for thread {thread_id} at {at}.");
+        }
+        ScheduleSubcommand::AddEvery(args) => {
+            let thread_id = parse_thread_id_arg(args.task.thread_id.as_str())?;
+            let interval_seconds = parse_schedule_duration(args.every.as_str())?;
+            let next_run_at = match args.start_at.as_deref() {
+                Some(value) => parse_utc_timestamp(value)?,
+                None => Utc::now() + chrono::Duration::seconds(interval_seconds),
+            };
+            state_db
+                .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    thread_id: thread_id.to_string(),
+                    title: args.task.title,
+                    prompt: args.task.prompt,
+                    kind: codex_state::ScheduledTaskKind::Interval,
+                    next_run_at,
+                    interval_seconds: Some(interval_seconds),
+                    requires_response: args.task.requires_response,
+                })
+                .await?;
+            println!(
+                "Scheduled recurring wakeup for thread {thread_id} every {interval_seconds}s starting at {next_run_at}."
+            );
+        }
+        ScheduleSubcommand::List(args) => {
+            let thread_id = args
+                .thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let tasks = state_db.list_scheduled_tasks(thread_id).await?;
+            if tasks.is_empty() {
+                println!("No scheduled tasks found.");
+            } else {
+                for task in tasks {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        task.id,
+                        task.thread_id,
+                        task.kind.as_str(),
+                        task.next_run_at.to_rfc3339(),
+                        if task.enabled { "enabled" } else { "disabled" },
+                        task.title,
+                        task.last_run_status
+                            .map(|status| status.as_str().to_string())
+                            .unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        ScheduleSubcommand::Runs(args) => {
+            let runs = state_db
+                .list_scheduled_task_runs(args.task_id.as_deref())
+                .await?;
+            if runs.is_empty() {
+                println!("No scheduled task runs found.");
+            } else {
+                for run in runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        run.id,
+                        run.scheduled_task_id,
+                        run.status.as_str(),
+                        run.started_at.to_rfc3339(),
+                        run.turn_id.unwrap_or_else(|| "-".to_string()),
+                        run.summary
+                            .unwrap_or_else(|| run.error.unwrap_or_else(|| "-".to_string()))
+                    );
+                }
+            }
+        }
+        ScheduleSubcommand::Remove(args) => {
+            if state_db
+                .delete_scheduled_task(args.task_id.as_str())
+                .await?
+            {
+                println!("Removed scheduled task {}.", args.task_id);
+            } else {
+                println!("Scheduled task {} was not found.", args.task_id);
+            }
+        }
+        ScheduleSubcommand::RunNow(args) => {
+            if state_db
+                .trigger_scheduled_task_now(args.task_id.as_str())
+                .await?
+            {
+                println!("Scheduled task {} is now due.", args.task_id);
+            } else {
+                println!("Scheduled task {} was not found.", args.task_id);
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn run_tester_command(
+    cmd: TesterCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite.clone(), config.model_provider_id.clone()).await?;
+
+    match cmd.subcommand {
+        TesterSubcommand::Create(args) => {
+            if args.allowed_interfaces.is_empty() {
+                anyhow::bail!("at least one --allowed-interface is required");
+            }
+            let controller_thread_id = args
+                .controller_thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let tester_run_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_tester_run(codex_state::TesterRunCreateParams {
+                    id: tester_run_id.clone(),
+                    name: args.name,
+                    objective: args.objective,
+                    background: args.background,
+                    skill_level: args.skill_level,
+                    temperament: args.temperament,
+                    starting_knowledge: args.starting_knowledge,
+                    constraints: args.constraints,
+                    allowed_interfaces: args.allowed_interfaces,
+                    execution_class: args.execution_class.into(),
+                    controller_thread_id: controller_thread_id.map(|id| id.to_string()),
+                    cwd: args.cwd,
+                })
+                .await?;
+            println!("Created tester run {tester_run_id}.");
+        }
+        TesterSubcommand::List => {
+            let tester_runs = state_db.list_tester_runs().await?;
+            if tester_runs.is_empty() {
+                println!("No tester runs found.");
+            } else {
+                for tester_run in tester_runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        tester_run.id,
+                        tester_run.status.as_str(),
+                        tester_run.execution_class.as_str(),
+                        tester_run
+                            .runtime_thread_id
+                            .unwrap_or_else(|| "-".to_string()),
+                        tester_run
+                            .controller_thread_id
+                            .unwrap_or_else(|| "-".to_string()),
+                        tester_run.name,
+                        tester_run.objective,
+                        tester_run.last_error.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        TesterSubcommand::Reports(args) => {
+            let reports = state_db
+                .list_tester_run_reports(args.run_id.as_deref())
+                .await?;
+            if reports.is_empty() {
+                println!("No tester run reports found.");
+            } else {
+                for report in reports {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}",
+                        report.id,
+                        report.tester_run_id,
+                        report.report_kind.as_str(),
+                        report.created_at.to_rfc3339(),
+                        report.summary
+                    );
+                }
+            }
+        }
+        TesterSubcommand::Artifacts(args) => {
+            let artifacts = state_db
+                .list_tester_run_artifacts(args.run_id.as_str())
+                .await?;
+            if artifacts.is_empty() {
+                println!("No tester run artifacts found.");
+            } else {
+                for artifact in artifacts {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}",
+                        artifact.id,
+                        artifact.tester_run_id,
+                        artifact.artifact_kind.as_str(),
+                        artifact.created_at.to_rfc3339(),
+                        artifact.path.display()
+                    );
+                }
+            }
+        }
+        TesterSubcommand::Prompt(args) => {
+            let tester_run = state_db
+                .get_tester_run(args.run_id.as_str())
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("tester run {} was not found", args.run_id))?;
+            let tester_thread_id = tester_run
+                .runtime_thread_id
+                .ok_or_else(|| anyhow::anyhow!("tester run {} has not started yet", args.run_id))?;
+            let schedule_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+                    id: schedule_id.clone(),
+                    thread_id: tester_thread_id.clone(),
+                    title: format!("tester:{} prompt", tester_run.name),
+                    prompt: args.prompt,
+                    kind: codex_state::ScheduledTaskKind::Once,
+                    next_run_at: Utc::now(),
+                    interval_seconds: None,
+                    requires_response: true,
+                })
+                .await?;
+            println!(
+                "Queued prompt for tester run {} on thread {} via scheduled task {}.",
+                args.run_id, tester_thread_id, schedule_id
+            );
+        }
+        TesterSubcommand::Stop(args) => {
+            if state_db.stop_tester_run(args.run_id.as_str()).await? {
+                println!("Stopped tester run {}.", args.run_id);
+            } else {
+                println!(
+                    "Tester run {} was not found or was already stopped.",
+                    args.run_id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_task_watch_command(
+    cmd: TaskWatchCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite.clone(), config.model_provider_id.clone()).await?;
+
+    match cmd.subcommand {
+        TaskWatchSubcommand::Add(args) => {
+            let thread_id = parse_thread_id_arg(args.task_watch.thread_id.as_str())?;
+            let cadence_seconds = parse_schedule_duration(args.every.as_str())?;
+            let next_check_at = match args.start_at.as_deref() {
+                Some(value) => parse_utc_timestamp(value)?,
+                None => Utc::now() + chrono::Duration::seconds(cadence_seconds),
+            };
+            let task_watch_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_task_watch(codex_state::TaskWatchCreateParams {
+                    id: task_watch_id.clone(),
+                    thread_id: thread_id.to_string(),
+                    title: args.task_watch.title,
+                    objective: args.task_watch.objective,
+                    prompt: args.task_watch.prompt,
+                    cadence_seconds,
+                    next_check_at,
+                    max_checks: args.max_checks,
+                    requires_response: args.task_watch.requires_response,
+                })
+                .await?;
+            println!(
+                "Created task watch {task_watch_id} for thread {thread_id} every {cadence_seconds}s starting at {next_check_at}."
+            );
+        }
+        TaskWatchSubcommand::List(args) => {
+            let thread_id = args
+                .thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let task_watches = state_db.list_task_watches(thread_id).await?;
+            if task_watches.is_empty() {
+                println!("No task watches found.");
+            } else {
+                for task_watch in task_watches {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        task_watch.id,
+                        task_watch.thread_id,
+                        task_watch.status.as_str(),
+                        task_watch.next_check_at.to_rfc3339(),
+                        task_watch.cadence_seconds,
+                        task_watch.title,
+                        task_watch.last_decision.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        TaskWatchSubcommand::Runs(args) => {
+            let runs = state_db
+                .list_task_watch_runs(args.task_watch_id.as_deref())
+                .await?;
+            if runs.is_empty() {
+                println!("No task watch runs found.");
+            } else {
+                for run in runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        run.id,
+                        run.task_watch_id,
+                        run.status.as_str(),
+                        run.started_at.to_rfc3339(),
+                        run.turn_id.unwrap_or_else(|| "-".to_string()),
+                        run.summary
+                            .unwrap_or_else(|| run.error.unwrap_or_else(|| "-".to_string()))
+                    );
+                }
+            }
+        }
+        TaskWatchSubcommand::Update(args) => {
+            let cadence_seconds = args
+                .every
+                .as_deref()
+                .map(parse_schedule_duration)
+                .transpose()?;
+            let delay_seconds = args
+                .delay
+                .as_deref()
+                .map(parse_schedule_duration)
+                .transpose()?;
+            let next_check_at =
+                delay_seconds.map(|seconds| Utc::now() + chrono::Duration::seconds(seconds));
+            let status = match args.action {
+                TaskWatchUpdateActionArg::Continue
+                | TaskWatchUpdateActionArg::Backoff
+                | TaskWatchUpdateActionArg::Snooze => None,
+                TaskWatchUpdateActionArg::Complete => Some(codex_state::TaskWatchStatus::Completed),
+                TaskWatchUpdateActionArg::Stop => Some(codex_state::TaskWatchStatus::Stopped),
+            };
+            let accepted = state_db
+                .update_task_watch(codex_state::TaskWatchUpdateParams {
+                    id: args.task_watch_id.clone(),
+                    cadence_seconds,
+                    next_check_at,
+                    max_checks: args.max_checks,
+                    last_decision: Some(
+                        args.decision
+                            .unwrap_or_else(|| format!("{:?}", args.action).to_ascii_lowercase()),
+                    ),
+                    last_observation: args.observation,
+                    status,
+                })
+                .await?;
+            if accepted {
+                println!("Updated task watch {}.", args.task_watch_id);
+            } else {
+                println!(
+                    "Task watch {} was not found or was already stopped.",
+                    args.task_watch_id
+                );
+            }
+        }
+        TaskWatchSubcommand::Stop(args) => {
+            if state_db
+                .cancel_task_watch(
+                    args.task_watch_id.as_str(),
+                    codex_state::TaskWatchStatus::Stopped,
+                )
+                .await?
+            {
+                println!("Stopped task watch {}.", args.task_watch_id);
+            } else {
+                println!(
+                    "Task watch {} was not found or was already stopped.",
+                    args.task_watch_id
+                );
+            }
+        }
+        TaskWatchSubcommand::RunNow(args) => {
+            let accepted = state_db
+                .update_task_watch(codex_state::TaskWatchUpdateParams {
+                    id: args.task_watch_id.clone(),
+                    cadence_seconds: None,
+                    next_check_at: Some(Utc::now()),
+                    max_checks: None,
+                    last_decision: Some("run_now".to_string()),
+                    last_observation: None,
+                    status: None,
+                })
+                .await?;
+            if accepted {
+                println!("Task watch {} is now due.", args.task_watch_id);
+            } else {
+                println!(
+                    "Task watch {} was not found or was already stopped.",
+                    args.task_watch_id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_watcher_command(
+    cmd: WatcherCommand,
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<()> {
+    let config = load_config_for_state_commands(root_config_overrides, interactive).await?;
+    let state_db =
+        StateRuntime::init(config.sqlite.clone(), config.model_provider_id.clone()).await?;
+
+    match cmd.subcommand {
+        WatcherSubcommand::AddProcessExit(args) => {
+            let thread_id = parse_thread_id_arg(args.thread_id.as_str())?;
+            let timeout_at = args
+                .timeout
+                .as_deref()
+                .map(parse_schedule_duration)
+                .transpose()?
+                .map(|seconds| {
+                    Utc::now()
+                        + chrono::Duration::from_std(std::time::Duration::from_secs(seconds as u64))
+                            .expect("positive duration")
+                });
+            let watcher_id = uuid::Uuid::new_v4().to_string();
+            state_db
+                .create_watcher(codex_state::WatcherCreateParams {
+                    id: watcher_id.clone(),
+                    thread_id: thread_id.to_string(),
+                    title: args.title,
+                    prompt: args.prompt,
+                    trigger_kind: codex_state::WatcherTriggerKind::ProcessExit,
+                    process_id: Some(args.session_id),
+                    target_thread_id: None,
+                    agent_completion_condition: None,
+                    timeout_at,
+                    requires_response: args.requires_response,
+                })
+                .await?;
+            println!("Created watcher {watcher_id}.");
+        }
+        WatcherSubcommand::List(args) => {
+            let thread_id = args
+                .thread_id
+                .as_deref()
+                .map(parse_thread_id_arg)
+                .transpose()?;
+            let watchers = state_db.list_watchers(thread_id).await?;
+            if watchers.is_empty() {
+                println!("No watchers found.");
+            } else {
+                for watcher in watchers {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}\t{}",
+                        watcher.id,
+                        watcher.status.as_str(),
+                        watcher
+                            .process_id
+                            .map(|value| value.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        watcher.thread_id,
+                        watcher.title,
+                        watcher.last_error.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        WatcherSubcommand::Runs(args) => {
+            let runs = state_db
+                .list_watcher_runs(args.watcher_id.as_deref())
+                .await?;
+            if runs.is_empty() {
+                println!("No watcher runs found.");
+            } else {
+                for run in runs {
+                    println!(
+                        "{}\t{}\t{}\t{}\t{}",
+                        run.id,
+                        run.watcher_id,
+                        run.status.as_str(),
+                        run.started_at.to_rfc3339(),
+                        run.summary.unwrap_or_else(|| "-".to_string())
+                    );
+                }
+            }
+        }
+        WatcherSubcommand::Remove(args) => {
+            if state_db.cancel_watcher(args.watcher_id.as_str()).await? {
+                println!("Stopped watcher {}.", args.watcher_id);
+            } else {
+                println!(
+                    "Watcher {} was not found or was already stopped.",
+                    args.watcher_id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn load_config_for_state_commands(
+    root_config_overrides: &CliConfigOverrides,
+    interactive: &TuiCli,
+) -> anyhow::Result<Config> {
+    let cli_kv_overrides = root_config_overrides
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+    let loader_overrides = loader_overrides_for_profile(interactive.config_profile_v2.as_ref())?;
+    ConfigBuilder::default()
+        .cli_overrides(cli_kv_overrides)
+        .loader_overrides(loader_overrides)
+        .build()
+        .await
+        .map_err(Into::into)
+}
+
+fn parse_thread_id_arg(value: &str) -> anyhow::Result<ThreadId> {
+    ThreadId::from_string(value).map_err(anyhow::Error::msg)
+}
+
+fn parse_utc_timestamp(value: &str) -> anyhow::Result<DateTime<Utc>> {
+    let parsed = DateTime::parse_from_rfc3339(value)
+        .map_err(|err| anyhow::anyhow!("invalid RFC3339 timestamp `{value}`: {err}"))?
+        .with_timezone(&Utc);
+    Ok(parsed)
+}
+
+fn parse_schedule_duration(value: &str) -> anyhow::Result<i64> {
+    if value.len() < 2 {
+        return Err(anyhow::anyhow!(
+            "invalid duration `{value}`; use forms like 30s, 5m, 1h, or 1d"
+        ));
+    }
+    let (count, unit) = value.split_at(value.len() - 1);
+    let count: i64 = count
+        .parse()
+        .map_err(|err| anyhow::anyhow!("invalid duration `{value}`: {err}"))?;
+    let seconds = match unit {
+        "s" => count,
+        "m" => count * 60,
+        "h" => count * 60 * 60,
+        "d" => count * 60 * 60 * 24,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "invalid duration unit `{unit}` in `{value}`; use s, m, h, or d"
+            ));
+        }
+    };
+    if seconds <= 0 {
+        return Err(anyhow::anyhow!("duration must be positive"));
+    }
+    Ok(seconds)
+}
+
 /// Prepend root-level overrides so they have lower precedence than
 /// CLI-specific ones specified after the subcommand (if any).
 fn prepend_config_flags(
@@ -2318,6 +3472,10 @@ fn unsupported_subcommand_name_for_strict_config(
         Some(Subcommand::Logout(_)) => Some("logout"),
         Some(Subcommand::Completion(_)) => Some("completion"),
         Some(Subcommand::Update) => Some("update"),
+        Some(Subcommand::Schedule(_)) => Some("schedule"),
+        Some(Subcommand::TaskWatch(_)) => Some("task-watch"),
+        Some(Subcommand::Watcher(_)) => Some("watcher"),
+        Some(Subcommand::Tester(_)) => Some("tester"),
         Some(Subcommand::Cloud(_)) => Some("cloud"),
         Some(Subcommand::Sandbox(_)) => Some("sandbox"),
         Some(Subcommand::Debug(_)) => Some("debug"),
@@ -2713,6 +3871,7 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
         no_alt_screen,
         no_daemon,
         prompt,
+        agent_name,
         mut config_overrides,
         ..
     } = subcommand_cli;
@@ -2739,6 +3898,9 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     if let Some(prompt) = prompt {
         // Normalize CRLF/CR to LF so CLI-provided text can't leak `\r` into TUI state.
         interactive.prompt = Some(prompt.replace("\r\n", "\n").replace('\r', "\n"));
+    }
+    if let Some(agent_name) = agent_name {
+        interactive.agent_name = Some(agent_name);
     }
 
     interactive
@@ -4121,6 +5283,8 @@ enabled = true
                 "codex",
                 "resume",
                 "sid",
+                "--agent-name",
+                "Scout",
                 "--oss",
                 "--search",
                 "--sandbox",
@@ -4141,6 +5305,7 @@ enabled = true
         );
 
         assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
+        assert_eq!(interactive.agent_name.as_deref(), Some("Scout"));
         assert!(interactive.oss);
         assert_eq!(interactive.config_profile_v2.as_deref(), Some("my-config"));
         assert_matches!(
@@ -4265,6 +5430,113 @@ enabled = true
         let interactive = finalize_fork_from_args(["codex", "fork", "--all"].as_ref());
         assert!(interactive.fork_picker);
         assert!(interactive.fork_show_all);
+    }
+
+    #[test]
+    fn resume_subcommand_agent_name_overrides_root_agent_name() {
+        let interactive = finalize_resume_from_args(
+            [
+                "codex",
+                "--agent-name",
+                "Root",
+                "resume",
+                "--agent-name",
+                "Resume",
+            ]
+            .as_ref(),
+        );
+
+        assert_eq!(interactive.agent_name.as_deref(), Some("Resume"));
+    }
+
+    #[test]
+    fn root_name_shorthand_sets_agent_name() {
+        let cli = parse_multitool_cli_from(["codex", "name", "Scout", "fix bug"]).expect("parse");
+
+        assert_eq!(cli.interactive.agent_name.as_deref(), Some("Scout"));
+        assert_eq!(cli.interactive.prompt.as_deref(), Some("fix bug"));
+        assert!(cli.subcommand.is_none());
+    }
+
+    #[test]
+    fn root_name_shorthand_survives_injected_root_options() {
+        let cli = parse_multitool_cli_from([
+            "codex",
+            "--enable",
+            "tui_app_server",
+            "--cd",
+            "/tmp",
+            "--ask-for-approval",
+            "never",
+            "--remote",
+            "ws://127.0.0.1:46324",
+            "name",
+            "Scout",
+        ])
+        .expect("parse");
+
+        assert_eq!(cli.interactive.agent_name.as_deref(), Some("Scout"));
+        assert_eq!(
+            cli.interactive.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp"))
+        );
+        assert_eq!(cli.remote.remote.as_deref(), Some("ws://127.0.0.1:46324"));
+        assert!(cli.subcommand.is_none());
+    }
+
+    #[test]
+    fn resume_name_shorthand_sets_agent_name() {
+        let cli = parse_multitool_cli_from(["codex", "resume", "name", "Scout", "--last"])
+            .expect("parse");
+
+        let Some(Subcommand::Resume(ResumeCommand {
+            session_id,
+            last,
+            config_overrides,
+            ..
+        })) = cli.subcommand
+        else {
+            panic!("expected resume subcommand");
+        };
+
+        assert_eq!(session_id, None);
+        assert!(last);
+        assert_eq!(config_overrides.0.agent_name.as_deref(), Some("Scout"));
+    }
+
+    #[test]
+    fn fork_name_shorthand_sets_agent_name() {
+        let cli =
+            parse_multitool_cli_from(["codex", "fork", "name", "Scout", "--all"]).expect("parse");
+
+        let Some(Subcommand::Fork(ForkCommand {
+            session_id,
+            all,
+            config_overrides,
+            ..
+        })) = cli.subcommand
+        else {
+            panic!("expected fork subcommand");
+        };
+
+        assert_eq!(session_id, None);
+        assert!(all);
+        assert_eq!(config_overrides.0.agent_name.as_deref(), Some("Scout"));
+    }
+
+    #[test]
+    fn prompt_word_name_after_positional_is_not_rewritten() {
+        let rewritten = rewrite_name_shorthand_args(["codex", "fix", "name", "handling"]);
+
+        assert_eq!(
+            rewritten,
+            vec![
+                OsString::from("codex"),
+                OsString::from("fix"),
+                OsString::from("name"),
+                OsString::from("handling"),
+            ]
+        );
     }
 
     #[test]

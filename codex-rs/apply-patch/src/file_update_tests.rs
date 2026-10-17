@@ -276,3 +276,153 @@ g
 "#
     );
 }
+
+#[tokio::test]
+async fn cooperative_partial_insertion_preserves_existing_mixed_terminators_and_bom() {
+    let home = tempdir().expect("isolated shared-source fixture");
+    let path = home.path().join("shared.txt");
+    fs::write(&path, "\u{feff}alpha\r\nalready\nomega\r\n").expect("existing peer bytes");
+    let patch =
+        wrap_patch("*** Update File: shared.txt\n@@\n \u{feff}alpha\n+already\n+fresh\n omega\n");
+    let cwd = PathUri::from_host_native_path(home.path()).expect("native workspace");
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    apply_patch(
+        &patch,
+        &cwd,
+        &mut stdout,
+        &mut stderr,
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    .expect("apply remaining cooperative insertion");
+    assert_eq!(
+        fs::read(&path).expect("resulting source"),
+        "\u{feff}alpha\r\nalready\nfresh\r\nomega\r\n".as_bytes()
+    );
+    assert_eq!(stderr, Vec::<u8>::new());
+}
+
+#[tokio::test]
+async fn cooperative_fuzzy_peer_insertion_preserves_actual_bytes() {
+    let home = tempdir().expect("isolated shared-source fixture");
+    let path = home.path().join("shared.txt");
+    fs::write(&path, "\u{feff}alpha\r\nalready  \nomega\r\n").expect("existing peer bytes");
+    let patch =
+        wrap_patch("*** Update File: shared.txt\n@@\n \u{feff}alpha\n+already\n+fresh\n omega\n");
+    let cwd = PathUri::from_host_native_path(home.path()).expect("native workspace");
+    apply_patch(
+        &patch,
+        &cwd,
+        &mut Vec::new(),
+        &mut Vec::new(),
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    .expect("apply remaining cooperative insertion");
+    assert_eq!(
+        fs::read(&path).expect("resulting source"),
+        "\u{feff}alpha\r\nalready  \nfresh\r\nomega\r\n".as_bytes()
+    );
+}
+
+#[tokio::test]
+async fn cooperative_explicit_replacement_is_not_preserved_as_context() {
+    let home = tempdir().expect("isolated shared-source fixture");
+    let path = home.path().join("shared.txt");
+    fs::write(&path, "alpha\r\npeer\nsame\nomega\r\n").expect("existing peer bytes");
+    let patch =
+        wrap_patch("*** Update File: shared.txt\n@@\n alpha\n+peer\n-same\n+same\n omega\n");
+    let cwd = PathUri::from_host_native_path(home.path()).expect("native workspace");
+    apply_patch(
+        &patch,
+        &cwd,
+        &mut Vec::new(),
+        &mut Vec::new(),
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await
+    .expect("apply explicit replacement beside peer insertion");
+    assert_eq!(
+        fs::read(&path).expect("resulting source"),
+        "alpha\r\npeer\nsame\r\nomega\r\n".as_bytes()
+    );
+}
+
+#[tokio::test]
+async fn cooperative_ambiguous_context_refuses_without_rewriting_peer_bytes() {
+    let home = tempdir().expect("isolated shared-source fixture");
+    let path = home.path().join("shared.txt");
+    let before = "same\r\nnew\nsame\r\n";
+    fs::write(&path, before).expect("existing peer bytes");
+    let patch = wrap_patch("*** Update File: shared.txt\n@@\n-same\n same\n+new\n+same\n");
+    let cwd = PathUri::from_host_native_path(home.path()).expect("native workspace");
+    let result = apply_patch(
+        &patch,
+        &cwd,
+        &mut Vec::new(),
+        &mut Vec::new(),
+        LOCAL_FS.as_ref(),
+        None,
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "incompatible peer/context origins must refuse"
+    );
+    assert_eq!(fs::read(&path).expect("original source"), before.as_bytes());
+}
+
+#[tokio::test]
+async fn cooperative_fuzzy_peer_insertions_preserve_original_bytes() {
+    for (existing, requested) in [("already  ", "already"), ("already—", "already-")] {
+        let home = tempdir().expect("isolated cooperative fixture");
+        let path = home.path().join("shared.txt");
+        fs::write(&path, format!("\u{feff}alpha\r\n{existing}\nomega\r\n"))
+            .expect("existing peer bytes");
+        let patch = wrap_patch(&format!(
+            "*** Update File: shared.txt\n@@\n \u{feff}alpha\n+{requested}\n+fresh\n omega\n"
+        ));
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(home.path()).expect("native workspace"),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .expect("cooperative update");
+        assert_eq!(
+            fs::read(&path).expect("result"),
+            format!("\u{feff}alpha\r\n{existing}\nfresh\r\nomega\r\n").as_bytes()
+        );
+    }
+}
+
+#[tokio::test]
+async fn cooperative_explicit_same_text_replacement_keeps_changed_line_semantics() {
+    let home = tempdir().expect("isolated cooperative fixture");
+    let path = home.path().join("shared.txt");
+    fs::write(&path, "\u{feff}alpha\r\npeer\nsame\nomega\r\n").expect("existing peer bytes");
+    let patch = wrap_patch(
+        "*** Update File: shared.txt\n@@\n \u{feff}alpha\n+peer\n-same\n+same\n omega\n",
+    );
+    apply_patch(
+        &patch,
+        &PathUri::from_host_native_path(home.path()).expect("native workspace"),
+        &mut Vec::new(),
+        &mut Vec::new(),
+        LOCAL_FS.as_ref(),
+        /*sandbox*/ None,
+    )
+    .await
+    .expect("cooperative update");
+    assert_eq!(
+        fs::read(&path).expect("result"),
+        "\u{feff}alpha\r\npeer\nsame\r\nomega\r\n".as_bytes()
+    );
+}

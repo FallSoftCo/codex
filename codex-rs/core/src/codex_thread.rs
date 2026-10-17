@@ -8,6 +8,8 @@ use crate::elicitation::ElicitationRegistration;
 use crate::session::SessionIo;
 use crate::session::SessionSettingsUpdate;
 use crate::session::Submission;
+pub use crate::session::legacy_hollywood_idle::TryStartTurnIfIdleError;
+pub use crate::session::legacy_hollywood_idle::TryStartTurnIfIdleRejectionReason;
 use crate::session::new_submission_id;
 use crate::session::session::Session;
 use crate::session::startup_prewarm::PrewarmInput;
@@ -41,6 +43,7 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EnvironmentConfig;
 use codex_protocol::protocol::EnvironmentConfigState;
 use codex_protocol::protocol::Event;
+use codex_protocol::protocol::HollywoodInputMessage;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SandboxPolicy;
@@ -103,6 +106,7 @@ pub struct ThreadConfigSnapshot {
     pub workspace_roots: Vec<AbsolutePathBuf>,
     pub profile_workspace_roots: Vec<ProfileWorkspaceRoot>,
     pub ephemeral: bool,
+    pub thread_name: Option<String>,
     pub reasoning_effort: Option<ReasoningEffort>,
     pub reasoning_summary: Option<ReasoningSummary>,
     pub personality: Option<Personality>,
@@ -603,6 +607,14 @@ impl CodexThread {
         self.io.submit_turn_input(request, mode).await
     }
 
+    #[doc(hidden)]
+    pub async fn submit_hollywood_followup(
+        &self,
+        message: HollywoodInputMessage,
+    ) -> CodexResult<()> {
+        self.session.submit_hollywood_followup(message).await
+    }
+
     /// Persist whether this thread is eligible for future memory generation.
     pub async fn set_thread_memory_mode(&self, mode: ThreadMemoryMode) -> anyhow::Result<()> {
         self.session.set_thread_memory_mode(mode).await
@@ -815,6 +827,15 @@ impl CodexThread {
         self.session.token_usage_info().await
     }
 
+    /// Compatibility for standalone Hollywood prefix updates, using bounded typed context.
+    pub async fn inject_user_message_without_turn(&self, message: String) {
+        self.inject_fragment_without_turn(crate::context::AdditionalContextUserFragment::new(
+            "hollywood_legacy_context".to_string(),
+            message,
+        ))
+        .await;
+    }
+
     /// Records a context fragment without creating a new user turn boundary.
     pub(crate) async fn inject_fragment_without_turn(&self, fragment: impl ContextualUserFragment) {
         let item = ContextualUserFragment::into(fragment);
@@ -959,6 +980,32 @@ impl CodexThread {
 
     pub fn state_db(&self) -> Option<StateDbHandle> {
         self.session.state_db()
+    }
+
+    pub async fn set_hollywood_session_meta(
+        &self,
+        meta: Option<codex_protocol::protocol::HollywoodSessionMeta>,
+    ) {
+        self.session.set_hollywood_session_meta(meta).await;
+    }
+
+    pub async fn hollywood_obligation_count(&self) -> usize {
+        self.session.hollywood_obligation_count().await
+    }
+
+    pub async fn persist_rollout_items(&self, items: &[codex_history::RolloutItem]) {
+        self.session.persist_rollout_items(items).await;
+    }
+
+    pub async fn unified_exec_process_observation(
+        &self,
+        process_id: i32,
+    ) -> crate::unified_exec::ProcessObservation {
+        self.session
+            .services
+            .unified_exec_manager
+            .process_observation(process_id)
+            .await
     }
 
     pub async fn config_snapshot(&self) -> ThreadConfigSnapshot {

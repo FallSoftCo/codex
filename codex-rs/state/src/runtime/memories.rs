@@ -218,7 +218,12 @@ SELECT
     threads.daybreak_enabled,
     threads.git_sha,
     threads.git_branch,
-    threads.git_origin_url
+    threads.git_origin_url,
+    threads.hollywood_url,
+    threads.hollywood_room,
+    threads.hollywood_attention_mode,
+    threads.hollywood_include_at_all,
+    threads.hollywood_include_at_room
 FROM threads
             "#,
         );
@@ -612,7 +617,12 @@ SELECT
     threads.daybreak_enabled,
     threads.git_sha,
     threads.git_branch,
-    threads.git_origin_url
+    threads.git_origin_url,
+    threads.hollywood_url,
+    threads.hollywood_room,
+    threads.hollywood_attention_mode,
+    threads.hollywood_include_at_all,
+    threads.hollywood_include_at_room
 FROM threads
 WHERE threads.id = ? AND threads.memory_mode = 'enabled'
             "#,

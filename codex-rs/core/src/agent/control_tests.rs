@@ -57,6 +57,7 @@ use codex_protocol::capabilities::SelectedCapabilityRoot;
 use codex_protocol::config_types::ApprovalsReviewer;
 use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::config_types::ModeKind;
+use codex_protocol::config_types::MultiAgentMode;
 use codex_protocol::config_types::ReasoningSummary;
 use codex_protocol::config_types::Settings;
 use codex_protocol::error::AgentErrorContext;
@@ -4989,6 +4990,22 @@ async fn resume_thread_subagent_restores_stored_metadata() {
         child_thread.session.services.selected_capability_roots,
         roots
     );
+    let mut child_turn_context = child_thread
+        .session
+        .new_default_turn()
+        .await
+        .to_turn_context_item();
+    child_turn_context.multi_agent_mode = Some(MultiAgentMode::Proactive);
+    child_thread
+        .session
+        .persist_rollout_items(&[RolloutItem::TurnContext(child_turn_context)])
+        .await;
+    child_thread.session.ensure_rollout_materialized().await;
+    child_thread
+        .session
+        .flush_rollout()
+        .await
+        .expect("flush child effective multi-agent mode");
     let original_snapshot = child_thread.config_snapshot().await;
     let original_nickname = original_snapshot
         .session_source

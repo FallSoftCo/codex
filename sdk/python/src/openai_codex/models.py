@@ -74,3 +74,7 @@ class InitializeResponse(BaseModel):
     userAgent: str | None = None
     platformFamily: str | None = None
     platformOs: str | None = None
+
+
+class EmptyResponse(BaseModel):
+    pass

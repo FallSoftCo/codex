@@ -1,0 +1,2089 @@
+use crate::function_tool::FunctionCallError;
+use crate::hollywood::HollywoodSessionConfig;
+use crate::hollywood::canonicalize_agent_identity;
+use crate::hollywood::canonicalize_hollywood_identity;
+use crate::hollywood::live_identity_matches_target;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
+use crate::tools::context::FunctionToolOutput;
+use crate::tools::context::ToolInvocation;
+use crate::tools::context::ToolPayload;
+use crate::tools::context::boxed_tool_output;
+use crate::tools::handlers::multi_agents::parse_agent_id_target;
+use crate::tools::handlers::parse_arguments;
+use crate::tools::losangelex_spec::create_coordination_act_tool;
+use crate::tools::losangelex_spec::create_list_coordination_tasks_tool;
+use crate::tools::registry::ToolExecutor;
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
+use codex_protocol::ThreadId;
+use codex_tools::ToolName;
+use codex_tools::ToolSpec;
+use reqwest::Client;
+use reqwest::StatusCode;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
+use serde_json::json;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+pub struct CoordinationHandler {
+    tool_name: ToolName,
+}
+
+impl CoordinationHandler {
+    pub(crate) fn new(name: &'static str) -> Self {
+        Self {
+            tool_name: ToolName::new(None, name.to_string()),
+        }
+    }
+}
+const HOLLYWOOD_REGISTRY_STALE_AFTER: Duration = Duration::seconds(90);
+
+#[derive(Debug, Deserialize)]
+struct CoordinationActArgs {
+    action: String,
+    task_id: Option<String>,
+    title: Option<String>,
+    details: Option<String>,
+    kind: Option<String>,
+    owner: Option<String>,
+    team_id: Option<String>,
+    room: Option<String>,
+    capability: Option<String>,
+    depends_on: Option<Vec<String>>,
+    summary: Option<String>,
+    #[serde(default = "default_notify_room")]
+    notify_room: bool,
+    claim_paths: Option<Vec<PathClaimArg>>,
+    release_paths: Option<Vec<PathClaimArg>>,
+    lease_seconds: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListCoordinationTasksArgs {
+    owner: Option<String>,
+    creator: Option<String>,
+    statuses: Option<Vec<String>>,
+    room: Option<String>,
+    #[serde(default)]
+    include_history: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct PathClaimArg {
+    kind: String,
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenTaskActPayload {
+    #[serde(default)]
+    claim_paths: Option<Vec<PathClaimArg>>,
+}
+
+#[derive(Debug, Serialize)]
+struct CoordinationActResult {
+    task: codex_state::CoordinationTask,
+    act: Option<codex_state::CoordinationAct>,
+    unblocked_tasks: Vec<codex_state::CoordinationTask>,
+    ownership: Option<Value>,
+    room_notified: bool,
+    woken_threads: Vec<String>,
+    superseded_owner_thread_id: Option<String>,
+    deduped: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct HollywoodRegistryListResponse {
+    entries: Vec<HollywoodRegistryEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HollywoodRoomsResponse {
+    rooms: Vec<HollywoodRoomStateResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HollywoodRoomStateResponse {
+    room: String,
+    contract_version: String,
+    coordination_policy: Option<String>,
+    coordination_phase: Option<String>,
+    coordination_epoch: i64,
+    leader_session_id: Option<String>,
+    verifier_session_id: Option<String>,
+}
+
+#[derive(Debug)]
+struct CoordinationRoomPolicyContext {
+    room: String,
+    configured_policy: String,
+    effective_policy: String,
+    phase: String,
+    epoch: i64,
+    role: Option<&'static str>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HollywoodRegistryEntry {
+    session_id: String,
+    attached: bool,
+    identities: Vec<String>,
+    updated_at: Option<String>,
+    last_heartbeat_at: Option<String>,
+}
+
+fn default_notify_room() -> bool {
+    true
+}
+
+impl ToolExecutor<ToolInvocation> for CoordinationHandler {
+    fn tool_name(&self) -> ToolName {
+        self.tool_name.clone()
+    }
+
+    fn spec(&self) -> ToolSpec {
+        if self.tool_name.name == "coordination_act" {
+            create_coordination_act_tool()
+        } else if self.tool_name.name == "list_coordination_tasks" {
+            create_list_coordination_tasks_tool()
+        } else {
+            panic!("unsupported coordination tool {}", self.tool_name.name)
+        }
+    }
+
+    fn handle<'a>(&'a self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'a>
+    where
+        ToolInvocation: 'a,
+    {
+        Box::pin(async move {
+            if crate::canonical_collaboration::enterprise() {
+                let ToolPayload::Function { arguments } = &invocation.payload else {
+                    return Err(FunctionCallError::RespondToModel(
+                        "Canonical native tool expects function intent".to_string(),
+                    ));
+                };
+                let intent: serde_json::Value = parse_arguments(arguments)?;
+                let result =
+                    crate::canonical_collaboration::invocation(&invocation, "coordination", intent)
+                        .await?;
+                return Ok(boxed_tool_output(FunctionToolOutput::from_text(
+                    result.to_string(),
+                    Some(true),
+                )));
+            }
+            let output = async {
+                let ToolInvocation {
+                    session,
+                    turn,
+                    tool_name,
+                    payload,
+                    ..
+                } = invocation;
+
+                let ToolPayload::Function { arguments } = payload else {
+                    return Err(FunctionCallError::RespondToModel(
+                        "coordination handler received unsupported payload".to_string(),
+                    ));
+                };
+
+                let db = required_state_db(&session)?;
+                match tool_name.name.as_str() {
+                    "coordination_act" => {
+                        let args: CoordinationActArgs = parse_arguments(&arguments)?;
+                        handle_coordination_act(&session, &turn, &db, args).await
+                    }
+                    "list_coordination_tasks" => {
+                        let args: ListCoordinationTasksArgs = parse_arguments(&arguments)?;
+                        let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
+                            Some(resolve_coordination_target(&session, &turn, &db, owner).await?)
+                        } else {
+                            None
+                        };
+                        let creator_thread_id = if let Some(creator) = args.creator.as_deref() {
+                            Some(resolve_coordination_target(&session, &turn, &db, creator).await?)
+                        } else {
+                            None
+                        };
+                        let statuses = args
+                            .statuses
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|status| parse_coordination_status(status.as_str()))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(FunctionCallError::RespondToModel)?;
+                        let room = match args.room {
+                            Some(room) => Some(room),
+                            None => hollywood_config_for_session(&session, &db)
+                                .await?
+                                .map(|config| config.room),
+                        };
+                        let tasks = db
+                            .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+                                owner_thread_id,
+                                creator_thread_id,
+                                room,
+                                statuses,
+                            })
+                            .await
+                            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+                        let content = if args.include_history {
+                            let task_ids =
+                                tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
+                            let acts = db
+                                .list_coordination_acts(None)
+                                .await
+                                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+                            let acts = acts
+                                .into_iter()
+                                .filter(|act| {
+                                    act.task_id
+                                        .as_ref()
+                                        .is_some_and(|task_id| task_ids.contains(task_id))
+                                })
+                                .collect::<Vec<_>>();
+                            json!({
+                                "tasks": tasks,
+                                "acts": acts,
+                            })
+                        } else {
+                            json!({ "tasks": tasks })
+                        };
+                        Ok(FunctionToolOutput::from_text(
+                            serde_json::to_string_pretty(&content)
+                                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                            Some(true),
+                        ))
+                    }
+                    other => Err(FunctionCallError::RespondToModel(format!(
+                        "unsupported coordination tool {other}"
+                    ))),
+                }
+            }
+            .await?;
+            Ok(boxed_tool_output(output))
+        })
+    }
+}
+
+async fn handle_coordination_act(
+    session: &Arc<Session>,
+    turn: &Arc<TurnContext>,
+    db: &Arc<codex_state::StateRuntime>,
+    args: CoordinationActArgs,
+) -> Result<FunctionToolOutput, FunctionCallError> {
+    let actor_thread_id = session.thread_id();
+    let action = args.action.as_str();
+    match validate_coordination_act_summary(action, args.summary.as_deref()) {
+        Ok(()) => {}
+        Err(FunctionCallError::RespondToModel(message)) => {
+            return coordination_failure_output(message, None);
+        }
+        Err(fatal) => return Err(fatal),
+    }
+    let outcome = match action {
+        "open_task" => {
+            let title = args
+                .title
+                .clone()
+                .filter(|title| !title.trim().is_empty())
+                .ok_or_else(|| {
+                    FunctionCallError::RespondToModel(
+                        "coordination_act open_task requires a non-empty title".to_string(),
+                    )
+                })?;
+            let kind = args
+                .kind
+                .as_deref()
+                .map(codex_state::CoordinationTaskKind::parse)
+                .transpose()
+                .map_err(|err| FunctionCallError::RespondToModel(err.to_string()))?
+                .unwrap_or(codex_state::CoordinationTaskKind::General);
+            let owner_thread_id = if let Some(owner) = args.owner.as_deref() {
+                if coordination_target_is_unassigned(owner) {
+                    None
+                } else {
+                    Some(resolve_coordination_target(session, turn, db, owner).await?)
+                }
+            } else {
+                None
+            };
+            let room_policy =
+                load_coordination_room_policy_context(session, db, args.room.as_deref()).await?;
+            if let Err(err) = enforce_open_task_room_policy(
+                &actor_thread_id,
+                room_policy.as_ref(),
+                kind,
+                owner_thread_id.as_ref(),
+                args.claim_paths.as_deref(),
+            ) {
+                match err {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, None);
+                    }
+                    fatal => return Err(fatal),
+                }
+            }
+            if args.claim_paths.is_some() && owner_thread_id.is_none() {
+                return coordination_failure_output(
+                    "coordination_act open_task requires `owner` when reserving claim_paths"
+                        .to_string(),
+                    None,
+                );
+            }
+            let reserved_path_claims = if let Some(claim_paths) = args.claim_paths.as_deref() {
+                let owner_thread_id = owner_thread_id.ok_or_else(|| {
+                    FunctionCallError::RespondToModel(
+                        "coordination_act open_task requires `owner` when reserving claim_paths"
+                            .to_string(),
+                    )
+                })?;
+                resolve_path_claim_specs_for_thread(db, owner_thread_id, claim_paths).await?
+            } else {
+                Vec::new()
+            };
+            if matches!(kind, codex_state::CoordinationTaskKind::Implementation)
+                && owner_thread_id.is_some()
+                && reserved_path_claims.is_empty()
+            {
+                return coordination_failure_output(
+                    "coordination_act open_task requires exact claim_paths before it can direct-assign implementation work".to_string(),
+                    None,
+                );
+            }
+            let details = if matches!(kind, codex_state::CoordinationTaskKind::Implementation) {
+                with_reserved_scope_details(
+                    args.details.clone().unwrap_or_default(),
+                    args.claim_paths.as_deref().unwrap_or(&[]),
+                )
+            } else {
+                args.details.clone().unwrap_or_default()
+            };
+            let reserved_claim_paths_json = path_claim_specs_to_json(&reserved_path_claims);
+            let act_payload_json = serde_json::to_string(&json!({
+                "action": "open_task",
+                "details": args.details,
+                "kind": args.kind,
+                "owner": args.owner,
+                "claim_paths": reserved_claim_paths_json,
+                "team_id": args.team_id,
+                "room": args.room,
+                "capability": args.capability,
+                "depends_on": args.depends_on,
+            }))
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+            match db
+                .create_coordination_task(codex_state::CoordinationTaskCreateParams {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    creator_thread_id: actor_thread_id,
+                    owner_thread_id,
+                    reserved_path_claims,
+                    claim_lease_seconds: args
+                        .lease_seconds
+                        .unwrap_or(codex_state::DEFAULT_COORDINATION_LEASE_SECONDS),
+                    team_id: args.team_id.clone(),
+                    room: args.room.clone(),
+                    kind,
+                    summary: title,
+                    details,
+                    requested_capability: args.capability.clone(),
+                    dependency_task_ids: args.depends_on.clone().unwrap_or_default(),
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    let message = err.to_string();
+                    if let Some(existing_task_id) = parse_duplicate_task_id(message.as_str()) {
+                        let existing_task = db
+                            .get_coordination_task(existing_task_id)
+                            .await
+                            .map_err(|load_err| FunctionCallError::Fatal(load_err.to_string()))?
+                            .ok_or_else(|| {
+                                FunctionCallError::Fatal(format!(
+                                    "duplicate coordination task {existing_task_id} disappeared"
+                                ))
+                            })?;
+                        return coordination_duplicate_output(existing_task);
+                    }
+                    match map_coordination_open_task_message(message) {
+                        FunctionCallError::RespondToModel(message) => {
+                            return coordination_failure_output(message, None);
+                        }
+                        fatal => return Err(fatal),
+                    }
+                }
+            }
+        }
+        "accept" => {
+            let task = match required_task(db, args.task_id.as_deref()).await {
+                Ok(task) => task,
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, None);
+                }
+                Err(fatal) => return Err(fatal),
+            };
+            if let Some(owner_thread_id) = task.owner_thread_id.as_deref()
+                && owner_thread_id != actor_thread_id.to_string()
+            {
+                return coordination_failure_output(
+                    format!(
+                        "coordination task {} is currently awarded to {owner_thread_id}",
+                        task.id
+                    ),
+                    Some(&task),
+                );
+            }
+            if task.status == codex_state::CoordinationTaskStatus::Active
+                && task.owner_thread_id.as_deref() == Some(actor_thread_id.to_string().as_str())
+            {
+                return coordination_duplicate_output(task);
+            }
+            let room_policy =
+                load_coordination_room_policy_context(session, db, task.room.as_deref()).await?;
+            if let Err(err) =
+                enforce_accept_room_policy(&actor_thread_id, room_policy.as_ref(), &task)
+            {
+                match err {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, Some(&task));
+                    }
+                    fatal => return Err(fatal),
+                }
+            }
+            let lease_seconds = args
+                .lease_seconds
+                .unwrap_or(codex_state::DEFAULT_COORDINATION_LEASE_SECONDS);
+            let path_claims = if let Some(claim_paths) = args.claim_paths.as_deref() {
+                resolve_path_claim_specs_for_thread(db, actor_thread_id, claim_paths).await?
+            } else if matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+                && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded)
+            {
+                reserved_claim_paths_for_task(db, actor_thread_id, task.id.as_str()).await?
+            } else {
+                Vec::new()
+            };
+            let outcome = match db
+                .accept_coordination_task(codex_state::CoordinationTaskAcceptParams {
+                    task_id: task.id.clone(),
+                    actor_thread_id,
+                    path_claims: path_claims.clone(),
+                    lease_seconds,
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json: serde_json::to_string(&json!({
+                        "action": "accept",
+                        "claim_paths": path_claim_specs_to_json(&path_claims),
+                        "lease_seconds": lease_seconds,
+                    }))
+                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    if let Some(current_task) =
+                        same_owner_active_task(db, task.id.as_str(), actor_thread_id).await?
+                    {
+                        return coordination_duplicate_output(current_task);
+                    }
+                    match map_coordination_transition_error(err) {
+                        FunctionCallError::RespondToModel(message) => {
+                            return coordination_failure_output(message, Some(&task));
+                        }
+                        fatal => return Err(fatal),
+                    }
+                }
+            };
+            let ownership = if path_claims.is_empty() {
+                None
+            } else {
+                Some(accepted_claim_paths_for_actor(db, actor_thread_id, &path_claims).await?)
+            };
+            return finalize_coordination_act(session, turn, db, &args, outcome, ownership, None)
+                .await;
+        }
+        "done" => {
+            let task = match required_task(db, args.task_id.as_deref()).await {
+                Ok(task) => task,
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, None);
+                }
+                Err(fatal) => return Err(fatal),
+            };
+            match ensure_task_control(&task, actor_thread_id) {
+                Ok(()) => {}
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, Some(&task));
+                }
+                Err(fatal) => return Err(fatal),
+            }
+            if task.status == codex_state::CoordinationTaskStatus::Done {
+                return coordination_duplicate_output(task);
+            }
+            let outcome = match db
+                .complete_coordination_task(codex_state::CoordinationTaskDoneParams {
+                    task_id: task.id.clone(),
+                    actor_thread_id,
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json: serde_json::to_string(&json!({
+                        "action": "done",
+                        "summary": args.summary,
+                    }))
+                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    if let Some(current_task) =
+                        same_controller_done_task(db, task.id.as_str(), actor_thread_id).await?
+                    {
+                        return coordination_duplicate_output(current_task);
+                    }
+                    match map_coordination_transition_error(err) {
+                        FunctionCallError::RespondToModel(message) => {
+                            return coordination_failure_output(message, Some(&task));
+                        }
+                        fatal => return Err(fatal),
+                    }
+                }
+            };
+            let ownership = if let Some(release_paths) = args.release_paths.as_deref() {
+                Some(release_paths_for_actor(db, actor_thread_id, release_paths).await?)
+            } else {
+                None
+            };
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                ownership,
+                task.owner_thread_id.clone(),
+            )
+            .await;
+        }
+        "cancel" => {
+            let task = match required_task(db, args.task_id.as_deref()).await {
+                Ok(task) => task,
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, None);
+                }
+                Err(fatal) => return Err(fatal),
+            };
+            match ensure_task_control(&task, actor_thread_id) {
+                Ok(()) => {}
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, Some(&task));
+                }
+                Err(fatal) => return Err(fatal),
+            }
+            if let Some(current_task) =
+                same_controller_cancelled_task(db, task.id.as_str(), actor_thread_id).await?
+            {
+                return coordination_duplicate_output(current_task);
+            }
+            let outcome = match db
+                .cancel_coordination_task(codex_state::CoordinationTaskCancelParams {
+                    task_id: task.id.clone(),
+                    actor_thread_id,
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json: serde_json::to_string(&json!({
+                        "action": "cancel",
+                        "summary": args.summary,
+                    }))
+                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => match map_coordination_transition_error(err) {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, Some(&task));
+                    }
+                    fatal => return Err(fatal),
+                },
+            };
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                None,
+                task.owner_thread_id.clone(),
+            )
+            .await;
+        }
+        "handoff" => {
+            let task = match required_task(db, args.task_id.as_deref()).await {
+                Ok(task) => task,
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, None);
+                }
+                Err(fatal) => return Err(fatal),
+            };
+            match ensure_task_control(&task, actor_thread_id) {
+                Ok(()) => {}
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, Some(&task));
+                }
+                Err(fatal) => return Err(fatal),
+            }
+            let Some(owner) = args.owner.as_deref() else {
+                return coordination_failure_output(
+                    "coordination_act handoff requires `owner`".to_string(),
+                    Some(&task),
+                );
+            };
+            let new_owner_thread_id = resolve_coordination_target(session, turn, db, owner).await?;
+            let outcome = match db
+                .handoff_coordination_task(codex_state::CoordinationTaskHandoffParams {
+                    task_id: task.id.clone(),
+                    actor_thread_id,
+                    new_owner_thread_id,
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json: serde_json::to_string(&json!({
+                        "action": "handoff",
+                        "owner": args.owner,
+                        "summary": args.summary,
+                    }))
+                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => match map_coordination_transition_error(err) {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, Some(&task));
+                    }
+                    fatal => return Err(fatal),
+                },
+            };
+            let ownership = if let Some(release_paths) = args.release_paths.as_deref() {
+                Some(release_paths_for_actor(db, actor_thread_id, release_paths).await?)
+            } else {
+                None
+            };
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                ownership,
+                task.owner_thread_id.clone(),
+            )
+            .await;
+        }
+        "yield" => {
+            let task = match required_task(db, args.task_id.as_deref()).await {
+                Ok(task) => task,
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, None);
+                }
+                Err(fatal) => return Err(fatal),
+            };
+            match ensure_task_control(&task, actor_thread_id) {
+                Ok(()) => {}
+                Err(FunctionCallError::RespondToModel(message)) => {
+                    return coordination_failure_output(message, Some(&task));
+                }
+                Err(fatal) => return Err(fatal),
+            }
+            let outcome = match db
+                .yield_coordination_task(codex_state::CoordinationTaskYieldParams {
+                    task_id: task.id.clone(),
+                    actor_thread_id,
+                    act_id: uuid::Uuid::new_v4().to_string(),
+                    act_summary: args.summary.clone(),
+                    act_payload_json: serde_json::to_string(&json!({
+                        "action": "yield",
+                        "summary": args.summary,
+                    }))
+                    .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+                })
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(err) => match map_coordination_transition_error(err) {
+                    FunctionCallError::RespondToModel(message) => {
+                        return coordination_failure_output(message, Some(&task));
+                    }
+                    fatal => return Err(fatal),
+                },
+            };
+            let ownership = if let Some(release_paths) = args.release_paths.as_deref() {
+                Some(release_paths_for_actor(db, actor_thread_id, release_paths).await?)
+            } else {
+                None
+            };
+            return finalize_coordination_act(
+                session,
+                turn,
+                db,
+                &args,
+                outcome,
+                ownership,
+                task.owner_thread_id.clone(),
+            )
+            .await;
+        }
+        other => {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "invalid coordination action `{other}`; expected open_task, accept, done, cancel, handoff, or yield"
+            )));
+        }
+    };
+    finalize_coordination_act(session, turn, db, &args, outcome, None, None).await
+}
+
+async fn finalize_coordination_act(
+    session: &Arc<Session>,
+    turn: &Arc<TurnContext>,
+    db: &Arc<codex_state::StateRuntime>,
+    args: &CoordinationActArgs,
+    outcome: codex_state::CoordinationTaskTransitionOutcome,
+    ownership: Option<Value>,
+    prior_owner_thread_id: Option<String>,
+) -> Result<FunctionToolOutput, FunctionCallError> {
+    let superseded_owner_thread_id =
+        superseded_owner_thread_id(&outcome, prior_owner_thread_id.as_deref());
+    clear_superseded_coordination_notifications(db, &outcome, prior_owner_thread_id.as_deref())
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+
+    let mut woken_threads = Vec::new();
+    if let Some(owner_thread_id) = outcome.task.owner_thread_id.as_deref()
+        && owner_thread_id != session.thread_id().to_string()
+    {
+        let wake_reason = match outcome.task.status {
+            codex_state::CoordinationTaskStatus::Awarded => Some("assigned"),
+            codex_state::CoordinationTaskStatus::Cancelled
+                if matches!(outcome.act.kind, codex_state::CoordinationActKind::Cancel) =>
+            {
+                Some("cancelled")
+            }
+            _ => None,
+        };
+        if let Some(wake_reason) = wake_reason {
+            enqueue_coordination_notification(db, owner_thread_id, &outcome.task, wake_reason)
+                .await
+                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+            woken_threads.push(owner_thread_id.to_string());
+        }
+    }
+    for task in &outcome.unblocked_tasks {
+        if let Some(owner_thread_id) = task.owner_thread_id.as_deref()
+            && owner_thread_id != session.thread_id().to_string()
+            && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded)
+        {
+            enqueue_coordination_notification(db, owner_thread_id, task, "unblocked")
+                .await
+                .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+            woken_threads.push(owner_thread_id.to_string());
+        }
+    }
+    let room_notified = if args.notify_room {
+        send_coordination_room_summary(session, turn, db, &outcome).await
+    } else {
+        false
+    };
+
+    let result = CoordinationActResult {
+        task: outcome.task,
+        act: Some(outcome.act),
+        unblocked_tasks: outcome.unblocked_tasks,
+        ownership,
+        room_notified,
+        woken_threads,
+        superseded_owner_thread_id,
+        deduped: false,
+    };
+    Ok(FunctionToolOutput::from_text(
+        serde_json::to_string_pretty(&result)
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+        Some(true),
+    ))
+}
+
+async fn clear_superseded_coordination_notifications(
+    db: &Arc<codex_state::StateRuntime>,
+    outcome: &codex_state::CoordinationTaskTransitionOutcome,
+    prior_owner_thread_id: Option<&str>,
+) -> anyhow::Result<()> {
+    let task_id = outcome.task.id.as_str();
+    let actor_thread_id = ThreadId::from_string(&outcome.act.actor_thread_id).ok();
+    let owner_thread_id = outcome
+        .task
+        .owner_thread_id
+        .as_deref()
+        .and_then(|thread_id| ThreadId::from_string(thread_id).ok());
+    let prior_owner_thread_id =
+        prior_owner_thread_id.and_then(|thread_id| ThreadId::from_string(thread_id).ok());
+
+    match outcome.act.kind {
+        codex_state::CoordinationActKind::Accept => {
+            if let Some(owner_thread_id) = owner_thread_id {
+                clear_coordination_notifications_for_thread(
+                    db,
+                    owner_thread_id,
+                    task_id,
+                    &["assigned", "unblocked"],
+                )
+                .await?;
+            }
+        }
+        codex_state::CoordinationActKind::Done | codex_state::CoordinationActKind::Cancel => {
+            let threads_to_clear = [prior_owner_thread_id, owner_thread_id]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            for thread_id in threads_to_clear {
+                clear_coordination_notifications_for_thread(
+                    db,
+                    thread_id,
+                    task_id,
+                    &["assigned", "unblocked", "cancelled"],
+                )
+                .await?;
+            }
+        }
+        codex_state::CoordinationActKind::Handoff | codex_state::CoordinationActKind::Yield => {
+            let threads_to_clear = [prior_owner_thread_id, actor_thread_id]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            for thread_id in threads_to_clear {
+                clear_coordination_notifications_for_thread(
+                    db,
+                    thread_id,
+                    task_id,
+                    &["assigned", "unblocked", "cancelled"],
+                )
+                .await?;
+            }
+        }
+        codex_state::CoordinationActKind::OpenTask => {}
+    }
+
+    Ok(())
+}
+
+fn superseded_owner_thread_id(
+    outcome: &codex_state::CoordinationTaskTransitionOutcome,
+    prior_owner_thread_id: Option<&str>,
+) -> Option<String> {
+    match outcome.act.kind {
+        codex_state::CoordinationActKind::Done
+        | codex_state::CoordinationActKind::Cancel
+        | codex_state::CoordinationActKind::Handoff
+        | codex_state::CoordinationActKind::Yield => prior_owner_thread_id
+            .filter(|thread_id| !thread_id.is_empty())
+            .map(str::to_string),
+        codex_state::CoordinationActKind::OpenTask | codex_state::CoordinationActKind::Accept => {
+            None
+        }
+    }
+}
+
+async fn clear_coordination_notifications_for_thread(
+    db: &Arc<codex_state::StateRuntime>,
+    thread_id: ThreadId,
+    task_id: &str,
+    reasons: &[&str],
+) -> anyhow::Result<usize> {
+    let task_id_marker = format!("task_id: {task_id}");
+    let scheduled_tasks = db.list_scheduled_tasks(Some(thread_id)).await?;
+    let matching_task_ids = scheduled_tasks
+        .into_iter()
+        .filter(|scheduled_task| {
+            reasons.iter().any(|reason| {
+                scheduled_task
+                    .title
+                    .starts_with(format!("coordination:{reason}:").as_str())
+            }) && scheduled_task.prompt.contains(&task_id_marker)
+        })
+        .map(|scheduled_task| scheduled_task.id)
+        .collect::<Vec<_>>();
+
+    for scheduled_task_id in &matching_task_ids {
+        let _deleted = db.delete_scheduled_task(scheduled_task_id).await?;
+    }
+
+    Ok(matching_task_ids.len())
+}
+
+fn required_state_db(
+    session: &Arc<Session>,
+) -> Result<Arc<codex_state::StateRuntime>, FunctionCallError> {
+    session.state_db().ok_or_else(|| {
+        FunctionCallError::RespondToModel(
+            "durable coordination is unavailable for this session because the sqlite state db could not be initialized".to_string(),
+        )
+    })
+}
+
+fn validate_coordination_act_summary(
+    action: &str,
+    summary: Option<&str>,
+) -> Result<(), FunctionCallError> {
+    if let Some(summary) = summary.map(str::trim).filter(|summary| !summary.is_empty())
+        && is_placeholder_coordination_summary(summary)
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "coordination_act {action} requires a concrete summary, not placeholder text"
+        )));
+    }
+
+    if !matches!(action, "done" | "cancel" | "handoff" | "yield") {
+        return Ok(());
+    }
+
+    let Some(_summary) = summary.map(str::trim).filter(|summary| !summary.is_empty()) else {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "coordination_act {action} requires a concise non-empty summary"
+        )));
+    };
+
+    Ok(())
+}
+
+fn is_placeholder_coordination_summary(summary: &str) -> bool {
+    let normalized = summary
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    matches!(
+        normalized.as_str(),
+        "placeholder"
+            | "placeholder summary"
+            | "todo"
+            | "tbd"
+            | "none"
+            | "n a"
+            | "na"
+            | "noop"
+            | "no op"
+    )
+}
+
+fn parse_coordination_status(value: &str) -> Result<codex_state::CoordinationTaskStatus, String> {
+    let normalized = value.trim().to_ascii_lowercase().replace(['-', ' '], "_");
+    let canonical = match normalized.as_str() {
+        "pending" | "todo" | "new" | "pending_review" | "proposed" => "open",
+        "accepted" | "assigned" => "awarded",
+        "claimed" | "in_progress" | "inprogress" | "handoff" | "handoff_pending" => "active",
+        "complete" | "completed" | "closed" => "done",
+        "canceled" => "cancelled",
+        other => other,
+    };
+    codex_state::CoordinationTaskStatus::parse(canonical).map_err(|err| err.to_string())
+}
+
+fn coordination_target_is_unassigned(value: &str) -> bool {
+    matches!(
+        value
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['-', '_'], " ")
+            .as_str(),
+        "unassigned" | "currently unassigned" | "none" | "no owner" | "no one" | "nobody"
+    )
+}
+
+async fn resolve_coordination_target(
+    session: &Arc<Session>,
+    turn: &Arc<TurnContext>,
+    db: &Arc<codex_state::StateRuntime>,
+    target: &str,
+) -> Result<ThreadId, FunctionCallError> {
+    if let Ok(thread_id) = parse_agent_id_target(target) {
+        return Ok(thread_id);
+    }
+
+    if let Some(session_id) = canonicalize_agent_identity(target) {
+        return ThreadId::from_string(&session_id).map_err(|err| {
+            FunctionCallError::RespondToModel(format!("invalid agent id {target}: {err:?}"))
+        });
+    }
+
+    if let Some(thread_id) = resolve_current_thread_target(session, db, target).await? {
+        return Ok(thread_id);
+    }
+
+    let hollywood_config = hollywood_config_for_session(session, db).await?;
+    if let Some(identity) = canonicalize_hollywood_identity(target)
+        && let Some(config) = hollywood_config.as_ref()
+    {
+        if let Some(thread_id) = resolve_live_hollywood_identity(config, &identity).await? {
+            return Ok(thread_id);
+        }
+        return Err(FunctionCallError::RespondToModel(format!(
+            "unknown live Hollywood agent `{target}` in room `{}`",
+            config.room
+        )));
+    }
+
+    if hollywood_config.is_none()
+        && let Some(thread_id) = resolve_thread_by_exact_title(db, turn, target).await?
+    {
+        return Ok(thread_id);
+    }
+
+    Err(FunctionCallError::RespondToModel(format!(
+        "unknown agent id or name `{target}`"
+    )))
+}
+
+async fn resolve_live_hollywood_identity(
+    config: &HollywoodSessionConfig,
+    identity: &str,
+) -> Result<Option<ThreadId>, FunctionCallError> {
+    let mut matches = Vec::new();
+    for room in room_scoped_candidate_rooms(config) {
+        let entries = fetch_registry_entries(config, &room).await?;
+        for entry in entries {
+            if !entry.attached {
+                continue;
+            }
+            if (entry.session_id == identity
+                || entry
+                    .identities
+                    .iter()
+                    .any(|value| live_identity_matches_target(value, identity)))
+                && !matches.iter().any(|value| value == &entry.session_id)
+            {
+                matches.push(entry.session_id);
+            }
+        }
+    }
+
+    match matches.len() {
+        0 => Ok(None),
+        1 => ThreadId::from_string(&matches[0]).map(Some).map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood registry returned invalid session id for `{identity}`: {err:?}"
+            ))
+        }),
+        _ => Err(FunctionCallError::RespondToModel(format!(
+            "Hollywood identity `{identity}` is ambiguous across live sessions: {}",
+            matches.join(", ")
+        ))),
+    }
+}
+
+async fn resolve_current_thread_target(
+    session: &Arc<Session>,
+    db: &Arc<codex_state::StateRuntime>,
+    target: &str,
+) -> Result<Option<ThreadId>, FunctionCallError> {
+    let Some(target_title) = crate::util::normalize_thread_name(target.trim_start_matches('@'))
+    else {
+        return Ok(None);
+    };
+    let metadata = db
+        .get_thread(session.thread_id())
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+    let Some(metadata) = metadata else {
+        return Ok(None);
+    };
+    let Some(current_title) = crate::util::normalize_thread_name(&metadata.title) else {
+        return Ok(None);
+    };
+    if current_title == target_title {
+        Ok(Some(session.thread_id()))
+    } else {
+        Ok(None)
+    }
+}
+
+async fn resolve_thread_by_exact_title(
+    db: &Arc<codex_state::StateRuntime>,
+    turn: &Arc<TurnContext>,
+    target: &str,
+) -> Result<Option<ThreadId>, FunctionCallError> {
+    let Some(title) = crate::util::normalize_thread_name(target.trim_start_matches('@')) else {
+        return Ok(None);
+    };
+    let allowed_sources = Vec::<String>::new();
+    db.find_thread_by_exact_title_including_empty_history(
+        &title,
+        &allowed_sources,
+        None,
+        /*archived_only*/ false,
+        Some(turn.config.cwd.as_path()),
+    )
+    .await
+    .map(|metadata| metadata.map(|thread| thread.id))
+    .map_err(|err| FunctionCallError::Fatal(err.to_string()))
+}
+
+fn room_scoped_candidate_rooms(config: &HollywoodSessionConfig) -> Vec<String> {
+    let mut rooms = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for room in std::iter::once(config.room.as_str())
+        .chain(config.observed_rooms.iter().map(String::as_str))
+    {
+        if !room.is_empty() && seen.insert(room.to_string()) {
+            rooms.push(room.to_string());
+        }
+    }
+    rooms
+}
+
+async fn hollywood_config_for_session(
+    session: &Arc<Session>,
+    db: &Arc<codex_state::StateRuntime>,
+) -> Result<Option<HollywoodSessionConfig>, FunctionCallError> {
+    if let Some(config) = session.hollywood_session_config().await {
+        return Ok(Some(config));
+    }
+
+    let metadata = db
+        .get_thread(session.thread_id())
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+    let Some(hollywood) = metadata.and_then(|thread| thread.hollywood) else {
+        return Ok(None);
+    };
+
+    Ok(Some(HollywoodSessionConfig {
+        url: hollywood.url,
+        room: hollywood.room,
+        observed_rooms: Vec::new(),
+        wake_rooms: Vec::new(),
+        attention_mode: hollywood.attention_mode,
+    }))
+}
+
+async fn fetch_hollywood_room_policy_state(
+    config: &HollywoodSessionConfig,
+    room: &str,
+) -> Result<Option<HollywoodRoomStateResponse>, FunctionCallError> {
+    let url = format!("{}/hollywood/v1/rooms", config.url.trim_end_matches('/'));
+    let response = Client::new()
+        .get(&url)
+        .query(&[("room", room), ("limit", "1")])
+        .send()
+        .await
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood room-state read failed for `{room}`: {err}"
+            ))
+        })?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let response = response.error_for_status().map_err(|err| {
+        FunctionCallError::RespondToModel(format!(
+            "Hollywood room-state read failed for `{room}`: {err}"
+        ))
+    })?;
+    let response = response
+        .json::<HollywoodRoomsResponse>()
+        .await
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood room-state response parse failed for `{room}`: {err}"
+            ))
+        })?;
+    Ok(response
+        .rooms
+        .into_iter()
+        .next()
+        .filter(|room_state| room_state.contract_version == "losangelex-room/v2"))
+}
+
+async fn load_coordination_room_policy_context(
+    session: &Arc<Session>,
+    db: &Arc<codex_state::StateRuntime>,
+    room_override: Option<&str>,
+) -> Result<Option<CoordinationRoomPolicyContext>, FunctionCallError> {
+    let Some(config) = hollywood_config_for_session(session, db).await? else {
+        return Ok(None);
+    };
+    let room = room_override.unwrap_or(config.room.as_str()).to_string();
+    let Some(room_state) = fetch_hollywood_room_policy_state(&config, &room).await? else {
+        return Ok(None);
+    };
+    let Some(configured_policy) = room_state.coordination_policy.clone() else {
+        return Ok(None);
+    };
+    let phase = if configured_policy == "auto" {
+        let tasks = db
+            .list_coordination_tasks(codex_state::CoordinationTaskListFilter {
+                owner_thread_id: None,
+                creator_thread_id: None,
+                room: Some(room.clone()),
+                statuses: Vec::new(),
+            })
+            .await
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+        infer_auto_phase_from_tasks(&tasks).to_string()
+    } else {
+        room_state
+            .coordination_phase
+            .clone()
+            .unwrap_or_else(|| "execution".to_string())
+    };
+    Ok(Some(CoordinationRoomPolicyContext {
+        room,
+        effective_policy: effective_room_policy_for_phase(&configured_policy, &phase).to_string(),
+        configured_policy,
+        phase,
+        epoch: room_state.coordination_epoch,
+        role: coordination_role_for_room_state(&room_state, session.thread_id()),
+    }))
+}
+
+fn enforce_open_task_room_policy(
+    actor_thread_id: &ThreadId,
+    room_policy: Option<&CoordinationRoomPolicyContext>,
+    kind: codex_state::CoordinationTaskKind,
+    owner_thread_id: Option<&ThreadId>,
+    claim_paths: Option<&[PathClaimArg]>,
+) -> Result<(), FunctionCallError> {
+    let Some(room_policy) = room_policy else {
+        return Ok(());
+    };
+    let _effective_policy = room_policy.effective_policy.as_str();
+    let _epoch = room_policy.epoch;
+    if room_policy.configured_policy != "auto" {
+        return Ok(());
+    }
+    if matches!(kind, codex_state::CoordinationTaskKind::Implementation)
+        && room_policy.phase == "discovery"
+        && claim_paths.is_none_or(<[PathClaimArg]>::is_empty)
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "auto room policy in `{}` phase `{}` blocks broad implementation claims; open investigation/review lanes or direct-assign exact implementation claim_paths first",
+            room_policy.room, room_policy.phase
+        )));
+    }
+    if matches!(room_policy.role, Some("verifier"))
+        && matches!(kind, codex_state::CoordinationTaskKind::Implementation)
+    {
+        let verifier_is_taking_lane = owner_thread_id.is_none()
+            || owner_thread_id.is_some_and(|owner| owner == actor_thread_id);
+        if verifier_is_taking_lane {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "auto room policy in `{}` keeps the verifier on QA unless an implementation lane is explicitly reassigned to another owner",
+                room_policy.room
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn enforce_accept_room_policy(
+    actor_thread_id: &ThreadId,
+    room_policy: Option<&CoordinationRoomPolicyContext>,
+    task: &codex_state::CoordinationTask,
+) -> Result<(), FunctionCallError> {
+    let Some(room_policy) = room_policy else {
+        return Ok(());
+    };
+    let _effective_policy = room_policy.effective_policy.as_str();
+    let _epoch = room_policy.epoch;
+    if room_policy.configured_policy != "auto"
+        || !matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+    {
+        return Ok(());
+    }
+    let actor_thread_id = actor_thread_id.to_string();
+    if room_policy.phase == "discovery"
+        && task.owner_thread_id.as_deref() != Some(actor_thread_id.as_str())
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "auto room policy in `{}` phase `{}` requires implementation lanes to be explicitly awarded before they are accepted",
+            room_policy.room, room_policy.phase
+        )));
+    }
+    if matches!(room_policy.role, Some("verifier"))
+        && task.owner_thread_id.as_deref() != Some(actor_thread_id.as_str())
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "auto room policy in `{}` keeps the verifier on QA unless the implementation lane is explicitly awarded to the verifier",
+            room_policy.room
+        )));
+    }
+    Ok(())
+}
+
+async fn fetch_registry_entries(
+    config: &HollywoodSessionConfig,
+    room: &str,
+) -> Result<Vec<HollywoodRegistryEntry>, FunctionCallError> {
+    let url = format!("{}/hollywood/v1/registry", config.url.trim_end_matches('/'));
+    Client::new()
+        .get(&url)
+        .query(&[("room", room), ("limit", "1000")])
+        .send()
+        .await
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!("Hollywood registry read failed: {err}"))
+        })?
+        .error_for_status()
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!("Hollywood registry read failed: {err}"))
+        })?
+        .json::<HollywoodRegistryListResponse>()
+        .await
+        .map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "Hollywood registry response parse failed: {err}"
+            ))
+        })
+        .map(|response| {
+            let now = Utc::now();
+            response
+                .entries
+                .into_iter()
+                .filter(|entry| registry_entry_is_fresh(entry, &now))
+                .collect()
+        })
+}
+
+fn registry_entry_is_fresh(entry: &HollywoodRegistryEntry, now: &DateTime<Utc>) -> bool {
+    let cutoff = *now - HOLLYWOOD_REGISTRY_STALE_AFTER;
+    let heartbeat_at = entry
+        .last_heartbeat_at
+        .as_deref()
+        .or(entry.updated_at.as_deref());
+    heartbeat_at
+        .and_then(parse_registry_timestamp)
+        .is_some_and(|heartbeat_at| heartbeat_at >= cutoff)
+}
+
+fn parse_registry_timestamp(value: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|parsed| parsed.with_timezone(&Utc))
+}
+
+fn coordination_role_for_room_state(
+    room_state: &HollywoodRoomStateResponse,
+    actor_thread_id: ThreadId,
+) -> Option<&'static str> {
+    let actor_thread_id = actor_thread_id.to_string();
+    if room_state
+        .leader_session_id
+        .as_deref()
+        .is_some_and(|thread_id| thread_id == actor_thread_id)
+    {
+        Some("leader")
+    } else if room_state
+        .verifier_session_id
+        .as_deref()
+        .is_some_and(|thread_id| thread_id == actor_thread_id)
+    {
+        Some("verifier")
+    } else if room_state.coordination_policy.is_some() {
+        Some("executor")
+    } else {
+        None
+    }
+}
+
+fn infer_auto_phase_from_tasks(tasks: &[codex_state::CoordinationTask]) -> &'static str {
+    let incomplete = tasks
+        .iter()
+        .filter(|task| {
+            !matches!(
+                task.status,
+                codex_state::CoordinationTaskStatus::Done
+                    | codex_state::CoordinationTaskStatus::Cancelled
+            )
+        })
+        .collect::<Vec<_>>();
+    if incomplete.is_empty() {
+        return if tasks.is_empty() {
+            "discovery"
+        } else {
+            "closure"
+        };
+    }
+    if incomplete
+        .iter()
+        .any(|task| matches!(task.kind, codex_state::CoordinationTaskKind::Implementation))
+    {
+        return "execution";
+    }
+    let has_completed_implementation = tasks.iter().any(|task| {
+        matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+            && matches!(task.status, codex_state::CoordinationTaskStatus::Done)
+    });
+    let has_stabilization_lane = incomplete.iter().any(|task| {
+        matches!(
+            task.kind,
+            codex_state::CoordinationTaskKind::Qa
+                | codex_state::CoordinationTaskKind::Review
+                | codex_state::CoordinationTaskKind::Handoff
+        )
+    });
+    if has_completed_implementation || has_stabilization_lane {
+        "stabilization"
+    } else {
+        "discovery"
+    }
+}
+
+fn effective_room_policy_for_phase<'a>(configured_policy: &'a str, phase: &str) -> &'a str {
+    match configured_policy {
+        "auto" => match phase {
+            "execution" => "kanban_pull",
+            "stabilization" | "closure" | "discovery" => "leader_award",
+            _ => "leader_award",
+        },
+        policy => policy,
+    }
+}
+
+async fn required_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: Option<&str>,
+) -> Result<codex_state::CoordinationTask, FunctionCallError> {
+    let task_id = task_id.ok_or_else(|| {
+        FunctionCallError::RespondToModel("coordination_act requires `task_id`".to_string())
+    })?;
+    db.get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+        .ok_or_else(|| {
+            FunctionCallError::RespondToModel(format!("coordination task {task_id} was not found"))
+        })
+}
+
+async fn same_owner_active_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: &str,
+    actor_thread_id: ThreadId,
+) -> Result<Option<codex_state::CoordinationTask>, FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let Some(task) = db
+        .get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let same_owner_active = task.status == codex_state::CoordinationTaskStatus::Active
+        && task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str());
+    Ok(same_owner_active.then_some(task))
+}
+
+async fn same_controller_done_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: &str,
+    actor_thread_id: ThreadId,
+) -> Result<Option<codex_state::CoordinationTask>, FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let Some(task) = db
+        .get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let same_controller_done = task.status == codex_state::CoordinationTaskStatus::Done
+        && (task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str())
+            || task.creator_thread_id == actor_thread_id);
+    Ok(same_controller_done.then_some(task))
+}
+
+async fn same_controller_cancelled_task(
+    db: &Arc<codex_state::StateRuntime>,
+    task_id: &str,
+    actor_thread_id: ThreadId,
+) -> Result<Option<codex_state::CoordinationTask>, FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let Some(task) = db
+        .get_coordination_task(task_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let same_controller_cancelled = task.status == codex_state::CoordinationTaskStatus::Cancelled
+        && (task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str())
+            || task.creator_thread_id == actor_thread_id);
+    Ok(same_controller_cancelled.then_some(task))
+}
+
+fn ensure_task_control(
+    task: &codex_state::CoordinationTask,
+    actor_thread_id: ThreadId,
+) -> Result<(), FunctionCallError> {
+    let actor_thread_id = actor_thread_id.to_string();
+    let owner_matches = task.owner_thread_id.as_deref() == Some(actor_thread_id.as_str());
+    let creator_matches = task.creator_thread_id == actor_thread_id;
+    if owner_matches || creator_matches {
+        return Ok(());
+    }
+    Err(FunctionCallError::RespondToModel(format!(
+        "coordination task {} is controlled by creator {} and owner {:?}",
+        task.id, task.creator_thread_id, task.owner_thread_id
+    )))
+}
+
+async fn claim_paths_for_actor(
+    db: &Arc<codex_state::StateRuntime>,
+    actor_thread_id: ThreadId,
+    claim_paths: &[codex_state::PathClaimSpec],
+) -> Result<Value, FunctionCallError> {
+    let owned_claims = db
+        .list_path_claims(Some(actor_thread_id))
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+    Ok(json!({
+        "acquired": true,
+        "claims": owned_claims
+            .into_iter()
+            .filter(|claim| {
+                claim_paths
+                    .iter()
+                    .any(|requested| requested.kind == claim.kind && requested.path == claim.path)
+            })
+            .map(path_claim_to_json)
+            .collect::<Vec<_>>(),
+        "conflicts": Vec::<Value>::new(),
+    }))
+}
+
+async fn accepted_claim_paths_for_actor(
+    db: &Arc<codex_state::StateRuntime>,
+    actor_thread_id: ThreadId,
+    claim_paths: &[codex_state::PathClaimSpec],
+) -> Result<Value, FunctionCallError> {
+    claim_paths_for_actor(db, actor_thread_id, claim_paths).await
+}
+
+async fn release_paths_for_actor(
+    db: &Arc<codex_state::StateRuntime>,
+    actor_thread_id: ThreadId,
+    release_paths: &[PathClaimArg],
+) -> Result<Value, FunctionCallError> {
+    let claims = resolve_path_claim_specs_for_thread(db, actor_thread_id, release_paths).await?;
+    let released = db
+        .release_path_claims(actor_thread_id, &claims)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+    Ok(json!({ "released": released }))
+}
+
+async fn resolve_path_claim_specs_for_thread(
+    db: &Arc<codex_state::StateRuntime>,
+    actor_thread_id: ThreadId,
+    claims: &[PathClaimArg],
+) -> Result<Vec<codex_state::PathClaimSpec>, FunctionCallError> {
+    let metadata = db
+        .get_thread(actor_thread_id)
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?
+        .ok_or_else(|| {
+            FunctionCallError::RespondToModel(format!(
+                "thread metadata for {actor_thread_id} is unavailable"
+            ))
+        })?;
+    resolve_path_claim_specs(claims, metadata.cwd.as_path())
+}
+
+async fn reserved_claim_paths_for_task(
+    db: &Arc<codex_state::StateRuntime>,
+    actor_thread_id: ThreadId,
+    task_id: &str,
+) -> Result<Vec<codex_state::PathClaimSpec>, FunctionCallError> {
+    let acts = db
+        .list_coordination_acts(Some(task_id))
+        .await
+        .map_err(|err| FunctionCallError::Fatal(err.to_string()))?;
+    let claim_paths = acts
+        .into_iter()
+        .find(|act| matches!(act.kind, codex_state::CoordinationActKind::OpenTask))
+        .and_then(|act| {
+            serde_json::from_str::<OpenTaskActPayload>(act.payload_json.as_str())
+                .ok()
+                .and_then(|payload| payload.claim_paths)
+        })
+        .unwrap_or_default();
+    resolve_path_claim_specs_for_thread(db, actor_thread_id, &claim_paths).await
+}
+
+fn resolve_path_claim_specs(
+    claims: &[PathClaimArg],
+    cwd: &std::path::Path,
+) -> Result<Vec<codex_state::PathClaimSpec>, FunctionCallError> {
+    claims
+        .iter()
+        .map(|claim| {
+            let kind = match claim.kind.as_str() {
+                "file" => codex_state::PathClaimKind::File,
+                "directory" => codex_state::PathClaimKind::Directory,
+                other => {
+                    return Err(FunctionCallError::RespondToModel(format!(
+                        "invalid path claim kind `{other}`; expected file or directory"
+                    )));
+                }
+            };
+            let path = PathBuf::from(&claim.path);
+            let path = if path.is_absolute() {
+                path
+            } else {
+                cwd.join(path)
+            };
+            Ok(codex_state::PathClaimSpec { kind, path })
+        })
+        .collect()
+}
+
+fn path_claim_to_json(claim: codex_state::PathClaim) -> Value {
+    json!({
+        "id": claim.id,
+        "owner_thread_id": claim.owner_thread_id,
+        "kind": claim.kind.as_str(),
+        "path": claim.path,
+        "claimed_at": claim.claimed_at.timestamp(),
+        "updated_at": claim.updated_at.timestamp(),
+        "lease_expires_at": claim.lease_expires_at.timestamp(),
+    })
+}
+
+fn path_claim_specs_to_json(claims: &[codex_state::PathClaimSpec]) -> Vec<Value> {
+    claims
+        .iter()
+        .map(|claim| {
+            json!({
+                "kind": claim.kind.as_str(),
+                "path": claim.path,
+            })
+        })
+        .collect()
+}
+
+fn parse_duplicate_task_id(message: &str) -> Option<&str> {
+    parse_duplicate_implementation_task_id(message)
+        .or_else(|| parse_duplicate_owner_lane_task_id(message))
+}
+
+fn parse_duplicate_implementation_task_id(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("duplicate coordination implementation task ")
+        .and_then(|rest| rest.strip_suffix(" already covers this scope"))
+}
+
+fn parse_duplicate_owner_lane_task_id(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("duplicate coordination owner-lane task ")
+        .and_then(|rest| rest.strip_suffix(" already exists for this owner"))
+}
+
+fn coordination_duplicate_output(
+    task: codex_state::CoordinationTask,
+) -> Result<FunctionToolOutput, FunctionCallError> {
+    let result = CoordinationActResult {
+        task,
+        act: None,
+        unblocked_tasks: Vec::new(),
+        ownership: None,
+        room_notified: false,
+        woken_threads: Vec::new(),
+        superseded_owner_thread_id: None,
+        deduped: true,
+    };
+    Ok(FunctionToolOutput::from_text(
+        serde_json::to_string_pretty(&result)
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+        Some(true),
+    ))
+}
+
+fn coordination_failure_output(
+    message: String,
+    task: Option<&codex_state::CoordinationTask>,
+) -> Result<FunctionToolOutput, FunctionCallError> {
+    let payload = match task {
+        Some(task) => json!({
+            "ok": false,
+            "error": message,
+            "task": task,
+        }),
+        None => json!({
+            "ok": false,
+            "error": message,
+        }),
+    };
+    Ok(FunctionToolOutput::from_text(
+        serde_json::to_string_pretty(&payload)
+            .map_err(|err| FunctionCallError::Fatal(err.to_string()))?,
+        Some(false),
+    ))
+}
+
+fn map_coordination_transition_error(err: anyhow::Error) -> FunctionCallError {
+    let message = err.to_string();
+    if message.contains("is not claimable")
+        || message.contains("is still blocked on dependencies")
+        || message.contains("requires exact ownership claims")
+        || message.contains("cannot become active because thread")
+        || message.contains("cannot be completed from status")
+        || message.contains("cannot be cancelled from status")
+        || message.contains("cannot be handed off from status")
+        || message.contains("cannot be yielded from status")
+    {
+        FunctionCallError::RespondToModel(message)
+    } else {
+        FunctionCallError::Fatal(message)
+    }
+}
+
+fn map_coordination_open_task_message(message: String) -> FunctionCallError {
+    if message.contains("requires exact ownership claims")
+        || message.contains("cannot be awarded because thread")
+    {
+        FunctionCallError::RespondToModel(message)
+    } else {
+        FunctionCallError::Fatal(message)
+    }
+}
+
+async fn enqueue_coordination_notification(
+    db: &Arc<codex_state::StateRuntime>,
+    thread_id: &str,
+    task: &codex_state::CoordinationTask,
+    reason: &str,
+) -> anyhow::Result<()> {
+    db.create_scheduled_task(codex_state::ScheduledTaskCreateParams {
+        id: uuid::Uuid::new_v4().to_string(),
+        thread_id: thread_id.to_string(),
+        title: format!("coordination:{reason}:{}", task.summary),
+        prompt: format_coordination_wake_prompt(task, reason),
+        kind: codex_state::ScheduledTaskKind::Once,
+        next_run_at: chrono::Utc::now(),
+        interval_seconds: None,
+        requires_response: true,
+    })
+    .await
+}
+
+fn format_coordination_wake_prompt(task: &codex_state::CoordinationTask, reason: &str) -> String {
+    let wake_brief = format_coordination_wake_brief(task, reason);
+    format!(
+        concat!(
+            "<coordination_context>\n",
+            "reason: {reason}\n",
+            "task_id: {task_id}\n",
+            "task_kind: {task_kind}\n",
+            "status: {status}\n",
+            "creator_thread_id: {creator_thread_id}\n",
+            "owner_thread_id: {owner_thread_id}\n",
+            "room: {room}\n",
+            "dependencies: {dependencies}\n",
+            "</coordination_context>\n\n",
+            "<coordination_brief>\n",
+            "{wake_brief}\n",
+            "</coordination_brief>\n\n",
+            "{summary}\n\n",
+            "{details}\n\n",
+            "Use the structured coordination brief above to choose the next concrete action."
+        ),
+        reason = reason,
+        task_id = task.id,
+        task_kind = task.kind.as_str(),
+        status = task.status.as_str(),
+        creator_thread_id = task.creator_thread_id,
+        owner_thread_id = task.owner_thread_id.as_deref().unwrap_or(""),
+        room = task.room.as_deref().unwrap_or(""),
+        dependencies = if task.dependency_task_ids.is_empty() {
+            "none".to_string()
+        } else {
+            task.dependency_task_ids.join(", ")
+        },
+        wake_brief = wake_brief,
+        summary = task.summary,
+        details = task.details,
+    )
+}
+
+fn format_coordination_wake_brief(task: &codex_state::CoordinationTask, reason: &str) -> String {
+    let mut lines = vec![
+        format!("wake_reason: {reason}"),
+        format!("status_now: {}", task.status.as_str()),
+        format!("task_kind: {}", task.kind.as_str()),
+    ];
+
+    if let Some(room) = task.room.as_deref().filter(|room| !room.is_empty()) {
+        lines.push(format!("room: {room}"));
+    }
+    if let Some(owner_thread_id) = task
+        .owner_thread_id
+        .as_deref()
+        .filter(|owner| !owner.is_empty())
+    {
+        lines.push(format!("current_owner_thread_id: {owner_thread_id}"));
+    }
+
+    lines.push("facts:".to_string());
+    lines.push(
+        "- this wake came from durable coordination state, not ambient room chatter".to_string(),
+    );
+    match reason {
+        "assigned" => {
+            lines.push(
+                "- the task is currently awarded to you and expects an ownership decision"
+                    .to_string(),
+            );
+        }
+        "cancelled" => {
+            lines.push(
+                "- this previously owned lane has been cancelled and should no longer consume active work"
+                    .to_string(),
+            );
+        }
+        "unblocked" => {
+            lines.push("- a dependency cleared and the task is actionable again".to_string());
+        }
+        other => {
+            lines.push(format!(
+                "- wake reason `{other}` came from the durable coordination scheduler"
+            ));
+        }
+    }
+    if !task.details.trim().is_empty() {
+        lines.push(
+            "- task details already contain the objective; answer that objective directly"
+                .to_string(),
+        );
+    }
+
+    lines.push("valid_next_moves:".to_string());
+    if reason == "cancelled" {
+        lines.push(
+            "- stop active work on this lane immediately; do not keep editing or re-accept this task unless it is explicitly re-awarded"
+                .to_string(),
+        );
+        lines.push(
+            "- if the cancellation interrupted an in-flight turn, treat that interrupt as authoritative and stand down from this lane"
+                .to_string(),
+        );
+        lines.push(
+            "- if you already produced material local changes that still matter, send one concise summary to the creator instead of continuing implementation silently"
+                .to_string(),
+        );
+    } else {
+        lines.push("- if you are taking the task, call `coordination_act` `accept` once and keep ownership while you work".to_string());
+        if matches!(task.kind, codex_state::CoordinationTaskKind::Implementation)
+            && matches!(task.status, codex_state::CoordinationTaskStatus::Awarded)
+        {
+            lines.push(
+                "- for direct implementation awards, reuse the exact reserved `claim_paths` listed in the task details when you call `accept`"
+                    .to_string(),
+            );
+            lines.push(
+                "- once your reserved implementation slice is complete enough for teammates to build on, call `coordination_act` `done` immediately in the same turn; do not wait for final green, a room acknowledgment, or extra monitoring"
+                    .to_string(),
+            );
+        }
+    }
+    if coordination_task_needs_room_read(task) {
+        lines.push("- use `hollywood_read` instead of shell commands when the task asks about Hollywood visibility, wording, or message history".to_string());
+        if let Some(room) = task.room.as_deref().filter(|room| !room.is_empty()) {
+            lines.push(format!(
+                "- exact verification target: inspect room `{room}` for a message mentioning task id `{}` and the awarded summary",
+                task.id
+            ));
+        }
+        lines.push("- preferred sequence: call `hollywood_read`, inspect the returned messages, then finish with `coordination_act` `done`".to_string());
+        lines.push("- if the room message is absent, that absence is still a valid result; record it with `coordination_act` `done` instead of continuing to probe".to_string());
+        lines.push(
+            "- do not shell out to Hollywood HTTP endpoints or ad hoc scripts for this check"
+                .to_string(),
+        );
+    }
+    if reason == "cancelled" {
+        lines.push(
+            "- after you have acknowledged the cancellation and reported any truly material leftover context, end the turn promptly"
+                .to_string(),
+        );
+    } else if coordination_task_is_verification(task) {
+        lines.push("- for verification or QA tasks, gather the requested evidence, then call `coordination_act` `done` with the observed result".to_string());
+    } else {
+        lines.push("- when the requested work is complete, call `coordination_act` `done` with a concise concrete result summary".to_string());
+    }
+    if matches!(task.kind, codex_state::CoordinationTaskKind::Implementation) {
+        lines.push(
+            "- after you record `done`, `yield`, or `handoff` for an implementation lane, end the current turn unless you already have a direct follow-up request or an unresolved exact-scope conflict"
+                .to_string(),
+        );
+    }
+    lines.push("- do not call `accept` repeatedly just to restate ownership unless you intentionally yielded or the lease actually lapsed".to_string());
+    lines.push("- only call `yield` or `handoff` if you are explicitly giving up the task, and include a concrete reason or target".to_string());
+    lines.push(
+        "- never use placeholder durable summaries like `placeholder`, `todo`, or `tbd`"
+            .to_string(),
+    );
+
+    lines.join("\n")
+}
+
+fn with_reserved_scope_details(details: String, claim_paths: &[PathClaimArg]) -> String {
+    if claim_paths.is_empty() {
+        return details;
+    }
+
+    let scope_lines = claim_paths
+        .iter()
+        .map(|claim| format!("- {} `{}`", claim.kind, claim.path))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let scope_block = format!(
+        "Reserved implementation scope:\n{scope_lines}\nWhen you accept this task, reuse the same `claim_paths`.\nWhen that exact slice is complete enough for teammates to build on, call `coordination_act` `done` immediately instead of waiting for room acknowledgment or final green."
+    );
+
+    if details.trim().is_empty() {
+        scope_block
+    } else {
+        format!("{details}\n\n{scope_block}")
+    }
+}
+
+fn coordination_task_is_verification(task: &codex_state::CoordinationTask) -> bool {
+    matches!(task.kind, codex_state::CoordinationTaskKind::Qa)
+        || coordination_task_text_contains_any(
+            task,
+            &[
+                "verify",
+                "verification",
+                "confirm",
+                "check",
+                "proof",
+                "validate",
+            ],
+        )
+}
+
+fn coordination_task_needs_room_read(task: &codex_state::CoordinationTask) -> bool {
+    task.room.as_deref().is_some_and(|room| !room.is_empty())
+        && coordination_task_text_contains_any(
+            task,
+            &[
+                "hollywood",
+                "room",
+                "message",
+                "messages",
+                "broadcast",
+                "summary",
+                "visible",
+                "visibility",
+                "wording",
+            ],
+        )
+}
+
+fn coordination_task_text_contains_any(
+    task: &codex_state::CoordinationTask,
+    needles: &[&str],
+) -> bool {
+    let haystack = format!(
+        "{}\n{}",
+        task.summary.to_ascii_lowercase(),
+        task.details.to_ascii_lowercase()
+    );
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
+async fn send_coordination_room_summary(
+    session: &Arc<Session>,
+    turn: &Arc<TurnContext>,
+    db: &Arc<codex_state::StateRuntime>,
+    outcome: &codex_state::CoordinationTaskTransitionOutcome,
+) -> bool {
+    let Ok(Some(config)) = hollywood_config_for_session(session, db).await else {
+        return false;
+    };
+    let room = outcome
+        .task
+        .room
+        .clone()
+        .unwrap_or_else(|| config.room.clone());
+    let body = coordination_room_summary(session.thread_id(), outcome);
+    let url = format!("{}/hollywood/v1/messages", config.url.trim_end_matches('/'));
+    let client = Client::new();
+
+    for _attempt in 0..2 {
+        let sent = client
+            .post(&url)
+            .json(&json!({
+                "room": room,
+                "sender_id": session.thread_id().to_string(),
+                "message_kind": "broadcast",
+                "response_policy": "none",
+                "body": body,
+            }))
+            .send()
+            .await
+            .ok()
+            .and_then(|response| response.error_for_status().ok())
+            .is_some();
+        if sent {
+            session
+                .mark_hollywood_send_for_turn(&turn.sub_id, &room)
+                .await;
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    false
+}
+
+fn coordination_room_summary(
+    actor_thread_id: ThreadId,
+    outcome: &codex_state::CoordinationTaskTransitionOutcome,
+) -> String {
+    let mut summary = format!(
+        "Coordination update from {actor_thread_id}: {} `{}` [{}]",
+        outcome.act.kind.as_str(),
+        outcome.task.summary,
+        outcome.task.id
+    );
+    if let Some(owner_thread_id) = outcome.task.owner_thread_id.as_deref() {
+        summary.push_str(format!(" owner={owner_thread_id}").as_str());
+    }
+    if !outcome.unblocked_tasks.is_empty() {
+        let unblocked = outcome
+            .unblocked_tasks
+            .iter()
+            .map(|task| format!("{} [{}]", task.summary, task.id))
+            .collect::<Vec<_>>()
+            .join(", ");
+        summary.push_str(format!(" unblocked={unblocked}").as_str());
+    }
+    summary
+}
+
+#[cfg(test)]
+#[path = "coordination_tests.rs"]
+mod tests;

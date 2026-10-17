@@ -1,0 +1,1793 @@
+{
+  "benchmark": "MARBLE/MultiAgentBench database",
+  "campaignName": "marble-native-final-primary-all-systems-2026-05-22",
+  "date": "2026-05-22",
+  "evidenceMode": "native-postgres",
+  "hiddenPathPolicy": {
+    "benchmarkRepositoryHiddenDuringModelExecution": true,
+    "defaultHiddenPathsEnabled": true,
+    "previousResultsHiddenDuringModelExecution": true
+  },
+  "model": "gpt-5.4",
+  "nonFullRecallResults": [
+    {
+      "caseId": "database-091",
+      "coordinationErrors": 0,
+      "exactSetMatch": false,
+      "gold": [
+        "REDUNDANT_INDEX",
+        "VACUUM"
+      ],
+      "predicted": [
+        "REDUNDANT_INDEX"
+      ],
+      "rootCauseF1": 0.6666666666666666,
+      "rootCausePrecision": 1.0,
+      "rootCauseRecall": 0.5,
+      "seconds": 179.2,
+      "success": false,
+      "system": "codex-subagents"
+    }
+  ],
+  "notes": [
+    "This is a sanitized result bundle for repository publication; local workspace paths, raw transcript paths, raw model predictions, and native Postgres process metadata are omitted.",
+    "Full success follows MARBLE-style root-cause recall over gold labels. Exact-set match, precision, and F1 are stricter auxiliary diagnostics."
+  ],
+  "pairedRuntimeAndScoreDeltas": {
+    "codex-subagents_over_losangelex": {
+      "losangelexFasterTasks": 23,
+      "meanRuntimeRatio": 1.169,
+      "medianRuntimeRatio": 1.129,
+      "pairedTasks": 30
+    },
+    "codex_over_codex-subagents": {
+      "codex-subagentsFasterTasks": 30,
+      "meanRuntimeRatio": 2.182,
+      "medianRuntimeRatio": 2.221,
+      "pairedTasks": 30
+    },
+    "codex_over_losangelex": {
+      "losangelexFasterTasks": 30,
+      "meanRuntimeRatio": 2.511,
+      "medianRuntimeRatio": 2.488,
+      "pairedTasks": 30
+    },
+    "losangelex_minus_codex_subagents_rootCauseF1": {
+      "meanDelta": -0.002222,
+      "negativeTasks": 1,
+      "positiveTasks": 1,
+      "tiedTasks": 28
+    },
+    "losangelex_minus_codex_subagents_rootCausePrecision": {
+      "meanDelta": -0.022222,
+      "negativeTasks": 2,
+      "positiveTasks": 0,
+      "tiedTasks": 28
+    },
+    "losangelex_minus_codex_subagents_rootCauseRecall": {
+      "meanDelta": 0.016667,
+      "negativeTasks": 0,
+      "positiveTasks": 1,
+      "tiedTasks": 29
+    }
+  },
+  "sourceRawResultsSha256": "f0f52975aeaab31bc1b0df3ac0b0b682885efbc1d1ccb539dd85aa934e1c5347",
+  "summary": {
+    "systems": {
+      "codex": {
+        "avgRootCauseF1": 0.7333333333333333,
+        "avgRootCausePrecision": 0.5833333333333334,
+        "avgRootCauseRecall": 1.0,
+        "avgSeconds": 393.6633333333333,
+        "coordinationToolErrors": 0,
+        "exactSetMatchRate": 0.0,
+        "exactSetMatches": 0,
+        "fullSuccessRate": 1.0,
+        "fullSuccesses": 30,
+        "tasks": 30
+      },
+      "codex-subagents": {
+        "avgRootCauseF1": 0.7422222222222222,
+        "avgRootCausePrecision": 0.6166666666666667,
+        "avgRootCauseRecall": 0.9833333333333333,
+        "avgSeconds": 184.04,
+        "coordinationToolErrors": 25,
+        "exactSetMatchRate": 0.06666666666666667,
+        "exactSetMatches": 2,
+        "fullSuccessRate": 0.9666666666666667,
+        "fullSuccesses": 29,
+        "tasks": 30
+      },
+      "losangelex": {
+        "avgRootCauseF1": 0.74,
+        "avgRootCausePrecision": 0.5944444444444444,
+        "avgRootCauseRecall": 1.0,
+        "avgSeconds": 160.19,
+        "coordinationToolErrors": 0,
+        "exactSetMatchRate": 0.03333333333333333,
+        "exactSetMatches": 1,
+        "fullSuccessRate": 1.0,
+        "fullSuccesses": 30,
+        "tasks": 30
+      }
+    }
+  },
+  "tasks": [
+    {
+      "caseId": "database-010",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 365.7,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 200.3,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 146.7,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-016",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 376.4,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 218.3,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 193.7,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-017",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 399.4,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 165.6,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 146.6,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-018",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 493.6,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 181.8,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 148.6,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-023",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 359.0,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 159.7,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 146.6,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-024",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 346.0,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 225.5,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 192.2,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-025",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 356.8,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "VACUUM",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 170.9,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 191.9,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-027",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 441.1,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 204.6,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 148.8,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-031",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 431.3,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 168.0,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.7,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-032",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 392.5,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 198.8,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.5,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-034",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 380.5,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 142.5,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.0,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-035",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "VACUUM",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 410.0,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 190.7,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM"
+          ],
+          "predicted": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 192.8,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-036",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 358.8,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 246.8,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.5,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-037",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 354.7,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 156.6,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.6,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-041",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 330.7,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 150.7,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 0.5,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.7,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-065",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 406.0,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 213.5,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 195.2,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-068",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 431.3,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 172.1,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 149.1,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-069",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 394.4,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 168.8,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 149.6,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-071",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 389.9,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 190.5,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 149.9,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-072",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 364.9,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "LOCK_CONTENTION",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 207.2,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX"
+          ],
+          "predicted": [
+            "LOCK_CONTENTION",
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 150.4,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-073",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 388.9,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "VACUUM",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 160.2,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 104.1,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-077",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 401.0,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": true,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 1.0,
+          "rootCausePrecision": 1.0,
+          "rootCauseRecall": 1.0,
+          "seconds": 166.8,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": true,
+          "gold": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 1.0,
+          "rootCausePrecision": 1.0,
+          "rootCauseRecall": 1.0,
+          "seconds": 194.1,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-079",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 412.4,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 251.2,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 148.3,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-081",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 368.1,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "VACUUM",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 162.7,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 148.2,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-082",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 377.2,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 174.6,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "LOCK_CONTENTION"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 148.2,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-083",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 397.3,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": true,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 1.0,
+          "rootCausePrecision": 1.0,
+          "rootCauseRecall": 1.0,
+          "seconds": 152.7,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "FETCH_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 193.1,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-087",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "VACUUM",
+            "REDUNDANT_INDEX",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 435.5,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "VACUUM",
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 213.1,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 148.5,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-088",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 442.8,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "VACUUM",
+            "REDUNDANT_INDEX",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 164.5,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 147.8,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-089",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "VACUUM",
+            "INSERT_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 384.4,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "FETCH_LARGE_DATA",
+            "INSERT_LARGE_DATA",
+            "VACUUM"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 163.3,
+          "success": true
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 193.3,
+          "success": true
+        }
+      }
+    },
+    {
+      "caseId": "database-091",
+      "systems": {
+        "codex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX",
+            "VACUUM",
+            "FETCH_LARGE_DATA"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 419.3,
+          "success": true
+        },
+        "codex-subagents": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.6666666666666666,
+          "rootCausePrecision": 1.0,
+          "rootCauseRecall": 0.5,
+          "seconds": 179.2,
+          "success": false
+        },
+        "losangelex": {
+          "coordinationErrors": 0,
+          "exactSetMatch": false,
+          "gold": [
+            "REDUNDANT_INDEX",
+            "VACUUM"
+          ],
+          "predicted": [
+            "INSERT_LARGE_DATA",
+            "VACUUM",
+            "REDUNDANT_INDEX"
+          ],
+          "rootCauseF1": 0.8,
+          "rootCausePrecision": 0.6666666666666666,
+          "rootCauseRecall": 1.0,
+          "seconds": 193.0,
+          "success": true
+        }
+      }
+    }
+  ],
+  "title": "Losangelex hardened same-model agent runtime evaluation, MARBLE final-primary holdout"
+}

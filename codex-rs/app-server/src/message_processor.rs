@@ -1303,6 +1303,41 @@ impl MessageProcessor {
                 }
                 Ok(response)
             }
+            ClientRequest::ThreadHollywoodAttach { params, .. } => self
+                .thread_processor
+                .thread_hollywood_attach(request_id.clone(), params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::ThreadHollywoodDetach { params, .. } => self
+                .thread_processor
+                .thread_hollywood_detach(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::ThreadHollywoodAttentionSet { params, .. } => self
+                .thread_processor
+                .thread_hollywood_attention_set(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::ThreadHollywoodList { params, .. } => self
+                .thread_processor
+                .thread_hollywood_list(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::ThreadOwnershipClaim { params, .. } => self
+                .thread_processor
+                .thread_ownership_claim(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::ThreadOwnershipRelease { params, .. } => self
+                .thread_processor
+                .thread_ownership_release(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::ThreadOwnershipList { params, .. } => self
+                .thread_processor
+                .thread_ownership_list(params)
+                .await
+                .map(|response| Some(response.into())),
             ClientRequest::ThreadResume { params, .. } => {
                 self.thread_processor
                     .thread_resume(

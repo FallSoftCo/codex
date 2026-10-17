@@ -45,6 +45,7 @@ use crate::tools::runtimes::unified_exec::UnifiedExecRuntime;
 use crate::tools::sandboxing::SandboxAttempt;
 use crate::tools::sandboxing::ToolCtx;
 use crate::tools::sandboxing::ToolError;
+use crate::unified_exec::CompletedProcessObservation;
 use crate::unified_exec::ExecCommandRequest;
 use crate::unified_exec::MAX_UNIFIED_EXEC_PROCESSES;
 use crate::unified_exec::MAX_YIELD_TIME_MS;
@@ -482,6 +483,18 @@ impl UnifiedExecProcessManager {
             let entry = store.processes.remove(&process_id);
             if !should_use_deterministic_process_ids() {
                 store.reserved_process_ids.remove(&process_id);
+            }
+            if let Some(entry) = entry.as_ref()
+                && entry.process.has_exited()
+            {
+                store.completed_processes.insert(
+                    process_id,
+                    CompletedProcessObservation {
+                        call_id: entry.call_id.clone(),
+                        exit_code: entry.process.exit_code(),
+                        failure_message: None,
+                    },
+                );
             }
             entry
         };
@@ -1171,6 +1184,14 @@ impl UnifiedExecProcessManager {
             let Some(entry) = store.remove(process_id) else {
                 return ProcessStatus::Unknown;
             };
+            store.completed_processes.insert(
+                process_id,
+                CompletedProcessObservation {
+                    call_id: entry.call_id.clone(),
+                    exit_code,
+                    failure_message: None,
+                },
+            );
             ProcessStatus::Exited {
                 exit_code,
                 entry: Box::new(entry),
@@ -1780,7 +1801,20 @@ impl UnifiedExecProcessManager {
                 .map(|process| process.interaction_lock())
                 && let Ok(_interaction_guard) = interaction_lock.try_lock_owned()
             {
-                return store.remove(process_id);
+                let removed = store.remove(process_id);
+                if let Some(entry) = removed.as_ref()
+                    && entry.process.has_exited()
+                {
+                    store.completed_processes.insert(
+                        process_id,
+                        CompletedProcessObservation {
+                            call_id: entry.call_id.clone(),
+                            exit_code: entry.process.exit_code(),
+                            failure_message: None,
+                        },
+                    );
+                }
+                return removed;
             }
             found_locked_exited_process |= candidate_has_exited
                 || candidate_process.is_some_and(|process| process.has_exited());

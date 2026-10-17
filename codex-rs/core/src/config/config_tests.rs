@@ -9025,8 +9025,7 @@ async fn discovered_agent_role_file_without_name_is_dropped_with_warning() -> st
     let codex_home = TempDir::new()?;
     let repo_root = TempDir::new()?;
     let nested_cwd = repo_root.path().join("packages").join("app");
-    std::fs::create_dir_all(repo_root.path().join(".git"))?;
-    std::fs::write(repo_root.path().join(".git/HEAD"), "ref: refs/heads/main\n")?;
+    std::fs::write(repo_root.path().join(".git"), "gitdir: here\n")?;
     std::fs::create_dir_all(&nested_cwd)?;
 
     let workspace_key = repo_root.path().to_string_lossy().replace('\\', "\\\\");
@@ -9358,8 +9357,7 @@ async fn mixed_legacy_and_standalone_agent_role_sources_merge_with_precedence()
     let codex_home = TempDir::new()?;
     let repo_root = TempDir::new()?;
     let nested_cwd = repo_root.path().join("packages").join("app");
-    std::fs::create_dir_all(repo_root.path().join(".git"))?;
-    std::fs::write(repo_root.path().join(".git/HEAD"), "ref: refs/heads/main\n")?;
+    std::fs::write(repo_root.path().join(".git"), "gitdir: here\n")?;
     std::fs::create_dir_all(&nested_cwd)?;
 
     let workspace_key = repo_root.path().to_string_lossy().replace('\\', "\\\\");

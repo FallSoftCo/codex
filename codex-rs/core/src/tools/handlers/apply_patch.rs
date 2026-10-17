@@ -25,6 +25,7 @@ use crate::tools::context::boxed_tool_output;
 use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
+use crate::tools::handlers::apply_patch_collaboration::apply_patch_collaboration_preflight;
 use crate::tools::handlers::apply_patch_spec::create_apply_patch_freeform_tool;
 use crate::tools::handlers::file_system_sandbox_policy_context_for_cwd;
 use crate::tools::handlers::resolve_tool_environment;
@@ -364,9 +365,9 @@ impl ApplyPatchHandler {
                 Ok(boxed_tool_output(ApplyPatchToolOutput::from_text(content)))
             }
             codex_apply_patch::MaybeApplyPatchVerified::CorrectnessError(parse_error) => {
-                Err(FunctionCallError::RespondToModel(format!(
-                    "apply_patch verification failed: {parse_error}"
-                )))
+                Err(FunctionCallError::RespondToModel(
+                    format_apply_patch_verification_error(&parse_error),
+                ))
             }
             codex_apply_patch::MaybeApplyPatchVerified::ShellParseError(error) => {
                 tracing::trace!("Failed to parse apply_patch input, {error:?}");
@@ -461,11 +462,9 @@ pub(crate) async fn intercept_apply_patch(
                 execute_verified_patch(changes, turn_environment, tracker, tool_ctx).await?;
             Ok(Some(FunctionToolOutput::from_text(content, Some(true))))
         }
-        codex_apply_patch::MaybeApplyPatchVerified::CorrectnessError(parse_error) => {
-            Err(FunctionCallError::RespondToModel(format!(
-                "apply_patch verification failed: {parse_error}"
-            )))
-        }
+        codex_apply_patch::MaybeApplyPatchVerified::CorrectnessError(parse_error) => Err(
+            FunctionCallError::RespondToModel(format_apply_patch_verification_error(&parse_error)),
+        ),
         codex_apply_patch::MaybeApplyPatchVerified::ShellParseError(error) => {
             tracing::trace!("Failed to parse apply_patch input, {error:?}");
             Ok(None)
@@ -493,6 +492,14 @@ async fn execute_verified_patch(
     };
     let environment_id = turn_environment.selection.environment_id.as_str();
     let file_paths = file_paths_for_action(&action);
+    let collaboration = if !crate::canonical_collaboration::enterprise()
+        && !turn_environment.environment.is_remote()
+    {
+        Some(apply_patch_collaboration_preflight(tool_ctx.session.as_ref(), &file_paths).await?)
+    } else {
+        None
+    };
+
     let granted_permissions = tool_ctx
         .step_context
         .turn
@@ -569,7 +576,34 @@ async fn execute_verified_patch(
         &tool_ctx.call_id,
         tracker,
     );
-    emitter.finish(event_ctx, result, delta.as_ref()).await
+    emitter
+        .finish(event_ctx, result, delta.as_ref())
+        .await
+        .map(|output| match collaboration {
+            Some(context) => context.append_notice(output),
+            None => output,
+        })
+}
+
+fn format_apply_patch_verification_error(parse_error: impl std::fmt::Display) -> String {
+    let parse_error = parse_error.to_string();
+    let mut message = format!("apply_patch verification failed: {parse_error}");
+    if parse_error.contains("Failed to find expected lines") {
+        message.push_str(
+            "\n\nRe-read the current file or diff before retrying; the file contents may have changed.",
+        );
+    } else if parse_error.contains("No such file or directory")
+        && (parse_error.contains("Failed to read file to update")
+            || parse_error.contains("Failed to read "))
+    {
+        message.push_str(
+            "\n\napply_patch paths must reference real files; rewrite it relative to the workspace root.",
+        );
+        if parse_error.contains("Failed to read file to update") {
+            message.push_str(" If the file was deleted or moved, retarget or reopen the task.");
+        }
+    }
+    message
 }
 
 fn require_environment_id(

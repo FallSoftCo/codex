@@ -3,6 +3,7 @@ use super::connection_handling_websocket::WsClient;
 use super::connection_handling_websocket::assert_no_message;
 use super::connection_handling_websocket::connect_websocket;
 use super::connection_handling_websocket::create_config_toml;
+use super::connection_handling_websocket::read_jsonrpc_message;
 use super::connection_handling_websocket::read_notification_for_method;
 use super::connection_handling_websocket::read_response_and_notification_for_method;
 use super::connection_handling_websocket::read_response_for_id;
@@ -11,11 +12,14 @@ use super::connection_handling_websocket::send_request;
 use super::connection_handling_websocket::spawn_websocket_server;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use app_test_support::create_fake_rollout_with_text_elements;
 use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::to_response;
+use codex_app_server_protocol::JSONRPCMessage;
 use codex_app_server_protocol::JSONRPCNotification;
 use codex_app_server_protocol::JSONRPCResponse;
+use codex_app_server_protocol::ThreadGoalClearedNotification;
 use codex_app_server_protocol::ThreadNameUpdatedNotification;
 use codex_app_server_protocol::ThreadResumeParams;
 use codex_app_server_protocol::ThreadResumeResponse;
@@ -27,6 +31,7 @@ use pretty_assertions::assert_eq;
 use std::path::Path;
 use tempfile::TempDir;
 use tokio::time::Duration;
+use tokio::time::Instant;
 use tokio::time::timeout;
 
 #[tokio::test]
@@ -82,8 +87,18 @@ async fn thread_name_updated_broadcasts_for_loaded_threads() -> Result<()> {
         assert_thread_name_updated(ws2_notification, &conversation_id, renamed)?;
         assert_legacy_thread_name(codex_home.path(), &conversation_id, renamed).await?;
 
-        assert_no_message(&mut ws1, Duration::from_millis(250)).await?;
-        assert_no_message(&mut ws2, Duration::from_millis(250)).await?;
+        assert_no_unexpected_loaded_thread_message(
+            &mut ws1,
+            &conversation_id,
+            Duration::from_millis(250),
+        )
+        .await?;
+        assert_no_unexpected_loaded_thread_message(
+            &mut ws2,
+            &conversation_id,
+            Duration::from_millis(250),
+        )
+        .await?;
         Ok(())
     }
     .await;
@@ -154,6 +169,37 @@ async fn initialize_both_clients(ws1: &mut WsClient, ws2: &mut WsClient) -> Resu
     send_initialize_request(ws2, /*id*/ 2, "ws_client_two").await?;
     timeout(DEFAULT_READ_TIMEOUT, read_response_for_id(ws2, /*id*/ 2)).await??;
     Ok(())
+}
+
+async fn assert_no_unexpected_loaded_thread_message(
+    stream: &mut WsClient,
+    thread_id: &str,
+    wait_for: Duration,
+) -> Result<()> {
+    let deadline = Instant::now() + wait_for;
+
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(());
+        }
+
+        match timeout(remaining, read_jsonrpc_message(stream)).await {
+            Err(_) => return Ok(()),
+            Ok(Err(err)) => return Err(err),
+            Ok(Ok(JSONRPCMessage::Notification(notification)))
+                if notification.method == "thread/goal/cleared" =>
+            {
+                let notification: ThreadGoalClearedNotification = serde_json::from_value(
+                    notification.params.context("thread/goal/cleared params")?,
+                )?;
+                assert_eq!(notification.thread_id, thread_id);
+            }
+            Ok(Ok(message)) => bail!(
+                "unexpected frame while waiting for loaded thread rename silence: {message:?}"
+            ),
+        }
+    }
 }
 
 fn create_rollout(codex_home: &std::path::Path, filename_ts: &str) -> Result<String> {

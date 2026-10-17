@@ -725,6 +725,7 @@ fn developer_msg_with_fragments(texts: &[&str]) -> ResponseItem {
 
 fn reference_context_item() -> TurnContextItem {
     TurnContextItem {
+        multi_agent_mode: None,
         turn_id: Some("reference-turn".to_string()),
         root_turn_id: None,
         disabled_plugin_ids: None,
@@ -2199,6 +2200,44 @@ fn record_items_truncates_custom_tool_call_output_content() {
             assert!(
                 output.contains("tokens truncated") || output.contains("bytes truncated"),
                 "expected truncation marker, got {output}"
+            );
+        }
+        other => panic!("unexpected history item: {other:?}"),
+    }
+}
+
+#[test]
+fn record_items_truncates_code_mode_custom_tool_output_content() {
+    let mut history = ContextManager::new();
+    let policy = TruncationPolicy::Tokens(10);
+    let long_output = "code mode output ".repeat(200);
+    let call = ResponseItem::CustomToolCall {
+        id: None,
+        status: None,
+        call_id: "call-1".to_string(),
+        name: "exec".to_string(),
+        namespace: None,
+        input: "text('large output')".to_string(),
+        internal_chat_message_metadata_passthrough: None,
+    };
+    let output = ResponseItem::CustomToolCallOutput {
+        id: None,
+        call_id: "call-1".to_string(),
+        name: None,
+        output: FunctionCallOutputPayload::from_text(long_output),
+        internal_chat_message_metadata_passthrough: None,
+    };
+
+    history.record_items([&call, &output], policy);
+
+    assert_eq!(history.items.len(), 2);
+    assert_eq!(history.items[0], call);
+    match &history.items[1] {
+        ResponseItem::CustomToolCallOutput { output, .. } => {
+            let output = output.text_content().unwrap_or_default();
+            assert!(
+                output.contains("tokens truncated"),
+                "expected token-based truncation marker, got {output}"
             );
         }
         other => panic!("unexpected history item: {other:?}"),

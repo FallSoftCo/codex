@@ -252,6 +252,7 @@ pub(super) async fn handle(
                 submission_id,
                 kind,
                 /*expected_previous_turn_id*/ None,
+                /*additional_response_items*/ Vec::new(),
             )
             .await
         }
@@ -272,6 +273,7 @@ pub(super) async fn handle(
                 submission_id,
                 TurnStartKind::Recovery,
                 Some(expected_previous_turn_id),
+                /*additional_response_items*/ Vec::new(),
             )
             .await
         }
@@ -317,6 +319,7 @@ pub(super) async fn handle_recovery(
         submission_id,
         TurnStartKind::Recovery,
         /*expected_previous_turn_id*/ None,
+        Vec::new(),
     )
     .await;
     if let Ok(TurnInputSubmission::Started { turn_id, .. }) = &result {
@@ -454,6 +457,24 @@ async fn start_or_steer(
     }
 }
 
+/// Adapts legacy standalone room-context batches to current idle admission.
+pub(super) async fn start_legacy_response_items(
+    session: &Arc<Session>,
+    mut input: Vec<ResponseItem>,
+    submission_id: String,
+) -> CodexResult<TurnInputSubmission> {
+    let first = input.remove(0);
+    start_if_idle(
+        session,
+        TurnInputRequest::new(SubmittedTurnInput::ResponseItem(first)).into(),
+        submission_id,
+        TurnStartKind::Automatic,
+        /*expected_previous_turn_id*/ None,
+        input,
+    )
+    .await
+}
+
 #[expect(
     clippy::await_holding_invalid_type,
     reason = "the previous turn check and idle reservation must be atomic"
@@ -464,6 +485,7 @@ async fn start_if_idle(
     submission_id: String,
     kind: TurnStartKind,
     expected_previous_turn_id: Option<String>,
+    additional_response_items: Vec<ResponseItem>,
 ) -> CodexResult<TurnInputSubmission> {
     let WithTurnExtensionData {
         request,
@@ -603,21 +625,25 @@ async fn start_if_idle(
         TurnStartKind::Automatic | TurnStartKind::Recovery => {
             // Empty automatic user input resumes sampling without a new message.
             if !matches!(&input, SubmittedTurnInput::UserInput { .. }) {
+                let mut pending = vec![
+                    pending_turn_input(
+                        session,
+                        input,
+                        sender_messages.as_ref(),
+                        &turn_context.sub_id,
+                        origin,
+                    )
+                    .await,
+                ];
+                pending.extend(
+                    additional_response_items
+                        .into_iter()
+                        .map(ResponseItemEnvelope::new)
+                        .map(TurnInput::ResponseItem),
+                );
                 session
                     .input_queue
-                    .extend_pending_input_for_turn_state(
-                        turn_state.as_ref(),
-                        vec![
-                            pending_turn_input(
-                                session,
-                                input,
-                                sender_messages.as_ref(),
-                                &turn_context.sub_id,
-                                origin,
-                            )
-                            .await,
-                        ],
-                    )
+                    .extend_pending_input_for_turn_state(turn_state.as_ref(), pending)
                     .await;
             }
         }

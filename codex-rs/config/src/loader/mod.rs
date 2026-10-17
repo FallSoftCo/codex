@@ -34,6 +34,7 @@ use crate::diagnostics::io_error_from_config_error;
 use crate::merge::merge_toml_values;
 use crate::overrides::build_cli_overrides_layer;
 use crate::project_root_markers::default_project_root_markers;
+use crate::project_root_markers::project_root_marker_exists;
 use crate::project_root_markers::project_root_markers_from_config;
 use crate::shell_environment_policy::ShellEnvironmentPolicyFilterConfigToml;
 use crate::state::ConfigLayerEntry;
@@ -1538,25 +1539,11 @@ pub async fn discover_project_root(
     for ancestor in cwd.ancestors() {
         for marker in project_root_markers {
             let marker_path = ancestor.join(marker);
-            let marker_path_uri = PathUri::from_abs_path(&marker_path);
-            let Ok(metadata) = fs
-                .get_metadata(&marker_path_uri, Default::default(), /*sandbox*/ None)
-                .await
-            else {
-                continue;
-            };
-            if marker == ".git"
-                && metadata.is_directory
-                && fs
-                    .get_metadata(
-                        &PathUri::from_abs_path(&marker_path.join("HEAD")),
-                        Default::default(),
-                        /*sandbox*/ None,
-                    )
-                    .await
-                    .is_err()
-            {
-                continue;
+            match project_root_marker_exists(fs, &marker_path, marker).await {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+                Err(err) => return Err(err),
             }
             return Ok(Some(ancestor));
         }

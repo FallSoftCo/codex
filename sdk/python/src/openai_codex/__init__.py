@@ -52,6 +52,13 @@ from .errors import (
     TransportClosedError,
     is_retryable_error,
 )
+from .realtime_audio import (
+    iter_pcm16le_audio_chunks,
+    iter_wav_audio_bytes_chunks,
+    iter_wav_audio_chunks,
+    iter_wav_audio_file_chunks,
+    pcm16le_audio_chunk,
+)
 from .retry import retry_on_overload
 
 __all__ = [
@@ -80,6 +87,11 @@ __all__ = [
     "SkillInput",
     "MentionInput",
     "retry_on_overload",
+    "pcm16le_audio_chunk",
+    "iter_pcm16le_audio_chunks",
+    "iter_wav_audio_chunks",
+    "iter_wav_audio_file_chunks",
+    "iter_wav_audio_bytes_chunks",
     "CodexError",
     "TransportClosedError",
     "JsonRpcError",

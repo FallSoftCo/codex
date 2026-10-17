@@ -34,6 +34,9 @@ pub(super) enum RolloutItemWire<'a> {
     SessionMeta {
         payload: Cow<'a, SessionMetaLine>,
     },
+    SessionState {
+        payload: Cow<'a, codex_protocol::protocol::SessionStateUpdate>,
+    },
     ResponseItem {
         payload: Cow<'a, ResponseItem>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -75,6 +78,9 @@ impl<'a> From<&'a RolloutItem> for RolloutItemWire<'a> {
     fn from(item: &'a RolloutItem) -> Self {
         match item {
             RolloutItem::SessionMeta(payload) => Self::SessionMeta {
+                payload: Cow::Borrowed(payload),
+            },
+            RolloutItem::SessionState(payload) => Self::SessionState {
                 payload: Cow::Borrowed(payload),
             },
             RolloutItem::ResponseItem(envelope) => Self::ResponseItem {
@@ -167,6 +173,7 @@ impl From<RolloutItemWire<'_>> for RolloutItem {
     fn from(item: RolloutItemWire<'_>) -> Self {
         match item {
             RolloutItemWire::SessionMeta { payload } => Self::SessionMeta(payload.into_owned()),
+            RolloutItemWire::SessionState { payload } => Self::SessionState(payload.into_owned()),
             RolloutItemWire::ResponseItem { payload, metadata } => {
                 if let (
                     ResponseItem::Message {

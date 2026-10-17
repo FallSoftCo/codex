@@ -1,0 +1,526 @@
+{
+  "type": "object",
+  "properties": {
+    "command": {
+      "discriminator": {
+        "mapping": {
+          "accept": "#/$defs/Accept",
+          "acquire": "#/$defs/Acquire",
+          "handoff": "#/$defs/Handoff",
+          "inspect": "#/$defs/Inspect",
+          "release": "#/$defs/Release",
+          "renew": "#/$defs/Renew"
+        },
+        "propertyName": "action"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Acquire"
+        },
+        {
+          "$ref": "#/$defs/Renew"
+        },
+        {
+          "$ref": "#/$defs/Release"
+        },
+        {
+          "$ref": "#/$defs/Handoff"
+        },
+        {
+          "$ref": "#/$defs/Accept"
+        },
+        {
+          "$ref": "#/$defs/Inspect"
+        }
+      ],
+      "title": "Command"
+    }
+  },
+  "required": [
+    "command"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Accept": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "minimum": 0,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "accept",
+          "title": "Action",
+          "type": "string"
+        },
+        "leaseSeconds": {
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Leaseseconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "claimId",
+        "claimRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "leaseSeconds"
+      ],
+      "title": "Accept",
+      "type": "object"
+    },
+    "Acquire": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "maximum": 0,
+          "minimum": 0,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "acquire",
+          "title": "Action",
+          "type": "string"
+        },
+        "relativePath": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "file",
+            "directory"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "contentSha256": {
+          "pattern": "^(absent|[a-f0-9]{64})$",
+          "title": "Contentsha256",
+          "type": "string"
+        },
+        "leaseSeconds": {
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Leaseseconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "claimId",
+        "claimRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "relativePath",
+        "kind",
+        "sourceRevision",
+        "contentSha256",
+        "leaseSeconds"
+      ],
+      "title": "Acquire",
+      "type": "object"
+    },
+    "Handoff": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "minimum": 0,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "handoff",
+          "title": "Action",
+          "type": "string"
+        },
+        "targetWorkId": {
+          "format": "uuid",
+          "title": "Targetworkid",
+          "type": "string"
+        },
+        "targetWorkRevision": {
+          "minimum": 1,
+          "title": "Targetworkrevision",
+          "type": "integer"
+        },
+        "effectDisposition": {
+          "enum": [
+            "reviewed",
+            "unknown"
+          ],
+          "title": "Effectdisposition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "claimId",
+        "claimRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "targetWorkId",
+        "targetWorkRevision",
+        "effectDisposition"
+      ],
+      "title": "Handoff",
+      "type": "object"
+    },
+    "Inspect": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "minimum": 0,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "inspect",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "claimId",
+        "claimRevision",
+        "briefingSequence",
+        "note",
+        "action"
+      ],
+      "title": "Inspect",
+      "type": "object"
+    },
+    "PhysicalTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "hollywood-physical-target/v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "workspaceId": {
+          "format": "uuid",
+          "title": "Workspaceid",
+          "type": "string"
+        },
+        "workspaceRevision": {
+          "minimum": 1,
+          "title": "Workspacerevision",
+          "type": "integer"
+        },
+        "grantRevision": {
+          "minimum": 1,
+          "title": "Grantrevision",
+          "type": "integer"
+        },
+        "environmentSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Environmentsha256",
+          "type": "string"
+        },
+        "rootIdentitySha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Rootidentitysha256",
+          "type": "string"
+        },
+        "resolution": {
+          "const": "beneath-no-symlinks/v1",
+          "title": "Resolution",
+          "type": "string"
+        },
+        "actionDigest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Actiondigest",
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "$ref": "#/$defs/ResolvedPath"
+          },
+          "maxItems": 32,
+          "title": "Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema",
+        "workspaceId",
+        "workspaceRevision",
+        "grantRevision",
+        "environmentSha256",
+        "rootIdentitySha256",
+        "resolution",
+        "actionDigest",
+        "paths"
+      ],
+      "title": "PhysicalTarget",
+      "type": "object"
+    },
+    "Release": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "minimum": 0,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "release",
+          "title": "Action",
+          "type": "string"
+        },
+        "effectDisposition": {
+          "enum": [
+            "reviewed",
+            "unknown"
+          ],
+          "title": "Effectdisposition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "claimId",
+        "claimRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "effectDisposition"
+      ],
+      "title": "Release",
+      "type": "object"
+    },
+    "Renew": {
+      "additionalProperties": false,
+      "properties": {
+        "workId": {
+          "format": "uuid",
+          "title": "Workid",
+          "type": "string"
+        },
+        "workRevision": {
+          "minimum": 1,
+          "title": "Workrevision",
+          "type": "integer"
+        },
+        "claimId": {
+          "format": "uuid",
+          "title": "Claimid",
+          "type": "string"
+        },
+        "claimRevision": {
+          "minimum": 0,
+          "title": "Claimrevision",
+          "type": "integer"
+        },
+        "briefingSequence": {
+          "minimum": 0,
+          "title": "Briefingsequence",
+          "type": "integer"
+        },
+        "note": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "action": {
+          "const": "renew",
+          "title": "Action",
+          "type": "string"
+        },
+        "leaseSeconds": {
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Leaseseconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workId",
+        "workRevision",
+        "claimId",
+        "claimRevision",
+        "briefingSequence",
+        "note",
+        "action",
+        "leaseSeconds"
+      ],
+      "title": "Renew",
+      "type": "object"
+    },
+    "ResolvedPath": {
+      "additionalProperties": false,
+      "properties": {
+        "relativePath": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "resolvedPath": {
+          "maxLength": 3072,
+          "minLength": 2,
+          "title": "Resolvedpath",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relativePath",
+        "resolvedPath"
+      ],
+      "title": "ResolvedPath",
+      "type": "object"
+    }
+  }
+}

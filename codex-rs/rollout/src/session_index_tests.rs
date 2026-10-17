@@ -58,6 +58,7 @@ fn write_rollout_with_source_and_provider(
                 selected_capability_roots: Vec::new(),
                 memory_mode: None,
                 history_mode: Default::default(),
+                hollywood: None,
                 history_base: None,
                 subagent_history_start_ordinal: None,
                 multi_agent_version: None,

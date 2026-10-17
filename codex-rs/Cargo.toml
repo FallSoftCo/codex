@@ -335,6 +335,8 @@ async-io = "2.6.0"
 async-stream = "0.3.6"
 aws-config = "1"
 aws-credential-types = "1"
+aws-sdk-s3 = "=1.119.0"
+aws-sdk-sesv2 = "=1.110.0"
 aws-sigv4 = "1"
 aws-smithy-runtime-api = { version = "1", features = ["client", "http-1x"] }
 aws-smithy-types = { version = "1", features = ["http-body-1-x"] }
@@ -410,6 +412,7 @@ libsqlite3-sys = { version = "0.37", default-features = false }
 linkify = "0.11"
 log = "0.4"
 lru = "0.18.2"
+mailparse = "=0.16.1"
 maplit = "1.0.2"
 memchr = "2.7.6"
 mime_guess = "2.0.5"

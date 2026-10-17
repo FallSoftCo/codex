@@ -26,11 +26,15 @@ class AppServer:
         on_request,
         on_submission=None,
         on_spawn=None,
+        enterprise=False,
+        collaboration_channel=None,
     ):
         self.binary, self.home, self.state = binary, home, state
         self.on_event, self.on_request = on_event, on_request
         self.on_submission = on_submission
         self.on_spawn = on_spawn
+        self.enterprise = enterprise
+        self.collaboration_channel = collaboration_channel
         self.pending = {}
         self.requests = set()
         self.sequence = 0
@@ -41,6 +45,20 @@ class AppServer:
         self.home.mkdir(parents=True, exist_ok=True)
         self.state.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, CODEX_HOME=str(self.home))
+        # A canonical worker never falls back to standalone shared SQLite or legacy ambient wakes.
+        env.pop("LAX_CANONICAL_NATIVE_CHANNEL", None)
+        env.pop("LAX_NATIVE_ENTERPRISE", None)
+        if self.enterprise:
+            env["LAX_NATIVE_ENTERPRISE"] = "1"
+            if self.collaboration_channel is not None:
+                from .service_observer import protected
+                descriptor = protected(Path(self.collaboration_channel))
+                if (set(descriptor) != {"schema", "socket", "ports"}
+                        or descriptor["schema"] != "lax-native-collaboration-channel/v1"
+                        or not isinstance(descriptor["ports"], list)):
+                    raise RuntimeError("Protected native collaboration descriptor differs")
+                env["LAX_CANONICAL_NATIVE_CHANNEL"] = str(self.collaboration_channel)
+
         # Pin the executable; inherited launcher overrides must not choose another build.
         for key in ("CODEX_CLI_PATH", "CODEX_EXECUTABLE", "CODEX_EXEC_SERVER_URL"):
             env.pop(key, None)

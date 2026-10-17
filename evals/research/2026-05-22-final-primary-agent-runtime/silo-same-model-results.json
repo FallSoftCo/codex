@@ -1,0 +1,480 @@
+{
+  "benchmark": "Silo-Bench",
+  "date": "2026-05-22",
+  "model": "gpt-5.4",
+  "notes": [
+    "Strict S/P metrics remain the primary Silo-compatible scores.",
+    "Numeric-tolerance metrics are auxiliary diagnostics for exact numeric formatting misses and do not replace strict scoring.",
+    "This JSON includes summaries and source artifact hashes only; local workspace paths and raw transcripts are omitted."
+  ],
+  "publicScaleContext": {
+    "n10": {
+      "deepSeekV31": 0.399,
+      "gptOss120b": 0.14,
+      "losangelexStrictSuccessRate": 0.667,
+      "qwen3Next80b": 0.086
+    },
+    "n2": {
+      "deepSeekV31": 0.612,
+      "gptOss120b": 0.344,
+      "losangelexStrictSuccessRate": 0.733,
+      "qwen3Next80b": 0.172
+    },
+    "n20": {
+      "deepSeekV31": 0.336,
+      "gptOss120b": 0.132,
+      "losangelexStrictSuccessRate": 0.633,
+      "qwen3Next80b": 0.074
+    },
+    "n5": {
+      "deepSeekV31": 0.485,
+      "gptOss120b": 0.28,
+      "losangelexStrictSuccessRate": 0.7,
+      "qwen3Next80b": 0.091
+    }
+  },
+  "sameModelControls": {
+    "n10": {
+      "codexSubagents": {
+        "avgAgentSuccessRate": 0.7666666666666667,
+        "avgNumericTolerancePartialCorrectness": 0.8633333333333333,
+        "avgNumericToleranceSuccessRate": 0.8633333333333333,
+        "avgPartialCorrectness": 0.7804054054054054,
+        "avgSeconds": 328.6066666666667,
+        "coordinationToolErrors": 182,
+        "fullSuccessRate": 0.7666666666666667,
+        "fullSuccesses": 23,
+        "levels": {
+          "I": {
+            "systems": {
+              "codex-subagents": {
+                "avgAgentSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgSeconds": 268.2,
+                "coordinationToolErrors": 87,
+                "fullSuccessRate": 1.0,
+                "fullSuccesses": 10,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex-subagents": {
+                "avgAgentSuccessRate": 0.7,
+                "avgNumericTolerancePartialCorrectness": 0.8,
+                "avgNumericToleranceSuccessRate": 0.8,
+                "avgPartialCorrectness": 0.7412162162162163,
+                "avgSeconds": 354.9,
+                "coordinationToolErrors": 69,
+                "fullSuccessRate": 0.7,
+                "fullSuccesses": 7,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex-subagents": {
+                "avgAgentSuccessRate": 0.6,
+                "avgNumericTolerancePartialCorrectness": 0.79,
+                "avgNumericToleranceSuccessRate": 0.79,
+                "avgPartialCorrectness": 0.6,
+                "avgSeconds": 362.72,
+                "coordinationToolErrors": 26,
+                "fullSuccessRate": 0.6,
+                "fullSuccesses": 6,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "ed9b5e3aab45105c4e4aaf5f07ffe4b8afd80a7aa706ae37929bf41679ba9b98",
+        "systemKey": "codex-subagents",
+        "tasks": 30
+      },
+      "fullContextCodexOracle": {
+        "avgAgentSuccessRate": 0.8,
+        "avgPartialCorrectness": 0.8137387387387387,
+        "avgSeconds": 52.75666666666667,
+        "coordinationToolErrors": 0,
+        "fullSuccessRate": 0.8,
+        "fullSuccesses": 24,
+        "levels": {
+          "I": {
+            "systems": {
+              "codex-full-context": {
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgSeconds": 42.22,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 1.0,
+                "fullSuccesses": 10,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex-full-context": {
+                "avgAgentSuccessRate": 0.8,
+                "avgPartialCorrectness": 0.8412162162162161,
+                "avgSeconds": 50.71,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.8,
+                "fullSuccesses": 8,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex-full-context": {
+                "avgAgentSuccessRate": 0.6,
+                "avgPartialCorrectness": 0.6,
+                "avgSeconds": 65.34,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.6,
+                "fullSuccesses": 6,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "c5c7775b9441079eb4eb0615d439cfbd6e07bd7e123fa52d4c117bd2d3d4a1c2",
+        "systemKey": "codex-full-context",
+        "tasks": 30
+      },
+      "losangelex": {
+        "avgAgentSuccessRate": 0.7333333333333333,
+        "avgPartialCorrectness": 0.7794054054054055,
+        "avgSeconds": 133.6,
+        "coordinationToolErrors": 0,
+        "fullSuccessRate": 0.6666666666666666,
+        "fullSuccesses": 20,
+        "levels": {
+          "I": {
+            "systems": {
+              "losangelex": {
+                "avgAgentSuccessRate": 0.9099999999999999,
+                "avgPartialCorrectness": 1.0,
+                "avgSeconds": 95.8,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.9,
+                "fullSuccesses": 9,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "losangelex": {
+                "avgAgentSuccessRate": 0.7,
+                "avgPartialCorrectness": 0.7482162162162163,
+                "avgSeconds": 138.35,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.6,
+                "fullSuccesses": 6,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "losangelex": {
+                "avgAgentSuccessRate": 0.5900000000000001,
+                "avgPartialCorrectness": 0.5900000000000001,
+                "avgSeconds": 166.65,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.5,
+                "fullSuccesses": 5,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "c5e6fde934d58bc238b2c87ea5dc1c1641cd8f503bb2393b45caa786560a74b6",
+        "systemKey": "losangelex",
+        "tasks": 30
+      },
+      "serialCodex": {
+        "avgAgentSuccessRate": 0.7266666666666667,
+        "avgPartialCorrectness": 0.7797387387387388,
+        "avgSeconds": 835.5366666666666,
+        "coordinationToolErrors": 0,
+        "fullSuccessRate": 0.7,
+        "fullSuccesses": 21,
+        "levels": {
+          "I": {
+            "systems": {
+              "codex": {
+                "avgAgentSuccessRate": 0.9,
+                "avgPartialCorrectness": 1.0,
+                "avgSeconds": 740.28,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.9,
+                "fullSuccesses": 9,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex": {
+                "avgAgentSuccessRate": 0.6799999999999999,
+                "avgPartialCorrectness": 0.7392162162162161,
+                "avgSeconds": 759.4300000000001,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.6,
+                "fullSuccesses": 6,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex": {
+                "avgAgentSuccessRate": 0.6,
+                "avgPartialCorrectness": 0.6,
+                "avgSeconds": 1006.9,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.6,
+                "fullSuccesses": 6,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "ab643f363b84083109e5b21dd70afac6f8fc3e838e5bb6a2d8908954f29e9770",
+        "systemKey": "codex",
+        "tasks": 30
+      }
+    },
+    "n5": {
+      "codexSubagents": {
+        "avgAgentSuccessRate": 0.8,
+        "avgNumericTolerancePartialCorrectness": 0.9337837837837838,
+        "avgNumericToleranceSuccessRate": 0.9333333333333333,
+        "avgPartialCorrectness": 0.812779217573738,
+        "avgSeconds": 240.11,
+        "coordinationToolErrors": 70,
+        "fullSuccessRate": 0.8,
+        "fullSuccesses": 24,
+        "levels": {
+          "I": {
+            "systems": {
+              "codex-subagents": {
+                "avgAgentSuccessRate": 1.0,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgSeconds": 198.39000000000001,
+                "coordinationToolErrors": 6,
+                "fullSuccessRate": 1.0,
+                "fullSuccesses": 10,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex-subagents": {
+                "avgAgentSuccessRate": 0.7,
+                "avgNumericTolerancePartialCorrectness": 0.8013513513513514,
+                "avgNumericToleranceSuccessRate": 0.8,
+                "avgPartialCorrectness": 0.7383376527212143,
+                "avgSeconds": 240.39000000000001,
+                "coordinationToolErrors": 31,
+                "fullSuccessRate": 0.7,
+                "fullSuccesses": 7,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex-subagents": {
+                "avgAgentSuccessRate": 0.7,
+                "avgNumericTolerancePartialCorrectness": 1.0,
+                "avgNumericToleranceSuccessRate": 1.0,
+                "avgPartialCorrectness": 0.7,
+                "avgSeconds": 281.55,
+                "coordinationToolErrors": 33,
+                "fullSuccessRate": 0.7,
+                "fullSuccesses": 7,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "a27c5c2ea634a45205147d826555a3802079cd255e605c2e52a1086a61eb548e",
+        "systemKey": "codex-subagents",
+        "tasks": 30
+      },
+      "fullContextCodexOracle": {
+        "avgAgentSuccessRate": 0.8333333333333334,
+        "avgPartialCorrectness": 0.845662100456621,
+        "avgSeconds": 39.223333333333336,
+        "coordinationToolErrors": 0,
+        "fullSuccessRate": 0.8333333333333334,
+        "fullSuccesses": 25,
+        "levels": {
+          "I": {
+            "systems": {
+              "codex-full-context": {
+                "avgAgentSuccessRate": 1.0,
+                "avgPartialCorrectness": 1.0,
+                "avgSeconds": 27.6,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 1.0,
+                "fullSuccesses": 10,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex-full-context": {
+                "avgAgentSuccessRate": 0.8,
+                "avgPartialCorrectness": 0.8369863013698631,
+                "avgSeconds": 32.089999999999996,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.8,
+                "fullSuccesses": 8,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex-full-context": {
+                "avgAgentSuccessRate": 0.7,
+                "avgPartialCorrectness": 0.7,
+                "avgSeconds": 57.98,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.7,
+                "fullSuccesses": 7,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "a68c98dd1a06493db0d8e2dce350d533207ce8719d6e85c8620ca0b6db885994",
+        "systemKey": "codex-full-context",
+        "tasks": 30
+      },
+      "losangelex": {
+        "avgAgentSuccessRate": 0.8066666666666666,
+        "avgPartialCorrectness": 0.8263287671232877,
+        "avgSeconds": 112.96000000000001,
+        "coordinationToolErrors": 0,
+        "fullSuccessRate": 0.7,
+        "fullSuccesses": 21,
+        "levels": {
+          "I": {
+            "systems": {
+              "losangelex": {
+                "avgAgentSuccessRate": 0.9800000000000001,
+                "avgPartialCorrectness": 0.9800000000000001,
+                "avgSeconds": 86.81,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.9,
+                "fullSuccesses": 9,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "losangelex": {
+                "avgAgentSuccessRate": 0.74,
+                "avgPartialCorrectness": 0.798986301369863,
+                "avgSeconds": 129.07,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.5,
+                "fullSuccesses": 5,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "losangelex": {
+                "avgAgentSuccessRate": 0.7,
+                "avgPartialCorrectness": 0.7,
+                "avgSeconds": 123.0,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.7,
+                "fullSuccesses": 7,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "ef481965ba65e0d0def8cd61f27cf46517b1c1de845c26baf2083353a91f8cae",
+        "systemKey": "losangelex",
+        "tasks": 30
+      },
+      "serialCodex": {
+        "avgAgentSuccessRate": 0.7,
+        "avgPartialCorrectness": 0.7141125509070715,
+        "avgSeconds": 422.0566666666667,
+        "coordinationToolErrors": 0,
+        "fullSuccessRate": 0.6666666666666666,
+        "fullSuccesses": 20,
+        "levels": {
+          "I": {
+            "systems": {
+              "codex": {
+                "avgAgentSuccessRate": 0.9,
+                "avgPartialCorrectness": 0.9,
+                "avgSeconds": 395.03000000000003,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.9,
+                "fullSuccesses": 9,
+                "tasks": 10
+              }
+            }
+          },
+          "II": {
+            "systems": {
+              "codex": {
+                "avgAgentSuccessRate": 0.58,
+                "avgPartialCorrectness": 0.6223376527212143,
+                "avgSeconds": 376.24,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.5,
+                "fullSuccesses": 5,
+                "tasks": 10
+              }
+            }
+          },
+          "III": {
+            "systems": {
+              "codex": {
+                "avgAgentSuccessRate": 0.62,
+                "avgPartialCorrectness": 0.62,
+                "avgSeconds": 494.9,
+                "coordinationToolErrors": 0,
+                "fullSuccessRate": 0.6,
+                "fullSuccesses": 6,
+                "tasks": 10
+              }
+            }
+          }
+        },
+        "sourceSha256": "74a035132aca46eeadb15e3a3e1232961edc816debb12f7c1dec94d7475e29b8",
+        "systemKey": "codex",
+        "tasks": 30
+      }
+    }
+  },
+  "title": "Sanitized Silo-Bench same-model control summary for Losangelex paper",
+  "tokenUsageAvailability": {
+    "coordinationTopologyBenchmark": "recorded model_tokens and should be used for token-efficiency claims, not extrapolated to Silo/MARBLE",
+    "marblePublishedBenchmarkRuns": "not recorded in result JSON or run logs for the final-primary artifact",
+    "siloPublishedBenchmarkRuns": "not recorded in result JSON or run logs for these artifacts"
+  }
+}

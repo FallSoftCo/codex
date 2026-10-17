@@ -5,6 +5,7 @@ use codex_protocol::SanitizedGitUrl;
 use codex_protocol::ThreadId;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::HollywoodSessionMeta;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::ThreadHistoryMode;
@@ -193,6 +194,8 @@ pub struct ThreadMetadata {
     pub git_branch: Option<String>,
     /// The git origin URL, if known.
     pub git_origin_url: Option<SanitizedGitUrl>,
+    /// Persisted Hollywood attachment config for the thread, if any.
+    pub hollywood: Option<HollywoodSessionMeta>,
 }
 
 /// Builder data required to construct [`ThreadMetadata`] without parsing filenames.
@@ -343,6 +346,7 @@ impl ThreadMetadataBuilder {
             git_sha: self.git_sha.clone(),
             git_branch: self.git_branch.clone(),
             git_origin_url: self.git_origin_url.clone(),
+            hollywood: None,
         }
     }
 }
@@ -370,6 +374,13 @@ impl ThreadMetadata {
         }
         if existing.git_origin_url.is_some() {
             self.git_origin_url = existing.git_origin_url.clone();
+        }
+    }
+
+    /// Preserve existing Hollywood metadata when rollout-derived metadata omits it.
+    pub fn prefer_existing_hollywood_info(&mut self, existing: &Self) {
+        if self.hollywood.is_none() && existing.hollywood.is_some() {
+            self.hollywood = existing.hollywood.clone();
         }
     }
 
@@ -491,6 +502,9 @@ impl ThreadMetadata {
         if self.git_origin_url != other.git_origin_url {
             diffs.push("git_origin_url");
         }
+        if self.hollywood != other.hollywood {
+            diffs.push("hollywood");
+        }
         diffs
     }
 }
@@ -538,6 +552,11 @@ pub(crate) struct ThreadRow {
     git_sha: Option<String>,
     git_branch: Option<String>,
     git_origin_url: Option<String>,
+    hollywood_url: Option<String>,
+    hollywood_room: Option<String>,
+    hollywood_attention_mode: Option<String>,
+    hollywood_include_at_all: Option<bool>,
+    hollywood_include_at_room: Option<bool>,
 }
 
 impl ThreadRow {
@@ -580,6 +599,11 @@ impl ThreadRow {
             git_sha: row.try_get("git_sha")?,
             git_branch: row.try_get("git_branch")?,
             git_origin_url: row.try_get("git_origin_url")?,
+            hollywood_url: row.try_get("hollywood_url")?,
+            hollywood_room: row.try_get("hollywood_room")?,
+            hollywood_attention_mode: row.try_get("hollywood_attention_mode")?,
+            hollywood_include_at_all: row.try_get("hollywood_include_at_all")?,
+            hollywood_include_at_room: row.try_get("hollywood_include_at_room")?,
         })
     }
 }
@@ -626,6 +650,11 @@ impl TryFrom<ThreadRow> for ThreadMetadata {
             git_sha,
             git_branch,
             git_origin_url,
+            hollywood_url,
+            hollywood_room,
+            hollywood_attention_mode,
+            hollywood_include_at_all,
+            hollywood_include_at_room,
         } = row;
         let thread_source = thread_source
             .map(|thread_source| thread_source.parse())
@@ -688,6 +717,30 @@ impl TryFrom<ThreadRow> for ThreadMetadata {
             git_branch,
             git_origin_url: git_origin_url
                 .and_then(|origin_url| SanitizedGitUrl::try_from(origin_url).ok()),
+            hollywood: match (
+                hollywood_url,
+                hollywood_room,
+                hollywood_attention_mode,
+                hollywood_include_at_all,
+                hollywood_include_at_room,
+            ) {
+                (
+                    Some(url),
+                    Some(room),
+                    Some(attention_mode),
+                    Some(include_at_all),
+                    Some(include_at_room),
+                ) => Some(HollywoodSessionMeta {
+                    url,
+                    room,
+                    observed_rooms: Vec::new(),
+                    wake_rooms: Vec::new(),
+                    attention_mode,
+                    include_at_all,
+                    include_at_room,
+                }),
+                _ => None,
+            },
         })
     }
 }
@@ -803,6 +856,11 @@ mod tests {
             git_sha: None,
             git_branch: None,
             git_origin_url: None,
+            hollywood_url: None,
+            hollywood_room: None,
+            hollywood_attention_mode: None,
+            hollywood_include_at_all: None,
+            hollywood_include_at_room: None,
         }
     }
 
@@ -844,6 +902,7 @@ mod tests {
             git_sha: None,
             git_branch: None,
             git_origin_url: None,
+            hollywood: None,
         }
     }
 

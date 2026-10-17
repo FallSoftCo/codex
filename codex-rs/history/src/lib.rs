@@ -214,6 +214,8 @@ impl Borrow<ResponseItem> for ResponseItemEnvelope {
 #[derive(Debug, Clone)]
 pub enum RolloutItem {
     SessionMeta(SessionMetaLine),
+    /// Private registered-agent state, never an authority or model context item.
+    SessionState(codex_protocol::protocol::SessionStateUpdate),
     ResponseItem(ResponseItemEnvelope),
     InterAgentCommunication(InterAgentCommunication),
     InterAgentCommunicationMetadata {
@@ -393,6 +395,38 @@ pub enum InitialHistory {
 }
 
 impl InitialHistory {
+    /// Returns recorded events without reinterpreting raw model items.
+    pub fn get_event_msgs(&self) -> Option<Vec<EventMsg>> {
+        if matches!(self, Self::New | Self::Cleared) {
+            return None;
+        }
+        Some(
+            self.get_rollout_items()
+                .iter()
+                .filter_map(|item| {
+                    if let RolloutItem::EventMsg(event) = item {
+                        Some(event.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    /// Read legacy effective-mode metadata without changing current WorldState authority.
+    pub fn get_latest_effective_multi_agent_mode(
+        &self,
+    ) -> Option<codex_protocol::config_types::MultiAgentMode> {
+        self.get_rollout_items()
+            .iter()
+            .rev()
+            .find_map(|item| match item {
+                RolloutItem::TurnContext(context) => context.multi_agent_mode.clone(),
+                _ => None,
+            })
+    }
+
     pub fn scan_rollout_items(&self, mut predicate: impl FnMut(&RolloutItem) -> bool) -> bool {
         match self {
             Self::New | Self::Cleared => false,

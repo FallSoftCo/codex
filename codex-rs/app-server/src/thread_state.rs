@@ -1,3 +1,4 @@
+use crate::hollywood::HollywoodRuntimeState;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
 use codex_app_server_protocol::RequestId;
@@ -111,6 +112,7 @@ pub(crate) struct ThreadState {
     shutdown_drain_waiter: Option<oneshot::Sender<()>>,
     pub(crate) cancel_tx: Option<oneshot::Sender<()>>,
     pub(crate) experimental_raw_events: bool,
+    pub(crate) hollywood: HollywoodRuntimeState,
     pub(crate) listener_generation: u64,
     last_thread_settings: Option<ThreadSettings>,
     listener_command_tx: Option<mpsc::UnboundedSender<ThreadListenerCommand>>,
@@ -196,6 +198,18 @@ impl ThreadState {
 
     pub(crate) fn take_shutdown_drain_waiter(&mut self) -> Option<oneshot::Sender<()>> {
         self.shutdown_drain_waiter.take()
+    }
+
+    pub(crate) fn has_active_turn(&self) -> bool {
+        self.current_turn_history.has_active_turn()
+    }
+
+    pub(crate) fn active_turn_snapshot_if_running(&self) -> Option<Turn> {
+        if self.current_turn_history.has_active_turn() {
+            self.current_turn_history.active_turn_snapshot()
+        } else {
+            None
+        }
     }
 
     pub(crate) fn track_current_turn_event(&mut self, event_turn_id: &str, event: &EventMsg) {
@@ -445,6 +459,10 @@ impl ThreadStateManager {
     pub(crate) async fn thread_state(&self, thread_id: ThreadId) -> Arc<Mutex<ThreadState>> {
         let mut state = self.state.lock().await;
         state.threads.entry(thread_id).or_default().state.clone()
+    }
+
+    pub(crate) async fn thread_ids(&self) -> Vec<ThreadId> {
+        self.state.lock().await.threads.keys().copied().collect()
     }
 
     pub(crate) fn current_listener_command_tx(

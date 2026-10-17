@@ -13,9 +13,10 @@ def parsed(value):
     return json.loads(value) if isinstance(value, str) else value
 
 ATOMIC = {
+    "hollywood_briefing",
     "hollywood_publish", "hollywood_request", "hollywood_decision_set",
     "hollywood_cooperation_set", "hollywood_work_create", "hollywood_work_assign",
-    "hollywood_work_claim", "hollywood_work_report", "hollywood_work_review",
+    "hollywood_work_claim", "hollywood_work_report", "hollywood_work_report_reconcile", "hollywood_work_review",
     "hollywood_work_cancel", "hollywood_work_revise", "hollywood_work_recover",
 }
 

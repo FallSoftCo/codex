@@ -54,6 +54,11 @@ EXPECTED_ROOT_EXPORTS = [
     "SkillInput",
     "MentionInput",
     "retry_on_overload",
+    "pcm16le_audio_chunk",
+    "iter_pcm16le_audio_chunks",
+    "iter_wav_audio_chunks",
+    "iter_wav_audio_file_chunks",
+    "iter_wav_audio_bytes_chunks",
     "CodexError",
     "TransportClosedError",
     "JsonRpcError",
@@ -93,6 +98,7 @@ EXPECTED_TYPES_EXPORTS = [
     "ThreadListCwdFilter",
     "ThreadListResponse",
     "ThreadReadResponse",
+    "ThreadRealtimeAudioChunk",
     "ThreadSetNameResponse",
     "ThreadSortKey",
     "ThreadSource",
@@ -406,6 +412,10 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "summary",
             "turn_service_tier",
         ],
+        Thread.realtime_start: [],
+        Thread.realtime_append_audio: [],
+        Thread.realtime_append_text: [],
+        Thread.realtime_stop: [],
         AsyncCodex.thread_start: [
             "approval_mode",
             "base_instructions",
@@ -488,6 +498,10 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "summary",
             "turn_service_tier",
         ],
+        AsyncThread.realtime_start: [],
+        AsyncThread.realtime_append_audio: [],
+        AsyncThread.realtime_append_text: [],
+        AsyncThread.realtime_stop: [],
     }
 
     for fn, expected_kwargs in expected.items():

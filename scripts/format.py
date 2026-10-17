@@ -41,7 +41,7 @@ def just_formatter_group(*, check: bool) -> FormatterGroup:
     return FormatterGroup("Just", (Command(tuple(args)),))
 
 
-def rust_formatter_group(*, check: bool) -> FormatterGroup:
+def rust_formatter_group(*, check: bool, paths: list[str] | None = None) -> FormatterGroup:
     rust_root = REPO_ROOT / "codex-rs"
     repository_files = subprocess.check_output(
         [
@@ -63,6 +63,14 @@ def rust_formatter_group(*, check: bool) -> FormatterGroup:
             if path and (REPO_ROOT / os.fsdecode(path)).is_file()
         }
     )
+    if paths is not None:
+        selected = []
+        for value in paths:
+            path = (REPO_ROOT / value).resolve(strict=True)
+            if not path.is_relative_to(rust_root) or path.suffix != ".rs" or not path.is_file():
+                raise ValueError(f"Expected a Rust source inside codex-rs: {value}")
+            selected.append(os.path.relpath(path, rust_root))
+        rust_files = sorted(set(selected))
     args = [
         "rustfmt",
         "--edition",
@@ -222,8 +230,10 @@ def main() -> int:
         action="store_true",
         help="check formatting without modifying files",
     )
+    parser.add_argument("--rust-path", action="append", help="format only this repository-relative Rust source; repeat for explicit owned slices")
     args = parser.parse_args()
-    groups = formatter_groups(check=args.check)
+    groups = ([rust_formatter_group(check=args.check, paths=args.rust_path)]
+              if args.rust_path else formatter_groups(check=args.check))
 
     failures: list[str] = []
     with ThreadPoolExecutor(max_workers=len(groups)) as executor:

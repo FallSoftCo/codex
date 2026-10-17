@@ -582,6 +582,48 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadUnsubscribeResponse,
     },
+    #[experimental("thread/hollywood/attach")]
+    ThreadHollywoodAttach => "thread/hollywood/attach" {
+        params: v2::ThreadHollywoodAttachParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadHollywoodAttachResponse,
+    },
+    #[experimental("thread/hollywood/detach")]
+    ThreadHollywoodDetach => "thread/hollywood/detach" {
+        params: v2::ThreadHollywoodDetachParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadHollywoodDetachResponse,
+    },
+    #[experimental("thread/hollywood/attention/set")]
+    ThreadHollywoodAttentionSet => "thread/hollywood/attention/set" {
+        params: v2::ThreadHollywoodAttentionSetParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadHollywoodAttentionSetResponse,
+    },
+    #[experimental("thread/hollywood/list")]
+    ThreadHollywoodList => "thread/hollywood/list" {
+        params: v2::ThreadHollywoodListParams,
+        serialization: None,
+        response: v2::ThreadHollywoodListResponse,
+    },
+    #[experimental("thread/ownership/claim")]
+    ThreadOwnershipClaim => "thread/ownership/claim" {
+        params: v2::ThreadOwnershipClaimParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadOwnershipClaimResponse,
+    },
+    #[experimental("thread/ownership/release")]
+    ThreadOwnershipRelease => "thread/ownership/release" {
+        params: v2::ThreadOwnershipReleaseParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadOwnershipReleaseResponse,
+    },
+    #[experimental("thread/ownership/list")]
+    ThreadOwnershipList => "thread/ownership/list" {
+        params: v2::ThreadOwnershipListParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadOwnershipListResponse,
+    },
     #[experimental("thread/increment_elicitation")]
     /// Increment the thread-local out-of-band elicitation counter.
     ///
@@ -2063,6 +2105,8 @@ server_notification_definitions! {
     ThreadRealtimeError => "thread/realtime/error" (v2::ThreadRealtimeErrorNotification),
     #[experimental("thread/realtime/closed")]
     ThreadRealtimeClosed => "thread/realtime/closed" (v2::ThreadRealtimeClosedNotification),
+    #[experimental("thread/hollywood/message")]
+    ThreadHollywoodMessage => "thread/hollywood/message" (v2::HollywoodMessageNotification),
 
     /// Notifies the user of world-writable directories on Windows, which cannot be protected by the sandbox.
     WindowsWorldWritableWarning => "windows/worldWritableWarning" (v2::WindowsWorldWritableWarningNotification),
@@ -3273,6 +3317,7 @@ mod tests {
                     git_info: None,
                     name: None,
                     daybreak_enabled: None,
+                    hollywood: None,
                     turns: Vec::new(),
                 },
                 model: "gpt-5".to_string(),
@@ -3335,6 +3380,7 @@ mod tests {
                         "gitInfo": null,
                         "name": null,
                         "daybreakEnabled": null,
+                        "hollywood": null,
                         "turns": []
                     },
                     "model": "gpt-5",

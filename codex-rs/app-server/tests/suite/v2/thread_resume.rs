@@ -164,6 +164,8 @@ mod network_tests;
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
 #[cfg(not(windows))]
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const EXPECTED_CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CODEX_5_2_INSTRUCTIONS_TEMPLATE_DEFAULT: &str = "You are Codex, a coding agent based on GPT-5. You and the user share the same workspace and collaborate to achieve the user's goals.";
 
 #[tokio::test]
 async fn thread_resume_paginated_model_context_preserves_original_metadata() -> Result<()> {
@@ -4574,6 +4576,7 @@ async fn thread_resume_prefers_persisted_git_metadata_for_local_threads() -> Res
         history_mode: Default::default(),
         history_base: None,
         subagent_history_start_ordinal: None,
+        hollywood: None,
         multi_agent_version: None,
         context_window: None,
     };

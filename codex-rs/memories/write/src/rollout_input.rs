@@ -45,7 +45,7 @@ pub(crate) async fn read_recent_rollout_items(path: &Path) -> anyhow::Result<Vec
         anyhow::ensure!(
             matches!(
                 codex_rollout::parse_rollout_line(&header)?.item,
-                RolloutItem::SessionMeta(_)
+                RolloutItem::SessionState(_) | RolloutItem::SessionMeta(_)
             ),
             "memory extraction requires valid session metadata within the record limit"
         );
@@ -112,7 +112,8 @@ pub(crate) fn serialize_tiered_input(
         let item = match item {
             RolloutItem::ResponseItem(item) => sanitize_response_item_for_memories(&item.item),
             RolloutItem::InterAgentCommunication(message) => Some(message.to_model_input_item()),
-            RolloutItem::SessionMeta(_)
+            RolloutItem::SessionState(_)
+            | RolloutItem::SessionMeta(_)
             | RolloutItem::InterAgentCommunicationMetadata { .. }
             | RolloutItem::Compacted(_)
             | RolloutItem::TurnContext(_)
