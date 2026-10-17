@@ -155,8 +155,10 @@ def definitions(spec):
         ),
         spec(
             "hollywood_goal_create",
-            "Record an explicitly authorized room goal and acceptance criteria. reviewBudget is the finite number of material worker reviews authorized by this request; use zero without authorization. Creation does not assign work.",
+            "Record an accountable Goal from this current authenticated human/agent request. Optional roomId selects its collaboration room independently of agent context. For another room explicitly set publishScopedIntent=true: only selected Goal intent is published there, never private source text. Original source must be room-visible. reviewBudget bounds authorized material reviews; creation assigns no work.",
             {
+                "roomId": {"type": ["string", "null"]},
+                "publishScopedIntent": {"type": "boolean"},
                 "title": text,
                 "objective": text,
                 "acceptance": text,
@@ -599,6 +601,14 @@ async def invoke(c, name, args, operation):
             "supervision?after=" + str(args["after"]) + "&limit=" + str(args["limit"]),
         )
     if name == "hollywood_goal_create":
+        room = identity("roomId") if args.get("roomId") is not None else c.active["request"]["room"]
+        publish = args.get("publishScopedIntent", False)
+        if type(publish) is not bool:
+            raise ToolValidationError("invalid_scoped_intent", "Scoped intent publication must be boolean",
+                                      "Choose an explicit boolean; original source remains unchanged.")
+        if room != c.active["request"]["room"] and not publish:
+            raise ToolValidationError("scoped_intent_required", "Cross-room Goal requires explicit scoped intent",
+                                      "Set publishScopedIntent=true for the selected Goal room; never broaden room access.")
         payload = {
             **{
                 key: args[key]
@@ -608,9 +618,9 @@ async def invoke(c, name, args, operation):
             "id": str(uuid5(UUID(c.config["agentId"]), operation)),
             "sourceEventId": c.active["request"]["id"],
         }
-        receipt = await c.http(
-            "POST", "rooms/" + c.active["request"]["room"] + "/goals", payload
-        )
+        if publish:
+            payload["publishScopedIntent"] = True
+        receipt = await c.http("POST", "rooms/" + room + "/goals", payload)
         # An existing primary coordination goal remains intact. A new canonical
         # goal does not silently replace it or create a shadow room context.
         if not c.goal_binding and not c.agent_binding:
