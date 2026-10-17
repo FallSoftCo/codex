@@ -342,7 +342,7 @@ def apply(directory):
     )
     host = manifest["hostId"]
     policy = relay("GET", "hosts/" + host + "/admission")["policy"]
-    existing = relay("GET", "hosts/" + host + "/collaboration-bridge").get("bridge")
+    existing = administrative("GET", "hosts/" + host + "/collaboration-bridge").get("bridge")
     if existing:
         require(
             existing["state"] == "active"

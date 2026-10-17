@@ -1,6 +1,6 @@
 # Protected native collaboration setup
 
-The candidate connector is version `0.1.0.dev40`. Its installer and automatic
+The candidate connector is version `0.1.0.dev41`. Its installer and automatic
 capture paths are staged source. Root owns installation, controlled activation
 and genuine native qualification. Component tests do not establish that a normal
 room task, shared edit or later continuation works end to end.
@@ -125,3 +125,39 @@ nongit roots, remote/directory mutations and enterprise native child admission
 remain unavailable. Arbitrary shell writes remain a cooperative boundary, not a
 filesystem transaction guarantee. The service/controller setup does not claim a
 durable solution to heavy-command isolation or general enterprise readiness.
+
+## Passive observations on the existing native connection
+
+After ordinary thread loading and canonical context binding, the connector creates
+one passive receiver for that persistent context. Its existing guidance pump
+checks one bounded inbox page and can append at most one `agent_message`, using
+`thread/inject_items` on the already-open RPC connection. The Stop monitor keeps
+its independent lane. Native metadata reads and receiver ticks each have a five-second deadline;
+unavailable metadata, authority or private journal state records an observation gap and leaves
+the ordinary task's native admission unchanged.
+
+The first cursor starts at the current inbox head. It does not scan old messages.
+Only eligible agent observations in the current privacy scope enter the native
+context, capped at 960 serialized ASCII bytes with an exact original-event read
+locator. Human input, requests, results and controls retain their existing paths.
+Observation creates no work, model turn, idle wake or second socket reader.
+
+Before an append, the local provider records the actual rollout EOF. Only an
+actual fresh native thread/start reply may authorize a zero origin for a not-yet
+materialized store. Exact complete raw-item readback from that finite tail must
+precede cursor advancement. The tail is capped at 256 KiB, 256 records and 64 KiB
+per record. Accepted or uncertain native input is never resent. Replaced,
+ambiguous, inaccessible or unsupported stores stay held.
+
+The provider supports a registered local runtime's configured private CODEX_HOME
+and native-returned sessions JSONL locator. This trusts the runtime/service UID;
+it does not resist root administrators or code running under that same execution
+UID, including model commands. Persisted input proof does not prove model
+consumption, comprehension or final enterprise acceptance. Root owns the integrated
+active-turn qualification.
+
+For a fresh bridge installation, the installer inspects the not-yet-enrolled bridge
+with its separate administrator credential. Host-admission reads and runtime relay
+continue to use the enrolled controller credential. Preparation must be regenerated
+for the new adapter digest; existing changed or revoked installations still require
+an explicit drained upgrade. This source change performs no live installation.

@@ -18,6 +18,8 @@ from aiohttp import ClientSession, ContentTypeError
 
 from .activity import Activity
 from .agent_context import AgentContext
+from .passive_context import PassiveReceiver
+from .passive_readback import RolloutReadback
 from .continuation_context import LocatorLedger, prepare_context, index_accepted_delegation
 from .participation import INSTRUCTIONS as PARTICIPATION, history_path, initialization, message
 from .administration import administer
@@ -221,6 +223,9 @@ class Connector:
         self.role_context = None
         self.work_briefing = None
         self.causal_task_context = None
+        self.passive_receiver = None
+        self.passive_epoch = None
+        self.passive_readback = None
         self.work_briefings = {}
         self.report_scope_reads = {}
         self.report_scope_briefings = {}
@@ -675,11 +680,50 @@ class Connector:
                 )
             await asyncio.sleep(1)
 
+    async def receive_passive_context(self):
+        # Existing connection/pump owns native calls; never read its socket here.
+        if (self.passive_receiver is None or not self.rpc or not self.rpc.process
+                or self.rpc.process.returncode is not None):
+            return
+        try:
+            if self.passive_readback is None:
+                provider = RolloutReadback(
+                    self.state / ("passive-native-" + self.context_id),
+                    binding=self.passive_receiver.binding,
+                    codex_home=self.config["codexHome"],
+                    registered_host_id=self.config["hostId"],
+                )
+                provider.check_capture(self.active)
+                # Metadata locates this exact local store. It is not raw-item proof.
+                reply = self.passive_native_started
+                if not self.passive_new_thread:
+                    reply = await self.rpc.call("thread/read", {
+                        "threadId": self.thread, "includeTurns": False,
+                    }, timeout=5)
+                provider.bind_native(reply, fresh=self.passive_new_thread)
+                self.passive_readback = provider
+            await asyncio.wait_for(self.passive_receiver.tick(
+                lambda path: self.http("GET", path),
+                lambda method, params: self.rpc.call(method, params, timeout=5),
+                captured=self.active,
+                loaded=bool(self.rpc and self.rpc.process and self.rpc.process.returncode is None),
+                connection_epoch=self.passive_epoch,
+                readback=self.passive_readback,
+            ), timeout=5)
+        except Exception as error:
+            saved(self.state / "passive-context-gap.json", {
+                "error": type(error).__name__, "executionAdmitted": False,
+                "nativeReplayAllowed": False,
+            })
+
     async def monitor_guidance(self, turn_id):
         # Guidance transport must not serialize or delay the independent Stop lane.
         while self.finished and not self.finished.done():
             try:
                 await self.controls.tick(turn_id)
+                # Serial with guidance on its existing pump, same AppServer.call
+                # and sole _read task. Stop retains its independent lane.
+                await self.receive_passive_context()
             except Exception as error:
                 saved(self.state / "guidance-observation-gap.json", {
                     "error": type(error).__name__, "deliveryId": self.active["delivery"]["id"],
@@ -1228,6 +1272,7 @@ class Connector:
                 }
                 if self.required_tool_policy is not None:
                     settings["toolPolicy"] = self.required_tool_policy
+                self.passive_new_thread = not context_path.exists()
                 if context_path.exists():
                     self.thread = json.loads(context_path.read_text())["nativeThread"]
                     native_started = await self.rpc.call(
@@ -1276,6 +1321,24 @@ class Connector:
                     },
                 )
                 await self.agent_context.bind()
+                # Thread was normally loaded above; observation never starts it.
+                self.passive_receiver = None
+                self.passive_readback = None
+                self.passive_native_started = native_started
+                self.passive_epoch = self.active["delivery"]["id"] + ":" + str(self.rpc.process.pid)
+                try:
+                    self.passive_receiver = PassiveReceiver(
+                        self.state / ("passive-" + self.context_id),
+                        authority_id=request["authority"], principal_id=self.config["agentId"],
+                        context_id=self.context_id, thread_id=self.thread,
+                    )
+                    await self.receive_passive_context()
+                except Exception as error:
+                    # Optional observations cannot reject an ordinary admitted task.
+                    saved(self.state / "passive-context-gap.json", {
+                        "error": type(error).__name__, "executionAdmitted": False,
+                        "nativeReplayAllowed": False,
+                    })
                 saved(
                     journal,
                     {

@@ -515,6 +515,8 @@ class InstallerTests(unittest.TestCase):
             if route.endswith("/admission"):
                 return {"policy": {"controller": uid(10)}}
             if method == "GET" and route.endswith("/collaboration-bridge"):
+                if token != "synthetic-administrator":
+                    raise PermissionError("403: bridge is not enrolled yet")
                 return {"bridge": None}
             if route.endswith("/collaboration-bridge"):
                 return {"bridge": {"revision": 1}}
@@ -544,7 +546,11 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertTrue(
             all(
-                token == "synthetic-controller"
+                token == (
+                    "synthetic-administrator"
+                    if route.endswith("/collaboration-bridge")
+                    else "synthetic-controller"
+                )
                 for token, method, route in calls
                 if method == "GET"
             )
