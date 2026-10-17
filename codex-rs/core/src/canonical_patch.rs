@@ -11,6 +11,14 @@ use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
 
+/// File-content result only; the protected bridge independently observes every
+/// original path before deciding whether a failed operation may settle.
+pub(crate) enum PatchOutcome {
+    Applied,
+    NotApplied,
+    Unknown,
+}
+
 pub(crate) struct PatchPermit {
     evidence: Value,
 }
@@ -131,13 +139,13 @@ impl PatchPermit {
         self,
         req: &ApplyPatchRequest,
         ctx: &ToolCtx,
-        applied: bool,
+        outcome: PatchOutcome,
     ) -> Result<(), FunctionCallError> {
         let mut evidence = self.evidence;
-        evidence["outcome"] = if applied {
-            json!("applied")
-        } else {
-            json!("unknown")
+        evidence["outcome"] = match outcome {
+            PatchOutcome::Applied => json!("applied"),
+            PatchOutcome::NotApplied => json!("notApplied"),
+            PatchOutcome::Unknown => json!("unknown"),
         };
         let reply =
             canonical_collaboration::patch_call(ctx, "patch-settle", &req.action.patch, evidence)

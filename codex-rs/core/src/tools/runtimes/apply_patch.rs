@@ -202,6 +202,13 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
         .await;
         let stdout = String::from_utf8_lossy(&stdout).into_owned();
         let stderr = String::from_utf8_lossy(&stderr).into_owned();
+        let outcome = match &result {
+            Ok(_) => crate::canonical_patch::PatchOutcome::Applied,
+            Err(failure) if failure.delta().is_exact() && failure.delta().is_empty() => {
+                crate::canonical_patch::PatchOutcome::NotApplied
+            }
+            Err(_) => crate::canonical_patch::PatchOutcome::Unknown,
+        };
         let failed = result.is_err();
         let patch_failure = result.as_ref().err().map(ToString::to_string);
 
@@ -234,7 +241,7 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
         }
         self.committed_delta.append(delta);
         if let Some(permit) = permit {
-            permit.settle(req, ctx, !failed).await.map_err(|error| {
+            permit.settle(req, ctx, outcome).await.map_err(|error| {
                 // Settlement can hold even a failed filesystem operation. Keep the
                 // original diagnostic while retaining the hold and prohibiting retry.
                 let diagnostic = if stderr.is_empty() {
