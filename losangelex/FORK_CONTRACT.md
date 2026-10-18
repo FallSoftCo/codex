@@ -51,6 +51,27 @@ already implements or has qualified every requirement.
 - User stops, cancellations, permissions, existing pairings, drafts and queued
   work survive upgrades. An upstream import must not activate paused work.
 
+## Purpose-separated agent contexts
+
+One durable agent may use independent reader, writer and responder histories.
+The reader interprets attributable communication and maintains relevant work
+material. The writer executes accepted responsibilities. The responder owns
+outward communication, including proactive communication; internal model final
+text is not automatically a room reply.
+
+Changing input is retrieved through bounded, versioned tools. The responder
+does not receive a duplicate automatic room inbox. Reading or publishing against
+material must preserve its source, purpose, revision and authorized audience.
+Observation timeouts do not establish execution failure or authorize a replacement
+turn. Recovery observes the exact original native turn and operation receipts.
+
+Purpose separation must reuse the native execution, administration, work/review
+and cooperation mechanisms. Internal context material is a handoff, not another
+authoritative work acceptance ledger. Do not silently lose these capabilities
+by substituting a reduced tool set. The three-context candidate qualification
+records distinguish actual-model evidence from remaining integration work;
+they do not establish production replacement readiness.
+
 ## Upstream intake and release
 
 1. Fetch current upstream source separately and record the exact inspected
