@@ -20,6 +20,10 @@ No polling loops, self-requests or acknowledgements to acknowledgements.
 ROLES = {
 "reader": """You are the READER. Interpret pending authenticated communication in
 light of the agent's continuing responsibility and actual work state.
+Peer-completion inputs explicitly require no answer. Read their canonical result,
+then use apply_peer_result to update the original work, never accept them as new
+work or acknowledge them. A completion result is evidence to assess, not proof
+that the overall acceptance criteria are met.
 For a new execution request, use accept_work with a concrete objective and
 acceptance outcome. This retains the final response pending actual work evidence.
 For a question or correction needing only available facts, use prepare_response
@@ -39,6 +43,15 @@ using complete_work only after verifying acceptance. These are internal material
 not already published replies. Include accurate artifact paths/checksums when useful.
 Use propose_communication when a material discovery, risk, blocker or opportunity
 is worth sharing before the final result. Routine commands need no chat narration.
+Use room_directory to select an actual peer. request_peer creates a communication
+intent for the responder; it does not mean the peer accepted or completed work.
+Delegate a bounded responsibility and retain the original objective. When peer
+input is a prerequisite, use await_peer_results and end this inference only if
+it returns waiting. The reader will assess real incoming results; an event-backed
+continuation resumes this same work and history. Read the updated work completely,
+verify the peer contribution, then continue to your accepted outcome. Do not poll
+the model, send self-requests or complete work before prerequisites are resolved.
+A version conflict means new material arrived: reread it before contributing.
 Do not stop after a progress contribution: continue the accepted work to its outcome.
 Your final model message is internal; use complete_work to make final evidence ready.
 """,
@@ -54,6 +67,9 @@ You may suppress optional redundant communication with an explicit reason.
 Never suppress a required answer, invent completion, take over work, change goals,
 or manufacture information missing from the material. Do not acknowledge each
 contribution. A useful final result may cover redundant optional progress.
+A request need contains an immutable peer specification and target. Publish it
+without a body argument to dispatch the recorded specification verbatim; do not
+rewrite the assignment, change its audience, or claim that queued means accepted.
 Only publish against material you read in this turn. If it changed, read it again.
 """
 }
@@ -83,15 +99,23 @@ def tools(purpose):
                {"inputId":ID,"objective":S,"acceptance":S},["inputId","objective","acceptance"]),
           spec("prepare_response","Supply response material for an input using current facts; does not change other work.",
                {"inputId":ID,"body":S},["inputId","body"]),
+          spec("apply_peer_result","Record interpretation of an actual peer-completion input on its original work. No acknowledgement or new execution request is sent.",
+               {"inputId":ID,"body":S},["inputId","body"]),
         ]
     if purpose=="writer":
         result += [
           spec("record_progress","Record verified execution progress internally and continue working.",
                {"workId":ID,"body":S,"evidence":E},["workId","body"]),
-          spec("complete_work","Record verified acceptance outcome and evidence; make the final response ready.",
+          spec("complete_work","Record verified acceptance outcome and evidence after reading current complete work material and resolving peer prerequisites.",
                {"workId":ID,"body":S,"evidence":E},["workId","body","evidence"]),
+          spec("request_peer","Queue an immutable peer specification for the responder. Returns an intent, not an accepted request. Select a real distinct agent from room_directory and retain responsibility for the result.",
+               {"workId":ID,"recipientId":ID,"roomId":ID,"body":S},["workId","recipientId","body"]),
+          spec("await_peer_results","Suspend the current work on outstanding peer prerequisites. If waiting, finish this inference; actual peer results resume the original work through the reader without model polling.",
+               {"workId":ID},["workId"]),
         ]
     if purpose in ("reader","writer"):
+        result += [spec("room_directory","Read the canonical room roster and responsibilities; a roster entry does not assign work.",
+                       {"roomId":ID,"after":ID},["roomId"])]
         result += [spec("propose_communication","Make sourced proactive communication ready without new human input.",
           {"sourceId":ID,"body":S,"reason":S},["sourceId","body","reason"])]
     if purpose=="responder":
@@ -100,10 +124,11 @@ def tools(purpose):
           ("suppress_optional","Record why optional communication is unnecessary; required responses cannot be suppressed."),
         ]:
             result += [spec(name,description,{"communicationId":ID,"revision":{"type":"integer","minimum":1},"body":S},
-                            ["communicationId","revision","body"])]
+                            ["communicationId","revision"] + ([] if name=="publish_response" else ["body"]))]
     return result
 
 ACTIONS={"context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
-         "suppress_optional":"suppress"}
+         "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers",
+         "apply_peer_result":"peer_result","room_directory":"directory"}

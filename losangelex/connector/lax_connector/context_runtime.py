@@ -284,7 +284,7 @@ class ContextAgent:
                             await runner.cancel()
                         pending=[x for x in pending if not x["cancelled"]]
                         if purpose=="writer":
-                            key=[x["id"] for x in pending]
+                            key=[(x["id"],x.get("resume_revision",0)) for x in pending]
                         else:
                             key=[(x["id"],x["revision"]) for x in pending]
                         recovery=self.state/purpose/"recovery.json"
