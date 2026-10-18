@@ -28,6 +28,7 @@ class AppServer:
         on_spawn=None,
         enterprise=False,
         collaboration_channel=None,
+        isolated_process_group=False,
     ):
         self.binary, self.home, self.state = binary, home, state
         self.on_event, self.on_request = on_event, on_request
@@ -35,6 +36,7 @@ class AppServer:
         self.on_spawn = on_spawn
         self.enterprise = enterprise
         self.collaboration_channel = collaboration_channel
+        self.isolated_process_group = isolated_process_group
         self.pending = {}
         self.requests = set()
         self.sequence = 0
@@ -88,6 +90,7 @@ class AppServer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=log,
                 env=env,
+                start_new_session=self.isolated_process_group,
                 limit=16 * 1024 * 1024,
             )
         if self.on_spawn:
