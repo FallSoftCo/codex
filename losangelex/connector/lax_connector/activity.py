@@ -6,8 +6,14 @@ import json
 
 
 class Activity:
-    def __init__(self, connector):
+    def __init__(self, connector=None, *, state=None, scope=None, send=None, secrets=()):
         self.connector = connector
+        self.state = connector.state if connector is not None else state
+        self.scope = scope
+        self.send = send
+        self.secrets = tuple(secrets) if connector is None else (connector.config["token"],)
+        if connector is None and (state is None or scope is None or send is None):
+            raise ValueError("An explicit execution scope and log transport are required")
         self.pending = {}
         self.task = None
         self.wake = asyncio.Event()
@@ -16,9 +22,22 @@ class Activity:
         from .journal import saved
 
         c = self.connector
+        captured = self.scope() if self.scope is not None else None
+        if self.scope is not None and captured is None:
+            return
+        if captured is not None:
+            execution_scope = captured.as_dict()
+            thread, turn = execution_scope["nativeThread"], execution_scope["nativeTurn"]
+            d = {"id": execution_scope["deliveryId"], "claim_id": execution_scope["claimId"],
+                 "generation": execution_scope["generation"]}
+        else:
+            execution_scope = None
+            thread = c.thread
+            turn = json.loads(c.journal.read_text()).get("nativeTurn")
+            d = c.active["delivery"]
         if (
             method in ("turn/plan/updated", "hollywood/goalProgress")
-            and params.get("threadId") == c.thread
+            and params.get("threadId") == thread
         ):
             raw = {"method": method, "params": params}
             item = {
@@ -42,15 +61,15 @@ class Activity:
             method = "item/completed"
         if (
             method not in ("item/started", "item/completed")
-            or params.get("threadId") != c.thread
+            or params.get("threadId") != thread
         ):
             return
-        record = json.loads(c.journal.read_text())
-        turn = record.get("nativeTurn")
         if not turn or params.get("turnId") != turn:
             raise RuntimeError("Native activity belongs to another captured turn")
         item = params["item"]
         kind = item["type"]
+        if execution_scope is not None and kind not in ("commandExecution", "fileChange", "planUpdate"):
+            return  # Internal text and context tools never become outward communication.
         if kind in ("userMessage", "hookPrompt", "reasoning", "functionCallOutput"):
             return
         if kind == "agentMessage" and (
@@ -69,7 +88,10 @@ class Activity:
             nonlocal truncated
             if value is None:
                 return None
-            value = str(value).replace(c.config["token"], "[REDACTED]")
+            value = str(value)
+            for secret in self.secrets:
+                if secret:
+                    value = value.replace(secret, "[REDACTED]")
             encoded = value.encode()
             if len(encoded) > budget:
                 truncated = True
@@ -151,11 +173,10 @@ class Activity:
         raw_digest = hashlib.sha256(
             json.dumps(item, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        d = c.active["delivery"]
         payload = {
             "claimId": d["claim_id"],
             "generation": d["generation"],
-            "nativeThread": c.thread,
+            "nativeThread": thread,
             "nativeTurn": turn,
             "itemId": item["id"],
             "phase": phase,
@@ -180,7 +201,7 @@ class Activity:
         identity = hashlib.sha256(
             json.dumps([d["id"], d["generation"], turn, item["id"], phase]).encode()
         ).hexdigest()
-        path = c.state / ("activity-" + identity + ".json")
+        path = self.state / ("activity-" + identity + ".json")
         if path.exists():
             old = json.loads(path.read_text())
             if old["payload"] != payload:
@@ -193,6 +214,7 @@ class Activity:
                 {
                     "state": "intent",
                     "deliveryId": d["id"],
+                    **({"executionScope": execution_scope} if execution_scope is not None else {}),
                     "payload": payload,
                     "nativeItem": item,
                 },
@@ -206,7 +228,7 @@ class Activity:
         self.pending.clear()
         self.wake.clear()
         c = self.connector
-        for path in c.state.glob("activity-*.json"):
+        for path in self.state.glob("activity-*.json"):
             # Diagnostic files share the prefix, but are not outbox records.
             # Preserve them as evidence without letting them block later work.
             identity = path.name[len("activity-"):-len(".json")]
@@ -215,7 +237,8 @@ class Activity:
             record = json.loads(path.read_text())
             if (
                 record["state"] != "accepted"
-                and record["deliveryId"] == c.active["delivery"]["id"]
+                and (self.send is not None and "executionScope" in record
+                     or c is not None and record["deliveryId"] == c.active["delivery"]["id"])
             ):
                 self.pending[path] = record["deliveryId"]
         self.task = asyncio.create_task(self.drain())
@@ -231,18 +254,21 @@ class Activity:
             for path, delivery in list(self.pending.items()):
                 record = json.loads(path.read_text())
                 try:
-                    receipt = await c.http(
-                        "POST",
-                        "connector/deliveries/" + delivery + "/activity",
-                        record["payload"],
-                    )
+                    if self.send is not None:
+                        receipt = await self.send(record)
+                    else:
+                        receipt = await c.http(
+                            "POST",
+                            "connector/deliveries/" + delivery + "/activity",
+                            record["payload"],
+                        )
                     saved(path, {**record, "state": "accepted", "receipt": receipt})
                     del self.pending[path]
                 except Exception as error:
                     # Retry only this immutable log operation; never any command,
                     # model turn, approval or replacement execution.
                     saved(
-                        c.state / "activity-observation-gap.json",
+                        self.state / "activity-observation-gap.json",
                         {
                             "deliveryId": delivery,
                             "error": type(error).__name__,

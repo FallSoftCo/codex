@@ -11,6 +11,8 @@ from pathlib import Path
 from uuid import uuid4
 from aiohttp import ClientSession, ClientTimeout
 from .context_contract import COMMON, ROLES, ACTIONS, tools
+from .activity import Activity
+from .execution_scope import ExecutionScope
 from .context_observation import TERMINAL, original_turn, wait_terminal
 from .journal import saved
 from .native_goals import external_admission
@@ -33,6 +35,10 @@ class ContextRunner:
         self.effect_lock=asyncio.Lock()
         self.task=None
         self.failed=False
+        self.execution_scope=None
+        self.early_activity=[]
+        self.activity=Activity(state=self.state,scope=lambda:self.execution_scope,
+            send=self.send_activity,secrets=tuple(self.config["tokens"].values())) if purpose=="writer" else None
         self.declarations=tools(purpose)
         self.allowed={t["name"] for t in self.declarations}
         self.rpc=AppServer(self.config["binary"],Path(self.config["homes"][purpose]),
@@ -66,6 +72,22 @@ class ContextRunner:
                 result=await self.agent.http(self.purpose,"GET",path+"/operations/"+operation)
         saved(journal,{"request":payload,"state":"accepted","receipt":result})
         return result
+
+    async def send_activity(self, record):
+        scope=record["executionScope"]
+        if (scope["agentId"]!=self.config["agentId"] or scope["purpose"]!=self.purpose
+            or scope["contextId"]!=self.config["contextIds"][self.purpose]
+            or scope["nativeThread"]!=self.thread):
+            raise RuntimeError("Activity outbox belongs to another purpose context")
+        frame=record["payload"]
+        key=hashlib.sha256(json.dumps([scope["id"],frame["nativeTurn"],
+            frame["itemId"],frame["phase"]]).encode()).hexdigest()
+        payload={"operationId":"activity:"+key,"action":"activity",
+            "nativeThread":scope["nativeThread"],"nativeTurn":scope["nativeTurn"],
+            "value":{"scopeId":scope["id"],"payload":frame}}
+        # Immutable log replay only. This endpoint cannot execute work or models.
+        return await self.agent.http(self.purpose,"POST",
+            f"agents/{self.config['agentId']}/contexts/{self.purpose}",payload)
 
     async def start(self):
         await self.rpc.start()
@@ -113,6 +135,8 @@ class ContextRunner:
         await self.request("bind",operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread,turn="bootstrap")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
                                     "effectiveToolPolicy":result.get("toolPolicy")})
+        if self.activity:
+            self.activity.start()
         # Resume changes metadata only. An unresolved original is observed,
         # never converted into another model submission.
         wake=self.state/"wake.json"
@@ -142,6 +166,13 @@ class ContextRunner:
             self.turn=params["turn"]["id"]
             old=json.loads((self.state/"wake.json").read_text())
             saved(self.state/"wake.json",{**old,"nativeTurn":self.turn})
+        if self.activity and self.active and method in ("item/started","item/completed","turn/plan/updated"):
+            if self.execution_scope is None:
+                if len(self.early_activity)>=1024:
+                    raise RuntimeError("Unbound native activity exceeded bounded admission buffer")
+                self.early_activity.append((method,params))
+            else:
+                self.activity.record(method,params)
         if method=="turn/completed" and self.finished and not self.finished.done():
             if self.turn and params["turn"]["id"]!=self.turn:
                 return
@@ -179,6 +210,8 @@ class ContextRunner:
     async def run(self,fingerprint,pending):
         self.active=True
         self.turn=None
+        self.execution_scope=None
+        self.early_activity=[]
         self.accepting=False
         self.closing=False
         self.admitted.clear()
@@ -194,8 +227,16 @@ class ContextRunner:
                 "output":json.dumps({"purpose":self.purpose,"materialIds":[r["id"] for r in pending]}),
                 "retain":False}})
             self.turn=result["turn"]["id"]
-            await self.request("begin",{"materialIds":[r["id"] for r in pending]},
+            material_ids=[r["id"] for r in pending]
+            admission=await self.request("begin",{"materialIds":material_ids},
                                operation="context-begin:"+self.turn)
+            if self.activity:
+                self.execution_scope=ExecutionScope.accepted(admission,agent=self.config["agentId"],
+                    thread=self.thread,turn=self.turn,materials=material_ids)
+                saved(self.state/("execution-"+self.turn+".json"),admission)
+                for method,params in self.early_activity:
+                    self.activity.record(method,params)
+                self.early_activity=[]
             self.accepting=True
             self.admitted.set()
             saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"running",
@@ -284,6 +325,7 @@ class ContextAgent:
                             await runner.cancel()
                         pending=[x for x in pending if not x["cancelled"]]
                         if purpose=="writer":
+                            pending=pending[:1]  # A turn has one original effect/work owner.
                             key=[(x["id"],x.get("resume_revision",0)) for x in pending]
                         else:
                             key=[(x["id"],x["revision"]) for x in pending]
@@ -325,6 +367,14 @@ class ContextAgent:
                     if runner.task and not runner.task.done():
                         runner.task.cancel()
                 await asyncio.gather(*(r.task for r in self.runners.values() if r.task),return_exceptions=True)
+                for runner in self.runners.values():
+                    if runner.activity:
+                        try:
+                            await runner.activity.flush(timeout=10)
+                        except Exception as error:
+                            runner.trace("activity_recovery_pending",{"error":type(error).__name__,
+                                "pending":len(runner.activity.pending),"executionReplayed":False})
+                        await runner.activity.close()
                 await asyncio.gather(*(r.rpc.close() for r in self.runners.values()),return_exceptions=True)
 
 def main():
