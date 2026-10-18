@@ -9,8 +9,9 @@ import signal
 import time
 from pathlib import Path
 from uuid import uuid4
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 from .context_contract import COMMON, ROLES, ACTIONS, tools
+from .context_observation import TERMINAL, original_turn, wait_terminal
 from .journal import saved
 from .native_goals import external_admission
 from .native_policy import verify
@@ -27,6 +28,9 @@ class ContextRunner:
         self.finished=None
         self.admitted=asyncio.Event()
         self.active=False
+        self.accepting=False
+        self.closing=False
+        self.effect_lock=asyncio.Lock()
         self.task=None
         self.failed=False
         self.declarations=tools(purpose)
@@ -109,44 +113,74 @@ class ContextRunner:
         await self.request("bind",operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread,turn="bootstrap")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
                                     "effectiveToolPolicy":result.get("toolPolicy")})
+        # Resume changes metadata only. An unresolved original is observed,
+        # never converted into another model submission.
+        wake=self.state/"wake.json"
+        old=json.loads(wake.read_text()) if wake.exists() else {}
+        if old.get("state") in ("submission_intent","running","unknown"):
+            self.turn=old.get("nativeTurn")
+            if not self.turn:
+                self.failed=True
+                self.trace("recovery_held",{"reason":"Original submission identity unavailable"})
+            else:
+                observed=await original_turn(self,self.turn)
+                saved(self.state/"recovery-observation.json",{
+                    "originalWake":old,"nativeTurn":self.turn,"turn":observed,"modelTurnsStarted":0})
+                if observed["status"] in TERMINAL:
+                    await self.request("end",{"status":observed["status"]},
+                                       operation="context-end:"+self.turn)
+                    saved(wake,{**old,"state":"finished","turn":observed,"recovered":True})
+                else:
+                    self.failed=True
+                    self.trace("recovery_held",{"nativeTurn":self.turn,"status":observed["status"]})
 
     async def event(self,method,params):
         if params.get("threadId") not in (None,self.thread):
             return
         self.trace(method,params)
-        if method=="turn/started":
+        if method=="turn/started" and self.active and self.turn is None:
             self.turn=params["turn"]["id"]
+            old=json.loads((self.state/"wake.json").read_text())
+            saved(self.state/"wake.json",{**old,"nativeTurn":self.turn})
         if method=="turn/completed" and self.finished and not self.finished.done():
             if self.turn and params["turn"]["id"]!=self.turn:
                 return
             self.finished.set_result(params["turn"])
-        if method=="hollywood/runtimeLost" and self.finished and not self.finished.done():
-            self.finished.set_exception(RuntimeError("Original native connection lost; no automatic replay"))
+        if method=="hollywood/runtimeLost" and self.active:
+            self.accepting=False
+            self.agent.stop.set()
+            if self.finished and not self.finished.done():
+                self.finished.set_exception(RuntimeError("Original native connection lost; no automatic replay"))
 
     async def tool(self,method,params):
         await self.admitted.wait()
-        if method!="item/tool/call" or params.get("threadId")!=self.thread:
-            raise PermissionError("Unsupported or cross-context native callback")
-        name=params["tool"]
-        if name not in self.allowed:
-            raise PermissionError("Tool belongs to another context purpose")
-        arguments=params["arguments"]
-        if isinstance(arguments,str):
-            arguments=json.loads(arguments)
-        operation="context-tool:"+hashlib.sha256((self.thread+params["callId"]).encode()).hexdigest()
-        try:
-            result=await self.request(ACTIONS[name],arguments,operation=operation)
-            self.trace("tool_receipt",{"tool":name,"operation":operation,"result":result})
-            return {"success":True,"contentItems":[{"type":"inputText","text":json.dumps(result)}]}
-        except Exception as error:
-            self.trace("tool_error",{"tool":name,"error":str(error)})
-            return {"success":False,"contentItems":[{"type":"inputText","text":json.dumps({
-                "error":str(error),"originalOperationId":operation,
-                "instruction":"Inspect current material; uncertain operations require original receipt reconciliation."})}]}
+        async with self.effect_lock:
+            if (not self.active or not self.accepting or self.closing
+                or method!="item/tool/call" or params.get("threadId")!=self.thread
+                or params.get("turnId")!=self.turn):
+                raise PermissionError("Original native turn no longer admits this callback")
+            name=params["tool"]
+            if name not in self.allowed:
+                raise PermissionError("Tool belongs to another context purpose")
+            arguments=params["arguments"]
+            if isinstance(arguments,str):
+                arguments=json.loads(arguments)
+            operation="context-tool:"+hashlib.sha256((self.thread+params["callId"]).encode()).hexdigest()
+            try:
+                result=await self.request(ACTIONS[name],arguments,operation=operation)
+                self.trace("tool_receipt",{"tool":name,"operation":operation,"result":result})
+                return {"success":True,"contentItems":[{"type":"inputText","text":json.dumps(result)}]}
+            except Exception as error:
+                self.trace("tool_error",{"tool":name,"error":str(error)})
+                return {"success":False,"contentItems":[{"type":"inputText","text":json.dumps({
+                    "error":str(error),"originalOperationId":operation,
+                    "instruction":"Inspect current material; uncertain operations require original receipt reconciliation."})}]}
 
     async def run(self,fingerprint,pending):
         self.active=True
         self.turn=None
+        self.accepting=False
+        self.closing=False
         self.admitted.clear()
         self.finished=asyncio.get_running_loop().create_future()
         saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"submission_intent",
@@ -160,16 +194,30 @@ class ContextRunner:
                 "output":json.dumps({"purpose":self.purpose,"materialIds":[r["id"] for r in pending]}),
                 "retain":False}})
             self.turn=result["turn"]["id"]
+            await self.request("begin",{"materialIds":[r["id"] for r in pending]},
+                               operation="context-begin:"+self.turn)
+            self.accepting=True
             self.admitted.set()
             saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"running",
                                          "nativeThread":self.thread,"nativeTurn":self.turn})
-            turn=await asyncio.wait_for(self.finished,self.config.get("turnTimeoutSeconds",900))
+            turn=await wait_terminal(self)
+            self.accepting=False
+            async with self.effect_lock:
+                await self.request("end",{"status":turn["status"]},
+                                   operation="context-end:"+self.turn)
             saved(self.state/("turn-"+self.turn+".json"),{"fingerprint":fingerprint,
                  "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
             saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"finished",
                                          "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
         except BaseException as error:
+            self.accepting=False
             self.failed=True
+            if self.turn and (not self.finished or not self.finished.done()):
+                try:
+                    await self.cancel()
+                except Exception as cleanup:
+                    self.trace("interrupt_unconfirmed",{"error":str(cleanup),"nativeTurn":self.turn})
+                    self.agent.stop.set()
             saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"unknown",
                      "nativeThread":self.thread,"nativeTurn":self.turn,"error":str(error)})
             raise
@@ -178,11 +226,17 @@ class ContextRunner:
             self.active=False
 
     async def cancel(self):
-        if self.active and self.turn:
-            await self.rpc.call("turn/interrupt",{"threadId":self.thread,"turnId":self.turn})
-            self.trace("interrupt",{"nativeTurn":self.turn})
-        # Native handles its own execution children; the caller observes completion.
-        # Whole-agent shutdown additionally closes each owned app-server process.
+        if not self.active or not self.turn or self.closing:
+            return
+        self.closing=True
+        self.accepting=False
+        async with self.effect_lock:
+            try:
+                await self.request("close",operation="context-close:"+self.turn)
+            finally:
+                await self.rpc.call("turn/interrupt",{"threadId":self.thread,"turnId":self.turn},timeout=15)
+        self.trace("interrupt",{"nativeTurn":self.turn})
+
 
 class ContextAgent:
     def __init__(self,config):
@@ -204,18 +258,27 @@ class ContextAgent:
                 raise RuntimeError(f"Hollywood {r.status}: {value.get('error','request failed')}")
             return value
 
-    async def serve(self):
+    async def serve(self, *, reconcile_only=False):
         loop=asyncio.get_running_loop()
         for sig in (signal.SIGTERM,signal.SIGINT):
             loop.add_signal_handler(sig,self.stop.set)
-        async with ClientSession() as self.session:
+        async with ClientSession(timeout=ClientTimeout(total=15)) as self.session:
             try:
                 for runner in self.runners.values():
                     await runner.start()
+                if reconcile_only:
+                    saved(self.state/"reconcile-only.json",{"at":time.time(),"modelTurnsStarted":0,
+                        "contexts":{p:{"nativeThread":r.thread,"held":r.failed} for p,r in self.runners.items()}})
+                    return
                 while not self.stop.is_set():
                     status={}
                     for purpose,runner in self.runners.items():
-                        pending=(await runner.request("pending"))["pending"]
+                        try:
+                            pending=(await runner.request("pending"))["pending"]
+                        except Exception as error:
+                            status[purpose]={"active":runner.active,"held":runner.failed,
+                                             "connection":"unavailable","error":type(error).__name__}
+                            continue
                         cancelled=[x for x in pending if x["cancelled"]]
                         if purpose=="writer" and cancelled and runner.active:
                             await runner.cancel()
@@ -268,8 +331,9 @@ def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser()
     parser.add_argument("--config",type=Path,required=True)
+    parser.add_argument("--reconcile-only",action="store_true")
     args=parser.parse_args()
-    asyncio.run(ContextAgent(json.loads(args.config.read_text())).serve())
+    asyncio.run(ContextAgent(json.loads(args.config.read_text())).serve(reconcile_only=args.reconcile_only))
 
 if __name__=="__main__":
     main()
