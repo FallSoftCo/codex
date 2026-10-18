@@ -207,6 +207,18 @@ class ContextRunner:
                     "error":str(error),"originalOperationId":operation,
                     "instruction":"Inspect current material; uncertain operations require original receipt reconciliation."})}]}
 
+    async def settle_turn(self, fingerprint, turn):
+        if turn.get("id")!=self.turn or turn.get("status") not in TERMINAL:
+            raise RuntimeError("Original terminal native identity is unconfirmed")
+        self.accepting=False
+        async with self.effect_lock:
+            await self.request("end",{"status":turn["status"]},
+                               operation="context-end:"+self.turn)
+        saved(self.state/("turn-"+self.turn+".json"),{"fingerprint":fingerprint,
+            "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
+        saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"finished",
+            "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
+
     async def run(self,fingerprint,pending):
         self.active=True
         self.turn=None
@@ -242,14 +254,7 @@ class ContextRunner:
             saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"running",
                                          "nativeThread":self.thread,"nativeTurn":self.turn})
             turn=await wait_terminal(self)
-            self.accepting=False
-            async with self.effect_lock:
-                await self.request("end",{"status":turn["status"]},
-                                   operation="context-end:"+self.turn)
-            saved(self.state/("turn-"+self.turn+".json"),{"fingerprint":fingerprint,
-                 "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
-            saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"finished",
-                                         "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
+            await self.settle_turn(fingerprint,turn)
         except BaseException as error:
             self.accepting=False
             self.failed=True
@@ -259,8 +264,22 @@ class ContextRunner:
                 except Exception as cleanup:
                     self.trace("interrupt_unconfirmed",{"error":str(cleanup),"nativeTurn":self.turn})
                     self.agent.stop.set()
-            saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"unknown",
-                     "nativeThread":self.thread,"nativeTurn":self.turn,"error":str(error)})
+            settled=False
+            if self.turn and self.finished and not self.finished.cancelled():
+                try:
+                    # Interrupt replies may precede turn/completed by a few ms.
+                    # Observe that exact future; do not infer terminality or start a turn.
+                    turn=await asyncio.wait_for(asyncio.shield(self.finished),5)
+                    await self.settle_turn(fingerprint,turn)
+                    self.trace("shutdown_terminal_settled",{"nativeTurn":self.turn,
+                        "status":turn["status"],"workCompletionInferred":False})
+                    settled=True
+                except (Exception,asyncio.CancelledError) as observation:
+                    self.trace("shutdown_terminal_unconfirmed",{"nativeTurn":self.turn,
+                        "error":type(observation).__name__})
+            if not settled:
+                saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"unknown",
+                         "nativeThread":self.thread,"nativeTurn":self.turn,"error":str(error)})
             raise
         finally:
             self.admitted.set()
