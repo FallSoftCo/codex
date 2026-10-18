@@ -232,7 +232,6 @@ class Connector:
         self.rpc = None
         self.active = None
         self.finished = None
-        self.final = ""
         self.thread = None
         self.publications = []
         self.role_context = None
@@ -376,14 +375,6 @@ class Connector:
                 )
         self.activity.record(method, params)
         if (
-            method == "item/completed"
-            and params.get("threadId") == self.thread
-            and params.get("item", {}).get("type") == "agentMessage"
-        ):
-            item = params["item"]
-            if item.get("phase") == "final_answer" or not self.final:
-                self.final = item.get("text", "")
-        elif (
             method == "turn/completed"
             and params.get("threadId") == self.thread
             and self.finished
@@ -763,7 +754,7 @@ class Connector:
         previous_rpc = self.rpc
         self.rpc = AppServer(
             self.config["binary"], Path(self.config["codexHome"]), self.state / "native",
-            event, request,
+            event, request, enterprise=True,
         )
         try:
             await self.rpc.start()
@@ -902,6 +893,7 @@ class Connector:
                 self.event,
                 self.tool,
                 self.attention.submitted,
+                enterprise=True,
             )
             self.goal_progress_closing = True
             self.activity.start()
@@ -1003,14 +995,8 @@ class Connector:
                     )
                 await self.activity.flush()
                 if not terminal:
-                    last = next(
-                        (
-                            i.get("text", "")
-                            for i in reversed(turn.get("items", []))
-                            if i.get("type") == "agentMessage" and i.get("text")
-                        ),
-                        "",
-                    )
+                    from .terminal_output import terminal_body
+                    last = terminal_body(status, turn.get("items", []))
                     transition_file = self.transition_path(status)
                     original = (
                         json.loads(transition_file.read_text())
@@ -1028,8 +1014,7 @@ class Connector:
                             status,
                             nativeThread=self.thread,
                             nativeTurn=record["nativeTurn"],
-                            body=last
-                            or "Original native terminal state reconciled without replay; inspect linked reports.",
+                            body=last,
                         )
                 else:
                     out = self.active
@@ -1121,7 +1106,6 @@ class Connector:
             )
         self.finished = None
         self.tool_admission.clear()
-        self.final = ""
         self.publications = []
         self.native_items = {}
         self.executor = None
@@ -1484,15 +1468,8 @@ class Connector:
                         else "failed"
                     )
                 )
-                answer = self.final or (
-                    "Native execution "
-                    + turn["status"]
-                    + "; responses were published through Hollywood."
-                    if self.publications
-                    else "Native execution "
-                    + turn["status"]
-                    + "; no response was published."
-                )
+                from .terminal_output import terminal_body
+                answer = terminal_body(status, self.native_items.values(), self.publications)
                 if len(answer.encode()) > 6000:
                     raise RuntimeError(
                         "Native result exceeds communication limit; artifact publication required"

@@ -117,3 +117,10 @@ an accepted answer and completed semantic work remain separate. Command and
 file approvals retain their original callback and permission scope.
 This requires the matching Hollywood human-continuation implementation; older
 servers cannot silently supply the native continuation contract.
+
+Native terminal output uses the same projection for live execution and original
+receipt recovery. Commentary stays in the activity stream. Only a completed
+inference may publish its final (or unphased) model reply; cancellation and
+failure publish the observed lifecycle outcome instead of an earlier model plan.
+This does not equate inference completion with Goal or Work acceptance. Metadata
+readback also keeps native mode enabled and never starts or resumes a model turn.
