@@ -107,10 +107,13 @@ def installed_native_owner(authority, uid):
     authority = str(UUID(authority))
     base = Path("/var/lib/harness") / authority
     account = pwd.getpwuid(uid)
-    global_receipt = protected(base / "global-admin-receipt.json")
-    if global_receipt["uid"] == uid and Path(global_receipt["home"]) == Path(
-        account.pw_dir
-    ):
+    if Path(account.pw_dir) == base / "global":
+        global_receipt = protected(base / "global-admin-receipt.json")
+        require(
+            global_receipt["uid"] == uid
+            and Path(global_receipt["home"]) == Path(account.pw_dir),
+            "Peer Global identity differs from protected installation",
+        )
         agent = str(UUID(global_receipt["agentId"]))
     else:
         try:

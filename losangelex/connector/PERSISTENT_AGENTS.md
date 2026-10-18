@@ -101,3 +101,12 @@ checks enforce transport visibility and current private-source forwarding;
 they are not a proof of semantic non-disclosure by an agent that remembers
 another room. Deploy separate explicit agents/contexts across independent trust
 domains instead of silently forking one identity whenever it changes rooms.
+
+## Worker-only execution hosts
+
+A host may enroll workers without installing another Global process or copying
+its local installation receipt. Protected worker provisioning, NSS identity,
+the actual managed service and canonical host/execution bindings authenticate
+that participant. The real Global still requires its own Global installation.
+This removes a local setup dependency; it does not implement context transfer,
+remote provisioning, artifact transfer or claim a shared filesystem.

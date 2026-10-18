@@ -526,15 +526,10 @@ def approve_image_upgrade(
             checksum.update(chunk)
         if checksum.hexdigest() != expected_image_sha256:
             raise ValueError("Native image differs from its explicitly approved SHA256")
-        base = Path("/var/lib/harness") / authority
-        global_receipt = observer.protected(base / "global-admin-receipt.json")
-        intent_path = (
-            base / "global-admin-intent.json"
-            if global_receipt["agentId"] == agent
-            else base / "workers" / agent / "provision-intent.json"
-        )
+        from .service_memory import approved_spec
         from .native_release import active_spec
-        spec = active_spec(observer.protected(intent_path)["spec"], authority, host, agent)
+        initial_spec, _, _ = approved_spec(authority, agent)
+        spec = active_spec(initial_spec, authority, host, agent)
         package = preflight_as_owner(binary, spec["interpreter"], uid, home)
         if package["assets"]["entrypoint"]["sha256"] != expected_image_sha256:
             raise ValueError("Service-identity package probe saw another native image")

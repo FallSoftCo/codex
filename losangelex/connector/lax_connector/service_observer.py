@@ -66,15 +66,16 @@ def directory(authority, host, agent):
 
 
 def expected_owner(authority, agent):
-    base = Path("/var/lib/harness") / str(UUID(authority))
-    global_receipt = protected(base / "global-admin-receipt.json")
-    if global_receipt["agentId"] == agent:
-        intent = protected(base / "global-admin-intent.json")["spec"]
+    from .service_memory import approved_spec
+
+    authority, agent = str(UUID(authority)), str(UUID(agent))
+    base = Path("/var/lib/harness") / authority
+    intent, receipt, global_agent = approved_spec(authority, agent)
+    if global_agent:
         from .native_release import active_spec
         software = active_spec(intent, authority, intent["hostId"], agent)
-        return global_receipt["uid"], Path(global_receipt["home"]), software["binary"]
-    record = base / "workers" / str(UUID(agent))
-    intent = protected(record / "provision-intent.json")["spec"]
+        return receipt["uid"], Path(receipt["home"]), software["binary"]
+    record = base / "workers" / agent
     if (intent["authorityId"], intent["agentId"]) != (authority, agent):
         raise PermissionError("Worker provisioning owner differs")
     user = "hworker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12]
@@ -89,15 +90,13 @@ def expected_owner(authority, agent):
 
 def installed_unit(authority, agent):
     """Only the administrator-installed participant unit is auto-enrolled."""
-    base = Path("/var/lib/harness") / str(UUID(authority))
-    global_receipt = protected(base / "global-admin-receipt.json")
-    if global_receipt["agentId"] == agent:
-        if not global_receipt.get("unit"):
-            raise PermissionError(
-                "Global installation needs explicit managed-service upgrade"
-            )
-        return properties(global_receipt["unit"])["Id"]
-    receipt = protected(base / "workers" / str(UUID(agent)) / "provision-receipt.json")
+    from .service_memory import approved_spec
+
+    _, receipt, global_agent = approved_spec(authority, agent)
+    if global_agent and not receipt.get("unit"):
+        raise PermissionError(
+            "Global installation needs explicit managed-service upgrade"
+        )
     return properties(receipt["unit"])["Id"]
 
 

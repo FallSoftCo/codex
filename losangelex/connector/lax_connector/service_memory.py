@@ -64,9 +64,15 @@ def unit_limit(spec, legacy):
 def approved_spec(authority, agent):
     from .service_observer import protected
 
-    base = Path("/var/lib/harness") / str(UUID(authority))
-    global_receipt = protected(base / "global-admin-receipt.json")
-    global_agent = global_receipt["agentId"] == agent
+    authority, agent = str(UUID(authority)), str(UUID(agent))
+    base = Path("/var/lib/harness") / authority
+    try:
+        global_receipt = protected(base / "global-admin-receipt.json")
+    except FileNotFoundError:
+        # A host can execute enrolled workers without hosting enterprise Global.
+        # Malformed or unprotected existing receipts still fail closed.
+        global_receipt = None
+    global_agent = global_receipt is not None and global_receipt["agentId"] == agent
     record = base if global_agent else base / "workers" / str(UUID(agent))
     intent = record / (
         "global-admin-intent.json" if global_agent else "provision-intent.json"
