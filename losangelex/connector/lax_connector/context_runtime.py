@@ -38,6 +38,7 @@ class ContextRunner:
         self.task=None
         self.failed=False
         self.execution_scope=None
+        self.permit=None
         self.native_tools=None
         self.early_activity=[]
         self.activity=Activity(state=self.state,scope=lambda:self.execution_scope,
@@ -73,7 +74,8 @@ class ContextRunner:
                 result=await self.agent.http(self.purpose,"POST",path,payload)
             except Exception:
                 result=await self.agent.http(self.purpose,"GET",path+"/operations/"+operation)
-        if action=="admit" and result.get("delivery") is None:
+        if (action=="admit" and result.get("delivery") is None
+                or action=="reserve" and result["permit"]["state"]=="queued"):
             journal.unlink()
             return result
         saved(journal,{"request":payload,"state":"accepted","receipt":result})
@@ -138,7 +140,10 @@ class ContextRunner:
                    for x in result["toolPolicy"]["allowedTools"]}
         if not {("functions",x) for x in self.allowed | {"exec","wait"}} <= effective:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
-        await self.request("bind",operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread,turn="bootstrap")
+        binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v2"},
+            operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread+":runtime-v2",turn="bootstrap")
+        if binding.get("runtimeProtocol")!="lax-purpose-runtime/v2":
+            raise RuntimeError("Hollywood native work/inference admission protocol unavailable")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
                                     "effectiveToolPolicy":result.get("toolPolicy")})
         if self.activity:
@@ -149,6 +154,7 @@ class ContextRunner:
         old=json.loads(wake.read_text()) if wake.exists() else {}
         if old.get("state") in ("submission_intent","running","unknown"):
             self.turn=old.get("nativeTurn")
+            self.permit=old.get("permitId")
             if not self.turn:
                 self.failed=True
                 self.trace("recovery_held",{"reason":"Original submission identity unavailable"})
@@ -157,7 +163,7 @@ class ContextRunner:
                 saved(self.state/"recovery-observation.json",{
                     "originalWake":old,"nativeTurn":self.turn,"turn":observed,"modelTurnsStarted":0})
                 if observed["status"] in TERMINAL:
-                    await self.request("end",{"status":observed["status"]},
+                    await self.request("end",{"status":observed["status"],**({"permitId":self.permit} if self.permit else {})},
                                        operation="context-end:"+self.turn)
                     saved(wake,{**old,"state":"finished","turn":observed,"recovered":True})
                 else:
@@ -222,7 +228,7 @@ class ContextRunner:
             raise RuntimeError("Original terminal native identity is unconfirmed")
         self.accepting=False
         async with self.effect_lock:
-            await self.request("end",{"status":turn["status"]},
+            await self.request("end",{"status":turn["status"],"permitId":self.permit},
                                operation="context-end:"+self.turn)
         saved(self.state/("turn-"+self.turn+".json"),{"fingerprint":fingerprint,
             "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
@@ -232,6 +238,7 @@ class ContextRunner:
     async def run(self,fingerprint,pending):
         self.active=True
         self.turn=None
+        self.permit=None
         self.execution_scope=None
         self.early_activity=[]
         self.accepting=False
@@ -257,8 +264,23 @@ class ContextRunner:
                 saved(self.state/"admission-wait.json",accepted)
                 return
             saved(self.state/"work-admission.json",accepted)
+        material_ids=[r["id"] for r in pending]
+        try:
+            reserved=await self.request("reserve",{"materialIds":material_ids},
+                operation="context-reserve:"+fingerprint,turn="admission")
+            if reserved["permit"]["state"]=="queued":
+                self.active=False
+                saved(self.state/"capacity-wait.json",reserved)
+                return
+            if reserved["permit"]["state"]!="reserved":
+                raise RuntimeError("Original inference permit no longer admits submission")
+            self.permit=reserved["permit"]["id"]
+        except BaseException:
+            self.failed=True
+            self.active=False
+            raise
         saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"submission_intent",
-                                      "pending":pending,"nativeThread":self.thread})
+                                      "pending":pending,"nativeThread":self.thread,"permitId":self.permit})
         self.trace("wake",{"fingerprint":fingerprint,"pending":pending})
         try:
             result=await self.rpc.call("turn/start",{
@@ -269,7 +291,7 @@ class ContextRunner:
                 "retain":False}})
             self.turn=result["turn"]["id"]
             material_ids=[r["id"] for r in pending]
-            admission=await self.request("begin",{"materialIds":material_ids},
+            admission=await self.request("begin",{"materialIds":material_ids,"permitId":self.permit},
                                operation="context-begin:"+self.turn)
             if self.activity:
                 self.execution_scope=ExecutionScope.accepted(admission,agent=self.config["agentId"],
@@ -288,7 +310,7 @@ class ContextRunner:
             self.accepting=True
             self.admitted.set()
             saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"running",
-                                         "nativeThread":self.thread,"nativeTurn":self.turn})
+                                         "nativeThread":self.thread,"nativeTurn":self.turn,"permitId":self.permit})
             turn=await wait_terminal(self)
             await self.settle_turn(fingerprint,turn)
         except BaseException as error:
@@ -315,7 +337,7 @@ class ContextRunner:
                         "error":type(observation).__name__})
             if not settled:
                 saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"unknown",
-                         "nativeThread":self.thread,"nativeTurn":self.turn,"error":str(error)})
+                         "nativeThread":self.thread,"nativeTurn":self.turn,"permitId":self.permit,"error":str(error)})
             raise
         finally:
             self.admitted.set()
@@ -369,6 +391,10 @@ class ContextAgent:
         self.lock.close()
 
     async def http(self,purpose,method,path,payload=None):
+        # Transport version is not part of an immutable semantic operation.
+        # Old effect/activity receipts keep their exact original fingerprints.
+        if method=="POST" and path==f"agents/{self.config['agentId']}/contexts/{purpose}":
+            payload={**payload,"runtimeProtocol":"lax-purpose-runtime/v2"}
         token=self.config["tokens"][purpose]
         async with self.session.request(method,self.config["hollywoodUrl"]+"/hollywood/v3/"+path,
           headers={"Authorization":"Bearer "+token},json=payload) as r:

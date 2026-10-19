@@ -77,6 +77,57 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(runner.active)
             self.assertFalse((runner.state / "wake.json").exists())
 
+    async def test_reader_and_responder_cannot_bypass_queued_inference_capacity(self):
+        for purpose in ("reader", "responder"):
+            with self.subTest(purpose=purpose), tempfile.TemporaryDirectory() as tmp:
+                calls = []
+                async def request(action, value=None, **kwargs):
+                    calls.append(action)
+                    return {"permit": {"id": "original-permit", "state": "queued"},
+                            "admission": {"reason": "host_capacity_exhausted"}}
+                async def rpc(*args, **kwargs):
+                    self.fail("A queued communication context reached inference")
+                runner = ContextRunner.__new__(ContextRunner)
+                runner.purpose = purpose
+                runner.state = Path(tmp)
+                runner.admitted = asyncio.Event()
+                runner.request = request
+                runner.rpc = SimpleNamespace(call=rpc)
+                await runner.run("frozen-material", [{"id": "original-material"}])
+                self.assertEqual(calls, ["reserve"])
+                self.assertFalse(runner.active)
+                self.assertFalse((runner.state / "wake.json").exists())
+
+    async def test_exact_permit_precedes_submission_and_survives_begin_and_terminal_callbacks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+            runner = ContextRunner.__new__(ContextRunner)
+            async def request(action, value=None, **kwargs):
+                calls.append(action)
+                if action == "reserve":
+                    return {"permit": {"id": "original-permit", "state": "reserved"}}
+                self.assertEqual(value["permitId"], "original-permit")
+                return {}
+            async def rpc(method, params, **kwargs):
+                calls.append(method)
+                self.assertEqual(calls[:2], ["reserve", "turn/start"])
+                runner.finished.set_result({"id": "original-turn", "status": "completed"})
+                return {"turn": {"id": "original-turn"}}
+            runner.purpose = "reader"
+            runner.thread = "original-reader-thread"
+            runner.config = {"model": "unchanged", "effort": "unchanged"}
+            runner.state = Path(tmp)
+            runner.admitted = asyncio.Event()
+            runner.effect_lock = asyncio.Lock()
+            runner.request = request
+            runner.rpc = SimpleNamespace(call=rpc)
+            runner.trace = lambda *_: None
+            runner.activity = None
+            await runner.run("material", [{"id": "original-material"}])
+            self.assertEqual(calls, ["reserve", "turn/start", "begin", "end"])
+            self.assertFalse(runner.active)
+            self.assertEqual(json.loads((runner.state / "wake.json").read_text())["state"], "finished")
+
     async def test_confirmed_deferral_can_retry_same_admission_then_retains_accepted_receipt(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls = []
