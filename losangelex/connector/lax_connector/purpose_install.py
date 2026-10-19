@@ -138,6 +138,9 @@ def install(spec):
     record.chmod(0o700)
     digest=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()).hexdigest()
     original(record/"intent.json",{"digest":digest,"spec":spec})
+    if spec.get("environmentProfileFile"):
+        from .environment import install as install_environment
+        install_environment(authority,spec["environmentProfileFile"])
     accepted=record/"installation.json"
     if accepted.exists():
         value=protected(accepted)
@@ -147,6 +150,8 @@ def install(spec):
         canonical(spec,json.loads(Path(value["config"]).read_text()))
         from .purpose_resources import ensure as ensure_resources
         ensure_resources(json.loads(Path(value["config"]).read_text()))
+        from .purpose_environment import install_agent
+        install_agent(authority,agent)
         return {**public(value),"reconciled":True,"servicesStarted":False}
     slug=authority.replace("-","")[:8]+"-"+agent.replace("-","")[:12]
     user=("hglobal-" if spec.get("global") else "hagent-")+slug
@@ -262,6 +267,8 @@ WantedBy=multi-user.target
     resource = ensure_resources(config)
     if resource is not None:
         saved(record/"resource-installation.json",resource)
+    from .purpose_environment import install_agent
+    install_agent(authority,agent)
     return public(value)
 
 

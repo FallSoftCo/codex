@@ -1,0 +1,103 @@
+{
+  "schema": "lax-purpose-environment-live-qualification/v1",
+  "at": 1792400716.2072828,
+  "noModelOrServiceStarted": true,
+  "noAccountCredentialsCopiedToWorkers": true,
+  "noPhoneInputOrAppChanges": true,
+  "sourceOwnershipPreserved": true,
+  "sourceRoute": "Existing workstream-owned checkout is an explicit host reference, readable through authorized sudo; it is not a shared writable agent checkout. Agents may use their own checkouts via the qualified GitHub route.",
+  "protectedProductionPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312"
+  },
+  "limit": "Selected actual routes verified; not fresh enterprise bootstrap, a full native build, arbitrary service-account permissions or phone-product delivery.",
+  "checks": [
+    {
+      "agentId": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "name": "account",
+      "uid": 886,
+      "exitCode": 0,
+      "stdout": "aiyer-commits\n"
+    },
+    {
+      "agentId": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "name": "git-private-fork",
+      "uid": 886,
+      "exitCode": 0,
+      "stdout": "2279d13cd95699a87b79801161d851863b939c1d\trefs/heads/harness/three-context-20261018-r01\n"
+    },
+    {
+      "agentId": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "name": "host-administration",
+      "uid": 886,
+      "exitCode": 0,
+      "stdout": "0\n"
+    },
+    {
+      "agentId": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "name": "workstation-ssh",
+      "uid": 886,
+      "exitCode": 0,
+      "stdout": "system76-pc\n"
+    },
+    {
+      "agentId": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "name": "source-reference-admin",
+      "uid": 886,
+      "exitCode": 0,
+      "stdout": "2279d13cd95699a87b79801161d851863b939c1d\n"
+    },
+    {
+      "agentId": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "name": "phone-read-only-ssh",
+      "uid": 886,
+      "exitCode": 0,
+      "stdout": "Linux\n"
+    },
+    {
+      "agentId": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "name": "account",
+      "uid": 885,
+      "exitCode": 0,
+      "stdout": "aiyer-commits\n"
+    },
+    {
+      "agentId": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "name": "git-private-fork",
+      "uid": 885,
+      "exitCode": 0,
+      "stdout": "2279d13cd95699a87b79801161d851863b939c1d\trefs/heads/harness/three-context-20261018-r01\n"
+    },
+    {
+      "agentId": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "name": "host-administration",
+      "uid": 885,
+      "exitCode": 0,
+      "stdout": "0\n"
+    },
+    {
+      "agentId": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "name": "workstation-ssh",
+      "uid": 885,
+      "exitCode": 0,
+      "stdout": "system76-pc\n"
+    },
+    {
+      "agentId": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "name": "source-reference-admin",
+      "uid": 885,
+      "exitCode": 0,
+      "stdout": "2279d13cd95699a87b79801161d851863b939c1d\n"
+    }
+  ],
+  "directSourceReadRejected": true,
+  "persistentCredentialFilesInWorkersCreated": false,
+  "transientCliCredentialUse": "Provider auth enters only the gh child environment; no token values were printed or stored in this receipt.",
+  "loginShellSmoke": {
+    "uid": 886,
+    "exitCode": 0,
+    "client": "root-owned installed gh",
+    "login": "aiyer-commits",
+    "actualObserved": true
+  }
+}

@@ -415,6 +415,9 @@ class ContextAgent:
         if purpose is not None and purpose not in ROLES:
             raise ValueError("Unknown native context purpose")
         self.config=config
+        if config.get("installedPurposeRuntime"):
+            from .purpose_environment import activate
+            self.installation_environment=activate(config["authorityId"],config["agentId"])
         self.purpose=purpose
         self.state=Path(config["state"])
         self.state.mkdir(mode=0o700,exist_ok=True)
