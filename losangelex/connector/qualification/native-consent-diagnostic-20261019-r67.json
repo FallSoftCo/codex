@@ -28,5 +28,44 @@
   "limit": "HTTP authenticates against actual PG; original receipt projection uses the immutable original context-begin scope and root-protected journal with guardian/current-scope HTTP boundary frozen; no current native admission manufactured. Not a new live kernel-channel or model self-recovery proof; existing peer/source guard unchanged.",
   "deploymentReceipt": "/aosp/development/lax-three-context-20261018-r01/qualification/private-diagnostics-r67/result.json",
   "originalRejectionDiagnosis": "/aosp/development/lax-three-context-20261018-r01/qualification/native-consent-original-rejection-r66.json",
-  "actualNativeOwnerReadQualification": "Pending after deployment; do not claim an actual new model recovery from replay projection."
+  "actualNativeOwnerReadQualification": {
+    "schema": "actual-native-owner-consent-receipt-read/v1",
+    "at": 1792420257.8402007,
+    "agentUid": 884,
+    "actualNativeToolResult": {
+      "at": 1792420163.1861675,
+      "nativeThread": "01a153b8-cc2a-7471-bb4e-1373c86aa82c",
+      "nativeTurn": "01a15490-8b8f-7923-9021-3c8fb3240c02",
+      "callId": "exec-51df4f6d-3fbb-4ff3-983f-01db85023e7f",
+      "success": true,
+      "originalReceipt": {
+        "operationId": "native-collaboration:cd05477aeac93470c935f1d8fdf36dac5e4d3db2a3340e818a0aaecf185597c2",
+        "nativeThread": "01a153b8-cc2a-7471-bb4e-1373c86aa82c",
+        "nativeTurn": "01a15482-24a7-7301-b0c6-939fba836811",
+        "callId": "exec-4d946559-1309-4f28-acb4-bc5fc34b81af",
+        "phase": "consent",
+        "receiptState": "rejected",
+        "httpStatus": 400,
+        "confirmedPostRejected": true,
+        "effectBoundary": "metadata_request_rejected",
+        "proposedPermitId": null,
+        "planId": "fddc8809-df40-56a6-b656-e7d3ac11beee",
+        "rejection": "{\"error\": \"invalid_edit_request\", \"mayApply\": false}",
+        "automaticRetryAuthorized": false
+      }
+    },
+    "maintainerCallbackOrConsentSubmissions": 0,
+    "kernelChannelFixtureUsed": false
+  },
+  "actualEngineerFreshConsent": {
+    "event": "ef72c5c6-3e96-486e-836a-13dbcbfd8971",
+    "revision": 1,
+    "noteCharacters": 340,
+    "replayed": false,
+    "plan": "fddc8809-df40-56a6-b656-e7d3ac11beee",
+    "manifest": "82bb85f80cd1a010b08da5b53634d409fe91866166662b9762a33a56f93d39a7",
+    "consentSetDigest": "51f38078816ffe5434a6aca4be652e7c3764f55200c0c6344f8087e2d75790cb",
+    "oldRejectedOperationRetained": true,
+    "meaning": "Actual native owner recovered original receipt and issued deliberately corrected fresh consent. Not a retry of original call and not Work/Goal acceptance."
+  }
 }
