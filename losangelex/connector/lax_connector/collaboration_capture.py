@@ -29,15 +29,16 @@ from .journal import saved
 from .service_observer import protected, process, observe, expected_owner
 
 
-def administrative_put(state, http, route, payload):
-    """Publish one protected intent; an uncertain PUT is only inspected thereafter."""
+def administrative_put(state, http, route, payload, *, method="PUT"):
+    """Publish one original administrative write; lost replies use its receipt."""
+    require(method in ("PUT", "POST"), "Canonical administrative write method required")
     path = (
         Path(state)
         / "administration"
         / (digest([route, payload["operationId"]]) + ".json")
     )
     wire = hashlib.sha256(json.dumps(payload).encode()).hexdigest()
-    identity = {"method": "PUT", "path": "/hollywood/v3/" + route, "wireDigest": wire}
+    identity = {"method": method, "path": "/hollywood/v3/" + route, "wireDigest": wire}
     if path.exists():
         old = protected(path)
         require(
@@ -52,7 +53,7 @@ def administrative_put(state, http, route, payload):
     else:
         saved(path, {"state": "pending", "identity": identity, "payload": payload})
         try:
-            result = http("PUT", route, payload)
+            result = http(method, route, payload)
         except urllib.error.HTTPError as error:
             if error.code in (400, 403, 409):
                 saved(

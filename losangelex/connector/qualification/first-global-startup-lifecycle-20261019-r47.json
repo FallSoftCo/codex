@@ -1,0 +1,75 @@
+{
+  "schema": "fresh-native-global-startup-lifecycle/v1",
+  "at": 1792411746.1137753,
+  "authorityId": "280c9d6f-753f-4dc2-889c-b2e124fcfbc6",
+  "agentId": "cfe8996a-9b34-4fba-88ff-0c60b44e20b7",
+  "hostId": "6b53f1e8-d183-40d9-bb87-ece9e44c570c",
+  "oneInitialRoom": true,
+  "threeDistinctNativeHistories": [
+    {
+      "purpose": "reader",
+      "context_id": "d621386d-e610-4263-afd5-8c883cbe9650",
+      "native_thread": "01a1540d-9d60-7f82-9977-76e5c2320b2b"
+    },
+    {
+      "purpose": "responder",
+      "context_id": "c3bbb533-04b3-4215-8825-c2e9025b6eef",
+      "native_thread": "01a1540d-9c2a-7133-a0bf-39939d8b9a30"
+    },
+    {
+      "purpose": "writer",
+      "context_id": "9470cc09-75ee-484f-9e32-a815b11f9b34",
+      "native_thread": "01a1540d-9c2c-73f2-af38-ee170b635c64"
+    }
+  ],
+  "firstActivationStartedOnlyNewAgent": true,
+  "noAcceptedInputNoNativeInference": true,
+  "taskSubmissions": 0,
+  "modelInferencePermits": 0,
+  "reconcilePreservedLivePids": true,
+  "reenrollmentPreservedNativeCaptureConfiguration": true,
+  "factoryReconcilePreservedDeliberateResponderStop": true,
+  "explicitTestOnlyRestorationPreservedSameHistory": true,
+  "beforePids": {
+    "reader": {
+      "MainPID": "700299",
+      "ActiveState": "active"
+    },
+    "writer": {
+      "MainPID": "700300",
+      "ActiveState": "active"
+    },
+    "responder": {
+      "MainPID": "700301",
+      "ActiveState": "active"
+    }
+  },
+  "afterPids": {
+    "reader": {
+      "MainPID": "700299",
+      "ActiveState": "active"
+    },
+    "writer": {
+      "MainPID": "700300",
+      "ActiveState": "active"
+    },
+    "responder": {
+      "MainPID": "712111",
+      "ActiveState": "active"
+    }
+  },
+  "protectedPidsUnchanged": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "lax-host-f96e5615-f1c9b594-r17.service": "4092519",
+    "lax-collaboration-f96e5615-f1c9b594.service": "374509"
+  },
+  "scope": "Fresh local authority native setup/startup/reconcile/stop only. No ordinary human-task completion, provider-model response, Git/SSH environment profile, phone or enterprise boot desired-state proof implied.",
+  "freshRestorationStatusAfterExplicitStart": {
+    "observedAt": 1792411805.9845016,
+    "restoreIntentAt": 1792411745.9899302,
+    "nativeThread": "01a1540d-9c2a-7133-a0bf-39939d8b9a30",
+    "active": false,
+    "held": false
+  }
+}

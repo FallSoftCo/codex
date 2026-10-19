@@ -252,7 +252,7 @@ def prepare(spec, destination):
     config_path = state / "bridge.json"
     unit = (
         "[Unit]\nDescription=Protected LAX native collaboration\nAfter=network-online.target\n"
-        "[Service]\nType=simple\nUser=root\nUMask=0077\n"
+        "[Service]\nType=notify\nNotifyAccess=main\nTimeoutStartSec=15\nUser=root\nUMask=0077\n"
         "ExecStart="
         + str(interpreter)
         + " -m lax_connector.collaboration_bridge --config "
@@ -263,7 +263,7 @@ def prepare(spec, destination):
         "RuntimeDirectory="
         + socket_directory.relative_to("/run").as_posix()
         + "\nRuntimeDirectoryMode=0755\nRuntimeDirectoryPreserve=no\n"
-        "Restart=no\nNoNewPrivileges=yes\nMemoryMax=512M\nCPUQuota=50%\nKillMode=control-group\nTimeoutStopSec=30\n"
+        "Restart=on-failure\nRestartSec=5\nNoNewPrivileges=yes\nMemoryMax=512M\nCPUQuota=50%\nKillMode=control-group\nTimeoutStopSec=30\n"
     )
     result = {
         "schema": "lax-reviewed-collaboration-setup/v1",

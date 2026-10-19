@@ -135,7 +135,9 @@ def install(spec, *, prepare_only=False):
     record=directory(authority,agent)
     record.mkdir(parents=True,exist_ok=True,mode=0o700)
     if record.is_symlink() or record.stat().st_uid!=0:raise ValueError("Installation root differs")
-    record.chmod(0o700)
+    # Reconciliation must retain search access to the private service home.
+    # Individual intents/tokens remain root-owned0600; the config is group0440.
+    record.chmod(0o711)
     digest=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()).hexdigest()
     original(record/"intent.json",{"digest":digest,"spec":spec})
     if spec.get("environmentProfileFile"):

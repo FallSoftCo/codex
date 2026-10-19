@@ -170,7 +170,18 @@ def enroll(spec):
         "sampleSeconds": min(5, policy["policy"]["sample_max_age"] / 3),
     }
     config_path = directory / "controller.json"
-    saved(config_path, config)
+    if config_path.exists():
+        # Resource/collaboration setup extends this protected configuration.
+        # Re-enrollment must not erase those installed routes or sample state.
+        from .service_observer import protected
+        current = protected(config_path)
+        if any(current.get(k) != config[k] for k in (
+                "authorityId", "hostId", "machineIdentity", "hollywoodUrl", "token", "state")):
+            raise ValueError("Original host controller configuration differs")
+        if not 0 < current["sampleSeconds"] <= policy["policy"]["sample_max_age"] / 3:
+            raise ValueError("Current controller cadence needs explicit policy reconciliation")
+    else:
+        saved(config_path, config)
     receipt = {
         "authorityId": authority,
         "hostId": host,

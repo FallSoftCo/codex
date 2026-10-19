@@ -482,6 +482,14 @@ class Bridge:
             listener.bind(str(path))
             path.chmod(0o666)
             listener.listen(16)
+            # systemd readiness follows the real listening socket. Starting the
+            # process alone cannot admit a newly installed agent's edit tools.
+            notify = os.environ.get("NOTIFY_SOCKET")
+            if notify:
+                address = "\0" + notify[1:] if notify.startswith("@") else notify
+                with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as status:
+                    status.connect(address)
+                    status.sendall(b"READY=1")
             while True:
                 connection, _ = listener.accept()
                 with connection:
