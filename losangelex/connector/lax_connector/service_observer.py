@@ -271,12 +271,12 @@ def members(group):
     return result
 
 
-def observe(config, row):
+def observe(config, row, *, registry=None):
     """Return a conclusive signed-in-controller fact or explicit unknown."""
     if os.geteuid() != 0 or machine_identity() != config["machineIdentity"]:
         raise PermissionError("Protected local host controller required")
     d = row["descriptor"]
-    root = directory(config["authorityId"], config["hostId"], row["agent"])
+    root = Path(registry) if registry is not None else directory(config["authorityId"], config["hostId"], row["agent"])
     manifest_path = root / (d["serviceInvocation"] + ".json")
     if not manifest_path.exists():
         # The controller's separate approved-service pass has the complete host
@@ -345,7 +345,7 @@ def observe(config, row):
         and guardian["controlGroup"] == binding["controlGroup"]
         and int(info["MainPID"]) == d["guardianPid"]
     )
-    if guardian_ok and (row.get("launch_phase") == "reserved" or native_original):
+    if registry is None and guardian_ok and (row.get("launch_phase") == "reserved" or native_original):
         from .service_memory import approved_spec
         from .service_restart import inspection as restart_inspection
         restart_policy = restart_inspection(config["authorityId"], config["hostId"], str(row["agent"]))

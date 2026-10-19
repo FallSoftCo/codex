@@ -187,6 +187,7 @@ def enroll(spec):
 def observe_executors(config):
     """Independent host facts, coalesced and receipted; never a model wake."""
     from .service_observer import observe, digest
+    from .purpose_observer import observe as observe_purpose
 
     root = Path(config["state"])
     after = None
@@ -204,7 +205,9 @@ def observe_executors(config):
                 payload = prior["payload"]
             else:
                 try:
-                    fact = observe(config, row)
+                    fact = observe_purpose(config, row)
+                    if fact is None:
+                        fact = observe(config, row)
                 except Exception as error:
                     saved(root / ("executor-sensor-gap-" + row["id"] + ".json"), {
                         "error": type(error).__name__, "detail": str(error)[:500],
@@ -335,6 +338,8 @@ def supervise(config, once=False):
                 payload,
             )
             saved(path, {"state": "completed", "payload": payload, "receipt": result})
+            from .purpose_observer import reconcile as reconcile_purposes
+            purpose_incarnations = reconcile_purposes(config)
             executor_observations = observe_executors(config)
             from .service_restart import reconcile_services
             service_incarnations = reconcile_services(config)
@@ -344,10 +349,11 @@ def supervise(config, once=False):
             saved(
                 root / "status.json",
                 {
-                    "state": "observation-gaps" if executor_gaps or service_incarnations["held"] else "healthy",
+                    "state": "observation-gaps" if executor_gaps or service_incarnations["held"] or purpose_incarnations["held"] else "healthy",
                     "lastReceipt": result,
                     "executorObservations": executor_observations,
                     "serviceIncarnations": service_incarnations,
+                    "purposeIncarnations": purpose_incarnations,
                     "executorObservationGaps": executor_gaps,
                     "modelsStarted": 0,
                 },

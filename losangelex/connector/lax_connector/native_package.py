@@ -193,7 +193,7 @@ def inspect_package(binary, *, expected_uid=None):
     }
 
 
-def preflight_as_owner(binary, interpreter, uid, home):
+def preflight_as_owner(binary, interpreter, uid, home, *, workspace=None):
     """Administrator installer/readiness call; drop to the recorded service UID."""
     account = pwd.getpwuid(uid)
     if Path(account.pw_dir) != Path(home):
@@ -223,7 +223,7 @@ def preflight_as_owner(binary, interpreter, uid, home):
     try:
         result = subprocess.run(
             command,
-            cwd=Path(home) / "work",
+            cwd=Path(workspace) if workspace is not None else Path(home) / "work",
             env=env,
             stdin=subprocess.DEVNULL,
             capture_output=True,
