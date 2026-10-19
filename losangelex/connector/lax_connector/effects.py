@@ -31,6 +31,7 @@ ADMIN_STAGES = {
     "hollywood_select_resource_default": {"resource-default"},
     "hollywood_placement_set": {"placement-state"},
     "lax_provision_worker": {"placement","purpose-context"},
+    "hollywood_reconcile_pending_inputs": {"purpose-context"},
 }
 
 class Effects:
@@ -234,7 +235,7 @@ class Effects:
         return evidence["acceptedResult"]
 
     def completed_administration(self, key, name):
-        if name not in ("hollywood_create_agent", "hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "hollywood_select_resource_default", "hollywood_placement_set", "hollywood_mutation_observe", "hollywood_mutation_reconcile", "lax_provision_worker"):
+        if name not in ("hollywood_create_agent", "hollywood_create_room", "hollywood_set_role", "hollywood_grant_room", "hollywood_grant_resource", "hollywood_select_resource_default", "hollywood_placement_set", "hollywood_mutation_observe", "hollywood_mutation_reconcile", "lax_provision_worker", "hollywood_reconcile_pending_inputs"):
             return None
         operation = "lax-tool:" + key
         path = self.c.state / ("administration-" + hashlib.sha256(operation.encode()).hexdigest() + ".json")

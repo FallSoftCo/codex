@@ -16,6 +16,12 @@ def spec(name, description, properties, required):
 
 CAPABILITIES = ['persistent-agent-context/v1', 'native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
 CAPABILITIES += ['completed-work-report-reconciliation/v1', 'completed-report-scope/v1']
+# Purpose work reports before completion. The historical v2-only reconciliation
+# tool is deliberately absent from its executable catalog; do not advertise it.
+PURPOSE_CAPABILITIES = [value for value in CAPABILITIES if value not in {
+    "completed-work-report-reconciliation/v1", "completed-report-scope/v1"}]
+PURPOSE_CAPABILITIES += ["primary-inbox-reconciliation/v1"]
+
 
 STRING = {"type": "string"}
 TOOLS = [
@@ -106,6 +112,10 @@ TOOLS += [
         },
         ["questions"],
     ),
+    spec("hollywood_reconcile_pending_inputs",
+        "Communication administrator: ingest exact original pending generation0 deliveries into an already enrolled agent primary inbox. No request replay, claim, execution, new identity or service start. Unknown, claimed or cancelled deliveries cannot use this repair.",
+        {"agentId":STRING,"deliveryIds":{"type":"array","items":STRING,"minItems":1,"maxItems":100}},
+        ["agentId","deliveryIds"]),
     spec(
         "lax_provision_worker",
         "Verified Global administrator: provision and start a scoped Linux worker on this enrolled host. Credentials remain private; no model runs until a request is addressed to it.",

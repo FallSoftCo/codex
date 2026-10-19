@@ -40,7 +40,11 @@ def bounded(value):
 
 def query(args, *, host_key=None):
     limit = args.get("limit", 4)
-    require(type(limit) is int and 1 <= limit <= 8, "Resource page limit must be 1..8")
+    if type(limit) is not int or not 1 <= limit <= 8:
+        from .errors import ToolValidationError
+        raise ToolValidationError("invalid_resource_page_limit",
+            "Resource metadata page limit must be an integer from 1 to 8.",
+            "Use limit=4 or another value in 1..8, then follow nextCursor. No request was dispatched.")
     values = {"limit": limit}
     if host_key and args.get(host_key) is not None:
         values[host_key] = str(UUID(args[host_key]))

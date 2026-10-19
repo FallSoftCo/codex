@@ -14,7 +14,7 @@ from .context_contract import COMMON, ROLES, ACTIONS, tools
 from .activity import Activity
 from .execution_scope import ExecutionScope
 from .native_tool_session import NativeToolSession, definitions
-from .native_tool_catalog import CAPABILITIES
+from .native_tool_catalog import PURPOSE_CAPABILITIES as CAPABILITIES
 from .context_observation import TERMINAL, original_turn, wait_terminal
 from .journal import saved
 from .native_goals import external_admission

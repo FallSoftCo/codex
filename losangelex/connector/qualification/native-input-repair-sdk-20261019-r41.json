@@ -1,0 +1,14 @@
+{
+  "schema": "native-inbox-repair-sdk-http/v1",
+  "at": 1792409350.412638,
+  "mode": "Shared NativeToolSession administrative handler and Effects journals against actual authenticated HTTP/PostgreSQL. Uses current real accepted writer binding/permit, no native launch/process facts inserted. Disposable inbox fixtures roll back. This is a substrate SDK test, not a model-chosen tool call.",
+  "modelsStarted": 0,
+  "acceptedLostReplyRecoveredByOriginalAdministrativeReceiptWithoutSecondPut": true,
+  "sameNativeCallReturnsOriginalResultWithoutReplay": true,
+  "oneOriginalInputIngestedNoDeliveryClaimOrModelAdmission": true,
+  "nonAdministratorRejectedBeforeDispatch": true,
+  "cancelledOriginalKnown409DoesNotLeaveUnknownToolEffect": true,
+  "invalidResourceLimitActionableBeforeDispatch": true,
+  "allFixturesRolledBack": true,
+  "journal": "/aosp/development/lax-three-context-20261018-r01/qualification/sdk-r41-journal-8079ba33-da57-4902-a837-f1493967819a"
+}

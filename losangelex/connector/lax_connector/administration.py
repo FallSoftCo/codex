@@ -57,7 +57,7 @@ async def administer(connector, name, arguments, operation):
             "hollywood_create_agent", "hollywood_create_room", "hollywood_set_role",
             "hollywood_grant_room", "hollywood_grant_resource",
             "hollywood_select_resource_default", "hollywood_placement_set",
-            "lax_provision_worker",
+            "lax_provision_worker", "hollywood_reconcile_pending_inputs",
         )
         known_rejection = (
             tracked and connector.effects.safe_rejection()
@@ -108,6 +108,17 @@ async def _administer(connector, name, arguments, operation):
     if name in ("hollywood_mutation_observe", "hollywood_mutation_reconcile"):
         from .mutation_tools import administer
         return await administer(connector, name, arguments, operation)
+    if name=="hollywood_reconcile_pending_inputs":
+        agent=str(UUID(arguments["agentId"]))
+        ids=[str(UUID(x)) for x in arguments["deliveryIds"]]
+        if not 1<=len(ids)<=100 or len(set(ids))!=len(ids):
+            raise ValueError("1 to 100 distinct original delivery IDs required")
+        original=await connector.http("GET","agents/"+agent+"/context-system")
+        payload={"operationId":operation+":admin:purpose-context",
+            "hostId":original["system"]["hostId"],"workspaceId":original["system"]["workspaceId"],
+            "bindings":[{k:b[k] for k in ("purpose","contextId","credentialDigest")}
+                        for b in original["bindings"]],"reconcilePendingDeliveryIds":ids}
+        return await connector.http("PUT","agents/"+agent+"/context-system",payload)
     identity = str(uuid5(UUID(connector.config["agentId"]), operation))
     if name == "hollywood_create_agent":
         credential = connector.state / ("agent-credential-" + identity + ".json")
