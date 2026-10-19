@@ -299,15 +299,30 @@ class ContextRunner:
                 await self.executor.capture_resident(self.rpc)
         material_ids=[r["id"] for r in pending]
         try:
+            # Queue identity belongs to an inference attempt, not a mutable
+            # material-set hash. A pending set can recur after another batch.
+            queued_path=self.state/"capacity-wait.json"
+            queued=json.loads(queued_path.read_text()) if queued_path.exists() else None
+            original=(queued.get("permit") or {}) if queued else {}
+            reuse=(original.get("state")=="queued"
+                and original.get("material_ids")==material_ids)
+            operation=original["operation"] if reuse else "context-reserve:"+str(uuid4())
             reserved=await self.request("reserve",{"materialIds":material_ids},
-                operation="context-reserve:"+fingerprint,turn="admission")
+                operation=operation,turn="admission")
             if reserved["permit"]["state"]=="queued":
                 self.active=False
                 saved(self.state/"capacity-wait.json",reserved)
                 return
-            if reserved["permit"]["state"]!="reserved":
-                raise RuntimeError("Original inference permit no longer admits submission")
-            self.permit=reserved["permit"]["id"]
+            # The accepted reservation receipt stays immutable. Observe the
+            # actual permit before any new native turn, including cached reads.
+            current=await self.agent.http(self.purpose,"GET",
+                f"agents/{self.config['agentId']}/contexts/{self.purpose}/operations/"+operation)
+            permit=current.get("currentPermit")
+            if (not permit or permit["id"]!=reserved["permit"]["id"]
+                    or permit["state"]!="reserved" or permit["native_turn"] is not None):
+                raise RuntimeError("Current original inference permit does not admit a new native turn")
+            self.permit=permit["id"]
+            queued_path.unlink(missing_ok=True)
         except BaseException:
             self.failed=True
             self.active=False
@@ -460,12 +475,22 @@ class ContextAgent:
                 while not self.stop.is_set():
                     status={}
                     for purpose,runner in self.runners.items():
+                        was_active=runner.active
                         try:
                             pending=(await runner.request("pending"))["pending"]
                         except Exception as error:
                             status[purpose]={"active":runner.active,"held":runner.failed,
                                              "connection":"unavailable","error":type(error).__name__}
                             continue
+                        queue_path=self.state/purpose/"capacity-wait.json"
+                        if queue_path.exists() and not runner.active:
+                            queued=json.loads(queue_path.read_text()).get("permit",{})
+                            ids=queued.get("material_ids",[])
+                            available={x["id"]:x for x in pending if not x["cancelled"]}
+                            if queued.get("state")=="queued" and ids and all(x in available for x in ids):
+                                pending=[available[x] for x in ids]
+                            else:
+                                queue_path.unlink()
                         cancelled=[x for x in pending if x["cancelled"]]
                         if purpose=="writer" and cancelled and runner.active:
                             await runner.cancel()
@@ -482,7 +507,7 @@ class ContextAgent:
                         fingerprint=hashlib.sha256(json.dumps(key).encode()).hexdigest()
                         last=self.state/purpose/"wake.json"
                         old=json.loads(last.read_text()) if last.exists() else {}
-                        if not runner.active and not runner.failed and pending and old.get("fingerprint")!=fingerprint:
+                        if not was_active and not runner.active and not runner.failed and pending and old.get("fingerprint")!=fingerprint:
                             if old.get("state") in ("submission_intent","running","unknown"):
                                 runner.failed=True
                             else:
@@ -493,9 +518,12 @@ class ContextAgent:
                             error=runner.task.exception()
                             if error:
                                 runner.failed=True
+                                runner.failure_reason=str(error)
+                                runner.trace("runtime_held",{"error":str(error),"nativeTurn":runner.turn,
+                                    "permitId":runner.permit})
                         status[purpose]={"active":runner.active,"held":runner.failed,
                                          "pending":pending,"nativeThread":runner.thread,
-                                         "nativeTurn":runner.turn}
+                                         "nativeTurn":runner.turn,"heldReason":getattr(runner,"failure_reason",None)}
                     saved(self.status_path,{"at":time.time(),"agentId":self.config["agentId"],
                                                   "contexts":status,"modelsStartedByUnchangedPoll":0})
                     try:

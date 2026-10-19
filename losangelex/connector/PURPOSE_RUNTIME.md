@@ -120,3 +120,30 @@ can withdraw its own unanswered nonblocking question when verified facts make it
 obsolete. The original question and attributed reason remain; no human response
 or approval is invented. Work completion continues to retain unresolved human
 questions as prerequisites.
+
+
+## Inference attempts are not material-set identities
+
+A pending set can recur (A, A+B, then A) after another response is published.
+Its hash must not be reused as the identity of a capacity reservation. New
+inference attempts use fresh durable operation IDs; an already queued attempt
+keeps its own fair-queue ticket and selected material IDs. Other new inputs stay
+durable for the subsequent turn.
+
+The original accepted reservation receipt is immutable. Before native start the
+runtime reads its currentPermit projection and requires a reserved, unbound
+permit. An old reserved receipt cannot make a released permit usable again.
+After a prior turn finishes during a pending read, the scheduler takes a fresh
+pending snapshot before admitting another turn.
+
+Recovery retains exact native identities. The observed interrupted responder
+turn had never been admitted and referenced an older, already released permit.
+Its terminal metadata is recorded as not_admitted/capacityReleased=false; the
+old permit and old native turn stay unchanged. No unknown journal is deleted.
+The actual private runtime observed that exact native turn and recovered its
+existing queued answer in the original history.
+
+This qualification does not cover every disconnected/partially submitted
+reservation or native-start crash boundary. Those remain explicit daily-operation
+gates before production/phone migration; original uncertainty must not be
+converted into an automatic replacement turn.
