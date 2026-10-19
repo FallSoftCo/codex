@@ -90,7 +90,10 @@ class Attention:
         saved(path, {"state": "create-intent", "payload": payload})
         try:
             receipt = await c.http("POST", "attention", payload)
-        except Exception:
+        except Exception as error:
+            from .errors import HttpFailure
+            if isinstance(error,HttpFailure) and error.status in (400,403,409):
+                raise
             # Read the SAME deterministic identity after an unconfirmed create.
             # Failure to establish it holds the original call; no replacement.
             receipt = await c.http("GET", "attention/" + identity)

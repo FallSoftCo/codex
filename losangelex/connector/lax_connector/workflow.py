@@ -624,7 +624,7 @@ async def invoke(c, name, args, operation):
         receipt = await c.http("POST", "rooms/" + room + "/goals", payload)
         # An existing primary coordination goal remains intact. A new canonical
         # goal does not silently replace it or create a shadow room context.
-        if not c.goal_binding and not c.agent_binding:
+        if not c.goal_binding and not c.agent_binding and not getattr(c,"purpose_scope",None):
             receipt["nativeBinding"] = await bind(c, receipt["goalId"], new_goal=True)
         return receipt
     if name == "hollywood_work_create":
@@ -662,7 +662,7 @@ async def invoke(c, name, args, operation):
         "operationId": operation,
     }
     if action == "report":
-        if participation(c)["request"]["data"].get("workId") != work or not (c.goal_binding or c.agent_binding):
+        if participation(c)["request"]["data"].get("workId") != work or not (c.goal_binding or c.agent_binding or getattr(c,"purpose_scope",None)):
             raise PermissionError("Only the captured native work may be reported")
         native = await progress(c) if c.goal_binding else None
         if args["state"] == "submitted" and native and native["status"] != "complete":

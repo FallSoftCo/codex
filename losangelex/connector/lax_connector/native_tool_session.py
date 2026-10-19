@@ -1,8 +1,8 @@
 """A purpose execution participant using the existing native tool core.
 
-This read-capable integration does not grant native mutation authority. The
-installed executor/effect integration must be present before that transport can
-be enabled. No mutable legacy Connector.active or inferred binding is supplied.
+Purpose-native mutations use the accepted writer scope and an independently
+observed executor. No legacy mutable Connector.active or synthetic goal binding
+is supplied. The responder alone owns outward communication.
 """
 import json
 from pathlib import Path
@@ -13,6 +13,7 @@ from .native_tool_catalog import TOOLS
 from .roles import RoleContext
 from .tool_execution import capture
 from .workflow import READ_TOOLS
+from .attention import Attention, QUESTION, APPROVAL
 
 # Briefing for an older report records a scoped read receipt (POST). Retain its
 # implementation in the shared core, but expose it only with the effect binding.
@@ -25,11 +26,21 @@ def read_definitions():
     return [tool for tool in TOOLS if tool["name"] in READ_NAMES]
 
 
+def definitions(installed=False):
+    if not installed:
+        return read_definitions()
+    return [t for t in TOOLS if t["name"] not in {
+        "hollywood_publish","hollywood_request","hollywood_work_report_reconcile"}]
+
+
 class NativeToolSession(NativeTools):
     """Explicit captured owner, native history and durable effect journal."""
 
-    def __init__(self, *, accepted, scope, config, state, rpc, role, transport):
-        self.config = config
+    def __init__(self, *, accepted, scope, config, state, rpc, role, transport, finished=None, native_items=None):
+        self.config = {**config,"codexHome":config["homes"]["writer"] if config.get("homes") else config.get("codexHome")}
+        self.purpose_scope = dict(scope) if config.get("installedPurposeRuntime") else None
+        if self.purpose_scope and (scope.get("schema")!="lax-execution-scope/v2" or not scope.get("executorId")):
+            raise PermissionError("Installed purpose mutation needs an observed original executor")
         self.thread = scope["nativeThread"]
         self.context_id = scope["contextId"]
         self._owner = capture(accepted, thread=self.thread, turn=scope["nativeTurn"],
@@ -47,7 +58,11 @@ class NativeToolSession(NativeTools):
         self.state.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.rpc, self._transport = rpc, transport
         self.effects = Effects(self)
-        self.uncertain_tools = False
+        self.attention = Attention(self)
+        self.finished = finished
+        self.native_items = native_items if native_items is not None else {}
+        self.uncertain_tools = any(
+            json.loads(p.read_text()).get("state")!="completed" for p in self.state.glob("tool-*.json"))
         self.goal_binding = None
         self.agent_binding = None
         self.publications = []
@@ -60,12 +75,22 @@ class NativeToolSession(NativeTools):
         return json.loads(json.dumps(self._owner))
 
     async def _http(self, method, path, payload=None):
-        if method != "GET":
-            raise PermissionError("Native mutation transport requires installed executor integration")
-        return await self._transport(method, path, payload)
+        source=None
+        if method!="GET":
+            if not self.purpose_scope:
+                raise PermissionError("Native mutation transport requires installed executor integration")
+            current=self.effects.current.get()
+            if current:
+                from .effects import native_source
+                source=native_source(current["scope"],purpose=self.purpose_scope)
+            elif not (path=="attention" or path.startswith("attention/")):
+                raise PermissionError("Original native tool callback required")
+        return await self._transport(method,path,payload,native_source=source) if self.purpose_scope else await self._transport(method,path,payload)
 
     async def call(self, method, params):
-        if method != "item/tool/call" or params.get("tool") not in READ_NAMES:
+        allowed={t["name"] for t in definitions(bool(self.purpose_scope))}
+        if not (method=="item/tool/call" and params.get("tool") in allowed
+                or self.purpose_scope and method in QUESTION+APPROVAL):
             raise PermissionError("Tool is not admitted by this native session")
         with self.effects.tool_scope(method, params):
             return await self._tool(method, params)

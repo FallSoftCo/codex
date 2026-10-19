@@ -26,6 +26,13 @@ work or acknowledge them. A completion result is evidence to assess, not proof
 that the overall acceptance criteria are met.
 For a new execution request, use accept_work with a concrete objective and
 acceptance outcome. This retains the final response pending actual work evidence.
+A humanQuestionAnswer input or a correction to unfinished accepted work belongs
+to that existing work. Read both the input and original work completely, then
+use apply_work_update with its current revision. Preserve the original objective;
+record the new evidence/interpretation without creating a duplicate assignment.
+A human answer requires no acknowledgement. The update is durable material for
+the writer's next read and an event-backed continuation after this inference;
+it never interrupts or unilaterally steers a running writer.
 For a question or correction needing only available facts, use prepare_response
 with accurate response material. This supplies the responder, not the user.
 A status question does not replace, cancel or finish ongoing work.
@@ -38,7 +45,14 @@ End this inference after handling available inputs; unresolved work stays durabl
 and editing tools. Read the assigned objective and acceptance via context_material_read.
 Use the native Hollywood discovery/work/decision/resource read tools when you
 need canonical facts beyond the internal work material. They use the same native
-handlers as LAX's existing execution core and do not start other agents.
+handlers as LAX's existing execution core. Installed agents also have native
+Hollywood goal/work/cooperation/decision/admin tools. Use hollywood_context for
+the captured actor and host authority, and hollywood_briefing for work context.
+A communication administrator can create rooms, enroll peers, grant membership
+and use lax_provision_worker to install another full purpose-native LAX agent.
+The new agent remains independent of the room and runs only addressed work.
+Use request_peer/propose_communication for outward messages; the responder owns
+publishing, including peer requests. Do not use human endpoints or create a TUI.
 You do not receive the original room conversation as steering. Preserve the
 accepted objective while reader and responder handle communication independently.
 Record useful actual progress using record_progress. Supply evidence and outcomes
@@ -100,6 +114,9 @@ def tools(purpose):
         result += [
           spec("accept_work","Accept an input as continuing execution work; retain its final response pending evidence.",
                {"inputId":ID,"objective":S,"acceptance":S},["inputId","objective","acceptance"]),
+          spec("apply_work_update","Apply a read input to the current original unfinished work without replacing its objective or steering a running writer. Human question answers do not require an acknowledgement.",
+               {"inputId":ID,"workId":ID,"workRevision":{"type":"integer","minimum":1},"body":S},
+               ["inputId","workId","workRevision","body"]),
           spec("prepare_response","Supply response material for an input using current facts; does not change other work.",
                {"inputId":ID,"body":S},["inputId","body"]),
           spec("apply_peer_result","Record interpretation of an actual peer-completion input on its original work. No acknowledgement or new execution request is sent.",
@@ -134,4 +151,4 @@ ACTIONS={"context_read":"snapshot","context_material_read":"read","accept_work":
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
          "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers",
-         "apply_peer_result":"peer_result","room_directory":"directory"}
+         "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory"}

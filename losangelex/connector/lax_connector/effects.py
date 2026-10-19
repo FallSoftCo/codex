@@ -30,7 +30,7 @@ ADMIN_STAGES = {
     "hollywood_grant_resource": {"resource-grant"},
     "hollywood_select_resource_default": {"resource-default"},
     "hollywood_placement_set": {"placement-state"},
-    "lax_provision_worker": {"placement"},
+    "lax_provision_worker": {"placement","purpose-context"},
 }
 
 class Effects:
@@ -172,7 +172,7 @@ class Effects:
 
     def atomic(self, group):
         name = group["scope"]["tool"]
-        if name in ATOMIC or (self.c.agent_binding and name in ("hollywood_goal_create","hollywood_goal_state")):
+        if name in ATOMIC or ((self.c.agent_binding or getattr(self.c,"purpose_scope",None)) and name in ("hollywood_goal_create","hollywood_goal_state")):
             return True
         binding = group["scope"]["bindingAtStart"]
         if binding is not None:
@@ -313,3 +313,14 @@ class Effects:
             saved(path, {**tool, "state": "completed", "result": result, "effectReconciled": True, "nativeCallbackReplayed": False})
             recovered.append({"callId": tool["callId"], "tool": tool["tool"], "operationId": "lax-tool:" + key, "nativeCallbackReplayed": False})
         return recovered
+
+
+def native_source(scope, *, purpose=None, agent_binding=False):
+    fields=("authorityId","agentId","hostId","deliveryId","claimId","generation","requestId",
+            "nativeThread","nativeTurn","callId","tool","argumentsDigest","roleRevision","contextId","nativeGoalId")
+    value={"schema":"hollywood-native-source/v3" if purpose else
+           "hollywood-native-source/v2" if agent_binding else "hollywood-native-source/v1",
+           **{k:scope[k] for k in fields}}
+    if purpose:
+        value.update(executionScopeId=purpose["id"],executorId=purpose["executorId"])
+    return value

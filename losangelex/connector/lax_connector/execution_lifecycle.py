@@ -35,6 +35,7 @@ class ExecutionLifecycle:
         self.root = Path(journal_directory)
         self.row = None
         self.native = None
+        self.resident = False
 
     def validate(self, value):
         row = value["executor"]
@@ -127,6 +128,37 @@ class ExecutionLifecycle:
             )
         await self.require_registered()
 
+    async def capture_resident(self,rpc):
+        """Observe the real resident app-server before admitting any inference."""
+        self.resident=True
+        own=process(os.getpid())
+        child=process(rpc.process.pid)
+        unit=own["controlGroup"].rsplit("/",1)[-1] if own else ""
+        info=properties(unit) if unit.startswith("lax-") and unit.endswith(".service") else {}
+        if (not own or not child or own["uid"]!=os.geteuid() or child["uid"]!=own["uid"]
+                or int(info.get("MainPID",0))!=own["pid"] or info.get("ActiveState")!="active"
+                or child["controlGroup"]!=own["controlGroup"]
+                or info.get("ControlGroup")!=own["controlGroup"]
+                or child["executable"]!=str(Path(self.config["binary"]).resolve(strict=True))):
+            raise RuntimeError("Actual installed purpose process ownership unavailable")
+        self.native=rpc.process
+        self.descriptor={"machineIdentity":machine_identity(),"bootId":boot_id(),"serviceUnit":unit,
+            "serviceInvocation":UUID(info["InvocationID"]).hex,"controlGroup":own["controlGroup"],
+            "guardianPid":own["pid"],"guardianStart":own["start"],
+            "nativePid":child["pid"],"nativeStart":child["start"]}
+        d=self.owner["delivery"]
+        self.id=str(uuid5(UUID(d["id"]),"purpose-executor:"+str(d["generation"])+":"+d["claim_id"]
+            +":"+self.descriptor["serviceInvocation"]+":"+str(child["start"])))
+        # Every physical incarnation retains its own immutable launch evidence.
+        self.root=self.root/self.id
+        self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
+        payload={"operationId":"purpose-executor:"+self.id,"id":self.id,"claimId":d["claim_id"],
+            "generation":d["generation"],"hostId":self.config["hostId"],**self.descriptor}
+        row=await self.original_post("connector/deliveries/"+d["id"]+"/executor",payload,"resident-capture")
+        if row["descriptor"]!=self.descriptor or row["launch_phase"]!="attached":
+            raise RuntimeError("Original resident capture differs")
+        return await self.require_live(wait=True)
+
     async def current_controller(self, row):
         policy = await self.transport(
             "GET", "hosts/" + self.config["hostId"] + "/admission"
@@ -208,10 +240,8 @@ class ExecutionLifecycle:
                 raise RuntimeError("Original attached executor changed")
             if self.native is None or self.native.returncode is not None:
                 raise RuntimeError("Original native process is no longer live")
-            if result["deliveryState"] != "claimed":
-                raise RuntimeError(
-                    "Captured delivery no longer admits native inference"
-                )
+            if result["deliveryState"] not in (("claimed","running") if self.resident else ("claimed",)):
+                raise RuntimeError("Captured delivery no longer admits native inference")
             if (
                 row["state"] == "live"
                 and row["controller"]

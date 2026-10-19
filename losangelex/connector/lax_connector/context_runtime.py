@@ -13,7 +13,7 @@ from aiohttp import ClientSession, ClientTimeout
 from .context_contract import COMMON, ROLES, ACTIONS, tools
 from .activity import Activity
 from .execution_scope import ExecutionScope
-from .native_tool_session import NativeToolSession, read_definitions
+from .native_tool_session import NativeToolSession, definitions
 from .native_tool_catalog import CAPABILITIES
 from .context_observation import TERMINAL, original_turn, wait_terminal
 from .journal import saved
@@ -40,13 +40,17 @@ class ContextRunner:
         self.execution_scope=None
         self.permit=None
         self.native_tools=None
+        self.native_items={}
+        self.executor=None
         self.early_activity=[]
         self.activity=Activity(state=self.state,scope=lambda:self.execution_scope,
             send=self.send_activity,secrets=tuple(self.config["tokens"].values())) if purpose=="writer" else None
-        self.declarations=tools(purpose) + (read_definitions() if purpose=="writer" else [])
+        self.declarations=tools(purpose) + (definitions(self.config.get("installedPurposeRuntime",False)) if purpose=="writer" else [])
         self.allowed={t["name"] for t in self.declarations}
         self.rpc=AppServer(self.config["binary"],Path(self.config["homes"][purpose]),
-          self.state/"native",self.event,self.tool,enterprise=True,isolated_process_group=True)
+          self.state/"native",self.event,self.tool,on_submission=self.submitted,enterprise=True,
+          collaboration_channel=self.config.get("nativeCollaborationChannel") if purpose=="writer" else None,
+          isolated_process_group=True)
 
     def trace(self,event,value):
         with (self.state/"events.jsonl").open("a") as f:
@@ -60,19 +64,25 @@ class ContextRunner:
         if action in ("pending", "ready"):
             return await self.agent.http(self.purpose,"POST",path,payload)
         journal=self.state/("operation-"+hashlib.sha256(operation.encode()).hexdigest()+".json")
-        if journal.exists():
-            old=json.loads(journal.read_text())
+        old=json.loads(journal.read_text()) if journal.exists() else None
+        if old:
             if old["request"]!=payload:
                 raise RuntimeError("Original context operation changed")
             if old.get("receipt") is not None:
                 return old["receipt"]
+        if old and old.get("state")!="rejected":
             # An uncertain original is observed, never submitted a second time.
             result=await self.agent.http(self.purpose,"GET",path+"/operations/"+operation)
         else:
             saved(journal,{"request":payload,"state":"intent"})
             try:
                 result=await self.agent.http(self.purpose,"POST",path,payload)
-            except Exception:
+            except Exception as error:
+                from .errors import HttpFailure
+                if isinstance(error,HttpFailure) and error.status in (400,403,409):
+                    saved(journal,{"request":payload,"state":"rejected","status":error.status,
+                                   "error":str(error)})
+                    raise
                 result=await self.agent.http(self.purpose,"GET",path+"/operations/"+operation)
         if (action=="admit" and result.get("delivery") is None
                 or action=="reserve" and result["permit"]["state"]=="queued"):
@@ -140,10 +150,12 @@ class ContextRunner:
                    for x in result["toolPolicy"]["allowedTools"]}
         if not {("functions",x) for x in self.allowed | {"exec","wait"}} <= effective:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
-        binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v2"},
-            operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread+":runtime-v2",turn="bootstrap")
-        if binding.get("runtimeProtocol")!="lax-purpose-runtime/v2":
+        binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3"},
+            operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread+":runtime-v3-work-updates-v1",turn="bootstrap")
+        if binding.get("runtimeProtocol")!="lax-purpose-runtime/v3":
             raise RuntimeError("Hollywood native work/inference admission protocol unavailable")
+        if self.purpose=="reader" and binding.get("workUpdates")!=1:
+            raise RuntimeError("Hollywood native work-update contract unavailable")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
                                     "effectiveToolPolicy":result.get("toolPolicy")})
         if self.activity:
@@ -170,10 +182,16 @@ class ContextRunner:
                     self.failed=True
                     self.trace("recovery_held",{"nativeTurn":self.turn,"status":observed["status"]})
 
+    async def submitted(self,method,params,success):
+        if self.native_tools:
+            await self.native_tools.attention.submitted(method,params,success)
+
     async def event(self,method,params):
         if params.get("threadId") not in (None,self.thread):
             return
         self.trace(method,params)
+        if method in ("item/started","item/completed") and isinstance(params.get("item"),dict):
+            self.native_items[params["item"]["id"]]=params["item"]
         if method=="turn/started" and self.active and self.turn is None:
             self.turn=params["turn"]["id"]
             old=json.loads((self.state/"wake.json").read_text())
@@ -199,9 +217,14 @@ class ContextRunner:
         await self.admitted.wait()
         async with self.effect_lock:
             if (not self.active or not self.accepting or self.closing
-                or method!="item/tool/call" or params.get("threadId")!=self.thread
-                or params.get("turnId")!=self.turn):
+                or params.get("threadId",self.thread)!=self.thread
+                or params.get("turnId",self.turn)!=self.turn):
                 raise PermissionError("Original native turn no longer admits this callback")
+            if method!="item/tool/call":
+                from .attention import QUESTION,APPROVAL
+                if self.native_tools and method in QUESTION+APPROVAL:
+                    return await self.native_tools.call(method,params)
+                raise PermissionError("Unsupported original native callback")
             name=params["tool"]
             if name not in self.allowed:
                 raise PermissionError("Tool belongs to another context purpose")
@@ -237,6 +260,7 @@ class ContextRunner:
 
     async def run(self,fingerprint,pending):
         self.active=True
+        self.executor=None
         self.turn=None
         self.permit=None
         self.execution_scope=None
@@ -264,6 +288,12 @@ class ContextRunner:
                 saved(self.state/"admission-wait.json",accepted)
                 return
             saved(self.state/"work-admission.json",accepted)
+            if self.config.get("installedPurposeRuntime"):
+                from .execution_lifecycle import ExecutionLifecycle
+                self.executor=ExecutionLifecycle(accepted,config=self.config,
+                    transport=lambda method,path,payload=None:self.agent.http(self.purpose,method,path,payload),
+                    journal_directory=self.state/"executor")
+                await self.executor.capture_resident(self.rpc)
         material_ids=[r["id"] for r in pending]
         try:
             reserved=await self.request("reserve",{"materialIds":material_ids},
@@ -283,6 +313,8 @@ class ContextRunner:
                                       "pending":pending,"nativeThread":self.thread,"permitId":self.permit})
         self.trace("wake",{"fingerprint":fingerprint,"pending":pending})
         try:
+            if self.executor:
+                await self.executor.require_live()
             result=await self.rpc.call("turn/start",{
               "threadId":self.thread,"input":[],"model":self.config["model"],
               "effort":self.config["effort"],"turnTrigger":"hollywood_context_material",
@@ -303,7 +335,8 @@ class ContextRunner:
                     "connector/deliveries/"+scope["deliveryId"]+"/context")
                 self.native_tools=NativeToolSession(accepted=accepted,scope=scope,
                     config=self.config,state=self.state/"native-tools",rpc=self.rpc,role=role,
-                    transport=lambda method,path,payload: self.agent.http(self.purpose,method,path,payload))
+                    transport=lambda method,path,payload,**kw: self.agent.http(self.purpose,method,path,payload,**kw),
+                    finished=self.finished,native_items=self.native_items)
                 for method,params in self.early_activity:
                     self.activity.record(method,params)
                 self.early_activity=[]
@@ -390,17 +423,21 @@ class ContextAgent:
             self.purpose_lock.close()
         self.lock.close()
 
-    async def http(self,purpose,method,path,payload=None):
+    async def http(self,purpose,method,path,payload=None,*,native_source=None):
         # Transport version is not part of an immutable semantic operation.
         # Old effect/activity receipts keep their exact original fingerprints.
         if method=="POST" and path==f"agents/{self.config['agentId']}/contexts/{purpose}":
-            payload={**payload,"runtimeProtocol":"lax-purpose-runtime/v2"}
+            payload={**payload,"runtimeProtocol":"lax-purpose-runtime/v3"}
         token=self.config["tokens"][purpose]
+        headers={"Authorization":"Bearer "+token}
+        if native_source:
+            headers["X-Hollywood-Native-Source"]=json.dumps(native_source,separators=(",",":"))
         async with self.session.request(method,self.config["hollywoodUrl"]+"/hollywood/v3/"+path,
-          headers={"Authorization":"Bearer "+token},json=payload) as r:
+          headers=headers,json=payload) as r:
             value=await r.json()
             if r.status!=200:
-                raise RuntimeError(f"Hollywood {r.status}: {value.get('error','request failed')}")
+                from .errors import HttpFailure
+                raise HttpFailure(r.status,value.get("error","request failed"))
             return value
 
     async def serve(self, *, reconcile_only=False):

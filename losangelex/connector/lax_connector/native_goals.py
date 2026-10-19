@@ -472,6 +472,8 @@ async def settle(connector, status):
 
 
 async def sync_policy(connector, goal_id, state, operation):
+    if getattr(connector,"purpose_scope",None):
+        return None  # Canonical Hollywood goals do not replace purpose identities.
     """An explicit goal control changes only its existing matching native binding."""
     from .journal import saved
 

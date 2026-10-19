@@ -14,7 +14,11 @@ class ExecutionScope:
         if len(values) != 1:
             raise RuntimeError("Writer needs one accepted original execution scope")
         value = dict(values[0])
-        expected = {"schema": "lax-execution-scope/v1", "agentId": agent,
+        if value.get("schema") not in ("lax-execution-scope/v1","lax-execution-scope/v2"):
+            raise RuntimeError("Unsupported accepted execution scope")
+        if value["schema"]=="lax-execution-scope/v2":
+            UUID(value["executorId"])
+        expected = {"agentId": agent,
                     "purpose": "writer", "nativeThread": thread, "nativeTurn": turn}
         if any(value.get(k) != v for k, v in expected.items()):
             raise RuntimeError("Accepted execution scope belongs to another native owner")

@@ -1,6 +1,7 @@
 """Native Hollywood administration tools; credentials never enter model output."""
 
 from .tool_execution import participation
+from .host import machine_identity
 
 import asyncio
 import hashlib
@@ -223,9 +224,7 @@ async def _administer(connector, name, arguments, operation):
             {"operationId": operation + ":admin:placement", **({
                 "hostId": host,
                 "name": "Enrolled LAX host",
-                "identityFingerprint": hashlib.sha256(
-                    Path("/etc/machine-id").read_bytes()
-                ).hexdigest(),
+                "identityFingerprint": machine_identity(),
                 "capabilities": {"localProvisioning": True},
                 "agentId": agent,
             })},
@@ -236,7 +235,7 @@ async def _administer(connector, name, arguments, operation):
             "credential": credential["token"],
             "hollywoodUrl": connector.config["hollywoodUrl"],
             "hostId": host,
-            "machineIdentity": hashlib.sha256(Path("/etc/machine-id").read_bytes()).hexdigest(),
+            "machineIdentity": machine_identity(),
             "approvedModelAuthFile": str(
                 Path(connector.config["codexHome"]) / "auth.json"
             ),
@@ -245,6 +244,9 @@ async def _administer(connector, name, arguments, operation):
             "model": connector.config["model"],
             "effort": connector.config["effort"],
         }
+        if connector.config.get("installedPurposeRuntime"):
+            from .purpose_provision import provision
+            return await provision(connector,arguments,operation,spec)
         from .service_memory import validate, DEFAULT_BYTES
         spec["serviceMemoryMaxBytes"] = validate(arguments.get("serviceMemoryMaxBytes", connector.config.get("workerServiceMemoryMaxBytes", DEFAULT_BYTES)))
         if connector.config.get("nativeCollaborationChannel"):
