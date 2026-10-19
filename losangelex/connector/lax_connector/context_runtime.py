@@ -50,6 +50,8 @@ class ContextRunner:
         self.declarations=tools(purpose) + (definitions(self.config.get("installedPurposeRuntime",False)) if purpose=="writer" else [])
         self.context_names={t["name"] for t in tools(purpose)}
         self.allowed={t["name"] for t in self.declarations}
+        from .tool_profile import for_context
+        self.tool_profile=for_context(self.config,self.purpose)
         self.rpc=AppServer(self.config["binary"],Path(self.config["homes"][purpose]),
           self.state/"native",self.event,self.tool,on_submission=self.submitted,enterprise=True,
           collaboration_channel=self.config.get("nativeCollaborationChannel") if purpose=="writer" else None,
@@ -142,6 +144,7 @@ class ContextRunner:
             allowed += [{"name":name} for name in ("exec_command","write_stdin","apply_patch","update_plan")]
             if self.config.get("nativeCollaborationChannel"):
                 allowed += [{"name":name} for name in ("coordination_act","collaborative_edit_plan")]
+        allowed += self.tool_profile["allowedTools"]
         settings={"cwd":self.config["workspace"],"model":self.config["model"],
           "sandbox":self.config.get("sandbox","danger-full-access"),
           "approvalPolicy":self.config.get("approvalPolicy","never"),
@@ -152,7 +155,8 @@ class ContextRunner:
             "features.goal_external_lifecycle":False,"agents.enabled":False,
             "features.multi_agent":False,"features.multi_agent_v2":False,
             "tools.update_plan.enabled":self.purpose=="writer",
-            "model_reasoning_effort":self.config["effort"]}}
+            "model_reasoning_effort":self.config["effort"],
+            **self.tool_profile["overrides"]}}
         record=self.state/"context.json"
         if record.exists():
             old=json.loads(record.read_text())
@@ -187,7 +191,8 @@ class ContextRunner:
         if self.purpose=="reader" and binding.get("workUpdates")!=1:
             raise RuntimeError("Hollywood native work-update contract unavailable")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
-                                    "effectiveToolPolicy":result.get("toolPolicy")})
+                                    "effectiveToolPolicy":result.get("toolPolicy"),
+                                    "approvedToolProfile":self.tool_profile["summary"]})
         if self.activity:
             self.activity.start()
             from .purpose_tool_recovery import reconcile as reconcile_native_tools

@@ -121,7 +121,7 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
         "global": True, "hollywoodUrl": profile["hollywoodUrl"], "machineIdentity": host.machine_identity(),
         **{k: profile[k] for k in ("binary", "interpreter", "pythonRoot", "model", "effort", "approvedModelAuthFile")},
         "nativeCollaborationChannel": str(channel)}
-    for optional in ("environmentProfileFile", "serviceMemoryMaxBytes"):
+    for optional in ("environmentProfileFile", "serviceMemoryMaxBytes", "toolProfileFile"):
         if optional in profile:
             spec[optional] = profile[optional]
     original(spec_path, spec)

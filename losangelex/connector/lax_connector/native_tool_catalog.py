@@ -119,7 +119,8 @@ TOOLS += [
     spec(
         "lax_provision_worker",
         "Verified Global administrator: provision and start a scoped Linux worker on this enrolled host. Credentials remain private; no model runs until a request is addressed to it.",
-        {"agentId": STRING, "serviceMemoryMaxBytes": {"type":"integer", "minimum":268435456, "maximum":1099511627776}},
+        {"agentId": STRING, "serviceMemoryMaxBytes": {"type":"integer", "minimum":268435456, "maximum":1099511627776},
+         "toolProfileFile": {"type":"string","description":"Optional administrator-protected native writer tool/provider declaration on this execution host. Do not copy another agent or human configuration."}},
         ["agentId"],
     ),
     spec(

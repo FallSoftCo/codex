@@ -1,0 +1,61 @@
+{
+  "schema": "lax-native-approved-tools-proof/v1",
+  "at": 1792430075.8849134,
+  "runtime": "SDK105/H73 venv-r100",
+  "authority": "f96e5615-0e6d-48d3-93b6-dc54393d5c2e",
+  "agent": "79d5190e-563d-48ee-826f-5037b157258a",
+  "room": "bc392b9b-a0ff-411a-bcd2-513dfa3439fb",
+  "sourceRequest": "bfa19c63-7c4c-466e-8b07-a35c14758339",
+  "authorKind": "agent",
+  "operation": "native-approved-provider-service-read-r104",
+  "delivery": {
+    "id": "66ffe967-1bba-4895-b3a3-c3c1fa2d9df7",
+    "state": "completed",
+    "generation": 1
+  },
+  "mcpCalls": [
+    {
+      "itemId": "exec-098ed237-ea57-4eac-8d5c-d09f119a154f",
+      "server": "computer_use",
+      "tool": "run",
+      "status": "completed",
+      "nativeThread": "01a15517-1ef1-7970-81a9-67f26373ad6e",
+      "nativeTurn": "01a1551f-8e89-7c61-8888-c5fe7f98e650",
+      "method": "runJob",
+      "jobId": "provider-qualification-r103-8cd46238-d8df-5313-aea0-d918d7ba9ea5"
+    },
+    {
+      "itemId": "exec-8211b8f3-e560-4a0c-ab7e-44abfa2e3d64",
+      "server": "computer_use",
+      "tool": "status",
+      "status": "completed",
+      "nativeThread": "01a15517-1ef1-7970-81a9-67f26373ad6e",
+      "nativeTurn": "01a1551f-8e89-7c61-8888-c5fe7f98e650",
+      "method": "jobStatus",
+      "jobId": "provider-qualification-r103-8cd46238-d8df-5313-aea0-d918d7ba9ea5"
+    }
+  ],
+  "providerResultIndependentlyMatches": true,
+  "brokerReceiptQualification": {
+    "state": "completed",
+    "ok": true,
+    "stopReason": "executor_lost",
+    "effect": "completed_unverified",
+    "executorStopped": true
+  },
+  "artifact": {
+    "path": "/var/lib/harness/f96e5615-0e6d-48d3-93b6-dc54393d5c2e/purpose-agents/79d5190e-563d-48ee-826f-5037b157258a/home/work/provider-qualification-r103.json",
+    "bytes": 6848,
+    "sha256": "9766718c7480b9da8255dbc987dd796f46122049424b7d7d17f1cee917ef914e"
+  },
+  "historyEvents": 18,
+  "mcpActivityEvents": 0,
+  "jobRepeated": false,
+  "readerResponderExternalTools": false,
+  "businessAgentsWoken": false,
+  "limits": [
+    "Read-only provider metadata, no browser/desktop input",
+    "Not physical phone, voice, push or complete provider catalog proof",
+    "Broker retained completed_unverified; no external-effect certainty inferred"
+  ]
+}

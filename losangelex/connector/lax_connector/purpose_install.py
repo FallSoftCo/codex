@@ -223,6 +223,15 @@ def install(spec, *, prepare_only=False):
         check=True,capture_output=True,text=True).stdout)
     if not Path(runtime["module"]).is_relative_to(Path(spec["pythonRoot"])):
         raise ValueError("Installed interpreter loads another connector")
+    if spec.get("toolProfileFile"):
+        from .tool_profile import read as read_tool_profile
+        source=Path(spec["toolProfileFile"])
+        approved=read_tool_profile(source)
+        installed=record/"tool-profile.json"
+        file_once(installed,source.read_text(),0o440)
+        os.chown(installed,0,gid)
+        read_tool_profile(installed,approved["sha256"])
+        config.update(toolProfileFile=str(installed),toolProfileSha256=approved["sha256"])
     config_path=home/"agent.json"
     content=json.dumps(config,indent=2)+"\n"
     file_once(config_path,content,0o440)

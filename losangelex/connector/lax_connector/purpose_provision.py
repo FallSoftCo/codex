@@ -17,6 +17,8 @@ async def provision(c,arguments,operation,spec):
               c.config.get("workerServiceMemoryMaxBytes",DEFAULT_BYTES)))}
     if c.config.get("nativeCollaborationChannel"):
         spec["nativeCollaborationChannel"]=c.config["nativeCollaborationChannel"]
+    if arguments.get("toolProfileFile"):
+        spec["toolProfileFile"]=arguments["toolProfileFile"]
     path=c.state/("purpose-provision-"+spec["agentId"]+".json")
     if path.exists():
         old=json.loads(path.read_text())

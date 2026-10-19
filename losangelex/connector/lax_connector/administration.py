@@ -219,6 +219,8 @@ async def _administer(connector, name, arguments, operation):
              **{key: arguments[key] for key in ("revision", "workspaceRevision", "state", "canRead", "canWrite")}},
         )
     if name == "lax_provision_worker":
+        if arguments.get("toolProfileFile") and not connector.config.get("installedPurposeRuntime"):
+            raise ValueError("Approved writer tool profiles require native purpose installation")
         if not connector.role_context.value["hostAdministrationVerified"]:
             raise PermissionError("Host administration not verified")
         agent = str(UUID(arguments["agentId"]))

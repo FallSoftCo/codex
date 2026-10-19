@@ -124,6 +124,10 @@ def verify(value):
             files[path] = expected
         files[str(env_path)] = checksum(env_path)
         files[environment["profileFile"]] = checksum(environment["profileFile"])
+    if config.get("toolProfileFile"):
+        from .tool_profile import read as read_tool_profile
+        profile=read_tool_profile(config["toolProfileFile"],config["toolProfileSha256"])
+        files[config["toolProfileFile"]]=profile["sha256"]
     # Run only local capability checks under the actual service UID. Provider
     # reachability and genuine model execution remain the first-user API proof.
     subprocess.run(["runuser", "-u", value["linuxUser"], "--", value["interpreter"], "-I", "-B", "-c",
