@@ -1,0 +1,187 @@
+{
+  "schema": "lax-reader-qualification-quality-audit/v1",
+  "at": 1792446689.1935751,
+  "auditScope": "Read-only retained native traces/drivers plus non-model executions of the original delivered CLI and deliberately broken control. No task/message/model/service resubmission.",
+  "originalArtifactSha256": "1b1afe2b5b50bc4641add04af4517cebbff66d5e9719c1d8bcd281df5acf1ee8",
+  "originalFixtureUnchanged": true,
+  "negativeControl": "Program ignores both CSV and date; prints hardcoded known outputs and switches only on presence of --product.",
+  "oldArtifactOracleAcceptedBrokenControl": {
+    "first_run_single_dataset": true,
+    "restart_run_unfiltered": true,
+    "restart_run_example_filter": true
+  },
+  "unseenCasesAuthoredAfterDelivery": [
+    {
+      "name": "empty_input",
+      "expected": {
+        "actionIds": [],
+        "overdueIds": [],
+        "byProduct": {}
+      },
+      "deliveredArtifact": {
+        "actionIds": [],
+        "overdueIds": [],
+        "byProduct": {}
+      },
+      "deliveredArtifactPassed": true,
+      "brokenControlPassed": false
+    },
+    {
+      "name": "new_ids_products_and_strict_due_boundary",
+      "expected": {
+        "actionIds": [
+          "A2",
+          "B1",
+          "R7",
+          "Z9"
+        ],
+        "overdueIds": [
+          "A2",
+          "R7"
+        ],
+        "byProduct": {
+          "NextComp": 1,
+          "lax": 2,
+          "ozzz": 1
+        }
+      },
+      "deliveredArtifact": {
+        "actionIds": [
+          "A2",
+          "B1",
+          "R7",
+          "Z9"
+        ],
+        "overdueIds": [
+          "A2",
+          "R7"
+        ],
+        "byProduct": {
+          "NextComp": 1,
+          "lax": 2,
+          "ozzz": 1
+        }
+      },
+      "deliveredArtifactPassed": true,
+      "brokenControlPassed": false
+    },
+    {
+      "name": "changed_as_of_date",
+      "expected": {
+        "actionIds": [
+          "A2",
+          "B1",
+          "R7",
+          "Z9"
+        ],
+        "overdueIds": [
+          "A2",
+          "R7",
+          "Z9"
+        ],
+        "byProduct": {
+          "NextComp": 1,
+          "lax": 2,
+          "ozzz": 1
+        }
+      },
+      "deliveredArtifact": {
+        "actionIds": [
+          "A2",
+          "B1",
+          "R7",
+          "Z9"
+        ],
+        "overdueIds": [
+          "A2",
+          "R7",
+          "Z9"
+        ],
+        "byProduct": {
+          "NextComp": 1,
+          "lax": 2,
+          "ozzz": 1
+        }
+      },
+      "deliveredArtifactPassed": true,
+      "brokenControlPassed": false
+    },
+    {
+      "name": "unseen_case_whitespace_filter",
+      "expected": {
+        "actionIds": [
+          "A2"
+        ],
+        "overdueIds": [
+          "A2"
+        ],
+        "byProduct": {
+          "NextComp": 1
+        }
+      },
+      "deliveredArtifact": {
+        "actionIds": [
+          "A2"
+        ],
+        "overdueIds": [
+          "A2"
+        ],
+        "byProduct": {
+          "NextComp": 1
+        }
+      },
+      "deliveredArtifactPassed": true,
+      "brokenControlPassed": false
+    },
+    {
+      "name": "zero_matches",
+      "expected": {
+        "actionIds": [],
+        "overdueIds": [],
+        "byProduct": {}
+      },
+      "deliveredArtifact": {
+        "actionIds": [],
+        "overdueIds": [],
+        "byProduct": {}
+      },
+      "deliveredArtifactPassed": true,
+      "brokenControlPassed": false
+    }
+  ],
+  "interpretation": "Old artifact oracle has demonstrated false-positive capability. This does not establish that the actual delivered CLI was fake: its retained bytes passed all5new cases.",
+  "architectureTestWeaknesses": [
+    "Explicit correction and explicit unrelated/no-action wording make semantic relevance selection easy.",
+    "Status question repeats the correction topic and cues attention.",
+    "Two tasks are one short session/one agent with3contexts, not independent repeated trials or cross-agent evidence.",
+    "Writer active flag establishes an admitted inference at the observed time, not a command in flight or that a stale implementation was already committed.",
+    "Second test was a clean reader stop while idle. Same native thread IDs establish identity, not arbitrary crash or compaction recovery.",
+    "Fields semanticOwnerInterventions=0 and codeChangedDuringSuccessfulSemanticRuns=false were recorded assertions, not independently enforced measurements.",
+    "No pre-registered baseline/ablation comparison demonstrates superiority over the prior reader architecture.",
+    "No automated gate currently prevents promoting this smoke evidence into a broader readiness claim."
+  ],
+  "supportedClaims": [
+    "Real native model contexts produced attributable tool calls and canonical events.",
+    "Exact incoming fragments were retained in native reader history without model-selected primary reads in the first run.",
+    "Specific same-work correction, status answer and delivered output occurred in one connected smoke journey.",
+    "A clean idle-reader restart retained and later handled two specific messages.",
+    "Retained delivered artifact is general enough to pass5additional unseen valid-input cases."
+  ],
+  "unsupportedClaims": [
+    "General semantic relevance",
+    "Long-running stability",
+    "Context compaction recovery",
+    "Mid-request crash recovery",
+    "Multi-agent or multi-host stability",
+    "Architecture superiority",
+    "Production replacement readiness"
+  ],
+  "nextEvaluationContract": {
+    "freezeBeforeModels": "Ordinary tasks, unlabeled mixed room traffic, expected outcome and operational limits; generated inputs held outside agent workspace.",
+    "failOn": "Dropped necessary information, invented completion, changed objective, wrong audience, unnecessary assignment/reply cycle, unfinished deliverable or human semantic rescue.",
+    "negativeControls": "Require scorer to reject ignored-message, irrelevant-work, fixed-output and false-completion controls before interpreting a live pass.",
+    "sample": "Predeclare a finite varied set; keep every failure and count interventions. Compare a baseline/ablation when claiming a causal advantage.",
+    "focus": "One actual collaborative deliverable including a non-prescriptive discovery while writer is already executing; compaction/reconnect are explicit separate conditions."
+  },
+  "productionReplacementReady": false
+}

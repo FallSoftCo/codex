@@ -1,7 +1,7 @@
 {
   "schema": "lax-continuous-reader-readiness/v1",
   "at": 1792438072.9099061,
-  "status": "experimental-native-input-path-two-bounded-workflows-passed",
+  "status": "two-connected-smoke-workflows; semantic reliability unproven",
   "runtime": "SDK108/H76 venv-r120",
   "frozenContractSha256": "08dfdc48b594612a3eeaa3e7e82664a93739896123278c546a179ae2f18739ef",
   "firstProof": "continuous-reader-native-r121.json",
@@ -22,6 +22,7 @@
   },
   "productionReplacementReady": false,
   "currentLimitations": [
+    "Semantic scenarios were strongly cued and not an independently sampled or comparative evaluation. Smoke passes must not qualify autonomous operation.",
     "Native compaction under the new automatic input path not qualified; previous retrieval-driven compaction evidence is separate.",
     "New multi-agent/multi-room collaboration run with automatic reader input still required.",
     "Crash/lost-reply during native append recovery is implemented conservatively but unqualified; ambiguous originals stay held.",
@@ -36,5 +37,9 @@
       "Complete artifact checks, useful attributed conversation, separate execution activity, no acknowledgement cycles or unsolicited task acceptance"
     ],
     "constraint": "Do not add business sessions, timers, provider builds or production default cutover; no old worker resumes."
-  }
+  },
+  "updatedAt": 1792446707.6083941,
+  "evidenceQualityAudit": "continuous-reader-test-audit-20261019.json",
+  "artifactOracleWeakness": "Deliberately hardcoded program ignoring CSV/date passed all3original artifact checks. Actual retained CLI passed5additional unseen cases, which validates that artifact only.",
+  "operatorAssertions": "Intervention/code-change counts are operator-reported, not independently enforced measurements."
 }
