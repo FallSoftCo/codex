@@ -14,6 +14,7 @@ from .context_contract import COMMON, ROLES, ACTIONS, tools
 from .activity import Activity
 from .execution_scope import ExecutionScope
 from .native_tool_session import NativeToolSession, read_definitions
+from .native_tool_catalog import CAPABILITIES
 from .context_observation import TERMINAL, original_turn, wait_terminal
 from .journal import saved
 from .native_goals import external_admission
@@ -55,7 +56,7 @@ class ContextRunner:
         payload={"operationId":operation,"action":action,"nativeThread":self.thread,
                  "nativeTurn":turn or self.turn or "runtime","value":value or {}}
         path=f"agents/{self.config['agentId']}/contexts/{self.purpose}"
-        if action=="pending":
+        if action in ("pending", "ready"):
             return await self.agent.http(self.purpose,"POST",path,payload)
         journal=self.state/("operation-"+hashlib.sha256(operation.encode()).hexdigest()+".json")
         if journal.exists():
@@ -72,6 +73,9 @@ class ContextRunner:
                 result=await self.agent.http(self.purpose,"POST",path,payload)
             except Exception:
                 result=await self.agent.http(self.purpose,"GET",path+"/operations/"+operation)
+        if action=="admit" and result.get("delivery") is None:
+            journal.unlink()
+            return result
         saved(journal,{"request":payload,"state":"accepted","receipt":result})
         return result
 
@@ -234,6 +238,25 @@ class ContextRunner:
         self.closing=False
         self.admitted.clear()
         self.finished=asyncio.get_running_loop().create_future()
+        if self.purpose=="writer":
+            identity=pending[0]["id"]
+            try:
+                accepted=await self.request("admit",{"workId":identity,"capabilities":CAPABILITIES},
+                    operation="context-admit:"+identity,turn="admission")
+                if accepted.get("delivery") is not None:
+                    # A cached original acceptance is not current authorization.
+                    # This read checks placement, role, room, cancellation and owner
+                    # again without creating another claim or model submission.
+                    accepted=await self.request("ready",{"workId":identity},turn="admission")
+            except BaseException:
+                self.failed=True
+                self.active=False
+                raise
+            if accepted.get("delivery") is None:
+                self.active=False
+                saved(self.state/"admission-wait.json",accepted)
+                return
+            saved(self.state/"work-admission.json",accepted)
         saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"submission_intent",
                                       "pending":pending,"nativeThread":self.thread})
         self.trace("wake",{"fingerprint":fingerprint,"pending":pending})
