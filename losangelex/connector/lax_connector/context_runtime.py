@@ -205,7 +205,7 @@ class ContextRunner:
         # never converted into another model submission.
         wake=self.state/"wake.json"
         old=json.loads(wake.read_text()) if wake.exists() else {}
-        if old.get("state") == "not_submitted":
+        if old.get("state") in ("not_submitted", "preparing_input"):
             await self.request("release_reservation", {"permitId":old["permitId"]},
                 operation="release-unused:"+old["permitId"], turn="admission")
             saved(self.state/"restart-recovery.json", {
@@ -405,14 +405,18 @@ class ContextRunner:
             self.failed=True
             self.active=False
             raise
-        saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"submission_intent",
-                                      "pending":pending,"nativeThread":self.thread,"permitId":self.permit})
+        saved(self.state/"wake.json",{"fingerprint":fingerprint,
+            "state":"preparing_input" if self.inbox else "submission_intent",
+            "pending":pending,"nativeThread":self.thread,"permitId":self.permit})
         self.trace("wake",{"fingerprint":fingerprint,"pending":pending})
         model_submitted=False
         try:
             if self.executor:
                 await self.executor.require_live()
             batch=await self.inbox.append(pending) if self.inbox else None
+            if self.inbox:
+                saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"submission_intent",
+                    "pending":pending,"nativeThread":self.thread,"permitId":self.permit})
             model_submitted=True
             result=await self.rpc.call("turn/start",{
               "threadId":self.thread,"input":[],"model":self.config["model"],

@@ -110,12 +110,21 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
                 return {}
             async def rpc(method, params, **kwargs):
                 calls.append(method)
-                self.assertEqual(calls[:2], ["reserve", "turn/start"])
+                self.assertEqual(calls[:3], ["reserve", "currentPermit", "turn/start"])
                 runner.finished.set_result({"id": "original-turn", "status": "completed"})
                 return {"turn": {"id": "original-turn"}}
+            async def http(purpose, method, path, payload=None):
+                self.assertEqual((purpose, method), ("reader", "GET"))
+                self.assertTrue(path.startswith("agents/original-agent/contexts/reader/operations/"))
+                calls.append("currentPermit")
+                return {"currentPermit": {"id": "original-permit",
+                    "state": "reserved", "native_turn": None}}
+            runner.agent = SimpleNamespace(http=http)
+            runner.inbox = None  # This fixture isolates permit admission, not input delivery.
+            runner.native_tools = None
             runner.purpose = "reader"
             runner.thread = "original-reader-thread"
-            runner.config = {"model": "unchanged", "effort": "unchanged"}
+            runner.config = {"agentId": "original-agent", "model": "unchanged", "effort": "unchanged"}
             runner.state = Path(tmp)
             runner.admitted = asyncio.Event()
             runner.effect_lock = asyncio.Lock()
@@ -124,7 +133,7 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
             runner.trace = lambda *_: None
             runner.activity = None
             await runner.run("material", [{"id": "original-material"}])
-            self.assertEqual(calls, ["reserve", "turn/start", "begin", "end"])
+            self.assertEqual(calls, ["reserve", "currentPermit", "turn/start", "begin", "end"])
             self.assertFalse(runner.active)
             self.assertEqual(json.loads((runner.state / "wake.json").read_text())["state"], "finished")
 

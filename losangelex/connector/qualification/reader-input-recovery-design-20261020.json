@@ -1,0 +1,38 @@
+{
+  "at": 1792450349.4912415,
+  "status": "candidate built SDK109; native queue-boundary qualified, full Hollywood three-context crash recovery not yet qualified",
+  "problem": "Native thread/inject_items active-turn acknowledgement queues input in RAM; SDK108 cross-inference content-hash dedup can suppress canonical material after loss of that queue.",
+  "sourceEvidence": [
+    "codex-rs/core/src/session/inject.rs:74",
+    "codex-rs/core/src/session/input_queue.rs:368",
+    "codex-rs/core/src/codex_thread.rs:858"
+  ],
+  "decision": "Hollywood input/work/response state remains canonical. Refresh primary input views before every newly admitted reader inference; preserve unknown native model-turn holds and original message/work IDs. Queue acceptance is not durable history or interpretation.",
+  "changes": [
+    "Per-attempt input journal; no cross-inference suppression by old acknowledgement.",
+    "Read native history as an observation without overwriting original acceptance/unknown receipts.",
+    "Separate preparing_input from model submission intent, allowing unused inference reservation recovery without claiming a native turn ran."
+  ],
+  "limits": [
+    "Canonical input may appear more than once in modelhistory; no exactly-once claim.",
+    "Full Hollywood admission plusthree-context taskcompletion aftercrash and compaction remain unqualified.",
+    "SDK108 team/production/pilot runtimes unchanged."
+  ],
+  "evidence": {
+    "mechanical": "2 regressions fail installed SDK108 and pass109; RPC stub,0models",
+    "nativeBoundary": {
+      "path": "/var/lib/lax-three-context-20261018-r01/native-reader-queue-fault-r132/result.json",
+      "thread": "01a1565b-6cd2-7973-91a9-282f6715b49a",
+      "turn": "01a1565c-639c-7291-be20-2a01e2454224",
+      "modelStarts": 1,
+      "fault": "Real active native queue acknowledgement then injected client reply loss and SIGKILL of owned native process group",
+      "observed": "Late fragment absent beforekill; original turn interrupted on same-thread resume; SDK108 recovery refusal; SDK109 fresh view durably present; original intent preserved",
+      "limits": "ReaderInbox source is a test fixture, not actual Hollywood admission. No new model turn or business execution aftercrash. Not full three-context recovery proof."
+    }
+  },
+  "retainedFailures": [
+    "Initial pytest invocation unavailable; used standard library unittest, no dependency install.",
+    "Pre-existing admission fixture failed on108and109 because it bypassed initialization/currentpermitread; explicit currentpermit/inbox/native_tools fixture correction retains admission assertions.",
+    "Native fixture initially omitted readerstateparent; failed beforemodelcall. Originalthread reused, failure and setup correction retained."
+  ]
+}

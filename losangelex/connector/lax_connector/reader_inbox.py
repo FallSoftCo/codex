@@ -1,4 +1,11 @@
-"""Automatic, journaled primary input delivery through the native context API."""
+"""Mechanical primary input views reconstructed from canonical Hollywood state.
+
+A native queue acknowledgement is not durable history or interpretation.
+Snapshots are refreshed for each reader inference; canonical input/work states
+prevent duplicate task acceptance. Uncertain model turns keep their separate
+existing admission/recovery hold. Rebuilding a view never re-posts a message or
+replays a tool, task, peer request or external effect.
+"""
 import hashlib
 import json
 from pathlib import Path
@@ -14,15 +21,16 @@ class ReaderInbox:
         self.delivered = {}
 
     async def recover(self):
-        uncertain = [p for p in self.directory.glob("*.json")
-                     if json.loads(p.read_text()).get("state") == "intent"]
-        if not uncertain:
+        journals = []
+        for path in self.directory.glob("*.json"):
+            old = json.loads(path.read_text())
+            if old.get("state") in ("intent", "appended", "accepted"):
+                journals.append((path, old))
+        if not journals:
             return
         result = await self.runner.rpc.call("thread/read",
             {"threadId": self.runner.thread, "includeTurns": False})
         path = Path(result["thread"]["path"])
-        # Inspect the exact retained native record. Absence cannot authorize replay.
-        records = [json.loads(line) for line in path.read_text().splitlines() if line]
         def outputs(value):
             if isinstance(value, dict):
                 if value.get("type") == "function_call_output":
@@ -33,15 +41,28 @@ class ReaderInbox:
                 for child in value:
                     yield from outputs(child)
         present = set()
-        for record in records:
-            for output in outputs(record):
-                if isinstance(output, str):
-                    present.add(output)
-        for journal in uncertain:
-            old = json.loads(journal.read_text())
-            if not all(item["output"] in present for item in old["items"]):
-                raise RuntimeError("Original reader append remains uncertain; inspect its exact journal/history without retry")
-            saved(journal, {**old, "state": "appended", "recoveredFromNativeHistory": True})
+        with path.open() as history:
+            for line in history:
+                if line.strip():
+                    for output in outputs(json.loads(line)):
+                        if isinstance(output, str):
+                            present.add(hashlib.sha256(output.encode()).hexdigest())
+        observations = []
+        for journal, old in journals:
+            retained = sum(hashlib.sha256(item["output"].encode()).hexdigest() in present
+                           for item in old["items"])
+            observations.append({"journal": journal.name, "operation": old["operation"],
+                "originalState": old["state"], "fragments": len(old["items"]),
+                "retainedFragments": retained,
+                "historyObserved": retained == len(old["items"])})
+        saved(self.directory / "recovery-observation.json", {
+            "nativeThread": self.runner.thread, "batches": observations,
+            "meaning": "History observation only. Original receipts unchanged. Current canonical pending inputs are refreshed before a newly admitted inference.",
+            "modelTurnsStarted": 0, "operationsReplayed": 0})
+        self.runner.trace("reader_input_recovery_observed", {
+            "batches": len(observations),
+            "incompleteHistoryBatches": sum(not o["historyObserved"] for o in observations),
+            "operationsReplayed": 0, "interpretationInferred": False})
 
     async def append(self, pending):
         runner = self.runner
@@ -49,15 +70,11 @@ class ReaderInbox:
         operation = "reader-inbox:" + str(uuid4())
         snapshot = await runner.request("inbox", {"materialIds": [r["id"] for r in selected]},
                                        operation=operation, turn="input-delivery")
-        fingerprint = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
-        journal = self.directory / (fingerprint + ".json")
-        if journal.exists():
-            old = json.loads(journal.read_text())
-            if old["state"] == "appended":
-                return old
-            if old["state"] != "rejected":
-                raise RuntimeError("Original reader append is uncertain; no replacement was submitted")
-            saved(journal.with_name(journal.stem + "-rejected.json"), old)
+        # An old acknowledgement must not suppress a fresh canonical input view.
+        # Same-process duplicate wake delivery is bounded by delivered revisions;
+        # interpretation/durable Work deduplication remains in Hollywood.
+        identity = hashlib.sha256(operation.encode()).hexdigest()
+        journal = self.directory / (identity + ".json")
         items = []
         for chunk in snapshot["chunks"]:
             output = json.dumps({"schema": "lax-reader-fragment/v1",
@@ -74,12 +91,13 @@ class ReaderInbox:
                 saved(journal, {**intent, "state": "rejected", "nativeAppendAdmitted": False,
                                 "code": error.code})
             raise
-        result = {**intent, "state": "appended"}
+        result = {**intent, "state": "accepted", "nativeHistoryDurability": "unconfirmed"}
         saved(journal, result)
-        runner.trace("reader_input_appended", {"snapshotOperationId": operation,
+        runner.trace("reader_input_accepted", {"snapshotOperationId": operation,
             "inputIds": snapshot["inputIds"], "chunks": len(items),
             "duringNativeTurn": runner.turn if runner.active and runner.accepting else None,
-            "modelSelectedRetrieval": False, "interpretationInferred": False})
+            "modelSelectedRetrieval": False, "nativeHistoryDurability": "unconfirmed",
+            "interpretationInferred": False})
         return result
 
     async def adopt(self, batch):
