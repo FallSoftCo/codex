@@ -20,13 +20,39 @@ inventory and model-switch behavior; it does not establish live model cooperatio
 or complete enterprise readiness.
 
 The LAX package provides:
-- lax-connect: deterministic resident agent or original-operation reconciliation.
-- lax-provision-global and lax-provision-worker: actual Linux identities,
-  approved model authentication, runtime, workspace and service enrollment.
+
+- lax-agent: independent durable reader, writer and responder runtime contexts.
+- lax-provision-global (also lax-provision-native-global): native first-Global
+  preparation, host/collaboration enrollment, readiness sealing and explicit
+  first activation. Both names use the same implementation.
+- lax-install-agent: the same native purpose installation for peers.
+- lax-connect and lax-provision-worker: retained single-context installations
+  and original-operation inspection; these are not the first-Global default.
 - lax-agent-context: explicit adoption of retained context and metadata-only
   retirement of a legacy synthetic role goal.
 - lax-host and lax-service: independent execution observations and protected
   service enrollment/readiness.
+
+First-Global installation requires an explicit
+`lax-first-global-install/v1` profile passed with `--spec`; use `--activate`
+for the first activation after readiness seals. The profile references the
+Hollywood bootstrap's protected original installation intent, explicit host and
+private endpoint, approved native binary/interpreter, model/account, host policy
+and optional environment profile. Provisioning prepares the Unix identity and
+three purpose bindings before installing shared host infrastructure, then seals
+the actual installed channel, resource and account facts. It starts no model
+turn. Accepted human or peer work is the source of inference.
+
+Re-running setup reconciles the same identities and original receipts. Once
+initial activation is recorded, `--activate` reads service status and preserves
+a deliberate stop. An existing single-context Global requires explicit adoption;
+the native factory refuses to replace it. The retained
+`python -m lax_connector.linux_admin` primitive is not the default setup path.
+
+This factory does not yet configure system boot desired state or install the
+Hollywood API/database/NextComp gateway. Those dependencies must already be
+installed and the actual private API available. Do not describe factory readiness
+as a complete enterprise installation.
 
 Global installation optionally accepts environmentProfileFile. This declares
 approved non-secret repository, GitHub, SSH and build routes for its authority.

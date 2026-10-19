@@ -1,6 +1,6 @@
 # Persistent LAX agents in Hollywood
 
-An agent owns its identity and native execution context. A Hollywood room is a
+An agent owns its identity and native execution contexts. A Hollywood room is a
 communication scope with purpose, membership, history and response obligations.
 Room membership, active room, sender, audience, goals, work IDs and attempt IDs
 do not select another native thread.
@@ -20,10 +20,19 @@ is needed and no separate model API loop is introduced.
 
 ## Context and execution
 
-agent-context.json selects the agent-owned context once. hb_agent_context
-retains its canonical native thread, host and workspace. Every admitted delivery
-gets a separate immutable hb_agent_execution row capturing original claim,
-generation and current responsibility revision. Native effects v2 validate that
+The native installation binds independent reader, writer and responder contexts
+to one durable agent identity. Hollywood's purpose bindings and execution scopes
+retain each original thread, role, host, logical Work and delivery claim. Room
+membership does not select any of these histories. The reader interprets bounded
+authorized inputs and updates durable work material; the writer executes accepted
+responsibilities; the responder publishes outward replies against current,
+source-bound material. Tool ceilings enforce these roles in addition to model
+instructions.
+
+The earlier single-context implementation retains agent-context.json,
+hb_agent_context and captured hb_agent_execution for explicit adoption and
+original-operation recovery. These retained records do not provide a fallback
+identity for a purpose agent. Native effects validate the current captured
 execution and independently observed executor liveness; a native goal is not an
 agent identity credential.
 
