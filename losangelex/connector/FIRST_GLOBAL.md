@@ -24,8 +24,10 @@ the original native history. Existing production and original team workers were
 preserved. The earlier r44 prototype failed before Global activation at socket
 readiness and directory traversal; those original receipts remain retained.
 
-This source does not certify a completed enterprise deployment. Actual first
-human API work, selected Git/SSH/provider routes, boot desired state, daily
-operation, phone delivery and multi-host qualification remain separate gates.
+This source does not certify a completed enterprise deployment. The original fresh r47 human API task also completed through reader, writer
+and responder, with generation1 retained, all three inference permits released,
+and independent readback of BOOT-SMOKE.md matching the published SHA-256.
+Selected Git/SSH/provider routes, boot desired state, daily operation, phone
+delivery and multi-host qualification remain separate gates.
 An ordinary Hollywood restart must preserve explicit agent stops; do not add
 blanket PartOf/BoundBy dependencies that restart or kill other agent work.

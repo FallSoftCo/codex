@@ -96,6 +96,26 @@ class ContextRunner:
         saved(journal,{"request":payload,"state":"accepted","receipt":result})
         return result
 
+    async def admit_work(self, identity):
+        operation = "context-admit:" + identity
+        value = {"workId": identity, "capabilities": CAPABILITIES}
+        journal = self.state / ("operation-" + hashlib.sha256(operation.encode()).hexdigest() + ".json")
+        if journal.exists():
+            original = json.loads(journal.read_text())["request"]
+            if (original["action"] != "admit" or original["operationId"] != operation
+                    or original["nativeThread"] != self.thread or original["nativeTurn"] != "admission"
+                    or set(original["value"]) != {"workId", "capabilities"}
+                    or original["value"]["workId"] != identity):
+                raise RuntimeError("Original Work admission belongs to a different scope")
+            # Capability discovery changes across releases. It must never rewrite
+            # the original accepted/uncertain admission or create another claim.
+            value = original["value"]
+        accepted = await self.request("admit", value, operation=operation, turn="admission")
+        if accepted.get("delivery") is not None:
+            # The receipt is immutable; current authority is independently read.
+            accepted = await self.request("ready", {"workId": identity}, turn="admission")
+        return accepted
+
     async def send_activity(self, record):
         scope=record["executionScope"]
         if (scope["agentId"]!=self.config["agentId"] or scope["purpose"]!=self.purpose
@@ -291,13 +311,7 @@ class ContextRunner:
         if self.purpose=="writer":
             identity=pending[0]["id"]
             try:
-                accepted=await self.request("admit",{"workId":identity,"capabilities":CAPABILITIES},
-                    operation="context-admit:"+identity,turn="admission")
-                if accepted.get("delivery") is not None:
-                    # A cached original acceptance is not current authorization.
-                    # This read checks placement, role, room, cancellation and owner
-                    # again without creating another claim or model submission.
-                    accepted=await self.request("ready",{"workId":identity},turn="admission")
+                accepted=await self.admit_work(identity)
             except BaseException:
                 self.failed=True
                 self.active=False

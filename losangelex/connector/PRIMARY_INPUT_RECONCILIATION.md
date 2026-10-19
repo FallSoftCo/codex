@@ -19,3 +19,10 @@ NativeToolSession, authentication, original administrative receipt recovery,
 cached same-call result, non-admin rejection and cancelled-original rejection.
 It starts no model and is not evidence of a model choosing this tool. The source
 candidate is separate from the still-running dev88 native processes.
+
+Accepted Work admission payloads remain immutable across runtime capability
+upgrades. Continuation reads the original journal and then independently checks
+current readiness; new discovery capabilities never rewrite the original
+admission or create another delivery claim. The r51 integration qualified both
+original active team Works through the actual SDK and authenticated ready read
+with zero new admission POSTs or model calls.
