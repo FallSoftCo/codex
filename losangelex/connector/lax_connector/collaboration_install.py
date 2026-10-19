@@ -226,7 +226,7 @@ def prepare(spec, destination):
     descriptor = {
         "schema": "lax-native-collaboration-channel/v1",
         "socket": str(socket_directory / "bridge.sock"),
-        "ports": sorted(IMPLEMENTED_PORTS | {"owner-briefing/v1"}),
+        "ports": sorted(IMPLEMENTED_PORTS | {"owner-briefing/v1","edit-status/v1"}),
     }
     adapter = adapter_digest()
     bridge["adapterSha256"] = adapter

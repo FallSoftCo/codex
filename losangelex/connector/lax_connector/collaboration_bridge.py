@@ -282,7 +282,10 @@ class Bridge:
             result = self.http("POST", route, body)
         except urllib.error.HTTPError as error:
             if error.code in (400, 403, 409):
-                saved(path, {"state": "rejected", "fingerprint": fingerprint, "wire": body, "status": error.code})
+                detail=error.read(4096).decode(errors="replace")
+                saved(path, {"state": "rejected", "fingerprint": fingerprint, "wire": body,
+                    "status": error.code, "rejection":detail,
+                    "phase":action,"originalPostConfirmedRejected":True})
             raise
         except Exception:
             saved(path, {"state": "unknown", "fingerprint": fingerprint, "wire": body})
@@ -512,7 +515,10 @@ class Bridge:
                         require(0 < size <= (65536 if owner is not None else FRAME_LIMIT), "Native frame bound exceeded")
                         frame = strict_json(receive(connection, size))
                         if owner is not None:
-                            from .owner_briefing import carry
+                            if frame.get("schema")=="lax-native-edit-status/v1":
+                                from .native_edit_status import carry
+                            else:
+                                from .owner_briefing import carry
                             response = carry(capture, peer, frame, owner)
                         else:
                             response = self.handle(peer, frame)

@@ -68,6 +68,13 @@ TOOLS = [
 ]
 ROLE = {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
 TOOLS += [
+    spec("lax_native_edit_status",
+        "Read protected original edit receipts for this current work. Distinguishes a confirmed preflight rejection (no mutation admission) from pending/unknown or begun effects. Inspection grants no mutation and no automatic retry; missing records prove nothing.",
+        {"after":{"type":"string","pattern":"^[a-f0-9]{64}$"}},[]),
+    spec("hollywood_withdraw_question",
+        "Withdraw your own unanswered nonblocking question when verified facts make it obsolete. Retains the original question and an attributed reason; never supplies a human answer or accepts an approval.",
+        {"attentionId":STRING,"reason":{"type":"string","minLength":1,"maxLength":2000}},
+        ["attentionId","reason"]),
     spec(
         "hollywood_ask",
         "Ask the attributable human a necessary scoped question through Hollywood. Returns a durable pending receipt immediately; retain the unfinished outcome and continue other obligations or end this inference slice. The authenticated answer later arrives as primary input in your same context. Do not claim an answer or completed work from acceptance. Do not request secrets in chat.",

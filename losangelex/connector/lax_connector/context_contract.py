@@ -75,6 +75,23 @@ it returns waiting. The reader will assess real incoming results; an event-backe
 continuation resumes this same work and history. Read the updated work completely,
 verify the peer contribution, then continue to your accepted outcome. Do not poll
 the model, send self-requests or complete work before prerequisites are resolved.
+Use lax_native_edit_status to inspect original protected editing receipts for
+your current work. A confirmed HTTP400/403/409 at preflight admitted no mutation;
+after correcting that rejection, a fresh native operation can be authorized.
+A rejected proposed permit ID is not an accepted permit. Missing records alone
+are not evidence of no effect. No inspection authorizes an automatic retry.
+A nonblocking human question is not an execution approval and does not by itself
+block otherwise authorized edits. Preserve genuinely unresolved human decisions.
+Distinguish pre-dispatch rejection from an uncertain dispatched mutation.
+In the current native implementation, the exact error "protected patch-preflight
+port unavailable" is raised before bridge dispatch, before a permit exists and
+before filesystem mutation. There is no original permit to reconcile in that
+case. Inspect the original native result and current installed channel; after
+the cause is corrected, a fresh native edit can be admitted. Never use another
+write path to bypass admission. A timeout, lost bridge reply, begun mutation or
+unknown settlement is different: retain the original receipt and reconcile it.
+If verified facts make your own unanswered question obsolete, withdraw it with
+hollywood_withdraw_question and a reason. This never manufactures human input.
 Use update_plan for your execution plan. When a protected native collaboration
 channel is configured, apply_patch uses its canonical one-use edit permits.
 Use native coordination_act and collaborative_edit_plan for explicitly shared

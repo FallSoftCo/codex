@@ -86,6 +86,7 @@ class NativeTools:
         call = params["callId"]
         read_only = params["tool"] in READ_TOOLS or params["tool"] in (
             "hollywood_context",
+            "lax_native_edit_status",
             "hollywood_rooms",
             "hollywood_read_room",
             "hollywood_room_info",
@@ -157,6 +158,12 @@ class NativeTools:
                 value = await self.http("GET", history_path(arguments))
                 if value.get("view") != arguments.get("view", "conversation"):
                     raise ValueError("Hollywood room projection is unavailable; reconcile server version")
+            elif name == "lax_native_edit_status":
+                from .native_edit_status import inspect
+                value = await inspect(self,arguments)
+            elif name == "hollywood_withdraw_question":
+                value = await self.attention.withdraw(str(UUID(arguments["attentionId"])),
+                    arguments["reason"],operation=operation)
             elif name == "hollywood_ask":
                 value = await self.attention.ask({**params, **arguments}, slot=call)
             elif name in ("hollywood_publish", "hollywood_request"):

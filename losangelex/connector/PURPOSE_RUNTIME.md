@@ -94,3 +94,29 @@ Qualification boundaries: the r22 PostgreSQL checks use frozen native facts and
 roll back every synthetic change. The private two-agent model continuation is
 separate evidence. Neither establishes production/phone replacement readiness,
 multi-host editing, compaction, Stop, or complete enterprise installation.
+
+
+## Native rejection recovery and questions
+
+The protected edit-status metadata port reports original current-work receipts
+to the independently verified writer guardian. It uses the same Unix channel,
+not another coordinator. The agent can distinguish a confirmed preflight HTTP
+400/403/409 rejection from pending/unknown dispatch or a begun mutation. A
+proposed permit ID in a rejected preflight is not an accepted permit. Missing
+journal entries alone establish no outcome. Inspection is read-only and bounded
+with a cursor; it never grants mutation or authorizes automatic replay.
+
+The currently deployed native implementation checks required patch ports before
+bridge dispatch and filesystem mutation. Its exact unavailable-preflight-port
+diagnostic therefore has no original permit to reconcile. The published native
+edit contract explains that specific case, separately from post-dispatch
+uncertainty. Native Rust's generic held wording remains a diagnostic debt for
+the next binary release; the package supplies the source-grounded contract and
+actual protected receipts rather than interpreting all holds as unknown effects.
+
+Nonblocking questions do not block otherwise authorized physical editing.
+Pending execution approvals and unresolved native controls still do. A writer
+can withdraw its own unanswered nonblocking question when verified facts make it
+obsolete. The original question and attributed reason remain; no human response
+or approval is invented. Work completion continues to retain unresolved human
+questions as prerequisites.

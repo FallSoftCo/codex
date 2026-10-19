@@ -115,6 +115,22 @@ class Attention:
                      "responseMode": response_mode})
         return identity, path, receipt
 
+    async def withdraw(self, identity, reason, *, operation):
+        c=self.connector
+        current=await c.http("GET","attention/"+identity)
+        row,scope=current["attention"],current["scope"]
+        owner=participation(c)
+        if (row["agent"]!=c.config["agentId"] or scope["deliveryId"]!=owner["delivery"]["id"]
+                or scope["generation"]!=owner["delivery"]["generation"]
+                or scope["nativeThread"]!=owner["nativeThread"]
+                or row["method"] not in QUESTION or row["request"].get("isBlocking") is not False
+                or row["state"]!="pending"):
+            raise PermissionError("Only this original work's unanswered nonblocking question may be withdrawn")
+        result=await c.http("POST","attention/"+identity+"/acknowledge",{
+            "operationId":operation+":question-withdraw","claimId":owner["delivery"]["claim_id"],
+            "generation":owner["delivery"]["generation"],"scope":scope,"state":"expired","reason":reason})
+        return {**result,"humanAnswerSupplied":False,"approvalGranted":False}
+
     async def ask(self, params, *, slot):
         identity, _, receipt = await self.create(
             "hollywood/question", params, slot=slot, response_mode="agent-continuation"
