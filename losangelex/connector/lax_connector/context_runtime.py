@@ -60,6 +60,8 @@ class ContextRunner:
 
     async def request(self,action,value=None,operation=None,turn=None):
         operation=operation or str(uuid4())
+        if len(json.dumps(value or {}).encode())>12000:
+            raise ValueError("Context contribution exceeds 12000 bytes; use a concise summary and artifact references. Nothing was dispatched.")
         payload={"operationId":operation,"action":action,"nativeThread":self.thread,
                  "nativeTurn":turn or self.turn or "runtime","value":value or {}}
         path=f"agents/{self.config['agentId']}/contexts/{self.purpose}"
@@ -81,7 +83,7 @@ class ContextRunner:
                 result=await self.agent.http(self.purpose,"POST",path,payload)
             except Exception as error:
                 from .errors import HttpFailure
-                if isinstance(error,HttpFailure) and error.status in (400,403,409):
+                if isinstance(error,HttpFailure) and error.status in (400,403,409,413,422):
                     saved(journal,{"request":payload,"state":"rejected","status":error.status,
                                    "error":str(error)})
                     raise
@@ -247,6 +249,11 @@ class ContextRunner:
                 arguments=json.loads(arguments)
             operation="context-tool:"+hashlib.sha256((self.thread+params["callId"]).encode()).hexdigest()
             try:
+                for key,schema in next(t for t in self.declarations if t["name"]==name)["inputSchema"]["properties"].items():
+                    item=arguments.get(key)
+                    if item is not None and schema.get("type")=="string" and (not isinstance(item,str)
+                            or not schema.get("minLength",0)<=len(item)<=schema.get("maxLength",12000)):
+                        raise ValueError("Invalid bounded "+key+"; follow the tool schema. Nothing was dispatched.")
                 result=await self.request(ACTIONS[name],arguments,operation=operation)
                 self.trace("tool_receipt",{"tool":name,"operation":operation,"result":result})
                 return {"success":True,"contentItems":[{"type":"inputText","text":json.dumps(result)}]}
@@ -465,11 +472,12 @@ class ContextAgent:
             headers["X-Hollywood-Native-Source"]=json.dumps(native_source,separators=(",",":"))
         async with self.session.request(method,self.config["hollywoodUrl"]+"/hollywood/v3/"+path,
           headers=headers,json=payload) as r:
-            value=await r.json()
             if r.status!=200:
                 from .errors import HttpFailure
+                try:value=await r.json()
+                except Exception:value={}
                 raise HttpFailure(r.status,value.get("error","request failed"))
-            return value
+            return await r.json()
 
     async def serve(self, *, reconcile_only=False):
         loop=asyncio.get_running_loop()

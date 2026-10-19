@@ -496,7 +496,7 @@ class Bridge:
                             from .collaboration_capture import AutomaticCapture
                             capture = AutomaticCapture(self)
                             try:
-                                capture.peer(peer)
+                                capture.peer(peer, authentication_only=True)
                             except Exception:
                                 from .owner_briefing import guardian_peer
                                 owner = guardian_peer(capture, peer)

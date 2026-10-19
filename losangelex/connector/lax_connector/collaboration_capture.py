@@ -174,7 +174,7 @@ class AutomaticCapture:
         )
         protected_directory(self.state / "administration")
 
-    def peer(self, peer, frame=None):
+    def peer(self, peer, frame=None, *, authentication_only=False):
         """Authenticate kernel identity before consuming any client bytes."""
         actual = process(peer[0])
         require(actual and actual["uid"] == peer[1], "Kernel peer incarnation vanished")
@@ -212,9 +212,14 @@ class AutomaticCapture:
                     current.append(row)
             rows = current
         require(
-            not after and len(rows) == 1,
-            "One bounded canonical native executor required",
+            not after and (1 <= len(rows) <= 1024 if authentication_only else len(rows) == 1),
+            "Bounded independently observed native process required" if authentication_only
+            else "One exact canonical native execution required",
         )
+        # Pre-frame authentication proves the process, never an effect scope.
+        # A resident purpose writer may legitimately have several logical
+        # executors. ensure() still selects ONE exact thread/turn from the frame
+        # and rechecks its current claim, cancellation and service observation.
         row = rows[0]
         require(
             str(row["agent"]) == agent
