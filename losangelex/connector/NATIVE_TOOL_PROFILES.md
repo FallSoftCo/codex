@@ -52,3 +52,32 @@ completed_unverified flag; no exactly-once or external-effect claim follows.
 
 This is not qualification of all account connectors, browser input, physical
 Android use, voice, push or an enterprise-wide migration.
+
+## Existing identity upgrade
+
+Use lax-upgrade-agent --spec /absolute/protected-upgrade.json for an explicit
+offline transition. The spec uses schema lax-purpose-upgrade/v1, a fresh UUID
+operationId, authorityId, agentId, expectedInstallationSha256, interpreter,
+pythonRoot and optional toolProfileFile. Omitting the profile preserves it.
+
+First inspect actual work and unknown effects, pause the same enrolled placement
+through Hollywood's revisioned admin API, and stop/drain only its three services.
+Pause is not drainage. The installer takes the existing agent launcher lock,
+rejects unresolved local submissions, verifies stopped services/descendants and
+the paused enrollment, then updates protected configuration and owned launchers.
+It reseals existing readiness dependencies; it replaces no identity, account,
+native binary, room membership, history, work or receipt. It starts no service.
+
+The original root-private upgrade receipt retains exact rollback bytes and an
+uncertainty state before publication. An existing intent must be inspected, never
+automatically replayed. Explicit --rollback uses the same operation identity and
+the freshly inspected expectedInstallationSha256 while offline and paused.
+Rollback restores code/config metadata only; it never rewinds work or databases.
+Normal startup/reconciliation still preserves deliberate stops. An operator may
+separately resume the placement and start the verified owned services.
+
+Actual upgrade/rollback qualification is recorded in
+qualification/native-purpose-upgrade-20261019.json. Safe MCP execution-card
+projection is recorded in qualification/native-mcp-actions-20261019.json; it used
+original real native items without replaying the provider action. Arguments and
+results stay private; only tool identity/status appears in the action feed.

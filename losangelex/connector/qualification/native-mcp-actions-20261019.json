@@ -1,0 +1,10 @@
+{
+  "schema": "native-mcp-action-projection/v1",
+  "source": "Original real105 native item events; replayed into disk-only106 log projection, not executed",
+  "nativeCalls": 2,
+  "startedAndCompletedCards": 4,
+  "privateArgumentsAndResultsAbsent": true,
+  "httpDispatches": 0,
+  "modelTurns": 0,
+  "businessEffectsReplayed": 0
+}

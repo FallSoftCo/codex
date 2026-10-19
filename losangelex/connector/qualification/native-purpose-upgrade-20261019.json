@@ -1,0 +1,27 @@
+{
+  "schema": "lax-purpose-offline-upgrade-proof/v1",
+  "at": 1792430345.539405,
+  "agent": "79d5190e-563d-48ee-826f-5037b157258a",
+  "authority": "f96e5615-0e6d-48d3-93b6-dc54393d5c2e",
+  "upgrade": {
+    "schema": "lax-purpose-upgrade/v1",
+    "operationId": "20a6d015-2a27-4f1f-bc85-20ddd6bcf816",
+    "state": "accepted",
+    "installationSha256": "0fbadae79b5fe29c236ca2e3e8328c531e9bd9e82d8c02134a966386645c54d1",
+    "servicesStarted": 0,
+    "modelsStarted": 0,
+    "identityAndHistoryPreserved": true
+  },
+  "rollback": {
+    "state": "rolled_back",
+    "servicesStarted": 0,
+    "modelsStarted": 0,
+    "workOrDatabaseReverted": false
+  },
+  "installationRestoredByteForByte": true,
+  "canonicalBindingsPermitsDeliveriesIdentical": true,
+  "threeNativeHistoriesPreserved": true,
+  "qaAgentRemainsPausedAndStopped": true,
+  "modelTurnsStarted": 0,
+  "taskReplay": false
+}

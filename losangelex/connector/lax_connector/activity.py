@@ -68,7 +68,7 @@ class Activity:
             raise RuntimeError("Native activity belongs to another captured turn")
         item = params["item"]
         kind = item["type"]
-        if execution_scope is not None and kind not in ("commandExecution", "fileChange", "planUpdate"):
+        if execution_scope is not None and kind not in ("commandExecution", "fileChange", "planUpdate", "mcpToolCall"):
             return  # Internal text and context tools never become outward communication.
         if kind in ("userMessage", "hookPrompt", "reasoning", "functionCallOutput"):
             return
