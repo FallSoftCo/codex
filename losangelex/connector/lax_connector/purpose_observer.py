@@ -60,7 +60,7 @@ def register(value,purpose):
         "hostId":value["hostId"],"agentId":value["agentId"],"uid":value["uid"],"home":value["home"],
         "unit":unit,"unitDefinitionDigest":value["unitDefinitionDigests"][unit],
         "binary":value["binary"],"binaryDevice":value["binaryDevice"],"binaryInode":value["binaryInode"],
-        "machineIdentity":value["machineIdentity"],"killMode":"control-group","purpose":purpose,
+        "machineIdentity":value["machineIdentity"],"killMode":info["KillMode"],"purpose":purpose,
         "bootId":observer.boot_id(),"serviceInvocation":UUID(info["InvocationID"]).hex,
         "controlGroup":info["ControlGroup"],"guardianPid":own["pid"],"guardianStart":own["start"]}
     if observer.process(own["pid"])!=own:

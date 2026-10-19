@@ -153,3 +153,17 @@ converted into an automatic replacement turn.
 Readers have bounded canonical room discovery/history and exact event retrieval. Ordinary room traffic becomes optional attributed observation material, never an addressed execution delivery or required acknowledgement. Fully read relevant observations may update an existing responsibility without changing its objective or steering a running writer. Hollywood owns cursors and current grants; normal inference admission applies even to read-only observation.
 
 Reader hollywood_rooms/hollywood_read_room use the bounded purpose read route; writer tools retain their shared native handlers. Dispatch follows the purpose's declarations rather than a global name collision. Actual HTTP/PG fixture qualification and the live r31 model journey are separate evidence. Production replacement, arbitrary new-work autonomy, full fork work/report parity and general semantic stability remain unqualified.
+
+Purpose services use systemd KillMode=mixed: SIGTERM reaches the supervisor
+first, allowing original native interrupt/end receipts to settle while its
+app-server child is alive. The observer accepts only child-group cleanup modes
+(control-group or mixed), pins the actual mode through the protected unit
+definition and observes real PID/cgroup/incarnation facts. A rejected resident
+attestation occurs before inference reservation and is reported as held, inactive.
+
+An explicit service restart can continue eligible material after the original
+inference is definitively interrupted. A stable restart token prevents unchanged
+polling from chaining completed inferences. Unknown native turns remain held;
+cancelled Work is not resumed. An intentionally stopped service stays stopped
+until explicitly activated. This does not establish enterprise boot policy or
+automatic recovery from every host/network failure.

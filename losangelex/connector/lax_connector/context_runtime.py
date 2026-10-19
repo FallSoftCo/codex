@@ -213,6 +213,19 @@ class ContextRunner:
                 else:
                     self.failed=True
                     self.trace("recovery_held",{"nativeTurn":self.turn,"status":observed["status"]})
+        old = json.loads(wake.read_text()) if wake.exists() else {}
+        if old.get("state") == "finished" and old.get("turn", {}).get("status") == "interrupted":
+            # An explicit process restart may continue eligible unfinished
+            # material after a definitively interrupted original inference.
+            # Keep the token stable thereafter; unchanged polling cannot chain
+            # completed inferences. Unknown turns and cancelled Work stay held.
+            observed = await original_turn(self, old["nativeTurn"])
+            if observed["status"] != "interrupted":
+                raise RuntimeError("Original interrupted native terminal receipt changed")
+            saved(self.state / "restart-recovery.json", {
+                "id": "resume-after-interrupted:" + old["nativeTurn"],
+                "nativeThread": self.thread, "nativeTurn": old["nativeTurn"],
+                "terminalStatus": "interrupted", "modelsStarted": 0})
 
     async def submitted(self,method,params,success):
         if self.native_tools:
@@ -341,7 +354,12 @@ class ContextRunner:
                 self.executor=ExecutionLifecycle(accepted,config=self.config,
                     transport=lambda method,path,payload=None:self.agent.http(self.purpose,method,path,payload),
                     journal_directory=self.state/"executor")
-                await self.executor.capture_resident(self.rpc)
+                try:
+                    await self.executor.capture_resident(self.rpc)
+                except BaseException:
+                    self.failed=True
+                    self.active=False
+                    raise
         material_ids=[r["id"] for r in pending]
         try:
             # Queue identity belongs to an inference attempt, not a mutable
@@ -558,6 +576,9 @@ class ContextAgent:
                         if recovery.exists():
                             control=json.loads(recovery.read_text())
                             key=[key,control["id"]]
+                        restarted=self.state/purpose/"restart-recovery.json"
+                        if restarted.exists():
+                            key=[key,json.loads(restarted.read_text())["id"]]
                         fingerprint=hashlib.sha256(json.dumps(key).encode()).hexdigest()
                         last=self.state/purpose/"wake.json"
                         old=json.loads(last.read_text()) if last.exists() else {}
@@ -593,7 +614,15 @@ class ContextAgent:
                             pass
                 for runner in self.runners.values():
                     if runner.task and not runner.task.done():
-                        runner.task.cancel()
+                        try:
+                            # Let the original interrupt/end receipts settle while
+                            # the app-server child is still alive. Unit KillMode=mixed
+                            # sends SIGTERM only to this supervising process.
+                            await asyncio.wait_for(asyncio.shield(runner.task), 20)
+                        except (TimeoutError, asyncio.CancelledError):
+                            runner.task.cancel()
+                        except Exception as error:
+                            runner.trace("shutdown_task_failed", {"error": type(error).__name__})
                 await asyncio.gather(*(r.task for r in self.runners.values() if r.task),return_exceptions=True)
                 for runner in self.runners.values():
                     if runner.activity:

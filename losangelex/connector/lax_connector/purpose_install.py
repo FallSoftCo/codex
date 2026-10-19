@@ -248,8 +248,8 @@ ExecStart={spec["interpreter"]} -m lax_connector.context_runtime --config {confi
 Restart=on-failure
 RestartSec=10
 UMask=0077
-KillMode=control-group
-TimeoutStopSec=30
+KillMode=mixed
+TimeoutStopSec=60
 [Install]
 WantedBy=multi-user.target
 """

@@ -110,8 +110,8 @@ def unit_definition(info):
     metadata = path.lstat()
     if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o022:
         raise PermissionError("Service definition is not administrator owned")
-    if info["KillMode"] != "control-group":
-        raise PermissionError("Service must use systemd control-group lifecycle")
+    if info["KillMode"] not in ("control-group", "mixed"):
+        raise PermissionError("Service must retain systemd child-group cleanup")
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -139,7 +139,7 @@ def _register(authority, host, agent, unit, *, expected_binding=None):
                 "hostId": host, "agentId": agent, "uid": uid, "home": str(home),
                 "unit": unit, "unitDefinitionDigest": definition, "binary": str(Path(binary).resolve()),
                 "binaryDevice": image.st_dev, "binaryInode": image.st_ino,
-                "machineIdentity": machine_identity(), "killMode": "control-group"}
+                "machineIdentity": machine_identity(), "killMode": info["KillMode"]}
     root = directory(authority, host, agent)
     # The enrolled host directory is root/private; never create another installation.
     parent = root.parent.parent
@@ -238,7 +238,7 @@ def _approve_drained_upgrade(authority, host, agent, expected_enrollment, expect
         old["machineIdentity"], old["killMode"]
     ) != (
         authority, host, agent, uid, str(home), info["Id"], image.st_dev,
-        image.st_ino, machine_identity(), "control-group"
+        image.st_ino, machine_identity(), info["KillMode"]
     ):
         raise ValueError("This upgrade cannot change identity, native image or host")
     upgraded = {**old, "unitDefinitionDigest": definition}
