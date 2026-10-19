@@ -5,21 +5,23 @@ import stat
 from pathlib import Path
 
 
-def open_root(root):
+def open_root(root, *, search_only=False):
     """Resolve every absolute root component without following directory links."""
     path = Path(root)
     if not path.is_absolute() or str(path) != str(root):
         raise ValueError("Literal absolute physical root required")
     flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_DIRECTORY
     # Traversing a search-only parent must not require directory enumeration.
-    # Keep the returned root readable for existing descriptor consumers.
+    # Mutation/fsync consumers retain a readable root by default; artifact
+    # readers request search-only handles without directory enumeration.
     search_flags = (flags & ~os.O_RDONLY) | getattr(os, "O_PATH", os.O_RDONLY)
-    fd = os.open("/", flags if len(path.parts) == 1 else search_flags)
+    root_flags = search_flags if search_only else flags
+    fd = os.open("/", root_flags if len(path.parts) == 1 else search_flags)
     try:
         for index, part in enumerate(path.parts[1:], 1):
             if part in ("", ".", ".."):
                 raise ValueError("Canonical root components required")
-            child = os.open(part, flags if index == len(path.parts) - 1 else search_flags, dir_fd=fd)
+            child = os.open(part, root_flags if index == len(path.parts) - 1 else search_flags, dir_fd=fd)
             os.close(fd)
             fd = child
         result, fd = fd, None

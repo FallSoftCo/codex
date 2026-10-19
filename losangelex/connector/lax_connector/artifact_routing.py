@@ -126,13 +126,13 @@ async def _collect(c, args, reader):
             "Server artifact resource evidence capability unavailable; no report submitted")
     pinned = await resolve(c, explicit)
     try:
-        fd = open_root(pinned["root"])
+        fd = open_root(pinned["root"], search_only=True)
         try:
             identity = physical(c, pinned, fd)
             evidence = reader(c.config, paths, root_fd=fd)
             current = await resolve(c, explicit)
             require(current == pinned, "Artifact root/default or grant changed while hashing")
-            current_fd = open_root(current["root"])
+            current_fd = open_root(current["root"], search_only=True)
             try:
                 require(physical(c, current, current_fd) == identity,
                         "Artifact root incarnation changed while hashing")

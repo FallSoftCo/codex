@@ -362,7 +362,8 @@ def artifacts(config, paths, *, root_fd=None):
         try:
             for part in p.parts[:-1]:
                 child = os.open(
-                    part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+                    part, getattr(os, "O_PATH", os.O_RDONLY) | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=directory
                 )
                 os.close(directory)
                 directory = child
