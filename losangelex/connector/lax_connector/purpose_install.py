@@ -128,7 +128,7 @@ def model_account(path):
     return hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
 
 
-def install(spec):
+def install(spec, *, prepare_only=False):
     if os.geteuid()!=0:raise PermissionError("Verified root installation required")
     authority,agent,host=[str(UUID(spec[k])) for k in ("authorityId","agentId","hostId")]
     if spec["machineIdentity"]!=machine_identity():raise ValueError("Installation host identity differs")
@@ -148,11 +148,15 @@ def install(spec):
         from .purpose_observer import validate as validate_installation
         validate_installation(value)
         canonical(spec,json.loads(Path(value["config"]).read_text()))
+        if prepare_only:
+            return {**public(value),"reconciled":True,"phase":"prepared","servicesStarted":False}
         from .purpose_resources import ensure as ensure_resources
         ensure_resources(json.loads(Path(value["config"]).read_text()))
         from .purpose_environment import install_agent
         install_agent(authority,agent)
-        return {**public(value),"reconciled":True,"servicesStarted":False}
+        from .purpose_readiness import seal
+        readiness=seal(value)
+        return {**public(value),"reconciled":True,"phase":"sealed","readiness":readiness,"servicesStarted":False}
     slug=authority.replace("-","")[:8]+"-"+agent.replace("-","")[:12]
     user=("hglobal-" if spec.get("global") else "hagent-")+slug
     home=record/"home"
@@ -263,13 +267,16 @@ WantedBy=multi-user.target
         "machineIdentity":machine_identity(),"nativePackage":package,"sudoVerifiedUid":0,
         "servicesStarted":False,"historicalSessionsResumed":False}
     saved(accepted,value)
+    if prepare_only:
+        return {**public(value),"phase":"prepared"}
     from .purpose_resources import ensure as ensure_resources
     resource = ensure_resources(config)
     if resource is not None:
         saved(record/"resource-installation.json",resource)
     from .purpose_environment import install_agent
     install_agent(authority,agent)
-    return public(value)
+    from .purpose_readiness import seal
+    return {**public(value),"phase":"sealed","readiness":seal(value)}
 
 
 def public(value):
@@ -288,6 +295,8 @@ def activate(authority,agent):
         return {"activationRepeated":False,"units":{p:subprocess.check_output(
             ["systemctl","show",u,"-p","ActiveState","--value"],text=True).strip()
             for p,u in value["units"].items()}}
+    from .purpose_readiness import require_sealed
+    require_sealed(value)
     original(intent,{"units":value["units"],"configurationSha256":value["configSha256"]})
     subprocess.run(["systemctl","start",*value["units"].values()],check=True,capture_output=True)
     result={"servicesStarted":True,"units":value["units"],"modelSubmissionByInstaller":False}
@@ -299,10 +308,12 @@ def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser()
     parser.add_argument("--spec",type=Path,required=True)
-    parser.add_argument("--activate",action="store_true")
+    mode=parser.add_mutually_exclusive_group()
+    mode.add_argument("--activate",action="store_true")
+    mode.add_argument("--prepare",action="store_true",help="Prepare identity/config/units without sealing or activation")
     args=parser.parse_args()
     spec=json.loads(args.spec.read_text())
-    value=install(spec)
+    value=install(spec,prepare_only=args.prepare)
     if args.activate:value["activation"]=activate(spec["authorityId"],spec["agentId"])
     print(json.dumps(value))
 
