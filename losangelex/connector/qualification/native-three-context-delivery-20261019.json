@@ -1,0 +1,128 @@
+{
+  "schema": "native-three-context-end-state-delivery/v1",
+  "at": 1792421554.137562,
+  "scope": "Actual single-host human API,3agents,9independent native contexts; no TUI or external semantic coordinator",
+  "goal": {
+    "id": "9d93d523-e043-53cb-b3d2-8f2d5c5e0673",
+    "state": "accepted",
+    "revision": 18,
+    "review_remaining": 3
+  },
+  "originalHumanRequest": "89f4f459-85bf-4e06-83c5-6372e47660e9",
+  "originalDelivery": {
+    "id": "5a6a69b0-8472-4362-8e6a-bf6dfbd09fed",
+    "generation": 1,
+    "claim_id": "context-admit:a8be40f9-2600-5ef8-a523-f8224914df33",
+    "state": "completed",
+    "result_event": "93127d78-c939-4747-bc0d-453424bc659a"
+  },
+  "works": [
+    {
+      "id": "512a8eb8-154b-51fc-8831-90927adb4da3",
+      "owner": "e4c5bc4f-8d3e-5fcf-ac11-44722b1efb1d",
+      "state": "accepted",
+      "revision": 4,
+      "delivery": "141cec5e-5a9b-450b-a603-ade7ba22cd6d",
+      "report_event": "0fc5f47f-818c-4784-bfb8-742d86735732",
+      "execution_state": "completed"
+    },
+    {
+      "id": "fb5efdc2-5639-501f-bba2-27abb9bdc6f2",
+      "owner": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "state": "accepted",
+      "revision": 8,
+      "delivery": "2690df12-550a-44b2-a44e-c1a62babcd68",
+      "report_event": "ec1ab3d2-7477-4aa1-aba9-493af1c95610",
+      "execution_state": "completed"
+    }
+  ],
+  "designatedIndependentGoalAcceptanceEvent": "b3e70829-55a2-4234-a06e-c8a4d87d8158",
+  "designatedReviewer": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+  "protectedReworkPlan": {
+    "id": "fddc8809-df40-56a6-b656-e7d3ac11beee",
+    "revision": 1,
+    "state": "settled"
+  },
+  "protectedAppliedPermit": {
+    "id": "314ed53b-b0e2-5a1d-873e-d33dc570f993",
+    "revision": 3,
+    "state": "settled"
+  },
+  "finalFile": {
+    "path": "/var/lib/lax-three-context-20261018-r01/agent/work/native-team-r36/room_work_inventory.py",
+    "size": 25787,
+    "sha256": "f904a67a9a81015bb85fab79749246f7cdb0a9457b9b61a1490d2b776a827596"
+  },
+  "responsePurpose": "responder",
+  "nineIndependentHistories": [
+    {
+      "agent": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "purpose": "reader",
+      "context_id": "ace66fa5-32e8-412e-b2b8-be22c3ec749f",
+      "native_thread": "01a152d8-7480-79c1-accd-7f73e4f2ccf7"
+    },
+    {
+      "agent": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "purpose": "responder",
+      "context_id": "3ead1d30-8949-4e18-bf00-d85c2ce08b67",
+      "native_thread": "01a152d8-7610-71f0-b122-4f34d4ed4f3b"
+    },
+    {
+      "agent": "3df5ce3f-334d-5942-b99b-84fe7436bd19",
+      "purpose": "writer",
+      "context_id": "4d92133e-f013-4318-a93b-6e70e347b87d",
+      "native_thread": "01a152d8-779d-7d02-aaee-1cdd3fb02443"
+    },
+    {
+      "agent": "e4c5bc4f-8d3e-5fcf-ac11-44722b1efb1d",
+      "purpose": "reader",
+      "context_id": "a7fd4daf-1a48-40bc-b3d8-adbebd12a2b6",
+      "native_thread": "01a153b8-cb01-7f70-95ce-1b091f463d6b"
+    },
+    {
+      "agent": "e4c5bc4f-8d3e-5fcf-ac11-44722b1efb1d",
+      "purpose": "responder",
+      "context_id": "a8c38037-ca38-422d-a3c1-f8447732608c",
+      "native_thread": "01a153b8-c9da-76a1-8733-17f170e50aad"
+    },
+    {
+      "agent": "e4c5bc4f-8d3e-5fcf-ac11-44722b1efb1d",
+      "purpose": "writer",
+      "context_id": "2360f618-97ac-47cd-b62e-1da9b56d53ad",
+      "native_thread": "01a153b8-cc2a-7471-bb4e-1373c86aa82c"
+    },
+    {
+      "agent": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "purpose": "reader",
+      "context_id": "6539cb87-58cf-4d7d-a21d-d89ae86c0d67",
+      "native_thread": "01a14f4a-f1e1-7a63-b6bf-36218d37ad78"
+    },
+    {
+      "agent": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "purpose": "responder",
+      "context_id": "d9b55d01-76e1-4e8c-994a-a84da3924073",
+      "native_thread": "01a14f54-3c64-7380-ad4d-151d747ec7af"
+    },
+    {
+      "agent": "f2363d21-e7da-4dc5-8749-6736d01d4f68",
+      "purpose": "writer",
+      "context_id": "fd36bf3e-c19e-4964-8af9-3651451f067b",
+      "native_thread": "01a14f53-7c6c-7273-a36a-2f88cac249e0"
+    }
+  ],
+  "actualRecovery": [
+    "Same original admissions across SDK capability changes",
+    "Actual live reader/writer compactions followed by continued work",
+    "Actual original report callbacks reconciled through owned RPC without callbacks/model replay",
+    "Search-only physical root evidence collection under actual engineerUID",
+    "Original consent400 recovered through actual protected owner status; deliberately corrected fresh consent, not replay",
+    "Reviewer found real pagination defect, rejected first Global attempt and accepted explicit same-Work rework with new two-owner content-bound plan"
+  ],
+  "limitations": [
+    "Bounded single-host3UID physical resource proof, no shared-filesystem assumption for otherhosts",
+    "No production/phone/push/voice/crosshost or autonomous-enterprise certification",
+    "Method counts are utility review evidence, not broad harness unit-test coverage; no exactly-once external-effect claim"
+  ],
+  "completePrivateProof": "/aosp/development/lax-three-context-20261018-r01/qualification/canonical-native-team-original-complete-r72.json",
+  "sourceArtifactReadbackSha256": "512b58130bc4444898652c6d8f447794b3d7e6bb7b7631b4d2ba05e5ddc48d67"
+}
