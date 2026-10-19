@@ -57,7 +57,7 @@ async def administer(connector, name, arguments, operation):
             "hollywood_create_agent", "hollywood_create_room", "hollywood_set_role",
             "hollywood_grant_room", "hollywood_grant_resource",
             "hollywood_select_resource_default", "hollywood_placement_set",
-            "lax_provision_worker", "hollywood_reconcile_pending_inputs",
+            "lax_provision_worker", "hollywood_reconcile_pending_inputs", "hollywood_select_work_resource",
         )
         known_rejection = (
             tracked and connector.effects.safe_rejection()
@@ -108,6 +108,9 @@ async def _administer(connector, name, arguments, operation):
     if name in ("hollywood_mutation_observe", "hollywood_mutation_reconcile"):
         from .mutation_tools import administer
         return await administer(connector, name, arguments, operation)
+    if name == "hollywood_select_work_resource":
+        from .work_resources import select
+        return await select(connector, arguments, operation)
     if name=="hollywood_reconcile_pending_inputs":
         agent=str(UUID(arguments["agentId"]))
         ids=[str(UUID(x)) for x in arguments["deliveryIds"]]

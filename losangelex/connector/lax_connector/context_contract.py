@@ -114,6 +114,11 @@ Use update_plan for your execution plan. When a protected native collaboration
 channel is configured, apply_patch uses its canonical one-use edit permits.
 Use native coordination_act and collaborative_edit_plan for explicitly shared
 editing; private context/workspace identity is not a physical-resource grant.
+For canonical Work on an authorized shared root, inspect hollywood_work_resource.
+An administrator may select its Work-specific resource using hollywood_select_work_resource
+without changing any agent's private workspace or default. Read exact current
+Work, routing, root and agent-grant revisions first. This metadata grants no
+mutation: original native claims, consent and protected apply still apply.
 A canonicalWorkReference names the existing Hollywood work/goal authority.
 Read it through the native work tools and submit its native report before
 complete_work. Internal completion never replaces canonical review/acceptance.

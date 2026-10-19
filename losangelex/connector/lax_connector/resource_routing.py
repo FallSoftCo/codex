@@ -10,6 +10,7 @@ from .collaboration_bridge import require, digest
 
 CAPABILITY = "canonical-agent-resources/v1"
 READ_TOOLS = {
+    "hollywood_work_resource",
     "hollywood_resource_roots",
     "hollywood_agent_resources",
     "hollywood_resource_default",
@@ -81,6 +82,9 @@ async def connector_capabilities(c):
 
 
 async def read(c, name, args):
+    if name == "hollywood_work_resource":
+        from .work_resources import read as read_work_resource
+        return await read_work_resource(c, args)
     admin = c.role_context.value["communicationAdministrator"]
     authority = participation(c)["request"]["authority"]
     if name == "hollywood_resource_roots":
@@ -184,6 +188,7 @@ async def select(c, args, operation):
 
 
 def definitions(spec):
+    from .work_resources import definitions as work_definitions
     text = {"type": "string"}
     nullable = {"type": ["string", "null"]}
     page = {"after": nullable, "limit": {"type": "integer", "minimum": 1, "maximum": 8}}
@@ -227,7 +232,7 @@ def definitions(spec):
                 "grantRevision",
             ],
         ),
-    ]
+    ] + work_definitions(spec)
 
 
 def agent_rows(http, policy, authority, agent, host):
@@ -269,24 +274,30 @@ def agent_rows(http, policy, authority, agent, host):
 def intent_root(bridge, record, policy, environment):
     capabilities(policy)
     base = record["sourceBase"]
-    value = bounded(
-        bridge.http(
-            "GET", "collaboration/delivery-resource-default/" + base["deliveryId"]
-        )
-    )
-    require(
-        value.get("schema") == "hollywood-delivery-resource-default/v1"
-        and (value.get("deliveryId"), value.get("agentId"), value.get("executionHost"))
-        == (base["deliveryId"], base["agentId"], base["hostId"]),
-        "Captured delivery routing scope differs",
-    )
-    view = default_view(
-        value["default"], base["authorityId"], base["agentId"], base["hostId"]
-    )
-    require(
-        view["effectiveState"] == "selected" and view["resource"] is not None,
-        "Relative intent requires a current explicit selected default",
-    )
+    work = record.get("work")
+    if work and policy.get("workResourceRouting") is True:
+        from .work_resources import CAPABILITY as WORK_CAPABILITY
+        value = bounded(bridge.http("GET", "work/" + work["id"] + "/resource"))
+        require(value.get("schema") == WORK_CAPABILITY
+                and (value.get("workId"), value.get("workRevision"), value.get("agentId"), value.get("executionHost"))
+                == (work["id"], work["revision"], base["agentId"], base["hostId"]),
+                "Captured original Work routing scope differs")
+        if value["effectiveState"] != "absent":
+            require(value["effectiveState"] == "selected" and value["resource"] is not None,
+                    "Work-specific resource intent is cleared or stale; inspect current Work/resource/grant revisions")
+            return selected_root(record, value, environment)
+    value = bounded(bridge.http("GET", "collaboration/delivery-resource-default/" + base["deliveryId"]))
+    require(value.get("schema") == "hollywood-delivery-resource-default/v1"
+            and (value.get("deliveryId"), value.get("agentId"), value.get("executionHost"))
+            == (base["deliveryId"], base["agentId"], base["hostId"]), "Captured delivery routing scope differs")
+    view = default_view(value["default"], base["authorityId"], base["agentId"], base["hostId"])
+    require(view["effectiveState"] == "selected" and view["resource"] is not None,
+            "Relative intent requires a current explicit selected default")
+    return selected_root(record, view, environment)
+
+
+def selected_root(record, view, environment):
+    base = record["sourceBase"]
     pointer, resource = view["selection"], view["resource"]
     workspace, grant = resource["workspace"], resource["grant"]
     roots = [

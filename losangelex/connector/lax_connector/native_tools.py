@@ -195,6 +195,7 @@ class NativeTools:
                 "hollywood_mutation_reconcile",
                 "lax_provision_worker",
                 "hollywood_reconcile_pending_inputs",
+                "hollywood_select_work_resource",
             ):
                 value = await administer(self, name, arguments, operation)
             else:

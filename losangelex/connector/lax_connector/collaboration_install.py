@@ -360,6 +360,7 @@ def apply(directory):
     if existing:
         require(
             existing["state"] == "active"
+            and existing.get("features", []) == ["canonical-work-resource-routing/v1"]
             and existing["protocol"] == "canonical-edit-plans/v2"
             and str(existing["controller"]) == str(policy["controller"])
             and existing["adapter_sha256"] == manifest["adapterSha256"]
@@ -373,6 +374,7 @@ def apply(directory):
             "controllerId": str(policy["controller"]),
             "state": "active",
             "protocol": "canonical-edit-plans/v2",
+            "features": ["canonical-work-resource-routing/v1"],
             "adapterSha256": manifest["adapterSha256"],
             "enrollmentSha256": manifest["enrollmentSha256"],
         }
