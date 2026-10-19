@@ -286,6 +286,11 @@ class Bridge:
                 saved(path, {"state": "rejected", "fingerprint": fingerprint, "wire": body,
                     "status": error.code, "rejection":detail,
                     "phase":action,"originalPostConfirmedRejected":True})
+                raise Held(
+                    f"Canonical {action} request rejected HTTP{error.code}; "
+                    f"original operation {operation}. Inspect lax_native_edit_status "
+                    "for its protected receipt; no automatic retry."
+                ) from None
             raise
         except Exception:
             saved(path, {"state": "unknown", "fingerprint": fingerprint, "wire": body})

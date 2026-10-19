@@ -1,0 +1,32 @@
+{
+  "schema": "native-consent-diagnostic-http-and-projection/v1",
+  "at": 1792419944.7500114,
+  "realOwnerAuthenticatedHttp": true,
+  "exactOriginalInvalidWireRejectedBeforeStoreDispatch": true,
+  "sanitizedSchemaConstraintReturned": true,
+  "unknownInputKeyValueNotReflected": true,
+  "unauthenticatedReadRejected": true,
+  "correctedWireParsedOnlyNotPosted": true,
+  "originalCanonicalCommandCountStill0": true,
+  "originalRecordedScopeProjectsOriginalRejectedConsent": {
+    "operationId": "native-collaboration:cd05477aeac93470c935f1d8fdf36dac5e4d3db2a3340e818a0aaecf185597c2",
+    "nativeThread": "01a153b8-cc2a-7471-bb4e-1373c86aa82c",
+    "nativeTurn": "01a15482-24a7-7301-b0c6-939fba836811",
+    "callId": "exec-4d946559-1309-4f28-acb4-bc5fc34b81af",
+    "phase": "consent",
+    "receiptState": "rejected",
+    "httpStatus": 400,
+    "confirmedPostRejected": true,
+    "effectBoundary": "metadata_request_rejected",
+    "proposedPermitId": null,
+    "planId": "fddc8809-df40-56a6-b656-e7d3ac11beee",
+    "rejection": "{\"error\": \"invalid_edit_request\", \"mayApply\": false}",
+    "automaticRetryAuthorized": false
+  },
+  "otherAgentPlanReceiptsExcluded": true,
+  "modelsOrTaskPosts": 0,
+  "limit": "HTTP authenticates against actual PG; original receipt projection uses the immutable original context-begin scope and root-protected journal with guardian/current-scope HTTP boundary frozen; no current native admission manufactured. Not a new live kernel-channel or model self-recovery proof; existing peer/source guard unchanged.",
+  "deploymentReceipt": "/aosp/development/lax-three-context-20261018-r01/qualification/private-diagnostics-r67/result.json",
+  "originalRejectionDiagnosis": "/aosp/development/lax-three-context-20261018-r01/qualification/native-consent-original-rejection-r66.json",
+  "actualNativeOwnerReadQualification": "Pending after deployment; do not claim an actual new model recovery from replay projection."
+}

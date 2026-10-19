@@ -2,7 +2,7 @@
 import asyncio,json,re,socket,struct
 from pathlib import Path
 from uuid import UUID
-from .collaboration_bridge import protected_directory,require,receive
+from .collaboration_bridge import protected_directory,require,receive,PLAN_ACTIONS
 from .owner_briefing import guardian_peer
 from .service_observer import protected
 
@@ -34,16 +34,19 @@ def carry(capture,peer,frame,owner):
             continue
         command=wire.get("command") or {}
         phase=command.get("action")
-        if phase not in ("preflight","begin","settle"):
+        if phase not in PLAN_ACTIONS | {"preflight","begin","settle"}:
             continue
         rejected=old["state"]=="rejected" and old.get("status") in (400,403,409)
         boundary=("preflight_rejected_no_admission" if rejected and phase=="preflight"
+            else "metadata_request_rejected" if rejected and phase in PLAN_ACTIONS
+            else "inspect_original_metadata" if old["state"]=="completed" and phase in PLAN_ACTIONS
             else "inspect_original_permit" if old["state"]=="completed" else "original_effect_unsettled")
         rows.append({"cursor":path.stem,"operationId":wire["operationId"],"nativeThread":source["nativeThread"],
             "nativeTurn":source["nativeTurn"],"callId":source["callId"],"phase":phase,
             "receiptState":old["state"],"httpStatus":old.get("status"),
             "confirmedPostRejected":rejected,"effectBoundary":boundary,
-            "proposedPermitId":command.get("permitId"),"rejection":old.get("rejection"),
+            "proposedPermitId":command.get("permitId"),"planId":command.get("planId"),
+            "rejection":old.get("rejection"),
             "automaticRetryAuthorized":False})
         if len(rows)==17:
             break
@@ -54,7 +57,7 @@ def carry(capture,peer,frame,owner):
     return {"success":True,"result":{"schema":"lax-native-edit-status/v1",
         "agentId":frame["agentId"],"deliveryId":frame["deliveryId"],"generation":frame["generation"],
         "operations":rows,"nextCursor":next_cursor,"mayApply":False,
-        "meaning":"Original protected receipts. A confirmed preflight HTTP rejection admitted no mutation; a missing record alone proves nothing. Pending/unknown or begun effects retain their original receipts and locks."},
+        "meaning":"Original protected plan/consent/mutation receipts. A rejected metadata request is separate from prior or pending filesystem effects. A confirmed preflight HTTP rejection admitted no mutation; a missing record alone proves nothing. Pending/unknown or begun effects retain their original receipts and locks."},
         "canonicalReceipt":None,"holdReason":None}
 
 def read(c,arguments):
