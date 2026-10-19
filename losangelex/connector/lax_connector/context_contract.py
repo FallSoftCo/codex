@@ -20,6 +20,16 @@ No polling loops, self-requests or acknowledgements to acknowledgements.
 ROLES = {
 "reader": """You are the READER. Interpret pending authenticated communication in
 light of the agent's continuing responsibility and actual work state.
+A roomObservation is optional attributable context, NOT an assignment or response
+obligation. Read it fully, retrieve relevant authorized history when needed, and
+use record_room_observation with a bounded relevance interpretation. If it affects
+unfinished accepted work, read that work fully and supply its exact workId/revision;
+this preserves its objective and informs the writer without interrupting it.
+Otherwise record why it is unrelated, already accounted for, or useful future
+context. Do not accept observations as new work or prepare acknowledgements.
+hollywood_rooms and hollywood_read_room are bounded read-only discovery tools;
+room history returns references, not full bodies. Read event:<id> references with
+context_material_read. Room access and semantic relevance grant no new authority.
 Peer-completion inputs explicitly require no answer. Read their canonical result,
 then use apply_peer_result to update the original work, never accept them as new
 work or acknowledge them. A completion result is evidence to assess, not proof
@@ -134,12 +144,21 @@ def tools(purpose):
       spec("context_read","List bounded purpose-scoped material references, states and revisions. This is an index, not full material. Follow nextCursor via after; history is an explicit choice.",
            {"view":{"type":"string","enum":["active","history"]},"after":{"type":"string","minLength":1,"maxLength":512}},[]),
       spec("context_material_read","Read exact role or indexed material as bounded JSON text. Concatenate chunks of the same revision until nextOffset is null. Only then use its contents. The responder must finish a ready material read in this turn before publishing.",
-           {"reference":{"type":"string","minLength":1,"maxLength":36},
+           {"reference":{"type":"string","minLength":1,"maxLength":42},
             "offset":{"type":"integer","minimum":0},
             "revision":{"type":"integer","minimum":1}},["reference"]),
     ]
     if purpose=="reader":
         result += [
+          spec("hollywood_rooms","List authorized rooms with bounded purpose previews; discovery never assigns work.",
+               {"after":ID},[]),
+          spec("hollywood_read_room","Index authorized room conversation or activity. Latest by default; read returned event references with context_material_read. No execution or response obligation.",
+               {"roomId":ID,"after":{"type":"integer","minimum":0},
+                "before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":20},
+                "view":{"type":"string","enum":["conversation","activity","all"]}},["roomId"]),
+          spec("record_room_observation","Record a fully read passive observation's relevance without a reply. Optionally amend an exact unfinished responsibility after reading it; never replaces objective or steers the writer.",
+               {"observationId":ID,"body":S,"workId":ID,"workRevision":{"type":"integer","minimum":1}},
+               ["observationId","body"]),
           spec("accept_work","Accept an input as continuing execution work; retain its final response pending evidence.",
                {"inputId":ID,"objective":S,"acceptance":S},["inputId","objective","acceptance"]),
           spec("apply_work_update","Apply a read input to the current original unfinished work without replacing its objective or steering a running writer. Human question answers do not require an acknowledgement.",
@@ -181,4 +200,5 @@ ACTIONS={"context_read":"snapshot","context_material_read":"read","accept_work":
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
          "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers",
-         "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory","provide_response_material":"response_material"}
+         "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory","provide_response_material":"response_material",
+         "record_room_observation":"observe","hollywood_rooms":"room_list","hollywood_read_room":"room_history"}

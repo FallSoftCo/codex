@@ -46,6 +46,7 @@ class ContextRunner:
         self.activity=Activity(state=self.state,scope=lambda:self.execution_scope,
             send=self.send_activity,secrets=tuple(self.config["tokens"].values())) if purpose=="writer" else None
         self.declarations=tools(purpose) + (definitions(self.config.get("installedPurposeRuntime",False)) if purpose=="writer" else [])
+        self.context_names={t["name"] for t in tools(purpose)}
         self.allowed={t["name"] for t in self.declarations}
         self.rpc=AppServer(self.config["binary"],Path(self.config["homes"][purpose]),
           self.state/"native",self.event,self.tool,on_submission=self.submitted,enterprise=True,
@@ -231,7 +232,7 @@ class ContextRunner:
             name=params["tool"]
             if name not in self.allowed:
                 raise PermissionError("Tool belongs to another context purpose")
-            if name not in ACTIONS:
+            if name not in self.context_names:
                 if self.native_tools is None:
                     raise PermissionError("Original native tool session unavailable")
                 return await self.native_tools.call(method, params)

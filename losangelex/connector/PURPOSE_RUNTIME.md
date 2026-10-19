@@ -147,3 +147,9 @@ This qualification does not cover every disconnected/partially submitted
 reservation or native-start crash boundary. Those remain explicit daily-operation
 gates before production/phone migration; original uncertainty must not be
 converted into an automatic replacement turn.
+
+## Scoped reader observations (r31)
+
+Readers have bounded canonical room discovery/history and exact event retrieval. Ordinary room traffic becomes optional attributed observation material, never an addressed execution delivery or required acknowledgement. Fully read relevant observations may update an existing responsibility without changing its objective or steering a running writer. Hollywood owns cursors and current grants; normal inference admission applies even to read-only observation.
+
+Reader hollywood_rooms/hollywood_read_room use the bounded purpose read route; writer tools retain their shared native handlers. Dispatch follows the purpose's declarations rather than a global name collision. Actual HTTP/PG fixture qualification and the live r31 model journey are separate evidence. Production replacement, arbitrary new-work autonomy, full fork work/report parity and general semantic stability remain unqualified.
