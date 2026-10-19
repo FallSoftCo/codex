@@ -854,7 +854,8 @@ class Connector(NativeTools):
                 self.state / ("role-" + request["id"] + ".json"),
                 self.role_context.value,
             )
-            self.executor = ExecutionLifecycle(self)
+            self.executor = ExecutionLifecycle(self.captured_execution(), config=self.config,
+                transport=self.http, journal_directory=self.journal.directory)
             self.rpc = AppServer(
                 self.config["binary"],
                 Path(self.config["codexHome"]),

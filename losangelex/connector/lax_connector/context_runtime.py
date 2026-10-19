@@ -312,15 +312,38 @@ class ContextRunner:
 
 
 class ContextAgent:
-    def __init__(self,config):
+    def __init__(self,config,*,purpose=None):
+        if purpose is not None and purpose not in ROLES:
+            raise ValueError("Unknown native context purpose")
         self.config=config
+        self.purpose=purpose
         self.state=Path(config["state"])
         self.state.mkdir(mode=0o700,exist_ok=True)
         self.lock=(self.state/"agent.lock").open("a")
-        fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
-        self.runners={p:ContextRunner(self,p) for p in ROLES}
+        self.purpose_lock=None
+        try:
+            # Separate purpose services coexist. The all-context launcher is
+            # exclusive with every purpose service, including during recovery.
+            kind=fcntl.LOCK_EX if purpose is None else fcntl.LOCK_SH
+            fcntl.flock(self.lock.fileno(),kind|fcntl.LOCK_NB)
+            if purpose is not None:
+                directory=self.state/purpose
+                directory.mkdir(mode=0o700,exist_ok=True)
+                self.purpose_lock=(directory/"runner.lock").open("a")
+                fcntl.flock(self.purpose_lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            self.runners={p:ContextRunner(self,p) for p in ([purpose] if purpose else ROLES)}
+        except BaseException:
+            self.release_locks()
+            raise
+        self.status_path=self.state/("status-"+purpose+".json" if purpose else "status.json")
+        self.reconcile_path=self.state/("reconcile-only-"+purpose+".json" if purpose else "reconcile-only.json")
         self.session=None
         self.stop=asyncio.Event()
+
+    def release_locks(self):
+        if self.purpose_lock:
+            self.purpose_lock.close()
+        self.lock.close()
 
     async def http(self,purpose,method,path,payload=None):
         token=self.config["tokens"][purpose]
@@ -340,7 +363,7 @@ class ContextAgent:
                 for runner in self.runners.values():
                     await runner.start()
                 if reconcile_only:
-                    saved(self.state/"reconcile-only.json",{"at":time.time(),"modelTurnsStarted":0,
+                    saved(self.reconcile_path,{"at":time.time(),"modelTurnsStarted":0,
                         "contexts":{p:{"nativeThread":r.thread,"held":r.failed} for p,r in self.runners.items()}})
                     return
                 while not self.stop.is_set():
@@ -382,7 +405,7 @@ class ContextAgent:
                         status[purpose]={"active":runner.active,"held":runner.failed,
                                          "pending":pending,"nativeThread":runner.thread,
                                          "nativeTurn":runner.turn}
-                    saved(self.state/"status.json",{"at":time.time(),"agentId":self.config["agentId"],
+                    saved(self.status_path,{"at":time.time(),"agentId":self.config["agentId"],
                                                   "contexts":status,"modelsStartedByUnchangedPoll":0})
                     try:
                         await asyncio.wait_for(self.stop.wait(),0.5)
@@ -408,14 +431,16 @@ class ContextAgent:
                                 "pending":len(runner.activity.pending),"executionReplayed":False})
                         await runner.activity.close()
                 await asyncio.gather(*(r.rpc.close() for r in self.runners.values()),return_exceptions=True)
+                self.release_locks()
 
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser()
     parser.add_argument("--config",type=Path,required=True)
     parser.add_argument("--reconcile-only",action="store_true")
+    parser.add_argument("--purpose",choices=sorted(ROLES))
     args=parser.parse_args()
-    asyncio.run(ContextAgent(json.loads(args.config.read_text())).serve(reconcile_only=args.reconcile_only))
+    asyncio.run(ContextAgent(json.loads(args.config.read_text()),purpose=args.purpose).serve(reconcile_only=args.reconcile_only))
 
 if __name__=="__main__":
     main()

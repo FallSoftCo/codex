@@ -21,25 +21,24 @@ def digest(value):
 
 
 class ExecutionLifecycle:
-    def __init__(self, connector):
-        self.c = connector
-        delivery = connector.active["delivery"]
-        self.id = str(
-            uuid5(
-                UUID(delivery["id"]),
-                "native-executor:"
-                + str(delivery["generation"])
-                + ":"
-                + delivery["claim_id"],
-            )
-        )
-        self.root = connector.journal.directory
+    def __init__(self, execution, *, config, transport, journal_directory):
+        from .tool_execution import capture
+        # The executor is owned by an actual accepted delivery, independently
+        # of the scheduler or communication context that invokes this core.
+        self.owner = capture(execution, thread=execution.get("nativeThread"),
+            turn=execution.get("nativeTurn"), agent=config["agentId"], host=config["hostId"])
+        self.config = {key: config[key] for key in ("agentId", "hostId", "binary")}
+        self.transport = transport
+        delivery = self.owner["delivery"]
+        self.id = str(uuid5(UUID(delivery["id"]), "native-executor:"
+            + str(delivery["generation"]) + ":" + delivery["claim_id"]))
+        self.root = Path(journal_directory)
         self.row = None
         self.native = None
 
     def validate(self, value):
         row = value["executor"]
-        d = self.c.active["delivery"]
+        d = self.owner["delivery"]
         if (
             row["id"],
             row["delivery"],
@@ -50,8 +49,8 @@ class ExecutionLifecycle:
         ) != (
             self.id,
             d["id"],
-            self.c.config["agentId"],
-            self.c.config["hostId"],
+            self.config["agentId"],
+            self.config["hostId"],
             d["generation"],
             d["claim_id"],
         ):
@@ -61,13 +60,13 @@ class ExecutionLifecycle:
     async def original_post(self, path, payload, name):
         saved(self.root / (name + "-intent.json"), payload)
         try:
-            result = await self.c.http("POST", path, payload)
+            result = await self.transport("POST", path, payload)
         except Exception as error:
             if isinstance(error, HttpFailure) and error.status in (400, 403, 409):
                 raise
             # Inspect the original executor identity; never repeat a process
             # birth, attachment or model submission after an uncertain reply.
-            result = await self.c.http("GET", "executors/" + self.id)
+            result = await self.transport("GET", "executors/" + self.id)
         self.row = self.validate(result)
         saved(self.root / (name + "-receipt.json"), result)
         return self.row
@@ -99,13 +98,13 @@ class ExecutionLifecycle:
             "nativePid": None,
             "nativeStart": None,
         }
-        d = self.c.active["delivery"]
+        d = self.owner["delivery"]
         payload = {
             "operationId": "native-reserve:" + self.id,
             "id": self.id,
             "claimId": d["claim_id"],
             "generation": d["generation"],
-            "hostId": self.c.config["hostId"],
+            "hostId": self.config["hostId"],
             **{
                 k: v
                 for k, v in self.descriptor.items()
@@ -129,8 +128,8 @@ class ExecutionLifecycle:
         await self.require_registered()
 
     async def current_controller(self, row):
-        policy = await self.c.http(
-            "GET", "hosts/" + self.c.config["hostId"] + "/admission"
+        policy = await self.transport(
+            "GET", "hosts/" + self.config["hostId"] + "/admission"
         )
         value = policy.get("policy")
         return bool(
@@ -142,7 +141,7 @@ class ExecutionLifecycle:
     async def require_registered(self):
         deadline = time.monotonic() + 45
         while True:
-            result = await self.c.http("GET", "executors/" + self.id)
+            result = await self.transport("GET", "executors/" + self.id)
             row = self.validate(result)
             if result["deliveryState"] != "claimed" or row["state"] == "stopped":
                 raise RuntimeError("Original launch no longer admits process birth")
@@ -170,16 +169,16 @@ class ExecutionLifecycle:
         ):
             raise RuntimeError("Actual native child ownership unavailable")
         if child["executable"] != str(
-            Path(self.c.config["binary"]).resolve(strict=True)
+            Path(self.config["binary"]).resolve(strict=True)
         ):
             raise RuntimeError("Native child executable differs from pinned runtime")
         saved(self.root / "native-process.json", child)
-        d = self.c.active["delivery"]
+        d = self.owner["delivery"]
         payload = {
             "operationId": "native-attach:" + self.id,
             "claimId": d["claim_id"],
             "generation": d["generation"],
-            "hostId": self.c.config["hostId"],
+            "hostId": self.config["hostId"],
             "reservationDigest": digest(self.descriptor),
             "nativePid": child["pid"],
             "nativeStart": child["start"],
@@ -200,7 +199,7 @@ class ExecutionLifecycle:
     async def require_live(self, *, wait=False):
         deadline = time.monotonic() + (45 if wait else 0)
         while True:
-            result = await self.c.http("GET", "executors/" + self.id)
+            result = await self.transport("GET", "executors/" + self.id)
             row = self.validate(result)
             if (
                 row["descriptor"] != self.descriptor
@@ -235,7 +234,7 @@ class ExecutionLifecycle:
         deadline = time.monotonic() + 15
         while True:
             try:
-                result = await self.c.http("GET", "executors/" + self.id)
+                result = await self.transport("GET", "executors/" + self.id)
                 row = self.validate(result)
                 saved(self.root / "native-close-observation.json", result)
                 if row["state"] == "stopped":
