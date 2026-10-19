@@ -49,10 +49,32 @@ a deliberate stop. An existing single-context Global requires explicit adoption;
 the native factory refuses to replace it. The retained
 `python -m lax_connector.linux_admin` primitive is not the default setup path.
 
-This factory does not yet configure system boot desired state or install the
-Hollywood API/database/NextComp gateway. Those dependencies must already be
-installed and the actual private API available. Do not describe factory readiness
-as a complete enterprise installation.
+The factory prepares a disabled systemd startup target for this Global's three
+purpose services, host observer and native collaboration bridge. Additional
+already-installed API/client service units can be declared with repeated
+`--startup-service UNIT` arguments. Later reconciliation retains that exact
+membership and the operator's current enabled/disabled state. It does not
+automatically enroll peers or historical installations at boot.
+
+Use `--enable-startup` or `--disable-startup` for an explicit boot-policy change.
+These commands never use `--now` and do not start, stop or restart current
+execution. Native first activation remains `--activate`; subsequent setup
+preserves deliberate service stops. The target is an ordinary systemd boot
+dependency group, not a work scheduler. Current execution and boot policy remain
+separate operator actions.
+
+The packaged SDK102 installer passed an actual owned seven-service cold restart:
+the same three native histories, six inference permits and original completed
+request/answer receipts remained unchanged. Default setup preserved a disabled
+target and deliberately stopped responder. This is installation restart
+evidence, not a host reboot, shared database restart, phone, voice or push proof.
+See `qualification/native-startup-20261019.json` and the explicit
+`tests/integration_native_boot.py` integration runner.
+
+This factory still does not provision the Hollywood API/database or NextComp
+gateway. Those dependencies must already be installed, their own boot/database
+dependencies configured, and the actual private API available for sealing.
+Do not describe factory readiness as a complete enterprise installation.
 
 Global installation optionally accepts environmentProfileFile. This declares
 approved non-secret repository, GitHub, SSH and build routes for its authority.

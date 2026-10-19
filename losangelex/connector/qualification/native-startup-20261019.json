@@ -1,0 +1,23 @@
+{
+  "schema": "native-startup-source-qualification/v1",
+  "date": "2026-10-19",
+  "package": "lax-hollywood-connector0.1.0.dev102",
+  "scope": "Native installer startup metadata and explicit boot controls; agent/API/bridge execution runtime remains SDK101/H73.",
+  "packagedSourceWheelInstalledBytesMatched": true,
+  "actualIntegration": "tests/integration_native_boot.py",
+  "authority": "483b0ac5-072a-43e1-ab50-36405f83de31",
+  "globalAgent": "cccfd79e-e934-460a-886e-df51c3ded886",
+  "ownedServices": 7,
+  "preservedNativeHistories": 3,
+  "nativeInferencePermitsBeforeAndAfter": 6,
+  "defaultReconcilePreservedBootDisable": true,
+  "defaultReconcilePreservedDeliberatePurposeStop": true,
+  "ownedColdStartPassed": true,
+  "historicalOrBusinessWorkersResumed": false,
+  "productionAndSharedDatabasePidsUnchanged": true,
+  "newModelOrTaskSubmittedByTest": false,
+  "hostRebootTested": false,
+  "fullEnterpriseInstallerComplete": false,
+  "privateReceipt": "/var/lib/harness-deployments/ozzz-native-20261019-r01/startup-lifecycle-r89.json",
+  "runnerNotes": "Initial test interpreter had no optional psycopg; import failed before any intent/effect. Used existing maintained full SDK101/H73 interpreter to drive actual packaged SDK102 CLI. No runtime dependencies/permissions changed to make tests pass."
+}

@@ -45,7 +45,7 @@ def start_once(root, unit):
     return {"unit": unit, "state": state, "startRepeated": False}
 
 
-def provision(profile, *, activate=False):
+def provision(profile, *, activate=False, startup_enabled=None, startup_dependencies=None):
     if os.geteuid() != 0:
         raise PermissionError("First Global installation requires the host administrator")
     if profile.get("schema") != SCHEMA:
@@ -87,7 +87,8 @@ def provision(profile, *, activate=False):
         ready = protected(ready_path)
         manifest = protected(purpose_install.directory(authority, global_id) / "installation.json")
         require_sealed(manifest)
-        return {**ready, "reconciled": True, "activation": (
+        startup = configure_startup(root, manifest, ready, startup_enabled, startup_dependencies)
+        return {**ready, "startup": startup, "reconciled": True, "activation": (
             purpose_install.activate(authority, global_id) if activate else {"requested": False}),
             "historicalAgentsResumed": False}
     for name in ("binary", "interpreter", "pythonRoot"):
@@ -159,7 +160,14 @@ def provision(profile, *, activate=False):
         "enterpriseInstallationComplete": False,
         "meaning": "Prepared and sealed native Global; actual first-user execution and lifecycle qualification remain required."}
     saved(ready_path, ready)
-    return {**ready, "activation": purpose_install.activate(authority, global_id) if activate else {"requested": False}}
+    startup = configure_startup(root, manifest, ready, startup_enabled, startup_dependencies)
+    return {**ready, "startup": startup, "activation": purpose_install.activate(authority, global_id) if activate else {"requested": False}}
+
+
+def configure_startup(root, manifest, ready, enabled, dependencies):
+    from .native_startup import prepare, set_enabled
+    startup = prepare(root, manifest, ready["infrastructure"], dependencies)
+    return set_enabled(root, startup, enabled) if enabled is not None else startup
 
 
 def main():
@@ -167,8 +175,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--activate", action="store_true")
+    startup = parser.add_mutually_exclusive_group()
+    startup.add_argument("--enable-startup", dest="startup_enabled", action="store_true")
+    startup.add_argument("--disable-startup", dest="startup_enabled", action="store_false")
+    parser.set_defaults(startup_enabled=None)
+    parser.add_argument("--startup-service", action="append", default=None,
+                        help="Additional installed API/client service; preserved on later reconciliation")
     args = parser.parse_args()
-    print(json.dumps(provision(protected(args.spec), activate=args.activate)))
+    print(json.dumps(provision(protected(args.spec), activate=args.activate,
+        startup_enabled=args.startup_enabled, startup_dependencies=args.startup_service)))
 
 
 if __name__ == "__main__":

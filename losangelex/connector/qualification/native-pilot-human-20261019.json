@@ -1,0 +1,22 @@
+{
+  "schema": "native-pilot-human-qualification/v1",
+  "date": "2026-10-19",
+  "scope": "Actual new authority/UID with installed approved enterprise environment, reached over private HTTPS from phone SSH using legitimate paired test device. Physical NextComp app input not implied.",
+  "request": "10d98256-d71d-432b-80b9-83d7e8d2b8e9",
+  "delivery": "28ce7aa0-f37e-442a-b58a-a6ea865ef86a",
+  "generation": 1,
+  "completed": true,
+  "question": "fa188020-1afe-5317-8916-15210efbb8ff",
+  "answerMode": "same-agent-context-input",
+  "final": "82266a31-fc01-4469-8116-609e42f154d4",
+  "artifactSha256": "58b23c032904daa9a3613ae304f6176efa663d055e768004c8f49cc5e30bba89",
+  "artifactUid": 880,
+  "executionActivities": 28,
+  "crossEnvironmentTokenIsolation": [
+    401,
+    401
+  ],
+  "phoneAppProfileChanged": false,
+  "voiceAndPushProved": false,
+  "privateReceipt": "/var/lib/harness-deployments/ozzz-native-20261019-r01/human-journey-proof-r90.json"
+}
