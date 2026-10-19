@@ -193,6 +193,38 @@ See `codex-rs/tui/styles.md`.
 
 ## Tests
 
+### Evidence integrity — explicit user directive, 2026-10-19
+
+The user explicitly prohibits cheating in evaluation or reporting.
+
+- Freeze acceptance criteria and scoring before a model qualification run. Never
+  weaken a check, change an expected answer, or reinterpret failure to obtain a
+  pass. If the evaluator is defective, retain its original result, disclose the
+  correction and requalify the affected claim.
+- Do not feed workers hidden expected outputs or coach the semantic decisions
+  being evaluated. Normally stated task requirements remain legitimate inputs.
+  A test with explicitly labeled relevance measures following those directions;
+  it does not establish relevance judgment on ordinary room traffic.
+- Never manually repair generated work or canonical state and describe the run
+  as unassisted. Record every intervention and preserve original operations,
+  artifacts and failures. Debugging and assisted recovery must be labeled.
+- Demonstrate that outcome checks reject deliberately broken controls. Keep
+  fixtures, stubs and mechanical checks distinct from actual-model behavior.
+  New artifact checks on an old output are not new independent model trials.
+- Derive pass claims from recorded observations and executable assertions.
+  Label operator statements, inferences and unverified claims explicitly;
+  hardcoded success booleans are not measurements.
+- Retain and report all attempts, including setup/transport failures and scorer
+  defects. Do not select only successful runs or extrapolate reliability from
+  a few smoke tests.
+- Bound every conclusion to its actual scenario. A clean idle-reader restart,
+  thread ID continuity or one finished artifact does not establish arbitrary
+  crash recovery, compaction stability, multi-agent autonomy or production
+  readiness.
+
+These instructions are policy, not evidence that an executable release gate
+already enforces them.
+
 ### Model-In-The-Loop Evaluation
 
 - Losangelex/Hollywood is a model-driven system. The thing being built is not just the runtime or state machine in isolation; it is the combined behavior of:
