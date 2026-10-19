@@ -1,0 +1,40 @@
+{
+  "schema": "lax-continuous-reader-readiness/v1",
+  "at": 1792438072.9099061,
+  "status": "experimental-native-input-path-two-bounded-workflows-passed",
+  "runtime": "SDK108/H76 venv-r120",
+  "frozenContractSha256": "08dfdc48b594612a3eeaa3e7e82664a93739896123278c546a179ae2f18739ef",
+  "firstProof": "continuous-reader-native-r121.json",
+  "restartProof": "continuous-reader-restart-native-r122.json",
+  "originalTaskAcceptedOnce": true,
+  "semanticWorkflowsUsedActualModel": true,
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "codeChangedDuringSuccessfulSemanticRuns": false,
+  "semanticOwnerInterventionsDuringSuccessfulRuns": 0,
+  "firstTransportFailuresAndReadOnlyScorerRepairRetained": true,
+  "productionAndPilotPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "1791962",
+    "nextcomp-native-pilot-20261019-r01.service": "1516570"
+  },
+  "productionReplacementReady": false,
+  "currentLimitations": [
+    "Native compaction under the new automatic input path not qualified; previous retrieval-driven compaction evidence is separate.",
+    "New multi-agent/multi-room collaboration run with automatic reader input still required.",
+    "Crash/lost-reply during native append recovery is implemented conservatively but unqualified; ambiguous originals stay held.",
+    "Automatic reader snapshots currently accompany incoming communication and include current work; autonomous delivery of every writer-state revision is not implemented.",
+    "Full enterprise installer, multi-host/multi-human sustained operation and physical phone native-profile/voice/push qualification remain incomplete."
+  ],
+  "nextExecutableSlice": {
+    "scenario": "One native coordinator plus engineer and reviewer using the qualified input path; a real defect arrives during execution, peers resolve prerequisites and deliver independently reviewed artifact.",
+    "qualifyBeforeRollout": [
+      "Actual compaction of reader history followed by new input and correct same-work continuation",
+      "Same canonical original operations across disconnect and recovery",
+      "Complete artifact checks, useful attributed conversation, separate execution activity, no acknowledgement cycles or unsolicited task acceptance"
+    ],
+    "constraint": "Do not add business sessions, timers, provider builds or production default cutover; no old worker resumes."
+  }
+}

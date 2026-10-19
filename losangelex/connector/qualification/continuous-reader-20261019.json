@@ -1,0 +1,41 @@
+{
+  "schema": "lax-continuous-reader-qualification/v1",
+  "state": "contract-frozen-before-implementation",
+  "objective": "Automatically deliver authorized primary content to the persistent reader, independently of writer execution; reader interprets impact, writer preserves and completes accepted work, responder communicates source-bound answers.",
+  "existing": {
+    "lax": "6f918838fd775f9f06a87c341305cd5eaabf3957",
+    "hollywood": "eb0226d216f63a702f309fdaf8e3a21d227440cb"
+  },
+  "architecture": {
+    "backbone": "Hollywood retains canonical events, ACLs, original authorship and distinct input/work/response states.",
+    "input": "LAX fetches full authorized pending input automatically, including role and current own unfinished work. No model tool choice gates primary visibility.",
+    "native": "Existing thread/injectItems appends bounded named tool output fragments. Active turns consume queued input at native model-step boundaries. No assertion that in-flight provider calls can change.",
+    "admission": "Initial input is appended before reader inference. Later arrivals extend only the current reader's captured input after confirmed append. Work and response obligations stay distinct from delivery.",
+    "histories": "Reader, writer and responder remain independent native histories; raw room messages never steer writer or enter responder.",
+    "recovery": "Journal native append intent and receipt. On uncertain append, observe exact original history before any retry; never replay work or infer interpretation from delivery.",
+    "scope": "New disposable native cohort on existing private QA authority; existing production, Global pilot, phone profiles and deliberate stops preserved."
+  },
+  "acceptance": [
+    "Transcript contains exact original input body and provenance without model-initiated retrieval of that input.",
+    "Relevant event arrives during actual writer work and is interpreted by reader while original writer turn remains active.",
+    "An event arriving during reader inference enters the same reader history without turn/interrupt or human steering.",
+    "Relevant interpretation amends existing objective-bearing work; unrelated observation creates no assignment or required acknowledgement.",
+    "Status/question receives an attributable responder answer while original work remains open.",
+    "Original deliverable completes and passes independent frozen output checks including the unforeseen change.",
+    "Existing original input/delivery/work identities retained, no duplicate task submission or owner semantic intervention.",
+    "Repeat with reader restart and native compaction; inspect causal inputs and resulting artifact, not just terminal states."
+  ],
+  "failure": [
+    "Any omitted authorized pending event, wrong authorship/audience, objective replacement, silent dropped obligation, acknowledgement cycle, duplicate task or manual semantic repair.",
+    "Passing only state transitions or substituted model decisions.",
+    "Observed message retrieval counted as proof of understanding.",
+    "Any failure remains in the run record; a repaired run is a separate qualified revision."
+  ],
+  "stages": [
+    "Implement smallest native input path.",
+    "Run one real model workflow and independently inspect artifact and event trace.",
+    "Repeat the frozen scenario with altered timing, restart and compaction.",
+    "Then extend to multiple native agents and rooms before rollout."
+  ],
+  "evidenceLimits": "Finite trials support bounded behavior, never universal semantic reliability, deadlock freedom, exactly-once external effects or full Codex replacement."
+}

@@ -1,0 +1,92 @@
+{
+  "schema": "lax-continuous-reader-real-native-workflow/v1",
+  "at": 1792437868.3389645,
+  "state": "bounded-workflow-passed",
+  "authority": "f96e5615-0e6d-48d3-93b6-dc54393d5c2e",
+  "agent": "c8d3dd19-a008-4cf1-a1dd-52628abcde6a",
+  "room": "39bc080c-bc4e-4efe-8190-744406d07bf8",
+  "runtime": "SDK108/H76 venv-r120",
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "nativeHistories": {
+    "reader": "01a15598-39cf-7bd0-9b93-37c90f805485",
+    "writer": "01a15598-38a1-7823-a481-23e0e7c7b202",
+    "responder": "01a15598-38a0-7620-a92b-f77e0840ad87"
+  },
+  "originalRequest": "cef1b3ce-bd09-489b-9aa5-bc205eb6b375",
+  "originalDelivery": {
+    "id": "e4871820-bb8d-44bb-9111-224ef87fbd68",
+    "event": "cef1b3ce-bd09-489b-9aa5-bc205eb6b375",
+    "state": "completed",
+    "generation": 1,
+    "result_event": "4ad21e62-9800-4c0a-9384-bcf4a1b3f098"
+  },
+  "originalWork": "5c020b5a-2c69-5f8b-9e44-c6511c6e53ae",
+  "automaticPrimaryFragmentsVerifiedInNativeRollout": 7,
+  "firstInputBeforeAcceptWork": true,
+  "laterArrivalsDuringSameReaderTurn": "01a1559c-0e2d-7a00-be16-c47dc1953298",
+  "writerActiveAtArrival": true,
+  "sourceBoundCorrectionAppliedToSameWork": true,
+  "unrelatedObservationHandledWithoutAssignmentOrReply": true,
+  "statusResponseBeforeWorkCompletionSeconds": 63.469,
+  "originalObjectivePreserved": "Build and deliver dependency-free Python triage_cli.py and a short README.md in this workspace for the supplied backlog.csv. Support `python3 triage_cli.py --input backlog.csv --as-of YYYY-MM-DD`, emitting one JSON object with sorted actionIds, sorted overdueIds, and byProduct actionable counts omitting zero counts. Every status except done is actionable; overdue means actionable with a due date strictly before as-of. Preserve this objective while incorporating relevant operational corrections in this room.",
+  "modelSelectedPrimaryReads": [],
+  "independentArtifactCheck": {
+    "at": 1792437785.5666378,
+    "actual": {
+      "actionIds": [
+        "S-01",
+        "S-02",
+        "S-06",
+        "S-07"
+      ],
+      "overdueIds": [
+        "S-01",
+        "S-07"
+      ],
+      "byProduct": {
+        "8bar": 1,
+        "Hollywood": 1,
+        "NextComp": 1,
+        "ozzz": 1
+      }
+    },
+    "expected": {
+      "actionIds": [
+        "S-01",
+        "S-02",
+        "S-06",
+        "S-07"
+      ],
+      "overdueIds": [
+        "S-01",
+        "S-07"
+      ],
+      "byProduct": {
+        "8bar": 1,
+        "Hollywood": 1,
+        "NextComp": 1,
+        "ozzz": 1
+      }
+    },
+    "matches": true,
+    "codeSha256": "087b6b2cae7a5fac70c45e3461c7104287d8bb00a723c2d17c3d430d15735a62",
+    "readmeExists": true
+  },
+  "nativeCallsInterruptedDuringSuccessfulWorkflow": 0,
+  "semanticOwnerInterventionsDuringWorkflow": 0,
+  "initialFailuresRetained": [
+    "QA journal path before dispatch",
+    "Room owner rejected human identity; corrected to agent owner after definite403",
+    "Human task rejected agent-only expectsReply field before acceptance",
+    "Native method typo -32600 before model; original task continued after corrected upgrade",
+    "Read-only scorer UUID serialization fixed after workflow completion; no resubmission"
+  ],
+  "remaining": [
+    "Reader restart and delayed input recovery",
+    "Native compaction under this new input path",
+    "Multiple native agents/rooms using continuous input",
+    "Prolonged operation and physical NextComp profile"
+  ],
+  "limits": "One finite real-model workflow; no universal semantic stability, deadlock-freedom, exactly-once or production replacement claim."
+}

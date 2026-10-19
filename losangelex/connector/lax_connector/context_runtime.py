@@ -39,6 +39,8 @@ class ContextRunner:
         self.failed=False
         self.execution_scope=None
         self.material_ids=[]
+        from .reader_inbox import ReaderInbox
+        self.inbox=ReaderInbox(self) if purpose=="reader" else None
         self.next_review_at=0.0
         self.permit=None
         self.native_tools=None
@@ -177,6 +179,8 @@ class ContextRunner:
             "threadId":self.thread,"name":self.config["agentId"]+":"+self.purpose})
         saved(record,{"state":"bound","contextId":self.config["contextIds"][self.purpose],
                       "nativeThread":self.thread,"purpose":self.purpose,"materialized":True})
+        if self.inbox:
+            await self.inbox.recover()
         verify(settings["toolPolicy"],result)
         effective={(x.get("namespace") or "functions",x["name"])
                    for x in result["toolPolicy"]["allowedTools"]}
@@ -201,6 +205,12 @@ class ContextRunner:
         # never converted into another model submission.
         wake=self.state/"wake.json"
         old=json.loads(wake.read_text()) if wake.exists() else {}
+        if old.get("state") == "not_submitted":
+            await self.request("release_reservation", {"permitId":old["permitId"]},
+                operation="release-unused:"+old["permitId"], turn="admission")
+            saved(self.state/"restart-recovery.json", {
+                "id":"resume-after-not-submitted:"+old["permitId"],
+                "nativeThread":self.thread,"modelsStarted":0})
         if old.get("state") in ("submission_intent","running","unknown"):
             self.turn=old.get("nativeTurn")
             self.permit=old.get("permitId")
@@ -398,9 +408,12 @@ class ContextRunner:
         saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"submission_intent",
                                       "pending":pending,"nativeThread":self.thread,"permitId":self.permit})
         self.trace("wake",{"fingerprint":fingerprint,"pending":pending})
+        model_submitted=False
         try:
             if self.executor:
                 await self.executor.require_live()
+            batch=await self.inbox.append(pending) if self.inbox else None
+            model_submitted=True
             result=await self.rpc.call("turn/start",{
               "threadId":self.thread,"input":[],"model":self.config["model"],
               "effort":self.config["effort"],"turnTrigger":"hollywood_context_material",
@@ -411,6 +424,8 @@ class ContextRunner:
             material_ids=[r["id"] for r in pending]
             admission=await self.request("begin",{"materialIds":material_ids,"permitId":self.permit},
                                operation="context-begin:"+self.turn)
+            if self.inbox:
+                await self.inbox.adopt(batch)
             if self.activity:
                 self.execution_scope=ExecutionScope.accepted(admission,agent=self.config["agentId"],
                     thread=self.thread,turn=self.turn,materials=material_ids)
@@ -456,6 +471,13 @@ class ContextRunner:
                 except (Exception,asyncio.CancelledError) as observation:
                     self.trace("shutdown_terminal_unconfirmed",{"nativeTurn":self.turn,
                         "error":type(observation).__name__})
+            if not settled and not model_submitted:
+                await self.request("release_reservation",{"permitId":self.permit},
+                    operation="release-unused:"+self.permit,turn="admission")
+                saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"not_submitted",
+                    "nativeThread":self.thread,"nativeTurn":None,"permitId":self.permit,
+                    "modelSubmissionAdmitted":False,"error":str(error)})
+                settled=True
             if not settled:
                 saved(self.state/"wake.json",{"fingerprint":fingerprint,"state":"unknown",
                          "nativeThread":self.thread,"nativeTurn":self.turn,"permitId":self.permit,"error":str(error)})
@@ -572,6 +594,17 @@ class ContextAgent:
                                 and any(x["id"] in runner.material_ids for x in cancelled)):
                             await runner.cancel()
                         pending=[x for x in pending if not x["cancelled"]]
+                        if purpose=="reader":
+                            try:
+                                await runner.inbox.receive(pending)
+                            except Exception as error:
+                                runner.failed=True
+                                runner.failure_reason=str(error)
+                                runner.trace("reader_delivery_held",{"error":str(error),
+                                    "nativeTurn":runner.turn,"inputReplayed":False})
+                                self.stop.set()
+                            if not runner.active:
+                                pending=pending[:16]
                         if purpose=="writer":
                             pending=pending[:1]  # A turn has one original effect/work owner.
                             key=[(x["id"],x.get("resume_revision",0)) for x in pending]

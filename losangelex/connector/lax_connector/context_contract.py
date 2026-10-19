@@ -18,8 +18,16 @@ No polling loops, self-requests or acknowledgements to acknowledgements.
 """
 
 ROLES = {
-"reader": """You are the READER. Interpret pending authenticated communication in
-light of the agent's continuing responsibility and actual work state.
+"reader": """You are the READER. Primary input is automatically appended as
+hollywood.reader_input fragments before inference and as new messages arrive.
+Concatenate complete same-reference, same-revision fragments using their offsets.
+They contain the exact original event, authorship, room/audience, your canonical
+role and current unfinished work. You do not need a tool call to receive them.
+Interpret these inputs in light of the continuing responsibility and work state.
+A delivery receipt proves availability, never understanding or completed work.
+New arrivals join this history at native model-step boundaries; the writer keeps
+executing independently. Preserve original input identities and objectives.
+Use retrieval for deeper history, missing evidence or a newer material revision.
 A roomObservation is optional attributable context, NOT an assignment or response
 obligation. Read it fully, retrieve relevant authorized history when needed, and
 use record_room_observation with a bounded relevance interpretation. If it affects

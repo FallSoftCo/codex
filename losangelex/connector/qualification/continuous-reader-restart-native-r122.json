@@ -1,0 +1,50 @@
+{
+  "schema": "lax-continuous-reader-offline-recovery/v1",
+  "at": 1792437990.599038,
+  "state": "bounded-workflow-passed",
+  "agent": "c8d3dd19-a008-4cf1-a1dd-52628abcde6a",
+  "task": "ce0fe045-6429-49d5-91b2-f815f44c43fa",
+  "correction": "14fc9cb5-3259-434b-b3a7-c8fbc1adc395",
+  "deliveries": [
+    {
+      "id": "7c5036ae-0fde-483e-80c6-a53dbe9a868d",
+      "event": "13782ef6-1889-4f22-a7fd-6eb7e8d50745",
+      "state": "completed",
+      "generation": 0,
+      "result_event": "774a040a-bc8e-42c4-8f5e-4cf4e41f578a"
+    },
+    {
+      "id": "df97a582-33b8-4e2f-a358-2928adbc352e",
+      "event": "ce0fe045-6429-49d5-91b2-f815f44c43fa",
+      "state": "completed",
+      "generation": 1,
+      "result_event": "055045ea-54dc-4416-8b88-e0fe0fe48c6b"
+    }
+  ],
+  "readerOldPid": "2172040",
+  "readerNewPid": "2192137",
+  "writerActiveDuringDisconnect": true,
+  "sameNativeHistories": {
+    "reader": "01a15598-39cf-7bd0-9b93-37c90f805485",
+    "writer": "01a15598-38a1-7823-a481-23e0e7c7b202",
+    "responder": "01a15598-38a0-7620-a92b-f77e0840ad87"
+  },
+  "filteredActual": {
+    "actionIds": [
+      "S-01"
+    ],
+    "overdueIds": [
+      "S-01"
+    ],
+    "byProduct": {
+      "ozzz": 1
+    }
+  },
+  "unfilteredPreserved": true,
+  "codeSha256": "1b1afe2b5b50bc4641add04af4517cebbff66d5e9719c1d8bcd281df5acf1ee8",
+  "newTaskSubmissions": 1,
+  "correctionMessages": 1,
+  "statusQuestions": 1,
+  "semanticOwnerInterventions": 0,
+  "limits": "Reader restart while idle, arrivals retained during disconnect; not a mid-provider-call crash or native compaction proof."
+}

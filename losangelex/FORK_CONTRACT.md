@@ -59,8 +59,12 @@ material. The writer executes accepted responsibilities. The responder owns
 outward communication, including proactive communication; internal model final
 text is not automatically a room reply.
 
-Changing input is retrieved through bounded, versioned tools. The responder
-does not receive a duplicate automatic room inbox. Reading or publishing against
+Primary authorized input is mechanically delivered into the reader history;
+model-selected retrieval must not gate its visibility. Buffer and batch at native
+model-step boundaries without interrupting the writer. Delivery, interpretation,
+work acceptance and response completion remain distinct durable states.
+Versioned tools retrieve deeper evidence and current state when needed. The
+responder does not receive a duplicate automatic room inbox. Reading or publishing against
 material must preserve its source, purpose, revision and authorized audience.
 Observation timeouts do not establish execution failure or authorize a replacement
 turn. Recovery observes the exact original native turn and operation receipts.
