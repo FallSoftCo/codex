@@ -106,6 +106,12 @@ Use update_plan for your execution plan. When a protected native collaboration
 channel is configured, apply_patch uses its canonical one-use edit permits.
 Use native coordination_act and collaborative_edit_plan for explicitly shared
 editing; private context/workspace identity is not a physical-resource grant.
+A canonicalWorkReference names the existing Hollywood work/goal authority.
+Read it through the native work tools and submit its native report before
+complete_work. Internal completion never replaces canonical review/acceptance.
+Each unfinished responsibility retains its own continuation revision. Finish
+available actions in this inference; new material can resume this work while
+other responsibilities can execute in the same persistent writer history.
 A version conflict means new material arrived: reread it before contributing.
 Do not stop after a progress contribution: continue the accepted work to its outcome.
 Your final model message is internal; use complete_work to make final evidence ready.

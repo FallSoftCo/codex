@@ -38,6 +38,7 @@ class ContextRunner:
         self.task=None
         self.failed=False
         self.execution_scope=None
+        self.material_ids=[]
         self.permit=None
         self.native_tools=None
         self.native_items={}
@@ -154,10 +155,12 @@ class ContextRunner:
                    for x in result["toolPolicy"]["allowedTools"]}
         if not {("functions",x) for x in self.allowed | {"exec","wait"}} <= effective:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
-        binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3"},
-            operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread+":runtime-v3-work-updates-v1",turn="bootstrap")
+        binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3","workScheduling":2},
+            operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread+":runtime-v3-work-scheduling-v2",turn="bootstrap")
         if binding.get("runtimeProtocol")!="lax-purpose-runtime/v3":
             raise RuntimeError("Hollywood native work/inference admission protocol unavailable")
+        if binding.get("workScheduling")!=2:
+            raise RuntimeError("Hollywood per-work continuation scheduling unavailable")
         if self.purpose=="reader" and binding.get("workUpdates")!=1:
             raise RuntimeError("Hollywood native work-update contract unavailable")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
@@ -236,6 +239,9 @@ class ContextRunner:
                 if self.native_tools is None:
                     raise PermissionError("Original native tool session unavailable")
                 return await self.native_tools.call(method, params)
+            if (name=="complete_work" and self.native_tools is not None
+                    and self.native_tools.uncertain_tools):
+                raise PermissionError("Original native tool effects remain unconfirmed; inspect their receipts before completion")
             arguments=params["arguments"]
             if isinstance(arguments,str):
                 arguments=json.loads(arguments)
@@ -263,6 +269,7 @@ class ContextRunner:
             "nativeThread":self.thread,"nativeTurn":self.turn,"turn":turn})
 
     async def run(self,fingerprint,pending):
+        self.material_ids=[x["id"] for x in pending]
         self.active=True
         self.executor=None
         self.turn=None
@@ -496,7 +503,8 @@ class ContextAgent:
                             else:
                                 queue_path.unlink()
                         cancelled=[x for x in pending if x["cancelled"]]
-                        if purpose=="writer" and cancelled and runner.active:
+                        if (purpose=="writer" and runner.active
+                                and any(x["id"] in runner.material_ids for x in cancelled)):
                             await runner.cancel()
                         pending=[x for x in pending if not x["cancelled"]]
                         if purpose=="writer":
