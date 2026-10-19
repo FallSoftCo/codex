@@ -33,6 +33,15 @@ POLICY = {
 }
 
 
+def bind_owner(c):
+    import copy
+    c.captured_execution = lambda: {
+        **copy.deepcopy(c.active), "nativeThread": getattr(c, "thread", "fixture-thread"),
+        "nativeTurn": "fixture-native-turn",
+    }
+    return c
+
+
 def fixture_view(authority, agent, host, workspace, grant, revision=19):
     return {
         "schema": "hollywood-agent-resource-default/v1",
@@ -72,6 +81,7 @@ class NativeMetadataTests(unittest.IsolatedAsyncioTestCase):
             thread="thread",
             work_briefing={"observed": True},
         )
+        bind_owner(self.c)
         self.view = {
             "schema": "hollywood-agent-resource-default/v1",
             "authorityId": uid(3),
@@ -822,14 +832,16 @@ class IntentAndGuardianProjectionTests(unittest.TestCase):
         self.assertEqual(
             result["resourceCapabilities"],
             {
-                key: POLICY[key]
+                **{key: POLICY[key]
                 for key in [
                     "resourceRouting",
                     "resourceDefaults",
                     "resourceMetadata",
                     "placementControl",
                     "pausedResourceSetup",
-                ]
+                ]},
+                "artifactResourceEvidence": None,
+                "artifactRootPolicy": None,
             },
         )
         self.assertFalse(result["mayApply"])

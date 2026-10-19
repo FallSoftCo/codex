@@ -13,6 +13,7 @@ from aiohttp import ClientSession, ClientTimeout
 from .context_contract import COMMON, ROLES, ACTIONS, tools
 from .activity import Activity
 from .execution_scope import ExecutionScope
+from .native_tool_session import NativeToolSession, read_definitions
 from .context_observation import TERMINAL, original_turn, wait_terminal
 from .journal import saved
 from .native_goals import external_admission
@@ -36,10 +37,11 @@ class ContextRunner:
         self.task=None
         self.failed=False
         self.execution_scope=None
+        self.native_tools=None
         self.early_activity=[]
         self.activity=Activity(state=self.state,scope=lambda:self.execution_scope,
             send=self.send_activity,secrets=tuple(self.config["tokens"].values())) if purpose=="writer" else None
-        self.declarations=tools(purpose)
+        self.declarations=tools(purpose) + (read_definitions() if purpose=="writer" else [])
         self.allowed={t["name"] for t in self.declarations}
         self.rpc=AppServer(self.config["binary"],Path(self.config["homes"][purpose]),
           self.state/"native",self.event,self.tool,enterprise=True,isolated_process_group=True)
@@ -193,6 +195,10 @@ class ContextRunner:
             name=params["tool"]
             if name not in self.allowed:
                 raise PermissionError("Tool belongs to another context purpose")
+            if name not in ACTIONS:
+                if self.native_tools is None:
+                    raise PermissionError("Original native tool session unavailable")
+                return await self.native_tools.call(method, params)
             arguments=params["arguments"]
             if isinstance(arguments,str):
                 arguments=json.loads(arguments)
@@ -246,6 +252,13 @@ class ContextRunner:
                 self.execution_scope=ExecutionScope.accepted(admission,agent=self.config["agentId"],
                     thread=self.thread,turn=self.turn,materials=material_ids)
                 saved(self.state/("execution-"+self.turn+".json"),admission)
+                scope=self.execution_scope.as_dict()
+                accepted=await self.agent.http(self.purpose,"GET","deliveries/"+scope["deliveryId"])
+                role=await self.agent.http(self.purpose,"GET",
+                    "connector/deliveries/"+scope["deliveryId"]+"/context")
+                self.native_tools=NativeToolSession(accepted=accepted,scope=scope,
+                    config=self.config,state=self.state/"native-tools",rpc=self.rpc,role=role,
+                    transport=lambda method,path,payload: self.agent.http(self.purpose,method,path,payload))
                 for method,params in self.early_activity:
                     self.activity.record(method,params)
                 self.early_activity=[]

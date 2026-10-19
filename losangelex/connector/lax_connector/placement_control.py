@@ -1,5 +1,7 @@
 """Revisioned same-host placement metadata; pause is not physical drainage."""
 
+from .tool_execution import participation
+
 from uuid import UUID
 from .collaboration_bridge import require
 from .resource_routing import connector_capabilities, bounded
@@ -52,7 +54,7 @@ async def read(c, args):
     capabilities(await connector_capabilities(c))
     return view(
         await c.http("GET", "placements/" + agent),
-        c.active["request"]["authority"],
+        participation(c)["request"]["authority"],
         agent,
     )
 
@@ -80,7 +82,7 @@ async def set_state(c, args, operation):
     }
     return view(
         await c.http("PUT", "placements/" + agent, payload),
-        c.active["request"]["authority"],
+        participation(c)["request"]["authority"],
         agent,
         host,
     )

@@ -1,4 +1,6 @@
 """Native discovery, protected observation and explicit review of held file edits."""
+
+from .tool_execution import participation
 import asyncio
 import json
 import sys
@@ -84,7 +86,7 @@ async def administer(c, name, args, operation):
             and c.role_context.value["hostAdministrationVerified"],
             "Verified local host administrator required for physical observation")
     # Installation paths belong to the selected host. No remote filesystem is inferred.
-    authority = str(UUID(c.active["request"]["authority"]))
+    authority = str(UUID(participation(c)["request"]["authority"]))
     host = str(UUID(c.config["hostId"]))
     config = (Path("/var/lib/harness") / authority / "hosts" / host /
               "native-collaboration/bridge.json")

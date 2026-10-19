@@ -96,6 +96,13 @@ class Fixture:
         self.post_error = None
         self.register_artifact_root(root)
 
+    def captured_execution(self):
+        from lax_connector.tool_execution import capture
+        turn = (json.loads(self.journal.read_text()).get("nativeTurn")
+                if hasattr(self, "journal") else "fixture-native-turn")
+        return capture(self.active, thread=self.thread, turn=turn,
+                       agent=self.config["agentId"], host=self.config["hostId"])
+
     def register_artifact_root(self, root):
         # Canonical metadata is fixture data; physical identity uses real files.
         environment = digest({"hostId": self.host, "environmentId": "local"})

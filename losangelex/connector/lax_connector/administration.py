@@ -1,5 +1,7 @@
 """Native Hollywood administration tools; credentials never enter model output."""
 
+from .tool_execution import participation
+
 import asyncio
 import hashlib
 import json
@@ -113,7 +115,7 @@ async def _administer(connector, name, arguments, operation):
                 credential,
                 {
                     "agentId": identity,
-                    "authorityId": connector.active["request"]["authority"],
+                    "authorityId": participation(connector)["request"]["authority"],
                     "token": secrets.token_urlsafe(40),
                 },
             )
@@ -208,7 +210,7 @@ async def _administer(connector, name, arguments, operation):
         credential = json.loads(
             (connector.state / ("agent-credential-" + agent + ".json")).read_text()
         )
-        authority = connector.active["request"]["authority"]
+        authority = participation(connector)["request"]["authority"]
         if credential["authorityId"] != authority:
             raise PermissionError("Credential belongs to another enterprise")
         # An agent may be provisioned before joining any room. Membership is

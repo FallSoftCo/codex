@@ -4,6 +4,8 @@ Coverage proves HTTP snapshot issuance, never model receipt or comprehension.
 Only an explicit native briefing call populates this cache. Reporting cannot
 silently fetch decisions or borrow another room's global sequence.
 """
+
+from .tool_execution import participation
 import json
 from datetime import datetime, timezone
 from uuid import UUID
@@ -11,7 +13,7 @@ from .journal import saved
 
 
 def expected_reader(c):
-    active = c.active
+    active = participation(c)
     if not active:
         raise PermissionError("Current native participation required")
     result = {"authorityId":active["request"]["authority"],"agentId":c.config["agentId"],
@@ -34,7 +36,7 @@ async def read(c, args, operation):
     original = await c.http("GET", "deliveries/"+prior)
     old, source = original["delivery"], original["request"]
     work_id = source.get("data",{}).get("workId")
-    if not work_id or old["agent"]!=c.config["agentId"] or source["authority"]!=c.active["request"]["authority"]:
+    if not work_id or old["agent"]!=c.config["agentId"] or source["authority"]!=participation(c)["request"]["authority"]:
         raise PermissionError("An original owned work delivery is required for report scope")
     work_id = str(UUID(work_id))
     work = (await c.http("GET", "work/"+work_id))["work"]

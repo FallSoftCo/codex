@@ -36,6 +36,9 @@ End this inference after handling available inputs; unresolved work stays durabl
 """,
 "writer": """You are the WRITER. Execute accepted work using your native execution
 and editing tools. Read the assigned objective and acceptance via context_material_read.
+Use the native Hollywood discovery/work/decision/resource read tools when you
+need canonical facts beyond the internal work material. They use the same native
+handlers as LAX's existing execution core and do not start other agents.
 You do not receive the original room conversation as steering. Preserve the
 accepted objective while reader and responder handle communication independently.
 Record useful actual progress using record_progress. Supply evidence and outcomes

@@ -1,5 +1,7 @@
 """Exact additive canonical-agent-resources/v1 consumers. Routing grants no effect."""
 
+from .tool_execution import participation
+
 import json
 from urllib.parse import urlencode
 from uuid import UUID
@@ -76,7 +78,7 @@ async def connector_capabilities(c):
 
 async def read(c, name, args):
     admin = c.role_context.value["communicationAdministrator"]
-    authority = c.active["request"]["authority"]
+    authority = participation(c)["request"]["authority"]
     if name == "hollywood_resource_roots":
         require(admin, "Administrator required for registered root discovery")
         route = "physical-workspaces?" + query(args, host_key="hostId")
@@ -174,7 +176,7 @@ async def select(c, args, operation):
     value = await c.http(
         "PUT", "agents/" + agent + "/resource-defaults/" + host, payload
     )
-    return default_view(value, c.active["request"]["authority"], agent, host)
+    return default_view(value, participation(c)["request"]["authority"], agent, host)
 
 
 def definitions(spec):

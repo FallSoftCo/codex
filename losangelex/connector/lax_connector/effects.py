@@ -5,6 +5,7 @@ import hashlib
 import json
 from .journal import saved
 from .errors import HttpFailure
+from .tool_execution import participation
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -43,17 +44,19 @@ class Effects:
         if method != "item/tool/call":
             yield
             return
-        if not c.active or params["threadId"] != c.thread:
+        owner = c.captured_execution()
+        if (not owner["nativeThread"] or not owner["nativeTurn"]
+                or params["threadId"] != owner["nativeThread"]
+                or params.get("turnId", owner["nativeTurn"]) != owner["nativeTurn"]):
             raise RuntimeError("Tool belongs to another native context")
         key = hashlib.sha256((params["threadId"] + params["callId"]).encode()).hexdigest()
-        record = json.loads(c.journal.read_text())
         binding = c.goal_binding
         scope = {
-            "authorityId": c.active["request"]["authority"], "agentId": c.config["agentId"],
-            "hostId": c.config["hostId"], "deliveryId": c.active["delivery"]["id"],
-            "claimId": c.active["delivery"]["claim_id"], "generation": c.active["delivery"]["generation"],
-            "requestId": c.active["request"]["id"], "nativeThread": c.thread,
-            "nativeTurn": record.get("nativeTurn"), "callId": params["callId"],
+            "authorityId": owner["request"]["authority"], "agentId": c.config["agentId"],
+            "hostId": c.config["hostId"], "deliveryId": owner["delivery"]["id"],
+            "claimId": owner["delivery"]["claim_id"], "generation": owner["delivery"]["generation"],
+            "requestId": owner["request"]["id"], "nativeThread": c.thread,
+            "nativeTurn": owner["nativeTurn"], "callId": params["callId"],
             "tool": params["tool"],
             "roleRevision": c.role_context.value["roleRevision"],
             "contextId": c.context_id,
@@ -61,7 +64,7 @@ class Effects:
             "argumentsDigest": hashlib.sha256(json.dumps([params["tool"], params["arguments"]], sort_keys=True).encode()).hexdigest(),
             "bindingAtStart": {k: binding.get(k) for k in ("bindingKind", "goalId", "nativeGoalId")} if binding else None,
         }
-        token = self.current.set({"key": key, "scope": scope})
+        token = self.current.set({"key": key, "scope": scope, "owner": owner})
         try:
             yield
         finally:
@@ -123,12 +126,13 @@ class Effects:
         if group["scope"] != context["scope"] or self.current_key(group) != context["key"]:
             raise RuntimeError("Administrative callback scope changed")
         c, scope = self.c, group["scope"]
+        owner = participation(c)
         expected = {
-            "authorityId": c.active["request"]["authority"], "agentId": c.config["agentId"],
-            "hostId": c.config["hostId"], "requestId": c.active["request"]["id"],
-            "deliveryId": c.active["delivery"]["id"],
-            "claimId": c.active["delivery"]["claim_id"],
-            "generation": c.active["delivery"]["generation"], "nativeThread": c.thread,
+            "authorityId": owner["request"]["authority"], "agentId": c.config["agentId"],
+            "hostId": c.config["hostId"], "requestId": owner["request"]["id"],
+            "deliveryId": owner["delivery"]["id"],
+            "claimId": owner["delivery"]["claim_id"],
+            "generation": owner["delivery"]["generation"], "nativeThread": c.thread,
         }
         if any(scope.get(k) != v for k, v in expected.items()):
             raise RuntimeError("Administrative operation ownership changed")
@@ -190,11 +194,12 @@ class Effects:
     async def resolve(self, group):
         c = self.c
         scope = group["scope"]
+        owner = participation(c)
         expected = {
-            "authorityId": c.active["request"]["authority"], "agentId": c.config["agentId"],
-            "hostId": c.config["hostId"], "deliveryId": c.active["delivery"]["id"],
-            "claimId": c.active["delivery"]["claim_id"], "generation": c.active["delivery"]["generation"],
-            "requestId": c.active["request"]["id"], "nativeThread": c.thread,
+            "authorityId": owner["request"]["authority"], "agentId": c.config["agentId"],
+            "hostId": c.config["hostId"], "deliveryId": owner["delivery"]["id"],
+            "claimId": owner["delivery"]["claim_id"], "generation": owner["delivery"]["generation"],
+            "requestId": owner["request"]["id"], "nativeThread": c.thread,
         }
         if any(scope.get(k) != v for k, v in expected.items()):
             raise RuntimeError("Original command effect ownership changed")
@@ -257,11 +262,12 @@ class Effects:
     async def reconcile(self, execution, turn):
         """Reconcile failed original callbacks using accepted effects, not current file contents."""
         c = self.c
+        owner = participation(c)
         items = {item["id"]: item for item in turn.get("items", [])}
         recovered = []
         for path in sorted(c.state.glob("tool-*.json")):
             tool = json.loads(path.read_text())
-            if tool["state"] == "completed" or tool.get("requestId") != c.active["request"]["id"] or tool.get("nativeThread") != execution["nativeThread"]:
+            if tool["state"] == "completed" or tool.get("requestId") != owner["request"]["id"] or tool.get("nativeThread") != execution["nativeThread"]:
                 continue
             item = items.get(tool["callId"])
             if not item or item.get("type") != "dynamicToolCall" or item.get("tool") != tool["tool"]:
@@ -285,9 +291,9 @@ class Effects:
                     or group["scope"]["argumentsDigest"] != fingerprint
                     or group["scope"]["callId"] != tool["callId"]
                     or group["scope"]["tool"] != tool["tool"]
-                    or group["scope"]["deliveryId"] != c.active["delivery"]["id"]
-                    or group["scope"]["generation"] != c.active["delivery"]["generation"]
-                    or group["scope"]["claimId"] != c.active["delivery"]["claim_id"]
+                    or group["scope"]["deliveryId"] != owner["delivery"]["id"]
+                    or group["scope"]["generation"] != owner["delivery"]["generation"]
+                    or group["scope"]["claimId"] != owner["delivery"]["claim_id"]
                     or group["scope"]["agentId"] != c.config["agentId"]
                     or group["scope"]["hostId"] != c.config["hostId"]
                 ):

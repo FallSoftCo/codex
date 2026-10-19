@@ -1,5 +1,7 @@
 """Role-scoped Hollywood work tools and independently hashed artifact evidence."""
 
+from .tool_execution import participation
+
 import hashlib
 import os
 import stat
@@ -418,7 +420,7 @@ async def reconcile_report(c, args, operation):
         or len(args["artifactPaths"]) > 16
         or any(not isinstance(p, str) for p in args["artifactPaths"])):
         raise ValueError("Reconciliation requires explicit effect disposition; submitted needs reviewed effects")
-    current = c.active
+    current = participation(c)
     binding = c.agent_binding
     if not current or not binding:
         raise PermissionError("Reconciliation requires current persistent native participation")
@@ -523,7 +525,7 @@ async def invoke(c, name, args, operation):
             "POST", "deliveries/" + identity("deliveryId") + "/cancel", {}
         )
     if name == "hollywood_briefing":
-        if args.get("deliveryId") and args["deliveryId"] != c.active["delivery"]["id"]:
+        if args.get("deliveryId") and args["deliveryId"] != participation(c)["delivery"]["id"]:
             from .report_scope import read
             return await read(c, args, operation)
         if any(args.get(key) is not None for key in ("readId", "cursor", "pageSize")):
@@ -543,7 +545,7 @@ async def invoke(c, name, args, operation):
     if name == "hollywood_decision_set":
         return await c.http(
             "POST",
-            "rooms/" + c.active["request"]["room"] + "/decisions",
+            "rooms/" + participation(c)["request"]["room"] + "/decisions",
             {
                 **{k: v for k, v in args.items() if k != "decisionId"},
                 "id": identity("decisionId"),
@@ -600,12 +602,12 @@ async def invoke(c, name, args, operation):
             "supervision?after=" + str(args["after"]) + "&limit=" + str(args["limit"]),
         )
     if name == "hollywood_goal_create":
-        room = identity("roomId") if args.get("roomId") is not None else c.active["request"]["room"]
+        room = identity("roomId") if args.get("roomId") is not None else participation(c)["request"]["room"]
         publish = args.get("publishScopedIntent", False)
         if type(publish) is not bool:
             raise ToolValidationError("invalid_scoped_intent", "Scoped intent publication must be boolean",
                                       "Choose an explicit boolean; original source remains unchanged.")
-        if room != c.active["request"]["room"] and not publish:
+        if room != participation(c)["request"]["room"] and not publish:
             raise ToolValidationError("scoped_intent_required", "Cross-room Goal requires explicit scoped intent",
                                       "Set publishScopedIntent=true for the selected Goal room; never broaden room access.")
         payload = {
@@ -615,7 +617,7 @@ async def invoke(c, name, args, operation):
             },
             "operationId": operation,
             "id": str(uuid5(UUID(c.config["agentId"]), operation)),
-            "sourceEventId": c.active["request"]["id"],
+            "sourceEventId": participation(c)["request"]["id"],
         }
         if publish:
             payload["publishScopedIntent"] = True
@@ -660,7 +662,7 @@ async def invoke(c, name, args, operation):
         "operationId": operation,
     }
     if action == "report":
-        if c.active["request"]["data"].get("workId") != work or not (c.goal_binding or c.agent_binding):
+        if participation(c)["request"]["data"].get("workId") != work or not (c.goal_binding or c.agent_binding):
             raise PermissionError("Only the captured native work may be reported")
         native = await progress(c) if c.goal_binding else None
         if args["state"] == "submitted" and native and native["status"] != "complete":
@@ -676,8 +678,8 @@ async def invoke(c, name, args, operation):
         payload.pop("artifactWorkspaceId", None)
         evidence = await collect_artifacts(c, args, artifacts)
         payload.update(
-            claimId=c.active["delivery"]["claim_id"],
-            generation=c.active["delivery"]["generation"],
+            claimId=participation(c)["delivery"]["claim_id"],
+            generation=participation(c)["delivery"]["generation"],
             evidence=evidence,
             briefingSequence=c.work_briefing["asOfSequence"]
             if c.work_briefing

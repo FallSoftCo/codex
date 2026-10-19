@@ -1,5 +1,7 @@
 """Shared Hollywood participation protocol and communication tool arguments."""
 
+from .tool_execution import participation
+
 from urllib.parse import urlencode
 from uuid import UUID
 from .environment import snapshot as environment_snapshot
@@ -70,7 +72,7 @@ def history_path(arguments):
 
 
 def message(c, name, args, operation):
-    request = c.active["request"]
+    request = participation(c)["request"]
     room = str(UUID(args.get("roomId") or request["room"]))
     recipient = str(UUID(args["recipientId"])) if args.get("recipientId") else None
     audience = args.get("audience") or (
@@ -129,7 +131,7 @@ def initialization(c):
                 "hostAdministrationVerified"
             ],
         },
-        "installation": environment_snapshot(c.active["request"]["authority"]),
+        "installation": environment_snapshot(participation(c)["request"]["authority"]),
         "communication": c.work_briefing,
         "causalTaskContext": getattr(c, "causal_task_context", None),
         "contentAuthority": "tool-data-with-attributable-issuers",

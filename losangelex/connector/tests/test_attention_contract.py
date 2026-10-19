@@ -26,6 +26,12 @@ class HumanControlContractTests(unittest.IsolatedAsyncioTestCase):
                            "question": "Which audience?", "options": []}]
         self.answer = {"answers": {"audience": {"answers": ["Technical"]}}}
 
+    def captured_execution(self):
+        # Synthetic native callback ownership; this test starts no process/model.
+        import copy
+        return {**copy.deepcopy(self.active), "nativeThread": self.thread,
+                "nativeTurn": json.loads(self.journal.read_text())["nativeTurn"]}
+
     async def http(self, method, path, payload=None):
         self.calls.append((method, path, payload))
         if method == "POST" and path == "attention":

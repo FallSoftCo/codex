@@ -14,6 +14,15 @@ from lax_connector.effects import Effects
 from lax_connector.journal import saved
 
 
+def bind_owner(c):
+    import copy
+    c.captured_execution = lambda: {
+        **copy.deepcopy(c.active), "nativeThread": getattr(c, "thread", "fixture-thread"),
+        "nativeTurn": "fixture-native-turn",
+    }
+    return c
+
+
 def uid(n):
     return str(UUID(int=n))
 
@@ -32,6 +41,7 @@ class ResourceAdministrationTests(unittest.IsolatedAsyncioTestCase):
             },
             thread="thread",
         )
+        bind_owner(self.c)
         self.args = {
             "workspaceId": uid(6),
             "agentId": uid(7),

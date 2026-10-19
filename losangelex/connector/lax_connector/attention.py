@@ -1,5 +1,7 @@
 """Durable Hollywood human questions and exact native execution approvals."""
 
+from .tool_execution import participation
+
 import asyncio
 import json
 from uuid import UUID, uuid5
@@ -22,15 +24,14 @@ class Attention:
 
     async def create(self, method, params, *, slot, response_mode):
         c = self.connector
-        journal = json.loads(c.journal.read_text())
-        turn = journal.get("nativeTurn")
+        turn = participation(c)["nativeTurn"]
         if (
             not turn
             or params.get("threadId", c.thread) != c.thread
             or params.get("turnId", turn) != turn
         ):
             raise RuntimeError("Human control belongs to another native execution")
-        delivery = c.active["delivery"]
+        delivery = participation(c)["delivery"]
         identity = str(uuid5(UUID(delivery["id"]), method + ":" + str(slot)))
         path = c.state / ("attention-" + identity + ".json")
         if path.exists():
@@ -193,7 +194,7 @@ class Attention:
         item = self.pending.get(str(slot))
         if not item:
             return
-        d = c.active["delivery"]
+        d = participation(c)["delivery"]
         payload = {
             "operationId": "lax-attention:" + item["identity"] + ":" + state,
             "claimId": d["claim_id"],

@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 from aiohttp import ClientSession, ContentTypeError
 
 from .activity import Activity
+from .native_tools import NativeTools
+from .tool_execution import capture
 from .agent_context import AgentContext
 from .passive_context import PassiveReceiver
 from .passive_readback import RolloutReadback
@@ -57,168 +59,10 @@ from .workflow import (
 )
 
 
-def spec(name, description, properties, required):
-    return {
-        "name": name,
-        "description": description,
-        "inputSchema": {
-            "type": "object",
-            "properties": properties,
-            "required": required,
-            "additionalProperties": False,
-        },
-    }
+from .native_tool_catalog import CAPABILITIES, TOOLS, spec
 
 
-CAPABILITIES = ['persistent-agent-context/v1', 'native-role-goals/v1', 'cooperation-plan/v1', 'work-attempts/v1', 'room-briefing/v1', 'host-admission/v1', 'portfolio-supervision/v1', 'native-human-controls/v1', 'attempt-journals/v1', 'native-executor-launch/v1', 'native-effect-source/v1']
-CAPABILITIES += ['completed-work-report-reconciliation/v1', 'completed-report-scope/v1']
-
-STRING = {"type": "string"}
-TOOLS = [
-    spec(
-        "hollywood_context",
-        "Read the captured authoritative room, request and agent identities for this turn.",
-        {},
-        [],
-    ),
-    spec(
-        "hollywood_rooms",
-        "Discover only rooms this agent is authorized to read; observation never starts another agent context.",
-        {},
-        [],
-    ),
-    spec(
-        "hollywood_read_room",
-        "Read authorized room conversation (default), execution activity, or both without starting execution. Latest by default. Cursors belong to this room/view; private audiences are filtered by Hollywood.",
-        {"roomId": STRING, "after": {"type":"integer","minimum":0},
-         "before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":100},
-         "view":{"type":"string","enum":["conversation","activity","all"]}},
-        ["roomId"],
-    ),
-    spec(
-        "hollywood_room_info",
-        "Inspect authorized room ownership, actors and current membership revisions before changing grants. Administrators can see all grants; others see their own.",
-        {"roomId": STRING},
-        ["roomId"],
-    ),
-    spec(
-        "hollywood_agent_info",
-        "Inspect an authorized agent's current primary role, home room and revision before updating its role.",
-        {"agentId": STRING},
-        ["agentId"],
-    ),
-    spec(
-        "hollywood_publish",
-        "Publish communication in this turn's room without requesting anyone to execute.",
-        {"body":STRING,"roomId":STRING,"recipientId":{"type":["string","null"]},
-         "audience":{"type":"string","enum":["room","direct"]},"sourceEventId":STRING},
-        ["body"],
-    ),
-    spec(
-        "hollywood_request",
-        "Address a bounded execution request to a specific authorized peer in a room. Supply recipientId for that peer; omission uses the room default. This starts work, preserves source identity and does not grant the peer new permissions.",
-        {"roomId": STRING, "body": STRING, "recipientId": {"type": ["string", "null"]},
-         "audience":{"type":"string","enum":["room","direct"]},"sourceEventId":STRING},
-        ["roomId", "body"],
-    ),
-]
-ROLE = {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
-TOOLS += [
-    spec(
-        "hollywood_ask",
-        "Ask the attributable human a necessary scoped question through Hollywood. Returns a durable pending receipt immediately; retain the unfinished outcome and continue other obligations or end this inference slice. The authenticated answer later arrives as primary input in your same context. Do not claim an answer or completed work from acceptance. Do not request secrets in chat.",
-        {
-            "questions": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 3,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": STRING,
-                        "header": STRING,
-                        "question": STRING,
-                        "options": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {"label": STRING, "description": STRING},
-                                "required": ["label", "description"],
-                                "additionalProperties": False,
-                            },
-                        },
-                    },
-                    "required": ["id", "header", "question", "options"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-        ["questions"],
-    ),
-    spec(
-        "lax_provision_worker",
-        "Verified Global administrator: provision and start a scoped Linux worker on this enrolled host. Credentials remain private; no model runs until a request is addressed to it.",
-        {"agentId": STRING, "serviceMemoryMaxBytes": {"type":"integer", "minimum":268435456, "maximum":1099511627776}},
-        ["agentId"],
-    ),
-    spec(
-        "hollywood_create_agent",
-        "Administrator: create a stable scoped agent and primary responsibility. Credential stays protected in LAX. This does not provision execution.",
-        {"name": STRING, "primary": ROLE, "purpose": STRING},
-        ["name", "primary", "purpose"],
-    ),
-    spec(
-        "hollywood_create_room",
-        "Administrator: create a Hollywood room with an accountable agent owner and clear purpose. The owner initially receives read/post/request membership; inspect hollywood_room_info for its current revision before changing grants.",
-        {"name": STRING, "purpose": STRING, "ownerId": STRING},
-        ["name", "purpose", "ownerId"],
-    ),
-    spec(
-        "hollywood_set_role",
-        "Administrator: revise a primary role with revision compare-and-swap; role names do not grant authority.",
-        {
-            "agentId": STRING,
-            "primary": ROLE,
-            "purpose": STRING,
-            "homeRoomId": {"type": ["string", "null"]},
-            "revision": {"type": "integer", "minimum": 0},
-        },
-        ["agentId", "primary", "purpose", "homeRoomId", "revision"],
-    ),
-    spec(
-        "hollywood_grant_room",
-        "Administrator: explicitly grant room observation, posting or execution-request rights; none grant host access. First inspect hollywood_room_info for the current membership revision; revision 0 means absent membership.",
-        {
-            "roomId": STRING,
-            "principalId": STRING,
-            "can_read": {"type": "boolean"},
-            "can_post": {"type": "boolean"},
-            "can_request": {"type": "boolean"},
-            "revision": {"type": "integer", "minimum": 0},
-        },
-        ["roomId", "principalId", "can_read", "can_post", "can_request", "revision"],
-    ),
-]
-
-
-TOOLS.append(spec(
-    "hollywood_grant_resource",
-    "Administrator: revise canonical access to an already registered physical resource for an enrolled placed agent. Inspect current resource/grant revisions first; absent grants deny access. Metadata grants do not change Unix permissions, admit a turn, or start a service.",
-    {"workspaceId": STRING, "agentId": STRING, "executionHost": STRING,
-     "revision": {"type": "integer", "minimum": 0},
-     "workspaceRevision": {"type": "integer", "minimum": 1},
-     "state": {"type": "string", "enum": ["active", "revoked"]},
-     "canRead": {"type": "boolean"}, "canWrite": {"type": "boolean"}},
-    ["workspaceId", "agentId", "executionHost", "revision", "workspaceRevision", "state", "canRead", "canWrite"],
-))
-
-
-TOOLS += workflow_definitions(spec)
-from .mutation_tools import definitions as mutation_definitions
-TOOLS += mutation_definitions(spec)
-
-
-class Connector:
+class Connector(NativeTools):
     def __init__(self, config):
         self.config = config
         self.required_tool_policy = config.get("nativeToolPolicy")
@@ -265,22 +109,6 @@ class Connector:
         self.controls = NativeControls(self)
         self.tool_admission = asyncio.Event()
 
-    async def http(self, method, path, payload=None):
-        marker = self.effects.before(method, path, payload)
-        try:
-            result = await self._http(method, path, payload)
-        except Exception as error:
-            self.effects.after(marker, error=error)
-            try:
-                recovered = await self.effects.recover_http(marker)
-            except Exception:
-                recovered = None
-            if recovered is not None:
-                return recovered
-            raise
-        self.effects.after(marker, result=result)
-        return result
-
     async def _http(self, method, path, payload=None):
         headers = {"Authorization": "Bearer " + self.config["token"]}
         context = self.effects.current.get()
@@ -320,32 +148,6 @@ class Connector:
             if response.status != 200:
                 raise HttpFailure(response.status, data.get("error", "request failed"))
             return data
-
-    async def briefing(self, delivery_id=None):
-        # An explicit original-delivery read preserves current execution identity.
-        if not self.active:
-            raise PermissionError("Briefing requires current participation")
-        target = str(UUID(delivery_id)) if delivery_id else self.active["delivery"]["id"]
-        captured = self.active if target == self.active["delivery"]["id"] else await self.http("GET", "deliveries/" + target)
-        delivery, request = captured["delivery"], captured["request"]
-        if delivery["agent"] != self.config["agentId"] or request["authority"] != self.active["request"]["authority"]:
-            raise PermissionError("Original briefing belongs to a different participant")
-        value = await self.http("GET", "connector/deliveries/" + target + "/briefing")
-        expected = {
-            "schema": "lax-work-briefing/v1", "authorityId": request["authority"],
-            "agentId": self.config["agentId"], "roomId": request["room"],
-            "deliveryId": target, "generation": delivery["generation"], "claimId": delivery["claim_id"],
-        }
-        if any(value.get(k) != v for k, v in expected.items()):
-            raise ValueError("Briefing does not match exact original execution scope")
-        self.work_briefings[target] = value
-        if target == self.active["delivery"]["id"]:
-            self.work_briefing = value
-        saved(self.state / ("briefing-" + target + "-" + str(value["asOfSequence"]) + ".json"), value)
-        if target == self.active["delivery"]["id"] and getattr(self, "owner_briefing_delivery", None) == target:
-            from .owner_briefing import publish
-            await publish(self, value)
-        return value
 
     async def event(self, method, params):
         if not self.active:
@@ -411,6 +213,13 @@ class Connector:
                 {"error": type(error).__name__, "executionReplayed": False},
             )
 
+    def captured_execution(self):
+        if not self.active:
+            raise RuntimeError("No original native participation")
+        record = json.loads(self.journal.read_text())
+        return capture(self.active, thread=self.thread, turn=record.get("nativeTurn"),
+                       agent=self.config["agentId"], host=self.config["hostId"])
+
     async def tool(self, method, params):
         # The native reader must keep receiving turn/start's reply while an early
         # callback waits. No dynamic tool or question may race the authoritative
@@ -420,194 +229,6 @@ class Connector:
             raise RuntimeError("Native callback context changed")
         with self.effects.tool_scope(method, params):
             return await self._tool(method, params)
-
-    async def _tool(self, method, params):
-        def output(value, success=True):
-            return {
-                "success": success,
-                "contentItems": [
-                    {"type": "inputText", "text": json.dumps(value, default=str)}
-                ],
-            }
-
-        if not self.active:
-            raise RuntimeError("No captured native execution; no approval inferred")
-        if method in QUESTION + APPROVAL:
-            slot = (
-                method + ":" + str(params.get("approvalId") or params["_rpcRequestId"])
-            )
-            return await self.attention.wait(method, params, slot=slot)
-        if method != "item/tool/call":
-            raise ValueError("Unsupported native request; no approval inferred")
-        call = params["callId"]
-        read_only = params["tool"] in READ_TOOLS or params["tool"] in (
-            "hollywood_context",
-            "hollywood_rooms",
-            "hollywood_read_room",
-            "hollywood_room_info",
-            "hollywood_agent_info",
-        )
-        control = params["tool"] in ("hollywood_execution_cancel", "hollywood_work_cancel")
-        if params["tool"] == "hollywood_goal_state":
-            try:
-                control = (json.loads(params["arguments"]) if isinstance(params["arguments"], str) else params["arguments"]).get("state") == "cancelled"
-            except (ValueError, TypeError, AttributeError):
-                control = False
-        if self.uncertain_tools and not (read_only or control):
-            return output(
-                {
-                    "error": "Prior tool effect unconfirmed; further mutations held pending original receipt reconciliation"
-                },
-                False,
-            )
-        path = self.state / (
-            "tool-"
-            + hashlib.sha256((params["threadId"] + call).encode()).hexdigest()
-            + ".json"
-        )
-        fingerprint = hashlib.sha256(
-            json.dumps([params["tool"], params["arguments"]], sort_keys=True).encode()
-        ).hexdigest()
-        if path.exists():
-            record = json.loads(path.read_text())
-            if record["digest"] != fingerprint or record["state"] != "completed":
-                return output(
-                    {
-                        "error": "Tool effect unknown or changed; reconcile original identity before retry"
-                    },
-                    False,
-                )
-            return record["result"]
-        record = {
-            "state": "intent",
-            "digest": fingerprint,
-            "callId": call,
-            "tool": params["tool"],
-            "requestId": self.active["request"]["id"],
-            "nativeThread": params["threadId"],
-            "arguments": params["arguments"],
-        }
-        saved(path, record)
-        try:
-            name = params["tool"]
-            arguments = params["arguments"]
-            if isinstance(arguments, str):
-                arguments = json.loads(arguments)
-            operation = (
-                "lax-tool:"
-                + hashlib.sha256((params["threadId"] + call).encode()).hexdigest()
-            )
-            if name == "hollywood_context":
-                value = initialization(self)
-            elif name == "hollywood_rooms":
-                value = await self.http("GET", "rooms")
-            elif name == "hollywood_room_info":
-                value = await self.http(
-                    "GET", "rooms/" + str(UUID(arguments["roomId"]))
-                )
-            elif name == "hollywood_agent_info":
-                value = await self.http(
-                    "GET", "agents/" + str(UUID(arguments["agentId"])) + "/role"
-                )
-            elif name == "hollywood_read_room":
-                value = await self.http("GET", history_path(arguments))
-                if value.get("view") != arguments.get("view", "conversation"):
-                    raise ValueError("Hollywood room projection is unavailable; reconcile server version")
-            elif name == "hollywood_ask":
-                value = await self.attention.ask({**params, **arguments}, slot=call)
-            elif name in ("hollywood_publish", "hollywood_request"):
-                room, payload = message(self, name, arguments, operation)
-                value = await self.http("POST", f"rooms/{room}/messages", payload)
-                if name == "hollywood_request":
-                    value = await index_accepted_delegation(
-                        lambda path: self.http("GET", path),
-                        LocatorLedger(self.state / "causal-locators-v2"),
-                        self.active, value,
-                    )
-                if name == "hollywood_publish":
-                    self.publications.append(value["event"]["id"])
-            elif name == "hollywood_mutation_read":
-                from .mutation_tools import view as mutation_view
-                value = mutation_view(await self.http(
-                    "GET", "collaboration/delivery-edits/" + str(UUID(arguments["permitId"]))))
-            elif name in READ_TOOLS | MUTATION_TOOLS:
-                value = await workflow_tool(self, name, arguments, operation)
-            elif name in (
-                "hollywood_create_agent",
-                "hollywood_create_room",
-                "hollywood_set_role",
-                "hollywood_grant_room",
-                "hollywood_grant_resource",
-                "hollywood_select_resource_default",
-                "hollywood_placement_set",
-                "hollywood_mutation_observe",
-                "hollywood_mutation_reconcile",
-                "lax_provision_worker",
-            ):
-                value = await administer(self, name, arguments, operation)
-            else:
-                raise ValueError("Unknown connector tool")
-            result = output(value)
-            saved(path, {**record, "state": "completed", "result": result})
-            return result
-        except Exception as error:
-            if not read_only and not isinstance(error, AttentionExpired):
-                try:
-                    recovered = await self.effects.recover_live()
-                except Exception:
-                    recovered = None  # Original uncertainty remains fenced.
-                if recovered is not None:
-                    if params["tool"] == "hollywood_request":
-                        recovered = await index_accepted_delegation(
-                            lambda path: self.http("GET", path),
-                            LocatorLedger(self.state / "causal-locators-v2"),
-                            self.active, recovered,
-                        )
-                    if params["tool"] == "hollywood_publish":
-                        event_id = recovered["event"]["id"]
-                        if event_id not in self.publications:
-                            self.publications.append(event_id)
-                    result = output(recovered)
-                    saved(path, {**record, "state": "completed", "result": result, "effectRecoveredByOriginalRead": True})
-                    return result
-            if (
-                read_only
-                or isinstance(error, AttentionExpired)
-                or self.effects.safe_rejection() and (
-                    isinstance(error, (ValueError, PermissionError))
-                    or isinstance(error, HttpFailure) and error.status in (400, 403, 409)
-                )
-            ):
-                result = output(
-                    {
-                        "error": type(error).__name__,
-                        "effect": "rejected",
-                        **(error.public_details() if isinstance(error, ToolValidationError) else {}),
-                        **(
-                            {
-                                "status": error.status,
-                                "message": str(error)[:250],
-                                "next": "Inspect the current authorized resource/revision before a corrected command",
-                            }
-                            if isinstance(error, HttpFailure)
-                            else {}
-                        ),
-                    },
-                    False,
-                )
-                saved(path, {**record, "state": "completed", "result": result})
-                return result
-            self.uncertain_tools = True
-            # The persisted intent stays unknown. A lost HTTP reply is not proof
-            # that the communication or execution request was rejected.
-            return output(
-                {
-                    "error": type(error).__name__,
-                    "effect": "unconfirmed",
-                    "reconciliationRequired": True,
-                },
-                False,
-            )
 
     def transition_path(self, state):
         path = self.journal.directory / ("transition-" + state + ".json")
