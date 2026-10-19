@@ -39,6 +39,7 @@ class ContextRunner:
         self.failed=False
         self.execution_scope=None
         self.material_ids=[]
+        self.next_review_at=0.0
         self.permit=None
         self.native_tools=None
         self.native_items={}
@@ -496,7 +497,11 @@ class ContextAgent:
                     for purpose,runner in self.runners.items():
                         was_active=runner.active
                         try:
-                            pending=(await runner.request("pending"))["pending"]
+                            metadata={}
+                            if purpose=="reader" and time.monotonic()>=runner.next_review_at:
+                                metadata={"capabilities":CAPABILITIES}
+                                runner.next_review_at=time.monotonic()+5
+                            pending=(await runner.request("pending",metadata))["pending"]
                         except Exception as error:
                             status[purpose]={"active":runner.active,"held":runner.failed,
                                              "connection":"unavailable","error":type(error).__name__}

@@ -102,6 +102,14 @@ write path to bypass admission. A timeout, lost bridge reply, begun mutation or
 unknown settlement is different: retain the original receipt and reconcile it.
 If verified facts make your own unanswered question obsolete, withdraw it with
 hollywood_withdraw_question and a reason. This never manufactures human input.
+For canonical team deliverables, use existing native Goal/Work/cooperation tools.
+Report assigned canonical work through hollywood_work_report with actual artifact
+evidence BEFORE complete_work; completion does not accept a teammate's contribution.
+When original work depends on canonical Goals created from its source, use
+await_goal_results and end this inference only if waiting. Actual terminal state
+resumes the SAME responsibility; other tasks may use this writer while it waits.
+Read canonical reports and verify evidence; distinguish cancellation from success.
+Do not replace Goal acceptance with peer chat or recurring model status calls.
 Use update_plan for your execution plan. When a protected native collaboration
 channel is configured, apply_patch uses its canonical one-use edit permits.
 Use native coordination_act and collaborative_edit_plan for explicitly shared
@@ -185,6 +193,8 @@ def tools(purpose):
                {"workId":ID,"inputId":ID,"body":S},["workId","inputId","body"]),
           spec("request_peer","Queue an immutable peer specification for the responder. Returns an intent, not an accepted request. Select a real distinct agent from room_directory and retain responsibility for the result.",
                {"workId":ID,"recipientId":ID,"roomId":ID,"body":S},["workId","recipientId","body"]),
+          spec("await_goal_results","Wait durably for terminal canonical Goals sourced from this original responsibility. Actual terminal facts resume the same work; waiting does not accept, change, assign or execute Goal work.",
+               {"workId":ID,"goalIds":{"type":"array","items":ID,"minItems":1,"maxItems":8}},["workId","goalIds"]),
           spec("await_peer_results","Suspend the current work on outstanding peer prerequisites. If waiting, finish this inference; actual peer results resume the original work through the reader without model polling.",
                {"workId":ID},["workId"]),
         ]
@@ -205,6 +215,6 @@ def tools(purpose):
 ACTIONS={"context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
-         "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers",
+         "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers","await_goal_results":"wait_goals",
          "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory","provide_response_material":"response_material",
          "record_room_observation":"observe","hollywood_rooms":"room_list","hollywood_read_room":"room_history"}

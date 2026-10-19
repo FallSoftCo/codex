@@ -13,6 +13,8 @@ server rejects oversized bodies with JSON413; a missing receipt is not substitut
 for this known nonadmission.
 
 The actual r34 contract receipt records installed-process inspection and real
-authenticated HTTP. It starts no model or mutation. Original B is continuing in
-the private runtime after typed controller software metadata; that deliverable
-has not yet passed its final acceptance. Production and phone are unchanged.
+authenticated HTTP. It starts no model or mutation. Original B completed in the private runtime after typed controller software
+metadata. Its final responder event2190a313-9f77-4800-8607-07dcac0c7bce
+references the verified artifact; 213 prior file hashes/sizes and the six
+histories were independently checked. See the r34 native outcome receipt.
+Production and phone are unchanged.
