@@ -115,6 +115,8 @@ class ContextRunner:
         allowed=[{"name":name} for name in sorted(self.allowed | {"exec","wait"})]
         if self.purpose=="writer":
             allowed += [{"name":name} for name in ("exec_command","write_stdin","apply_patch","update_plan")]
+            if self.config.get("nativeCollaborationChannel"):
+                allowed += [{"name":name} for name in ("coordination_act","collaborative_edit_plan")]
         settings={"cwd":self.config["workspace"],"model":self.config["model"],
           "sandbox":self.config.get("sandbox","danger-full-access"),
           "approvalPolicy":self.config.get("approvalPolicy","never"),
@@ -124,6 +126,7 @@ class ContextRunner:
           "config":{"features.goal_external_admission":True,
             "features.goal_external_lifecycle":False,"agents.enabled":False,
             "features.multi_agent":False,"features.multi_agent_v2":False,
+            "tools.update_plan.enabled":self.purpose=="writer",
             "model_reasoning_effort":self.config["effort"]}}
         record=self.state/"context.json"
         if record.exists():
@@ -337,6 +340,8 @@ class ContextRunner:
                     config=self.config,state=self.state/"native-tools",rpc=self.rpc,role=role,
                     transport=lambda method,path,payload,**kw: self.agent.http(self.purpose,method,path,payload,**kw),
                     finished=self.finished,native_items=self.native_items)
+                if self.config.get("nativeCollaborationChannel"):
+                    await self.native_tools.briefing()
                 for method,params in self.early_activity:
                     self.activity.record(method,params)
                 self.early_activity=[]

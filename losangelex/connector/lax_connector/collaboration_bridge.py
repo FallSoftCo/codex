@@ -174,7 +174,8 @@ class Bridge:
                 require(prior == root["workspaceId"], "One physical root has conflicting private-context namespaces")
         require(record["schema"] == "lax-captured-native-channel/v1", "Captured channel schema differs")
         base = record["sourceBase"]
-        require(set(base) == SOURCE_FIELDS and base["schema"] == "hollywood-native-source/v2"
+        fields = SOURCE_FIELDS | {"executionScopeId","executorId"} if base["schema"]=="hollywood-native-source/v3" else SOURCE_FIELDS
+        require(set(base) == fields and base["schema"] in {"hollywood-native-source/v2","hollywood-native-source/v3"}
                 and base["authorityId"] == self.config["authorityId"]
                 and base["hostId"] == self.config["hostId"]
                 and (base["nativeGoalId"] is None or isinstance(base["nativeGoalId"], str)), "Protected canonical source differs")
@@ -195,7 +196,8 @@ class Bridge:
         descriptor = row["descriptor"]
         require((descriptor["nativePid"], descriptor["nativeStart"]) == (peer[0], actual["start"]),
                 "Native socket is not attached executor process")
-        fact = observe(self.config, row)
+        from .purpose_observer import observe as purpose_observe
+        fact = purpose_observe(self.config, row) or observe(self.config, row)
         require(fact["state"] == "live" and fact["evidence"]["serviceBindingDigest"] == record["serviceBindingDigest"],
                 "Independent protected service binding unavailable")
         policy = self.http("GET", "hosts/" + base["hostId"] + "/collaboration-bridge")

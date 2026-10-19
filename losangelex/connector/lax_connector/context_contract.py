@@ -24,6 +24,9 @@ Peer-completion inputs explicitly require no answer. Read their canonical result
 then use apply_peer_result to update the original work, never accept them as new
 work or acknowledge them. A completion result is evidence to assess, not proof
 that the overall acceptance criteria are met.
+A peerContinuation input carries a canonical parentWorkId from your own outbound
+delegation. Read that input and parent work, then apply_work_update even when the
+peer uses another authorized room. Do not accept it as a competing new task.
 For a new execution request, use accept_work with a concrete objective and
 acceptance outcome. This retains the final response pending actual work evidence.
 A humanQuestionAnswer input or a correction to unfinished accepted work belongs
@@ -58,6 +61,10 @@ accepted objective while reader and responder handle communication independently
 Record useful actual progress using record_progress. Supply evidence and outcomes
 using complete_work only after verifying acceptance. These are internal materials,
 not already published replies. Include accurate artifact paths/checksums when useful.
+When an interpreted input in work.updates needs an answer before the entire
+parent work can finish, use provide_response_material with its inputId and your
+verified facts. The responder composes that answer; this does not complete work.
+Resolve prerequisites without waiting on a peer who is waiting for your answer.
 Use propose_communication when a material discovery, risk, blocker or opportunity
 is worth sharing before the final result. Routine commands need no chat narration.
 Use room_directory to select an actual peer. request_peer creates a communication
@@ -68,6 +75,10 @@ it returns waiting. The reader will assess real incoming results; an event-backe
 continuation resumes this same work and history. Read the updated work completely,
 verify the peer contribution, then continue to your accepted outcome. Do not poll
 the model, send self-requests or complete work before prerequisites are resolved.
+Use update_plan for your execution plan. When a protected native collaboration
+channel is configured, apply_patch uses its canonical one-use edit permits.
+Use native coordination_act and collaborative_edit_plan for explicitly shared
+editing; private context/workspace identity is not a physical-resource grant.
 A version conflict means new material arrived: reread it before contributing.
 Do not stop after a progress contribution: continue the accepted work to its outcome.
 Your final model message is internal; use complete_work to make final evidence ready.
@@ -128,6 +139,8 @@ def tools(purpose):
                {"workId":ID,"body":S,"evidence":E},["workId","body"]),
           spec("complete_work","Record verified acceptance outcome and evidence after reading current complete work material and resolving peer prerequisites.",
                {"workId":ID,"body":S,"evidence":E},["workId","body","evidence"]),
+          spec("provide_response_material","Supply verified facts for the responder to answer a reader-interpreted input on this original work before overall completion; does not complete work or publish a message.",
+               {"workId":ID,"inputId":ID,"body":S},["workId","inputId","body"]),
           spec("request_peer","Queue an immutable peer specification for the responder. Returns an intent, not an accepted request. Select a real distinct agent from room_directory and retain responsibility for the result.",
                {"workId":ID,"recipientId":ID,"roomId":ID,"body":S},["workId","recipientId","body"]),
           spec("await_peer_results","Suspend the current work on outstanding peer prerequisites. If waiting, finish this inference; actual peer results resume the original work through the reader without model polling.",
@@ -151,4 +164,4 @@ ACTIONS={"context_read":"snapshot","context_material_read":"read","accept_work":
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
          "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers",
-         "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory"}
+         "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory","provide_response_material":"response_material"}

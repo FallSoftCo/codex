@@ -70,6 +70,11 @@ def expected_owner(authority, agent):
 
     authority, agent = str(UUID(authority)), str(UUID(agent))
     base = Path("/var/lib/harness") / authority
+    from .purpose_observer import installation, validate
+    purpose = installation(authority, agent)
+    if purpose is not None:
+        validate(purpose)
+        return purpose["uid"], Path(purpose["home"]), purpose["binary"]
     intent, receipt, global_agent = approved_spec(authority, agent)
     if global_agent:
         from .native_release import active_spec

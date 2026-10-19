@@ -54,3 +54,43 @@ qualify multi-host shared editing, or migrate historical sessions. Native
 collaboration bridge capture and later completed-report reconciliation still
 need purpose-aware integration. The ordinary enterprise bootstrap must adopt
 this installation path before a default cutover is claimed.
+
+
+## Native collaboration and causal peer continuations
+
+The purpose-native writer uses the existing protected collaboration bridge. Its
+source is the immutable accepted v3 execution scope, including the actual
+executor, context, role, host and native turn. The bridge still verifies the
+kernel peer UID/PID/start, native image, installed guardian and independently
+observed incarnation. An authenticated controller relay is distinct from the
+writer credential; neither can substitute an arbitrary model-selected scope.
+The server derives a purpose binding from that original receipt. It does not
+create a legacy single-context row.
+
+Installed private workspaces are registered as explicit physical resources with
+per-agent access and a selected default. Context workspace identity remains
+separate from the physical root namespace. Future purpose-peer provisioning
+inherits the protected channel and enrolls its actual workspace through those
+same resource APIs. Native apply_patch retains preflight/begin/settle receipts;
+a stale, replayed or uncertain receipt never becomes a new one-use grant.
+coordination_act and collaborative_edit_plan are exposed only with a configured
+channel. The writer explicitly enables the native update_plan configuration.
+
+A request back from an actual delegated peer, sourced to that original
+delegation, carries peerContinuation/parentWorkId. The reader interprets it on
+the original work, even when the authorized review room differs from the
+original request room. It cannot create competing work from that causal input.
+An older, unadmitted misclassification can be retained as superseded only while
+its original delivery remains pending at generation zero with no execution or
+child delegation. Original operations and interpretation evidence are retained.
+
+The writer can supply provide_response_material for a reader-interpreted input
+on its current work. This makes the existing required response ready for the
+responder without declaring the parent work complete. It allows a peer blocked
+on a prerequisite answer to progress while the parent still awaits that peer.
+It does not publish directly, steer either writer or create another assignment.
+
+Qualification boundaries: the r22 PostgreSQL checks use frozen native facts and
+roll back every synthetic change. The private two-agent model continuation is
+separate evidence. Neither establishes production/phone replacement readiness,
+multi-host editing, compaction, Stop, or complete enterprise installation.

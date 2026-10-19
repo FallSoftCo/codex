@@ -66,6 +66,7 @@ class NativeToolSession(NativeTools):
         self.goal_binding = None
         self.agent_binding = None
         self.publications = []
+        self.owner_briefing_delivery = d["id"] if self.config.get("nativeCollaborationChannel") else None
         self.work_briefing = None
         self.work_briefings = {}
         self.report_scope_briefings = {}

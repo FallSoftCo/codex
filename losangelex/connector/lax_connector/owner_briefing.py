@@ -38,6 +38,22 @@ def guardian_peer(capture, peer):
     authority, host = capture.config["authorityId"], capture.config["hostId"]
     agent, _ = installed_native_owner(authority, peer[1])
     uid, home, binary = observer.expected_owner(authority, agent)
+    from .purpose_observer import installation, validate
+    purpose = installation(authority, agent)
+    if purpose is not None:
+        validate(purpose)
+        info = observer.properties(purpose["units"]["writer"])
+        require(info["ActiveState"]=="active" and int(info["MainPID"])==peer[0]
+                and actual["controlGroup"]==info["ControlGroup"] and uid==peer[1],
+                "Briefing source is not the installed writer guardian")
+        invocation = UUID(info["InvocationID"]).hex
+        binding = observer.protected(Path(purpose["config"]).parent.parent / "incarnations" / (invocation+".json"))
+        require(binding["purpose"]=="writer" and binding["guardianPid"]==actual["pid"]
+                and binding["guardianStart"]==actual["start"]
+                and binding["unit"]==info["Id"] and binding["controlGroup"]==actual["controlGroup"]
+                and binding["unitDefinitionDigest"]==observer.unit_definition(info),
+                "Protected writer incarnation differs")
+        return {"agentId":agent,"actual":actual,"bindingDigest":digest(binding)}
     info = observer.properties(observer.installed_unit(authority, agent))
     require(
         info["ActiveState"] == "active"
@@ -124,11 +140,14 @@ def carry(capture, peer, frame, owner):
         "Exact authenticated owner briefing scope required",
     )
     snapshot = capture.admin_http("GET", "deliveries/" + str(UUID(brief["deliveryId"])))
-    delivery, event, binding = (
-        snapshot["delivery"],
-        snapshot["request"],
-        snapshot["agentContextBinding"],
-    )
+    delivery, event = snapshot["delivery"], snapshot["request"]
+    scope = snapshot.get("purposeExecutionScope")
+    if scope is not None:
+        binding = {"delivery":scope["deliveryId"],"generation":scope["generation"],
+            "principal":scope["agentId"],"context_id":scope["contextId"],
+            "native_thread":scope["nativeThread"],"role_revision":scope["roleRevision"]}
+    else:
+        binding = snapshot["agentContextBinding"]
     require(
         delivery["state"] in {"claimed", "running"}
         and not delivery["cancellation_requested"]
@@ -255,7 +274,9 @@ def sequence(bridge, record):
 
 
 def _publish(c, value):
-    authority, host = c.active["request"]["authority"], c.config["hostId"]
+    from .tool_execution import participation
+    owner = participation(c)
+    authority, host = owner["request"]["authority"], c.config["hostId"]
     descriptor_path = Path(
         c.config.get("nativeCollaborationChannel")
         or Path("/etc/harness") / authority / "collaboration" / host / "channel.json"
@@ -310,7 +331,7 @@ async def publish(c, value):
             c.state / "owner-briefing-gap.json",
             {
                 "error": type(error).__name__,
-                "deliveryId": c.active["delivery"]["id"],
+                "deliveryId": c.captured_execution()["delivery"]["id"],
                 "editingAdmitted": False,
                 "modelsStarted": 0,
             },

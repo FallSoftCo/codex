@@ -107,7 +107,16 @@ def installed_native_owner(authority, uid):
     authority = str(UUID(authority))
     base = Path("/var/lib/harness") / authority
     account = pwd.getpwuid(uid)
-    if Path(account.pw_dir) == base / "global":
+    parts = Path(account.pw_dir).parts
+    if Path(account.pw_dir).parent.parent == base / "purpose-agents":
+        from .purpose_observer import installation, validate
+        agent = str(UUID(Path(account.pw_dir).parent.name))
+        installed = installation(authority, agent)
+        require(installed is not None, "Protected purpose installation required")
+        validate(installed)
+        require((installed["uid"],installed["home"])==(uid,account.pw_dir),
+                "Purpose NSS identity differs from installation")
+    elif Path(account.pw_dir) == base / "global":
         global_receipt = protected(base / "global-admin-receipt.json")
         require(
             global_receipt["uid"] == uid
@@ -165,7 +174,7 @@ class AutomaticCapture:
         )
         protected_directory(self.state / "administration")
 
-    def peer(self, peer):
+    def peer(self, peer, frame=None):
         """Authenticate kernel identity before consuming any client bytes."""
         actual = process(peer[0])
         require(actual and actual["uid"] == peer[1], "Kernel peer incarnation vanished")
@@ -191,6 +200,17 @@ class AutomaticCapture:
             after = page["nextAfter"]
             if not after:
                 break
+        rows = [row for row in rows if row["state"] == "live" and row["launch_phase"] == "attached"]
+        if frame is not None:
+            current = []
+            for row in rows:
+                snapshot = self.admin_http("GET", "deliveries/" + str(UUID(row["delivery"])))
+                delivery = snapshot["delivery"]
+                if (delivery["state"] == "running" and not delivery["cancellation_requested"]
+                        and (delivery["native_thread"],delivery["native_turn"])
+                        == (frame["threadId"],frame["turnId"])):
+                    current.append(row)
+            rows = current
         require(
             not after and len(rows) == 1,
             "One bounded canonical native executor required",
@@ -207,7 +227,8 @@ class AutomaticCapture:
         require(
             uid == peer[1], "Native process differs from protected installation owner"
         )
-        fact = observe(self.config, row)
+        from .purpose_observer import observe as purpose_observe
+        fact = purpose_observe(self.config, row) or observe(self.config, row)
         require(
             fact["state"] == "live",
             "Independent current native service observation required",
@@ -216,7 +237,7 @@ class AutomaticCapture:
 
     def ensure(self, peer, frame=None):
         """Capture exact current turn, then grant only its already admitted work."""
-        row, native, fact = self.peer(peer)
+        row, native, fact = self.peer(peer, frame)
         lock_path = self.state / "capture.lock"
         fd = os.open(
             lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600
@@ -257,46 +278,53 @@ class AutomaticCapture:
                 and event["authority"] == self.config["authorityId"],
                 "Original canonical running turn required for capture",
             )
-            binding = snapshot["agentContextBinding"]
-            require(
-                binding["delivery"] == delivery["id"]
-                and binding["generation"] == delivery["generation"]
-                and binding["principal"] == row["agent"]
-                and binding["native_thread"] == delivery["native_thread"]
-                and delivery["native_turn"],
-                "Exact persistent context/turn binding required",
-            )
-            role = self.admin_http("GET", "agents/" + str(UUID(row["agent"])) + "/role")
-            require(
-                role["revision"] == binding["role_revision"],
-                "Current role revision changed",
-            )
-            base = {
-                "schema": "hollywood-native-source/v2",
-                "authorityId": self.config["authorityId"],
-                "agentId": str(row["agent"]),
-                "hostId": self.config["hostId"],
-                "deliveryId": str(delivery["id"]),
-                "generation": delivery["generation"],
-                "claimId": delivery["claim_id"],
-                "requestId": str(event["id"]),
-                "nativeThread": delivery["native_thread"],
-                "nativeTurn": delivery["native_turn"],
-                "roleRevision": binding["role_revision"],
-                "contextId": binding["context_id"],
-                "nativeGoalId": (snapshot.get("nativeGoalBinding") or {}).get(
-                    "native_goal_id"
-                ),
-            }
-            require(
-                set(base) == SOURCE_FIELDS, "Exact canonical captured source required"
-            )
-            if frame is not None:
+            purpose_scope = snapshot.get("purposeExecutionScope")
+            if purpose_scope is not None:
+                from .purpose_collaboration import source_base
+                base = source_base(snapshot, row, self.config)
+                binding = {"role_revision":base["roleRevision"]}
+            else:
+                binding = snapshot["agentContextBinding"]
+            if purpose_scope is None:
                 require(
-                    (frame["threadId"], frame["turnId"])
-                    == (base["nativeThread"], base["nativeTurn"]),
-                    "Native frame differs from current canonical turn",
+                    binding["delivery"] == delivery["id"]
+                    and binding["generation"] == delivery["generation"]
+                    and binding["principal"] == row["agent"]
+                    and binding["native_thread"] == delivery["native_thread"]
+                    and delivery["native_turn"],
+                    "Exact persistent context/turn binding required",
                 )
+                role = self.admin_http("GET", "agents/" + str(UUID(row["agent"])) + "/role")
+                require(
+                    role["revision"] == binding["role_revision"],
+                    "Current role revision changed",
+                )
+                base = {
+                    "schema": "hollywood-native-source/v2",
+                    "authorityId": self.config["authorityId"],
+                    "agentId": str(row["agent"]),
+                    "hostId": self.config["hostId"],
+                    "deliveryId": str(delivery["id"]),
+                    "generation": delivery["generation"],
+                    "claimId": delivery["claim_id"],
+                    "requestId": str(event["id"]),
+                    "nativeThread": delivery["native_thread"],
+                    "nativeTurn": delivery["native_turn"],
+                    "roleRevision": binding["role_revision"],
+                    "contextId": binding["context_id"],
+                    "nativeGoalId": (snapshot.get("nativeGoalBinding") or {}).get(
+                        "native_goal_id"
+                    ),
+                }
+                require(
+                    set(base) == SOURCE_FIELDS, "Exact canonical captured source required"
+                )
+                if frame is not None:
+                    require(
+                        (frame["threadId"], frame["turnId"])
+                        == (base["nativeThread"], base["nativeTurn"]),
+                        "Native frame differs from current canonical turn",
+                    )
             identity = (
                 str(UUID(row["id"]))
                 + "-"

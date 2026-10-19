@@ -145,6 +145,8 @@ def install(spec):
         from .purpose_observer import validate as validate_installation
         validate_installation(value)
         canonical(spec,json.loads(Path(value["config"]).read_text()))
+        from .purpose_resources import ensure as ensure_resources
+        ensure_resources(json.loads(Path(value["config"]).read_text()))
         return {**public(value),"reconciled":True,"servicesStarted":False}
     slug=authority.replace("-","")[:8]+"-"+agent.replace("-","")[:12]
     user=("hglobal-" if spec.get("global") else "hagent-")+slug
@@ -256,6 +258,10 @@ WantedBy=multi-user.target
         "machineIdentity":machine_identity(),"nativePackage":package,"sudoVerifiedUid":0,
         "servicesStarted":False,"historicalSessionsResumed":False}
     saved(accepted,value)
+    from .purpose_resources import ensure as ensure_resources
+    resource = ensure_resources(config)
+    if resource is not None:
+        saved(record/"resource-installation.json",resource)
     return public(value)
 
 
