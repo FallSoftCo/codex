@@ -190,6 +190,8 @@ class ContextRunner:
                                     "effectiveToolPolicy":result.get("toolPolicy")})
         if self.activity:
             self.activity.start()
+            from .purpose_tool_recovery import reconcile as reconcile_native_tools
+            await reconcile_native_tools(self)
         # Resume changes metadata only. An unresolved original is observed,
         # never converted into another model submission.
         wake=self.state/"wake.json"
@@ -289,6 +291,18 @@ class ContextRunner:
             raise RuntimeError("Original terminal native identity is unconfirmed")
         self.accepting=False
         async with self.effect_lock:
+            if self.native_tools:
+                try:
+                    recovered = await self.native_tools.effects.reconcile(
+                        {"nativeThread": self.thread, "nativeTurn": self.turn},
+                        {**turn, "items": list(self.native_items.values())})
+                    self.trace("native_tool_effects_reconciled", {"nativeTurn": self.turn,
+                        "recovered": recovered, "callbacksReplayed": False})
+                except Exception as error:
+                    self.trace("native_tool_effect_recovery_held", {"nativeTurn": self.turn,
+                        "error": type(error).__name__, "callbacksReplayed": False})
+                # Native terminality releases inference capacity independently of
+                # unresolved effects. The affected Work's tool journals stay held.
             await self.request("end",{"status":turn["status"],"permitId":self.permit},
                                operation="context-end:"+self.turn)
         saved(self.state/("turn-"+self.turn+".json"),{"fingerprint":fingerprint,
@@ -303,6 +317,7 @@ class ContextRunner:
         self.turn=None
         self.permit=None
         self.execution_scope=None
+        self.native_items={}
         self.early_activity=[]
         self.accepting=False
         self.closing=False

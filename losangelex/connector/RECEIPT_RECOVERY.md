@@ -38,3 +38,28 @@ Actual integration drivers:
 
 These finite drivers require explicit qualification credentials and private
 disposable state. They are not production migration or phone qualification.
+
+## Purpose-native SDK recovery
+
+Purpose writers use the same Effects receipt reconciler at terminal native turns
+and on restart. Restart recovery reads the original callback through the owned
+native RPC with its exact thread/turn/item IDs; it submits no replacement callback.
+Old journals without turn identity use the captured trace only to locate the
+turn, then verify the callback against native persisted history. Unavailable or
+conflicting evidence remains held. A held tool belongs to its original Work;
+independent responsibilities do not inherit that uncertainty. Native terminality
+releases inference capacity independently of unresolved Work effects.
+
+Artifact reporting reads explicit canonical resource grants through the captured
+participant, without a legacy mutable active-context field. Failed preparation
+before the sole mutating report POST can be distinguished from uncertain dispatch:
+the transport always durably records write intent before sending. Recovery of a
+verified failed report with no write group clears only that callback as having
+no dispatched report. A write-intent journal retains its original receipt checks
+and never becomes absent merely because a command is missing. New tool results
+include originalOperationId; recovery does not automatically submit a new report.
+
+The r55 integration reproduced the original native failure, read all eleven
+settled artifacts using authenticated metadata, and exercised the exact failed
+callback on copied journals. An unconfirmed write fixture remained held. Actual
+post-upgrade native reports and acceptance remain separate end-state evidence.

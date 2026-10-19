@@ -62,7 +62,9 @@ class NativeToolSession(NativeTools):
         self.finished = finished
         self.native_items = native_items if native_items is not None else {}
         self.uncertain_tools = any(
-            json.loads(p.read_text()).get("state")!="completed" for p in self.state.glob("tool-*.json"))
+            row.get("state") != "completed" and row.get("requestId") == self._owner["request"]["id"]
+            and row.get("nativeThread") == self.thread
+            for row in (json.loads(p.read_text()) for p in self.state.glob("tool-*.json")))
         self.goal_binding = None
         self.agent_binding = None
         self.publications = []

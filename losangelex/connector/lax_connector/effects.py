@@ -271,6 +271,8 @@ class Effects:
             tool = json.loads(path.read_text())
             if tool["state"] == "completed" or tool.get("requestId") != owner["request"]["id"] or tool.get("nativeThread") != execution["nativeThread"]:
                 continue
+            if tool.get("nativeTurn", execution["nativeTurn"]) != execution["nativeTurn"]:
+                continue
             item = items.get(tool["callId"])
             if not item or item.get("type") != "dynamicToolCall" or item.get("tool") != tool["tool"]:
                 continue
@@ -285,8 +287,16 @@ class Effects:
             from .workflow import READ_TOOLS
             read_only = tool["tool"] in READ_TOOLS | {"hollywood_context", "hollywood_rooms", "hollywood_read_room", "hollywood_room_info", "hollywood_agent_info"}
             group = self.group(key)
-            if read_only:
-                value = {"effect": "none", "observation": "Original read callback failed; no read was replayed"}
+            # Reporting prepares/hash-reads evidence before its sole mutating
+            # HTTP call. before() durably journals that call BEFORE transport.
+            # A verified failed native report callback with no effect group
+            # therefore never reached report dispatch. This exception is narrow:
+            # provisioning/native mutations without a group remain unknown.
+            report_pre_dispatch = tool["tool"] == "hollywood_work_report" and group is None
+            if read_only or report_pre_dispatch:
+                value = {"effect": "none", "observation": (
+                    "Original report callback failed before any mutating HTTP dispatch; no report was replayed"
+                    if report_pre_dispatch else "Original read callback failed; no read was replayed")}
             else:
                 if (
                     not group or group["scope"]["nativeTurn"] != execution["nativeTurn"]
@@ -308,7 +318,7 @@ class Effects:
             result = {
                 "success": False,
                 "contentItems": [{"type": "inputText", "text": json.dumps({
-                    "effect": "none" if read_only else "confirmed-from-original-receipt", "receipt": value,
+                    "effect": "none" if read_only or report_pre_dispatch else "confirmed-from-original-receipt", "receipt": value,
                     "nativeCallbackReplayed": False, "originalNativeCallbackFailed": True,
                 })}],
             }

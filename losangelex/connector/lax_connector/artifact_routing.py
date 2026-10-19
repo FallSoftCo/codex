@@ -8,10 +8,11 @@ from .collaboration_bridge import Held, canonical_relative, digest, require
 from .collaboration_resources import open_root
 from .errors import ToolValidationError
 from .resource_routing import connector_capabilities, read
+from .tool_execution import participation
 
 
 def validated(c, resource, selection=None):
-    authority = c.active["request"]["authority"]
+    authority = participation(c)["request"]["authority"]
     agent, host = c.config["agentId"], c.config["hostId"]
     workspace, grant = resource["workspace"], resource["grant"]
     identity = str(UUID(workspace["id"]))
@@ -102,6 +103,10 @@ async def collect(c, args, reader):
         raise PermissionError(str(error)) from error
     except (KeyError, TypeError) as error:
         raise ValueError("Canonical artifact root metadata or arguments are incomplete") from error
+    except AttributeError as error:
+        raise ToolValidationError("ARTIFACT_PREPARATION_FAILED",
+            "Report artifact preparation failed before submission.",
+            "Inspect the installed native artifact reader. No report POST was dispatched by artifact preparation.") from error
 
 
 async def _collect(c, args, reader):

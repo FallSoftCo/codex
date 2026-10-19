@@ -130,6 +130,7 @@ class NativeTools:
             "tool": params["tool"],
             "requestId": owner["request"]["id"],
             "nativeThread": params["threadId"],
+            "nativeTurn": owner["nativeTurn"],
             "arguments": params["arguments"],
         }
         saved(path, record)
@@ -235,6 +236,7 @@ class NativeTools:
                     {
                         "error": type(error).__name__,
                         "effect": "rejected",
+                        "originalOperationId": operation,
                         **(error.public_details() if isinstance(error, ToolValidationError) else {}),
                         **(
                             {
@@ -257,6 +259,7 @@ class NativeTools:
                 {
                     "error": type(error).__name__,
                     "effect": "unconfirmed",
+                    "originalOperationId": operation,
                     "reconciliationRequired": True,
                 },
                 False,
