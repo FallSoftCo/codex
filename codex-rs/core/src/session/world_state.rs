@@ -131,6 +131,7 @@ impl Session {
                 model_instructions,
             )
         };
+        tracing::trace!(phase = "model_instructions_ready", "world state progress");
         let environment_subagents = if turn_context.config.include_environment_context {
             match turn_context.multi_agent_version {
                 MultiAgentVersion::V2 => {
@@ -165,6 +166,7 @@ impl Session {
         } else {
             String::new()
         };
+        tracing::trace!(phase = "peer_context_ready", "world state progress");
         let mut world_state = WorldState::default();
         let extension_metrics = super::extension_metrics::from_session_telemetry(
             step_context.session_telemetry.clone(),
@@ -285,6 +287,7 @@ impl Session {
             ));
         }
         if turn_context.config.include_environment_context {
+            tracing::trace!(phase = "environment_time_begin", "world state progress");
             let current_date = if turn_context.config.include_environment_context_time {
                 self.read_clock_for_context(turn_context, "environment_date")
                     .await?
@@ -297,6 +300,7 @@ impl Session {
             } else {
                 None
             };
+            tracing::trace!(phase = "environment_time_ready", "world state progress");
             world_state.add_section(
                 EnvironmentsState::from_turn_context_with_environments(
                     turn_context,
@@ -314,6 +318,7 @@ impl Session {
                     .features
                     .enabled(Feature::DeferredExecutor),
         ));
+        tracing::trace!(phase = "environment_context_ready", "world state progress");
         let apps_available =
             if turn_context.config.include_apps_instructions && turn_context.apps_enabled() {
                 AppToolPolicyEvaluator::new(&turn_context.config.config_layer_stack)
@@ -353,6 +358,7 @@ impl Session {
             .collect::<Vec<_>>();
         let previous_world_state = self.state.lock().await.history.world_state_checkpoint();
         for contributor in self.services.extensions.context_contributors() {
+            tracing::trace!(phase = "extension_begin", "world state progress");
             for section in contributor
                 .contribute_world_state(WorldStateContributionInput {
                     executor_capability_discovery_v2: step_context
@@ -378,6 +384,7 @@ impl Session {
                 world_state.add_extension_section(section);
             }
         }
+        tracing::trace!(phase = "extensions_ready", "world state progress");
         let v2_namespace = turn_context
             .config
             .multi_agent_v2
@@ -445,6 +452,7 @@ impl Session {
                     .as_ref(),
             ));
         }
+        tracing::trace!(phase = "built", "world state progress");
         Ok(world_state)
     }
 }

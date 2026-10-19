@@ -1,6 +1,6 @@
 {
-  "at": 1792450349.4912415,
-  "status": "candidate built SDK109; native queue-boundary qualified, full Hollywood three-context crash recovery not yet qualified",
+  "at": 1792452870.49587,
+  "status": "SDK109 is not release-qualified: native queue rematerialization passed, but full canonical recovery failed.",
   "problem": "Native thread/inject_items active-turn acknowledgement queues input in RAM; SDK108 cross-inference content-hash dedup can suppress canonical material after loss of that queue.",
   "sourceEvidence": [
     "codex-rs/core/src/session/inject.rs:74",
@@ -14,9 +14,9 @@
     "Separate preparing_input from model submission intent, allowing unused inference reservation recovery without claiming a native turn ran."
   ],
   "limits": [
-    "Canonical input may appear more than once in modelhistory; no exactly-once claim.",
-    "Full Hollywood admission plusthree-context taskcompletion aftercrash and compaction remain unqualified.",
-    "SDK108 team/production/pilot runtimes unchanged."
+    "Canonical input may appear more than once in model history; there is no exactly-once claim.",
+    "The full Hollywood three-context hard-crash journey failed and remains a release blocker.",
+    "Production and pilot services were not updated. The completed SDK108 catalog team is retired."
   ],
   "evidence": {
     "mechanical": "2 regressions fail installed SDK108 and pass109; RPC stub,0models",
@@ -34,5 +34,15 @@
     "Initial pytest invocation unavailable; used standard library unittest, no dependency install.",
     "Pre-existing admission fixture failed on108and109 because it bypassed initialization/currentpermitread; explicit currentpermit/inbox/native_tools fixture correction retains admission assertions.",
     "Native fixture initially omitted readerstateparent; failed beforemodelcall. Originalthread reused, failure and setup correction retained."
-  ]
+  ],
+  "fullCanonicalRecovery": {
+    "state": "failed",
+    "case": "native-reader-canonical-fault-r135",
+    "observation": "After real queued-input loss and normal installed-reader restoration, the original request did not complete within the fixed observation window. No writer or responder inference or artifact was observed.",
+    "lastNativeProgress": "world_state.build, before another client tool callback",
+    "failedCaseDisposition": "Original request was still pending at generation zero. After inspection it was cancelled; its placement was paused and all three purpose services were stopped. Histories and failure receipts remain intact.",
+    "diagnostic": "One explicitly logged 45-second reader-only continuation also reached turn/start without another client callback. It is diagnostic evidence, not a passing release test.",
+    "sourceMatch": "The running native package was built from dd28405adb15e2c5090b1a6cf537477e69189a03; before phase instrumentation, its entire codex-rs tree matched current source.",
+    "next": "Locate the native preparation stall with metadata-only phase tracing. Do not infer a model judgment failure or promote the package from the earlier queue-boundary check."
+  }
 }

@@ -316,6 +316,7 @@ pub(crate) async fn run_turn(
             }
         },
     );
+    trace!(phase = "context_and_diff_ready", "native step progress");
     let mut world_state = record_context?;
 
     let Some((injection_items, explicitly_enabled_connectors)) = build_skills_and_plugins(
@@ -908,6 +909,7 @@ pub(crate) async fn run_turn(
 
 #[instrument(level = "trace", skip_all)]
 async fn turn_diff_display_roots(step_context: &StepContext) -> Vec<(String, PathUri)> {
+    trace!(phase = "diff_roots_begin", "native step progress");
     let mut display_roots = Vec::new();
     for turn_environment in step_context.environments.turn_environments() {
         let cwd = turn_environment.cwd();
@@ -926,6 +928,7 @@ async fn turn_diff_display_roots(step_context: &StepContext) -> Vec<(String, Pat
         .unwrap_or_else(|| cwd.clone());
         display_roots.push((turn_environment.selection.environment_id.clone(), root));
     }
+    trace!(phase = "diff_roots_ready", "native step progress");
     display_roots
 }
 
