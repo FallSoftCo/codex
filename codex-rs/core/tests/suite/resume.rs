@@ -390,6 +390,7 @@ async fn resume_with_unresolved_custom_call_preserves_unknown_outcome() -> Resul
             include_archived: true,
         })
         .await?;
+    let original_item_count = context.items.len();
     let original_call: codex_protocol::models::ResponseItem = serde_json::from_value(
         serde_json::json!({
             "type": "custom_tool_call",
@@ -417,6 +418,27 @@ async fn resume_with_unresolved_custom_call_preserves_unknown_outcome() -> Resul
             codex_history::ResponseItemEnvelope::new(item),
         ));
     }
+    // Resume reloads the authoritative store, superseding caller-only history.
+    // Persist the interrupted call before closing/reopening that native boundary.
+    initial
+        .thread_store
+        .append_items(codex_thread_store::AppendThreadItemsParams {
+            thread_id: context.thread_id,
+            items: context.items[original_item_count..].to_vec(),
+        })
+        .await?;
+    let persisted = initial
+        .thread_store
+        .load_latest_model_context(LoadThreadHistoryParams {
+            thread_id: context.thread_id,
+            include_archived: true,
+        })
+        .await?;
+    assert!(persisted.items.iter().any(|item| matches!(
+        item,
+        codex_history::RolloutItem::ResponseItem(envelope) if envelope.item == original_call
+    )));
+    context.items = persisted.items;
     let resumed = initial
         .thread_manager
         .resume_thread_with_history(

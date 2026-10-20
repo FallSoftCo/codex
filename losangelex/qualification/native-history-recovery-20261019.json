@@ -1,7 +1,7 @@
 {
   "schema": "lax-native-history-recovery-investigation/v1",
-  "at": 1792454796.5580204,
-  "status": "Candidate source; unqualified. Do not deploy as a completed recovery fix.",
+  "at": 1792457127.1406493,
+  "status": "Native recovery qualified for the stated bounded case and two targeted mechanical checks; not a production replacement certification.",
   "objective": "Keep real Hollywood-native reader/writer/responder work usable across crash and queued primary input, without replaying uncertain effects.",
   "failedBaseline": {
     "root": "/var/lib/lax-three-context-20261018-r01/native-reader-canonical-fault-r135",
@@ -40,5 +40,50 @@
     "Wire fixture and lifecycle regression tests are mechanical evidence; do not imply model relevance, autonomous recovery or production readiness.",
     "Original failed cohorts remain failed; no retries of external effects authorized by missing tool output.",
     "No new compaction/multi-host/physical phone proof yet."
-  ]
+  ],
+  "actualModelRecovery": {
+    "root": "/var/lib/lax-three-context-20261018-r01/native-reader-recovery-native-fix-r158",
+    "independentAudit": "independent-audit-r163/facts.json",
+    "originalRequest": "c5546ad0-d7ed-4736-935c-d99c208d655a",
+    "originalDelivery": "7fabb9e1-c007-4f93-be89-344301b5a9b3",
+    "state": "completed generation1",
+    "work": "one original source-bound Work in canonical complete state",
+    "nativeSource": "e1915bfaf2b54f71f5ef039b443ede8b0442f564",
+    "nativeBinarySha256": "f28cb6ba879472fcbd2538cb0644813ec6d73dda56c9232cc6988db28cb4c552",
+    "artifactSha256": "721898449563590f1296fc85d4c5e8941a411679ea94365ffa821bd8362f89b9",
+    "latencySeconds": 203.777251,
+    "observedHumanEvents": 2,
+    "completedCommands": 7,
+    "completedFileChanges": 1,
+    "sameThreeNativeHistories": true,
+    "originalUncertainInputJournal": "original intent bytes unchanged, not asserted acknowledged or exactly-once",
+    "retirement": "all3purpose services stopped, placement paused, completed request retained"
+  },
+  "mechanicalChecks": {
+    "nativeTaskPanic": {
+      "state": "passed",
+      "test": "panicked_task_emits_terminal_failure_and_clears_active_turn",
+      "seconds": 0.095,
+      "receipt": "/aosp/development/lax-native-recovery-diagnostics-20261019-r145/candidate-r156/stages.json"
+    },
+    "nativeResumeWire": {
+      "state": "passed",
+      "test": "resume_with_unresolved_custom_call_preserves_unknown_outcome",
+      "seconds": 0.569,
+      "receipt": "/aosp/development/lax-native-recovery-diagnostics-20261019-r145/resume-check-r167/check-result.json",
+      "meaning": "Actual native resume and captured mock model-wire request; explicit unknown output, known output unchanged, no replay file and terminal continuation. No real-model claim for this fixture."
+    },
+    "scopedLint": {
+      "state": "passed",
+      "command": "just fix -p codex-core --lib",
+      "receipt": "/aosp/development/lax-native-recovery-diagnostics-20261019-r145/lint-r169/stages.json",
+      "productRustEdits": 0
+    }
+  },
+  "retainedQualificationCorrections": [
+    "Native integration target suite did not exist; initial command rejected before tests. Correct target all selects one test.",
+    "r164 wire fixture failed twice under nextest retry because it altered only caller ResumedHistory. Native resume correctly reloads authoritative ThreadStore. r167 persists the interrupted call through ThreadStore, adds a durable-seed assertion and retains every original outcome assertion.",
+    "r162 independent audit confused material complete with delivery completed. Failed before any state change. Source-vocabulary correction retained in r163; no model/task/artifact replay."
+  ],
+  "productionReplacementReady": false
 }
