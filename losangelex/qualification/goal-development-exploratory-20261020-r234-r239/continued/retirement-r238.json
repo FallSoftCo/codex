@@ -1,0 +1,53 @@
+{
+  "at": 1792525602.8075044,
+  "state": "settled",
+  "unitPids": {
+    "lax-agent-7501aa71-d5d99ed1f20a-reader.service": "0",
+    "lax-agent-7501aa71-d5d99ed1f20a-writer.service": "0",
+    "lax-agent-7501aa71-d5d99ed1f20a-responder.service": "0",
+    "lax-agent-7501aa71-d62a6378559a-reader.service": "0",
+    "lax-agent-7501aa71-d62a6378559a-writer.service": "0",
+    "lax-agent-7501aa71-d62a6378559a-responder.service": "0",
+    "lax-host-7501aa71-cd1cf7b2.service": "0",
+    "lax-collaboration-7501aa71-cd1cf7b2.service": "0"
+  },
+  "contextsBeforePause": [
+    {
+      "agent": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+      "purpose": "reader",
+      "native_thread": "01a15a9b-6d68-79b0-8821-510aa4a50b19",
+      "active_turn": null
+    },
+    {
+      "agent": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+      "purpose": "responder",
+      "native_thread": "01a15a9b-6c32-7e60-b3aa-96b38f717bea",
+      "active_turn": null
+    },
+    {
+      "agent": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+      "purpose": "writer",
+      "native_thread": "01a15a9b-6ef5-7572-9330-525824ee6d30",
+      "active_turn": null
+    },
+    {
+      "agent": "d62a6378-559a-4ece-bcd7-4ba853e7d712",
+      "purpose": "reader",
+      "native_thread": "01a15a9b-6dfa-7b60-afd7-b8272374bbaf",
+      "active_turn": null
+    },
+    {
+      "agent": "d62a6378-559a-4ece-bcd7-4ba853e7d712",
+      "purpose": "responder",
+      "native_thread": "01a15a9b-6d34-7ff1-a724-32a0ba3cfc5f",
+      "active_turn": null
+    },
+    {
+      "agent": "d62a6378-559a-4ece-bcd7-4ba853e7d712",
+      "purpose": "writer",
+      "native_thread": "01a15a9b-6f2d-7221-af4f-25e9aa1cc49f",
+      "active_turn": null
+    }
+  ],
+  "originalCancelledPredecessorNotResumed": true
+}

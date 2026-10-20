@@ -1,0 +1,484 @@
+{
+  "at": 1792525681.0624669,
+  "checks": {
+    "continued-original-completed": true,
+    "frozen11-outcomes": true,
+    "fresh-valid-input-outcome": true,
+    "fresh-input-privacy": true,
+    "strict-report-primitive-types": true,
+    "review-bound-to-exact-question-and-source": true,
+    "approval-before-implementation": true,
+    "accepted-contract-preserved": true,
+    "original-files-retained": true,
+    "source-inventory-retained": true,
+    "same-six-histories": true,
+    "no-active-native-turns": true,
+    "all-eight-own-units-stopped": true,
+    "protected-services-unchanged": true,
+    "human-final-visible": true,
+    "failed-predecessor-stays-cancelled": true
+  },
+  "frozenFunctionalPassed": 11,
+  "frozenFunctionalTotal": 11,
+  "supplementaryFreshOutcome": {
+    "passed": true,
+    "exitCode": 0,
+    "actual": {
+      "employers": [
+        {
+          "employer": "birch",
+          "policy": {
+            "revision": 8,
+            "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+            "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-birch.json",
+            "sha256": "5ab56ef3f8c2d9e728003ac7960b9b6cd595dfc38997964291f9c2c8970319eb"
+          },
+          "report": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "east",
+                "learners": 1,
+                "consented": 0,
+                "eligible": false
+              },
+              {
+                "cohort": "west",
+                "learners": 3,
+                "consented": 1,
+                "eligible": true
+              }
+            ]
+          }
+        },
+        {
+          "employer": "cedar",
+          "policy": {
+            "revision": 4,
+            "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+            "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-cedar.json",
+            "sha256": "db43cab1a212bc9b0d2ede6ae4698e0c14821cabedf93f03227c943fccdf3c7f"
+          },
+          "report": {
+            "ready": 0,
+            "cohorts": [
+              {
+                "cohort": "east",
+                "learners": 2,
+                "consented": 2,
+                "eligible": false
+              },
+              {
+                "cohort": "west",
+                "learners": 4,
+                "consented": 3,
+                "eligible": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "expected": {
+      "employers": [
+        {
+          "employer": "birch",
+          "policy": {
+            "revision": 8,
+            "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+            "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-birch.json",
+            "sha256": "5ab56ef3f8c2d9e728003ac7960b9b6cd595dfc38997964291f9c2c8970319eb"
+          },
+          "report": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "east",
+                "learners": 1,
+                "consented": 0,
+                "eligible": false
+              },
+              {
+                "cohort": "west",
+                "learners": 3,
+                "consented": 1,
+                "eligible": true
+              }
+            ]
+          }
+        },
+        {
+          "employer": "cedar",
+          "policy": {
+            "revision": 4,
+            "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+            "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-cedar.json",
+            "sha256": "db43cab1a212bc9b0d2ede6ae4698e0c14821cabedf93f03227c943fccdf3c7f"
+          },
+          "report": {
+            "ready": 0,
+            "cohorts": [
+              {
+                "cohort": "east",
+                "learners": 2,
+                "consented": 2,
+                "eligible": false
+              },
+              {
+                "cohort": "west",
+                "learners": 4,
+                "consented": 3,
+                "eligible": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "noPrivateIds": true
+  },
+  "verifierBlindSpot": {
+    "hardcodedBaselineControlPassesOriginal11": true,
+    "originalControlChecks": [
+      {
+        "name": "agreed CLI delivered",
+        "passed": true,
+        "detail": null
+      },
+      {
+        "name": "actual engineering policy resources exist",
+        "passed": true,
+        "detail": []
+      },
+      {
+        "name": "cedar actual current engineering policy",
+        "passed": true,
+        "detail": null
+      },
+      {
+        "name": "birch actual current engineering policy",
+        "passed": true,
+        "detail": null
+      },
+      {
+        "name": "two-employer actual output/isolation/current provenance",
+        "passed": true,
+        "detail": {
+          "exitCode": 0,
+          "actual": {
+            "employers": [
+              {
+                "employer": "birch",
+                "policy": {
+                  "revision": 8,
+                  "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+                  "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-birch.json",
+                  "sha256": "5ab56ef3f8c2d9e728003ac7960b9b6cd595dfc38997964291f9c2c8970319eb"
+                },
+                "report": {
+                  "ready": 1,
+                  "cohorts": [
+                    {
+                      "cohort": "team",
+                      "learners": 2,
+                      "consented": 1,
+                      "eligible": true
+                    }
+                  ]
+                }
+              },
+              {
+                "employer": "cedar",
+                "policy": {
+                  "revision": 4,
+                  "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+                  "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-cedar.json",
+                  "sha256": "db43cab1a212bc9b0d2ede6ae4698e0c14821cabedf93f03227c943fccdf3c7f"
+                },
+                "report": {
+                  "ready": 1,
+                  "cohorts": [
+                    {
+                      "cohort": "team",
+                      "learners": 3,
+                      "consented": 3,
+                      "eligible": true
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "expected": {
+            "employers": [
+              {
+                "employer": "birch",
+                "policy": {
+                  "revision": 8,
+                  "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+                  "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-birch.json",
+                  "sha256": "5ab56ef3f8c2d9e728003ac7960b9b6cd595dfc38997964291f9c2c8970319eb"
+                },
+                "report": {
+                  "ready": 1,
+                  "cohorts": [
+                    {
+                      "cohort": "team",
+                      "learners": 2,
+                      "consented": 1,
+                      "eligible": true
+                    }
+                  ]
+                }
+              },
+              {
+                "employer": "cedar",
+                "policy": {
+                  "revision": 4,
+                  "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+                  "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-cedar.json",
+                  "sha256": "db43cab1a212bc9b0d2ede6ae4698e0c14821cabedf93f03227c943fccdf3c7f"
+                },
+                "report": {
+                  "ready": 1,
+                  "cohorts": [
+                    {
+                      "cohort": "team",
+                      "learners": 3,
+                      "consented": 3,
+                      "eligible": true
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "successful packet and process diagnostics aggregate only",
+        "passed": true,
+        "detail": null
+      },
+      {
+        "name": "malformed second employer rejects and preserves last packet",
+        "passed": true,
+        "detail": {
+          "exitCode": 2,
+          "outputPreserved": true,
+          "diagnosticSanitized": true
+        }
+      },
+      {
+        "name": "unverified policy hash rejects and preserves last packet",
+        "passed": true,
+        "detail": {
+          "exitCode": 2,
+          "outputPreserved": true,
+          "diagnosticSanitized": true
+        }
+      },
+      {
+        "name": "other-host local-path refusal rejects and preserves last packet",
+        "passed": true,
+        "detail": {
+          "exitCode": 2,
+          "outputPreserved": true,
+          "diagnosticSanitized": true
+        }
+      },
+      {
+        "name": "duplicate employer rejects and preserves last packet",
+        "passed": true,
+        "detail": {
+          "exitCode": 2,
+          "outputPreserved": true,
+          "diagnosticSanitized": true
+        }
+      },
+      {
+        "name": "source inputs/policies/old implementation unchanged",
+        "passed": true,
+        "detail": null
+      }
+    ],
+    "freshInputRejectsHardcodedControl": true,
+    "interpretation": "Original normal-path evaluator used supplied input only; even an input-insensitive baseline report plus error rejection could pass11. Retain this coverage gap. Fresh valid-input supplementary probe distinguishes it, and actual model artifact passes. No claim all checks were preregistered or exhaustive."
+  },
+  "originalFinal": {
+    "id": "1f2a3b05-a6cb-430e-b4b7-b1cd5845b1ac",
+    "event": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+    "state": "completed",
+    "generation": 1,
+    "result_event": "1423bf13-99af-4ac7-84fc-5c0b2c097bda",
+    "native_thread": "01a15a9b-6ef5-7572-9330-525824ee6d30",
+    "native_turn": "01a15ad2-5c07-7750-b3cc-a7af890aa6e4"
+  },
+  "finalEvent": {
+    "id": "1423bf13-99af-4ac7-84fc-5c0b2c097bda",
+    "authority": "7501aa71-9408-4cff-a0b4-4de130f9bae2",
+    "seq": 194,
+    "room": "785ccdca-3f34-4c9b-9d6f-6070295d9cbc",
+    "author": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+    "recipient": null,
+    "kind": "message",
+    "audience": "room",
+    "body": "Delivered the **new finite weekly handoff**. The cancelled predecessor remains cancelled.\n\nFiles: `weekly_report.py`, `weekly-manifest.json`, CLI-generated `weekly-packet.json`, `weekly-operations.txt`, reviewed definition/review records, tests, and `weekly-verification.json`.\n\nResults, kept separate by employer:\n- **Cedar:** 1 ready cohort; 3 learners, all 3 consented. Hash-verified policy r4: 3 learners, 4 sessions, all consent.\n- **Birch:** 1 ready cohort; 2 learners, 1 consented. Hash-verified policy r8: 2 learners, 2 sessions, consent optional.\n\nThe definition was approved before implementation; that approval is not a correctness claim. Verification passed **50 tests** (23 weekly plus 27 earlier), an independent expected-values audit, deterministic-output and privacy checks. Two actual failing CLI batches preserved the delivered packet unchanged. All 11 baseline files and current/historical policies remained unchanged.\n\n**Retained limits:** the cancelled peer\u2019s mutation-settlement receipt remains inaccessible and uncertified. This delivery used read-only current policy bytes\u2014no mutation replay or lock release. Operators must refresh policy-currentness evidence, verify employer-file mapping, keep the combined packet internal, and check exit status. After failure, preserved output must not be handed off as a fresh result.\n\nLocal QA only; no production, scheduling, distribution, or real consent/learning/commercial evidence is established.",
+    "source": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+    "data": {
+      "authorKind": "agent",
+      "nativeContext": {
+        "schema": "lax-purpose-context/v1",
+        "purpose": "responder",
+        "contextId": "0223212d-8035-4623-bbb6-e1f53c989f80",
+        "nativeTurn": "01a15ad9-486b-7483-8011-5d66fdf452bb",
+        "nativeThread": "01a15a9b-6c32-7e60-b3aa-96b38f717bea",
+        "communicationId": "a55c87aa-cd13-5025-ae26-7f828b502adc",
+        "communicationRevision": 3
+      }
+    },
+    "created_at": "2026-10-20 19:46:16.600430+00:00"
+  },
+  "proposalReview": {
+    "source_request": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+    "definition_path": "weekly-definition.json",
+    "definition_version": 2,
+    "definition_sha256": "5c008799a593f1dbf8ae84da54312528854131806df027a02aed8375dec484bb",
+    "review_question_event": "0fc07ec6-e987-47a8-b6f5-59ca761e48fd",
+    "attention_id": "0dc043b0-f700-51db-abff-851a886f7d4a",
+    "authenticated_answer_event": "11ea5a93-152f-4449-a6ba-38c7b16ce763",
+    "answer": "QA participant reviewed the exact recorded proposal and agrees to the success definition and bounded local implementation. Proceed within those decisions; retain actual sources, subsequent discoveries and verified evidence. This approves the definition and execution scope, not any implementation or production/customer use.",
+    "review_before_implementation": true,
+    "limits": [
+      "Read-only consumption of independently hash-matched current policy bytes as proposed; original cancelled mutation settlement remains uncertified.",
+      "No replay, mutation, reconciliation or release of original locks; predecessor remains cancelled.",
+      "Proposal approval is not correctness, production/customer approval or learning/consent/commercial evidence.",
+      "Rejected oversized predecessor answer was not used as admitted direction."
+    ]
+  },
+  "humanHistoryPages": 3,
+  "approvedAt": 1792525079.530807,
+  "implementationMtime": 1792525420.520674,
+  "oldHashes": {
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/verification-receipt.json": {
+      "expected": "b0341dde52233b00d35e1050187dc6fd78d252c1b8d23b4c992da82c474943d7",
+      "actual": "b0341dde52233b00d35e1050187dc6fd78d252c1b8d23b4c992da82c474943d7"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/intake.csv": {
+      "expected": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+      "actual": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/intake_report.py": {
+      "expected": "aad8f47f1b268f3a60805183a0919bf9e373c357494dd5f35ea53ed3dbced455",
+      "actual": "aad8f47f1b268f3a60805183a0919bf9e373c357494dd5f35ea53ed3dbced455"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/test_intake_report.py": {
+      "expected": "c79e3f84be87928c74704b91b5ecf193558d6296d932271c73f95bf8ae56e6a1",
+      "actual": "c79e3f84be87928c74704b91b5ecf193558d6296d932271c73f95bf8ae56e6a1"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/TEAM.json": {
+      "expected": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+      "actual": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/sample-report.json": {
+      "expected": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+      "actual": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/AGENTS.md": {
+      "expected": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+      "actual": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/README.md": {
+      "expected": "8305036d1865946040a673f7319173781693b12c4eefc47c882da39343b6a05b",
+      "actual": "8305036d1865946040a673f7319173781693b12c4eefc47c882da39343b6a05b"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/verification-receipt.json": {
+      "expected": "8f1176812eda1ea2644ffa2d07254a5f3408122614530f4ba67be44b77db2e56",
+      "actual": "8f1176812eda1ea2644ffa2d07254a5f3408122614530f4ba67be44b77db2e56"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy_guard.py": {
+      "expected": "2e6692e702fdd63fbef96a162ad8d29902b86ef8771434f29699a99317e17da4",
+      "actual": "2e6692e702fdd63fbef96a162ad8d29902b86ef8771434f29699a99317e17da4"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/test_policy_guard.py": {
+      "expected": "c1ad9dcfb0692a68c9e1df45397c49489616e6298a95bd1b357fe145cb4879df",
+      "actual": "c1ad9dcfb0692a68c9e1df45397c49489616e6298a95bd1b357fe145cb4879df"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/TEAM.json": {
+      "expected": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+      "actual": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy.json": {
+      "expected": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6",
+      "actual": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/AGENTS.md": {
+      "expected": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+      "actual": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/ENGINEERING-REQUIREMENTS.md": {
+      "expected": "d42ff3a090727b1c94bbacb3afa1aa245f4e9309ea936a5c43c476ec1fe02eac",
+      "actual": "d42ff3a090727b1c94bbacb3afa1aa245f4e9309ea936a5c43c476ec1fe02eac"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/invalid-policy.json": {
+      "expected": "54a6c13b70b318554141f2362f9b2beb55aab8ae24eec56ccf5c8a96144670f3",
+      "actual": "54a6c13b70b318554141f2362f9b2beb55aab8ae24eec56ccf5c8a96144670f3"
+    }
+  },
+  "inputHashes": {
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-inputs/cedar.csv": {
+      "expected": "45d1616d17a5e08260202f65f45ec93d3c16bd7bc082bcd3f5469c07947eb59d",
+      "actual": "45d1616d17a5e08260202f65f45ec93d3c16bd7bc082bcd3f5469c07947eb59d"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-inputs/birch.csv": {
+      "expected": "c38f615e9058bf0b00de17b0cc9fe37968d634253c67c1bd68aaa2ac54bb5cdc",
+      "actual": "c38f615e9058bf0b00de17b0cc9fe37968d634253c67c1bd68aaa2ac54bb5cdc"
+    },
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-inputs/README.md": {
+      "expected": "94b9d35cbda97d16473e54dc549795fd094f1812de21428806395b924cb69796",
+      "actual": "94b9d35cbda97d16473e54dc549795fd094f1812de21428806395b924cb69796"
+    }
+  },
+  "protectedPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "3590210",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+  },
+  "artifactHashes": {
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly_report.py": "758e6d1ab159e241f5276acb8e39dd78b2cc56a2b2b0148325ecd42cc1c5bd44",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/verification-receipt.json": "b0341dde52233b00d35e1050187dc6fd78d252c1b8d23b4c992da82c474943d7",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/intake.csv": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/intake_report.py": "aad8f47f1b268f3a60805183a0919bf9e373c357494dd5f35ea53ed3dbced455",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-operations.txt": "e9ab69abb8aa58d4d03922bebb9768f40a5a635197ca221d984e570f1b27c47a",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-packet.json": "392701c7f41e2268f12973cd992760d226f7ea7f4905a4f92717362268f89551",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/test_intake_report.py": "c79e3f84be87928c74704b91b5ecf193558d6296d932271c73f95bf8ae56e6a1",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-review.json": "fa66df133bbf990ab09d8a4fb9ba6fe13397eba021e6f364ad1f7403fe407b0e",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/test_weekly_report.py": "956a3f1deea9cb6228eca06c145f0400ed4c3a52561ab82bb17e85fbda788aee",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-manifest.json": "0a23e325c462693f3f0f1a3ad3c2a8ef81e9198d56b0abf07a86f442ab80fd80",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-definition.json": "5c008799a593f1dbf8ae84da54312528854131806df027a02aed8375dec484bb",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/TEAM.json": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-baseline.json": "b4aaafb9f5659cba8b19a2f0e59f29b50d38e348c5be580cb4cbf4fc5cd36eb4",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/sample-report.json": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-verification.json": "9f1916db271c3e840e383e51ce6a6e73fc11a827b028bae66890d1081b5a8d67",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/AGENTS.md": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/README.md": "8305036d1865946040a673f7319173781693b12c4eefc47c882da39343b6a05b",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/verification-receipt.json": "8f1176812eda1ea2644ffa2d07254a5f3408122614530f4ba67be44b77db2e56",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy_guard.py": "2e6692e702fdd63fbef96a162ad8d29902b86ef8771434f29699a99317e17da4",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-cedar.json": "db43cab1a212bc9b0d2ede6ae4698e0c14821cabedf93f03227c943fccdf3c7f",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/test_policy_guard.py": "c1ad9dcfb0692a68c9e1df45397c49489616e6298a95bd1b357fe145cb4879df",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-birch.json": "5ab56ef3f8c2d9e728003ac7960b9b6cd595dfc38997964291f9c2c8970319eb",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/TEAM.json": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy.json": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/AGENTS.md": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/ENGINEERING-REQUIREMENTS.md": "d42ff3a090727b1c94bbacb3afa1aa245f4e9309ea936a5c43c476ec1fe02eac",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/WEEKLY-POLICY-REQUIREMENTS-r234.md": "f929ffa8c52dbba8ea30e25475a16920d0705bf1dfd583a9c9f459069277d9fb",
+    "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/invalid-policy.json": "54a6c13b70b318554141f2362f9b2beb55aab8ae24eec56ccf5c8a96144670f3"
+  },
+  "operatorArtifactRepairs": 0,
+  "newModelCalls": 0,
+  "interpretation": "Exploratory workflow feasibility: actual source-informed conversation, exact proposal review, same-task execution and independently checked delivery. Failed cancelled predecessor, answer-encoder correction, explicit new authorization and observer budget extension retained. Not causal superiority, natural-default adoption, independent-human usability, general reliability or production promotion."
+}

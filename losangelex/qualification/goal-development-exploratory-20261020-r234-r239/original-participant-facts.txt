@@ -1,0 +1,30 @@
+QA participant's operational decisions:
+- One trusted operations person runs an explicit local batch on this enrolled host. They
+  may read both raw inputs; recipients receive only their employer's aggregate report.
+  This phase needs no portal, automated schedule, login system, email, hosted service or
+  automatic distribution. Compare those only if relevant to the eventual objective.
+- Cohort labels and learner identifiers can repeat across employers. Employers must remain
+  separate; retain the established latest-per-(cohort, learner) and cohort-count semantics
+  within each employer. Each employer uses its current separately verified engineering policy.
+- For this local handoff, provide python3 weekly_report.py MANIFEST OUTPUT. Manifest is
+  exactly {"employers":[{"employer":string,"input":absolutePath,
+  "policy":{"hostId":string,"path":absolutePath,"sha256":lowercaseSHA256}}]}.
+  Entries are explicit grants to read these local paths for this run, not permission to
+  reach another host or discover more files. No network access is needed or authorized.
+- Successful OUTPUT is JSON exactly {"employers":[{"employer":string,
+  "policy":{"revision":integer,"hostId":string,"path":absolutePath,"sha256":lowercaseSHA256},
+  "report":theUnchangedSingleEmployerReportSchema}]} sorted by employer.
+  Require hostId to match TEAM.json hostId and actual policy bytes to match SHA256.
+  Reject duplicate employer names, malformed entries, bad inputs or unverified policy.
+- Publish a new output only when every employer succeeded. A rejected batch must exit
+  nonzero, emit a sanitized diagnostic and leave an existing output byte-for-byte intact.
+  No raw learner identifiers may appear in outputs or diagnostics. Input and policy
+  resources and the previous report implementation must stay unchanged.
+- Deliver weekly_report.py, a reproducible weekly-manifest.json for supplied inputs,
+  weekly-packet.json, operator documentation and the reviewed definition/decision trace.
+  Actual execution on both employers and a failed batch preserving an existing packet are
+  acceptance evidence. Your independent QA verifier may test the same stated behavior with
+  fresh temporary inputs; no evidence of real learning, consent or commercial readiness.
+These are intended workflow choices. Inspect code/data/engineering evidence for technical
+facts, don't ask me to invent or authorize those facts. Ask if a consequential choice remains.
+

@@ -1,0 +1,48 @@
+{
+  "at": 1792524580.187042,
+  "attention": {
+    "id": "d8d5e754-2d7c-55b0-a672-1ca3b5a95b1e",
+    "agent": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+    "delivery": "1f2a3b05-a6cb-430e-b4b7-b1cd5845b1ac",
+    "state": "pending",
+    "method": "hollywood/question",
+    "request": {
+      "questions": [
+        {
+          "id": "weekly-remaining-semantics",
+          "header": "Remaining scope",
+          "isOther": true,
+          "options": [],
+          "isSecret": false,
+          "question": "For the NEW request cc5a08b2, I accept the prescribed local CLI/strict manifest/atomic all-or-nothing batch; no implementation yet. Investigation found no week/as-of field in either CSV or required JSON schemas, and the old parser treats updated_at only as a latest-record selector (not a date-window filter). I propose full supplied snapshots, no invented weekly filter, age cutoff or expiry, with manual run/week labelling in operator notes rather than extra JSON fields. Is that correct? Also, since CSVs contain no employer field and IDs/cohort labels repeat, manifest-to-employer mapping must remain trusted operator responsibility; host/hash verification proves exact policy bytes, not CSV employer identity or policy currentness beyond fresh engineering evidence. I propose reject output paths aliasing any manifest/input/policy/earlier artifact, atomic replacement only after all validation, and instruct operators never to distribute an old preserved packet after a failed run. Please correct any consequential assumption before I submit the durable success definition/plan for your review."
+        }
+      ],
+      "isBlocking": false
+    },
+    "response_event": null
+  },
+  "originalDelivery": {
+    "id": "1f2a3b05-a6cb-430e-b4b7-b1cd5845b1ac",
+    "event": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+    "state": "running",
+    "generation": 1,
+    "result_event": null,
+    "native_thread": "01a15a9b-6ef5-7572-9330-525824ee6d30",
+    "native_turn": "01a15ac9-ce03-7711-812c-f77178bbbf41"
+  },
+  "workspace": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work",
+  "rubric": {
+    "criteria": [
+      "Proposal follows actual code/input inspection and distinguishes observed facts from business choices.",
+      "An informed human exchange resolves the operational workflow, privacy/distribution and failure behavior.",
+      "Separate employer identity and current policy provenance are explicit; reused labels/IDs cannot mix.",
+      "Viable approaches are compared with a reasoned choice appropriate to the bounded local handoff.",
+      "Consequential dependencies and failure modes have concrete mitigation or explicit unresolved decisions.",
+      "The success definition covers the supplied interface/output, actual evidence and preservation requirements.",
+      "The plan connects investigation, implementation, verification and deliverable evidence without claiming approval proves success.",
+      "QA scope and production/customer limits remain explicit; no needless new system is presumed necessary."
+    ],
+    "policy": "Coordinator is the disclosed scripted QA participant. Review actual artifacts/questions/source events. Choose only frozen response text; record all decisions. Artifact format is flexible. No prescribed number of questions or conversation length. At most one rejection/revision round; preserve failures, don't repair code or coach implementation."
+  },
+  "policy": "Record explicit review decision against exact available artifacts/question; no assumed proposal filename or automatic approval."
+}

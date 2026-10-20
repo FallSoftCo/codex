@@ -1,0 +1,39 @@
+{
+  "at": 1792525679.9737754,
+  "timing": "Post-trial supplementary coverage; frozen11 unchanged, no model repair or rerun.",
+  "criterion": "Same stated generic manifest/CSV contract, new valid data under same actual verified engineering policies; ready must change with input. No new employer or business requirement.",
+  "cedarExpected": {
+    "ready": 0,
+    "cohorts": [
+      {
+        "cohort": "east",
+        "learners": 2,
+        "consented": 2,
+        "eligible": false
+      },
+      {
+        "cohort": "west",
+        "learners": 4,
+        "consented": 3,
+        "eligible": false
+      }
+    ]
+  },
+  "birchExpected": {
+    "ready": 1,
+    "cohorts": [
+      {
+        "cohort": "east",
+        "learners": 1,
+        "consented": 0,
+        "eligible": false
+      },
+      {
+        "cohort": "west",
+        "learners": 3,
+        "consented": 1,
+        "eligible": true
+      }
+    ]
+  }
+}

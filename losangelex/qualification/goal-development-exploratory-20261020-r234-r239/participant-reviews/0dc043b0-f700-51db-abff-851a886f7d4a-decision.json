@@ -1,0 +1,64 @@
+{
+  "at": 1792525020.204971,
+  "reviewerKind": "coordinator-scripted-QA-participant",
+  "kind": "approve-exact-proposal",
+  "selectedFiles": [
+    "participant-approval.txt"
+  ],
+  "rubric": [
+    {
+      "criterion": "Proposal follows actual code/input inspection and distinguishes observed facts from business choices.",
+      "satisfied": true,
+      "evidence": "Definition investigation cites actual old CLI, inventory, collision counts, Python environment, current engineer events and independent resource hashes; source-informed native questions preceded this proposal and no weekly implementation exists."
+    },
+    {
+      "criterion": "An informed human exchange resolves the operational workflow, privacy/distribution and failure behavior.",
+      "satisfied": true,
+      "evidence": "Initial actual questions established operational alternatives/privacy/failure ambiguities; admitted new request supplies workflow contract. Further question and answer retain decisions while explicitly deferring proposed interpretations to this exact review."
+    },
+    {
+      "criterion": "Separate employer identity and current policy provenance are explicit; reused labels/IDs cannot mix.",
+      "satisfied": true,
+      "evidence": "Separate employer mapping, cohort-local deduplication, distinct Cedar/Birch policy values and exact host/path/hashes are recorded. No aggregate mixing or hidden global identifier namespace."
+    },
+    {
+      "criterion": "Viable approaches are compared with a reasoned choice appropriate to the bounded local handoff.",
+      "satisfied": true,
+      "evidence": "Manual old CLI, standard-library wrapper and service approach are compared; wrapper enforces agreed atomic manifest contract while preserving existing parser and implementation."
+    },
+    {
+      "criterion": "Consequential dependencies and failure modes have concrete mitigation or explicit unresolved decisions.",
+      "satisfied": true,
+      "evidence": "Definition explicitly handles failure atomicity, invalid/aliased outputs, stale packet handling, trusted operator mapping, no implicit freshness, small counts and inaccessible original settlement. No replay or settlement success presumed."
+    },
+    {
+      "criterion": "The success definition covers the supplied interface/output, actual evidence and preservation requirements.",
+      "satisfied": true,
+      "evidence": "Exact CLI and manifest/packet JSON, host/hash checks, sorting, aggregate privacy, all-or-nothing failure, actual execution and unchanged earlier artifacts agree with frozen participant choices."
+    },
+    {
+      "criterion": "The plan connects investigation, implementation, verification and deliverable evidence without claiming approval proves success.",
+      "satisfied": true,
+      "evidence": "Plan connects retained baseline and verified peer facts to review, bounded implementation, actual CLI/failure verification and evidence. Completion gates distinguish approval from actual output correctness."
+    },
+    {
+      "criterion": "QA scope and production/customer limits remain explicit; no needless new system is presumed necessary.",
+      "satisfied": true,
+      "evidence": "No network/scheduler/portal/distribution/customer/phone/production/new agents. Full snapshots/no invented filter and local trusted operator limits are explicit."
+    }
+  ],
+  "proposalSources": [
+    {
+      "kind": "file",
+      "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-definition.json",
+      "sha256": "5c008799a593f1dbf8ae84da54312528854131806df027a02aed8375dec484bb",
+      "reviewedSnapshot": "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-reviews/0dc043b0-f700-51db-abff-851a886f7d4a-reviewed-definition.json"
+    },
+    {
+      "kind": "canonical-question",
+      "attentionId": "0dc043b0-f700-51db-abff-851a886f7d4a"
+    }
+  ],
+  "approvedInterpretations": "Approve this exact proposal including full snapshots/no invented time filter, trusted operator mapping/currentness evidence and operator-private packet, output alias refusal/stale-output handling, and read-only consumption of independently verified current bytes without certifying or mutating the old interrupted edit. No criterion weakened.",
+  "scope": "Coordinator is scripted QA participant, not actual end user or independent semantic oracle. This approves definition/authorized local execution, not implementation correctness or production."
+}

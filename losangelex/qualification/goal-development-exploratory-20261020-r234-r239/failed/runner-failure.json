@@ -1,0 +1,6 @@
+{
+  "at": 1792523855.4407487,
+  "error": "FileNotFoundError",
+  "detail": "[Errno 2] No such file or directory: '/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-r234/administration/3e35b84cd89f55513b9e9d207be5aa614fbf4b1867020ef5260eed3c5fda153d.json.tf81l9kk'",
+  "action": "Retain accepted original receipts; no retry, artifact repair or invented success."
+}

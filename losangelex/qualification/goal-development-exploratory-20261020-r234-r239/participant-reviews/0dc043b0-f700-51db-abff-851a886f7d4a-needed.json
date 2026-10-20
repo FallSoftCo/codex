@@ -1,0 +1,48 @@
+{
+  "at": 1792524889.0462413,
+  "attention": {
+    "id": "0dc043b0-f700-51db-abff-851a886f7d4a",
+    "agent": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+    "delivery": "1f2a3b05-a6cb-430e-b4b7-b1cd5845b1ac",
+    "state": "pending",
+    "method": "hollywood/question",
+    "request": {
+      "questions": [
+        {
+          "id": "weekly-definition-review",
+          "header": "Review before code",
+          "isOther": true,
+          "options": [],
+          "isSecret": false,
+          "question": "Please review the durable proposed success definition/plan weekly-definition.json v2 (SHA256 5c008799a593f1dbf8ae84da54312528854131806df027a02aed8375dec484bb) before implementation. It retains your exact MANIFEST/OUTPUT schemas, host and actual-byte hash checks, separate per-employer latest-record/cohort-count calculations, sorted aggregate-only packet, sanitized rejection and all-or-nothing atomic output with old bytes preserved; adds operator instructions, bounded CLI/failure/privacy/isolation checks and unchanged earlier artifacts. Recommend a new standard-library wrapper over unchanged intake_report.py; manual copying risks wrong policy/stale/partial output, while a portal/scheduler is unnecessary/out of scope. Proposed weekly interpretation: full snapshots, no invented time filter/TTL; trusted operator binds inputs to employers and refreshes engineering evidence, keeps combined packet internal and shares only the recipient's aggregate report. Output aliases to protected resources are rejected; after failure preserved old output is NOT a new successful handoff. Engineer update 57e5b820/current peer result ca4c9ad5 verified Cedar r4 (3 participants/4 sessions/all consent) and Birch r8 (2/2/consent optional); I independently hash-matched both, so expected ready=1 for EACH employer, not a mixed cohort. Important unresolved limit: original cancelled peer mutation settlement receipt is inaccessible and NOT certified. I propose read-only consumption of these verified current bytes only\u2014no replay, mutation, lock release or claim to settle the old work. Approve this definition/plan for bounded local execution with that explicit limit, or require authorized original-settlement evidence before any consumption? Review approval will not be reported as implementation correctness, production readiness, or learning/consent/commercial evidence."
+        }
+      ],
+      "isBlocking": false
+    },
+    "response_event": null
+  },
+  "originalDelivery": {
+    "id": "1f2a3b05-a6cb-430e-b4b7-b1cd5845b1ac",
+    "event": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+    "state": "running",
+    "generation": 1,
+    "result_event": null,
+    "native_thread": "01a15a9b-6ef5-7572-9330-525824ee6d30",
+    "native_turn": "01a15acc-c941-71c1-8dc5-a09e03c713ff"
+  },
+  "workspace": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work",
+  "rubric": {
+    "criteria": [
+      "Proposal follows actual code/input inspection and distinguishes observed facts from business choices.",
+      "An informed human exchange resolves the operational workflow, privacy/distribution and failure behavior.",
+      "Separate employer identity and current policy provenance are explicit; reused labels/IDs cannot mix.",
+      "Viable approaches are compared with a reasoned choice appropriate to the bounded local handoff.",
+      "Consequential dependencies and failure modes have concrete mitigation or explicit unresolved decisions.",
+      "The success definition covers the supplied interface/output, actual evidence and preservation requirements.",
+      "The plan connects investigation, implementation, verification and deliverable evidence without claiming approval proves success.",
+      "QA scope and production/customer limits remain explicit; no needless new system is presumed necessary."
+    ],
+    "policy": "Coordinator is the disclosed scripted QA participant. Review actual artifacts/questions/source events. Choose only frozen response text; record all decisions. Artifact format is flexible. No prescribed number of questions or conversation length. At most one rejection/revision round; preserve failures, don't repair code or coach implementation."
+  },
+  "policy": "Record explicit review decision against exact available artifacts/question; no assumed proposal filename or automatic approval."
+}

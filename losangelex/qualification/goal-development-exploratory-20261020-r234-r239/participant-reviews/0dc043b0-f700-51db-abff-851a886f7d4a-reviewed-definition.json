@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "status": "proposed_for_review_not_implementation_approval",
+  "source_request": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+  "cancelled_predecessor": "b51b4645-1fec-4fd2-8812-5aa02e650c47 remains cancelled; no replay",
+  "objective": "A trusted Operations person can run a bounded local batch and hand off only the correct employer's aggregate language-practice readiness report, with verified policy provenance and no learner records.",
+  "investigation": {
+    "environment": "Python 3.12.3 available on enrolled host; standard library suffices; no network or scheduling needed",
+    "existing_implementation": "intake_report.py validates CSV/policy, selects latest per (cohort,learner), counts eligible cohorts, and emits aggregates; preserve its bytes and reuse its cohort calculation/parser",
+    "weekly_inputs": "Both CSVs have the original five fields but no employer field. Both reuse cohort team, and learner IDs overlap. Cedar has 4 rows/3 current learners, all consented with 4 sessions; Birch has 2 current learners, one consented, each with 2 sessions.",
+    "policy_dependency": "Old TEAM.json shared policy is historical. Current engineer evidence 57e5b820-0ce5-44ae-8dcf-c4ebdf9f824b and completed read-only peer result ca4c9ad5-88d6-4443-a89a-b4b097504289 verify current Cedar/Birch contents as of 2026-10-20T19:31:20Z. Both named policy files were independently read and hash-matched by this report agent. Original mutation settlement remains uncertified, not silently resolved.",
+    "interrupted_work": "Original peer delivery 3f1cea6e-4b41-4af3-bf11-658aeaa665c0 is terminal cancelled with no result event. No weekly implementation files exist in this workspace. Preserve original effects rather than replaying writes."
+  },
+  "verified_engineering_content": {
+    "hostId": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+    "cedar": {"path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-cedar.json", "sha256": "db43cab1a212bc9b0d2ede6ae4698e0c14821cabedf93f03227c943fccdf3c7f", "values": {"revision": 4, "minParticipants": 3, "minPracticeSessions": 4, "requiresAllConsent": true}},
+    "birch": {"path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy-weekly-birch.json", "sha256": "5ab56ef3f8c2d9e728003ac7960b9b6cd595dfc38997964291f9c2c8970319eb", "values": {"revision": 8, "minParticipants": 2, "minPracticeSessions": 2, "requiresAllConsent": false}},
+    "validation_scope": "Engineer reports both policy guard CLIs exit 0, invalid boolean fixture exit 1, 16 invalid in-memory cases rejected, alternate thresholds 0/1/7 accepted, files unchanged. These are attributed engineering results, not this report's correctness evidence.",
+    "currentness_limit": "Resource mapping binds employers, not a JSON employer field. No effective date, expiry, TTL or revision-monotonicity rule; hash identity is not continuing freshness. No pending change stated in material read.",
+    "original_receipt_limit": "Original peer delivery is cancelled/no result. Engineer could not access original permit/settlement receipt; original mutation settlement is NOT certified. Proposal is read-only use of independently verified current bytes, without further mutation, replay, reconciliation or release of original locks. If settlement certification is a prerequisite to use, stop for authorized administrator evidence; do not manufacture it."
+  },
+  "independently_expected_supplied_results": {
+    "birch": {"ready": 1, "cohorts": [{"cohort": "team", "learners": 2, "consented": 1, "eligible": true}]},
+    "cedar": {"ready": 1, "cohorts": [{"cohort": "team", "learners": 3, "consented": 3, "eligible": true}]}
+  },
+  "approaches": [
+    {"option": "Manual old CLI twice and manual copying", "assessment": "Small change but error-prone provenance, swapped policies/files, stale packets, and partial batches; does not enforce the new atomic contract."},
+    {"option": "New standard-library batch wrapper", "assessment": "Recommended: preserves original CLI, validates exact manifest and policy bytes, computes each employer separately, stages one complete packet and atomically replaces output only on success."},
+    {"option": "Portal/scheduler/distribution service", "assessment": "Unnecessary for one trusted local operator; adds access, retention and operational dependencies outside authorized scope; not implemented."}
+  ],
+  "contract_from_new_request": {
+    "cli": "python3 weekly_report.py MANIFEST OUTPUT",
+    "manifest_exact": {"employers": [{"employer": "string", "input": "absolutePath", "policy": {"hostId": "string", "path": "absolutePath", "sha256": "lowercase 64-hex SHA256"}}]},
+    "success_json_exact": {"employers": [{"employer": "string", "policy": {"revision": "integer", "hostId": "string", "path": "absolutePath", "sha256": "lowercase 64-hex SHA256"}, "report": {"ready": "integer eligible-cohort count", "cohorts": [{"cohort": "string", "learners": "integer", "consented": "integer", "eligible": "boolean"}]}}]},
+    "ordering": "Employers sorted by employer name; cohorts sorted by cohort name",
+    "isolation": "Process each employer's CSV independently, never concatenate or globally deduplicate; same cohort/learner strings may repeat",
+    "policy_verification": "Strict four-field policy schema, TEAM.json hostId equality and SHA256 of actual policy bytes. Hash and parse the same bytes. Manifest grants only listed local reads, never discovery or other-host access.",
+    "failure": "Reject malformed/duplicate manifest entries, bad inputs, unverified policy or publication failure: nonzero, sanitized diagnostics, no partial packet and existing output byte-for-byte intact",
+    "privacy": "Output aggregate reports only; no raw learner IDs in packets, diagnostics or documentation examples. Combined packet is Operations-only; recipients receive only their own report.",
+    "preservation": "No changes to prior implementation, inputs, outputs, TEAM.json, source inventory or engineering policies"
+  },
+  "proposed_interpretations_and_limits_for_review": [
+    {"topic": "Meaning of weekly", "evidence": "No week/as-of fields in either prescribed schema; prior parser uses updated_at only for deduplication", "proposal": "Full supplied snapshots; no invented date-window filtering, age cutoff or policy expiry. Operator records run/week outside exact JSON schema.", "alternative": "A time-filtered or expiry-aware report needs a separately agreed schema and business rule, and is not silently added."},
+    {"topic": "Employer/current-policy trust", "evidence": "CSV lacks employer identity and policies are pinned by operator-supplied metadata", "proposal": "Trusted operator verifies inventory mapping and refreshes engineer currentness evidence before each weekly run. Program proves listed policy bytes/schema/host, not business identity, consent truth, or perpetual currentness.", "alternative": "Stronger signed input identity/currentness registry would be a future authorization and engineering dependency."},
+    {"topic": "Publication safety", "evidence": "A preserved last-success packet can be mistaken for this week's result", "proposal": "Reject output aliasing a manifest/input/policy or protected earlier artifact (including symlinks/hardlinks); stage in the output directory, fsync then atomic replace only after all succeed. Operator must check exit status and never distribute preserved old bytes after failure.", "alternative": "Writing in place or publishing employers one at a time violates all-or-nothing semantics."},
+    {"topic": "Small cohorts and access", "evidence": "Supplied employers have only 3 and 2 current learners; exact schema retains counts", "proposal": "Retain requested exact counts without inventing suppression; keep all inputs and combined packet restricted to trusted Operations. Aggregation is not a guarantee against inference in small groups.", "alternative": "Privacy suppression requires a new agreed reporting rule; no external sending is performed."}
+  ],
+  "human_decision_trace": [
+    {"event": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f", "meaning": "New admitted operational decisions and required review-before-implementation; not proposal approval"},
+    {"event": "f13e0d75-eda9-4de4-9e35-576fef29ffea", "meaning": "Existing operational decisions remain authoritative; no extra production/customer authority. Does not individually approve proposed remaining interpretations or this definition."}
+  ],
+  "delivery_plan": [
+    "Retain read-only current policy verification and the unresolved original-settlement limitation; preserve source evidence and baseline hashes without replaying cancelled work.",
+    "Finalize this definition with engineering facts and request native participant review before writing implementation. Keep approval separate from correctness.",
+    "Add weekly_report.py, weekly-manifest.json, operator instructions and focused CLI tests without modifying earlier files.",
+    "Execute real two-employer CLI to weekly-packet.json; independently check exact schema, expected aggregates, sorting, provenance, isolation and privacy.",
+    "Run bounded invalid-batch tests with sentinel output: duplicate/invalid manifest, wrong host/hash/policy, malformed input and output aliases; verify output and all source bytes unchanged.",
+    "Re-run earlier 27 tests, verify final hashes and no staging leftovers, retain compact verification receipt and report only actual results."
+  ],
+  "completion_gates": [
+    "Participant has reviewed this durable definition/plan before implementation",
+    "Enrolled engineer evidence and actual current policy bytes are verified, not inferred from cancelled work; any permission to proceed is explicitly read-only and does not certify original settlement",
+    "Real CLI output and failed-batch preservation meet exact contract, independently verified",
+    "Operator workflow makes safe employer-only handoff, exit checking and stale-output handling clear",
+    "Earlier artifacts/resources and all input bytes remain unchanged",
+    "No scheduling, network, customer contact, production/service changes or open-ended testing"
+  ]
+}

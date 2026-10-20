@@ -1,0 +1,125 @@
+{
+  "at": 1792525079.3192112,
+  "sourceSha256": "7250e3ec92291f9ffa2f882efb7039f318eff8bb83573cb67d50c2e930ad95b3",
+  "originalDelivery": "1f2a3b05-a6cb-430e-b4b7-b1cd5845b1ac",
+  "originalEvent": "cc5a08b2-b831-4ab0-9d57-6a1ae0fbc72f",
+  "taskSubmissionCount": 0,
+  "nativeWorkerRestarts": 0,
+  "beforePids": {
+    "lax-agent-7501aa71-d5d99ed1f20a-reader.service": "3460704",
+    "lax-agent-7501aa71-d5d99ed1f20a-writer.service": "3460711",
+    "lax-agent-7501aa71-d5d99ed1f20a-responder.service": "3460709",
+    "lax-agent-7501aa71-d62a6378559a-reader.service": "3460713",
+    "lax-agent-7501aa71-d62a6378559a-writer.service": "3460721",
+    "lax-agent-7501aa71-d62a6378559a-responder.service": "3460719",
+    "lax-host-7501aa71-cd1cf7b2.service": "3460684",
+    "lax-collaboration-7501aa71-cd1cf7b2.service": "3460685"
+  },
+  "baselineUsage": {
+    "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731": {
+      "total_tokens": 4590051,
+      "input_tokens": 4549546,
+      "cached_input_tokens": 4273536,
+      "output_tokens": 40505,
+      "reasoning_output_tokens": 8932,
+      "files": [
+        {
+          "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/native-reader/sessions/2026/10/20/rollout-2026-10-20T20-38-19-01a15a9b-6d68-79b0-8821-510aa4a50b19.jsonl",
+          "total": {
+            "input_tokens": 1122863,
+            "cached_input_tokens": 1050624,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 5889,
+            "reasoning_output_tokens": 249,
+            "total_tokens": 1128752
+          },
+          "usageUpdates": 32,
+          "compactionRecords": 0
+        },
+        {
+          "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/native-writer/sessions/2026/10/20/rollout-2026-10-20T20-38-19-01a15a9b-6ef5-7572-9330-525824ee6d30.jsonl",
+          "total": {
+            "input_tokens": 3210594,
+            "cached_input_tokens": 3064960,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 32791,
+            "reasoning_output_tokens": 7906,
+            "total_tokens": 3243385
+          },
+          "usageUpdates": 46,
+          "compactionRecords": 0
+        },
+        {
+          "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/native-responder/sessions/2026/10/20/rollout-2026-10-20T20-38-19-01a15a9b-6c32-7e60-b3aa-96b38f717bea.jsonl",
+          "total": {
+            "input_tokens": 216089,
+            "cached_input_tokens": 157952,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1825,
+            "reasoning_output_tokens": 777,
+            "total_tokens": 217914
+          },
+          "usageUpdates": 20,
+          "compactionRecords": 0
+        }
+      ],
+      "updates": 98,
+      "compactions": 0
+    },
+    "d62a6378-559a-4ece-bcd7-4ba853e7d712": {
+      "total_tokens": 2174608,
+      "input_tokens": 2150708,
+      "cached_input_tokens": 1945728,
+      "output_tokens": 23900,
+      "reasoning_output_tokens": 5435,
+      "files": [
+        {
+          "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/native-reader/sessions/2026/10/20/rollout-2026-10-20T20-38-19-01a15a9b-6dfa-7b60-afd7-b8272374bbaf.jsonl",
+          "total": {
+            "input_tokens": 649922,
+            "cached_input_tokens": 566912,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 3755,
+            "reasoning_output_tokens": 747,
+            "total_tokens": 653677
+          },
+          "usageUpdates": 32,
+          "compactionRecords": 0
+        },
+        {
+          "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/native-writer/sessions/2026/10/20/rollout-2026-10-20T20-38-19-01a15a9b-6f2d-7221-af4f-25e9aa1cc49f.jsonl",
+          "total": {
+            "input_tokens": 1202574,
+            "cached_input_tokens": 1115392,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 16251,
+            "reasoning_output_tokens": 3290,
+            "total_tokens": 1218825
+          },
+          "usageUpdates": 27,
+          "compactionRecords": 0
+        },
+        {
+          "path": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/native-responder/sessions/2026/10/20/rollout-2026-10-20T20-38-19-01a15a9b-6d34-7ff1-a724-32a0ba3cfc5f.jsonl",
+          "total": {
+            "input_tokens": 298212,
+            "cached_input_tokens": 263424,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 3894,
+            "reasoning_output_tokens": 1398,
+            "total_tokens": 302106
+          },
+          "usageUpdates": 22,
+          "compactionRecords": 0
+        }
+      ],
+      "updates": 81,
+      "compactions": 0
+    }
+  },
+  "extendedObservationBounds": {
+    "seconds": 600,
+    "additionalReportedNativeTokens": 4000000
+  },
+  "originalBudgetClaim": "Original4M cached-inclusive pilot window extended at3.48M before implementation. Do not claim completion within original pilot budget or comparative efficiency. Frozen semantic checks and participant choices unchanged."
+}

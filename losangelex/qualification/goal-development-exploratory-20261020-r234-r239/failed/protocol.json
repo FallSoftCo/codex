@@ -1,0 +1,97 @@
+{
+  "schema": "lax-goal-discovery/v1",
+  "frozenAt": 1792523658.5876448,
+  "objective": "Test substantive discovery and collaborative goal development before committing to a feasible plan, then actual agreed delivery on a two-employer local workflow.",
+  "userClarification": "Complex work should naturally develop a deep conversation that resolves consequential details/pitfalls; do not optimize for short conversations or impose long ones on routine tasks.",
+  "design": "Single bounded continuation, same ordinary-r228 six native histories and SDK111/H77/f28,gpt-6.1-sol/xhigh. No runtime/prompt-default changes. Workflow explicitly requested; this cannot prove spontaneous default adoption or causal superiority.",
+  "actors": {
+    "reporter": {
+      "authority": "7501aa71-9408-4cff-a0b4-4de130f9bae2",
+      "agent": "d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731",
+      "host": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+      "room": "785ccdca-3f34-4c9b-9d6f-6070295d9cbc",
+      "config": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/agent.json",
+      "workspace": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work",
+      "linuxUser": "hglobal-7501aa71-d5d99ed1f20a",
+      "units": {
+        "reader": "lax-agent-7501aa71-d5d99ed1f20a-reader.service",
+        "writer": "lax-agent-7501aa71-d5d99ed1f20a-writer.service",
+        "responder": "lax-agent-7501aa71-d5d99ed1f20a-responder.service"
+      },
+      "installation": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/installation.json",
+      "infrastructure": [
+        "lax-host-7501aa71-cd1cf7b2.service",
+        "lax-collaboration-7501aa71-cd1cf7b2.service"
+      ],
+      "state": "prepared-stopped",
+      "runtime": "SDK111/H77"
+    },
+    "engineer": {
+      "authority": "7501aa71-9408-4cff-a0b4-4de130f9bae2",
+      "agent": "d62a6378-559a-4ece-bcd7-4ba853e7d712",
+      "host": "cd1cf7b2-636f-4947-aad7-2d0ef1f03e2d",
+      "room": "785ccdca-3f34-4c9b-9d6f-6070295d9cbc",
+      "config": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/agent.json",
+      "workspace": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work",
+      "linuxUser": "hagent-7501aa71-d62a6378559a",
+      "uid": 848,
+      "gid": 843,
+      "units": {
+        "reader": "lax-agent-7501aa71-d62a6378559a-reader.service",
+        "writer": "lax-agent-7501aa71-d62a6378559a-writer.service",
+        "responder": "lax-agent-7501aa71-d62a6378559a-responder.service"
+      },
+      "installation": "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/installation.json",
+      "state": "prepared-stopped",
+      "modelsStarted": 0
+    }
+  },
+  "budgets": {
+    "seconds": 1200,
+    "addedReportedNativeTokens": 5000000,
+    "participantAnswers": 5
+  },
+  "modelRequestsByOperator": 1,
+  "peerActivation": "Peer services ready with their same history; only reporter's real native peer request may start engineering inference. Operator must not submit an engineering task/result.",
+  "participant": "Disclosed scripted QA human fixture via native human API. Not actual end-user usability or independent semantic validation.",
+  "reviewPolicy": "Every native question recorded; coordinator selects frozen answer categories or approves/rejects exact available proposal under frozen rubric. No fallback unsolicited facts or implementation coaching.",
+  "primaryEvidence": [
+    "source-informed discovery and human tradeoff conversation before implementation",
+    "reviewed feasible plan/definition with alternatives and consequential failure behavior",
+    "actual employer isolation/current-policy CLI outcome",
+    "failed batch preserves last output without identifier leak",
+    "old artifacts retained; same persistent contexts; no undisclosed interventions"
+  ],
+  "frozenInputs": {
+    "oldArtifacts": {
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/verification-receipt.json": "b0341dde52233b00d35e1050187dc6fd78d252c1b8d23b4c992da82c474943d7",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/intake.csv": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/intake_report.py": "aad8f47f1b268f3a60805183a0919bf9e373c357494dd5f35ea53ed3dbced455",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/test_intake_report.py": "c79e3f84be87928c74704b91b5ecf193558d6296d932271c73f95bf8ae56e6a1",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/TEAM.json": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/sample-report.json": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/AGENTS.md": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/README.md": "8305036d1865946040a673f7319173781693b12c4eefc47c882da39343b6a05b",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/verification-receipt.json": "8f1176812eda1ea2644ffa2d07254a5f3408122614530f4ba67be44b77db2e56",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy_guard.py": "2e6692e702fdd63fbef96a162ad8d29902b86ef8771434f29699a99317e17da4",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/test_policy_guard.py": "c1ad9dcfb0692a68c9e1df45397c49489616e6298a95bd1b357fe145cb4879df",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/TEAM.json": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/policy.json": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/AGENTS.md": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/ENGINEERING-REQUIREMENTS.md": "d42ff3a090727b1c94bbacb3afa1aa245f4e9309ea936a5c43c476ec1fe02eac",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d62a6378-559a-4ece-bcd7-4ba853e7d712/home/work/invalid-policy.json": "54a6c13b70b318554141f2362f9b2beb55aab8ae24eec56ccf5c8a96144670f3"
+    },
+    "weeklyInputs": {
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-inputs/cedar.csv": "45d1616d17a5e08260202f65f45ec93d3c16bd7bc082bcd3f5469c07947eb59d",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-inputs/birch.csv": "c38f615e9058bf0b00de17b0cc9fe37968d634253c67c1bd68aaa2ac54bb5cdc",
+      "/var/lib/harness/7501aa71-9408-4cff-a0b4-4de130f9bae2/purpose-agents/d5d99ed1-f20a-4fc3-8655-ee1c0d8ad731/home/work/weekly-inputs/README.md": "94b9d35cbda97d16473e54dc549795fd094f1812de21428806395b924cb69796"
+    },
+    "engineeringPrivateRequirementsSha256": "f929ffa8c52dbba8ea30e25475a16920d0705bf1dfd583a9c9f459069277d9fb"
+  },
+  "limits": [
+    "N1 prompted workflow feasibility, not general superiority or natural default behavior.",
+    "Subjective proposal review is coordinator's scripted participant judgment; actual output independently executed.",
+    "Two employers are QA fixtures, not customer data or a production tenancy/security proof.",
+    "No long conversation quota; evaluate consequential uncertainty resolved and actual agreed end state."
+  ]
+}

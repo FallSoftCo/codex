@@ -1,0 +1,12 @@
+{
+  "at": 1792524719.856696,
+  "reviewerKind": "coordinator-scripted-QA-participant",
+  "selectedFiles": [
+    "participant-no-new-decisions.txt"
+  ],
+  "kind": "retain-existing-decisions-before-proposal",
+  "reason": "Proposed baseline retains the existing full-file/latest-record semantics rather than inventing a time filter; exact output schema provides no as-of field. Trusted operator mapping and local explicit host/path/hash choices are already in frozen facts; preservation of manifest/input/policy/earlier artifacts is already required. No new business fact is introduced. Agent should make these limits explicit in its actual proposal for review. This is not proposal approval.",
+  "remainingReview": "Check that currentness is attributed to fresh engineering evidence, not inferred from hash; output is operator-private and old output after rejection is not claimed current.",
+  "actualAttentionId": "d8d5e754-2d7c-55b0-a672-1ca3b5a95b1e",
+  "criteriaChanged": false
+}

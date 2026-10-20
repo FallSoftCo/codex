@@ -1,0 +1,21 @@
+{
+  "at": 1792524515.8260036,
+  "hashes": {
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-source-redirect.txt": "1100150909c5fbf17cfa53169429e2fcb7ebf67de785170e82fddc32a3c22a8f",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-no-new-decisions.txt": "69b0c7b6fc01eb8dd7ada3ae753725f61610d572a8e5ae12d28a4e70f569195d",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-rejection.txt": "5944c87203761e43e784edd595b7e0eae2ac586c39fb799156f1c3ea494c2438",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-approval.txt": "f2e05403591bb3b06176e861f2c84734c90bebc85f443c3eb421e7179ca31244",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/request.txt": "94796cb167ef5e30cb5a5d4004fa7067cb4a8f736e692b49e7887286ee36a139",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-facts.txt": "f584b1112d2510de399fdc37853dd07343bf74d9ca8cb27e8b5fe64dd2db9ab7",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/protocol.json": "d8875147479d8d4af50cd67fcaf7b8d2afccc6cd7ffa87d6729d7ae90ce40b57",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/participant-rubric.json": "4809875d8972e26c91bbdabbd2dc1204d5509241ff531fcda679abfc3949302c",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/outcome_scorer.py": "1fbb4a57896cdcff7fb81626f0d2c9a4fa069cfd7c3611171c66fde513c1e74f",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/oracle-controls.json": "7c9b78c88461f7b939ecd1fd7f9a61440f5d60268e8966b6f3160fdaf888337e",
+    "/var/lib/lax-operating-model-comparison-20261020-r228/goal-discovery-continuation-r237/answer-encoding-control.json": "99f1d742dd26f98737a0de4ce8bf15de0f335041dd75deccf08f07b12e26b036",
+    "/aosp/development/lax-three-context-20261018-r01/qualification/run_goal_discovery_continuation_r237.py": "2fa6cd22458bddb21fd71ba0b14e5b3fcbf0249f79688616b8fce98c568f24e1"
+  },
+  "allFrozenBeforeNewRequest": true,
+  "oldFailedAttemptRetained": true,
+  "criteriaUnchanged": true,
+  "modelsStarted": 0
+}

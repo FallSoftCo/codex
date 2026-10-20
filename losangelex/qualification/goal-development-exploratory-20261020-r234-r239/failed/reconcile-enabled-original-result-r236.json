@@ -1,0 +1,35 @@
+{
+  "at": 1792524446.12923,
+  "exitCode": 0,
+  "stderr": "Running as unit: lax-qa-original-writer-reconcile-r236b.service; invocation ID: 529324c9761d43949a4c52eca8496f6d\nFinished with result: success\nMain processes terminated with: code=exited/status=0\nService runtime: 4.193s\nCPU time consumed: 4.143s\nMemory peak: 256.0K\nMemory swap peak: 0B\n",
+  "nativeUsageUnchanged": true,
+  "wakeAfter": {
+    "fingerprint": "2ccb2ced0126435de46a3f9544784a9eed2e66cd061473abc113cba0e19fbb10",
+    "state": "finished",
+    "nativeThread": "01a15a9b-6f2d-7221-af4f-25e9aa1cc49f",
+    "nativeTurn": "01a15ac1-3fac-7520-8f57-5b8e76d5cd25",
+    "permitId": "4f0e401b-28c0-516f-be64-4e9f7a38de7d",
+    "error": "Hollywood 403: Access denied",
+    "turn": {
+      "id": "01a15ac1-3fac-7520-8f57-5b8e76d5cd25",
+      "rootTurnId": "01a15ac1-3fac-7520-8f57-5b8e76d5cd25",
+      "items": [],
+      "itemsView": "summary",
+      "status": "interrupted",
+      "error": null,
+      "startedAt": 1792523976,
+      "completedAt": 1792524034,
+      "durationMs": 57552
+    },
+    "recovered": true
+  },
+  "normalUnitPids": {
+    "lax-agent-7501aa71-d5d99ed1f20a-reader.service": "0",
+    "lax-agent-7501aa71-d5d99ed1f20a-writer.service": "0",
+    "lax-agent-7501aa71-d5d99ed1f20a-responder.service": "0",
+    "lax-agent-7501aa71-d62a6378559a-reader.service": "0",
+    "lax-agent-7501aa71-d62a6378559a-writer.service": "0",
+    "lax-agent-7501aa71-d62a6378559a-responder.service": "0"
+  },
+  "originalTaskRemainsCancelled": true
+}

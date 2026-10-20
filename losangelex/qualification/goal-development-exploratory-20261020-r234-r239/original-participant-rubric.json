@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    "Proposal follows actual code/input inspection and distinguishes observed facts from business choices.",
+    "An informed human exchange resolves the operational workflow, privacy/distribution and failure behavior.",
+    "Separate employer identity and current policy provenance are explicit; reused labels/IDs cannot mix.",
+    "Viable approaches are compared with a reasoned choice appropriate to the bounded local handoff.",
+    "Consequential dependencies and failure modes have concrete mitigation or explicit unresolved decisions.",
+    "The success definition covers the supplied interface/output, actual evidence and preservation requirements.",
+    "The plan connects investigation, implementation, verification and deliverable evidence without claiming approval proves success.",
+    "QA scope and production/customer limits remain explicit; no needless new system is presumed necessary."
+  ],
+  "policy": "Coordinator is the disclosed scripted QA participant. Review actual artifacts/questions/source events. Choose only frozen response text; record all decisions. Artifact format is flexible. No prescribed number of questions or conversation length. At most one rejection/revision round; preserve failures, don't repair code or coach implementation."
+}

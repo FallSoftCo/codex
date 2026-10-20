@@ -1,0 +1,16 @@
+{
+  "at": 1792524360.2396266,
+  "exitCode": 1,
+  "stdout": "",
+  "stderr": "Running as unit: lax-qa-original-writer-reconcile-r236.service; invocation ID: 186b5357076548fdb53c207d0f189506\nFinished with result: exit-code\nMain processes terminated with: code=exited/status=1\nService runtime: 4.755s\nCPU time consumed: 4.644s\nMemory peak: 256.0K\nMemory swap peak: 0B\n",
+  "nativeUsageUnchanged": true,
+  "wakeAfter": {
+    "fingerprint": "2ccb2ced0126435de46a3f9544784a9eed2e66cd061473abc113cba0e19fbb10",
+    "state": "unknown",
+    "nativeThread": "01a15a9b-6f2d-7221-af4f-25e9aa1cc49f",
+    "nativeTurn": "01a15ac1-3fac-7520-8f57-5b8e76d5cd25",
+    "permitId": "4f0e401b-28c0-516f-be64-4e9f7a38de7d",
+    "error": "Hollywood 403: Access denied"
+  },
+  "reconciliation": null
+}

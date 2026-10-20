@@ -1,0 +1,6 @@
+{
+  "at": 1792524033.879624,
+  "error": "HTTPError",
+  "detail": "HTTP Error 403: Forbidden",
+  "action": "Retain accepted original receipts; no retry, artifact repair or invented success."
+}

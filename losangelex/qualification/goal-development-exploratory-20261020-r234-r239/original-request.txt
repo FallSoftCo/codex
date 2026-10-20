@@ -1,0 +1,15 @@
+We need the language-practice readiness reporting to become a trustworthy weekly
+handoff for two separate employers, Cedar and Birch, starting from the existing report.
+Make this usable by our operations person without mixing their data or handing out learner
+records. The source inventory is weekly-inputs/README.md; engineering owns current policy.
+Before committing to a solution, investigate the actual code, inputs, available environment
+and relevant engineering facts. Work through consequential ambiguities, viable approaches,
+dependencies and likely failure modes with the QA participant. Bring informed questions
+about intent and tradeoffs rather than asking the participant to inspect code for you.
+Develop a durable, reviewable success definition and feasible plan; the form is your choice.
+Request participant review before implementation. Then deliver the agreed bounded local
+solution and verify the actual end state. Do not equate proposal approval with correctness.
+Preserve all earlier implementation/input/artifacts. No customer contact, actual scheduled
+jobs, production/services/phone changes, new agents, or open-ended testing.
+This is a new finite QA continuation, not replaying the earlier report request.
+
