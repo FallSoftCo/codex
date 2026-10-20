@@ -1,7 +1,7 @@
 {
   "schema": "lax-purpose-image-upgrade-candidate/v1",
-  "at": 1792457127.1409929,
-  "state": "SDK110 source candidate; actual offline upgrade/rollback qualification still pending",
+  "at": 1792458689.7824123,
+  "state": "Qualified bounded offline native image upgrade and rollback; private Global runtime rollout pending",
   "purpose": "Deliver a newly qualified immutable native image to an existing three-context installation through its existing paused/offline upgrade transaction. Do not overwrite shared release paths or rebuild the identity.",
   "inputs": [
     "Optional binary plus mandatory matching expectedBinarySha256",
@@ -25,5 +25,32 @@
     "No service/model starts or accepted-work replay",
     "Private Global cutover only after those checks and a fresh quiet-state/rollback preflight"
   ],
-  "productionChanged": false
+  "productionChanged": false,
+  "observations": {
+    "at": 1792457891.3988776,
+    "state": "offline-native-image-upgrade-and-rollback-passed",
+    "agent": "d1a5d34e-7a4d-4e4c-b479-85fc941bd3ce",
+    "operation": "8936fe1b-6fa2-47e4-8b86-09b7fb32ec79",
+    "nativeImage": "/opt/lax-native-pilot-20261020-r172/native/bin/codex-app-server",
+    "binarySha256": "f28cb6ba879472fcbd2538cb0644813ec6d73dda56c9232cc6988db28cb4c552",
+    "originalFileHashes": {
+      "/var/lib/harness/f96e5615-0e6d-48d3-93b6-dc54393d5c2e/purpose-agents/d1a5d34e-7a4d-4e4c-b479-85fc941bd3ce/installation.json": "7b50918f43c95e456e4449a1ecbbb0eccc32776d7c012089c161f9fa973fbccb",
+      "/var/lib/harness/f96e5615-0e6d-48d3-93b6-dc54393d5c2e/purpose-agents/d1a5d34e-7a4d-4e4c-b479-85fc941bd3ce/home/agent.json": "847483999bd2c63106f0e793e1c031f9055ac826821f3cfdb52dd94adb0d2991",
+      "/var/lib/harness/f96e5615-0e6d-48d3-93b6-dc54393d5c2e/purpose-agents/d1a5d34e-7a4d-4e4c-b479-85fc941bd3ce/readiness.json": "e449ca10de0c68b96da7f51db311014cf232f334f376bd4b3183b600a6366d10",
+      "/etc/systemd/system/lax-agent-f96e5615-d1a5d34e7a4d-reader.service": "1b436eb3522b9427315033654657b1bc21f0aa2b3494d3e5b019cf13baedd34e",
+      "/etc/systemd/system/lax-agent-f96e5615-d1a5d34e7a4d-writer.service": "d08a0a5a0ca6ed0b2ac428829da9dcafbe34f2dd03d13e6a3ce16d2dc3964723",
+      "/etc/systemd/system/lax-agent-f96e5615-d1a5d34e7a4d-responder.service": "2cc4bb583563eea34521883f2e1f0e6e49b30ce3b04769504ffb3b0f8f18cd3a"
+    },
+    "retainedFileCount": 95,
+    "inferencePermitCount": 4,
+    "servicesStarted": 0,
+    "modelPermitsAdded": 0,
+    "scope": "Real installed3context identity, private API/canonical readiness and actual native package preflight under execution UID. No actual model start with upgraded SDK110 and no production/pilot mutation."
+  },
+  "limits": [
+    "No actual inference with SDK110 in this offline case",
+    "Rollback qualified only with stopped services and unchanged canonical/history state",
+    "No production or private Global changes in this qualification",
+    "Native package contains qualified e1915bf Rust product; current later revisions are test, connector and receipt changes"
+  ]
 }
