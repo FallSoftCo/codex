@@ -1,0 +1,44 @@
+{
+  "schema": "lax-native-history-recovery-investigation/v1",
+  "at": 1792454796.5580204,
+  "status": "Candidate source; unqualified. Do not deploy as a completed recovery fix.",
+  "objective": "Keep real Hollywood-native reader/writer/responder work usable across crash and queued primary input, without replaying uncertain effects.",
+  "failedBaseline": {
+    "root": "/var/lib/lax-three-context-20261018-r01/native-reader-canonical-fault-r135",
+    "request": "116766c6-ad43-4e57-b314-1a79cbe0fdba",
+    "delivery": "53847518-6514-4c2e-9e2c-6ddcc671344f",
+    "state": "500s failed; cancelled unclaimed generation0 and all three services stopped; do not resume"
+  },
+  "nativeDiagnostic": {
+    "root": "/var/lib/lax-three-context-20261018-r01/native-reader-phase-fault-r148",
+    "request": "06af89f0-2b02-4822-9ef1-89326b82b299",
+    "delivery": "d1850e9f-712a-45df-9497-892f3efc47dd",
+    "state": "120s failed diagnostic retained; cancelled unclaimed and placement paused,3services stopped",
+    "nativeHead": "a06d6961d55439378f74034a73b504c1f76e9e48",
+    "nativeSha256": "eda744fe062d0ecb387d28b60ee485c2eb0fa9297cd566ee39c18000de69b144"
+  },
+  "observations": [
+    "Both baseline and diagnostic stderr contain Custom tool call output is missing panic at core/src/util.rs:85.",
+    "World state and skill contributors complete in diagnostic; prior world-state-stall hypothesis disproven.",
+    "Prompt normalization panics while building next inference input from a custom tool call whose output was lost at the forced crash.",
+    "Task panic escapes native completion path; active turn remains without terminal result.",
+    "Native V8 build first failed404 because maintainer builder omitted existing resolver. Original failure retained; corrected builder used scripts/codex_package/v8.py with official pinned checksums.",
+    "Diagnostic fixture human display name initially conflicted409. Requested UUID absent. Unique-name corrected administrative operation retained; no models or user task at correction."
+  ],
+  "candidateChanges": [
+    "At restored-history boundary, supplement only in-memory model view with stable unknown-outcome notices for missing function/custom/shell call outputs. Keep raw recorded rollout unchanged.",
+    "Known outputs retain their original contents; live-history invariant checks remain.",
+    "Catch panic at native task-run boundary and follow existing terminal error lifecycle. No automatic tool/turn retry."
+  ],
+  "criteriaBeforeRelease": [
+    "Targeted native resume/model-wire regression; confirms unknown notice, known output preservation, no old effect execution and terminal continuation.",
+    "Controlled native Tokio task panic produces Error and failed terminal event; active turn clears.",
+    "New actual human-API Hollywood/native three-context crash workflow completes original request and independently verified artifact including late input. Retain uncertain input journal and history identities.",
+    "No source or receipt edits to fabricate semantic pass; no production/pilot changes."
+  ],
+  "scopeLimits": [
+    "Wire fixture and lifecycle regression tests are mechanical evidence; do not imply model relevance, autonomous recovery or production readiness.",
+    "Original failed cohorts remain failed; no retries of external effects authorized by missing tool output.",
+    "No new compaction/multi-host/physical phone proof yet."
+  ]
+}

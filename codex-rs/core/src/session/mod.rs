@@ -1963,6 +1963,19 @@ impl Session {
             .zip(metadata)
             .map(|(item, metadata)| ResponseItemEnvelope { item, metadata })
             .collect();
+        // Restored history has no live executor owning its unfinished calls.
+        // Preserve the recorded prefix and attach explicit unknown-outcome
+        // notices only to this in-memory view, before ordinary prompt invariants.
+        let recovered_calls = crate::context_manager::ensure_call_outputs_present(
+            &mut history,
+            crate::context_manager::MissingCallOutputPolicy::ReconstructedHistory,
+        );
+        if recovered_calls > 0 {
+            warn!(
+                recovered_calls,
+                "restored missing tool outputs as unknown; no operations replayed"
+            );
+        }
         let context = crate::guardian::GuardianReviewContext::from(turn_context);
         let (_, reviewer) = crate::guardian::resolve_review_model(self, &context).await;
         let reviewer_compaction_hash = reviewer.comp_hash.clone();

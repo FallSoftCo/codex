@@ -371,3 +371,112 @@ async fn resume_model_switch_is_not_duplicated_after_pre_turn_override() -> Resu
 
     Ok(())
 }
+
+/// A restored tool invocation is not a live executor or evidence of a completed
+/// side effect. The next model request must preserve that uncertainty and run.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resume_with_unresolved_custom_call_preserves_unknown_outcome() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let initial = test_codex()
+        .with_thread_store(Arc::new(InMemoryThreadStore::default()))
+        .build_with_auto_env(&server)
+        .await?;
+    initial.codex.shutdown_and_wait().await?;
+    let mut context = initial
+        .thread_store
+        .load_latest_model_context(LoadThreadHistoryParams {
+            thread_id: initial.session_configured.thread_id,
+            include_archived: true,
+        })
+        .await?;
+    let original_call: codex_protocol::models::ResponseItem = serde_json::from_value(
+        serde_json::json!({
+            "type": "custom_tool_call",
+            "id": "ctc_unresolved_resume",
+            "call_id": "unresolved-resume-call",
+            "name": "apply_patch",
+            "input": "*** Begin Patch\n*** Add File: replay-must-not-execute.txt\n+unexpected\n*** End Patch"
+        }),
+    )?;
+    context.items.push(codex_history::RolloutItem::ResponseItem(
+        codex_history::ResponseItemEnvelope::new(original_call.clone()),
+    ));
+    let completed_call: codex_protocol::models::ResponseItem =
+        serde_json::from_value(serde_json::json!({
+            "type": "function_call", "call_id": "completed-resume-call",
+            "name": "historical_read", "arguments": "{}"
+        }))?;
+    let completed_output: codex_protocol::models::ResponseItem =
+        serde_json::from_value(serde_json::json!({
+            "type": "function_call_output", "call_id": "completed-resume-call",
+            "output": "original recorded result"
+        }))?;
+    for item in [completed_call, completed_output] {
+        context.items.push(codex_history::RolloutItem::ResponseItem(
+            codex_history::ResponseItemEnvelope::new(item),
+        ));
+    }
+    let resumed = initial
+        .thread_manager
+        .resume_thread_with_history(
+            initial.config.clone(),
+            InitialHistory::Resumed(ResumedHistory {
+                history_revision: None,
+                conversation_id: context.thread_id,
+                history: Arc::new(context.items),
+                rollout_path: initial.session_configured.rollout_path.clone(),
+            }),
+            initial.thread_manager.auth_manager(),
+            /*parent_trace*/ None,
+            ClientMcpExtensions::default(),
+        )
+        .await?;
+    let response = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("resume-answer", "Recovered with unknown tool outcome."),
+            ev_completed("resume-answer"),
+        ]),
+    )
+    .await;
+    resumed
+        .thread
+        .start_or_steer_turn(TurnInputRequest::user_input(vec![UserInput::Text {
+            text: "Continue using the original task and receipts.".into(),
+            text_elements: Vec::new(),
+        }]))
+        .await?;
+    wait_for_event(&resumed.thread, |event| {
+        matches!(event, EventMsg::TurnComplete(_))
+    })
+    .await;
+    let request = response.single_request();
+    let output = request.custom_tool_call_output("unresolved-resume-call");
+    let text = output["output"].as_str().expect("explicit recovery notice");
+    assert!(text.starts_with("Tool outcome unknown:"));
+    assert!(text.contains("not a tool result"));
+    assert!(text.contains("do not repeat the operation"));
+    assert_eq!(
+        request.function_call_output("completed-resume-call")["output"],
+        serde_json::json!("original recorded result")
+    );
+    assert_eq!(
+        request
+            .input()
+            .iter()
+            .filter(|item| item["type"] == "custom_tool_call_output"
+                && item["call_id"] == "unresolved-resume-call")
+            .count(),
+        1
+    );
+    assert!(
+        !initial
+            .cwd
+            .path()
+            .join("replay-must-not-execute.txt")
+            .exists()
+    );
+    resumed.thread.shutdown_and_wait().await?;
+    Ok(())
+}

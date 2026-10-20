@@ -494,3 +494,57 @@ fn emit_compact_metric_records_auto_local() {
         ])
     );
 }
+
+struct PanickingTask;
+
+impl SessionTask for PanickingTask {
+    fn kind(&self) -> TaskKind {
+        TaskKind::Regular
+    }
+
+    fn span_name(&self) -> &'static str {
+        "session_task.panicking"
+    }
+
+    async fn run(
+        self: Arc<Self>,
+        _session: Arc<Session>,
+        _turn_context: Arc<TurnContext>,
+        _input: Vec<TurnInput>,
+        _cancellation_token: CancellationToken,
+    ) -> SessionTaskResult {
+        panic!("controlled native task failure");
+    }
+}
+
+#[tokio::test]
+async fn panicked_task_emits_terminal_failure_and_clears_active_turn() {
+    let (session, turn_context, events) = make_session_and_context_with_rx().await;
+    session
+        .spawn_task(Arc::clone(&turn_context), Vec::new(), PanickingTask)
+        .await;
+    let observed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let mut error_seen = false;
+        while let Ok(event) = events.recv().await {
+            match event.msg {
+                codex_protocol::protocol::EventMsg::Error(error) => {
+                    assert!(error.message.contains("Native turn task panicked"));
+                    error_seen = true;
+                }
+                codex_protocol::protocol::EventMsg::TurnComplete(event) => {
+                    assert!(
+                        event.error.is_some(),
+                        "a panic must not report successful completion"
+                    );
+                    return error_seen;
+                }
+                _ => {}
+            }
+        }
+        false
+    })
+    .await
+    .expect("panicked task must produce a terminal event");
+    assert!(observed);
+    assert!(session.active_turn.lock().await.is_none());
+}

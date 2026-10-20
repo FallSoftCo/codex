@@ -4,6 +4,7 @@ mod regular;
 mod review;
 mod user_shell;
 
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -11,6 +12,7 @@ use std::time::Instant;
 use codex_diagnostics::Gauge;
 use codex_exec_server::ExecutorCapabilityDiscoveryV2Cache;
 use codex_extension_api::ThreadIdleCause;
+use futures::FutureExt;
 use futures::future::BoxFuture;
 use tokio::select;
 use tokio::sync::Mutex;
@@ -384,15 +386,26 @@ impl Session {
         let storage_originator = AuthStorageOriginator::from_client_name(&turn_context.originator);
         let task_future = async move {
             let ctx_for_finish = Arc::clone(&ctx);
-            let task_result = task_for_run
-                .run(
+            // A panicked turn must follow the same error/terminal lifecycle as
+            // other native failures. Keeping the service alive is not evidence
+            // that its execution future is still running. Never retry here.
+            let task_result = AssertUnwindSafe(
+                task_for_run.run(
                     Arc::clone(&session),
                     ctx,
                     task_input,
                     task_cancellation_token.child_token(),
-                )
-                .instrument(trace_span!("session_task.run"))
-                .await;
+                ),
+            )
+            .catch_unwind()
+            .instrument(trace_span!("session_task.run"))
+            .await
+            .unwrap_or_else(|_| {
+                Err(codex_protocol::error::CodexErr::Fatal(
+                    "Native turn task panicked. Tool outcomes may be unknown; inspect original                      receipts before retrying."
+                        .to_string(),
+                ))
+            });
             let sess = Arc::clone(&session);
             // Private reviewers save their transcript together with the terminal event.
             // Errors and cancellation retain their existing save path.

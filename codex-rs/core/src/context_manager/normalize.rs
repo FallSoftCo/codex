@@ -18,7 +18,25 @@ use tracing::info;
 // Changing this value would change model-visible IDs and invalidate prompt caches.
 const SYNTHETIC_OUTPUT_ID_NAMESPACE: Uuid = Uuid::from_u128(0x90d38d3e_6a5b_4d52_bfe2_2f1e634bfac4);
 
-pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>) {
+/// Whether a missing output is a live-history invariant violation or a restored
+/// snapshot whose executor/result may have been lost. Restoring a snapshot never
+/// establishes whether the original side effect happened.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MissingCallOutputPolicy {
+    RuntimeHistory,
+    ReconstructedHistory,
+}
+
+pub(crate) fn ensure_call_outputs_present(
+    items: &mut Vec<ResponseItemEnvelope>,
+    policy: MissingCallOutputPolicy,
+) -> usize {
+    let missing_output = match policy {
+        MissingCallOutputPolicy::RuntimeHistory => "aborted",
+        MissingCallOutputPolicy::ReconstructedHistory => {
+            "Tool outcome unknown: this restored history contains the call but no recorded output.              The original operation may have run or may still be running elsewhere.              This is a recovery notice, not a tool result. Inspect the original operation's              receipts and resulting state before deciding whether any retry is safe;              do not repeat the operation solely because its output is missing."
+        }
+    };
     let mut function_output_ids = HashSet::new();
     let mut tool_search_output_ids = HashSet::new();
     let mut custom_tool_output_ids = HashSet::new();
@@ -61,7 +79,7 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
                         call_id: Some(call_id.clone()),
                         name: None,
                         namespace: None,
-                        output: FunctionCallOutputPayload::from_text("aborted".to_string()),
+                        output: FunctionCallOutputPayload::from_text(missing_output.to_string()),
                         internal_chat_message_metadata_passthrough: None,
                     }),
                 ));
@@ -70,7 +88,9 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
                 id,
                 call_id: Some(call_id),
                 ..
-            } if !tool_search_output_ids.contains(call_id.as_str()) => {
+            } if policy == MissingCallOutputPolicy::RuntimeHistory
+                && !tool_search_output_ids.contains(call_id.as_str()) =>
+            {
                 info!("Tool search output is missing for call id: {call_id}");
                 missing_outputs_to_insert.push((
                     idx,
@@ -89,10 +109,11 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
             {
                 // Preserved-prefix forks mark copied calls as inherited. A call still
                 // running in the parent has no output in the child's snapshot.
-                if !envelope
-                    .metadata
-                    .as_ref()
-                    .is_some_and(|metadata| metadata.inherited_user_message)
+                if policy == MissingCallOutputPolicy::RuntimeHistory
+                    && !envelope
+                        .metadata
+                        .as_ref()
+                        .is_some_and(|metadata| metadata.inherited_user_message)
                 {
                     error_or_panic(format!(
                         "Custom tool call output is missing for call id: {call_id}"
@@ -104,7 +125,7 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
                         id: synthetic_output_id("ctco", id.as_deref()),
                         call_id: call_id.clone(),
                         name: None,
-                        output: FunctionCallOutputPayload::from_text("aborted".to_string()),
+                        output: FunctionCallOutputPayload::from_text(missing_output.to_string()),
                         internal_chat_message_metadata_passthrough: None,
                     }),
                 ));
@@ -117,10 +138,11 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
             } if !function_output_ids.contains(call_id.as_str()) => {
                 // Preserved-prefix forks mark copied calls as inherited. A call still
                 // running in the parent has no output in the child's snapshot.
-                if !envelope
-                    .metadata
-                    .as_ref()
-                    .is_some_and(|metadata| metadata.inherited_user_message)
+                if policy == MissingCallOutputPolicy::RuntimeHistory
+                    && !envelope
+                        .metadata
+                        .as_ref()
+                        .is_some_and(|metadata| metadata.inherited_user_message)
                 {
                     error_or_panic(format!(
                         "Local shell call output is missing for call id: {call_id}"
@@ -133,7 +155,7 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
                         call_id: Some(call_id.clone()),
                         name: None,
                         namespace: None,
-                        output: FunctionCallOutputPayload::from_text("aborted".to_string()),
+                        output: FunctionCallOutputPayload::from_text(missing_output.to_string()),
                         internal_chat_message_metadata_passthrough: None,
                     }),
                 ));
@@ -147,10 +169,14 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItemEnvelope>)
         custom_tool_output_ids,
     ));
 
+    // These notices exist only in the reconstructed/prompt view. They do not
+    // change raw rollout records, execute a tool, or settle an external receipt.
+    let recovered = missing_outputs_to_insert.len();
     // Insert synthetic outputs in reverse index order to avoid re-indexing.
     for (idx, output_item) in missing_outputs_to_insert.into_iter().rev() {
         items.insert(idx + 1, output_item);
     }
+    recovered
 }
 
 /// Derives a stable ID for a prompt-only output from its source call's item ID.

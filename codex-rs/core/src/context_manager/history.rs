@@ -969,7 +969,10 @@ impl ContextManager {
         let items = Arc::make_mut(&mut self.items);
 
         // all function/tool calls must have a corresponding output
-        normalize::ensure_call_outputs_present(items);
+        normalize::ensure_call_outputs_present(
+            items,
+            normalize::MissingCallOutputPolicy::RuntimeHistory,
+        );
 
         // Paired outputs must have a corresponding call; named external outputs stand alone.
         normalize::remove_orphan_outputs(items);
