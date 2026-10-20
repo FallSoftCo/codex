@@ -1,0 +1,48 @@
+{
+  "schema": "lax-private-global-runtime-upgrade/v1",
+  "at": 1792458914.245273,
+  "state": "private-global-native-api-upgraded-no-inference",
+  "runtime": "SDK110/H77",
+  "nativeBinarySha256": "f28cb6ba879472fcbd2538cb0644813ec6d73dda56c9232cc6988db28cb4c552",
+  "nativeRustProductSource": "e1915bfaf2b54f71f5ef039b443ede8b0442f564",
+  "scope": "Existing private Global3context installation and private Hollywood API. Native executable is unoptimized development candidate; version string is not a new optimized release claim.",
+  "observed": {
+    "threeHistoriesPreserved": {
+      "reader": "01a154cf-43c5-7302-81ec-20921e99d2d6",
+      "responder": "01a154cf-4495-73e3-8992-dfab72ac56d8",
+      "writer": "01a154cf-4119-7720-84e3-127ed80defb9"
+    },
+    "newInferencePermitsDuringRestart": 0,
+    "existingPairedDeviceRowsPreserved": 1,
+    "roomCountAtCutover": 12,
+    "catalogProjection": {
+      "activity": 1,
+      "feedSummary": 1
+    },
+    "retainedExactFileCount": 11,
+    "protectedProductionAndGatewayPids": {
+      "hollywood-backbone.service": "3268903",
+      "nextcomp-native-core.service": "2583312",
+      "harness-postgres.service": "3176384",
+      "nextcomp-native-pilot-20261019-r01.service": "1516570",
+      "lax-three-context-hollywood-20261018-r01.service": "2171552",
+      "lax-collaboration-483b0ac5-24e61377.service": "1516568",
+      "lax-host-483b0ac5-24e61377.service": "1516569"
+    }
+  },
+  "retainedPreflightFailures": [
+    "r177 operator loader incorrectly required root ownership for service-owned status. Refused before runtime changes; actual UID check substituted.",
+    "r178 read-only pg_dump lacked existing password. Refused before runtime changes; empty failed dump retained, child environment password used without credential output."
+  ],
+  "rollback": "Offline purpose upgrade rollback preserves original files/identities; remove only added private API override. Never revert database/history after admitted work. Original encoded manifests and privatePG/SQLite archives retained.",
+  "actualUserApiDelegation": "Separate original operation private-global-native-delegation-r180 is in progress; not a pass from this upgrade receipt.",
+  "remaining": [
+    "Actual Global-created peer delivery/follow-up qualification",
+    "Compaction under pending automatic input",
+    "Physical phone native profile/voice/push",
+    "Multi-human responsibility, sustained operation and multi-host qualification"
+  ],
+  "evidence": "/var/lib/harness-deployments/ozzz-native-20261019-r01/native-sdk110-upgrade-r177/result.json",
+  "productionChanged": false,
+  "phoneChanged": false
+}
