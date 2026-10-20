@@ -1,0 +1,15 @@
+{
+  "at": 1792523512.310359,
+  "finding": "Same six histories completed report-only follow-up with one reader and two writer actual native compactions. Human clarification arrived inside reader compaction; actual current engineering policy used, prior artifacts unchanged, original final visible through human API.",
+  "auditPassed": 18,
+  "auditTotal": 18,
+  "criteriaFrozenBeforeTask": true,
+  "auditExecutableWrittenAfterTaskOutputs": true,
+  "observerCorrection": "Audit initially assumed nextCursor changes at tail. Actual API returns same cursor with empty events. Preserved initial observer source; corrected only empty-tail termination. No new task/model calls, no output repair.",
+  "limits": [
+    "N1 controlled threshold-lowered trial, not general reliability or outcome superiority.",
+    "Does not measure discovery quality.",
+    "All eight own units stopped; temporary native configs removed; protected service PIDs unchanged.",
+    "No production/default/phone changes."
+  ]
+}

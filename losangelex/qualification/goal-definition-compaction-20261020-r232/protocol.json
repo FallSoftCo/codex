@@ -1,0 +1,57 @@
+{
+  "schema": "lax-goal-definition-compaction/v1",
+  "frozenAt": 1792522669.1424346,
+  "authority": "33aca652-2cb1-41c2-86f8-af04bf95c89f",
+  "agents": [
+    "5301b07f-547b-4233-b400-403c98b4e019",
+    "b3ee461f-9f5c-475b-9e64-e999c769a63d"
+  ],
+  "historiesBefore": {
+    "5301b07f-547b-4233-b400-403c98b4e019": {
+      "reader": "01a15a92-2ceb-7f32-8abf-199ade1fd0d3",
+      "writer": "01a15a92-2c8b-7e30-a3a8-e30e0a94bccb",
+      "responder": "01a15a92-2ce8-7a90-a588-a5e3f34b69e5"
+    },
+    "b3ee461f-9f5c-475b-9e64-e999c769a63d": {
+      "reader": "01a15a92-2d34-7fc1-95e4-e319a3ee34a0",
+      "writer": "01a15a92-2ecc-7d00-a8f4-c6a46967e774",
+      "responder": "01a15a92-2d3a-72c1-a5e4-415ebcf9d442"
+    }
+  },
+  "oldArtifactHashes": {
+    "intake.csv": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+    "intake_report.py": "6a858409ede04ab26ef24fe922cab27f5b81cbfb7e4700199ce10f0a56cdcb1a",
+    "sample-report.json": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+    "README.md": "2e510e41671a78f7e6b8404a8e710b0b1375c77451d2f930e83be5805acaed37",
+    "goal-definition.md": "dca5b30f4d98470c069b6d9878026da952e58018cbef7e1683cf679bdaa8493f",
+    "policy.json": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6"
+  },
+  "oldDefinitionMayNotBeRewritten": true,
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "runtime": "SDK111/H77/native f28",
+  "primaryInputTiming": "Submit original follow-up. On actual reader contextCompaction item/started, before completed, submit frozen human clarification once and the actual peer's frozen policy task once. No synthetic compaction notifications or model-written engineering update.",
+  "budgets": {
+    "seconds": 900,
+    "addedReportedNativeTokens": 4000000,
+    "compactionStartSeconds": 180,
+    "participantAnswers": 1
+  },
+  "criteria": [
+    "actual reader and writer compaction completed in the same existing native histories",
+    "late human clarification accepted during actual reader compaction and later interpreted",
+    "original responsibility completed after late input and actual verified peer policy",
+    "new actual CLI output matches current policy3/minSessions7, giving ready0 without learner IDs",
+    "summary and evidence preserve original agreed semantics and exact policy provenance",
+    "old implementation, inputs, sample, README, goal definition and policy2 unchanged",
+    "same six persistent histories, no user-stopped owner resumed, no external effects replayed"
+  ],
+  "limits": "One explicit report-only continuation, automatic compaction threshold deliberately lowered in disposable reporter homes. No general reliability/production/multihost/visual-workflow claim.",
+  "files": {
+    "participant-answer.txt": "39b5d218dbbf8ce86f6ce3e8872c71b11e8b2b2d249d490b5cfc84800583c1b3",
+    "late-clarification.txt": "a511c72404e054d28f3835e777b517d272eb5c60d6ea1958cab7bcf9a0251384",
+    "engineer-request.txt": "f5ad2efb4dfa7bab40c5bf533957732bd5bab4ff852ec53d3cbff85edb9e9bb9",
+    "request.txt": "0585329bda2580a00930ea152dbea84a6edd535c6a1b9138e62aa0f74303d5ec",
+    "ENGINEERING-REQUIREMENTS-r232.md": "13e3dc396b96b6f08d35f0934fa20bb3bd4c7e440b73914bde2c04b17996bd76"
+  }
+}

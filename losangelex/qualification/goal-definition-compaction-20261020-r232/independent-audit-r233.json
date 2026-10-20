@@ -1,0 +1,159 @@
+{
+  "at": 1792523420.5650418,
+  "checks": {
+    "settled-original-completed": true,
+    "reader-and-writer-real-compaction-completed": true,
+    "same-six-persistent-histories": true,
+    "late-canonical-input-inside-reader-compaction": true,
+    "late-input-mechanically-accepted-in-that-turn": true,
+    "actual-current-policy-cli": true,
+    "sample-and-evidence-match-actual": true,
+    "actual-engineer-policy-cli": true,
+    "verified-current-policy-provenance": true,
+    "late-input-and-original-retained-in-evidence": true,
+    "prior-artifacts-unchanged": true,
+    "no-raw-learner-identifiers": true,
+    "final-visible-through-actual-paginated-human-api": true,
+    "no-active-turns": true,
+    "all-eight-own-units-stopped": true,
+    "temporary-native-configs-restored": true,
+    "protected-services-unchanged": true,
+    "protocol-inputs-unchanged": true
+  },
+  "original": {
+    "id": "a19f481f-3a65-4d16-9739-86579059860a",
+    "event": "4bfa3cad-9c17-432f-8ae9-84bd18cdba21",
+    "state": "completed",
+    "generation": 1,
+    "result_event": "6ec5762f-8a4d-42ba-bebb-2e497e9810fd",
+    "native_thread": "01a15a92-2c8b-7e30-a3a8-e30e0a94bccb",
+    "native_turn": "01a15ab0-753e-7ca3-9f46-47ece6836221"
+  },
+  "lateInputTime": 1792522801.500504,
+  "readerCompactionInterval": [
+    1792522800.5339332,
+    1792522857.257046
+  ],
+  "readerAcceptance": [
+    {
+      "at": 1792522801.6522305,
+      "event": "reader_input_accepted",
+      "snapshotOperationId": "reader-inbox:7a811f5b-f785-4b32-ac84-afa1920b22dd",
+      "inputIds": [
+        "cd46c488-8a2c-4e7f-8ede-f794d6e494e8",
+        "edee3f38-b340-5dab-b3d4-fa9d1caf90cf"
+      ],
+      "chunks": 3,
+      "duringNativeTurn": "01a15aaf-4a7c-77b0-8cf8-3aebfdbf4d4e",
+      "modelSelectedRetrieval": false,
+      "nativeHistoryDurability": "unconfirmed",
+      "interpretationInferred": false
+    }
+  ],
+  "realCompactionCounts": {
+    "reader": 1,
+    "writer": 2
+  },
+  "currentReport": {
+    "ready": 0,
+    "cohorts": [
+      {
+        "cohort": "north",
+        "learners": 10,
+        "consented": 10,
+        "eligible": false
+      },
+      {
+        "cohort": "river",
+        "learners": 10,
+        "consented": 10,
+        "eligible": false
+      },
+      {
+        "cohort": "studio",
+        "learners": 10,
+        "consented": 9,
+        "eligible": false
+      },
+      {
+        "cohort": "tiny",
+        "learners": 9,
+        "consented": 9,
+        "eligible": false
+      }
+    ]
+  },
+  "policy": {
+    "revision": 3,
+    "minParticipants": 10,
+    "minPracticeSessions": 7,
+    "requiresAllConsent": true
+  },
+  "oldHashes": {
+    "intake.csv": {
+      "expected": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+      "actual": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81"
+    },
+    "intake_report.py": {
+      "expected": "6a858409ede04ab26ef24fe922cab27f5b81cbfb7e4700199ce10f0a56cdcb1a",
+      "actual": "6a858409ede04ab26ef24fe922cab27f5b81cbfb7e4700199ce10f0a56cdcb1a"
+    },
+    "sample-report.json": {
+      "expected": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+      "actual": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be"
+    },
+    "README.md": {
+      "expected": "2e510e41671a78f7e6b8404a8e710b0b1375c77451d2f930e83be5805acaed37",
+      "actual": "2e510e41671a78f7e6b8404a8e710b0b1375c77451d2f930e83be5805acaed37"
+    },
+    "goal-definition.md": {
+      "expected": "dca5b30f4d98470c069b6d9878026da952e58018cbef7e1683cf679bdaa8493f",
+      "actual": "dca5b30f4d98470c069b6d9878026da952e58018cbef7e1683cf679bdaa8493f"
+    },
+    "policy.json": {
+      "expected": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6",
+      "actual": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6"
+    }
+  },
+  "protectedPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "3590210",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+  },
+  "actualHumanHistoryPages": 3,
+  "finalEvent": {
+    "id": "6ec5762f-8a4d-42ba-bebb-2e497e9810fd",
+    "authority": "33aca652-2cb1-41c2-86f8-af04bf95c89f",
+    "seq": 155,
+    "room": "9470ac8a-822a-4375-bb4e-a2a941607931",
+    "author": "5301b07f-547b-4233-b400-403c98b4e019",
+    "recipient": null,
+    "kind": "message",
+    "audience": "room",
+    "body": "Completed the report-only follow-up. **Current result: `ready=0` eligible cohorts out of 4**, replacing the earlier revision-2 result for current-policy reporting.\n\nVerified policy revision 3: `minParticipants=10`, `minPracticeSessions=7`, `requiresAllConsent=true`. The inspected `policy-v3.json` values and SHA-256 match engineering\u2019s publication: `b87382ea3dc6b0a2dc22c5953a756de726be114ceef8c4d02f9283341c1da550`.\n\n| Cohort | Learners / consented | Failed requirements |\n|---|---:|---|\n| north | 10 / 10 | Sessions |\n| river | 10 / 10 | Sessions |\n| studio | 10 / 9 | Sessions, consent |\n| tiny | 9 / 9 | Sessions, participant count |\n\nCreated `report-summary.md`, `sample-report-current.json`, `summary-evidence.json`, and `goal-definition-addendum.md`.\n\nThe unchanged CLI produced byte-identical output on repeated executions, with exit 0 and no stderr. Independent checks passed for the report/schema, cohort calculations, privacy, preserved reviewed-definition content, and unchanged prior files and policies. Full provenance, commands, results and hashes are in `summary-evidence.json`. No unresolved decision or prerequisite remains.\n\nThis completes local scripted QA only\u2014not evidence of real consent, learning outcomes, production readiness or commercial results. Existing input-size, in-memory and UTC-calendar limitations remain.",
+    "source": "4bfa3cad-9c17-432f-8ae9-84bd18cdba21",
+    "data": {
+      "authorKind": "agent",
+      "nativeContext": {
+        "schema": "lax-purpose-context/v1",
+        "purpose": "responder",
+        "contextId": "70a67ef0-8596-47e2-8c1d-cde8870c0dc0",
+        "nativeTurn": "01a15ab5-421a-7240-8f4c-054c7a3743fd",
+        "nativeThread": "01a15a92-2ce8-7a90-a588-a5e3f34b69e5",
+        "communicationId": "84f7035a-35ff-51a4-a474-16778d253930",
+        "communicationRevision": 3
+      }
+    },
+    "created_at": "2026-10-20 19:06:54.635961+00:00"
+  },
+  "artifactsRepaired": 0,
+  "newModelCalls": 0,
+  "runtimeChanges": 0,
+  "seconds": 442.1559703350067,
+  "nativeTokenDelta": 1318388,
+  "qualificationScope": "One controlled report-only continuation after deliberately lowered native compaction thresholds. Criteria frozen before execution; this executable independent audit authored after outputs. No claim of statistical superiority, discovery quality, production readiness or exactly-once external effects."
+}

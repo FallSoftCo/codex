@@ -1,0 +1,19 @@
+{
+  "at": 1792523241.884475,
+  "state": "settled",
+  "ownedUnitPids": {
+    "lax-agent-33aca652-5301b07f547b-reader.service": "0",
+    "lax-agent-33aca652-5301b07f547b-writer.service": "0",
+    "lax-agent-33aca652-5301b07f547b-responder.service": "0",
+    "lax-agent-33aca652-b3ee461f9f5c-reader.service": "0",
+    "lax-agent-33aca652-b3ee461f9f5c-writer.service": "0",
+    "lax-agent-33aca652-b3ee461f9f5c-responder.service": "0",
+    "lax-host-33aca652-4b0a58a4.service": "0",
+    "lax-collaboration-33aca652-4b0a58a4.service": "0"
+  },
+  "nativeHomeConfigRestoration": [
+    "/var/lib/harness/33aca652-2cb1-41c2-86f8-af04bf95c89f/purpose-agents/5301b07f-547b-4233-b400-403c98b4e019/home/native-reader/config.toml",
+    "/var/lib/harness/33aca652-2cb1-41c2-86f8-af04bf95c89f/purpose-agents/5301b07f-547b-4233-b400-403c98b4e019/home/native-writer/config.toml"
+  ],
+  "originalHistoriesAndArtifactsRetained": true
+}

@@ -1,0 +1,26 @@
+{
+  "at": 1792522669.1410706,
+  "settings": [
+    {
+      "path": "/var/lib/harness/33aca652-2cb1-41c2-86f8-af04bf95c89f/purpose-agents/5301b07f-547b-4233-b400-403c98b4e019/home/native-reader/config.toml",
+      "purpose": "reader",
+      "threshold": 30000,
+      "wasAbsent": true,
+      "sha256": "f09f909bf1c06f52a4bff2bce4440d085f285ea44b6dfaea66f69dc7b29c7619",
+      "body": "model_auto_compact_token_limit = 30000\n",
+      "uid": 851,
+      "gid": 846
+    },
+    {
+      "path": "/var/lib/harness/33aca652-2cb1-41c2-86f8-af04bf95c89f/purpose-agents/5301b07f-547b-4233-b400-403c98b4e019/home/native-writer/config.toml",
+      "purpose": "writer",
+      "threshold": 50000,
+      "wasAbsent": true,
+      "sha256": "dfa02a0e948fbefd36dacf0058a7aaffa21537cefec0bd85449be69ea0fd34e3",
+      "body": "model_auto_compact_token_limit = 50000\n",
+      "uid": 851,
+      "gid": 846
+    }
+  ],
+  "meaning": "Only our completed QA reporter homes. Genuine native auto-compaction thresholds; model/effort/permissions unchanged. Restore by deleting only these unchanged owned files after test."
+}
