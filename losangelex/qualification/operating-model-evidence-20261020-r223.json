@@ -1,0 +1,144 @@
+{
+  "schema": "lax-operating-model-qualification/v1",
+  "recordedAt": 1792467580.205818,
+  "productCommit": "bd50bd7eb3b174d3d4bbec8ec94fcbc7d4801c9e",
+  "runtime": "SDK111 / Hollywood77; existing native f28cb6b image; gpt-6.1-sol/xhigh",
+  "decision": "Three contexts are a working experimental implementation, not demonstrated superior to single-context LAX and not qualified as a production replacement.",
+  "matchedPilots": [
+    {
+      "case": "r199 human clarification and status during execution",
+      "single": {
+        "artifactChecksPassed": 7,
+        "artifactChecksTotal": 7,
+        "observerSeconds": 234.7385,
+        "statusSeconds": 11.4363,
+        "nativeReportedTokens": 415405
+      },
+      "three": {
+        "artifactChecksPassed": 7,
+        "artifactChecksTotal": 7,
+        "observerSeconds": 298.2755,
+        "statusSeconds": 29.5955,
+        "nativeReportedTokens": 517708
+      },
+      "interpretation": "Both delivered. Single context was faster and used fewer reported tokens in this one pair. No superiority claim."
+    },
+    {
+      "case": "r208 ordinary peer update in a shared room",
+      "single": {
+        "state": "completed",
+        "artifactChecksPassed": 9,
+        "artifactChecksTotal": 9,
+        "consumerTokens": 462853,
+        "producerTokens": 530849
+      },
+      "three": {
+        "state": "unknown",
+        "artifactChecksPassed": 7,
+        "artifactChecksTotal": 9,
+        "consumerTokens": 827172,
+        "producerTokens": 473057
+      },
+      "interpretation": "Candidate failed its primary deliverable despite correct reader interpretation and successful engineering. A delayed old-turn command completion killed the current notification reader through an activity attribution exception. Original failure remains unknown, never repaired or replayed."
+    }
+  ],
+  "SDK111OrdinaryRequalification": {
+    "state": "settled-after-peer-input",
+    "originalConsumerState": "completed",
+    "artifactChecks": {
+      "passed": 9,
+      "total": 9
+    },
+    "reportedTokens": {
+      "consumer": 1057518,
+      "producer": 512035
+    },
+    "nativeInterleavingAbsent": true,
+    "meaning": "Ordinary actual model room update correctly produced current artifact; not alone regression coverage or superiority."
+  },
+  "SDK111TargetedNativeRegression": {
+    "twoIndependentAgents": true,
+    "samePersistentHistories": 6,
+    "deliveryId": "a30482d5-8c4d-4aab-8f86-44331357cad3",
+    "state": "completed",
+    "seconds": 309.16818618774414,
+    "interleaving": [
+      {
+        "at": 1792467127.6692398,
+        "originalTurn": "01a1575a-c21e-7e73-bd23-81d019eb8461",
+        "laterTurn": "01a1575d-8c3c-7513-bb86-158650ca837d",
+        "itemId": "exec-1ff67fb1-63e8-4fd7-a9d5-4378efbee030",
+        "originalEndedAt": 1792466986.5200515,
+        "laterStartedAt": 1792467111.1691062,
+        "exitCode": 0,
+        "expectedOriginalScope": "execution-2292ada57a721aab376dee8e657287700017c2e95378f181a8d8988f4abfa788"
+      }
+    ],
+    "actualUserApiShowsOriginalTurn": true,
+    "originalFrozenScore": {
+      "passed": 12,
+      "total": 14
+    },
+    "evaluatorCorrection": "Two command-start checks mistakenly counted script references inside checksum-inspection Python as executions. Original scores and scorer are retained. A separate audit of actual interpreter/script invocations finds one each and rejects the recorded inspection commands, zero-invocation and duplicate-invocation controls. This is reinspection of one trial, not a new model trial or permission to alter acceptance criteria.",
+    "procedureLimit": "Tool ordering was explicitly requested to exercise native mechanics; this is not evidence of spontaneous coordination.",
+    "semanticMocks": false,
+    "operatorSemanticInterventions": 0
+  },
+  "evidenceFiles": {
+    "result.json": "b4cc7073e2bbeb3d6b9e7c6751a430b460b7d681277abd506e7c418417fb1f41",
+    "command-invocation-audit-correction-r221.json": "57f83c32d99722c658f4673df7f5566fa98b41e8bf21c39eec2254c22cf3603d",
+    "independent-final-audit-r222.json": "50fb3b3df954d68d1d293ff41e2715d2f50856bd6e6d914adb819baf55b277e4",
+    "human-api-activity.json": "f6921fcc52a7a17932d4ffed329ebb2d2daf565860ef84f84a9418540ce13a0d",
+    "protocol.json": "992c21db645afc96beacfcbbf778a6ca36771b5aeafe9437b9d70cfee9e366ad",
+    "execution-intent.json": "50acfd6ada2d520361a8025621b3f101caaa75787fa8314b56b6d63919145897"
+  },
+  "retainedInvalidAttempts": [
+    {
+      "case": "r197 single control",
+      "reason": "Experiment omitted initial managed-service registration; native model process was never created. Unpaired candidate success was retained; comparison inconclusive."
+    },
+    {
+      "case": "r203",
+      "reason": "Observer searched a pre-submission snapshot for a newly accepted peer delivery; aborted and retained, no semantic score."
+    },
+    {
+      "case": "r206",
+      "reason": "Nonmodel traffic fixture had room membership but lacked the existing external communication enrollment; correctly rejected before publication. Aborted and retained, no semantic score."
+    }
+  ],
+  "limits": [
+    "Only small, representative synthetic tasks. Native total tokens include cached input; they are not invoices or independent API-request counts.",
+    "An explicitly named nonmodel fixture supplied unrelated traffic. Two real agents were used, not three independent product functions.",
+    "Controlled result delays provide reproducible timing; they are not external-service or performance benchmarks.",
+    "No compaction occurred in these current runs. Earlier real compaction evidence does not qualify the current continuous reader policy with pending input.",
+    "No phone, push, multihost, long-running commercial delivery or autonomous enterprise readiness is established.",
+    "N=1 per matched scenario and a candidate-only requalification do not establish stochastic reliability or general superiority."
+  ],
+  "nextExecutableSlice": {
+    "objective": "Prove continuation from standing responsibility after a prior task is already complete.",
+    "reconcileFirst": "Inspect existing canonical role, Goal/Work and portfolio supervision paths before adding any mechanism. A room observation can currently amend unfinished work; it cannot simply be accepted as a new assignment.",
+    "journey": "Give one explicit durable responsibility, finish an initial artifact, then let another real agent publish a new relevant verified fact after completion alongside unrelated traffic. Require appropriate autonomous follow-up without another human prompt. Attribute authority to the standing responsibility, not the incoming message.",
+    "followingGate": "Exercise actual native compaction with pending input, then repeat representative comparisons using the same durable work contract and a single-history control.",
+    "preservation": "No user-stopped owners or schedules, no all-default cutover, no new semantic coordinator or shadow work ledger."
+  },
+  "cleanup": {
+    "allOwnComparisonAndTargetServicesStopped": true,
+    "sameSixHistories": true,
+    "originalFailurePreserved": {
+      "id": "4d66ad30-286d-47d5-a2ba-99cd4690f782",
+      "state": "unknown",
+      "generation": 1,
+      "result_event": null
+    },
+    "protectedServicePidsUnchanged": {
+      "hollywood-backbone.service": "3268903",
+      "nextcomp-native-core.service": "2583312",
+      "harness-postgres.service": "3176384",
+      "hollywood-native-pilot-20261019-r01.service": "3590210",
+      "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+      "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+      "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+    },
+    "privateGlobalOpenDeliveries": []
+  }
+}
