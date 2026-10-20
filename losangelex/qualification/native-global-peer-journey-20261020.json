@@ -1,0 +1,58 @@
+{
+  "schema": "lax-three-context-native-journey/v1",
+  "at": 1792460660.7962132,
+  "state": "bounded-integration-completed",
+  "scope": "Actual native single-host Global creates one new independent reader/writer/responder peer, delegates a finite implementation review, accepts canonical Work/Goal, delivers original files, and answers ordinary later human question. This is an integration journey, not superiority or general reliability evidence.",
+  "nativeRustSource": "e1915bfaf2b54f71f5ef039b443ede8b0442f564",
+  "runtime": "SDK110/H77",
+  "observations": {
+    "originalLatencySeconds": 939.58817,
+    "followupLatencySeconds": 41.226892,
+    "sixDistinctHistories": 6,
+    "humanRequests": 2,
+    "nativeTurnsByPurpose": {
+      "cccfd79e-e934-460a-886e-df51c3ded886:reader": 3,
+      "cccfd79e-e934-460a-886e-df51c3ded886:writer": 3,
+      "cccfd79e-e934-460a-886e-df51c3ded886:responder": 3,
+      "80193b71-bb7d-5475-9aaa-ff27e49272fc:reader": 2,
+      "80193b71-bb7d-5475-9aaa-ff27e49272fc:writer": 1,
+      "80193b71-bb7d-5475-9aaa-ff27e49272fc:responder": 1
+    },
+    "extraInternalPortfolioReviews": 1,
+    "unfinishedMaterials": 0,
+    "unreleasedPermits": 0,
+    "observedCompactions": 0,
+    "canonicalGoal": "accepted",
+    "canonicalReviewWork": "accepted",
+    "artifactChecksReusedFromUnchangedHash": true
+  },
+  "evidenceIntegrity": {
+    "at": 1792459028.4475129,
+    "criteriaSha256": "06c766304307740fa5921a083714252c9ac80dee38c3e19eb8d5d980d4172e0b",
+    "scorerSha256": "279e3dc8c9b99fffc36bb5f39cf861d7908769efa2fd614be449414b2213aca4",
+    "criteriaFrozenBeforeOriginalPost": true,
+    "executableScorerWrittenAfterPost": true,
+    "modelOutputInspectedBeforeScorer": false,
+    "qualificationLimit": "This run cannot claim all executable scoring was frozen before model start. Criteria unchanged; timing defect retained. No artifact/model output inspected or repaired to create scorer."
+  },
+  "retainedFailures": [
+    "Read-only observer used nonexistent authority column; corrected to scope via principal FK, same original work/deadline",
+    "Independent coordinator audit used protected-record loader on service-owned fixture; corrected JSON read before any retirement",
+    "Peer reviewer first109/110 had diagnostic-wording assertion failure on valid JSON root array. Actual CLI correctly returned malformed exit1/readyfalse; peer retained original artifacts and requalified111cases without product edits. These are not111 independent model trials."
+  ],
+  "retirement": {
+    "state": "temporary-reviewer-paused-and-stopped",
+    "agent": "80193b71-bb7d-5475-9aaa-ff27e49272fc",
+    "historyAndArtifactsRetained": true,
+    "globalRemainsRunning": true
+  },
+  "remaining": [
+    "Matched capable single-context steer-as-you-go comparison with preregistered executable scoring",
+    "Real relevant/irrelevant multi-agent room traffic without relevance cues",
+    "Actual native compaction in tested histories",
+    "Sustained operation, broader multi-human/multi-host validation"
+  ],
+  "fullOperatingModelProven": false,
+  "productionReplacementReady": false,
+  "factsReceipt": "/var/lib/harness-deployments/ozzz-native-20261019-r01/global-native-delegation-r180/independent-audit-r192/facts.json"
+}
