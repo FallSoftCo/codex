@@ -1,0 +1,18 @@
+{
+  "at": 1792521900.1155627,
+  "oldObserverPid": 3214199,
+  "newObserverPid": 3282573,
+  "originalDelivery": "2c53a3f2-7499-4a77-b1ef-6ef58c319921",
+  "meaning": "Resume same accepted operations after correcting observer artifact assumption; original protocol, scorer, task bodies and native model output unchanged.",
+  "modelActivations": 0,
+  "newTaskSubmissions": 0,
+  "newAnswersSubmittedByThisObserver": 0,
+  "originalNativeWorkerPids": {
+    "lax-agent-7501aa71-d5d99ed1f20a-reader.service": "3256000",
+    "lax-agent-7501aa71-d5d99ed1f20a-writer.service": "3256004",
+    "lax-agent-7501aa71-d5d99ed1f20a-responder.service": "3256006",
+    "lax-agent-7501aa71-d62a6378559a-reader.service": "3256014",
+    "lax-agent-7501aa71-d62a6378559a-writer.service": "3256020",
+    "lax-agent-7501aa71-d62a6378559a-responder.service": "3256021"
+  }
+}

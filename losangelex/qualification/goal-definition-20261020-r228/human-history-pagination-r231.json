@@ -1,0 +1,20 @@
+{
+  "at": 1792522189.6457055,
+  "meaning": "Original audit read first page only. Follow the actual returned nextCursor without resubmitting any work. Original first-page receipt remains unchanged.",
+  "arms": {
+    "definition": {
+      "originalFinalEvent": "dc96a844-2547-4f9f-be3d-75f5ef7dea89",
+      "visibleThroughActualHumanHistoryApi": true,
+      "pagesRead": 2,
+      "eventsRead": 103,
+      "cursor": 103
+    },
+    "ordinary": {
+      "originalFinalEvent": "fa5d715a-fdb6-444b-baf0-0f7f383348b4",
+      "visibleThroughActualHumanHistoryApi": true,
+      "pagesRead": 1,
+      "eventsRead": 90,
+      "cursor": 90
+    }
+  }
+}

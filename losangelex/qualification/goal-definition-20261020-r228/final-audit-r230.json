@@ -1,0 +1,338 @@
+{
+  "at": 1792522140.5981877,
+  "arms": {
+    "definition": {
+      "originalDelivery": {
+        "id": "f258fb4d-fd41-4c89-bca6-7909c21da787",
+        "event": "bd3d1896-383f-49c4-ae9a-c27f30bf4301",
+        "state": "completed",
+        "generation": 1,
+        "result_event": "dc96a844-2547-4f9f-be3d-75f5ef7dea89",
+        "native_thread": "01a15a92-2c8b-7e30-a3a8-e30e0a94bccb",
+        "native_turn": "01a15a95-1f22-72f2-9260-7d507c74d1a5"
+      },
+      "frozenChecksPassed": 17,
+      "frozenChecksTotal": 17,
+      "supplementaryProbes": [
+        {
+          "name": "strict-report-types",
+          "passed": true,
+          "actual": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "north",
+                "learners": 10,
+                "consented": 10,
+                "eligible": true
+              },
+              {
+                "cohort": "river",
+                "learners": 10,
+                "consented": 10,
+                "eligible": false
+              },
+              {
+                "cohort": "studio",
+                "learners": 10,
+                "consented": 9,
+                "eligible": false
+              },
+              {
+                "cohort": "tiny",
+                "learners": 9,
+                "consented": 9,
+                "eligible": false
+              }
+            ]
+          },
+          "expected": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "north",
+                "learners": 10,
+                "consented": 10,
+                "eligible": true
+              },
+              {
+                "cohort": "river",
+                "learners": 10,
+                "consented": 10,
+                "eligible": false
+              },
+              {
+                "cohort": "studio",
+                "learners": 10,
+                "consented": 9,
+                "eligible": false
+              },
+              {
+                "cohort": "tiny",
+                "learners": 9,
+                "consented": 9,
+                "eligible": false
+              }
+            ]
+          },
+          "strictTypes": true,
+          "exitCode": 0
+        },
+        {
+          "name": "conditional-consent",
+          "passed": true,
+          "actual": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "anonymous-cohort",
+                "learners": 3,
+                "consented": 0,
+                "eligible": true
+              }
+            ]
+          },
+          "expected": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "anonymous-cohort",
+                "learners": 3,
+                "consented": 0,
+                "eligible": true
+              }
+            ]
+          },
+          "strictTypes": true,
+          "exitCode": 0
+        },
+        {
+          "name": "independent actual engineer CLI validation",
+          "passed": true,
+          "validExitCode": 0,
+          "invalidExitCode": 1
+        }
+      ],
+      "artifactsUnchangedByAudit": true,
+      "finalVisibleThroughActualHumanHistoryApi": false,
+      "originalDoneAfterLateInputs": true,
+      "reviews": [
+        {
+          "attentionId": "80d5128f-4ca0-5f80-bb3d-e19b7bd0a944",
+          "decision": "approve",
+          "rubricSatisfied": true,
+          "proposalWaitSeconds": 51.887866735458374,
+          "sourceKind": "versioned-Markdown-artifact",
+          "reviewedPrefixPreserved": true
+        }
+      ],
+      "distinctPersistentHistories": 6,
+      "activeNativeTurns": 0,
+      "unitPids": {
+        "lax-agent-33aca652-5301b07f547b-reader.service": "0",
+        "lax-agent-33aca652-5301b07f547b-writer.service": "0",
+        "lax-agent-33aca652-5301b07f547b-responder.service": "0",
+        "lax-agent-33aca652-b3ee461f9f5c-reader.service": "0",
+        "lax-agent-33aca652-b3ee461f9f5c-writer.service": "0",
+        "lax-agent-33aca652-b3ee461f9f5c-responder.service": "0",
+        "lax-host-33aca652-4b0a58a4.service": "0",
+        "lax-collaboration-33aca652-4b0a58a4.service": "0"
+      },
+      "artifactHashes": {
+        "intake.csv": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+        "intake_report.py": "6a858409ede04ab26ef24fe922cab27f5b81cbfb7e4700199ce10f0a56cdcb1a",
+        "test_intake_report.py": "da9c44ff6d221284277f6f915b96ef5c34bd96b71af7bc059e76d8ac172126e3",
+        "goal-definition.md": "dca5b30f4d98470c069b6d9878026da952e58018cbef7e1683cf679bdaa8493f",
+        "verification.md": "9b4b04997b14dea93ef09d87eccaa548a46821a0e3a354cf2f25b4133b918e91",
+        "verify_report.py": "9dc0b9917cda53b8e637e0324f908888b0919f77517cd6768c29484e3daa1c14",
+        "TEAM.json": "ccb81de874903ef87b1eb9b0ab9c5a03529e7b4304a9d57c24d2eda93c4c7fec",
+        "sample-report.json": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+        "AGENTS.md": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+        "README.md": "2e510e41671a78f7e6b8404a8e710b0b1375c77451d2f930e83be5805acaed37"
+      },
+      "policyHash": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6",
+      "seconds": 599.425683259964,
+      "usage": {
+        "total_tokens": 2515009,
+        "input_tokens": 2477465,
+        "cached_input_tokens": 2266240,
+        "output_tokens": 37544,
+        "compactions": 0
+      },
+      "definitionFileExists": true
+    },
+    "ordinary": {
+      "originalDelivery": {
+        "id": "2c53a3f2-7499-4a77-b1ef-6ef58c319921",
+        "event": "862a76f3-6374-47d3-9492-59702e6c5739",
+        "state": "completed",
+        "generation": 1,
+        "result_event": "fa5d715a-fdb6-444b-baf0-0f7f383348b4",
+        "native_thread": "01a15a9b-6ef5-7572-9330-525824ee6d30",
+        "native_turn": "01a15a9c-7616-7332-aa42-07bd2350306d"
+      },
+      "frozenChecksPassed": 17,
+      "frozenChecksTotal": 17,
+      "supplementaryProbes": [
+        {
+          "name": "strict-report-types",
+          "passed": true,
+          "actual": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "north",
+                "learners": 10,
+                "consented": 10,
+                "eligible": true
+              },
+              {
+                "cohort": "river",
+                "learners": 10,
+                "consented": 10,
+                "eligible": false
+              },
+              {
+                "cohort": "studio",
+                "learners": 10,
+                "consented": 9,
+                "eligible": false
+              },
+              {
+                "cohort": "tiny",
+                "learners": 9,
+                "consented": 9,
+                "eligible": false
+              }
+            ]
+          },
+          "expected": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "north",
+                "learners": 10,
+                "consented": 10,
+                "eligible": true
+              },
+              {
+                "cohort": "river",
+                "learners": 10,
+                "consented": 10,
+                "eligible": false
+              },
+              {
+                "cohort": "studio",
+                "learners": 10,
+                "consented": 9,
+                "eligible": false
+              },
+              {
+                "cohort": "tiny",
+                "learners": 9,
+                "consented": 9,
+                "eligible": false
+              }
+            ]
+          },
+          "strictTypes": true,
+          "exitCode": 0
+        },
+        {
+          "name": "conditional-consent",
+          "passed": true,
+          "actual": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "anonymous-cohort",
+                "learners": 3,
+                "consented": 0,
+                "eligible": true
+              }
+            ]
+          },
+          "expected": {
+            "ready": 1,
+            "cohorts": [
+              {
+                "cohort": "anonymous-cohort",
+                "learners": 3,
+                "consented": 0,
+                "eligible": true
+              }
+            ]
+          },
+          "strictTypes": true,
+          "exitCode": 0
+        },
+        {
+          "name": "independent actual engineer CLI validation",
+          "passed": true,
+          "validExitCode": 0,
+          "invalidExitCode": 1
+        }
+      ],
+      "artifactsUnchangedByAudit": true,
+      "finalVisibleThroughActualHumanHistoryApi": true,
+      "originalDoneAfterLateInputs": true,
+      "reviews": [
+        {
+          "attentionId": "9bdfce4e-62ea-56d9-a1c7-568265cd1c44",
+          "decision": "approve",
+          "rubricSatisfied": true,
+          "proposalWaitSeconds": 215.0603334903717,
+          "sourceKind": "canonical-native-Hollywood-question-plus-prior-clarification"
+        }
+      ],
+      "distinctPersistentHistories": 6,
+      "activeNativeTurns": 0,
+      "unitPids": {
+        "lax-agent-7501aa71-d5d99ed1f20a-reader.service": "0",
+        "lax-agent-7501aa71-d5d99ed1f20a-writer.service": "0",
+        "lax-agent-7501aa71-d5d99ed1f20a-responder.service": "0",
+        "lax-agent-7501aa71-d62a6378559a-reader.service": "0",
+        "lax-agent-7501aa71-d62a6378559a-writer.service": "0",
+        "lax-agent-7501aa71-d62a6378559a-responder.service": "0",
+        "lax-host-7501aa71-cd1cf7b2.service": "0",
+        "lax-collaboration-7501aa71-cd1cf7b2.service": "0"
+      },
+      "artifactHashes": {
+        "verification-receipt.json": "b0341dde52233b00d35e1050187dc6fd78d252c1b8d23b4c992da82c474943d7",
+        "intake.csv": "5daefa3ea1caf7fe1698452c00551e2e04bb1b00506e86c715db9abe18efef81",
+        "intake_report.py": "aad8f47f1b268f3a60805183a0919bf9e373c357494dd5f35ea53ed3dbced455",
+        "test_intake_report.py": "c79e3f84be87928c74704b91b5ecf193558d6296d932271c73f95bf8ae56e6a1",
+        "TEAM.json": "e2bed253272db46e974e743d4f17dc4ca366a228fdd7c3977163370326fd5bbf",
+        "sample-report.json": "65a58318e1f2bc51ed246c598aad538d78caa87dcf058901693892674ac350be",
+        "AGENTS.md": "0118fafd3f7a4ddcf97ddbf410e5faa27297f633fd85172d413232329b14c766",
+        "README.md": "8305036d1865946040a673f7319173781693b12c4eefc47c882da39343b6a05b"
+      },
+      "policyHash": "b557512ad616ac0224083d6603bac59c88b9a37a230ac256b4d62da3a930f1b6",
+      "seconds": 489.4597063064575,
+      "usage": {
+        "total_tokens": 2232101,
+        "input_tokens": 2195715,
+        "cached_input_tokens": 1939456,
+        "output_tokens": 36386,
+        "compactions": 0
+      },
+      "definitionFileExists": false
+    }
+  },
+  "protectedServicePids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "3590210",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+  },
+  "protectedPidsUnchanged": true,
+  "protocolAndScorerUnchanged": true,
+  "supplementaryProbePolicy": "Two post-trial probes cover stated conditional-consent/type requirements not fully distinguished by the frozen equality checks; engineer executable independently rechecked. They do not replace or inflate the original17-check result.",
+  "observerCorrection": "Original ordinary task and six native histories continued across deterministic observer correction; same accepted proposal was answered once. No model/worker restart, task resubmission or artifact repair.",
+  "interpretation": "Both actual-model workflows delivered. Definition arm used versioned Markdown; ordinary arm used a durable native proposal plus earlier clarification. Both had proposal review opportunity. This supports feasibility and artifact flexibility, not causal superiority or general reliability.",
+  "runtimeChanges": 0,
+  "newModelCallsByAudit": 0
+}

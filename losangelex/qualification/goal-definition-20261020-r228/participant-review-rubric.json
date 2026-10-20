@@ -1,0 +1,18 @@
+{
+  "reviewBeforeApproval": [
+    "Outcome remains the original local intake-report deliverable, not translation, deployment or an implementation plan alone.",
+    "CLI inputs and exact report shape are stated or explicitly referenced; fields are not silently reinterpreted.",
+    "Distinct learners use the latest timestamp record per learner/cohort independently of file order.",
+    "Readiness uses the actual engineering policy, all required consent and practice thresholds; five sessions is not adopted as fact.",
+    "Malformed input rejection, empty-input behavior and unchanged source input are covered.",
+    "Verification requires actual executions and meaningful boundary evidence, not a prose completion claim or a test-count target.",
+    "Settled requirements, unresolved policy evidence, and participant review are distinguishable.",
+    "Review does not approve an implementation or production/customer actions."
+  ],
+  "laterRevisionAudit": [
+    "Apply the recorded cohort-count/privacy correction without dropping prior requirements.",
+    "Retain definition revision/provenance and verified policy evidence."
+  ],
+  "reviewer": "Coordinator performing explicitly disclosed QA participant review, not a real end user or independent semantic oracle.",
+  "policy": "Use frozen facts and approval/rejection texts only. Record actual rubric observations and artifact hashes; do not silently approve a missing/contradictory definition or coach implementation."
+}

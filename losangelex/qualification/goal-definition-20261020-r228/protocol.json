@@ -1,0 +1,54 @@
+{
+  "schema": "lax-goal-definition-pilot/v1",
+  "frozenAt": 1792520712.0570984,
+  "hypothesis": "A collaborative durable goal-definition phase improves preservation and confirmed delivery of intent under later human input and real peer discovery.",
+  "arms": [
+    "definition",
+    "ordinary"
+  ],
+  "architecture": "Both identical SDK111/H77/native f28 gpt-6.1-sol/xhigh three-context agents; each has one independent three-context policy engineer.",
+  "participant": "Explicitly scripted human QA identity via native human API; not peer impersonation, real-user usability or independent human validation.",
+  "factsPolicy": "On first native question provide frozen facts. If ordinary asks none by60s, supply same facts as an explicit original-task clarification; record the difference. Definition arm must actually engage.",
+  "proposalPolicy": "Later native questions produce review-needed receipt. Coordinator reviews against frozen rubric, records observations/hashes and chooses frozen approval/rejection text. At most3 answer rounds; no implementation coaching.",
+  "peerTrigger": "After facts admitted, start real engineer with frozen assignment. It publishes its own verified normal room update. No operator-written engineering result.",
+  "laterInputs": "After intake_report.py first appears while original delivery is running, submit frozen headline/privacy clarification and status question once. Record any failure to obtain in-flight exposure.",
+  "budgets": {
+    "perArmSeconds": 1200,
+    "totalReportedNativeTokensPerArmCeiling": 6000000,
+    "maxParticipantAnswerRounds": 3
+  },
+  "primaryOutcomes": [
+    "independent CLI/report checks",
+    "original deliverable actually completed after required inputs",
+    "peer product facts correctly reflected",
+    "human status response without original-task abandonment",
+    "definition review and later revision traceability (process outcome, not a compulsory control-arm artifact)"
+  ],
+  "secondaryOutcomes": [
+    "latency",
+    "native reported usage incl cached input",
+    "review rounds",
+    "extra obligations and interventions"
+  ],
+  "limits": [
+    "One software-task pair; fixed order; scripted participant; not Houdini/visual acceptance, compaction, general reliability, production readiness or causal proof of context separation.",
+    "Frozen functional scorer has limited coverage and is audited alongside actual artifacts/conversation; no automatic superiority verdict."
+  ],
+  "files": {
+    "participant-review-rubric.json": "35a7175108ed04c4a1e9c9cc995cf9ababe0bf41a85b943694c9fe292a0ea055",
+    "definition-instructions.txt": "38dc90c7aecc8f46126a156203643848428b49ce9d5dbf097995347b64efced5",
+    "oracle-controls.json": "0d870e3f915bcba0926b325d83ca163c02ac923c1c2a27f4ffead6238e9d0f7a",
+    "ordinary-instructions.txt": "68db797ead70ccdc46ced5b3f115f22cd2fe103c3e2382917e0700af5adcbeab",
+    "producer-request.txt": "deca9fa01ae00b1d6a5af7bd06293fa7228a78cf487df0c2011c5608a2fa6b41",
+    "ordinary-fixed-inputs.json": "f688824438c17717b3b3fe120bd26eacc18c5e5106701ee2c640244029729604",
+    "outcome_scorer.py": "679f8b6907e4782010d3b6eb308fd636332c4e292ed30d09eae77781b75204d1",
+    "common-request.txt": "e30f871a5fe0e7352c544bd63701cd41af49a7d1f2143310b91d442a74392aaf",
+    "human-clarification.txt": "f325ad4de52fc3c4c09a7b7584fa9d926dc18008309e9216e637540d126c07be",
+    "human-status.txt": "8fa0489c001453c32bc0e68042de28cc5f6740156894e4dca69b7b6b0fc6f3dd",
+    "definition-fixed-inputs.json": "f97b4e414f44c5f19c1c5d2da5ed80d01e2f089043f093b7986d05a3a9496282",
+    "ENGINEERING-REQUIREMENTS.md": "d42ff3a090727b1c94bbacb3afa1aa245f4e9309ea936a5c43c476ec1fe02eac",
+    "participant-rejection.txt": "d30f22c9ded3e14ac5ae10b772d316cdeb6255344d2c9ff2ae43564e1e5ffdd7",
+    "participant-approval.txt": "199de2d709daa7c70f7ed0ea73f74f8748dcaaeb04fa36d7ea6102881ebf573c",
+    "participant-facts.txt": "b40a01723d4423cfab809f3591cf98427e54e9699520ced934c92d8ea0581c65"
+  }
+}

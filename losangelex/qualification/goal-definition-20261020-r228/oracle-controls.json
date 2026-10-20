@@ -1,0 +1,731 @@
+{
+  "positive": [
+    {
+      "name": "requested CLI exists",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sample behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sample no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sample source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 0,
+          "cohorts": []
+        }
+      }
+    },
+    {
+      "name": "empty no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "policy is data behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "small",
+              "learners": 3,
+              "consented": 3,
+              "eligible": true
+            }
+          ]
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "small",
+              "learners": 3,
+              "consented": 3,
+              "eligible": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "policy is data no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "policy is data source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "latest revocation behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": [
+            {
+              "cohort": "revoked",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        },
+        "expected": {
+          "ready": 0,
+          "cohorts": [
+            {
+              "cohort": "revoked",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "latest revocation no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "latest revocation source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "record order independent",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "malformed input rejected without identifier leak",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "delivered sample reflects final policy and human headline clarification",
+      "passed": true,
+      "detail": {
+        "observed": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "README delivered",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "constantOutput": [
+    {
+      "name": "requested CLI exists",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sample behavioral outcome",
+      "passed": false,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sample no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sample source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 0,
+          "cohorts": []
+        }
+      }
+    },
+    {
+      "name": "empty no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "policy is data behavioral outcome",
+      "passed": false,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "small",
+              "learners": 3,
+              "consented": 3,
+              "eligible": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "policy is data no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "policy is data source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "latest revocation behavioral outcome",
+      "passed": false,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 0,
+          "cohorts": [
+            {
+              "cohort": "revoked",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "latest revocation no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "latest revocation source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "record order independent",
+      "passed": false,
+      "detail": null
+    },
+    {
+      "name": "malformed input rejected without identifier leak",
+      "passed": false,
+      "detail": null
+    },
+    {
+      "name": "delivered sample reflects final policy and human headline clarification",
+      "passed": true,
+      "detail": {
+        "observed": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "README delivered",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "staleDeliveredSample": [
+    {
+      "name": "requested CLI exists",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sample behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sample no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sample source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 0,
+          "cohorts": []
+        }
+      }
+    },
+    {
+      "name": "empty no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "policy is data behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "small",
+              "learners": 3,
+              "consented": 3,
+              "eligible": true
+            }
+          ]
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "small",
+              "learners": 3,
+              "consented": 3,
+              "eligible": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "policy is data no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "policy is data source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "latest revocation behavioral outcome",
+      "passed": true,
+      "detail": {
+        "exitCode": 0,
+        "observed": {
+          "ready": 0,
+          "cohorts": [
+            {
+              "cohort": "revoked",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        },
+        "expected": {
+          "ready": 0,
+          "cohorts": [
+            {
+              "cohort": "revoked",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "latest revocation no learner identifiers",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "latest revocation source retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "record order independent",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "malformed input rejected without identifier leak",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "delivered sample reflects final policy and human headline clarification",
+      "passed": false,
+      "detail": {
+        "observed": {
+          "ready": 10,
+          "cohorts": []
+        },
+        "expected": {
+          "ready": 1,
+          "cohorts": [
+            {
+              "cohort": "north",
+              "learners": 10,
+              "consented": 10,
+              "eligible": true
+            },
+            {
+              "cohort": "river",
+              "learners": 10,
+              "consented": 10,
+              "eligible": false
+            },
+            {
+              "cohort": "studio",
+              "learners": 10,
+              "consented": 9,
+              "eligible": false
+            },
+            {
+              "cohort": "tiny",
+              "learners": 9,
+              "consented": 9,
+              "eligible": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "README delivered",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "meaning": "Mechanical controls only; none are model trials or product artifacts."
+}

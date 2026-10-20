@@ -1,0 +1,70 @@
+{
+  "schema": "lax-goal-definition-workflow-qualification/v1",
+  "at": 1792522518.8680882,
+  "scope": "Actual native software workflow proof; no runtime behavior changes or production promotion.",
+  "finding": "Both three-context workflows delivered against clarified goal and real peer evidence. Explicit definition retained five Markdown revisions; capable ordinary workflow proposed and obtained review through a durable native Hollywood question. Artifact format must be flexible.",
+  "runtime": "SDK111/H77/native f28; gpt-6.1-sol/xhigh; same approved account; two independent agents/six histories per arm.",
+  "arms": {
+    "definition": {
+      "originalDelivery": "f258fb4d-fd41-4c89-bca6-7909c21da787",
+      "state": "completed",
+      "frozenChecksPassed": 17,
+      "frozenChecksTotal": 17,
+      "supplementaryChecksPassed": true,
+      "persistentHistories": 6,
+      "seconds": 599.425683259964,
+      "usage": {
+        "total_tokens": 2515009,
+        "input_tokens": 2477465,
+        "cached_input_tokens": 2266240,
+        "output_tokens": 37544,
+        "compactions": 0
+      },
+      "definitionFileExists": true,
+      "proposalReviewWaitSeconds": [
+        51.887866735458374
+      ],
+      "finalVisibleThroughHumanApi": true
+    },
+    "ordinary": {
+      "originalDelivery": "2c53a3f2-7499-4a77-b1ef-6ef58c319921",
+      "state": "completed",
+      "frozenChecksPassed": 17,
+      "frozenChecksTotal": 17,
+      "supplementaryChecksPassed": true,
+      "persistentHistories": 6,
+      "seconds": 489.4597063064575,
+      "usage": {
+        "total_tokens": 2232101,
+        "input_tokens": 2195715,
+        "cached_input_tokens": 1939456,
+        "output_tokens": 36386,
+        "compactions": 0
+      },
+      "definitionFileExists": false,
+      "proposalReviewWaitSeconds": [
+        215.0603334903717
+      ],
+      "finalVisibleThroughHumanApi": true
+    }
+  },
+  "corrections": [
+    "Observer incorrectly required an ordinary proposal to exist as Markdown. Its native canonical question and referenced clarification were reviewed against the frozen rubric. Original task/workers continued; no model restart, task replay or artifact repair.",
+    "Initial resume helper used OS Python without psycopg, then assumed a raw delivery rather than its actual envelope. Both failed before observer takeover or any model/task mutation.",
+    "Initial history audit inspected only first100 events. Original first-page result retained; following returned cursor established candidate final on page2."
+  ],
+  "integrity": {
+    "protocolAndScorerUnchanged": true,
+    "allOwnServicesStopped": true,
+    "protectedPidsUnchanged": true,
+    "modelArtifactsNotRepaired": true
+  },
+  "limits": [
+    "One fixed-order software pair with scripted participant; no actual-user usability, Houdini/visual acceptance or general reliability conclusion.",
+    "Both arms were offered proposal review, so this does not isolate presence versus absence of definition.",
+    "Current native runtime default was not changed; proposal-before-execution in the candidate was instruction-driven, not a newly enforced goal state.",
+    "No compaction in these runs; both required future pending-input qualification.",
+    "Reported total tokens include cached input; runtime includes coordinator participant-review delays and observer correction."
+  ],
+  "next": "Use current accepted definition and persistent histories to qualify pending primary input during real native reader/writer compaction; no fourth context or additional coordinator component."
+}
