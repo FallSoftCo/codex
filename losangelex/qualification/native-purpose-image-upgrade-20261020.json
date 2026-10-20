@@ -1,0 +1,29 @@
+{
+  "schema": "lax-purpose-image-upgrade-candidate/v1",
+  "at": 1792457127.1409929,
+  "state": "SDK110 source candidate; actual offline upgrade/rollback qualification still pending",
+  "purpose": "Deliver a newly qualified immutable native image to an existing three-context installation through its existing paused/offline upgrade transaction. Do not overwrite shared release paths or rebuild the identity.",
+  "inputs": [
+    "Optional binary plus mandatory matching expectedBinarySha256",
+    "Existing expectedInstallationSha256, paused canonical placement and stopped3purpose services",
+    "Protected runtime/interpreter and complete native package accessible under actual service UID"
+  ],
+  "preserved": [
+    "Original agent/authority/host/workspace/context identities and credentials",
+    "Native histories and unresolved operation receipts",
+    "Existing environment/provider routes and approved account identity",
+    "Original installation intent and encoded pre-upgrade bytes for rollback"
+  ],
+  "receiptChanges": [
+    "Native package preflight/hashes for selected image",
+    "Current native device/inode/config manifest provenance",
+    "nativeBinaryChanged records actual path change"
+  ],
+  "criteria": [
+    "Real offline upgrade and rollback on owned completed paused QA installation",
+    "Wrong expected native hash refuses publication with original bytes/canonical state intact",
+    "No service/model starts or accepted-work replay",
+    "Private Global cutover only after those checks and a fresh quiet-state/rollback preflight"
+  ],
+  "productionChanged": false
+}

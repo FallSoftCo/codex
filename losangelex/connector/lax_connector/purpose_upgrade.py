@@ -2,7 +2,8 @@
 
 The operator pauses its canonical placement and drains/stops all three services
 first. This command neither pauses admission nor stops/starts services. It keeps
-the original installation intent, native binary, histories, credentials and work.
+the original installation intent, histories, credentials and work. Native images switch only to an explicitly
+selected immutable package with its expected executable hash.
 An interrupted publication requires inspecting the original receipt or explicit
 offline rollback; it is never automatically replayed.
 """
@@ -11,6 +12,7 @@ import base64
 import fcntl
 import json
 import os
+import stat
 import subprocess
 from pathlib import Path
 from uuid import UUID
@@ -91,10 +93,17 @@ def upgrade(spec):
     if os.geteuid() != 0:
         raise PermissionError("Installation administrator required")
     if set(spec) - {"schema", "operationId", "authorityId", "agentId",
-                    "expectedInstallationSha256", "interpreter", "pythonRoot", "toolProfileFile"}:
+                    "expectedInstallationSha256", "interpreter", "pythonRoot", "toolProfileFile",
+                    "binary", "expectedBinarySha256"}:
         raise ValueError("Unsupported purpose upgrade field")
     if spec["schema"] != SCHEMA:
         raise ValueError("Explicit purpose upgrade required")
+    if ("binary" in spec) != ("expectedBinarySha256" in spec):
+        raise ValueError("Native image path and expected SHA256 must be supplied together")
+    if "binary" in spec:
+        digest = spec["expectedBinarySha256"]
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise ValueError("Explicit native executable SHA256 required")
     operation = str(UUID(spec["operationId"]))
     record = install.directory(spec["authorityId"], spec["agentId"])
     with registry_lock(record):
@@ -127,7 +136,28 @@ def upgrade(spec):
                 text=True))
             if not Path(runtime["module"]).is_relative_to(root) or runtime["prefix"] != str(root):
                 raise ValueError("Installed interpreter loads another connector")
-            updated = {**config, "pythonRoot": str(root)}
+            binary = Path(spec.get("binary", value["binary"]))
+            if not binary.is_absolute():
+                raise PermissionError("Explicit absolute native image path required")
+            binary = binary.resolve(strict=True)
+            from .native_package import preflight_as_owner
+            package = preflight_as_owner(str(binary), str(interpreter), value["uid"],
+                                         Path(value["home"]), workspace=config["workspace"])
+            if "binary" in spec:
+                if package["assets"]["entrypoint"]["sha256"] != spec["expectedBinarySha256"]:
+                    raise ValueError("Selected native executable differs from expected SHA256")
+                paths = [Path(asset["path"]) for asset in package["assets"].values()]
+                paths.append(Path(package["packageRoot"]) / "codex-package.json")
+                for path in paths:
+                    info = path.lstat()
+                    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+                        raise PermissionError("Native package must be administrator-owned and protected")
+                for path in binary.parents:
+                    info = path.stat()
+                    if info.st_uid != 0 or info.st_mode & 0o022:
+                        raise PermissionError("Native package parent is not protected")
+            image = binary.stat()
+            updated = {**config, "pythonRoot": str(root), "binary": str(binary)}
             if "toolProfileFile" in spec:
                 from .tool_profile import read
                 source = Path(spec["toolProfileFile"])
@@ -150,11 +180,9 @@ def upgrade(spec):
                 changes.append(stage(path, text))
                 import hashlib
                 definitions[unit] = hashlib.sha256(text).hexdigest()
-            from .native_package import preflight_as_owner
-            package = preflight_as_owner(value["binary"], str(interpreter), value["uid"],
-                                         Path(value["home"]), workspace=config["workspace"])
             import hashlib
-            new_value = {**value, "configSha256": hashlib.sha256(base64.b64decode(changes[0]["data"])).hexdigest(),
+            new_value = {**value, "binary": str(binary), "binaryDevice": image.st_dev,
+                         "binaryInode": image.st_ino, "configSha256": hashlib.sha256(base64.b64decode(changes[0]["data"])).hexdigest(),
                          "interpreter": str(interpreter), "pythonRoot": str(root), "runtime": runtime,
                          "unitDefinitionDigests": definitions, "nativePackage": package}
             changes.append(stage(manifest_path, new_value))
@@ -162,7 +190,7 @@ def upgrade(spec):
             receipt = {"schema": SCHEMA, "operationId": operation, "state": "intent",
                        "before": [encoded(p) for p in paths], "after": changes,
                        "beforeOffline": before, "servicesStarted": 0, "modelsStarted": 0,
-                       "nativeBinaryChanged": False, "identitiesReplaced": False}
+                       "nativeBinaryChanged": str(binary) != value["binary"], "identitiesReplaced": False}
             if offline(value, config) != before:
                 raise ValueError("Original state changed before upgrade")
             saved(intent_path, receipt)
