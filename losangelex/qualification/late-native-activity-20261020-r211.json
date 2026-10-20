@@ -1,0 +1,41 @@
+{
+  "schema": "lax-native-activity-origin-fix/v1",
+  "at": 1792465552.2788975,
+  "observedCase": "/var/lib/lax-operating-model-comparison-20261020-r208/room-dependency-r208",
+  "originalSDK": "0.1.0.dev110",
+  "candidateSDK": "0.1.0.dev111",
+  "nativeImageUnchanged": "f28cb6ba879472fcbd2538cb0644813ec6d73dda56c9232cc6988db28cb4c552",
+  "actualFailure": {
+    "delivery": "4d66ad30-286d-47d5-a2ba-99cd4690f782",
+    "oldNativeTurn": "01a1573a-6c7e-7e10-a0b3-165f00c74c1c",
+    "continuedNativeTurn": "01a1573b-ed79-7573-9c2b-8298d7aaee3a",
+    "eventAt": 1792465036.7414746,
+    "outcome": "OriginalconsumerUNKNOWN, stalecardrev1; reader correctly interpreted actualpeerrelease and amended unfinishedwork. No repair/replay of originaltrial.",
+    "cause": "Old-turncommandcompletion raised Activity current-turn mismatch. Exception killed RPCnotification reader; finally emittedruntimeLost even without nativeprocesscrash evidence."
+  },
+  "change": "Resolve activity from accepted original perturnscope receipts; preserve one existing immutableoutbox andcanonicalserverfences. Record unknown/malformed attribution as privategap, without relabeling events or killing execution. Observe lateknown events while idle too. No newcomponent/DBtable/API or widened execution grants.",
+  "mechanicalReplay": {
+    "source": "tests/fixtures/late_command_completion_r208.json",
+    "before": {
+      "errors": 3,
+      "failures": 1,
+      "tests": 4
+    },
+    "after": {
+      "passed": 4,
+      "tests": 4
+    },
+    "purposeExecutionRegression": {
+      "passed": 3,
+      "tests": 3
+    },
+    "logHashes": {
+      "before.log": "071cfe3d72a372721b967046bbe2d3a30d8902a6b0d06e439f5d0cffd7b760a5",
+      "after.log": "bf7dcac0b79efbc45b48183e4fb256198febe14d06570821cd04d8f13aca97c8",
+      "purpose-execution-regression.log": "7d59a8fbca92ef540f42b6883247c3844892d23f501b6cf2621d0e535813fb81"
+    },
+    "nativeModelCalls": 0,
+    "claim": "Captured actual notification replay through actual AppServer._read andContextRunner; not semanticmodel or productionproof."
+  },
+  "qualification": "Full actual-model fresh requalification still required. OriginalSDK110 controlcase remains unchanged. No liveproduction/Global update."
+}

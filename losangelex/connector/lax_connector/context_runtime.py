@@ -11,7 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 from aiohttp import ClientSession, ClientTimeout
 from .context_contract import COMMON, ROLES, ACTIONS, tools
-from .activity import Activity
+from .purpose_activity import PurposeActivity
 from .execution_scope import ExecutionScope
 from .native_tool_session import NativeToolSession, definitions
 from .native_tool_catalog import PURPOSE_CAPABILITIES as CAPABILITIES
@@ -47,8 +47,7 @@ class ContextRunner:
         self.native_items={}
         self.executor=None
         self.early_activity=[]
-        self.activity=Activity(state=self.state,scope=lambda:self.execution_scope,
-            send=self.send_activity,secrets=tuple(self.config["tokens"].values())) if purpose=="writer" else None
+        self.activity=PurposeActivity(self) if purpose=="writer" else None
         self.declarations=tools(purpose) + (definitions(self.config.get("installedPurposeRuntime",False)) if purpose=="writer" else [])
         self.context_names={t["name"] for t in tools(purpose)}
         self.allowed={t["name"] for t in self.declarations}
@@ -256,8 +255,8 @@ class ContextRunner:
             self.turn=params["turn"]["id"]
             old=json.loads((self.state/"wake.json").read_text())
             saved(self.state/"wake.json",{**old,"nativeTurn":self.turn})
-        if self.activity and self.active and method in ("item/started","item/completed","turn/plan/updated"):
-            if self.execution_scope is None:
+        if self.activity and method in ("item/started","item/completed","turn/plan/updated"):
+            if self.execution_scope is None and self.active:
                 if len(self.early_activity)>=1024:
                     raise RuntimeError("Unbound native activity exceeded bounded admission buffer")
                 self.early_activity.append((method,params))

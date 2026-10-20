@@ -69,6 +69,12 @@ material must preserve its source, purpose, revision and authorized audience.
 Observation timeouts do not establish execution failure or authorize a replacement
 turn. Recovery observes the exact original native turn and operation receipts.
 
+Native execution activity belongs to its accepted original agent, work and turn,
+even when a background command finishes during a later inference or while idle.
+Unknown activity attribution remains an explicit private logging gap; it must not
+be relabeled as current work or terminate an otherwise live model transport.
+Activity receipts do not grant new execution authority.
+
 Purpose separation must reuse the native execution, administration, work/review
 and cooperation mechanisms. Internal context material is a handoff, not another
 authoritative work acceptance ledger. Do not silently lose these capabilities

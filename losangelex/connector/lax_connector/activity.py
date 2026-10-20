@@ -18,11 +18,13 @@ class Activity:
         self.task = None
         self.wake = asyncio.Event()
 
-    def record(self, method, params):
+    def record(self, method, params, *, captured_scope=None):
         from .journal import saved
 
         c = self.connector
-        captured = self.scope() if self.scope is not None else None
+        captured = captured_scope
+        if captured is None and self.scope is not None:
+            captured = self.scope()
         if self.scope is not None and captured is None:
             return
         if captured is not None:

@@ -1,0 +1,80 @@
+{
+  "schema": "observed-late-native-command/v1",
+  "sourceCase": "/var/lib/lax-operating-model-comparison-20261020-r208/room-dependency-r208",
+  "observedAt": 1792465036.7414746,
+  "originalAdmission": {
+    "executionScopes": [
+      {
+        "id": "execution-1a306cd768806e142c94bb75636e76eb5314e901873d6d00c50d36f6ad2ae09c",
+        "schema": "lax-execution-scope/v2",
+        "executorId": "19d95af2-b140-59bb-bb7f-b0947055b5d8",
+        "authorityId": "ec0806b8-0d2f-4fd2-ba1e-193493c67d13",
+        "agentId": "8ebfbee4-1ef4-43a4-aad5-894d684c4a85",
+        "hostId": "b82f4d76-17d3-4231-9563-8ff1fbc237a8",
+        "workspaceId": "bed575d0-6ff8-40f8-9e6d-43cd3776b751",
+        "contextId": "36599943-8acb-4428-839e-3b799ea88529",
+        "purpose": "writer",
+        "roleRevision": 2,
+        "nativeThread": "01a15739-e8a2-7b73-90d7-24f05da2573e",
+        "nativeTurn": "01a1573a-6c7e-7e10-a0b3-165f00c74c1c",
+        "materialId": "1df14fbf-f1d8-53bf-a4b8-810caacd4fd3",
+        "sourceRequestId": "8be7b37c-bc3a-4161-92aa-bf622988f1d4",
+        "deliveryId": "4d66ad30-286d-47d5-a2ba-99cd4690f782",
+        "claimId": "context-admit:1df14fbf-f1d8-53bf-a4b8-810caacd4fd3",
+        "generation": 1
+      }
+    ]
+  },
+  "continuedAdmission": {
+    "executionScopes": [
+      {
+        "id": "execution-36774803f086adb3794e3b0596ba65ae16f18fd5a7c84d3455babfbbd267749b",
+        "schema": "lax-execution-scope/v2",
+        "executorId": "19d95af2-b140-59bb-bb7f-b0947055b5d8",
+        "authorityId": "ec0806b8-0d2f-4fd2-ba1e-193493c67d13",
+        "agentId": "8ebfbee4-1ef4-43a4-aad5-894d684c4a85",
+        "hostId": "b82f4d76-17d3-4231-9563-8ff1fbc237a8",
+        "workspaceId": "bed575d0-6ff8-40f8-9e6d-43cd3776b751",
+        "contextId": "36599943-8acb-4428-839e-3b799ea88529",
+        "purpose": "writer",
+        "roleRevision": 2,
+        "nativeThread": "01a15739-e8a2-7b73-90d7-24f05da2573e",
+        "nativeTurn": "01a1573b-ed79-7573-9c2b-8298d7aaee3a",
+        "materialId": "1df14fbf-f1d8-53bf-a4b8-810caacd4fd3",
+        "sourceRequestId": "8be7b37c-bc3a-4161-92aa-bf622988f1d4",
+        "deliveryId": "4d66ad30-286d-47d5-a2ba-99cd4690f782",
+        "claimId": "context-admit:1df14fbf-f1d8-53bf-a4b8-810caacd4fd3",
+        "generation": 1
+      }
+    ]
+  },
+  "notification": {
+    "method": "item/completed",
+    "params": {
+      "item": {
+        "type": "commandExecution",
+        "id": "exec-dbd6e26b-d67e-423e-83d7-28fc6ae41079",
+        "pluginId": null,
+        "scriptPath": null,
+        "command": "/bin/bash -lc 'python3 _qualification_verify.py'",
+        "cwd": "/var/lib/harness/ec0806b8-0d2f-4fd2-ba1e-193493c67d13/purpose-agents/8ebfbee4-1ef4-43a4-aad5-894d684c4a85/home/work",
+        "processId": "30123",
+        "source": "unifiedExecStartup",
+        "status": "completed",
+        "commandActions": [
+          {
+            "type": "unknown",
+            "command": "python3 _qualification_verify.py"
+          }
+        ],
+        "aggregatedOutput": "{\"fixture\": \"timing-only\", \"initialCard\": {\"revision\": 1, \"featureId\": \"cohort-practice\", \"availability\": \"planned\", \"minParticipants\": 5, \"requiresAllConsent\": false, \"eligibleCohorts\": 3, \"evidence\": {\"hostId\": \"b82f4d76-17d3-4231-9563-8ff1fbc237a8\", \"path\": \"/var/lib/harness/ec0806b8-0d2f-4fd2-ba1e-193493c67d13/purpose-agents/8ebfbee4-1ef4-43a4-aad5-894d684c4a85/home/work/PRODUCT.json\"}, \"evidenceStatus\": \"planning estimate; not a verified release\"}, \"completedAt\": 1792465036.6739717}\n",
+        "exitCode": 0,
+        "durationMs": 179887
+      },
+      "threadId": "01a15739-e8a2-7b73-90d7-24f05da2573e",
+      "turnId": "01a1573a-6c7e-7e10-a0b3-165f00c74c1c",
+      "completedAtMs": 1792465036682
+    }
+  },
+  "meaning": "Actual command completion outlived its original inference; arrived during a later inference in the same persistent writer."
+}
