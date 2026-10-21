@@ -139,8 +139,10 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
         collaboration_install.prepare({"schema": "lax-collaboration-install/v1",
             "controllerConfig": str(controller_path), "administratorConfig": str(admin_path),
             "interpreter": profile["interpreter"],
-            "resources": [{"name": "global-private", "root": config["workspace"], "environmentId": "local"}],
-            "agents": {global_id: {"resources": ["global-private"], "defaultResource": "global-private"}}}, setup)
+            "resources": [{"name": "global-private", "root": config["workspace"], "environmentId": "local"},
+                          *profile.get("physicalResources", [])],
+            "agents": {global_id: {"resources": ["global-private", *[r["name"] for r in profile.get("physicalResources", [])]],
+                                  "defaultResource": "global-private"}}}, setup)
     collaboration = collaboration_install.apply(setup)
     observer = "lax-host-" + authority.replace("-", "")[:8] + "-" + host_id.replace("-", "")[:8] + ".service"
     unit = ("[Unit]\nDescription=LAX native host observer " + host_id + "\nAfter=network-online.target\n"
