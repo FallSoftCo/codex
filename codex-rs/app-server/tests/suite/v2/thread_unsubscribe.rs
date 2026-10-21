@@ -336,6 +336,7 @@ async fn thread_unsubscribe_during_turn_keeps_turn_running(delay_secs: u64) -> R
     assert!(closed_while_tool_call_blocked.is_err());
 
     let response = DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputText {
             text: "dynamic-ok".to_string(),

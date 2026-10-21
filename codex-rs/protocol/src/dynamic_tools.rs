@@ -58,6 +58,9 @@ pub struct DynamicToolCallRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicToolResponse {
+    /// Optional bounded programmatic text for code mode; never automatically added to model history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_mode_text: Option<String>,
     /// Bounded host-supplied context, recorded as separate items before the next model step.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub context_fragments: Vec<String>,

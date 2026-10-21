@@ -4890,6 +4890,7 @@ fn codex_error_info_serializes_active_turn_not_steerable_turn_kind_in_camel_case
 #[test]
 fn dynamic_tool_response_serializes_content_items() {
     let value = serde_json::to_value(DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputText {
             text: "dynamic-ok".to_string(),
@@ -4915,6 +4916,7 @@ fn dynamic_tool_response_serializes_content_items() {
 #[test]
 fn dynamic_tool_response_serializes_text_image_and_audio_content_items() {
     let value = serde_json::to_value(DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![
             DynamicToolCallOutputContentItem::InputText {

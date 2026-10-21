@@ -493,6 +493,7 @@ async fn dynamic_tool_call_round_trip_sends_text_content_items_to_model() -> Res
 
     // Respond to the tool call so the model receives a function_call_output.
     let response = DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputText {
             text: "dynamic-ok".to_string(),
@@ -727,6 +728,7 @@ async fn dynamic_tool_call_round_trip_handles_content_items() -> Result<()> {
         },
     ];
     let response = DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: response_content_items,
         success: true,
@@ -821,6 +823,7 @@ async fn dynamic_tool_remote_image_response_becomes_model_visible_error() -> Res
     } = start_function_dynamic_tool_call(call_id).await?;
 
     let response = DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputImage {
             image_url: "https://example.com/tool.png".to_string(),
@@ -878,6 +881,7 @@ async fn dynamic_tool_remote_audio_response_becomes_model_visible_error() -> Res
     } = start_function_dynamic_tool_call(call_id).await?;
 
     let response = DynamicToolCallResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputAudio {
             audio_url: "https://example.com/tool.wav".to_string(),

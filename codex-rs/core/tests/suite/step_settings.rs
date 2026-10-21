@@ -372,6 +372,7 @@ async fn tool_result_history_keeps_originating_model_across_switch_and_replay() 
         },
     ];
     let response = DynamicToolResponse {
+        code_mode_text: None,
         context_fragments: Vec::new(),
         content_items,
         success: true,

@@ -162,15 +162,18 @@ impl DynamicToolHandler {
             content_items,
             success,
             context_fragments: _,
+            code_mode_text,
         } = response;
         let body = content_items
             .into_iter()
             .map(FunctionCallOutputContentItem::from)
             .collect::<Vec<_>>();
-        Ok(boxed_tool_output(FunctionToolOutput::from_content(
-            body,
-            Some(success),
-        )))
+        Ok(boxed_tool_output(
+            super::dynamic_output::DynamicToolOutput {
+                model: FunctionToolOutput::from_content(body, Some(success)),
+                code_mode_text,
+            },
+        ))
     }
 }
 
@@ -248,7 +251,17 @@ async fn request_dynamic_tool(
         if cancellation_token.is_cancelled() {
             None
         } else {
-            let recorded = if !response.success && !response.context_fragments.is_empty() {
+            let recorded = if response
+                .code_mode_text
+                .as_ref()
+                .is_some_and(|text| text.len() > 262144)
+            {
+                Err(FunctionCallError::RespondToModel(
+                    "dynamic code-mode data exceeds262144 bytes; no context appended".to_string(),
+                ))
+            } else if !response.success
+                && (!response.context_fragments.is_empty() || response.code_mode_text.is_some())
+            {
                 Err(FunctionCallError::RespondToModel(
                     "failed dynamic tools cannot supply context fragments".to_string(),
                 ))
@@ -264,6 +277,7 @@ async fn request_dynamic_tool(
             if let Err(error) = recorded {
                 response.success = false;
                 response.context_fragments.clear();
+                response.code_mode_text = None;
                 response.content_items = vec![
                     codex_protocol::dynamic_tools::DynamicToolCallOutputContentItem::InputText {
                         text: error.to_string(),

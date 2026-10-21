@@ -48,6 +48,8 @@ async def journey(root,binary,kind):
         answer=tool_response(material,operation)
         if kind=="invalid":
             answer["contextFragments"]=[answer["contextFragments"][0],"x"*8193]
+        if kind=="invalid-programmatic":
+            answer["codeModeText"]="x"*262145
         return answer
     app=web.Application();app.router.add_post("/v1/responses",provider)
     server=web.AppRunner(app);await server.setup()
@@ -127,12 +129,13 @@ async def main():
         "frozenAt":time.time(),"sourceSha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "cases":["complete active direct and code-mode callback: next request full bounded fragments, cold reopen same thread",
                  "invalid batch: first valid fragment plus oversize fragment, zero appended",
+                 "oversize programmatic data: otherwise valid fragments, zero appended",
                  "cancelled original callback: late response cannot append to new turn"],
         "localResponsesFixture":True,"semanticModelClaim":False,
         "loadedSDKModule":material_module.__file__})
     results=[]
     try:
-        for kind in ["complete","complete-codemode","invalid","cancelled"]:
+        for kind in ["complete","complete-codemode","invalid","invalid-programmatic","cancelled"]:
             results.append(await journey(root/kind,os.environ["MATERIAL_BINARY"],kind))
     except BaseException as error:
         saved(root/"failure.json",{"at":time.time(),"error":repr(error),"casesCompleted":results})

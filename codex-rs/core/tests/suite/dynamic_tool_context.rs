@@ -71,6 +71,7 @@ async fn active_dynamic_callback_records_bounded_context_before_next_request(
         .submit(Op::DynamicToolResponse {
             id: "material-call".to_string(),
             response: DynamicToolResponse {
+                code_mode_text: None,
                 context_fragments: fragments.clone(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {
                     text: "Complete material prepared by the original callback.".to_string(),

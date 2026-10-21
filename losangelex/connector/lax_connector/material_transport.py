@@ -82,14 +82,24 @@ async def deliver(runner,snapshot,operation):
 
 
 def tool_response(snapshot, operation):
-    """Prepare only; the native callback owns append, persistence and continuation."""
+    """Prepare exact programmatic data plus separate bounded native model fragments."""
     items = fragments(snapshot, operation)
-    receipt = {"schema": "lax-context-material-tool-result/v1",
+    content = "".join(chunk["content"] for chunk in snapshot["chunks"])
+    result = {"reference": snapshot["reference"], "revision": snapshot["revision"],
+        "offset": 0, "encoding": "json/ascii", "content": content,
+        "nextOffset": None, "totalBytes": snapshot["totalBytes"], "sha256": snapshot["sha256"],
+        "meaning": "Exact serialized material at one read cut; no pagination remains. A read does not certify its assertions."}
+    text = json.dumps(result)
+    if len(text.encode()) > 262144:
+        raise ValueError("Complete programmatic material exceeds native data bound; use explicit revision/offset reads")
+    receipt = {"schema": "lax-context-material-tool-result/v2",
         "originalOperationId": operation, "reference": snapshot["reference"],
         "revision": snapshot["revision"], "sha256": snapshot["sha256"],
-        "totalBytes": snapshot["totalBytes"], "fragments": len(items),
+        "totalBytes": snapshot["totalBytes"], "offset": 0, "nextOffset": None,
+        "complete": True, "fragments": len(items),
         "state": "prepared_for_original_native_callback",
-        "meaning": "Complete material accompanies this result as separately bounded context fragments. No pagination call is needed. Preparation does not prove durable delivery, comprehension or execution."}
+        "meaning": "Complete data is returned to the calling program; separately bounded fragments accompany the model result. No pagination remains. Preparation does not prove durable delivery, comprehension or execution."}
     return {"success": True, "contentItems": [
         {"type": "inputText", "text": json.dumps(receipt)}],
+        "codeModeText": text,
         "contextFragments": [item["output"] for item in items]}

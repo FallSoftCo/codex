@@ -1,0 +1,21 @@
+{
+  "schema": "lax-code-mode-material-qualification/v1",
+  "at": 1792616706.072672,
+  "state": "mechanics_passed_source_checks_running",
+  "scope": "NativeToolOutput already separates programmatic data from model output. Optional bounded codeModeText restores exact prior JSON result/cursor for calling JS. Native still persists bounded material fragments; no giant automatic model/event item, no limits weakened.",
+  "actualFailure": "SDK123 receipt-only result broke an existing original generated pager; undefinednextOffset looped. Frozen real model run failed and is retained.",
+  "regressionFixture": "Exact recorded JS copied byte-for-byte with SHA25610cc9eaaa5994df6dea55d3fb78f663749a0f98f5f3b41c2a8cf453ed4720fea. Source fixture supplies fake material through local Responses fixture; no real model/semantic proof.",
+  "nativeCases": "Complete direct/code-mode callback, bad fragment batch, oversized programmatic data, cancellation/latecallback, same-thread coldreopen. Complete data checksum verified in actual code-mode store/load.",
+  "productionDeployed": false,
+  "automaticRefillProven": false,
+  "teamSourceImplementationDelivered": false,
+  "pending": [
+    "Source checks",
+    "Actual provider model continuation",
+    "Production Global finite Goal/Work proof",
+    "Automatic model-step refill",
+    "C4-C6 full-system qualification"
+  ],
+  "priorFailuresKept": true,
+  "upstreamLatestIntegrated": false
+}

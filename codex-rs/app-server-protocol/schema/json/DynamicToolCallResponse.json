@@ -67,6 +67,13 @@
     }
   },
   "properties": {
+    "codeModeText": {
+      "description": "Optional bounded programmatic text for code mode; never automatically added to model history.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "contentItems": {
       "items": {
         "$ref": "#/definitions/DynamicToolCallOutputContentItem"

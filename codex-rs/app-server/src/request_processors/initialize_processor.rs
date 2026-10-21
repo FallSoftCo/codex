@@ -211,7 +211,10 @@ impl InitializeRequestProcessor {
 
         let user_agent = get_codex_user_agent();
         let response = InitializeResponse {
-            lax_capabilities: vec!["dynamic_tool_context_fragments/v1".to_string()],
+            lax_capabilities: vec![
+                "dynamic_tool_context_fragments/v1".to_string(),
+                "dynamic_tool_code_mode_text/v1".to_string(),
+            ],
             user_agent,
             codex_home,
             platform_family: std::env::consts::FAMILY.to_string(),
