@@ -32,16 +32,19 @@ def open_root(root, *, search_only=False):
 
 
 def revision(root):
-    """Observe a bounded literal HEAD/ref under a nonsymlink .git directory.
+    """Read standard Git HEAD/ref metadata, including a registered linked checkout.
 
-    External worktree metadata must be explicitly supported before use. Reading
-    repository bytes never invokes hooks, filters, helpers or root-owned Git.
+    The linked metadata must use Git's conventional .git/worktrees layout and
+    point back to this exact checkout. No hooks, configuration or helpers run.
+    Every metadata directory/file is opened without following links.
     """
-    def read(relative):
+    def read(base, relative):
         flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
-        fd = open_root(root)
+        fd = open_root(str(base))
         try:
             parts = relative.split("/")
+            if any(part in ("", ".", "..") for part in parts):
+                raise ValueError("Literal Git metadata path required")
             for part in parts[:-1]:
                 child = os.open(part, flags | os.O_DIRECTORY, dir_fd=fd)
                 os.close(fd)
@@ -61,22 +64,50 @@ def revision(root):
                 os.close(child)
         finally:
             os.close(fd)
-    head = read(".git/HEAD")
+    checkout = Path(root)
+    fd = open_root(root)
+    try:
+        git_type = os.stat(".git", dir_fd=fd, follow_symlinks=False).st_mode
+    finally:
+        os.close(fd)
+    pointer = None
+    if stat.S_ISDIR(git_type):
+        metadata = common = checkout / ".git"
+    elif stat.S_ISREG(git_type):
+        pointer = read(checkout, ".git")
+        if not pointer.startswith("gitdir: "):
+            raise ValueError("Literal Git checkout metadata pointer required")
+        target = pointer[len("gitdir: "):]
+        metadata = Path(target)
+        if (not metadata.is_absolute() or str(metadata) != target
+                or metadata.parent.name != "worktrees" or metadata.parent.parent.name != ".git"):
+            raise ValueError("Registered conventional linked Git metadata required")
+        common = metadata.parent.parent
+        if read(metadata, "gitdir") != str(checkout / ".git") or read(metadata, "commondir") != "../..":
+            raise ValueError("Git linked metadata does not register this exact checkout")
+    else:
+        raise ValueError("Nonsymlink Git checkout metadata required")
+    head = read(metadata, "HEAD")
     if head.startswith("ref: "):
         ref = head[5:]
         if not re.fullmatch(r"refs/[A-Za-z0-9_./-]+", ref) or any(p in ("", ".", "..") for p in ref.split("/")):
             raise ValueError("Literal repository ref required")
+        # Git's private worktree namespaces stay local; ordinary refs are shared.
+        ref_root = metadata if ref.startswith(("refs/worktree/", "refs/bisect/", "refs/rewritten/")) else common
         try:
-            result = read(".git/" + ref)
+            result = read(ref_root, ref)
         except FileNotFoundError:
-            matches = [line.split(" ", 1)[0] for line in read(".git/packed-refs").splitlines() if line.endswith(" " + ref)]
+            matches = [line.split(" ", 1)[0] for line in read(common, "packed-refs").splitlines() if line.endswith(" " + ref)]
             if len(matches) != 1:
                 raise ValueError("Original repository ref is unavailable")
             result = matches[0]
-        if read(".git/HEAD") != head:
+        if read(metadata, "HEAD") != head:
             raise ValueError("Repository HEAD changed during observation")
     else:
         result = head
+    if pointer is not None and (read(checkout, ".git") != pointer
+            or read(metadata, "gitdir") != str(checkout / ".git") or read(metadata, "commondir") != "../.."):
+        raise ValueError("Git checkout registration changed during observation")
     if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", result):
         raise ValueError("Exact original repository revision required")
     return result

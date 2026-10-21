@@ -15,6 +15,8 @@ async def provision(c,arguments,operation,spec):
     spec={**spec,"machineIdentity":machine_identity(),"pythonRoot":c.config["pythonRoot"],
           "serviceMemoryMaxBytes":validate(arguments.get("serviceMemoryMaxBytes",
               c.config.get("workerServiceMemoryMaxBytes",DEFAULT_BYTES)))}
+    if "contextRebuildEnabled" in c.config:
+        spec["contextRebuildEnabled"]=c.config["contextRebuildEnabled"]
     if c.config.get("nativeCollaborationChannel"):
         spec["nativeCollaborationChannel"]=c.config["nativeCollaborationChannel"]
     if arguments.get("toolProfileFile"):

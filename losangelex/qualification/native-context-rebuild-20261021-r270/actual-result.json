@@ -1,0 +1,30 @@
+{
+  "at": 1792602613.1647074,
+  "state": "passed",
+  "error": null,
+  "seconds": 1504.5297548770905,
+  "goalId": "2deaf6ac-a951-5ea1-b5d0-dc9faac3a7cc",
+  "parentMaterialId": "5a497d7f-df46-5267-855e-bbb45c5e054d",
+  "originalFollowupSource": "ac5f9568-ebc1-4c39-90d7-96fcca8f666d",
+  "productionPidsPreserved": true,
+  "protectedPidsBefore": {
+    "hollywood-backbone.service": "3674595",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "lax-agent-e488f19b-2d4a0daa0514-reader.service": "3781558",
+    "lax-agent-e488f19b-2d4a0daa0514-responder.service": "3781560",
+    "lax-agent-e488f19b-2d4a0daa0514-writer.service": "3781559"
+  },
+  "protectedPidsAfter": {
+    "hollywood-backbone.service": "3674595",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "lax-agent-e488f19b-2d4a0daa0514-reader.service": "3781558",
+    "lax-agent-e488f19b-2d4a0daa0514-responder.service": "3781560",
+    "lax-agent-e488f19b-2d4a0daa0514-writer.service": "3781559"
+  },
+  "semanticModels": "Actual native provider calls; no generated model responses, lifecycle fixtures or operator output repair",
+  "priorResourceFailuresRetained": true,
+  "automaticMidInferenceResetProved": false,
+  "sharedWorkspaceConflictProved": false
+}

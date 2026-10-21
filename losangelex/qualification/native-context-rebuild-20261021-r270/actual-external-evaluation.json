@@ -1,0 +1,51 @@
+{
+  "checks": [
+    {
+      "args": [],
+      "invalid": false,
+      "exitCode": 0
+    },
+    {
+      "args": [
+        "--department",
+        "Sales"
+      ],
+      "invalid": false,
+      "exitCode": 0
+    },
+    {
+      "args": [
+        "--department",
+        "sales"
+      ],
+      "invalid": false,
+      "exitCode": 0
+    },
+    {
+      "args": [
+        "--department",
+        "Missing"
+      ],
+      "invalid": false,
+      "exitCode": 0
+    },
+    {
+      "args": [
+        "--department"
+      ],
+      "invalid": true,
+      "exitCode": 2
+    },
+    {
+      "args": [
+        "--department",
+        "Sales"
+      ],
+      "invalid": true,
+      "exitCode": 1
+    }
+  ],
+  "scriptSha256": "8b66c3cd6f292a4ad56fe9e7a627666d4f9c3aeb2e6db366b7d1adab7d6b77b2",
+  "oldArtifactsUnchanged": true,
+  "operatorArtifactRepair": false
+}

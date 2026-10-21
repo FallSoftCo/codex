@@ -1,6 +1,6 @@
 {
   "at": 1792601175.3893428,
-  "state": "Actual all-three-context reset passed; status answered while original remained waiting; peer delivery still running.",
+  "state": "Real-model continuation passed on SDK119/Hollywood85 after recorded SDK118 upgrade and activation-harness corrections. All3 contexts reset, status answered while original waited, actual peer delivery independently reviewed and original completed.",
   "architecture": "Reuse native TokenBudget no-summary checkpoint plus exact Hollywood marked-input manifests and a LAX original-action index; preserve native thread, context, agent and work identity. No extra coordinator or task ledger.",
   "nativeEvidence": "Actual native checkpoint/refill/reopen passed with zero provider/model requests; disclosed mechanical fixture, not semantic proof.",
   "databaseEvidence": "Authenticated PG API checks include selection revisions, purpose permissions, exact immutable snapshots and repeatable-read consistency across a concurrent commit.",
@@ -18,5 +18,11 @@
     "Hollywood85",
     "schema36"
   ],
-  "negotiation": "SDK118 correctly failed on cached old bind capability receipt; SDK119 versions the handshake operation. All original receipts and accepted follow-up preserved."
+  "negotiation": "SDK118 correctly failed on cached old bind capability receipt; SDK119 versions the handshake operation. All original receipts and accepted follow-up preserved.",
+  "limits": [
+    "Not an intervention-free initial SDK118 pass",
+    "No automatic mid-inference refill proof",
+    "No shared-edit conflict proof yet",
+    "No statistical superiority or production-wide qualification claim"
+  ]
 }
