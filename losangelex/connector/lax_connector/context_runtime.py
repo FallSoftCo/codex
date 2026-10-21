@@ -192,7 +192,9 @@ class ContextRunner:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
         binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3","workScheduling":2},
             operation="bind:"+hashlib.sha256(json.dumps([self.config["contextIds"][self.purpose],self.thread,
-                "lax-purpose-runtime/v3",2,1,1,"marked-context/v1"],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
+                "lax-purpose-runtime/v3",2,1,1,"marked-context/v1","complete-material/v1"],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
+        if binding.get("completeMaterialRead")!=1:
+            raise RuntimeError("Paired Hollywood complete material contract unavailable; hold this profile")
         if binding.get("contextSelection")!=1 or binding.get("contextRebuildSnapshot")!=1:
             raise RuntimeError("Paired Hollywood marked-context contract unavailable; do not start this candidate")
         if binding.get("runtimeProtocol")!="lax-purpose-runtime/v3":
@@ -256,6 +258,9 @@ class ContextRunner:
     async def submitted(self,method,params,success):
         if self.native_tools:
             await self.native_tools.attention.submitted(method,params,success)
+        failed=getattr(self,"material_delivery_failed_call",None)
+        if failed is not None and failed==params.get("callId"):
+            await self.cancel()
 
     async def event(self,method,params):
         if params.get("threadId") not in (None,self.thread):
@@ -319,6 +324,19 @@ class ContextRunner:
                 if name=="context_action_read":
                     from .context_action_memory import read
                     result=await read(self,arguments)
+                elif name=="context_material_read" and "offset" not in arguments:
+                    result=await self.request("read_complete",arguments,operation=operation)
+                    from .material_transport import deliver, MaterialDeliveryUnknown
+                    try:
+                        receipt=await deliver(self,result,operation)
+                    except MaterialDeliveryUnknown as error:
+                        self.accepting=False
+                        self.failed=True
+                        self.failure_reason=str(error)
+                        self.material_delivery_failed_call=params["callId"]
+                        raise
+                    self.trace("material_snapshot_delivered",receipt)
+                    return {"success":True,"contentItems":[{"type":"inputText","text":json.dumps(receipt)}]}
                 else:
                     result=await self.request(ACTIONS[name],arguments,operation=operation)
                 self.trace("tool_receipt",{"tool":name,"operation":operation,"result":result})
