@@ -1,0 +1,10 @@
+{
+  "at": 1792592467.6215096,
+  "reason": "Approved bootstrap file was expired; same approved account is currently authenticated in existing native installation",
+  "originalFailedNativeTurn": "01a15ed3-605b-7ff1-8512-373f32449513",
+  "sourceAccountDigest": "60cbd1ca925c5a3005ef42858cbca05f36199e6c21f66b51d6d7bdbcc72ffde6",
+  "sameOwnerAccount": true,
+  "newRequests": 0,
+  "semanticEffectsBeforeFailure": 0,
+  "modelsTriggeredOnlyByExplicitRecovery": true
+}

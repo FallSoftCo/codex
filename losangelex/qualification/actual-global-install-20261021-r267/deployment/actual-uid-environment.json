@@ -1,0 +1,44 @@
+{
+  "at": 1792592038.5806017,
+  "uid": 832,
+  "environmentState": "configured",
+  "checks": {
+    "sudo": {
+      "exitCode": 0,
+      "identity": "0"
+    },
+    "github": {
+      "exitCode": 0,
+      "identity": "aiyer-commits"
+    },
+    "system76": {
+      "exitCode": 0
+    },
+    "phone": {
+      "exitCode": 0
+    },
+    "laxSource": {
+      "readable": true,
+      "gitHead": "f2b32378635f7d8fbbde85e69ad1d9217df4ecc5"
+    },
+    "hollywoodSource": {
+      "readable": true,
+      "gitHead": "b2415de4cca8faab0e9c187cc06732ce716fc063"
+    },
+    "computerUse": {
+      "initialized": true,
+      "toolNames": [
+        "control",
+        "discover",
+        "resources",
+        "run",
+        "status"
+      ],
+      "fiveRequiredPresent": true,
+      "jobsSubmitted": 0
+    }
+  },
+  "modelsStarted": 0,
+  "phoneInput": 0,
+  "browserJobs": 0
+}

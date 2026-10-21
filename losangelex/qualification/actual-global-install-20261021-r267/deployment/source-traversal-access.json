@@ -1,0 +1,11 @@
+{
+  "at": 1792592030.1716325,
+  "path": "/aosp/development",
+  "uid": 832,
+  "permission": "search-only; directory listing not granted",
+  "sourceBytesChanged": false,
+  "rollback": [
+    "setfacl",
+    "--restore=/var/lib/lax-existing-global-adoption-20261021-r266/cutover-r267/source-traversal-access.before.acl"
+  ]
+}

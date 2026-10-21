@@ -1,0 +1,14 @@
+{
+  "at": 1792591848.5229516,
+  "result": {
+    "agentId": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+    "purposes": [
+      "reader",
+      "responder",
+      "writer"
+    ],
+    "configured": true,
+    "existingPendingInputsIngested": 0
+  },
+  "legacyNativeHistoryRetained": true
+}

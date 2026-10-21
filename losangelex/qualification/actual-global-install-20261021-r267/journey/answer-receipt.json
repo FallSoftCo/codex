@@ -1,0 +1,82 @@
+{
+  "at": 1792592553158,
+  "accepted": {
+    "attention": {
+      "id": "ca987b0f-3563-5f4c-827e-2f04c766d658",
+      "authority": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+      "delivery": "0c417797-66ff-49ae-aecf-7a497d984f44",
+      "agent": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+      "human": "301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6",
+      "room": "91eacc0e-bdd1-530b-a3bd-23dfa7103761",
+      "event": "98105ac9-8807-4ad2-856f-b51e40738b0d",
+      "generation": 1,
+      "claim_id": "context-admit:6385b8e6-7c89-54cf-ac31-467e1b1752b4",
+      "native_thread": "01a15ed0-c545-7081-b930-983d81a1ae54",
+      "native_turn": "01a15ed6-ae50-7c63-bc79-bbf586136478",
+      "native_slot": "exec-313e6339-be3d-4cfc-8028-89182e35f7c3",
+      "method": "hollywood/question",
+      "request": {
+        "questions": [
+          {
+            "id": "report_filename",
+            "header": "Report filename",
+            "isOther": true,
+            "options": [
+              {
+                "label": "native-install-readiness.json",
+                "description": "Save the report with this filename."
+              },
+              {
+                "label": "native-install-report.json",
+                "description": "Save the report with this filename."
+              }
+            ],
+            "isSecret": false,
+            "question": "Which filename would you like for the private environment-readiness report?"
+          }
+        ],
+        "isBlocking": false
+      },
+      "digest": "20d6f1071a24feb80489d493ed4fe7b1d50b4ee478eea1242a61f9e3927b78d9",
+      "state": "response_submitted",
+      "response": {
+        "answers": {
+          "report_filename": {
+            "answers": [
+              "native-install-readiness.json"
+            ]
+          }
+        }
+      },
+      "response_author": "301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6",
+      "response_event": "7e9077f9-6981-4158-a9dc-f3043b1968ed",
+      "revision": 2,
+      "created_at": "2026-10-21 14:21:46.620359+00:00",
+      "updated_at": "2026-10-21 14:22:32.998142+00:00"
+    },
+    "scope": {
+      "authorityId": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+      "attentionId": "ca987b0f-3563-5f4c-827e-2f04c766d658",
+      "deliveryId": "0c417797-66ff-49ae-aecf-7a497d984f44",
+      "agentId": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+      "roomId": "91eacc0e-bdd1-530b-a3bd-23dfa7103761",
+      "hostId": "ec32d149-b563-589f-87c9-d5f468df1e79",
+      "generation": 1,
+      "nativeThread": "01a15ed0-c545-7081-b930-983d81a1ae54",
+      "nativeTurn": "01a15ed6-ae50-7c63-bc79-bbf586136478",
+      "requestDigest": "20d6f1071a24feb80489d493ed4fe7b1d50b4ee478eea1242a61f9e3927b78d9"
+    },
+    "deliveryState": "running",
+    "nativeConsumptionProved": false,
+    "canRespond": false,
+    "responseMode": "same-agent-context-input",
+    "continuation": {
+      "id": "dfb16cd2-7588-4858-a5a2-ae44f75563b8",
+      "event": "7e9077f9-6981-4158-a9dc-f3043b1968ed",
+      "state": "pending",
+      "native_thread": null,
+      "native_turn": null
+    }
+  },
+  "postCount": 1
+}

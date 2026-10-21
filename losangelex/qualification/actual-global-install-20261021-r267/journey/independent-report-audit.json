@@ -1,0 +1,8 @@
+{
+  "at": 1792592711.8902233,
+  "reportPath": "/var/lib/harness/e488f19b-0f60-46ca-bd48-4fe544f06757/purpose-agents/2d4a0daa-0514-475e-be1e-71decacbd5bc/home/work/native-install-readiness.json",
+  "sha256": "0529b2fc64cd8ff0dbdabf4d3875bf64bdcde46dd7412cc9ab2b000e03779009",
+  "size": 1955,
+  "observedFactsIndependentlyMatch": true,
+  "expectedOutputWasNotWrittenByHarness": true
+}

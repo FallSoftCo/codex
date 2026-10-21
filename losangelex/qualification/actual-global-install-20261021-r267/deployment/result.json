@@ -1,0 +1,136 @@
+{
+  "schema": "lax-actual-global-install-result/v1",
+  "at": 1792593137.3768177,
+  "outcome": "Bounded same-realm native Global migration and real-model question/execution/response completed after explicit same-account auth repair",
+  "source": {
+    "connectorVersion": "0.1.0.dev116",
+    "hollywoodVersion": "0.3.0.dev83",
+    "nativeRustSource": "e1915bfaf2b54f71f5ef039b443ede8b0442f564",
+    "nativeExecutableSha256": "f28cb6ba879472fcbd2538cb0644813ec6d73dda56c9232cc6988db28cb4c552",
+    "nativeBuild": "Existing unoptimized qualified native package; no new Rust build or optimization certification"
+  },
+  "authorityId": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+  "globalAgentId": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+  "ownerHumanId": "301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6",
+  "globalRoomId": "3dd596b7-7a73-4828-969b-335c130551dc",
+  "apiEndpoint": "127.0.0.1:18776",
+  "schemaVersion": 34,
+  "contextThreads": {
+    "reader": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+    "writer": "01a15ed0-c545-7081-b930-983d81a1ae54",
+    "responder": "01a15ed0-c296-7b00-acf2-f72367461b6a"
+  },
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "services": {
+    "hollywood-backbone.service": {
+      "MainPID": "3674595",
+      "NRestarts": "0",
+      "MemoryCurrent": "62337024",
+      "ActiveState": "active"
+    },
+    "lax-host-e488f19b0f60.service": {
+      "MainPID": "3706946",
+      "NRestarts": "0",
+      "MemoryCurrent": "14217216",
+      "ActiveState": "active"
+    },
+    "lax-collaboration-e488f19b-ec32d149.service": {
+      "MainPID": "3706817",
+      "NRestarts": "0",
+      "MemoryCurrent": "17514496",
+      "ActiveState": "active"
+    },
+    "lax-agent-e488f19b-2d4a0daa0514-reader.service": {
+      "MainPID": "3781558",
+      "NRestarts": "0",
+      "MemoryCurrent": "241295360",
+      "ActiveState": "active"
+    },
+    "lax-agent-e488f19b-2d4a0daa0514-writer.service": {
+      "MainPID": "3781559",
+      "NRestarts": "0",
+      "MemoryCurrent": "225579008",
+      "ActiveState": "active"
+    },
+    "lax-agent-e488f19b-2d4a0daa0514-responder.service": {
+      "MainPID": "3781560",
+      "NRestarts": "0",
+      "MemoryCurrent": "161820672",
+      "ActiveState": "active"
+    },
+    "nextcomp-native-core.service": {
+      "MainPID": "2583312",
+      "NRestarts": "0",
+      "MemoryCurrent": "55169024",
+      "ActiveState": "active"
+    }
+  },
+  "bootTargetEnabled": "lax-native-e488f19b-2d4a0daa.target",
+  "actualUidEnvironment": {
+    "uid": 832,
+    "sudo": true,
+    "github": "aiyer-commits",
+    "system76Ssh": true,
+    "phoneSsh": true,
+    "computerUseTools": [
+      "discover",
+      "resources",
+      "run",
+      "status",
+      "control"
+    ],
+    "browserJobs": 0,
+    "phoneInput": 0,
+    "sourceHeadsVerified": true,
+    "buildEntry": "/usr/local/bin/storage-build",
+    "buildOwner": "aosp",
+    "buildsStarted": 0
+  },
+  "originalRequest": {
+    "operationId": "actual-native-r267:readiness-request",
+    "eventId": "c97ed259-0e18-40b6-9d3a-1518c3cd3234",
+    "deliveryId": "0c417797-66ff-49ae-aecf-7a497d984f44",
+    "generation": 1,
+    "state": "completed",
+    "requestPosts": 1,
+    "answerPosts": 1,
+    "finalResponses": 1,
+    "activityEvents": 12,
+    "nativePatchCanonicalReceipt": true,
+    "freshClientReconnectRecovered": true,
+    "sameHistoriesAcrossControlledRestart": true
+  },
+  "preserved": {
+    "pairingAndOwner": true,
+    "nextcompPid": 2583312,
+    "legacyAgentUnitsStoppedDisabled": 12,
+    "otherPlacementsPaused": 11,
+    "oldHistoryAndRequests": true,
+    "pausedJobsAndTimersResumed": 0,
+    "privatePilotUntouched": true
+  },
+  "failureAndCorrection": {
+    "initialAuth": "Installed original approved bootstrap credentials expired; actual request failed workspace discovery401 before semantic effects. Original failed turn retained. Refreshed from existing authenticated same approved account after verified idle; new inference explicitly continued original pending input, no new request.",
+    "operationalScripts": [
+      "Initial placement check expected revision in schema21 snapshot, which has generation; corrected before first write",
+      "Missing local administrative journal directory corrected before first write",
+      "Initial client probe ran as root, while protected binding requires actual gateway owner UID; corrected before any send"
+    ],
+    "acceptanceIsAfterRecovery": true
+  },
+  "remaining": [
+    "Physical handset/FCM/voice not exercised; actual deployed client module and binding were exercised",
+    "Git worktree source-revision support is missing for consented edits; private-workspace native patch is qualified",
+    "Long-lived account token rotation across separate purpose homes and failed-inference attention/recovery need production qualification",
+    "Representative goal-development, relevance/compaction and multi-agent long-running convergence not established by this finite request",
+    "Multi-host execution, artifact download UX and business enterprise proof remain open"
+  ],
+  "rollback": {
+    "api": "Compatible H81/SDK116 fallback retained; preserve schema34/current canonical receipts; no stale DB restore or request replay",
+    "global": "Pause same canonical placement, drain and stop exact three purpose units before any runtime change; preserve current identity/work/history. Do not automatically restore old product supervisors.",
+    "privateEvidenceRoot": "/var/lib/lax-existing-global-adoption-20261021-r266/cutover-r267"
+  },
+  "broadGoalComplete": false,
+  "productionReplacementReady": false
+}

@@ -1,0 +1,18 @@
+{
+  "at": 1792591927.309833,
+  "bridge": {
+    "MainPID": "3706817",
+    "NRestarts": "0",
+    "ActiveState": "active"
+  },
+  "observer": {
+    "MainPID": "3706946",
+    "NRestarts": "0",
+    "ActiveState": "active"
+  },
+  "nextcomp": {
+    "MainPID": "2583312",
+    "NRestarts": "0",
+    "ActiveState": "active"
+  }
+}

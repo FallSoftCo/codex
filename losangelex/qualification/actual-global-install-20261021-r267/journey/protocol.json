@@ -1,0 +1,29 @@
+{
+  "schema": "actual-native-user-acceptance/v1",
+  "at": 1792592204.131082,
+  "authorityId": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+  "agentId": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+  "humanId": "301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6",
+  "roomId": "91eacc0e-bdd1-530b-a3bd-23dfa7103761",
+  "operationId": "actual-native-r267:readiness-request",
+  "task": "This is a disclosed scripted installation acceptance request, authorized by the deployment owner, in a disposable platform QA room. Please prepare a small JSON environment-readiness report in your private workspace. Verify the actual host, effective sudo access, authenticated GitHub login, and the current LAX and Hollywood source revisions from your installed environment. Do not edit source, publish, contact anyone, start peers, or resume any previous/product/scheduled work. Before choosing the report filename, ask me whether I want native-install-readiness.json or native-install-report.json and wait for my answer. Then write that file with the observed facts and provide one concise final response with its artifact reference. Keep command execution in the activity stream. This is one finite task, not authorization for further enterprise work.",
+  "author": "Disclosed scripted deployment-owner QA human; not an agent message relabeled as a human instruction",
+  "budgets": {
+    "seconds": 600,
+    "maximumNativeTokens": 80000
+  },
+  "acceptance": [
+    "Same Global identity, three independent native threads",
+    "Exactly one original human request and one bound authenticated human question answer, no coaching/replays",
+    "Actual host/sudo/GitHub/source facts written to chosen private file and independently checked",
+    "Attributable final response and separate execution activity visible through actual deployed NextComp Hollywood client module",
+    "Fresh client reconnect can recover original command and history without new submission",
+    "Other old agents/NextComp/pairing unchanged"
+  ],
+  "notProven": [
+    "Physical handset/FCM/voice",
+    "Statistical semantic stability",
+    "Multi-host execution or enterprise business success",
+    "Source-worktree native edit mutation"
+  ]
+}

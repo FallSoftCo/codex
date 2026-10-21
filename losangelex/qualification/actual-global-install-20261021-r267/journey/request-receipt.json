@@ -1,0 +1,41 @@
+{
+  "at": 1792592272370,
+  "accepted": {
+    "accepted": true,
+    "event": {
+      "id": "c97ed259-0e18-40b6-9d3a-1518c3cd3234",
+      "authority": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+      "seq": 17853,
+      "room": "91eacc0e-bdd1-530b-a3bd-23dfa7103761",
+      "author": "301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6",
+      "recipient": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+      "kind": "request",
+      "audience": "room",
+      "body": "This is a disclosed scripted installation acceptance request, authorized by the deployment owner, in a disposable platform QA room. Please prepare a small JSON environment-readiness report in your private workspace. Verify the actual host, effective sudo access, authenticated GitHub login, and the current LAX and Hollywood source revisions from your installed environment. Do not edit source, publish, contact anyone, start peers, or resume any previous/product/scheduled work. Before choosing the report filename, ask me whether I want native-install-readiness.json or native-install-report.json and wait for my answer. Then write that file with the observed facts and provide one concise final response with its artifact reference. Keep command execution in the activity stream. This is one finite task, not authorization for further enterprise work.",
+      "source": null,
+      "data": {
+        "authorKind": "human"
+      },
+      "created_at": "2026-10-21 14:17:52.257432+00:00"
+    },
+    "deliveries": [
+      {
+        "id": "0c417797-66ff-49ae-aecf-7a497d984f44",
+        "authority": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+        "event": "c97ed259-0e18-40b6-9d3a-1518c3cd3234",
+        "agent": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+        "host": null,
+        "generation": 0,
+        "claim_id": null,
+        "native_thread": null,
+        "native_turn": null,
+        "state": "pending",
+        "result_event": null,
+        "revision": 1,
+        "updated_at": "2026-10-21 14:17:52.258736+00:00",
+        "cancellation_requested": false
+      }
+    ]
+  },
+  "postCount": 1
+}

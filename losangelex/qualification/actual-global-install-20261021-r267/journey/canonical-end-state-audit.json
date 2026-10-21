@@ -1,0 +1,35 @@
+{
+  "at": 1792592712.250739,
+  "originalRequestEvent": "c97ed259-0e18-40b6-9d3a-1518c3cd3234",
+  "originalDelivery": "0c417797-66ff-49ae-aecf-7a497d984f44",
+  "originalGeneration": 1,
+  "originalState": "completed",
+  "requestPosts": 1,
+  "answerPosts": 1,
+  "contexts": [
+    {
+      "purpose": "reader",
+      "native_thread": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "active_turn": null
+    },
+    {
+      "purpose": "responder",
+      "native_thread": "01a15ed0-c296-7b00-acf2-f72367461b6a",
+      "active_turn": null
+    },
+    {
+      "purpose": "writer",
+      "native_thread": "01a15ed0-c545-7081-b930-983d81a1ae54",
+      "active_turn": null
+    }
+  ],
+  "finalResponseEventId": "f569c06b-fe8f-49d8-91c8-d016deefab06",
+  "finalResponse": "[native-install-readiness.json](/var/lib/harness/e488f19b-0f60-46ca-bd48-4fe544f06757/purpose-agents/2d4a0daa-0514-475e-be1e-71decacbd5bc/home/work/native-install-readiness.json)",
+  "activityEvents": 12,
+  "ordinaryFinalResponses": 1,
+  "otherPlacementsPaused": 11,
+  "oldSupervisorsStoppedDisabled": 12,
+  "pairingBytesAndNextcompPidPreserved": true,
+  "initialProviderFailureRetained": true,
+  "physicalPhoneProved": false
+}

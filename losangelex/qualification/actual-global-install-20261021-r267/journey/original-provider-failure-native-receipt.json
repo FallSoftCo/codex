@@ -1,0 +1,190 @@
+{
+  "nativeTurn": "01a15ed3-605b-7ff1-8512-373f32449513",
+  "events": [
+    {
+      "at": 1792592274.6779659,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 1/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592275.2747705,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 2/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592276.0806158,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 3/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592277.1851895,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 4/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592279.4254122,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 5/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592283.5879948,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 1/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592284.2907014,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 2/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592285.0552504,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 3/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592286.2628183,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 4/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592288.335164,
+      "event": "error",
+      "error": {
+        "message": "Reconnecting... 5/5",
+        "codexErrorInfo": {
+          "responseStreamDisconnected": {
+            "httpStatusCode": null
+          }
+        },
+        "additionalDetails": "workspace routing discovery unauthorized (401)",
+        "misalignment": null
+      },
+      "willRetry": true,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    },
+    {
+      "at": 1792592292.0390096,
+      "event": "error",
+      "error": {
+        "message": "workspace routing discovery unauthorized (401)",
+        "codexErrorInfo": "other",
+        "additionalDetails": null,
+        "misalignment": null
+      },
+      "willRetry": false,
+      "threadId": "01a15ed0-c2fc-7a50-8937-4ff1f49e1213",
+      "turnId": "01a15ed3-605b-7ff1-8512-373f32449513"
+    }
+  ],
+  "semanticEffects": 0,
+  "sameRequestContinuedAfterRepair": true
+}

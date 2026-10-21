@@ -1,0 +1,42 @@
+{
+  "at": 1792592100.6654475,
+  "activation": {
+    "servicesStarted": true,
+    "units": {
+      "reader": "lax-agent-e488f19b-2d4a0daa0514-reader.service",
+      "writer": "lax-agent-e488f19b-2d4a0daa0514-writer.service",
+      "responder": "lax-agent-e488f19b-2d4a0daa0514-responder.service"
+    },
+    "modelSubmissionByInstaller": false
+  },
+  "startup": {
+    "schema": "lax-native-startup/v1",
+    "authorityId": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+    "agentId": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+    "unit": "lax-native-e488f19b-2d4a0daa.target",
+    "definition": "/etc/systemd/system/lax-native-e488f19b-2d4a0daa.target",
+    "nativeServices": [
+      "lax-agent-e488f19b-2d4a0daa0514-reader.service",
+      "lax-agent-e488f19b-2d4a0daa0514-responder.service",
+      "lax-agent-e488f19b-2d4a0daa0514-writer.service",
+      "lax-collaboration-e488f19b-ec32d149.service",
+      "lax-host-e488f19b0f60.service"
+    ],
+    "additionalServices": [
+      "hollywood-backbone.service"
+    ],
+    "members": [
+      "hollywood-backbone.service",
+      "lax-agent-e488f19b-2d4a0daa0514-reader.service",
+      "lax-agent-e488f19b-2d4a0daa0514-responder.service",
+      "lax-agent-e488f19b-2d4a0daa0514-writer.service",
+      "lax-collaboration-e488f19b-ec32d149.service",
+      "lax-host-e488f19b0f60.service"
+    ],
+    "definitionSha256": "df50fa60e33b7e16291e45bdb82954a974899e1371ed9ceb2c589b0aaf539d18",
+    "bootState": "enabled",
+    "servicesStarted": false,
+    "modelSubmissionByInstaller": false
+  },
+  "installerModelSubmissions": 0
+}

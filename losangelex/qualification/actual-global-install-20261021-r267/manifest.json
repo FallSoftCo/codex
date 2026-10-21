@@ -1,0 +1,216 @@
+{
+  "schema": "lax-actual-global-install-evidence/v1",
+  "at": 1792593238.482021,
+  "files": [
+    {
+      "path": "deployment/result.json",
+      "sha256": "6c9afa8c5a5f56ff73322e3f5b1fd36f9ebc3d95323099c8a681fb4b0702a2d5",
+      "bytes": 5540
+    },
+    {
+      "path": "deployment/api-upgraded.json",
+      "sha256": "213d1396d0ce349c815815a0f52f6fe79380abeafb55b73289b5773ffd937965",
+      "bytes": 714
+    },
+    {
+      "path": "deployment/contexts-enrolled.json",
+      "sha256": "4dcc6732324727c48baf926dd1726a394622d9e4f178e7e98e3063e9d017b852",
+      "bytes": 282
+    },
+    {
+      "path": "deployment/purpose-prepared.json",
+      "sha256": "7ef041aba095bb0981dc2109b19747365c7e221a550561926b1a31a3994f8b60",
+      "bytes": 914
+    },
+    {
+      "path": "deployment/native-infrastructure-active.json",
+      "sha256": "8117eb607a5ba0cfffbc4edac65862cf9801a873b40014db0b7287ce942d1eca",
+      "bytes": 318
+    },
+    {
+      "path": "deployment/native-global-started.json",
+      "sha256": "3b3fdc47af66d28d08181a36138ae80e8c9e429be1bf6a28a9b8a6b9b4113d44",
+      "bytes": 1557
+    },
+    {
+      "path": "deployment/actual-uid-environment.json",
+      "sha256": "d2b083daf8079f8832f6ccf5abfa42ee4e41479cccdfeefdfeba5c647126d74c",
+      "bytes": 851
+    },
+    {
+      "path": "deployment/source-traversal-access.json",
+      "sha256": "681f72109749761a754ad1427f85087f6b6ed4039a27c8889146d025bd142501",
+      "bytes": 321
+    },
+    {
+      "path": "deployment/auth-recovery-intent.json",
+      "sha256": "bb854f32877d3a8c5cdeb95891bd3611e732950f4e905baacbd02b44e279c88b",
+      "bytes": 460
+    },
+    {
+      "path": "deployment/auth-recovered.json",
+      "sha256": "12c0089b96299805be8c928a856f27fc55a66d16c6073aaf763531d658e20bc2",
+      "bytes": 450
+    },
+    {
+      "path": "deployment/build-route-accepted.json",
+      "sha256": "fd4370a4eb524e040bb76a0e116186ff5c7183d10d050f30a5d230c49d0e3c1b",
+      "bytes": 348
+    },
+    {
+      "path": "journey/protocol.json",
+      "sha256": "f4ad95d39a2f73987772706a1b5506a697b91a4c777fd0957e1e9e4d67aa1be0",
+      "bytes": 2176
+    },
+    {
+      "path": "journey/request-send-intent.json",
+      "sha256": "9e45049ba21aea5c6bf255f2a2fe447e575625ada08d7aa0d2d18c96485e3a58",
+      "bytes": 1418
+    },
+    {
+      "path": "journey/request-receipt.json",
+      "sha256": "5838730fcd36794e63493b42f95f19b5253c3c00dc42f298e052927f6546d6af",
+      "bytes": 2046
+    },
+    {
+      "path": "journey/answer-send-intent.json",
+      "sha256": "07cf51c6b3043e8ba178d4edf4fd0d31a3760b6907c32faeff37bb37858a50b7",
+      "bytes": 1074
+    },
+    {
+      "path": "journey/answer-receipt.json",
+      "sha256": "e3c5ab5ca678db241d1341dcb07caa6601d5dc39dd3f18de2224cd4dd5716032",
+      "bytes": 3048
+    },
+    {
+      "path": "journey/question-waiting-idle-boundary.json",
+      "sha256": "e014c096f8939976102022ffb0beb3b736df1d0098d0b4c6b3c4b81f73d2339d",
+      "bytes": 195
+    },
+    {
+      "path": "journey/independent-report-audit.json",
+      "sha256": "a93572ee2944da33b85f9f36cf588146a06af111f5b76b9ca4a420114253cc9e",
+      "bytes": 382
+    },
+    {
+      "path": "journey/canonical-end-state-audit.json",
+      "sha256": "c6b077d09737340b1d5b6982e201284c0fe41fab0c18abecfe1156062fa1f874",
+      "bytes": 1180
+    },
+    {
+      "path": "journey/fresh-client-readback-summary.json",
+      "sha256": "b43f778948f65564bffd4f97594cf8c3e9703f17d9b838a7633fb5924d98fdb3",
+      "bytes": 522
+    },
+    {
+      "path": "artifacts/native-install-readiness.json",
+      "sha256": "0529b2fc64cd8ff0dbdabf4d3875bf64bdcde46dd7412cc9ab2b000e03779009",
+      "bytes": 1955
+    },
+    {
+      "path": "journey/original-provider-failure-native-receipt.json",
+      "sha256": "1dd7acd5411a2d82131997bbeba5e1b13e960a430654690fc7f73afa2525175f",
+      "bytes": 5655
+    },
+    {
+      "path": "source/preflight_actual_global_r267.py",
+      "sha256": "5ecf3a7d4ea986254f57517d913417b5a188aae50c829ca1224b57f2e17af2aa",
+      "bytes": 7743
+    },
+    {
+      "path": "source/upgrade_actual_global_api_r267.py",
+      "sha256": "97445a7dffdc91db7b0954ba380a940898c46d8572b42f6a12399fcb25349d78",
+      "bytes": 5768
+    },
+    {
+      "path": "source/prepare_actual_global_runtime_r267.py",
+      "sha256": "8453300dd23824ea7f8c2941f7f4ffe9de055272c05bde478da8613d632b2fe6",
+      "bytes": 3636
+    },
+    {
+      "path": "source/continue_actual_global_runtime_r267a.py",
+      "sha256": "c82cc17e9c14edfc521b3fc316e3e240ac003781616801ddf3616a617c441b8f",
+      "bytes": 3853
+    },
+    {
+      "path": "source/continue_actual_global_runtime_r267b.py",
+      "sha256": "657a327260c2aca77da61347f7f3878a27685af4d305879a682c10e0d41e11fc",
+      "bytes": 3895
+    },
+    {
+      "path": "source/install_actual_collaboration_r267.py",
+      "sha256": "cf4fcc8d62eb133006439bc96b09a803254837f5414b8cca100074ce3e520430",
+      "bytes": 1704
+    },
+    {
+      "path": "source/activate_actual_infrastructure_r267.py",
+      "sha256": "5976601a847382ac6f7613555a9c805b0318edef816408c16e82e2bafdea9fde",
+      "bytes": 2328
+    },
+    {
+      "path": "source/probe_actual_global_environment_r267.py",
+      "sha256": "1adf941aca192f5c31f0947f568ae45377aa3a3a5905a820d0f5fff920adc1a3",
+      "bytes": 3558
+    },
+    {
+      "path": "source/activate_actual_global_r267.py",
+      "sha256": "8f251b3091a1c9998f3c4ba1222e60085bba7dfc641d476a1098ee1f07f5aff9",
+      "bytes": 2007
+    },
+    {
+      "path": "source/prepare_actual_user_journey_r267.py",
+      "sha256": "c3e1494fea7f21b97e3e13b51c68d0b80ece380b6f8f9d469def61b28ef26366",
+      "bytes": 3634
+    },
+    {
+      "path": "source/send_actual_user_journey_r267-before-owner-uid.mjs",
+      "sha256": "4ff8b00243ba63662d69beef70f1271ef44967e382447fb4b49e3d4d94bd863a",
+      "bytes": 1678
+    },
+    {
+      "path": "source/send_actual_user_journey_r267.mjs",
+      "sha256": "0904e2266d8dc3440161663403a008a79a6260ce39c5a0759118901e21e1a77b",
+      "bytes": 2338
+    },
+    {
+      "path": "source/observe_actual_user_journey_r267.py",
+      "sha256": "f54a03a77ebc70d7eb69f1f5d40ff9440c088acc264d712578ab2d169ffddfbc",
+      "bytes": 2882
+    },
+    {
+      "path": "source/recover_actual_global_auth_r267.py",
+      "sha256": "3631d7df99c23124055f24f96dcce038c3017d68ae5040dd74450bb23f2cc45d",
+      "bytes": 4264
+    },
+    {
+      "path": "source/answer_actual_user_journey_r267.py",
+      "sha256": "7be19c261a5df572d7c4440ec47a52208d3a9b66d23e3945cb8d459d4cfe0c9c",
+      "bytes": 2251
+    },
+    {
+      "path": "source/audit_actual_user_journey_r267.py",
+      "sha256": "e5e94ec88f08ec54e53200041f10a68d84fc19d85f56e03962f8d31b3590ae94",
+      "bytes": 5117
+    },
+    {
+      "path": "source/audit_actual_client_readback_r267.py",
+      "sha256": "edb9d5c7b8f787e0a891009d245a125b0c479801f72b7351f83056dc9c896d28",
+      "bytes": 3352
+    },
+    {
+      "path": "source/reconcile_actual_build_route_r267.py",
+      "sha256": "3682972189d74969ce517611a46344cd5ba8b3aa90dcffab8670d468f6b96039",
+      "bytes": 5102
+    },
+    {
+      "path": "source/finalize_actual_global_r267.py",
+      "sha256": "d4fac843dc870f02aef7433ac3c4243df083ed2f0ed36a785cbf5792601f1c2b",
+      "bytes": 6021
+    }
+  ],
+  "credentialScan": "Exact allowlisted bytes checked against enrolled deployment-human, Global base/purpose, original approved auth and database credential values; no values retained",
+  "scope": "Actual deployed same-realm Global identity, real model user request, native question/answer, execution/patch, one responder reply and reconnect readback. First request failed with stale auth and recovery is included, not a clean-install success.",
+  "doNotReplay": "These scripts and request receipts are historical evidence. Original operations already accepted; inspect their canonical status, never rerun setup or POSTs.",
+  "currentServicesRemainRunning": true,
+  "noPhoneOrBusinessSuccessClaim": true
+}

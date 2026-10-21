@@ -1,0 +1,18 @@
+import json,os,time
+from pathlib import Path
+from uuid import UUID,uuid5
+from lax_connector.host import request
+from lax_connector.collaboration_capture import administrative_put
+from lax_connector.journal import saved
+A='e488f19b-0f60-46ca-bd48-4fe544f06757';G='2d4a0daa-0514-475e-be1e-71decacbd5bc';H='301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6'
+R=Path('/var/lib/lax-existing-global-adoption-20261021-r266');C=R/'cutover-r267';Q=C/'actual-user-journey'
+os.umask(0o077);assert not Q.exists(),'Read original user journey; no setup or send replay';Q.mkdir(mode=0o700);(Q/'administration').mkdir(mode=0o700)
+a=json.loads((R/'administrator.json').read_text());api=lambda m,p,b=None:request(a['hollywoodUrl'],a['token'],m,p,b)
+room=str(uuid5(UUID(G),'actual-native-user-acceptance-20261021-r267'))
+task="""This is a disclosed scripted installation acceptance request, authorized by the deployment owner, in a disposable platform QA room. Please prepare a small JSON environment-readiness report in your private workspace. Verify the actual host, effective sudo access, authenticated GitHub login, and the current LAX and Hollywood source revisions from your installed environment. Do not edit source, publish, contact anyone, start peers, or resume any previous/product/scheduled work. Before choosing the report filename, ask me whether I want native-install-readiness.json or native-install-report.json and wait for my answer. Then write that file with the observed facts and provide one concise final response with its artifact reference. Keep command execution in the activity stream. This is one finite task, not authorization for further enterprise work."""
+protocol={'schema':'actual-native-user-acceptance/v1','at':time.time(),'authorityId':A,'agentId':G,'humanId':H,'roomId':room,'operationId':'actual-native-r267:readiness-request','task':task,'author':'Disclosed scripted deployment-owner QA human; not an agent message relabeled as a human instruction','budgets':{'seconds':600,'maximumNativeTokens':80000},'acceptance':['Same Global identity, three independent native threads','Exactly one original human request and one bound authenticated human question answer, no coaching/replays','Actual host/sudo/GitHub/source facts written to chosen private file and independently checked','Attributable final response and separate execution activity visible through actual deployed NextComp Hollywood client module','Fresh client reconnect can recover original command and history without new submission','Other old agents/NextComp/pairing unchanged'],'notProven':['Physical handset/FCM/voice','Statistical semantic stability','Multi-host execution or enterprise business success','Source-worktree native edit mutation']}
+saved(Q/'protocol.json',protocol)
+r=administrative_put(Q,api,'rooms',{'operationId':'actual-native-r267:create-qa-room','id':room,'name':'Platform installation QA · 2026-10-21','purpose':'Disposable disclosed owner acceptance of the same-realm native Global installation. No product workers are enrolled or resumed.','ownerId':G},method='POST');saved(Q/'room-created.json',r)
+r=administrative_put(Q,api,'rooms/'+room+'/membership',{'operationId':'actual-native-r267:qa-human-membership','principalId':H,'can_read':True,'can_post':True,'can_request':True,'revision':0});saved(Q/'human-membership.json',r)
+saved(Q/'request.json',{'path':'rooms/'+room+'/messages','body':{'operationId':protocol['operationId'],'kind':'request','body':task,'audience':'room','recipientId':G},'lookup':'commands/'+protocol['operationId']})
+print(json.dumps({'roomId':room,'prepared':True,'sent':False,'protocol':str(Q/'protocol.json')}))

@@ -1,0 +1,19 @@
+{
+  "schema": "lax-global-api-upgrade-receipt/v1",
+  "at": 1792591465.9870818,
+  "apiPid": "3674595",
+  "schemaVersion": 34,
+  "runtime": "/opt/harness/native-existing-realm-20261021-r265/venv/bin/python",
+  "health": 200,
+  "actualGatewayReadback": {
+    "authorityId": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+    "principalId": "301c8b83-8cdb-5b9a-9d7f-3b2fa6f0b3f6",
+    "defaultRoomId": "3dd596b7-7a73-4828-969b-335c130551dc",
+    "rooms": 12
+  },
+  "nextcompPidUnchanged": true,
+  "bindingBytesUnchanged": true,
+  "legacyAgentUnitsStoppedAndDisabled": 12,
+  "modelsStarted": 0,
+  "phase": "Modern API active; original Global identity not yet purpose-enrolled/activated. Continue exact staged installation."
+}

@@ -1,0 +1,46 @@
+{
+  "report": "native-install-readiness",
+  "observed_on": "2026-10-21",
+  "filename_choice": {
+    "filename": "native-install-readiness.json",
+    "question_id": "ca987b0f-3563-5f4c-827e-2f04c766d658",
+    "authenticated_answer_event_id": "7e9077f9-6981-4158-a9dc-f3043b1968ed"
+  },
+  "host": {
+    "hostname": "ozzz-aosp",
+    "kernel": "Linux 6.8.0-124-generic x86_64",
+    "effective_uid": 832,
+    "effective_user": "hglobal-e488f19b-2d4a0daa0514",
+    "verification": "hostname; uname -srm; id"
+  },
+  "sudo": {
+    "noninteractive_root_verified": true,
+    "observed_uid": 0,
+    "observed_user": "root",
+    "verification": "sudo -n -- id"
+  },
+  "github": {
+    "authenticated": true,
+    "login": "aiyer-commits",
+    "verification": "gh api user --jq .login",
+    "exit_code": 0,
+    "credential_material_included": false
+  },
+  "sources": {
+    "LAX": {
+      "path": "/aosp/development/lax-three-context-20261018-r01/lax",
+      "revision": "f2b32378635f7d8fbbde85e69ad1d9217df4ecc5",
+      "branch": "harness/three-context-20261018-r01",
+      "tracked_worktree_clean": true
+    },
+    "Hollywood": {
+      "path": "/aosp/development/lax-three-context-20261018-r01/hollywood",
+      "revision": "b2415de4cca8faab0e9c187cc06732ce716fc063",
+      "branch": "harness/three-context-20261018-r01",
+      "tracked_worktree_clean": true
+    }
+  },
+  "source_verification": "Read-only git rev-parse, symbolic-ref and status --porcelain=v1 --untracked-files=no under sudo with GIT_OPTIONAL_LOCKS=0 and exact-path process-local safe.directory overrides. Initial aosp queries were rejected for root-owned repositories; no persistent Git configuration was changed.",
+  "unverified_requested_facts": [],
+  "scope": "Finite environment-readiness observation only; source revisions do not attest deployed binary provenance or broader product readiness. No source edits, publishing, peer starts, or previous/product/scheduled work resumption performed."
+}

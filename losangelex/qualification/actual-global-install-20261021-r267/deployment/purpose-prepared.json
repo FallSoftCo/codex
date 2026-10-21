@@ -1,0 +1,20 @@
+{
+  "schema": "lax-purpose-installation/v1",
+  "authorityId": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+  "agentId": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+  "hostId": "ec32d149-b563-589f-87c9-d5f468df1e79",
+  "uid": 832,
+  "linuxUser": "hglobal-e488f19b-2d4a0daa0514",
+  "home": "/var/lib/harness/e488f19b-0f60-46ca-bd48-4fe544f06757/purpose-agents/2d4a0daa-0514-475e-be1e-71decacbd5bc/home",
+  "config": "/var/lib/harness/e488f19b-0f60-46ca-bd48-4fe544f06757/purpose-agents/2d4a0daa-0514-475e-be1e-71decacbd5bc/home/agent.json",
+  "units": {
+    "reader": "lax-agent-e488f19b-2d4a0daa0514-reader.service",
+    "writer": "lax-agent-e488f19b-2d4a0daa0514-writer.service",
+    "responder": "lax-agent-e488f19b-2d4a0daa0514-responder.service"
+  },
+  "slice": "lax-agent-e488f19b-2d4a0daa0514.slice",
+  "aggregateMemoryMaxBytes": 8589934592,
+  "sudoVerifiedUid": 0,
+  "servicesStarted": false,
+  "phase": "prepared"
+}

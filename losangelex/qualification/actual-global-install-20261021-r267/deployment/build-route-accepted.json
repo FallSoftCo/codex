@@ -1,0 +1,15 @@
+{
+  "at": 1792592936.023547,
+  "state": "accepted",
+  "newEntry": "/usr/local/bin/storage-build",
+  "buildToolOwner": "aosp",
+  "toolVersions": {
+    "cargo": "1.95.0",
+    "just": "1.47.1"
+  },
+  "placementRevision": 3,
+  "globalOnlyRestartedAtFreshQuietBoundary": true,
+  "otherAgentsResumed": 0,
+  "buildsStarted": 0,
+  "pairingChanged": false
+}

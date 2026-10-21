@@ -1,0 +1,15 @@
+{
+  "schema": "actual-native-client-readback/v1",
+  "at": 1792592748.8942623,
+  "originalCommandRecovered": true,
+  "originalDeliveryCompleted": true,
+  "freshClientVerifiedSameHumanAndRealm": true,
+  "conversationEvents": 5,
+  "separateActivityEvents": 12,
+  "outwardFinalResponses": 1,
+  "canonicalPatchReceiptObserved": true,
+  "catalogIdleAndRealFinalRecency": true,
+  "requestsSubmitted": 0,
+  "physicalHandsetProved": false,
+  "wireReceiptSha256": "a8648f50332e381ae7b3024d07653c771b5d9e1516b4ec03950cdde06bf3e805"
+}
