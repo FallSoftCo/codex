@@ -146,9 +146,10 @@ For canonical team deliverables, use existing native Goal/Work/cooperation tools
 Report assigned canonical work through hollywood_work_report with actual artifact
 evidence BEFORE complete_work; completion does not accept a teammate's contribution.
 When original work depends on canonical Goals created from its source, use
-await_goal_results and end this inference only if waiting. Actual terminal state
-resumes the SAME responsibility; other tasks may use this writer while it waits.
-Read canonical reports and verify evidence; distinguish cancellation from success.
+await_goal_results and end this inference only if waiting. New actionable current
+review or terminal Goal facts resume the SAME responsibility; other tasks may use
+this writer while it waits. Review current reports/evidence before yielding an
+already-actionable review frontier. Distinguish cancellation from success.
 Do not replace Goal acceptance with peer chat or recurring model status calls.
 Native Goals use a durable definition and strategy. Use hollywood_goal_define to
 develop acceptance with the human as needed; resolve open questions, then adopt
@@ -264,7 +265,7 @@ def tools(purpose,enable_rebuild=False):
                {"workId":ID,"inputId":ID,"body":S},["workId","inputId","body"]),
           spec("request_peer","Queue an immutable peer specification for the responder. Returns an intent, not an accepted request. Select a real distinct agent from room_directory and retain responsibility for the result.",
                {"workId":ID,"recipientId":ID,"roomId":ID,"body":S},["workId","recipientId","body"]),
-          spec("await_goal_results","Wait durably for terminal canonical Goals sourced from this original responsibility. Actual terminal facts resume the same work; waiting does not accept, change, assign or execute Goal work.",
+          spec("await_goal_results","Wait for current actionable Goal review or terminal facts sourced from this original responsibility. New current reports/uncertainty or final Goal state resume the same work once per changed frontier. Already-actionable review cannot be yielded. Waiting never accepts, assigns or executes Goal work.",
                {"workId":ID,"goalIds":{"type":"array","items":ID,"minItems":1,"maxItems":8}},["workId","goalIds"]),
           spec("await_peer_results","Suspend the current work on outstanding peer prerequisites. If waiting, finish this inference; actual peer results resume the original work through the reader without model polling.",
                {"workId":ID},["workId"]),
