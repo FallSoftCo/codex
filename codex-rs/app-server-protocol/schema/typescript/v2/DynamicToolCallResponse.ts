@@ -5,9 +5,9 @@ import type { DynamicToolCallOutputContentItem } from "./DynamicToolCallOutputCo
 
 export type DynamicToolCallResponse = {
 /**
- * Optional bounded programmatic text for code mode; never automatically added to model history.
+ * Bounded programmatic text for code mode, or null; never added to model history.
  */
-codeModeText?: string | null,
+codeModeText: string | null,
 /**
  * Bounded host-supplied context, recorded as separate items before the next model step.
  */

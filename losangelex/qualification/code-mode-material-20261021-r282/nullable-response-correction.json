@@ -1,0 +1,9 @@
+{
+  "at": 1792617606.6526077,
+  "originalCheck": "checks/failure.json",
+  "originalSummary": "889 run:888 passed,1failed (unchanged TS optional-nullable guard)",
+  "correction": "v2 response codeModeText is required-nullable on serialization/TS, omission accepted on deserialization for older callback clients. No evaluator, expectation, provider/caller script or tool-output semantics weakened.",
+  "nativeRedeploymentRequired": true,
+  "oldCandidateRetained": true,
+  "productionChanged": false
+}

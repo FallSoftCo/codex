@@ -1,7 +1,7 @@
 {
   "schema": "lax-code-mode-material-qualification/v1",
-  "at": 1792616706.072672,
-  "state": "mechanics_passed_source_checks_running",
+  "at": 1792618441.2363217,
+  "state": "mechanics_and_affected_source_checks_passed",
   "scope": "NativeToolOutput already separates programmatic data from model output. Optional bounded codeModeText restores exact prior JSON result/cursor for calling JS. Native still persists bounded material fragments; no giant automatic model/event item, no limits weakened.",
   "actualFailure": "SDK123 receipt-only result broke an existing original generated pager; undefinednextOffset looped. Frozen real model run failed and is retained.",
   "regressionFixture": "Exact recorded JS copied byte-for-byte with SHA25610cc9eaaa5994df6dea55d3fb78f663749a0f98f5f3b41c2a8cf453ed4720fea. Source fixture supplies fake material through local Responses fixture; no real model/semantic proof.",
@@ -10,12 +10,14 @@
   "automaticRefillProven": false,
   "teamSourceImplementationDelivered": false,
   "pending": [
-    "Source checks",
-    "Actual provider model continuation",
-    "Production Global finite Goal/Work proof",
+    "Actual Global/provider model and original-team task",
     "Automatic model-step refill",
-    "C4-C6 full-system qualification"
+    "C4-C6 full system/upstream qualification"
   ],
   "priorFailuresKept": true,
-  "upstreamLatestIntegrated": false
+  "upstreamLatestIntegrated": false,
+  "nativeImage": "/opt/lax-code-mode-material-20261021-r282-r02/native",
+  "nativeSha256": "073872ad1002c5897ad35ad1d96a3f200ee10490f3151a86d8360beed15b70b2",
+  "sourceChecks": "Original889:888passed,1failednullable-responseguard. Corrected DTO, regenerated normal/experimental/PythonSDK.153affectedchecks initially151pass/2serializationfail; explicitly versioned two wire expectations for added null field, then requalified affected guard/exports/v2tests. Original results retained; not a claim whole suite rerun green.",
+  "actualModelContinuationPassed": false
 }

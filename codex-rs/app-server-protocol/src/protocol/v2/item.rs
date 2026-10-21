@@ -1678,8 +1678,8 @@ pub struct DynamicToolCallParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct DynamicToolCallResponse {
-    /// Optional bounded programmatic text for code mode; never automatically added to model history.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Bounded programmatic text for code mode, or null; never added to model history.
+    #[serde(default)]
     pub code_mode_text: Option<String>,
     /// Bounded host-supplied context, recorded as separate items before the next model step.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

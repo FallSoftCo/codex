@@ -4902,6 +4902,7 @@ fn dynamic_tool_response_serializes_content_items() {
     assert_eq!(
         value,
         json!({
+            "codeModeText": null,
             "contentItems": [
                 {
                     "type": "inputText",
@@ -4936,6 +4937,7 @@ fn dynamic_tool_response_serializes_text_image_and_audio_content_items() {
     assert_eq!(
         value,
         json!({
+            "codeModeText": null,
             "contentItems": [
                 {
                     "type": "inputText",

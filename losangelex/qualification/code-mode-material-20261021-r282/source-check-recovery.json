@@ -1,0 +1,21 @@
+{
+  "at": 1792618401.7568114,
+  "state": "targeted_passed",
+  "sourceBase": "059730dedd9ba01f21bab2739b48e30659d32995",
+  "sourceDiffSha256": "dce09269368abcbf18e910a718036590e4bb42fbd40ad5cbbdaf43ee2cb7f0af",
+  "artifacts": {
+    "codex-app-server": {
+      "path": "/aosp/development/lax-native-recovery-diagnostics-20261019-r145/target/debug/codex-app-server",
+      "sha256": "073872ad1002c5897ad35ad1d96a3f200ee10490f3151a86d8360beed15b70b2",
+      "bytes": 505353744
+    },
+    "codex-code-mode-host": {
+      "path": "/aosp/development/lax-native-recovery-diagnostics-20261019-r145/target/debug/codex-code-mode-host",
+      "sha256": "8918cde7514f25449d9f6e637a6e35dacca1f5ddf6c1bea5d22ac5d1d16775e9",
+      "bytes": 150425800
+    }
+  },
+  "productionChanges": 0,
+  "modelRequests": 0,
+  "fullSuitePending": true
+}

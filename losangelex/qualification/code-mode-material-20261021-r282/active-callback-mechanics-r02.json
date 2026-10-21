@@ -1,0 +1,52 @@
+{
+  "at": 1792617956.0527277,
+  "state": "passed",
+  "cases": [
+    {
+      "kind": "complete",
+      "sameNativeThread": "01a1605a-fe3c-7112-b6bb-ffb05f4fa2e6",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 21,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "complete-codemode",
+      "sameNativeThread": "01a1605b-0c84-7f90-bd54-f7cabe00e63b",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 21,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "invalid",
+      "sameNativeThread": "01a1605b-1bbb-7e00-818d-4fc01f97a807",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 0,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "invalid-programmatic",
+      "sameNativeThread": "01a1605b-299c-70e1-beb0-a4c6ddcf9ecb",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 0,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "cancelled",
+      "sameNativeThread": "01a1605b-3851-7fc0-a921-dec4854a2d01",
+      "responseFixtureRequests": 2,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 0,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    }
+  ],
+  "scope": "Actual native active callback, persistence and cold reopen with disclosed local Responses fixture. Zero external model calls; not proof of semantic behavior."
+}

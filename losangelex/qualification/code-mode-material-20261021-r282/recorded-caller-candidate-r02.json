@@ -1,0 +1,19 @@
+{
+  "at": 1792617936.9807968,
+  "state": "passed",
+  "actualCompatibility": true,
+  "observed": {
+    "observer": "recorded-read-v1",
+    "present": true,
+    "checksum": 510294417,
+    "length": 54169
+  },
+  "expectedChecksum": 510294417,
+  "nativeThread": "01a1605a-f3d6-7a20-a6d2-392a301ca3f4",
+  "materialCalls": 3,
+  "loopGuardUsed": false,
+  "capturedScriptUnchanged": "10cc9eaaa5994df6dea55d3fb78f663749a0f98f5f3b41c2a8cf453ed4720fea",
+  "providerModelRequests": 0,
+  "businessEffects": 0,
+  "scope": "Actual native+installed SDK, captured code-mode caller and exact stored-data checksum. Disclosed Responses fixture; no semantic architecture proof."
+}

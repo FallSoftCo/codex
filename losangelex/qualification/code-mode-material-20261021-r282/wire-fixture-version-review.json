@@ -1,0 +1,10 @@
+{
+  "at": 1792618326.7716932,
+  "originalResult": "checks-r02/failure.json",
+  "originalSummary": "153affectedchecks:151passed(includingTSguardandbothgeneratedexports),2failedserializationequality",
+  "wireDecision": "The deliberately added v2responsefield serializes None as codeModeText:null per required-nullable response contract. Earlier callback clients may still omit it on input via serde(default), exercised by actual recorded-caller context_read without that field.",
+  "testUpdate": "Only add codeModeText:null to two exact serialization expectations. Preserve contentItems/success equality. No removals or softened assertions. No captured-caller, checksum, semantic acceptance or model expected answer changed.",
+  "nativeRuntimeSourceChanged": false,
+  "SDKSourceChanged": false,
+  "allPriorFailuresRetained": true
+}

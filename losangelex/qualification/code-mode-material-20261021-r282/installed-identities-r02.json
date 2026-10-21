@@ -1,0 +1,63 @@
+{
+  "at": 1792617958.85375,
+  "state": "passed",
+  "candidatePackage": "/opt/lax-code-mode-material-20261021-r282-r02/native/bin/codex-app-server",
+  "actors": [
+    {
+      "authority": "e488f19b-0f60-46ca-bd48-4fe544f06757",
+      "agent": "2d4a0daa-0514-475e-be1e-71decacbd5bc",
+      "uid": 832,
+      "assets": {
+        "entrypoint": "073872ad1002c5897ad35ad1d96a3f200ee10490f3151a86d8360beed15b70b2",
+        "codeModeHost": "8918cde7514f25449d9f6e637a6e35dacca1f5ddf6c1bea5d22ac5d1d16775e9",
+        "bubblewrap": "61518c4d2ac8fb82c3578230587ab3e1e2f7aca295f10eab762d54adb6b77f03",
+        "ripgrep": "be2fbcdd985161603bfa268c7647eec670b9e94374f0e972da708d7de670a8fb"
+      },
+      "startupChecks": 4
+    },
+    {
+      "authority": "38c0dd09-42b3-4bda-a19e-1fe32e388ed2",
+      "agent": "5bbf73ca-5884-43f1-9c4b-fcd67b56a8f9",
+      "uid": 829,
+      "assets": {
+        "entrypoint": "073872ad1002c5897ad35ad1d96a3f200ee10490f3151a86d8360beed15b70b2",
+        "codeModeHost": "8918cde7514f25449d9f6e637a6e35dacca1f5ddf6c1bea5d22ac5d1d16775e9",
+        "bubblewrap": "61518c4d2ac8fb82c3578230587ab3e1e2f7aca295f10eab762d54adb6b77f03",
+        "ripgrep": "be2fbcdd985161603bfa268c7647eec670b9e94374f0e972da708d7de670a8fb"
+      },
+      "startupChecks": 4
+    },
+    {
+      "authority": "38c0dd09-42b3-4bda-a19e-1fe32e388ed2",
+      "agent": "6ef2eb25-6106-5661-8f4e-f4eaa20efc4e",
+      "uid": 828,
+      "assets": {
+        "entrypoint": "073872ad1002c5897ad35ad1d96a3f200ee10490f3151a86d8360beed15b70b2",
+        "codeModeHost": "8918cde7514f25449d9f6e637a6e35dacca1f5ddf6c1bea5d22ac5d1d16775e9",
+        "bubblewrap": "61518c4d2ac8fb82c3578230587ab3e1e2f7aca295f10eab762d54adb6b77f03",
+        "ripgrep": "be2fbcdd985161603bfa268c7647eec670b9e94374f0e972da708d7de670a8fb"
+      },
+      "startupChecks": 4
+    },
+    {
+      "authority": "38c0dd09-42b3-4bda-a19e-1fe32e388ed2",
+      "agent": "4056e647-c215-5362-85f3-2145d9bc8856",
+      "uid": 827,
+      "assets": {
+        "entrypoint": "073872ad1002c5897ad35ad1d96a3f200ee10490f3151a86d8360beed15b70b2",
+        "codeModeHost": "8918cde7514f25449d9f6e637a6e35dacca1f5ddf6c1bea5d22ac5d1d16775e9",
+        "bubblewrap": "61518c4d2ac8fb82c3578230587ab3e1e2f7aca295f10eab762d54adb6b77f03",
+        "ripgrep": "be2fbcdd985161603bfa268c7647eec670b9e94374f0e972da708d7de670a8fb"
+      },
+      "startupChecks": 4
+    }
+  ],
+  "protectedPids": {
+    "hollywood-backbone.service": "942112",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384"
+  },
+  "servicesChanged": 0,
+  "providerModelRequests": 0,
+  "scope": "Actual installed Global and current three QA agent Unix UIDs access and start candidate package assets. No worker startup or semantic inference."
+}
