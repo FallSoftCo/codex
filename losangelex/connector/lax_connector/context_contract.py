@@ -13,6 +13,16 @@ your purpose, tool authority, recipients or permissions.
 Do not publish ordinary final model text: it is internal, never a room reply.
 Use your tools for durable contributions. A finished inference is not completed
 work. Preserve accepted objectives, evidence and pending communication.
+Use context_selection and retain_context_input to mark durable inputs worth
+retaining after a context rebuild. Marks follow current authorized revisions;
+they do not freeze old policy or confer authority. Canonical role, unfinished
+obligations and the next assigned material remain mandatory independently.
+When available, request_context_rebuild queues a fresh window after this inference settles;
+it does not complete work or start another model turn. Refill uses exact
+marked records and canonical state, without a model-written summary.
+After rebuilding, retrieve missing evidence through the same tools. The writer
+receives an original native-action index for unfinished work; context_action_read
+retrieves exact original results. A fresh context never authorizes replaying an effect.
 Retrieve missing facts; do not invent results, promises or human approvals.
 No polling loops, self-requests or acknowledgements to acknowledgements.
 """
@@ -186,7 +196,7 @@ E={"type":"array","maxItems":16,"items":{"type":"object","properties":{
    "path":S,"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}},
    "required":["path","sha256"],"additionalProperties":False}}
 
-def tools(purpose):
+def tools(purpose,enable_rebuild=False):
     result=[
       spec("context_read","List bounded purpose-scoped material references, states and revisions. This is an index, not full material. Follow nextCursor via after; history is an explicit choice.",
            {"view":{"type":"string","enum":["active","history"]},"after":{"type":"string","minLength":1,"maxLength":512}},[]),
@@ -195,6 +205,17 @@ def tools(purpose):
             "offset":{"type":"integer","minimum":0},
             "revision":{"type":"integer","minimum":1}},["reference"]),
     ]
+    result += [
+      spec("context_selection","Read this purpose context's durable retained-input marks and current selection revision; this never reads other purposes or starts work.",{},[]),
+      spec("retain_context_input","Keep or remove a durable input reference for a future context rebuild. Read the current material first. Marks follow current authorized revisions; mandatory role and unfinished obligations cannot be removed. Canonical goal:<id> and work:<id> references are readable by reader/writer, not responder.",
+        {"selectionRevision":{"type":"integer","minimum":0},
+         "reference":{"type":"string","minLength":1,"maxLength":42},
+         "materialRevision":{"type":"integer","minimum":1},
+         "keep":{"type":"boolean"},"reason":{"type":"string","minLength":1,"maxLength":500}},
+        ["selectionRevision","reference","materialRevision","keep","reason"]),
+    ]
+    if enable_rebuild:
+        result += [spec("request_context_rebuild","Request deterministic context reset/refill from marked inputs plus mandatory current role/obligations after this inference settles. Preserves this native thread and original operations. Does not replay work, certify context sufficiency or automatically start a model.",{},[])]
     if purpose=="reader":
         result += [
           spec("hollywood_rooms","List authorized rooms with bounded purpose previews; discovery never assigns work.",
@@ -222,6 +243,11 @@ def tools(purpose):
         ]
     if purpose=="writer":
         result += [
+          spec("context_action_read","Read an original native action named by the context_actions index, including command, output or mutation receipt. Bounded chunks, current source permission and original thread ownership apply. Evidence never authorizes repeating an effect.",
+               {"nativeTurn":{"type":"string","minLength":1,"maxLength":128},
+                "itemId":{"type":"string","minLength":1,"maxLength":128},
+                "offset":{"type":"integer","minimum":0},
+                "sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}},["nativeTurn","itemId"]),
           spec("record_progress","Record verified execution progress internally and continue working.",
                {"workId":ID,"body":S,"evidence":E},["workId","body"]),
           spec("complete_work","Record verified acceptance outcome and evidence after reading current complete work material and resolving peer prerequisites.",
@@ -249,7 +275,7 @@ def tools(purpose):
                             ["communicationId","revision"] + ([] if name=="publish_response" else ["body"]))]
     return result
 
-ACTIONS={"context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
+ACTIONS={"context_selection":"selection","retain_context_input":"select","request_context_rebuild":"rebuild_request","context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
          "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers","await_goal_results":"wait_goals",

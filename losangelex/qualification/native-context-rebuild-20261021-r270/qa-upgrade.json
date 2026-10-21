@@ -1,0 +1,15 @@
+{
+  "at": 1792600660.4971905,
+  "versions": [
+    "0.1.0.dev118",
+    "0.3.0.dev85"
+  ],
+  "authority": "b8a5a216-8084-4ab5-9d76-39733eabc2eb",
+  "agent": "a9ed6dfe-cc83-43e5-a4bb-9580e8e087ff",
+  "servicesStarted": "Owned private QA API, host observer and collaboration bridge only",
+  "modelAgentsStarted": 0,
+  "productionPidsPreserved": true,
+  "privateRollbackRuntime": "/opt/harness/goal-contract-20261021-r269/venv",
+  "databaseBackupSha256": "84c21c41743d2b5f25ec1f9a8bdc0cd1f8fc27e9e7765f1f9aeac5d358aac38b",
+  "originalHistoriesAndPairingsRetained": true
+}

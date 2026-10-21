@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "nativeThreadPreserved": true,
+  "unselectedOldHistoryAbsentFromReplacement": true,
+  "exactRefillDurableAcrossReopen": true,
+  "modelRequests": 0,
+  "businessEffects": 0,
+  "manifest": "Disclosed mechanical fixture; no semantic/model proof",
+  "receipt": {
+    "checkpointTurnId": "01a15f4c-e87f-7ec1-9691-eb1d712cb29f",
+    "nativeHistorySha256": "c24946f9bd8f7ae683e1a95be90dddf9461158a192198a9dc6a949493799fd5f",
+    "nativeHistoryBytes": 39693,
+    "nativeActionsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "snapshotSha256": "f889ffd9e5759833c41aa1cdb6dee3ea3acb883d70f10e3f7716d48ea52a32ef",
+    "nativeThread": "01a15f4c-e63c-72b0-be07-7b20371db9ed",
+    "fragments": 2,
+    "modelTurnsStarted": 0,
+    "effectsReplayed": 0,
+    "semanticSufficiencyProved": false
+  }
+}

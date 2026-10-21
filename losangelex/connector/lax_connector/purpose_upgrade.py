@@ -94,7 +94,7 @@ def upgrade(spec):
         raise PermissionError("Installation administrator required")
     if set(spec) - {"schema", "operationId", "authorityId", "agentId",
                     "expectedInstallationSha256", "interpreter", "pythonRoot", "toolProfileFile",
-                    "binary", "expectedBinarySha256"}:
+                    "binary", "expectedBinarySha256", "contextRebuildEnabled"}:
         raise ValueError("Unsupported purpose upgrade field")
     if spec["schema"] != SCHEMA:
         raise ValueError("Explicit purpose upgrade required")
@@ -104,6 +104,8 @@ def upgrade(spec):
         digest = spec["expectedBinarySha256"]
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             raise ValueError("Explicit native executable SHA256 required")
+    if "contextRebuildEnabled" in spec and type(spec["contextRebuildEnabled"]) is not bool:
+        raise ValueError("Explicit context rebuild opt-in must be boolean")
     operation = str(UUID(spec["operationId"]))
     record = install.directory(spec["authorityId"], spec["agentId"])
     with registry_lock(record):
@@ -158,6 +160,8 @@ def upgrade(spec):
                         raise PermissionError("Native package parent is not protected")
             image = binary.stat()
             updated = {**config, "pythonRoot": str(root), "binary": str(binary)}
+            if "contextRebuildEnabled" in spec:
+                updated["contextRebuildEnabled"]=spec["contextRebuildEnabled"]
             if "toolProfileFile" in spec:
                 from .tool_profile import read
                 source = Path(spec["toolProfileFile"])

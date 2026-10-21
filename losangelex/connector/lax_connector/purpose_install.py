@@ -192,6 +192,10 @@ def install(spec, *, prepare_only=False):
         sandbox="danger-full-access",approvalPolicy="never",requireAdministrator=bool(spec.get("global")),
         installedPurposeRuntime=True,installationRecord=str(accepted),pythonRoot=spec["pythonRoot"],
         workerServiceMemoryMaxBytes=spec.get("serviceMemoryMaxBytes",8*1024**3))
+    if "contextRebuildEnabled" in spec:
+        if type(spec["contextRebuildEnabled"]) is not bool:
+            raise ValueError("Explicit context rebuild opt-in must be boolean")
+        config["contextRebuildEnabled"]=spec["contextRebuildEnabled"]
     if spec.get("nativeCollaborationChannel"):
         config["nativeCollaborationChannel"]=spec["nativeCollaborationChannel"]
     if spec.get("sourceConfig"):

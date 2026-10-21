@@ -1,0 +1,14 @@
+{
+  "at": 1792600237.45306,
+  "passed": true,
+  "checks": [
+    "purpose-owned selection CAS and original receipt dedup",
+    "role cannot be dropped; cross-purpose material/token access denied",
+    "one repeatable-read cut across a concurrent role/work commit",
+    "immutable old snapshot and fresh exact changed revisions",
+    "generation receipt preserves original pending delivery; native proof remains explicitly host-reported"
+  ],
+  "modelCalls": 0,
+  "nativeCheckpoint": "Not exercised here; installed receipt used disclosed synthetic metadata",
+  "lifecycleFixtures": "Only one synthetic context Work and concurrent role/material update; no native execution or delivery completion fabricated"
+}

@@ -48,8 +48,8 @@ class ContextRunner:
         self.executor=None
         self.early_activity=[]
         self.activity=PurposeActivity(self) if purpose=="writer" else None
-        self.declarations=tools(purpose) + (definitions(self.config.get("installedPurposeRuntime",False)) if purpose=="writer" else [])
-        self.context_names={t["name"] for t in tools(purpose)}
+        self.declarations=tools(purpose,self.config.get("contextRebuildEnabled",False)) + (definitions(self.config.get("installedPurposeRuntime",False)) if purpose=="writer" else [])
+        self.context_names={t["name"] for t in tools(purpose,self.config.get("contextRebuildEnabled",False))}
         self.allowed={t["name"] for t in self.declarations}
         from .tool_profile import for_context
         self.tool_profile=for_context(self.config,self.purpose)
@@ -158,6 +158,11 @@ class ContextRunner:
             "tools.update_plan.enabled":False,
             "model_reasoning_effort":self.config["effort"],
             **self.tool_profile["overrides"]}}
+        if self.config.get("contextRebuildEnabled",False):
+            settings["config"].update({"features.token_budget":True,
+                "features.retain_client_tool_outputs":False,
+                "features.retain_client_developer_messages":False,
+                "model_auto_compact_token_limit":1000000000})
         record=self.state/"context.json"
         if record.exists():
             old=json.loads(record.read_text())
@@ -188,6 +193,8 @@ class ContextRunner:
         binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3","workScheduling":2},
             operation="bind:"+hashlib.sha256(json.dumps([self.config["contextIds"][self.purpose],self.thread,
                 "lax-purpose-runtime/v3",2,1,1],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
+        if binding.get("contextSelection")!=1 or binding.get("contextRebuildSnapshot")!=1:
+            raise RuntimeError("Paired Hollywood marked-context contract unavailable; do not start this candidate")
         if binding.get("runtimeProtocol")!="lax-purpose-runtime/v3":
             raise RuntimeError("Hollywood native work/inference admission protocol unavailable")
         if binding.get("workScheduling")!=2:
@@ -309,7 +316,11 @@ class ContextRunner:
                     if item is not None and schema.get("type")=="string" and (not isinstance(item,str)
                             or not schema.get("minLength",0)<=len(item)<=schema.get("maxLength",12000)):
                         raise ValueError("Invalid bounded "+key+"; follow the tool schema. Nothing was dispatched.")
-                result=await self.request(ACTIONS[name],arguments,operation=operation)
+                if name=="context_action_read":
+                    from .context_action_memory import read
+                    result=await read(self,arguments)
+                else:
+                    result=await self.request(ACTIONS[name],arguments,operation=operation)
                 self.trace("tool_receipt",{"tool":name,"operation":operation,"result":result})
                 return {"success":True,"contentItems":[{"type":"inputText","text":json.dumps(result)}]}
             except Exception as error:
@@ -562,7 +573,7 @@ class ContextAgent:
                 raise HttpFailure(r.status,value.get("error","request failed"))
             return await r.json()
 
-    async def serve(self, *, reconcile_only=False):
+    async def serve(self, *, reconcile_only=False, rebuild_only=False):
         loop=asyncio.get_running_loop()
         for sig in (signal.SIGTERM,signal.SIGINT):
             loop.add_signal_handler(sig,self.stop.set)
@@ -570,6 +581,20 @@ class ContextAgent:
             try:
                 for runner in self.runners.values():
                     await runner.start()
+                if rebuild_only:
+                    if any(r.failed for r in self.runners.values()):
+                        raise RuntimeError("An original native context remains held; no rebuild was attempted")
+                    from .context_rebuild_runtime import rebuild
+                    receipts={}
+                    for purpose,runner in self.runners.items():
+                        observed=await runner.request("pending")
+                        request=observed.get("contextRebuild",{}).get("requestedOperationId")
+                        if request:
+                            async with runner.effect_lock:
+                                receipts[purpose]=await rebuild(runner,request,observed["pending"])
+                    saved(self.state/"rebuild-only.json",{"at":time.time(),"modelTurnsStarted":0,
+                        "effectsReplayed":0,"receipts":receipts})
+                    return
                 if reconcile_only:
                     saved(self.reconcile_path,{"at":time.time(),"modelTurnsStarted":0,
                         "contexts":{p:{"nativeThread":r.thread,"held":r.failed} for p,r in self.runners.items()}})
@@ -583,7 +608,21 @@ class ContextAgent:
                             if purpose=="reader" and time.monotonic()>=runner.next_review_at:
                                 metadata={"capabilities":CAPABILITIES}
                                 runner.next_review_at=time.monotonic()+5
-                            pending=(await runner.request("pending",metadata))["pending"]
+                            observed=await runner.request("pending",metadata)
+                            pending=observed["pending"]
+                            requested=observed.get("contextRebuild",{}).get("requestedOperationId")
+                            if requested and not runner.active and not runner.failed:
+                                from .context_rebuild_runtime import rebuild
+                                try:
+                                    async with runner.effect_lock:
+                                        await rebuild(runner,requested,pending)
+                                    pending=(await runner.request("pending",metadata))["pending"]
+                                except Exception as error:
+                                    runner.failed=True
+                                    runner.failure_reason=str(error)
+                                    runner.trace("context_rebuild_held",{"error":str(error),"originalRequest":requested,
+                                        "effectsReplayed":False})
+                                    raise
                         except Exception as error:
                             status[purpose]={"active":runner.active,"held":runner.failed,
                                              "connection":"unavailable","error":type(error).__name__}
@@ -625,6 +664,9 @@ class ContextAgent:
                         restarted=self.state/purpose/"restart-recovery.json"
                         if restarted.exists():
                             key=[key,json.loads(restarted.read_text())["id"]]
+                        rebuilt=self.state/purpose/"context-rebuild-generation.json"
+                        if rebuilt.exists():
+                            key=[key,json.loads(rebuilt.read_text())["generation"]]
                         fingerprint=hashlib.sha256(json.dumps(key).encode()).hexdigest()
                         last=self.state/purpose/"wake.json"
                         old=json.loads(last.read_text()) if last.exists() else {}
@@ -685,10 +727,12 @@ def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser()
     parser.add_argument("--config",type=Path,required=True)
-    parser.add_argument("--reconcile-only",action="store_true")
+    operation=parser.add_mutually_exclusive_group()
+    operation.add_argument("--reconcile-only",action="store_true")
+    operation.add_argument("--rebuild-context-only",action="store_true")
     parser.add_argument("--purpose",choices=sorted(ROLES))
     args=parser.parse_args()
-    asyncio.run(ContextAgent(json.loads(args.config.read_text()),purpose=args.purpose).serve(reconcile_only=args.reconcile_only))
+    asyncio.run(ContextAgent(json.loads(args.config.read_text()),purpose=args.purpose).serve(reconcile_only=args.reconcile_only,rebuild_only=args.rebuild_context_only))
 
 if __name__=="__main__":
     main()
