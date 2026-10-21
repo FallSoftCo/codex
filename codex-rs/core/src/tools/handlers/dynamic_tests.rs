@@ -48,6 +48,7 @@ async fn response_cancel_race_completes_once() {
     });
     next_item(&receiver).await;
     let response = DynamicToolResponse {
+        context_fragments: Vec::new(),
         content_items: Vec::new(),
         success: true,
     };
@@ -55,7 +56,10 @@ async fn response_cancel_race_completes_once() {
         .notify_dynamic_tool_response("call-1", response.clone())
         .await;
     cancellation.cancel();
-    let result = lifecycle.await.expect("lifecycle joined");
+    let result = lifecycle
+        .await
+        .expect("lifecycle joined")
+        .expect("context barrier");
     assert!(result.is_none() || result == Some(response));
     let item = next_item(&receiver).await;
     assert_eq!(

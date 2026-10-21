@@ -96,13 +96,14 @@ class AppServer:
         if self.on_spawn:
             await self.on_spawn(self)
         self.reader = asyncio.create_task(self._read())
-        await self.call(
+        initialized = await self.call(
             "initialize",
             {
                 "clientInfo": {"name": "lax-hollywood-connector", "version": "0.1.0"},
                 "capabilities": {"experimentalApi": True},
             },
         )
+        self.lax_capabilities = frozenset(initialized.get("laxCapabilities", []))
         await self.write({"method": "initialized", "params": {}})
 
     async def write(self, message):

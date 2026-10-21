@@ -1,0 +1,42 @@
+{
+  "schema": "lax-active-tool-material-plan/v1",
+  "at": 1792610203.2221606,
+  "base": "6d10b58bb5f24bc29f9b0b441b2a028f3aa4f375",
+  "failure": "R279: active thread/inject_items queues until after callback; connector incorrectly required persisted fragments before returning callback. Idle evidence did not cover active mechanics.",
+  "decision": "Return bounded contextFragments in the actual dynamic tool response. Native validates entire batch, records each separately with per-fragment history retention, flushes before reporting the callback complete and permits next model step. No steer queue, extra inference or generic tool-output limit change.",
+  "alternatives": [
+    {
+      "name": "Remove durability observation and call queued input delivered",
+      "rejected": "Conflates acceptance and persistence; loses inputs across failure and does not prove next inference receives complete material."
+    },
+    {
+      "name": "One large tool response with higher global truncation limit",
+      "rejected": "Oversized single history item and unrelated command-output behavior changes."
+    },
+    {
+      "name": "Separate reader model or coordinator",
+      "rejected": "Adds an unrequested fourth context and fails to repair native transport."
+    }
+  ],
+  "hardBounds": {
+    "fragments": 32,
+    "asciiBytesPerFragment": 8192,
+    "aggregateBytes": 262144,
+    "snapshotBytes": 98304
+  },
+  "P0ManualReview": "Each fragment may exceed1k tokens. It remains ASCII<=8192bytes (<=8192 worst-case byte tokens), individual history item under10k; exact chunks/hash validated in SDK, all native bounds validated before append; override8192tokens is per-fragment only. Do not inject unbounded material.",
+  "qualification": [
+    "Actual active callback local Responses fixture: next request full ordered snapshot exactly once, native cold reopen same thread, invalid batch rejected before any fragment, cancelled original cannot append late",
+    "Actual native/model existing task only after mechanically qualified image and SDK",
+    "Current original R279 result retained; no task repost or broader production migration"
+  ],
+  "remainingRoadmap": [
+    "C1 native single-agent accepted Goal/Work with no self-dependency",
+    "C2 automatic deterministic canonical reset at model-step with stable original work/input/effect identities",
+    "C3 existing shared physical source team task, real conflict cooperation and deliverable",
+    "C4 install/account freshness/pause cleanup/recovery/cancellation/upgrade rollback",
+    "C5 physical client meaningful push/voice, multi-human and multi-host",
+    "C6 real OZZZ product/sales/maintenance outcomes"
+  ],
+  "broadGoalComplete": false
+}

@@ -91,6 +91,7 @@ text(JSON.stringify(results));
             .submit(Op::DynamicToolResponse {
                 id: request.call_id,
                 response: DynamicToolResponse {
+                    context_fragments: Vec::new(),
                     content_items: vec![DynamicToolCallOutputContentItem::InputText {
                         text: format!("value-{key}"),
                     }],

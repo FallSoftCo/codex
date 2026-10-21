@@ -141,6 +141,27 @@ impl Session {
         .await;
     }
 
+    /// Records an original tool's bounded context with an observed persistence barrier.
+    pub(crate) async fn try_record_tool_context(
+        &self,
+        turn_context: &TurnContext,
+        items: Vec<ResponseItemEnvelope>,
+    ) -> std::io::Result<()> {
+        let model_info = turn_context.model_info();
+        let (items, images) = self
+            .prepare_annotated_conversation_items_for_history(turn_context, model_info, items)
+            .await;
+        if !self
+            .record_prepared_conversation_items(turn_context, model_info, items, images)
+            .await
+        {
+            return Err(std::io::Error::other(
+                "original context append was not confirmed",
+            ));
+        }
+        self.flush_rollout().await
+    }
+
     pub(crate) async fn prepare_annotated_conversation_items_for_history(
         &self,
         turn_context: &TurnContext,

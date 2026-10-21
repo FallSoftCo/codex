@@ -1,0 +1,17 @@
+{
+  "at": 1792611864.5168018,
+  "originalRun": "build-r03/logs/protocol.log",
+  "originalResult": {
+    "testsRun": 845,
+    "passed": 843,
+    "failed": 2,
+    "skipped": 1
+  },
+  "fixes": [
+    "Generate maintained experimental schema exports for the same additive API fields; normal exports already regenerated",
+    "Use short disk-backed TMPDIR for test which directly binds an AF_UNIX socket; original temp path exceeded SUN_LEN"
+  ],
+  "originalFailureRetained": true,
+  "productCodeChangedForTestPass": false,
+  "rerun": "Only two affected failures, then originally planned core/app integration filters including handler cancellation regression.843otherpassing tests not repeated."
+}

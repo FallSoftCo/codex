@@ -151,7 +151,7 @@ impl DynamicToolHandler {
             args,
             cancellation_token,
         )
-        .await
+        .await?
         .ok_or_else(|| {
             FunctionCallError::RespondToModel(
                 "dynamic tool call was cancelled before receiving a response".to_string(),
@@ -161,6 +161,7 @@ impl DynamicToolHandler {
         let DynamicToolResponse {
             content_items,
             success,
+            context_fragments: _,
         } = response;
         let body = content_items
             .into_iter()
@@ -194,10 +195,11 @@ async fn request_dynamic_tool(
     tool_name: ToolName,
     arguments: Value,
     cancellation_token: CancellationToken,
-) -> Option<DynamicToolResponse> {
+) -> Result<Option<DynamicToolResponse>, FunctionCallError> {
     if cancellation_token.is_cancelled() {
-        return None;
+        return Ok(None);
     }
+    let context_tool_name = tool_name.clone();
     let namespace = tool_name.namespace;
     let tool = tool_name.name;
     let (tx_response, rx_response) = oneshot::channel();
@@ -205,14 +207,14 @@ async fn request_dynamic_tool(
     let prev_entry = {
         let mut active = session.active_turn.lock().await;
         if cancellation_token.is_cancelled() {
-            return None;
+            return Ok(None);
         }
         match active.as_mut() {
             Some(at) => {
                 let mut ts = at.turn_state.lock().await;
                 ts.insert_pending_dynamic_tool(call_id.clone(), tx_response)
             }
-            None => return None,
+            None => return Ok(None),
         }
     };
     if prev_entry.is_some() {
@@ -241,6 +243,39 @@ async fn request_dynamic_tool(
         .await
         .ok()
         .and_then(Result::ok);
+    let mut context_error = None;
+    let response = if let Some(mut response) = response {
+        if cancellation_token.is_cancelled() {
+            None
+        } else {
+            let recorded = if !response.success && !response.context_fragments.is_empty() {
+                Err(FunctionCallError::RespondToModel(
+                    "failed dynamic tools cannot supply context fragments".to_string(),
+                ))
+            } else {
+                super::dynamic_context::record(
+                    session,
+                    turn_context,
+                    &context_tool_name,
+                    &response.context_fragments,
+                )
+                .await
+            };
+            if let Err(error) = recorded {
+                response.success = false;
+                response.context_fragments.clear();
+                response.content_items = vec![
+                    codex_protocol::dynamic_tools::DynamicToolCallOutputContentItem::InputText {
+                        text: error.to_string(),
+                    },
+                ];
+                context_error = Some(error);
+            }
+            Some(response)
+        }
+    } else {
+        None
+    };
 
     let item = match &response {
         Some(response) => DynamicToolCallItem {
@@ -274,7 +309,10 @@ async fn request_dynamic_tool(
         .emit_turn_item_completed(turn_context, TurnItem::DynamicToolCall(item))
         .await;
 
-    response
+    if let Some(error) = context_error {
+        return Err(error);
+    }
+    Ok(response)
 }
 
 #[cfg(test)]

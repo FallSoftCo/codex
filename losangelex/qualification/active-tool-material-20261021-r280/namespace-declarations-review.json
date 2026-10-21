@@ -1,0 +1,7 @@
+{
+  "at": 1792613323.8942435,
+  "sameActualOldAndNewToolDeclarations": true,
+  "excluded": "Only native generated additional_tools item id differs; tool declarations/role/type identical",
+  "sha256": "6e646b618f78c7fe26b72bf13814b39c6efab50b93548cf626776c770be6ffa3",
+  "scope": "Additional inspection of same namespace comparison, not a new model trial; retention-specific golden unresolved and unchanged."
+}

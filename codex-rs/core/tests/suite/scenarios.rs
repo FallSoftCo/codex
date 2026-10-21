@@ -1651,6 +1651,7 @@ async fn astra_continues_after_input_yields_a_code_mode_cell() -> Result<()> {
         .submit(Op::DynamicToolResponse {
             id: tool_request.call_id,
             response: DynamicToolResponse {
+                context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {
                     text: "Release ready".into(),
                 }],

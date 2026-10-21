@@ -1,0 +1,43 @@
+{
+  "at": 1792611025.765123,
+  "state": "passed",
+  "cases": [
+    {
+      "kind": "complete",
+      "sameNativeThread": "01a15ff1-51bc-73e3-835f-b7742d6c447c",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 21,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "complete-codemode",
+      "sameNativeThread": "01a15ff1-5e7d-7d41-ba17-1a02646c7b97",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 21,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "invalid",
+      "sameNativeThread": "01a15ff1-6ca6-76a1-b97a-8a954e807826",
+      "responseFixtureRequests": 3,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 0,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    },
+    {
+      "kind": "cancelled",
+      "sameNativeThread": "01a15ff1-7994-7de2-9251-a7c60a479b85",
+      "responseFixtureRequests": 2,
+      "fragmentsExpected": 21,
+      "fragmentsObservedAfterReopen": 0,
+      "actualProviderModelRequests": 0,
+      "businessEffects": 0
+    }
+  ],
+  "scope": "Actual native active callback, persistence and cold reopen with disclosed local Responses fixture. Zero external model calls; not proof of semantic behavior."
+}

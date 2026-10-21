@@ -1,0 +1,17 @@
+{
+  "at": 1792613242.768848,
+  "originalCoreResult": {
+    "run": 47,
+    "passed": 39,
+    "failed": 8,
+    "filteredOut": 5334
+  },
+  "newCoreActiveCallbackCases": "Both complete batch and atomic invalid batch passed; dynamic handler cancellation race passed; related direct/code-mode/cancel checks passed.",
+  "failures": [
+    "Six ordinary MCP output checks lacked test_stdio_server helper binary; build actual maintained helper then rerun exactly those6",
+    "Named namespace alias expected double separator; actual prior deployed and candidate binaries both produce/call the same single separator. Original assertion remains failed/unchanged.",
+    "Retained output golden differs in tool instruction hashes only; preserve generated .snap.new privately, do not overwrite expected baseline. Investigate exact old/new tool metadata before attributing."
+  ],
+  "sourceMutationForFailedExpectations": false,
+  "extraMCPHelper": "Test fixture executable only, not a deployment component."
+}

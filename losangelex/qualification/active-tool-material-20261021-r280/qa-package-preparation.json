@@ -1,0 +1,18 @@
+{
+  "at": 1792611504.0501907,
+  "state": "prepared_paused",
+  "authority": "38c0dd09-42b3-4bda-a19e-1fe32e388ed2",
+  "agents": [
+    "6ef2eb25-6106-5661-8f4e-f4eaa20efc4e",
+    "4056e647-c215-5362-85f3-2145d9bc8856",
+    "5bbf73ca-5884-43f1-9c4b-fcd67b56a8f9"
+  ],
+  "sameCanonicalContextsPermitsClaims": true,
+  "sameHistoryFiles": 18,
+  "protectedPidsUnchanged": true,
+  "APIpid": "1145580",
+  "modelsStarted": 0,
+  "taskPosts": 0,
+  "originalTaskReposted": false,
+  "scope": "Package/image upgrade under actual installed identities only. Does not prove model continuation, automatic refill or team source delivery."
+}

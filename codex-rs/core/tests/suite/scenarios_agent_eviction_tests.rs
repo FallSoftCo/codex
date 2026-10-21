@@ -175,6 +175,7 @@ async fn idle_eviction_preserves_worker_context_for_followup() -> Result<()> {
                 .submit(Op::DynamicToolResponse {
                     id: call.call_id,
                     response: DynamicToolResponse {
+                        context_fragments: Vec::new(),
                         content_items: vec![DynamicToolCallOutputContentItem::InputText {
                             text: answer.to_string(),
                         }],

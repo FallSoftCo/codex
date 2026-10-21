@@ -192,7 +192,7 @@ class ContextRunner:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
         binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3","workScheduling":2},
             operation="bind:"+hashlib.sha256(json.dumps([self.config["contextIds"][self.purpose],self.thread,
-                "lax-purpose-runtime/v3",2,1,1,"marked-context/v1","complete-material/v1"],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
+                "lax-purpose-runtime/v3",2,1,1,"marked-context/v1","native-tool-material/v1"],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
         if binding.get("completeMaterialRead")!=1:
             raise RuntimeError("Paired Hollywood complete material contract unavailable; hold this profile")
         if binding.get("contextSelection")!=1 or binding.get("contextRebuildSnapshot")!=1:
@@ -325,18 +325,17 @@ class ContextRunner:
                     from .context_action_memory import read
                     result=await read(self,arguments)
                 elif name=="context_material_read" and "offset" not in arguments:
+                    if "dynamic_tool_context_fragments/v1" not in self.rpc.lax_capabilities:
+                        raise RuntimeError("Native image lacks bounded dynamic-tool context delivery; upgrade the actual LAX native package before complete material reads")
                     result=await self.request("read_complete",arguments,operation=operation)
-                    from .material_transport import deliver, MaterialDeliveryUnknown
-                    try:
-                        receipt=await deliver(self,result,operation)
-                    except MaterialDeliveryUnknown as error:
-                        self.accepting=False
-                        self.failed=True
-                        self.failure_reason=str(error)
-                        self.material_delivery_failed_call=params["callId"]
-                        raise
-                    self.trace("material_snapshot_delivered",receipt)
-                    return {"success":True,"contentItems":[{"type":"inputText","text":json.dumps(receipt)}]}
+                    from .material_transport import tool_response
+                    response=tool_response(result,operation)
+                    self.trace("material_snapshot_prepared",{
+                        "operation":operation,"reference":result["reference"],
+                        "revision":result["revision"],"sha256":result["sha256"],
+                        "fragments":len(response["contextFragments"]),
+                        "durableDeliveryClaim":False})
+                    return response
                 else:
                     result=await self.request(ACTIONS[name],arguments,operation=operation)
                 self.trace("tool_receipt",{"tool":name,"operation":operation,"result":result})

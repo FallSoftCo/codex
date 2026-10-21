@@ -1,7 +1,8 @@
-"""One coherent material read, delivered as bounded native input fragments.
+"""Bounded material in its original dynamic-tool response.
 
-Transport receipts do not establish comprehension or execution authority.
-Unconfirmed native appends are observed, never submitted a second time.
+The native server validates and persists fragments before the next model step.
+A prepared host response is not a delivery receipt or proof of comprehension.
+The legacy idle-only append observer remains for historical mechanism recovery.
 """
 import hashlib
 import json
@@ -78,3 +79,17 @@ async def deliver(runner,snapshot,operation):
         "meaning":"The complete authorized snapshot is present in this native history as hollywood.context_material fragments. No pagination call is needed."}
     saved(journal,{**value,"state":"delivered","receipt":receipt})
     return receipt
+
+
+def tool_response(snapshot, operation):
+    """Prepare only; the native callback owns append, persistence and continuation."""
+    items = fragments(snapshot, operation)
+    receipt = {"schema": "lax-context-material-tool-result/v1",
+        "originalOperationId": operation, "reference": snapshot["reference"],
+        "revision": snapshot["revision"], "sha256": snapshot["sha256"],
+        "totalBytes": snapshot["totalBytes"], "fragments": len(items),
+        "state": "prepared_for_original_native_callback",
+        "meaning": "Complete material accompanies this result as separately bounded context fragments. No pagination call is needed. Preparation does not prove durable delivery, comprehension or execution."}
+    return {"success": True, "contentItems": [
+        {"type": "inputText", "text": json.dumps(receipt)}],
+        "contextFragments": [item["output"] for item in items]}

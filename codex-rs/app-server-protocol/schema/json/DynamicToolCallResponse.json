@@ -73,6 +73,13 @@
       },
       "type": "array"
     },
+    "contextFragments": {
+      "description": "Bounded host-supplied context, recorded as separate items before the next model step.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "success": {
       "type": "boolean"
     }

@@ -5,6 +5,7 @@ pub(crate) mod collaborative_edit;
 pub(crate) mod coordination;
 mod current_time;
 mod dynamic;
+mod dynamic_context;
 pub(crate) mod extension_tools;
 mod get_context_remaining;
 pub(crate) mod get_context_remaining_spec;

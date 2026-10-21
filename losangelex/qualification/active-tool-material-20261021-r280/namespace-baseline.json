@@ -1,0 +1,14 @@
+{
+  "at": 1792613133.8159435,
+  "sameOldAndNewBehavior": true,
+  "old": {
+    "name": "codex_app_hidden_dynamic_tool",
+    "out": "hidden-ok"
+  },
+  "new": {
+    "name": "codex_app_hidden_dynamic_tool",
+    "out": "hidden-ok"
+  },
+  "originalRustAssertionPassed": false,
+  "scope": "Baseline alias discrepancy confirmed on actual old and candidate binary; no changed expected value or semantic model claim."
+}

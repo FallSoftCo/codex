@@ -182,6 +182,7 @@ async fn steer_joins_existing_turn_without_extending_sampling(
                 .submit(Op::DynamicToolResponse {
                     id: call.call_id.clone(),
                     response: DynamicToolResponse {
+                        context_fragments: Vec::new(),
                         content_items: Vec::new(),
                         success: true,
                     },

@@ -1678,6 +1678,9 @@ pub struct DynamicToolCallParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct DynamicToolCallResponse {
+    /// Bounded host-supplied context, recorded as separate items before the next model step.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_fragments: Vec<String>,
     pub content_items: Vec<DynamicToolCallOutputContentItem>,
     pub success: bool,
 }

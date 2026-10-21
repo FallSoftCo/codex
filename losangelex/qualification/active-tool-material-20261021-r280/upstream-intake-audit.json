@@ -1,0 +1,12 @@
+{
+  "at": 1792613418.2405586,
+  "maintainedSourceBase": "6d10b58bb5f24bc29f9b0b441b2a028f3aa4f375",
+  "latestInspectedUpstream": "9b39316997fd8bcecdb2007722f52ef858f0dbd8",
+  "inspectedUpstreamIsAncestor": false,
+  "upstreamCommitsNotInMaintainedFork": 138,
+  "forkCommitsNotInInspectedUpstream": 375,
+  "nativeRuntimeSourceBaseline": "e1915bfaf2b54f71f5ef039b443ede8b0442f564",
+  "priorCommittedRustDifferenceSinceBaseline": "One22line resume test only; no committed runtime Rust changes. Current bounded context callback is the new runtime candidate.",
+  "upstreamRelevantMechanismComparison": "Inspected latest protocol dynamic_tools.rs still has only content_items/success on DynamicToolResponse; dynamic handler/inject/app-server response files have no diff from native runtime baseline. Existing upstream does not supply this complete bounded callback mechanism.",
+  "status": "Fetched/inspected is NOT integrated/up to date. Full upstream intake and native contract requalification required before final replacement release. Do not overwrite LAX behavior or silently exclude upstream features including account/pricing changes."
+}

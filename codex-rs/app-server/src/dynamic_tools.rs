@@ -37,8 +37,10 @@ pub(crate) async fn on_call_response(
     let DynamicToolCallResponse {
         content_items,
         success,
+        context_fragments,
     } = response.clone();
     let core_response = CoreDynamicToolResponse {
+        context_fragments,
         content_items: content_items
             .into_iter()
             .map(CoreDynamicToolCallOutputContentItem::from)
@@ -101,6 +103,7 @@ fn decode_response(value: serde_json::Value) -> (DynamicToolCallResponse, Option
 fn fallback_response(message: &str) -> (DynamicToolCallResponse, Option<String>) {
     (
         DynamicToolCallResponse {
+            context_fragments: Vec::new(),
             content_items: vec![DynamicToolCallOutputContentItem::InputText {
                 text: message.to_string(),
             }],

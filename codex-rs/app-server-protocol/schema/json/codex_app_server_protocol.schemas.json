@@ -3018,6 +3018,13 @@
           },
           "type": "array"
         },
+        "contextFragments": {
+          "description": "Bounded host-supplied context, recorded as separate items before the next model step.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "success": {
           "type": "boolean"
         }
@@ -3474,6 +3481,12 @@
             }
           ],
           "description": "Absolute path to the server's $CODEX_HOME directory."
+        },
+        "laxCapabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "platformFamily": {
           "description": "Platform family for the running app-server target, for example `\"unix\"` or `\"windows\"`.",

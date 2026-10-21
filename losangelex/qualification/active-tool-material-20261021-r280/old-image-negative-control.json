@@ -1,0 +1,14 @@
+{
+  "at": 1792611148.2224364,
+  "negativeControlRejected": true,
+  "actualOldImageUsed": true,
+  "fixtureRequests": 2,
+  "nativeDeliveryVerifierUnchanged": true,
+  "providerModelRequests": 0,
+  "productionChanges": 0,
+  "originalFailure": {
+    "at": 1792611148.1259432,
+    "error": "AssertionError()",
+    "casesCompleted": []
+  }
+}

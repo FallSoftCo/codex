@@ -58,6 +58,9 @@ pub struct DynamicToolCallRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicToolResponse {
+    /// Bounded host-supplied context, recorded as separate items before the next model step.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_fragments: Vec<String>,
     pub content_items: Vec<DynamicToolCallOutputContentItem>,
     pub success: bool,
 }

@@ -1,0 +1,31 @@
+{
+  "at": 1792613608.237559,
+  "state": "native_mechanics_and_relevant_core_passed_remaining_checks_recorded",
+  "sourceOwnership": "Coordinator-authored transport fix, not original native team implementation.",
+  "nativeImageSha256": "28fbd5cf1eccda4859f61256d83d1f7d0930346d63e1f6d930062756ea44f3ea",
+  "SDK": 123,
+  "Hollywood": 87,
+  "actualProviderModelCallsThisCandidate": 0,
+  "localResponsesFixtureOnly": true,
+  "retainedFailures": [
+    "LiveR279failed/canceled after active append queue dependency. No Goal/file, originalPOSTonce.",
+    "Initial broad fmt missing dotslash; exact unrelated changes restored and explicit owned Rust formatting passed.",
+    "Initial PythonSDK schema generator missing locked test dependency; own disk-backed generator environment installed; regeneration passed.",
+    "QA preparation initial root-only record read and missing receipt directory rejected before mutation; corrected third attempt succeeded."
+  ],
+  "currentProduction": "SDK122/H87 still live; candidate not live. Existing Global reader held from original failure. Phone/PG/API/otherworkers unchanged.",
+  "currentQA": "Existing C3cohort upgraded and paused; original task/contexts/queued permits preserved.0modelsstarted,0taskPOST.",
+  "pending": [
+    "Focused Rust checks",
+    "New actual-model semantic workflow qualification",
+    "Original native team automatic-refill implementation and independent review",
+    "Full enterprise roadmap"
+  ],
+  "broadGoalComplete": false,
+  "productionReplacementReady": false,
+  "faultCoverageLimit": "Append/flush errors are routed into nativeFatal; actual injected persistence-failure end-state propagation was not exercised by the4normal/invalid/cancelled transport cases and remains C4qualification. Do not claim fault-injection proof.",
+  "protocolChecks": "Original845cases:843pass,2fail,1skip. Experimental export regeneration and short diskTMPDIR corrected test setup; both affected checks thenpassed. Original result retained.",
+  "core": "Original47:39passedincludingnew2casesandcancellationrace;6MCPfixturemissing failures then passed after actual helper built.2original assertions remainfailed/unchanged: namespace alias reproducedidenticallyold/new; retained-output tool-declaration hashes unresolved.",
+  "appServer": "Focused check currently compiling; no pass claim.",
+  "upstream": "Latestinspected9b393169 has138commits not in maintained source; integration/requalification pending before final replacement."
+}

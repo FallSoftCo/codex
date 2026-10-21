@@ -112,6 +112,7 @@ impl ManagedWorktreeTools {
             (text, success)
         };
         DynamicToolCallResponse {
+            context_fragments: Vec::new(),
             content_items: vec![DynamicToolCallOutputContentItem::InputText { text }],
             success,
         }
