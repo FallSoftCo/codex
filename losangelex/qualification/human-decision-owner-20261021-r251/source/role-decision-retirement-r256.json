@@ -1,0 +1,43 @@
+{
+  "at": 1792557825.8086214,
+  "all24OwnedUnitsStopped": true,
+  "ownedUnitPids": {
+    "role-owner": {
+      "lax-agent-3cd91351-a5585abc0d83-reader.service": "0",
+      "lax-agent-3cd91351-a5585abc0d83-writer.service": "0",
+      "lax-agent-3cd91351-a5585abc0d83-responder.service": "0",
+      "lax-agent-3cd91351-68d73878dea3-reader.service": "0",
+      "lax-agent-3cd91351-68d73878dea3-writer.service": "0",
+      "lax-agent-3cd91351-68d73878dea3-responder.service": "0",
+      "lax-host-3cd91351-62ea02ac.service": "0",
+      "lax-collaboration-3cd91351-62ea02ac.service": "0"
+    },
+    "role-owner-r252": {
+      "lax-agent-e923bcfb-e5e237b912b5-reader.service": "0",
+      "lax-agent-e923bcfb-e5e237b912b5-writer.service": "0",
+      "lax-agent-e923bcfb-e5e237b912b5-responder.service": "0",
+      "lax-agent-e923bcfb-f58b712bb5ae-reader.service": "0",
+      "lax-agent-e923bcfb-f58b712bb5ae-writer.service": "0",
+      "lax-agent-e923bcfb-f58b712bb5ae-responder.service": "0",
+      "lax-host-e923bcfb-583044fa.service": "0",
+      "lax-collaboration-e923bcfb-583044fa.service": "0"
+    },
+    "role-owner-r255": {
+      "lax-agent-9c7fea36-698a81322a15-reader.service": "0",
+      "lax-agent-9c7fea36-698a81322a15-writer.service": "0",
+      "lax-agent-9c7fea36-698a81322a15-responder.service": "0",
+      "lax-agent-9c7fea36-a46dfe6c1211-reader.service": "0",
+      "lax-agent-9c7fea36-a46dfe6c1211-writer.service": "0",
+      "lax-agent-9c7fea36-a46dfe6c1211-responder.service": "0",
+      "lax-host-9c7fea36-ef03f346.service": "0",
+      "lax-collaboration-9c7fea36-ef03f346.service": "0"
+    }
+  },
+  "privateListenerPid": "0",
+  "private18785ListenerAbsent": true,
+  "liveDecisionOwnerColumnAbsent": true,
+  "privateDatabaseRetained": "harness_role_decision_20261020_r251",
+  "nativeContextsAndOriginalReceiptsRetained": true,
+  "productionSchemaOrDefaultChangedByThisSlice": false,
+  "historicalAgentsAndTimersResumed": false
+}

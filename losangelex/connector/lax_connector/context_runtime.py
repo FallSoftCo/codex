@@ -186,7 +186,8 @@ class ContextRunner:
         if not {("functions",x) for x in self.allowed | {"exec","wait"}} <= effective:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
         binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3","workScheduling":2},
-            operation="bind:"+self.config["contextIds"][self.purpose]+":"+self.thread+":runtime-v3-work-scheduling-v2-role-work-v1",turn="bootstrap")
+            operation="bind:"+hashlib.sha256(json.dumps([self.config["contextIds"][self.purpose],self.thread,
+                "lax-purpose-runtime/v3",2,1,1],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
         if binding.get("runtimeProtocol")!="lax-purpose-runtime/v3":
             raise RuntimeError("Hollywood native work/inference admission protocol unavailable")
         if binding.get("workScheduling")!=2:
@@ -195,6 +196,8 @@ class ContextRunner:
             raise RuntimeError("Hollywood native work-update contract unavailable")
         if self.purpose=="reader" and binding.get("roleWork")!=1:
             raise RuntimeError("Hollywood native standing-role work contract unavailable; paired server upgrade required")
+        if self.purpose=="reader" and binding.get("roleDecisionOwner")!=1:
+            raise RuntimeError("Hollywood explicit role decision-owner contract unavailable; paired server upgrade required")
         self.trace("context_started",{"threadId":self.thread,"tools":sorted(self.allowed),
                                     "effectiveToolPolicy":result.get("toolPolicy"),
                                     "approvedToolProfile":self.tool_profile["summary"]})

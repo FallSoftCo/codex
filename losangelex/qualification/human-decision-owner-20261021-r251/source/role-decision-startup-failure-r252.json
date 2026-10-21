@@ -1,0 +1,20 @@
+{
+  "operationLength": 139,
+  "schemaLimit": 128,
+  "errors": [
+    {
+      "type": "string_too_long",
+      "loc": [
+        "operationId"
+      ],
+      "msg": "String should have at most 128 characters",
+      "ctx": {
+        "max_length": 128
+      }
+    }
+  ],
+  "originalFailure": "Native cohort startup incomplete; all8own units stopped",
+  "taskPosts": 0,
+  "nativeContextThread": "01a15c9f-5344-7640-968d-bd7730e8c22f",
+  "reason": "Added capability label overflowed transport bound. Keep source/setup failure, no original task replay."
+}

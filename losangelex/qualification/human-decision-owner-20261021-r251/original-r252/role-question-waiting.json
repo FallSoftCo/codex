@@ -1,0 +1,128 @@
+{
+  "at": 1792556335.2180333,
+  "attention": {
+    "id": "e7032450-26f6-5401-9a21-1af7bfb87443",
+    "authority": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+    "delivery": "9724f2e8-f22f-53e3-be14-1ccac68019f8",
+    "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+    "human": "625caeb5-24cf-4757-aefa-d606b419444e",
+    "room": "f839d4d4-2f30-4846-84ed-c39693ea7932",
+    "event": "4acc2fa3-d678-408a-8b21-92ce70539783",
+    "generation": 1,
+    "claim_id": "context-admit:bc8059b1-aa2b-5f98-aeb5-4a5d91372c4b",
+    "native_thread": "01a15ca8-8611-7ee2-b789-93ee6d01b82d",
+    "native_turn": "01a15cae-658a-7dc0-aec7-672848881c4d",
+    "native_slot": "exec-47fdf470-ddf3-4695-8500-765a4502aec5",
+    "method": "hollywood/question",
+    "request": {
+      "questions": [
+        {
+          "id": "release-scope-bbe758abbe79229e",
+          "header": "Local handoff",
+          "isOther": true,
+          "options": [
+            {
+              "label": "internal-review",
+              "description": "Keep this exact release's local handoff for internal review."
+            },
+            {
+              "label": "team-use",
+              "description": "Mark this exact release's local handoff for team use."
+            }
+          ],
+          "isSecret": false,
+          "question": "For the verified changed release with catalog SHA256 bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f (guided-practice v2 and team-review v1 released; seat-management planned), which local handoff scope should audience.json record before I finalize this same bulletin refresh? Neither choice authorizes deployment or external publication."
+        }
+      ],
+      "isBlocking": false
+    },
+    "digest": "bb4cf44fda4de41e377bd97f48b135be3c8ed5c3799914f9a87c9a96e307d899",
+    "state": "pending",
+    "response": null,
+    "response_author": null,
+    "response_event": null,
+    "revision": 1,
+    "created_at": "2026-10-21 04:18:49.612113+00:00",
+    "updated_at": "2026-10-21 04:18:49.612113+00:00"
+  },
+  "roleDelivery": {
+    "id": "9724f2e8-f22f-53e3-be14-1ccac68019f8",
+    "authority": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+    "event": "f2caef4c-6f32-4b3f-a868-72e2766cd0c5",
+    "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+    "host": "583044fa-3e04-4fa5-9937-4c9081f53f08",
+    "generation": 1,
+    "claim_id": "context-admit:bc8059b1-aa2b-5f98-aeb5-4a5d91372c4b",
+    "native_thread": "01a15ca8-8611-7ee2-b789-93ee6d01b82d",
+    "native_turn": "01a15cae-658a-7dc0-aec7-672848881c4d",
+    "state": "running",
+    "result_event": null,
+    "revision": 3,
+    "updated_at": "2026-10-21 04:18:15.648635+00:00",
+    "cancellation_requested": false
+  },
+  "roleOrigin": {
+    "id": "f2caef4c-6f32-4b3f-a868-72e2766cd0c5",
+    "authority": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+    "seq": 69,
+    "room": "f839d4d4-2f30-4846-84ed-c39693ea7932",
+    "author": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+    "recipient": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+    "kind": "control",
+    "audience": "room",
+    "body": "Refresh the local release bulletin for the newly reported changed engineering release, retaining strict CLI execution and exact source provenance, and obtain the configured human decision owner's authenticated local handoff scope before finalizing the refreshed deliverable.",
+    "source": "bf5d1a60-6ed4-44fb-b955-911e48ad5b7e",
+    "data": {
+      "type": "roleWork",
+      "schema": "lax-role-work/v1",
+      "acceptance": "Read the authorized source read-only through TEAM.json, verify actual bytes/schema and the reported changed release/hash (bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f), and regenerate bulletin.json using the actual standard-library build_bulletin.py CLI. Preserve strict exact-schema validation, unique ids, positive integer versions excluding booleans, sanitized nonzero errors and lexicographic released-only output; planned entries remain omitted. Retain/re-run real execution tests on varied valid and invalid data and verify no source mutation. bulletin-source.json must have exactly {\"hostId\":<actual source host UUID>,\"path\":<absolute actual source catalog path>,\"sha256\":<SHA256 of exact catalog bytes used>}. Before finalizing this refresh, privately ask only canonical decision owner 625caeb5-24cf-4757-aefa-d606b419444e to choose internal-review or team-use for this exact changed release; do not ask the engineer, infer a choice, or post private Q/A details in room chatter. Await the owner's authenticated answer as continuation of this same objective, not a new assignment. Then deliver audience.json with exactly {\"scope\":\"internal-review\"|\"team-use\",\"sourceSha256\":<exact verified catalog SHA256>}, matching bulletin provenance, and report the completed bounded refresh with factual execution evidence. If the source is now different, preserve accurate provenance and require a scope decision for the actual changed release rather than applying one to unverified bytes. Keep all source artifacts read-only; no new agents, services, production, deployment, external publication, customers, or unauthorized workspace activity. Close this finite refresh normally while preserving the ongoing role.",
+      "authorKind": "agent",
+      "nativeTurn": "01a15cad-f8b2-7c50-889a-aad609ca70be",
+      "roleSha256": "d19393003b7f8af992c69e52d5baee6185d51fbdd85a3176f4a7e5be7e1c8042",
+      "nativeThread": "01a15ca8-85ac-7543-8c67-3678b3fdea4f",
+      "roleRevision": 2,
+      "observationId": "95eaf7cd-49ad-5556-a57e-1240373d2cfa",
+      "sourceEventId": "bf5d1a60-6ed4-44fb-b955-911e48ad5b7e",
+      "readerContextId": "16dec97b-2fd4-4044-bfe1-a95967102472"
+    },
+    "created_at": "2026-10-21 04:18:10.927483+00:00"
+  },
+  "contexts": [
+    {
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "purpose": "reader",
+      "native_thread": "01a15ca8-85ac-7543-8c67-3678b3fdea4f",
+      "active_turn": null
+    },
+    {
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "purpose": "responder",
+      "native_thread": "01a15ca8-867c-70f2-991b-ba601f88db39",
+      "active_turn": null
+    },
+    {
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "purpose": "writer",
+      "native_thread": "01a15ca8-8611-7ee2-b789-93ee6d01b82d",
+      "active_turn": null
+    },
+    {
+      "agent": "f58b712b-b5ae-4645-9956-10ea65d03822",
+      "purpose": "reader",
+      "native_thread": "01a15ca8-860f-7401-bf0b-ed255d52dec7",
+      "active_turn": null
+    },
+    {
+      "agent": "f58b712b-b5ae-4645-9956-10ea65d03822",
+      "purpose": "responder",
+      "native_thread": "01a15ca8-8677-7d32-8f62-ba7539035ad8",
+      "active_turn": null
+    },
+    {
+      "agent": "f58b712b-b5ae-4645-9956-10ea65d03822",
+      "purpose": "writer",
+      "native_thread": "01a15ca8-8798-71b0-b503-3de018efdb4f",
+      "active_turn": null
+    }
+  ]
+}

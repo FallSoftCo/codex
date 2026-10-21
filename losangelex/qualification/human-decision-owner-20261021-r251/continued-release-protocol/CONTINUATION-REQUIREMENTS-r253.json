@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "features": [
+    {
+      "id": "guided-practice",
+      "version": 3,
+      "title": "Guided practice with manager review",
+      "state": "released"
+    },
+    {
+      "id": "team-review",
+      "version": 2,
+      "title": "Team review with retained notes",
+      "state": "released"
+    },
+    {
+      "id": "seat-management",
+      "version": 1,
+      "title": "Seat management",
+      "state": "released"
+    },
+    {
+      "id": "course-analytics",
+      "version": 1,
+      "title": "Course analytics",
+      "state": "planned"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "at": 1792557441.3531957,
+  "status": "Source findings for the next coherent native slice, not an implemented feature or new test result.",
+  "objective": "Natural goal development and accepted delivery bound to the intended reviewed outcome, using native Hollywood Goal/Work/Decision and LAX execution.",
+  "existingEvidence": [
+    "Current Goal has source event, objective, prose acceptance, revisioned Work and explicit goal review.",
+    "Work reporting and review already fence evidence against current scoped Decision sequence; do not replace this with another planning system.",
+    "ArtifactEvidence already carries explicit host/workspace/path/hash/size; no shared filesystem assumption.",
+    "Current Decisions are canonical versioned prose/source events. There is no typed reviewed-definition artifact revision binding on GoalCreate/GoalState.",
+    "Goal acceptance requires all Work accepted and explicit review note. Source inspected so far does not mechanically compare previously accepted work with a subsequent changed definition; whether that is a real defect depends on the chosen definition/review contract."
+  ],
+  "next": [
+    "Finish and archive this SDK115/H81 human-owner qualification first.",
+    "Reconcile decision, goal-review and existing artifact-proof behavior with actual native cooperation; freeze an end-state where an ongoing role discovers a release opportunity, develops a consequential success definition with its configured human, creates/reviews native peer work and delivers against the approved version.",
+    "Compare sufficient existing explicit Decision/evidence binding with any proposed minimal Goal extension before coding. Keep setup reply, standing Role, finite Goal and Work lifetimes separate.",
+    "Treat changed implementation path differently from changed acceptance or authority; require explicit re-review only for a consequential definition change."
+  ],
+  "avoid": [
+    "No new coordinator, model context, task ledger or perpetual setup request.",
+    "No broad fixture campaign before actual deliverable mechanisms.",
+    "No production schema migration/default changes until reviewed runtime path qualified."
+  ]
+}

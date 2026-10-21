@@ -1,0 +1,19 @@
+{
+  "at": 1792555907.440427,
+  "protocolSha256": "816115c1c6a227d6330e372c53c3054b3c8b1f1da230f4743fd3adbd8def2d42",
+  "runnerSha256": "b0b56a9f34e04ea63c2311f2bea629b444436c25870315a69663a63444cf87c2",
+  "helperSha256": "76cb561b5b3412644b55251d1a371efb4ccbc48e2a967ee846d563608d49b722",
+  "packages": "SDK115/H81",
+  "model": "gpt-6.1-sol/xhigh",
+  "protectedPids": {
+    "hollywood-backbone.service": "1342390",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "1342324",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "1342370",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "1342372",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "1342371"
+  },
+  "participant": "Disclosed scripted human A and regular human B; actual peer/role models",
+  "noModelRemindersOrArtifactRepair": true
+}

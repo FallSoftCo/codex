@@ -1,0 +1,28 @@
+{
+  "at": 1792557648.5545094,
+  "path": "attention/2e5ad8bd-1d80-5ac2-a8c7-0a8e6147ddc1/response",
+  "body": {
+    "operationId": "role-owner-r255:answer-a",
+    "scope": {
+      "authorityId": "9c7fea36-8b36-45ff-a81b-774fc1bff22f",
+      "attentionId": "2e5ad8bd-1d80-5ac2-a8c7-0a8e6147ddc1",
+      "deliveryId": "a138af8f-895b-56a0-9674-0b5baec836d6",
+      "agentId": "698a8132-2a15-4946-9acf-222ca7fb6383",
+      "roomId": "e395d336-fe8d-4e2f-a4eb-c6694e74e3cb",
+      "hostId": "ef03f346-f25a-4699-90a4-3da453ba7e00",
+      "generation": 1,
+      "nativeThread": "01a15cbd-fdf0-7082-9e47-68ffd7636271",
+      "nativeTurn": "01a15cc2-5c3e-7792-af96-0c376e52af55",
+      "requestDigest": "ec1b6f13bdfc0901faecdeb4583bf986aa12054bd4e039f524e5fd2d685665ce"
+    },
+    "response": {
+      "answers": {
+        "release-handoff-bbe758abbe79": {
+          "answers": [
+            "Use team-use for this verified release. The choice authorizes the local audience.json and refreshed bulletin only, not external publication, customer actions, scheduling or any broader scope. PRIVATE COORDINATION NOTE: qa-owner-note-71f3 is not for the room or delivered artifacts; communicate only the agreed scope and verified work outcome.\n"
+          ]
+        }
+      }
+    }
+  }
+}

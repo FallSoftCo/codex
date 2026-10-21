@@ -1,0 +1,51 @@
+{
+  "schema": "lax-role-human-decision-continuation/v1",
+  "frozenAt": 1792556872.6656566,
+  "model": "gpt-6.1-sol/xhigh",
+  "purpose": "Prove explicit role decision ownership through a real native question and authenticated answer without giving evidence-source human the decision authority.",
+  "actors": "Two real native agents, each with three persistent contexts; two disclosed scripted human QA principals. A=installation Owner/role decision owner; B=regular room member who requests the engineer release.",
+  "sequence": [
+    "Record current six histories, original completed task and cancelled role work. Explicitly re-enable only these two retired QA agents for a new engineering release; settle the original known cancellation without inference on it.",
+    "B requests distinct new engineering release via normal user API. Actual engineer changes source and publishes ordinary report. No new task/reminder to consumer.",
+    "Require new native role Work and question bound to explicit A, with fact tracing to B. Wait original question-producing writer inference idle.",
+    "B private read and valid-scope answer and agent-as-human answer each403 with no admission. Submit one A answer through user API; inspect original receipt on transport uncertainty, never repeat.",
+    "Same new role Work/claim/generation and original six histories complete; strict CLI/source/audience checks pass, private canary not in room/artifacts. Prior initial delivery stays complete, prior role work cancelled, prior attention unanswered.",
+    "Retire own eight units and disable own placements; compare production PIDs."
+  ],
+  "criteria": [
+    "Initial finite outcome complete before role initiative",
+    "One native role Work from real peer report without new consumer human request",
+    "Native Attention targets configured A, not evidence human B",
+    "B cannot read private question or answer even holding valid scope; no new input admitted",
+    "Exactly one admitted authenticated A answer causally amends same original role Work, not replacement assignment/steer",
+    "Correct CLI/report/source provenance and audience.json team-use after answer; actual native command evidence and user-visible final",
+    "Strict unseen/invalid CLI checks and input bytes preserved",
+    "Private note not in room-visible history or artifacts",
+    "Same6context histories and original claim/generation preserved",
+    "No model polling/acknowledgement loop, all own units retired, no production schema/PID/default change"
+  ],
+  "budgets": {
+    "seconds": 1000,
+    "perPhaseSeconds": 420,
+    "nativeTokens": 6000000,
+    "quietSeconds": 15
+  },
+  "failurePolicy": "Do not extend frozen limits, coach models, replay original operations or repair generated artifacts/canonical task state. Preserve every failed attempt and distinguish substrate/model/scorer errors.",
+  "limits": "One continued responsibility after disclosed QA-driver failure; not independent model replication, spontaneous relevance, production or generic crash recovery.",
+  "files": {
+    "engineer-release.txt": "66b5651e141e621d3f2f3de3e62a5a8900d344b72abfb057b8edd8dab08462cd",
+    "controls.json": "5bb43697b6efd9050be57c19eafb4d1083a3d60ee6cf222979ddf9a98dec417c",
+    "owner-answer.txt": "1867f69093bd815c7e3540cce7d5d6f570bdb0258375d7ac1b5b6b8e7245b52e",
+    "outcome.py": "f152a14c40ab50f12c976d2897134d666b58eb79f5265603fb52b2263836c1c2",
+    "CONTINUATION-REQUIREMENTS-r253.json": "6c1b85a3a1275fb59a3919d022bda0ca5be2173e63de8c527e3416fa2f867e69",
+    "unseen-valid-cases.json": "25296b60663525934587f43a0273d48105be509ffa97012e6b9b2151d81271e8"
+  },
+  "parentProtocolSha256": "816115c1c6a227d6330e372c53c3054b3c8b1f1da230f4743fd3adbd8def2d42",
+  "priorFailure": {
+    "run": "role-owner-r252/run",
+    "cause": "QA driver caught HttpFailure instead of urllib HTTPError for expected403; no A answer submitted",
+    "originalCancelledDelivery": "9724f2e8-f22f-53e3-be14-1ccac68019f8",
+    "originalAttention": "e7032450-26f6-5401-9a21-1af7bfb87443",
+    "claim": "Not an unassisted success of prior failed run, not retry/resurrection of original task"
+  }
+}

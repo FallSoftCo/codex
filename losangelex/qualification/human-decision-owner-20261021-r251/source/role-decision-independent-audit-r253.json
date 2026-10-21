@@ -1,0 +1,145 @@
+{
+  "schema": "lax-role-human-independent-audit/v1",
+  "at": 1792557204.1181211,
+  "planSha256": "c2202c1f1912e4626fbdc02af362bdd4aaf23a9933330dbbe28550c6e288a26b",
+  "runnerSha256": "f91ed0da9133191c0aff0f3e5215148f27d62739bc324b928260b4c1a3064dc9",
+  "originalResultPath": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/failure.json",
+  "originalResultSha256": "33ed9d30e363c34fc2555a7bceb9d2d92056a48fdf81d0f0238002613ef31d67",
+  "originalProtocolState": "failed",
+  "testDefect": "Original runner falsely counted the one canonical human answer input as a new assignment; original failed result unchanged. Supplemental audit validates exact attention links, same Work update and absence of replacement Work.",
+  "checks": {
+    "frozen-protocol-files-unchanged": true,
+    "original-driver-failure-retained": true,
+    "same-six-histories-and-no-live-turns": true,
+    "cancelled-original-never-resumed-or-answered": true,
+    "all-own-deliveries-terminal": true,
+    "same-continued-work-claim-generation": true,
+    "configured-A-decision-authority-and-answer": true,
+    "actual-peer-fact-traces-to-B-with-agent-authorship": true,
+    "captured-role-owner-digest-bound": true,
+    "no-extra-assignment-besides-original-and-bound-answer": true,
+    "answer-exact-attention-and-original-work-scope": true,
+    "no-replacement-work-from-answer": true,
+    "answer-input-handled-on-same-work": true,
+    "source-b-private-question-denied": true,
+    "source-b-answer-denied": true,
+    "agent-as-human-answer-denied": true,
+    "one-original-authenticated-answer": true,
+    "answer-amends-same-work": true,
+    "writer-idle-before-authenticated-answer": true,
+    "room-events-body-and-data-exclude-private-canary": true,
+    "private-question-and-answer-visible-to-A": true,
+    "B-all-projections-exclude-private-note-and-question-answer": true,
+    "private-canary-is-real-not-vacuous": true,
+    "completed-role-final-visible-to-both-humans": true,
+    "real-attributed-native-commands-visible-as-activity": true,
+    "new-writer-inference-after-answer-same-history": true,
+    "engineer-source-matches-new-frozen-release": true,
+    "strict-delivered-bulletin-and-provenance": true,
+    "delivered-artifacts-exclude-private-canary": true,
+    "delivered-cli-native-owner-strict-cases": true,
+    "requirements-preserved": true,
+    "all-eight-owned-services-retired": true,
+    "protected-services-stay-unchanged": true,
+    "only-own-placements-disabled": true
+  },
+  "passed": true,
+  "detail": {
+    "humanFeedPages": {
+      "A:all": 3,
+      "A:conversation": 2,
+      "A:activity": 2,
+      "B:all": 3,
+      "B:conversation": 2,
+      "B:activity": 2
+    },
+    "questionEventId": "8fb957b0-d9ac-4b81-87d7-777a3b92931f",
+    "answerEventId": "de3d86aa-d0a4-4e84-8234-8bd8bc8a55f9",
+    "roleEventId": "467020d5-4f74-4fff-955c-018a2e497f96",
+    "roleDeliveryId": "07bfed6a-29ea-5661-a7d3-9eabc124fc87",
+    "peerFactEventId": "4e69342d-e59c-4d50-977f-4dd136148e8a",
+    "nativeCommandActivityEventIds": [
+      "f3bc1d6b-f4d0-4e57-8da7-b0433bea24b2",
+      "b2fb120e-7f56-49e9-a8b6-d46455f40429",
+      "2c02e8df-5b41-4adf-9ed9-6d5903bf47b1",
+      "2f1e4725-6906-4d50-abff-f001180e1f59",
+      "a5379c7b-e9d5-49ba-88ee-c6297f558920"
+    ],
+    "workId": "28e65c97-a493-5c78-80af-3d171b819a0e",
+    "nativeOwnerProbes": [
+      {
+        "case": 0,
+        "valid": true,
+        "exitCode": 0,
+        "passed": true
+      },
+      {
+        "case": 1,
+        "valid": true,
+        "exitCode": 0,
+        "passed": true
+      },
+      {
+        "case": 2,
+        "valid": true,
+        "exitCode": 0,
+        "passed": true
+      },
+      {
+        "case": 3,
+        "valid": true,
+        "exitCode": 0,
+        "passed": true
+      },
+      {
+        "case": 4,
+        "valid": true,
+        "exitCode": 0,
+        "passed": true
+      },
+      {
+        "case": 5,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      },
+      {
+        "case": 6,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      },
+      {
+        "case": 7,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      },
+      {
+        "case": 8,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      },
+      {
+        "case": 9,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      },
+      {
+        "case": 10,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      },
+      {
+        "case": 11,
+        "valid": false,
+        "exitCode": 1,
+        "passed": true
+      }
+    ]
+  },
+  "scope": "Read-only audit plus native-owner disposable CLI probes on same frozen actual-model run, not a new model trial, no output repair or statistical reliability claim."
+}

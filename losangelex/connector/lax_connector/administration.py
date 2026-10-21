@@ -187,6 +187,7 @@ async def _administer(connector, name, arguments, operation):
                     if "nativeGoalScope" in arguments
                     else {}
                 ),
+                **({"decisionOwnerId": arguments["decisionOwnerId"]} if "decisionOwnerId" in arguments else {}),
                 "revision": arguments["revision"],
             })},
         )

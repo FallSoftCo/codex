@@ -1,0 +1,128 @@
+{
+  "at": 1792557648.4961147,
+  "attention": {
+    "id": "2e5ad8bd-1d80-5ac2-a8c7-0a8e6147ddc1",
+    "authority": "9c7fea36-8b36-45ff-a81b-774fc1bff22f",
+    "delivery": "a138af8f-895b-56a0-9674-0b5baec836d6",
+    "agent": "698a8132-2a15-4946-9acf-222ca7fb6383",
+    "human": "367124ea-da39-4aea-870e-5db59850323f",
+    "room": "e395d336-fe8d-4e2f-a4eb-c6694e74e3cb",
+    "event": "4e0ac2b3-386b-4d52-99ed-98fe4a9eae8c",
+    "generation": 1,
+    "claim_id": "context-admit:4b8f4c50-8201-541b-82a1-42c2925e7ab3",
+    "native_thread": "01a15cbd-fdf0-7082-9e47-68ffd7636271",
+    "native_turn": "01a15cc2-5c3e-7792-af96-0c376e52af55",
+    "native_slot": "exec-cebd1ea3-b616-4374-967f-f8437194878b",
+    "method": "hollywood/question",
+    "request": {
+      "questions": [
+        {
+          "id": "release-handoff-bbe758abbe79",
+          "header": "Local release handoff",
+          "isOther": true,
+          "options": [
+            {
+              "label": "internal-review",
+              "description": "Mark this verified release's local bulletin for internal review."
+            },
+            {
+              "label": "team-use",
+              "description": "Mark this verified release's local bulletin for team use."
+            }
+          ],
+          "isSecret": false,
+          "question": "For the independently verified catalog SHA256 bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f, should this release's local bulletin handoff be internal-review or team-use? Released: guided-practice v2 (Guided practice with saved feedback) and team-review v1 (Team review dashboard); planned seat-management is excluded. This selects only the local handoff scope; no deployment or external publication is authorized."
+        }
+      ],
+      "isBlocking": false
+    },
+    "digest": "ec1b6f13bdfc0901faecdeb4583bf986aa12054bd4e039f524e5fd2d685665ce",
+    "state": "pending",
+    "response": null,
+    "response_author": null,
+    "response_event": null,
+    "revision": 1,
+    "created_at": "2026-10-21 04:40:26.406764+00:00",
+    "updated_at": "2026-10-21 04:40:26.406764+00:00"
+  },
+  "roleDelivery": {
+    "id": "a138af8f-895b-56a0-9674-0b5baec836d6",
+    "authority": "9c7fea36-8b36-45ff-a81b-774fc1bff22f",
+    "event": "162f72df-21ec-4f75-9f10-83c188f0e3d7",
+    "agent": "698a8132-2a15-4946-9acf-222ca7fb6383",
+    "host": "ef03f346-f25a-4699-90a4-3da453ba7e00",
+    "generation": 1,
+    "claim_id": "context-admit:4b8f4c50-8201-541b-82a1-42c2925e7ab3",
+    "native_thread": "01a15cbd-fdf0-7082-9e47-68ffd7636271",
+    "native_turn": "01a15cc2-5c3e-7792-af96-0c376e52af55",
+    "state": "running",
+    "result_event": null,
+    "revision": 3,
+    "updated_at": "2026-10-21 04:40:03.973010+00:00",
+    "cancellation_requested": false
+  },
+  "roleOrigin": {
+    "id": "162f72df-21ec-4f75-9f10-83c188f0e3d7",
+    "authority": "9c7fea36-8b36-45ff-a81b-774fc1bff22f",
+    "seq": 40,
+    "room": "e395d336-fe8d-4e2f-a4eb-c6694e74e3cb",
+    "author": "698a8132-2a15-4946-9acf-222ca7fb6383",
+    "recipient": "698a8132-2a15-4946-9acf-222ca7fb6383",
+    "kind": "control",
+    "audience": "room",
+    "body": "Complete a bounded local bulletin refresh for the newly reported engineering release after verifying the read-only catalog, retaining the existing CLI and provenance requirements, and obtaining the configured human decision owner's publication-scope choice before finalizing the refreshed deliverable.",
+    "source": "f0a3422e-55be-4b9c-81dc-3e307c4f6052",
+    "data": {
+      "type": "roleWork",
+      "schema": "lax-role-work/v1",
+      "acceptance": "Read only the TEAM.json-authorized source resource; independently verify actual host/path/catalog bytes, schema and changed SHA256 against the engineering report. Reuse/verify standard-library build_bulletin.py and its strict input validation; execute actual CLI on the verified bytes to produce bulletin.json with released entries only, sorted lexicographically by id, and verify varied real execution with no source mutation. Save bulletin-source.json with exactly {hostId:<actual source host UUID>,path:<absolute actual catalog path>,sha256:<exact catalog SHA256 used>}. Privately ask only configured human decision_owner 367124ea-da39-4aea-870e-5db59850323f whether this release's local handoff is internal-review or team-use, bound to the verified changed release/hash; do not substitute the engineer or a human source author. Wait for that authenticated owner's answer, apply it to this same follow-on objective, and only then finalize audience.json exactly {scope:<chosen internal-review|team-use>,sourceSha256:<exact verified catalog SHA256>}. Do not infer scope or finalize before the decision; never expose private question/answer details as room chatter. Report completed finite refreshed local deliverable only after all criteria hold. No source mutation, arbitrary humans, new agents, services, other workspaces beyond TEAM.json-authorized read-only resources, deployment, or external publication.",
+      "authorKind": "agent",
+      "nativeTurn": "01a15cc1-ecdb-75b2-92dd-02902935345c",
+      "roleSha256": "7547ed13c87b99c0a5bcb6d904958873e097434b5a960cc2bc6df7049437cc9d",
+      "nativeThread": "01a15cbd-fc5c-7050-b698-d3492f4d2f87",
+      "roleRevision": 2,
+      "observationId": "5c4ab4f7-1ef7-5b35-917a-8fcb10fea285",
+      "sourceEventId": "f0a3422e-55be-4b9c-81dc-3e307c4f6052",
+      "readerContextId": "52b33d91-cbdb-4f21-90d0-683c4a8e1f9f"
+    },
+    "created_at": "2026-10-21 04:40:01.087368+00:00"
+  },
+  "contexts": [
+    {
+      "agent": "698a8132-2a15-4946-9acf-222ca7fb6383",
+      "purpose": "reader",
+      "native_thread": "01a15cbd-fc5c-7050-b698-d3492f4d2f87",
+      "active_turn": null
+    },
+    {
+      "agent": "698a8132-2a15-4946-9acf-222ca7fb6383",
+      "purpose": "responder",
+      "native_thread": "01a15cbd-fd29-76b1-8c8a-972e352f2150",
+      "active_turn": null
+    },
+    {
+      "agent": "698a8132-2a15-4946-9acf-222ca7fb6383",
+      "purpose": "writer",
+      "native_thread": "01a15cbd-fdf0-7082-9e47-68ffd7636271",
+      "active_turn": null
+    },
+    {
+      "agent": "a46dfe6c-1211-401d-8b3c-faeef66e0389",
+      "purpose": "reader",
+      "native_thread": "01a15cbd-fe54-71a2-8a7a-ef6de5611321",
+      "active_turn": null
+    },
+    {
+      "agent": "a46dfe6c-1211-401d-8b3c-faeef66e0389",
+      "purpose": "responder",
+      "native_thread": "01a15cbd-fec1-7002-9fcd-dd868530ff7f",
+      "active_turn": null
+    },
+    {
+      "agent": "a46dfe6c-1211-401d-8b3c-faeef66e0389",
+      "purpose": "writer",
+      "native_thread": "01a15cbd-fd2c-7413-9c17-04fd33346328",
+      "active_turn": null
+    }
+  ]
+}

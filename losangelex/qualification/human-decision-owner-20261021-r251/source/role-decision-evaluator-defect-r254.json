@@ -1,0 +1,13 @@
+{
+  "at": 1792557200.2648294,
+  "originalRun": "continuation-r253",
+  "originalOutcome": "failed, retained unchanged",
+  "defect": "Operator-authored consumer request count conflated typed humanQuestionAnswer input-delivery with a replacement work assignment. Existing native answer contract intentionally uses kind=request and a separate input delivery.",
+  "affectedAssertion": "sum(requests to consumer)==1",
+  "newAuditCriteria": "Exactly initial event plus canonical Attention.response_event; exact question/source/originalDelivery links; reader marks input handled and appliedToWorkId original Work; no answer Work and no extra consumer Work. All rejected attempts remain403 and exactly one admitted answer.",
+  "notClaimed": "No new model replication; original frozen run is not changed to passed. Read-only supplemental mechanism/outcome requalification only.",
+  "originalAuditSourceSha256": "5c2784c409b2dd377f352b0d6fd7b102f55818525160dec9aca09251c8fd52a1",
+  "correctedAuditSourceSha256": "f91ed0da9133191c0aff0f3e5215148f27d62739bc324b928260b4c1a3064dc9",
+  "generatedOutputsRepaired": false,
+  "newModelCalls": 0
+}

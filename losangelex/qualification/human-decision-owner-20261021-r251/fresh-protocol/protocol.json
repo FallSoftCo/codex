@@ -1,0 +1,55 @@
+{
+  "schema": "lax-role-human-decision-qualification/v2",
+  "frozenAt": 1792557263.333586,
+  "model": "gpt-6.1-sol/xhigh",
+  "purpose": "Prove explicit role decision ownership through a real native question and authenticated answer without giving evidence-source human the decision authority.",
+  "actors": "Two real native agents, each with three persistent contexts; two disclosed scripted human QA principals. A=installation Owner/role decision owner; B=regular room member who requests the engineer release.",
+  "sequence": [
+    "A requests finite initial bulletin; require completed original delivery and human-visible final before later release.",
+    "B requests actual engineer release. Actual peer publishes ordinary factual verified report; coordinator does not invent peer facts or send another assignment/reminder to bulletin agent.",
+    "Role agent initiates bounded follow-on and creates native nonblocking question. Require Attention.human=A even though peer report traces to B.",
+    "Attempt B read and response with stolen valid original scope:403, no admission. Submit exactly one A answer through actual user API; uncertain outcome is inspected, never repeated.",
+    "Same role Work, claim/generation and persistent histories continue. Actual CLI/report/provenance/audience output correct; no private note leaked to room or artifacts.",
+    "All owned work settles and services retire; production services/schema and phone untouched."
+  ],
+  "criteria": [
+    "Initial finite outcome complete before role initiative",
+    "One native role Work from real peer report without new consumer human request",
+    "Native Attention targets configured A, not evidence human B",
+    "B cannot read private question or answer even holding valid scope; no new input admitted",
+    "Exactly one admitted authenticated A answer causally amends same original role Work, not replacement assignment/steer",
+    "Correct CLI/report/source provenance and audience.json team-use after answer; actual native command evidence and user-visible final",
+    "Strict unseen/invalid CLI checks and input bytes preserved",
+    "Private note not in room-visible history or artifacts",
+    "Same6context histories and original claim/generation preserved",
+    "No model polling/acknowledgement loop, all own units retired, no production schema/PID/default change",
+    "Exactly original consumer request plus the one exact canonical Attention.response_event; the authenticated answer input creates no replacement Work. Do not count a communication delivery as an accepted Work."
+  ],
+  "budgets": {
+    "seconds": 1200,
+    "perPhaseSeconds": 420,
+    "nativeTokens": 6000000,
+    "quietSeconds": 15
+  },
+  "failurePolicy": "Do not extend frozen limits, coach models, replay original operations or repair generated artifacts/canonical task state. Preserve every failed attempt and distinguish substrate/model/scorer errors.",
+  "limits": "One explicit decision-required software case, not spontaneous question relevance, arbitrary multi-human policy, many-agent scale, phone or production readiness.",
+  "files": {
+    "engineer-role.txt": "c73bb33e48d260b7a02d042b632d98facee23b920de225145f1cfbbb709df363",
+    "role.txt": "168403ad1dc06aac4a518b5e48522afa7e1569ba3a9aec12ba61c015acf35bfd",
+    "engineer-release.txt": "7fa3bad38200983a0c01b8d4070b0202d7b629fddba3f39b41cc4773a8f35d9c",
+    "controls.json": "5bb43697b6efd9050be57c19eafb4d1083a3d60ee6cf222979ddf9a98dec417c",
+    "owner-answer.txt": "1867f69093bd815c7e3540cce7d5d6f570bdb0258375d7ac1b5b6b8e7245b52e",
+    "outcome.py": "f152a14c40ab50f12c976d2897134d666b58eb79f5265603fb52b2263836c1c2",
+    "RELEASE-REQUIREMENTS.json": "6a03e65207003fedad95feb489c5428f8f0927ff0adbcf266746767f93ce98f5",
+    "initial-catalog.json": "0bc0e018776bf2a0eb55cc9d3a7477b662f14d813906f25ee65606f9d7df15a9",
+    "expected-scope.txt": "cfe528155f08ea4d737f6d42e47ed81edc16c9bbaf3884a22fcbb05a935ca315",
+    "initial.txt": "b9e2c7bd83db10c5479e474c12d2471bc6883253864fe002ea4c0ead5541b493",
+    "unseen-valid-cases.json": "25296b60663525934587f43a0273d48105be509ffa97012e6b9b2151d81271e8"
+  },
+  "attempt": "r255 fresh independent cohort; same real-model scenario, corrected evaluator, no product/runtime change",
+  "priorAttemptsRetained": [
+    "r251 bind identity139chars rejected pre-model",
+    "r252 expected403 driver exception mismatch",
+    "r253 extra-assignment assertion conflated one bound canonical answer input with a new Work; frozen failed, independent audit passed"
+  ]
+}

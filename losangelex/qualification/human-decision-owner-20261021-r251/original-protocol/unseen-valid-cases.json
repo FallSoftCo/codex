@@ -1,0 +1,51 @@
+[
+  {
+    "schema": 1,
+    "features": []
+  },
+  {
+    "schema": 1,
+    "features": [
+      {
+        "id": "z",
+        "version": 7,
+        "title": "Unseen review",
+        "state": "released"
+      },
+      {
+        "id": "a",
+        "version": 11,
+        "title": "Unseen practice",
+        "state": "released"
+      },
+      {
+        "id": "b",
+        "version": 2,
+        "title": "Future feature",
+        "state": "planned"
+      }
+    ]
+  },
+  {
+    "schema": 1,
+    "features": [
+      {
+        "id": "guided-practice",
+        "version": 19,
+        "title": "Changed title without memorized sample",
+        "state": "planned"
+      }
+    ]
+  },
+  {
+    "schema": 1,
+    "features": [
+      {
+        "id": "first",
+        "version": 1,
+        "title": "Version one must remain integer",
+        "state": "released"
+      }
+    ]
+  }
+]

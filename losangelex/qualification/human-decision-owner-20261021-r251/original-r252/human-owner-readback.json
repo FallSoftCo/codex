@@ -1,0 +1,18 @@
+{
+  "at": 1792555683.3285887,
+  "decisionOwnerA": "625caeb5-24cf-4757-aefa-d606b419444e",
+  "sourceHumanB": "5a5eda8b-a5d9-47c9-b6c0-ad298ea0bd31",
+  "sourceHumanBAdministrator": false,
+  "canonicalRole": {
+    "principal": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+    "authority": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+    "primary_role": "global",
+    "home_room": "f839d4d4-2f30-4846-84ed-c39693ea7932",
+    "purpose": "Own the disposable product's local release bulletin as an ongoing role across finite assignments. Keep source provenance and verified engineering changes. Complete the initial requested bulletin normally. For a later verified changed engineering release, perform bounded follow-on work and ask your explicitly configured human decision owner whether its local handoff should be \"internal-review\" or \"team-use\" before finalizing the refreshed bulletin. This is a required publication-scope decision for each changed release, not a question to the engineer or the human behind a source fact. The answer is not a new assignment; preserve the original follow-on objective. Select no arbitrary human and do not infer authority from a message author. Never post private question/answer details as room chatter. Source artifacts remain explicitly read-only. No customers, network publication, services, new agents, production or other workspaces beyond TEAM.json. This is disclosed finite QA.\n",
+    "revision": 2,
+    "native_goal_scope": "role",
+    "decision_owner": "625caeb5-24cf-4757-aefa-d606b419444e"
+  },
+  "liveDecisionOwnerColumnAbsent": true,
+  "modelsStarted": 0
+}

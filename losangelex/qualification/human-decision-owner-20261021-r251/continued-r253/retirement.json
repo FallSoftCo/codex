@@ -1,0 +1,64 @@
+{
+  "at": 1792557118.6376855,
+  "state": "failed",
+  "error": "AssertionError: ",
+  "pids": {
+    "lax-agent-e923bcfb-e5e237b912b5-reader.service": "0",
+    "lax-agent-e923bcfb-e5e237b912b5-writer.service": "0",
+    "lax-agent-e923bcfb-e5e237b912b5-responder.service": "0",
+    "lax-agent-e923bcfb-f58b712bb5ae-reader.service": "0",
+    "lax-agent-e923bcfb-f58b712bb5ae-writer.service": "0",
+    "lax-agent-e923bcfb-f58b712bb5ae-responder.service": "0",
+    "lax-host-e923bcfb-583044fa.service": "0",
+    "lax-collaboration-e923bcfb-583044fa.service": "0"
+  },
+  "preStopContexts": [
+    {
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "purpose": "reader",
+      "native_thread": "01a15ca8-85ac-7543-8c67-3678b3fdea4f",
+      "active_turn": null
+    },
+    {
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "purpose": "responder",
+      "native_thread": "01a15ca8-867c-70f2-991b-ba601f88db39",
+      "active_turn": null
+    },
+    {
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "purpose": "writer",
+      "native_thread": "01a15ca8-8611-7ee2-b789-93ee6d01b82d",
+      "active_turn": null
+    },
+    {
+      "agent": "f58b712b-b5ae-4645-9956-10ea65d03822",
+      "purpose": "reader",
+      "native_thread": "01a15ca8-860f-7401-bf0b-ed255d52dec7",
+      "active_turn": null
+    },
+    {
+      "agent": "f58b712b-b5ae-4645-9956-10ea65d03822",
+      "purpose": "responder",
+      "native_thread": "01a15ca8-8677-7d32-8f62-ba7539035ad8",
+      "active_turn": null
+    },
+    {
+      "agent": "f58b712b-b5ae-4645-9956-10ea65d03822",
+      "purpose": "writer",
+      "native_thread": "01a15ca8-8798-71b0-b503-3de018efdb4f",
+      "active_turn": null
+    }
+  ],
+  "protectedPids": {
+    "hollywood-backbone.service": "1342390",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "1342324",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "1342370",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "1342372",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "1342371"
+  },
+  "protectedPidsUnchanged": true,
+  "originalsRetained": true
+}

@@ -1,0 +1,283 @@
+{
+  "reference": [
+    {
+      "case": 0,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 1,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      }
+    },
+    {
+      "case": 2,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 3,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "first",
+            "version": 1,
+            "title": "Version one must remain integer"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "first",
+            "version": 1,
+            "title": "Version one must remain integer"
+          }
+        ]
+      }
+    },
+    {
+      "case": 4,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 5,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 6,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 7,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 8,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 9,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 10,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    }
+  ],
+  "wrongBooleanPrimitive": [
+    {
+      "case": 0,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 1,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      }
+    },
+    {
+      "case": 2,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 3,
+      "valid": true,
+      "passed": false,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "first",
+            "version": true,
+            "title": "Version one must remain integer"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "first",
+            "version": 1,
+            "title": "Version one must remain integer"
+          }
+        ]
+      }
+    },
+    {
+      "case": 4,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 5,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 6,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 7,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 8,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 9,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 10,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    }
+  ],
+  "label": "Mechanical controls only, not model behavior"
+}

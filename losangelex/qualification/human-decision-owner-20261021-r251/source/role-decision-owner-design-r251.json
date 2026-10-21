@@ -1,0 +1,11 @@
+{
+  "schema": "lax-role-human-decision-design/v1",
+  "status": "Implementation candidate; no production migration",
+  "problem": "A role-work trigger is evidence rather than human delegation. Questions must target an explicitly accountable human; following the trigger's author/source lineage confers the wrong authority.",
+  "decision": "Extend existing canonical agent Role with nullable decision_owner (same-authority human principal). New enterprise bootstrap sets Global's owner to the explicit installation Owner. Native authenticated role administration can set/preserve/clear it with existing revision fencing. Do not infer existing installations' owners.",
+  "sourceRules": "Capture exact Role snapshot/revision/digest in existing private role Work. Role-origin Attention resolves only that captured explicit owner after verifying original role admission. Direct human tasks retain their existing human/delegation source path. Evidence-source human cannot select recipients or answer another human's private question.",
+  "permissions": "Decision owner must be an active human in the same authority with actual read/request rights in the Work room. Revocation does not select a fallback. Global administration privileges remain unchanged. Role-owner edits advance the Role revision and cannot race active inference/execution.",
+  "validation": "Freeze two-human actual-model journey: finite initial task completes; second regular human assigns actual peer release; role agent initiates follow-on, asks configured first human, second human cannot access/answer; one authenticated first-human answer resumes same original role Work and all6histories and produces useful output. Add HTTP/PG routing/revocation/old-snapshot tests; no reminders, task replay, manually repaired outputs or model polling.",
+  "deployment": "Source changes belong to maintained LAX/Hollywood fork. Qualify new additive schema only in a fresh private QA database in the existing PostgreSQL instance, with a private listener. No production schema/default/service/phone change.",
+  "open": "General Goal definition/acceptance binding, standing Role vs business Goal/Work/response lifetimes and role-origin native team/cooperative editing remain subsequent gates."
+}

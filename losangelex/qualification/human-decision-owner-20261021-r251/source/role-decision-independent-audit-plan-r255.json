@@ -1,0 +1,22 @@
+{
+  "schema": "lax-role-human-independent-audit/v1",
+  "frozenAt": 1792557336.9037023,
+  "purpose": "Independent read-only audit of fresh r255 actual-model cohort. Original r253 failure/audit retained separately.",
+  "checks": [
+    "No changes to original protocol files or original request/answer identities",
+    "Same six native histories before/after; no new consumer assignment",
+    "New engineer release factual peer report traces to B, role-native admission snapshot targets A",
+    "B and native agent real403s before exactly one A answer; same Work/claim/generation resumes",
+    "Actual native owner CLI execution and strict source-bound artifact output, immutable source requirements",
+    "Private QA canary and private human answer are absent from B-visible all-history, conversation-history and activity-history; authoritative room-visible events serialized body/data also contain no canary",
+    "A question/answer events exist in private authenticated A feed, B cannot see their event identities",
+    "Human-visible final response and attributable native command activity linked to completed new role Work",
+    "No additional unsettled/unknown own deliveries; own service retirement and unchanged protected production PIDs",
+    "Source and installed candidate modules match; schema migration remains confined to private QA DB"
+  ],
+  "limits": [
+    "One same-history continued responsibility after recorded test-driver failure, no independent replication or broad reliability",
+    "No arbitrary compaction/crash/crosshost/phone proof",
+    "Semantic prompt relevance and question content not mechanically guaranteed"
+  ]
+}

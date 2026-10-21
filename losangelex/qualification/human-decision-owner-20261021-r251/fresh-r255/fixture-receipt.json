@@ -1,0 +1,13 @@
+{
+  "at": 1792557303.6113997,
+  "files": {
+    "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/698a8132-2a15-4946-9acf-222ca7fb6383/home/work/TEAM.json": "d4a3ce0178f3c34cbe80ba02fc30d1bde3062b7c22e95ea3d3d8a73d6d37ab5b",
+    "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/698a8132-2a15-4946-9acf-222ca7fb6383/home/work/AGENTS.md": "a89414c0b49263012f6936e9e83f337353a4c94a46842d0375ef1b81af2af1f1",
+    "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/a46dfe6c-1211-401d-8b3c-faeef66e0389/home/work/catalog.json": "1d5ed1d7418629ca7a116a5387d529549d200161f26ab0600aca5b5818b54e4a",
+    "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/a46dfe6c-1211-401d-8b3c-faeef66e0389/home/work/TEAM.json": "d4a3ce0178f3c34cbe80ba02fc30d1bde3062b7c22e95ea3d3d8a73d6d37ab5b",
+    "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/a46dfe6c-1211-401d-8b3c-faeef66e0389/home/work/RELEASE-REQUIREMENTS.json": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f",
+    "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/a46dfe6c-1211-401d-8b3c-faeef66e0389/home/work/AGENTS.md": "a89414c0b49263012f6936e9e83f337353a4c94a46842d0375ef1b81af2af1f1"
+  },
+  "sourceReadOnlyGrant": "0ebba807-8713-58d1-a64a-4cd98618bc14",
+  "modelInputsSubmitted": 0
+}

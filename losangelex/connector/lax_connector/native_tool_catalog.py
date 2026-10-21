@@ -144,6 +144,8 @@ TOOLS += [
             "purpose": STRING,
             "nativeGoalScope": {"type": "string", "enum": ["role", "work"],
                 "description": "Administrator selects ongoing role responsibility or separately addressed work. Does not grant room, host or resource permissions."},
+            "decisionOwnerId": {"type": ["string", "null"],
+                "description": "Explicit active human for role-origin questions/approvals. Omit to preserve; null withdraws routing. Does not confer room, host or resource rights."},
             "homeRoomId": {"type": ["string", "null"]},
             "revision": {"type": "integer", "minimum": 0},
         },

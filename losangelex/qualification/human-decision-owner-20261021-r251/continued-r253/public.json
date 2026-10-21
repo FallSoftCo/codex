@@ -1,0 +1,22 @@
+{
+  "authority": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+  "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+  "host": "583044fa-3e04-4fa5-9937-4c9081f53f08",
+  "room": "f839d4d4-2f30-4846-84ed-c39693ea7932",
+  "config": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/home/agent.json",
+  "workspace": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/home/work",
+  "linuxUser": "hglobal-e923bcfb-e5e237b912b5",
+  "uid": 838,
+  "gid": 833,
+  "units": {
+    "reader": "lax-agent-e923bcfb-e5e237b912b5-reader.service",
+    "writer": "lax-agent-e923bcfb-e5e237b912b5-writer.service",
+    "responder": "lax-agent-e923bcfb-e5e237b912b5-responder.service"
+  },
+  "installation": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/installation.json",
+  "infrastructure": [
+    "lax-host-e923bcfb-583044fa.service",
+    "lax-collaboration-e923bcfb-583044fa.service"
+  ],
+  "url": "http://127.0.0.1:18785"
+}

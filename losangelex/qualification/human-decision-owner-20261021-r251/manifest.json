@@ -1,0 +1,656 @@
+{
+  "schema": "lax-human-owner-evidence-archive/v1",
+  "at": 1792557847.587158,
+  "files": [
+    {
+      "path": "source/role-decision-owner-design-r251.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-owner-design-r251.json",
+      "sha256": "ade98b496bd23ce336e04f6aa689cf4926b19ac8320abb350202152ac57cf891",
+      "bytes": 2247
+    },
+    {
+      "path": "source/role-decision-routing-invariants-r252.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-routing-invariants-r252.json",
+      "sha256": "f99b0ca95c21f2ad3568e46833f9040d178aa4f3e72e32ad29f2e0545d593072",
+      "bytes": 631
+    },
+    {
+      "path": "source/role-decision-startup-failure-r252.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-startup-failure-r252.json",
+      "sha256": "98b45d3a999d972682e689c72094f109f445d221288510c404f5ceabf198c452",
+      "bytes": 548
+    },
+    {
+      "path": "source/role-decision-independent-audit-plan-r253.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-independent-audit-plan-r253.json",
+      "sha256": "c2202c1f1912e4626fbdc02af362bdd4aaf23a9933330dbbe28550c6e288a26b",
+      "bytes": 1815
+    },
+    {
+      "path": "source/role-decision-independent-audit-r253.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-independent-audit-r253.json",
+      "sha256": "c318e426394896d4ff1d317f88724bd313e06cb1db8bb66267e6afa1d6422e0e",
+      "bytes": 4829
+    },
+    {
+      "path": "source/role-decision-evaluator-defect-r254.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-evaluator-defect-r254.json",
+      "sha256": "4a42bf17eb0c21f2d3dbe334e82b63da2e7a8b554de63493f8212db8e4967f78",
+      "bytes": 1129
+    },
+    {
+      "path": "source/role-decision-independent-audit-plan-r255.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-independent-audit-plan-r255.json",
+      "sha256": "a59f8b26bd3cb7e60e647e420854d77bb25a27e6cba604c4d60933ba6cb2d1b4",
+      "bytes": 1646
+    },
+    {
+      "path": "source/role-decision-independent-audit-r255.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-independent-audit-r255.json",
+      "sha256": "1ac95552b63051e3754419ef3ea56f32276c74e39bebdf1ccc73accf482d1039",
+      "bytes": 4615
+    },
+    {
+      "path": "source/role-decision-runtime-artifacts-r255.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-runtime-artifacts-r255.json",
+      "sha256": "8323214fee45b77c70816a4d9b5562d199ff35f7c8ce61f8bff585bfeb0911b9",
+      "bytes": 34499
+    },
+    {
+      "path": "source/role-goal-next-source-findings-r255.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-next-source-findings-r255.json",
+      "sha256": "2974df69f49012afab201e9ae584af0e774fc52a5bf53ce2dc69685cb5c2c47d",
+      "bytes": 2187
+    },
+    {
+      "path": "source/role-decision-validation-scope-r256.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-validation-scope-r256.json",
+      "sha256": "74d7f6c9782b4199b24f80194bf076865a7480d98760c38e1fee44924381c508",
+      "bytes": 2472
+    },
+    {
+      "path": "source/role-decision-retirement-r256.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-retirement-r256.json",
+      "sha256": "3619630c0be8af64de7bde92a2dcc96f17c81124f9faaf11ec284d02cf29624c",
+      "bytes": 1945
+    },
+    {
+      "path": "source/role-decision-qualification-r256.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-decision-qualification-r256.json",
+      "sha256": "771ef78f8502428d91fca8b8e1a1c5f4df87313d721564981d53705ce884f17f",
+      "bytes": 3755
+    },
+    {
+      "path": "source/freeze_role_decision_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/freeze_role_decision_r251.py",
+      "sha256": "19fa0ff8d588368a3310b1d4c910cc665fb375d34afe15427807d6a07a368f94",
+      "bytes": 7276
+    },
+    {
+      "path": "source/prepare_role_decision_database_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/prepare_role_decision_database_r251.py",
+      "sha256": "3dd9e2c59e2901a102635abf4ed5533671eef93aaff2cde46cf403ff16857be2",
+      "bytes": 2603
+    },
+    {
+      "path": "source/prepare_role_decision_agents_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/prepare_role_decision_agents_r251.py",
+      "sha256": "0b30de867beac263116714bfa6a24478d15f6a4779490892a75ee2a885bdf885",
+      "bytes": 4297
+    },
+    {
+      "path": "source/prepare_role_decision_agents_r252.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/prepare_role_decision_agents_r252.py",
+      "sha256": "e8240d59eabd80f6b8615a1ad28d5ccd15130a025c7e472cba14c41ea895f591",
+      "bytes": 4302
+    },
+    {
+      "path": "source/prepare_role_decision_agents_r255.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/prepare_role_decision_agents_r255.py",
+      "sha256": "9670f916422c4f6f9d13aee3430564c9a456b78895f2e3c8fce3e59722bd3830",
+      "bytes": 4307
+    },
+    {
+      "path": "source/install_role_decision_peer_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/install_role_decision_peer_r251.py",
+      "sha256": "9483221cecd2b580a2ab744ac91e910056d6b1c12ddb0aae5c526e6af7fffb4b",
+      "bytes": 5843
+    },
+    {
+      "path": "source/install_role_decision_peer_r255.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/install_role_decision_peer_r255.py",
+      "sha256": "0eb55cb943bcacfd121e04ec0953d9c3d3d56db118d057a5c1e18ffa65d57ed6",
+      "bytes": 5858
+    },
+    {
+      "path": "source/enroll_role_decision_humans_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/enroll_role_decision_humans_r251.py",
+      "sha256": "6cadcbc90afa0c390590e966d76e62645bf995e5e0bf57726d5bb3e29f093b5d",
+      "bytes": 2345
+    },
+    {
+      "path": "source/enroll_role_decision_humans_r252.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/enroll_role_decision_humans_r252.py",
+      "sha256": "f51a865b5330be9bd163f9bed41418ecea55f75c2c55b99a0702647db67f027f",
+      "bytes": 2350
+    },
+    {
+      "path": "source/enroll_role_decision_humans_r255.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/enroll_role_decision_humans_r255.py",
+      "sha256": "776b6e48e4bf3c9770f8a3258e79f080625891ffd1ad59719f7b4f53278fe747",
+      "bytes": 2350
+    },
+    {
+      "path": "source/serve_role_decision_qa_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/serve_role_decision_qa_r251.py",
+      "sha256": "24876243c7641eb3dedb56471f49596681a209fceab61db28b476be032c0967d",
+      "bytes": 453
+    },
+    {
+      "path": "source/run_role_decision_r251.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_role_decision_r251.py",
+      "sha256": "9e1afbd1defc07b819ccc2d08d0508c30c9afebb9d657f4ac2f55d562b323cb7",
+      "bytes": 14035
+    },
+    {
+      "path": "source/run_role_decision_r252.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_role_decision_r252.py",
+      "sha256": "b0b56a9f34e04ea63c2311f2bea629b444436c25870315a69663a63444cf87c2",
+      "bytes": 14488
+    },
+    {
+      "path": "source/run_role_decision_r253.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_role_decision_r253.py",
+      "sha256": "2b8e8e38f2d5c5955e8363fd693ab667b4585e570d0b0d6db035273e1b5d7661",
+      "bytes": 15710
+    },
+    {
+      "path": "source/run_role_decision_r255.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_role_decision_r255.py",
+      "sha256": "e0f3192ad156fb11f099928d02de3c5cc05d0068bcf7853696e678bfd3596111",
+      "bytes": 15424
+    },
+    {
+      "path": "source/audit_role_decision_r253.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/audit_role_decision_r253.py",
+      "sha256": "f91ed0da9133191c0aff0f3e5215148f27d62739bc324b928260b4c1a3064dc9",
+      "bytes": 13250
+    },
+    {
+      "path": "source/audit_role_decision_r255.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/audit_role_decision_r255.py",
+      "sha256": "4c19d12e996f1ffe940522af4d355dd7b43c4d8477891dab27bedc02d27b1538",
+      "bytes": 12298
+    },
+    {
+      "path": "source/build_role_decision_r251.sh",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/build_role_decision_r251.sh",
+      "sha256": "5624a67196a42d81616e4478cccbe64fa841ed9a3274f2ecc6c45fd7d8ba2dd0",
+      "bytes": 858
+    },
+    {
+      "path": "source/build_role_decision_r252.sh",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/build_role_decision_r252.sh",
+      "sha256": "16fe9dd1944b0d6fb030b11db0fe8de584f01a1d7f0cd074f73e927f7b5c5ce3",
+      "bytes": 551
+    },
+    {
+      "path": "source/run_standing_r242.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_standing_r242.py",
+      "sha256": "76cb561b5b3412644b55251d1a371efb4ccbc48e2a967ee846d563608d49b722",
+      "bytes": 13324
+    },
+    {
+      "path": "original-protocol/RELEASE-REQUIREMENTS.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/RELEASE-REQUIREMENTS.json",
+      "sha256": "6a03e65207003fedad95feb489c5428f8f0927ff0adbcf266746767f93ce98f5",
+      "bytes": 444
+    },
+    {
+      "path": "original-protocol/controls.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/controls.json",
+      "sha256": "5bb43697b6efd9050be57c19eafb4d1083a3d60ee6cf222979ddf9a98dec417c",
+      "bytes": 5138
+    },
+    {
+      "path": "original-protocol/engineer-release.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/engineer-release.txt",
+      "sha256": "7fa3bad38200983a0c01b8d4070b0202d7b629fddba3f39b41cc4773a8f35d9c",
+      "bytes": 387
+    },
+    {
+      "path": "original-protocol/engineer-role.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/engineer-role.txt",
+      "sha256": "c73bb33e48d260b7a02d042b632d98facee23b920de225145f1cfbbb709df363",
+      "bytes": 379
+    },
+    {
+      "path": "original-protocol/expected-scope.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/expected-scope.txt",
+      "sha256": "cfe528155f08ea4d737f6d42e47ed81edc16c9bbaf3884a22fcbb05a935ca315",
+      "bytes": 9
+    },
+    {
+      "path": "original-protocol/initial-catalog.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/initial-catalog.json",
+      "sha256": "0bc0e018776bf2a0eb55cc9d3a7477b662f14d813906f25ee65606f9d7df15a9",
+      "bytes": 296
+    },
+    {
+      "path": "original-protocol/initial.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/initial.txt",
+      "sha256": "b9e2c7bd83db10c5479e474c12d2471bc6883253864fe002ea4c0ead5541b493",
+      "bytes": 1692
+    },
+    {
+      "path": "original-protocol/outcome.py",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/outcome.py",
+      "sha256": "f152a14c40ab50f12c976d2897134d666b58eb79f5265603fb52b2263836c1c2",
+      "bytes": 2241
+    },
+    {
+      "path": "original-protocol/owner-answer.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/owner-answer.txt",
+      "sha256": "1867f69093bd815c7e3540cce7d5d6f570bdb0258375d7ac1b5b6b8e7245b52e",
+      "bytes": 343
+    },
+    {
+      "path": "original-protocol/protocol.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/protocol.json",
+      "sha256": "816115c1c6a227d6330e372c53c3054b3c8b1f1da230f4743fd3adbd8def2d42",
+      "bytes": 3916
+    },
+    {
+      "path": "original-protocol/role.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/role.txt",
+      "sha256": "168403ad1dc06aac4a518b5e48522afa7e1569ba3a9aec12ba61c015acf35bfd",
+      "bytes": 986
+    },
+    {
+      "path": "original-protocol/unseen-valid-cases.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol/unseen-valid-cases.json",
+      "sha256": "25296b60663525934587f43a0273d48105be509ffa97012e6b9b2151d81271e8",
+      "bytes": 859
+    },
+    {
+      "path": "continued-release-protocol/CONTINUATION-REQUIREMENTS-r253.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/CONTINUATION-REQUIREMENTS-r253.json",
+      "sha256": "6c1b85a3a1275fb59a3919d022bda0ca5be2173e63de8c527e3416fa2f867e69",
+      "bytes": 567
+    },
+    {
+      "path": "continued-release-protocol/controls.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/controls.json",
+      "sha256": "5bb43697b6efd9050be57c19eafb4d1083a3d60ee6cf222979ddf9a98dec417c",
+      "bytes": 5138
+    },
+    {
+      "path": "continued-release-protocol/engineer-release.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/engineer-release.txt",
+      "sha256": "66b5651e141e621d3f2f3de3e62a5a8900d344b72abfb057b8edd8dab08462cd",
+      "bytes": 486
+    },
+    {
+      "path": "continued-release-protocol/outcome.py",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/outcome.py",
+      "sha256": "f152a14c40ab50f12c976d2897134d666b58eb79f5265603fb52b2263836c1c2",
+      "bytes": 2241
+    },
+    {
+      "path": "continued-release-protocol/owner-answer.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/owner-answer.txt",
+      "sha256": "1867f69093bd815c7e3540cce7d5d6f570bdb0258375d7ac1b5b6b8e7245b52e",
+      "bytes": 343
+    },
+    {
+      "path": "continued-release-protocol/protocol.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/protocol.json",
+      "sha256": "403e69714d3dd05772930ad1432fb5705aa7ab90bfdba8e56e9daf5d8fb64727",
+      "bytes": 4136
+    },
+    {
+      "path": "continued-release-protocol/unseen-valid-cases.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253-protocol/unseen-valid-cases.json",
+      "sha256": "25296b60663525934587f43a0273d48105be509ffa97012e6b9b2151d81271e8",
+      "bytes": 859
+    },
+    {
+      "path": "fresh-protocol/RELEASE-REQUIREMENTS.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/RELEASE-REQUIREMENTS.json",
+      "sha256": "6a03e65207003fedad95feb489c5428f8f0927ff0adbcf266746767f93ce98f5",
+      "bytes": 444
+    },
+    {
+      "path": "fresh-protocol/controls.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/controls.json",
+      "sha256": "5bb43697b6efd9050be57c19eafb4d1083a3d60ee6cf222979ddf9a98dec417c",
+      "bytes": 5138
+    },
+    {
+      "path": "fresh-protocol/engineer-release.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/engineer-release.txt",
+      "sha256": "7fa3bad38200983a0c01b8d4070b0202d7b629fddba3f39b41cc4773a8f35d9c",
+      "bytes": 387
+    },
+    {
+      "path": "fresh-protocol/engineer-role.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/engineer-role.txt",
+      "sha256": "c73bb33e48d260b7a02d042b632d98facee23b920de225145f1cfbbb709df363",
+      "bytes": 379
+    },
+    {
+      "path": "fresh-protocol/expected-scope.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/expected-scope.txt",
+      "sha256": "cfe528155f08ea4d737f6d42e47ed81edc16c9bbaf3884a22fcbb05a935ca315",
+      "bytes": 9
+    },
+    {
+      "path": "fresh-protocol/initial-catalog.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/initial-catalog.json",
+      "sha256": "0bc0e018776bf2a0eb55cc9d3a7477b662f14d813906f25ee65606f9d7df15a9",
+      "bytes": 296
+    },
+    {
+      "path": "fresh-protocol/initial.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/initial.txt",
+      "sha256": "b9e2c7bd83db10c5479e474c12d2471bc6883253864fe002ea4c0ead5541b493",
+      "bytes": 1692
+    },
+    {
+      "path": "fresh-protocol/outcome.py",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/outcome.py",
+      "sha256": "f152a14c40ab50f12c976d2897134d666b58eb79f5265603fb52b2263836c1c2",
+      "bytes": 2241
+    },
+    {
+      "path": "fresh-protocol/owner-answer.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/owner-answer.txt",
+      "sha256": "1867f69093bd815c7e3540cce7d5d6f570bdb0258375d7ac1b5b6b8e7245b52e",
+      "bytes": 343
+    },
+    {
+      "path": "fresh-protocol/protocol.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/protocol.json",
+      "sha256": "8b3c13208b85d2b2e38efb1af9829f720ded5e45111043d237f7d3f56072a849",
+      "bytes": 4526
+    },
+    {
+      "path": "fresh-protocol/role.txt",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/role.txt",
+      "sha256": "168403ad1dc06aac4a518b5e48522afa7e1569ba3a9aec12ba61c015acf35bfd",
+      "bytes": 986
+    },
+    {
+      "path": "fresh-protocol/unseen-valid-cases.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/protocol-r255/unseen-valid-cases.json",
+      "sha256": "25296b60663525934587f43a0273d48105be509ffa97012e6b9b2151d81271e8",
+      "bytes": 859
+    },
+    {
+      "path": "original-r252/execution-intent.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/run/execution-intent.json",
+      "sha256": "08ecbaf879711940108583cfff73a226e16b6b5cb26a3ffb8dc73973a81d0ae5",
+      "bytes": 905
+    },
+    {
+      "path": "original-r252/failure.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/run/failure.json",
+      "sha256": "b43645936512c14a1f5b057b521d17127db4859f602af97fbc0b5c9a01644e13",
+      "bytes": 189067
+    },
+    {
+      "path": "original-r252/retirement.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/run/retirement.json",
+      "sha256": "c9e0167cdc52bd430e9dd2fd258994ea9688939e81ce27e0ce9e9d306c3cb6f3",
+      "bytes": 2200
+    },
+    {
+      "path": "original-r252/role-question-waiting.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/run/role-question-waiting.json",
+      "sha256": "a5b4016625597f3e2c64a4d49986589be922af325f7bbb4ceb7b69be88550c7a",
+      "bytes": 6864
+    },
+    {
+      "path": "original-r252/public.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/public.json",
+      "sha256": "6af9a525ed0e70f395b693a7ecc9f52abc66a0880914fa3c7ab2992ccecffd52",
+      "bytes": 1069
+    },
+    {
+      "path": "original-r252/human-owner-readback.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/human-owner-readback.json",
+      "sha256": "3d0031645714b651924b62f409e4dce1aa2f15e97c90bb82cb2d37d41ebf9774",
+      "bytes": 1599
+    },
+    {
+      "path": "original-r252/fixture-receipt.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/fixture-receipt.json",
+      "sha256": "60d10baf0705418084b768b3c74f58a1bb7eccb25be91dec6f090d0f3a1a49a7",
+      "bytes": 1366
+    },
+    {
+      "path": "original-r252/peer-public.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/peer/public.json",
+      "sha256": "d3e7bd997429de3544c2fdcc44b4ec2f7c1fbcfa6439d55b40187513e23c3553",
+      "bytes": 949
+    },
+    {
+      "path": "continued-r253/execution-intent.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/execution-intent.json",
+      "sha256": "baa0083663a11967ac49dd2eb8a038c5e41ce011f5596b0971fb338e9a87531a",
+      "bytes": 906
+    },
+    {
+      "path": "continued-r253/failure.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/failure.json",
+      "sha256": "33ed9d30e363c34fc2555a7bceb9d2d92056a48fdf81d0f0238002613ef31d67",
+      "bytes": 276684
+    },
+    {
+      "path": "continued-r253/retirement.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/retirement.json",
+      "sha256": "e25a53a6f20fb2d43b8de995b0a036dd4355f814c21cbdc3ba8cbb079255c3e1",
+      "bytes": 2181
+    },
+    {
+      "path": "continued-r253/role-question-waiting.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/role-question-waiting.json",
+      "sha256": "1a2d276b7b144fde9df080d34028ab527fa18d2f83fe8a8d5ef0c5a8868019d7",
+      "bytes": 7190
+    },
+    {
+      "path": "continued-r253/source-b-private-question-denied.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/source-b-private-question-denied.json",
+      "sha256": "2866578fb31245d52cccc6091a141b27d8933f35141d038f6a977563dd60d6c4",
+      "bytes": 112
+    },
+    {
+      "path": "continued-r253/source-b-answer-denied.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/source-b-answer-denied.json",
+      "sha256": "2965865f3078dc4efb2c948ccfe7a2221ded0caf5b64526c9bf7d63f38afcc54",
+      "bytes": 112
+    },
+    {
+      "path": "continued-r253/agent-as-human-answer-denied.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/agent-as-human-answer-denied.json",
+      "sha256": "83cdab5bf0cdcb46225c396ac7d846033753bd2921cfce8c913514ac94d9f706",
+      "bytes": 111
+    },
+    {
+      "path": "continued-r253/owner-a-answer-intent.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/owner-a-answer-intent.json",
+      "sha256": "dc7919dd44f5063ecb01b77db66fb1b0e83e3777ce486353294439653636e89c",
+      "bytes": 1270
+    },
+    {
+      "path": "continued-r253/owner-a-answer-receipt.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/continuation-r253/owner-a-answer-receipt.json",
+      "sha256": "9cfa4c2193a34d851abb737d4fa724a9207af28346c83ae21d07d94bef7bb5f0",
+      "bytes": 3798
+    },
+    {
+      "path": "continued-r253/public.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/public.json",
+      "sha256": "6af9a525ed0e70f395b693a7ecc9f52abc66a0880914fa3c7ab2992ccecffd52",
+      "bytes": 1069
+    },
+    {
+      "path": "continued-r253/human-owner-readback.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/human-owner-readback.json",
+      "sha256": "3d0031645714b651924b62f409e4dce1aa2f15e97c90bb82cb2d37d41ebf9774",
+      "bytes": 1599
+    },
+    {
+      "path": "continued-r253/fixture-receipt.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/fixture-receipt.json",
+      "sha256": "60d10baf0705418084b768b3c74f58a1bb7eccb25be91dec6f090d0f3a1a49a7",
+      "bytes": 1366
+    },
+    {
+      "path": "continued-r253/peer-public.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r252/peer/public.json",
+      "sha256": "d3e7bd997429de3544c2fdcc44b4ec2f7c1fbcfa6439d55b40187513e23c3553",
+      "bytes": 949
+    },
+    {
+      "path": "fresh-r255/execution-intent.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/execution-intent.json",
+      "sha256": "27272d3f38b502c1ec5752322bb6ab84132c66dcaf76bed8c23f80f9421ad107",
+      "bytes": 906
+    },
+    {
+      "path": "fresh-r255/result.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/result.json",
+      "sha256": "dee3022e6b3579a8db5719658af886b438341437107e06b5afc3b34ea6ce7271",
+      "bytes": 145287
+    },
+    {
+      "path": "fresh-r255/retirement.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/retirement.json",
+      "sha256": "aeee168913c54b76ebd652f968c82afe32e604c0ebfecab0aa9cc2b24010616d",
+      "bytes": 2206
+    },
+    {
+      "path": "fresh-r255/role-question-waiting.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/role-question-waiting.json",
+      "sha256": "588074d3e25dcaa8dbe382b961c9ab74eb07a084de0e33a2514632a7c7dad819",
+      "bytes": 6649
+    },
+    {
+      "path": "fresh-r255/source-b-private-question-denied.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/source-b-private-question-denied.json",
+      "sha256": "6da0156b3b15f62e2a76a9b3c686bdd514607f3aada7256051848b9919b96ed7",
+      "bytes": 112
+    },
+    {
+      "path": "fresh-r255/source-b-answer-denied.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/source-b-answer-denied.json",
+      "sha256": "ccc4fafeca97aa2ed71b03e5c50f76dc9c19aaddf431d9b5f3d76c6e666a8fd0",
+      "bytes": 112
+    },
+    {
+      "path": "fresh-r255/agent-as-human-answer-denied.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/agent-as-human-answer-denied.json",
+      "sha256": "536c484f07504a96ee0ae5253ed933e35ccb911f7fc52d699d2a525758fbb50e",
+      "bytes": 112
+    },
+    {
+      "path": "fresh-r255/owner-a-answer-intent.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/owner-a-answer-intent.json",
+      "sha256": "681a676021f8cfc0d9cad0cf8572856a95637241da53a92a1ad20f6ae4d57f0d",
+      "bytes": 1268
+    },
+    {
+      "path": "fresh-r255/owner-a-answer-receipt.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/run/owner-a-answer-receipt.json",
+      "sha256": "fa88b4772269c61114d5220e2520144c9e29989ea26827a0b7013740c6ee96fe",
+      "bytes": 3773
+    },
+    {
+      "path": "fresh-r255/public.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/public.json",
+      "sha256": "783ea22182bf993af72bbc0ed09d4ace9dc2610fb9cf7d83bd25b2187d29477f",
+      "bytes": 1069
+    },
+    {
+      "path": "fresh-r255/human-owner-readback.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/human-owner-readback.json",
+      "sha256": "7c2c27c7e4435debb97bbea0d0a5c5605f5d9508b33db121c82415d341b27b3e",
+      "bytes": 1599
+    },
+    {
+      "path": "fresh-r255/fixture-receipt.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/fixture-receipt.json",
+      "sha256": "fade57109e6f85dac9feac6788a9cbdb4dd61c598fc07d9e9e830f87f55d130d",
+      "bytes": 1366
+    },
+    {
+      "path": "fresh-r255/peer-public.json",
+      "source": "/var/lib/lax-role-decision-owner-20261020-r251/role-owner-r255/peer/public.json",
+      "sha256": "9149b66d6904d3d17e2b2dc02e8f08b332471d77f60bd8cac722c83db7002cad",
+      "bytes": 949
+    },
+    {
+      "path": "continued-r253/artifacts/build_bulletin.py",
+      "source": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/home/work/build_bulletin.py",
+      "sha256": "d05b5425f33f48c844315bc3fcf3220b8e051ab47df7c149bd9cc35a02c34226",
+      "bytes": 2560
+    },
+    {
+      "path": "continued-r253/artifacts/bulletin.json",
+      "source": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/home/work/bulletin.json",
+      "sha256": "59d1d3c45c47534b70829cb2b2a13c5924762399190d5fd23cd7f2df1cc7bb4c",
+      "bytes": 236
+    },
+    {
+      "path": "continued-r253/artifacts/bulletin-source.json",
+      "source": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/home/work/bulletin-source.json",
+      "sha256": "08912e6d7853ad109c6678e225e0a4f4537c49bcb5646864d471584adafa780a",
+      "bytes": 277
+    },
+    {
+      "path": "continued-r253/artifacts/audience.json",
+      "source": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/e5e237b9-12b5-4eb4-92e7-4166df37c00e/home/work/audience.json",
+      "sha256": "1d969a1e2922ab0840034a0bfb474e31c7a93ddc2903e067bf3b58bbd1358f1f",
+      "bytes": 112
+    },
+    {
+      "path": "continued-r253/artifacts/engineer-catalog.json",
+      "source": "/var/lib/harness/e923bcfb-e559-463e-b6e4-5d624135abd6/purpose-agents/f58b712b-b5ae-4645-9956-10ea65d03822/home/work/catalog.json",
+      "sha256": "aabdb1b468c851d5848346cdf8387e5749d847bf6080e888fdd023e2d131f024",
+      "bytes": 568
+    },
+    {
+      "path": "fresh-r255/artifacts/build_bulletin.py",
+      "source": "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/698a8132-2a15-4946-9acf-222ca7fb6383/home/work/build_bulletin.py",
+      "sha256": "bf34c043903abba781fa117dd60cfa0bc198f488bb64ac1c9dbb6ad0597c93c3",
+      "bytes": 2650
+    },
+    {
+      "path": "fresh-r255/artifacts/bulletin.json",
+      "source": "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/698a8132-2a15-4946-9acf-222ca7fb6383/home/work/bulletin.json",
+      "sha256": "06e45bf5c94a9c48a546300018216339d20d8c22b69b49ebdb6a575dea51a1dd",
+      "bytes": 163
+    },
+    {
+      "path": "fresh-r255/artifacts/bulletin-source.json",
+      "source": "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/698a8132-2a15-4946-9acf-222ca7fb6383/home/work/bulletin-source.json",
+      "sha256": "b4d5d9896a324a1e98f4c6d632c46092af4f4a0fdc941704c624cc33d0d269b4",
+      "bytes": 277
+    },
+    {
+      "path": "fresh-r255/artifacts/audience.json",
+      "source": "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/698a8132-2a15-4946-9acf-222ca7fb6383/home/work/audience.json",
+      "sha256": "07623484ca8c6d55daf3563a7c723903de9933d7d5f67dfd0a5ab64ca50353e3",
+      "bytes": 103
+    },
+    {
+      "path": "fresh-r255/artifacts/engineer-catalog.json",
+      "source": "/var/lib/harness/9c7fea36-8b36-45ff-a81b-774fc1bff22f/purpose-agents/a46dfe6c-1211-401d-8b3c-faeef66e0389/home/work/catalog.json",
+      "sha256": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f",
+      "bytes": 445
+    }
+  ],
+  "credentialLiteralScan": "All copied bytes checked against owned human/purpose/database credentials; no credential values stored. Explicit allowlist excludes installation, enrollment/auth and database secrets.",
+  "limits": "Source and curated lab qualification, no production promotion. Failed original outcomes remain failed."
+}

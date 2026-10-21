@@ -1,0 +1,3 @@
+# Preserve exact native source bytes, including the original installer EOF.
+continued-r253/artifacts/engineer-catalog.json whitespace=-blank-at-eof
+fresh-r255/artifacts/engineer-catalog.json whitespace=-blank-at-eof

@@ -1,0 +1,82 @@
+{
+  "at": 1792557014.4175074,
+  "result": {
+    "attention": {
+      "id": "bd5bb983-380c-5fca-9247-d89cab1e8f28",
+      "authority": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+      "delivery": "07bfed6a-29ea-5661-a7d3-9eabc124fc87",
+      "agent": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "human": "625caeb5-24cf-4757-aefa-d606b419444e",
+      "room": "f839d4d4-2f30-4846-84ed-c39693ea7932",
+      "event": "8fb957b0-d9ac-4b81-87d7-777a3b92931f",
+      "generation": 1,
+      "claim_id": "context-admit:28e65c97-a493-5c78-80af-3d171b819a0e",
+      "native_thread": "01a15ca8-8611-7ee2-b789-93ee6d01b82d",
+      "native_turn": "01a15cb8-daca-7132-aab5-3b80755ba7b3",
+      "native_slot": "exec-ee595cda-b4a2-437f-90da-3917edea860d",
+      "method": "hollywood/question",
+      "request": {
+        "questions": [
+          {
+            "id": "release-scope-aabdb1b468c851d5",
+            "header": "Local handoff",
+            "isOther": true,
+            "options": [
+              {
+                "label": "internal-review",
+                "description": "Keep this exact release's local handoff for internal review."
+              },
+              {
+                "label": "team-use",
+                "description": "Mark this exact release's local handoff for team use."
+              }
+            ],
+            "isSecret": false,
+            "question": "For this separate verified release, catalog SHA256 aabdb1b468c851d5848346cdf8387e5749d847bf6080e888fdd023e2d131f024 (guided-practice v3, team-review v2, and seat-management v1 released; course-analytics planned), should audience.json record internal-review or team-use before I finalize this same bulletin refresh? This is a new decision for these exact bytes, not a revival of the cancelled prior refresh. Neither choice authorizes deployment or external publication."
+          }
+        ],
+        "isBlocking": false
+      },
+      "digest": "0d7fb9f724ccde83e7cab54fff176795caddad2939a0df66d861d98e4a6f33e5",
+      "state": "response_submitted",
+      "response": {
+        "answers": {
+          "release-scope-aabdb1b468c851d5": {
+            "answers": [
+              "Use team-use for this verified release. The choice authorizes the local audience.json and refreshed bulletin only, not external publication, customer actions, scheduling or any broader scope. PRIVATE COORDINATION NOTE: qa-owner-note-71f3 is not for the room or delivered artifacts; communicate only the agreed scope and verified work outcome.\n"
+            ]
+          }
+        }
+      },
+      "response_author": "625caeb5-24cf-4757-aefa-d606b419444e",
+      "response_event": "de3d86aa-d0a4-4e84-8234-8bd8bc8a55f9",
+      "revision": 2,
+      "created_at": "2026-10-21 04:30:10.721275+00:00",
+      "updated_at": "2026-10-21 04:30:14.413278+00:00"
+    },
+    "scope": {
+      "authorityId": "e923bcfb-e559-463e-b6e4-5d624135abd6",
+      "attentionId": "bd5bb983-380c-5fca-9247-d89cab1e8f28",
+      "deliveryId": "07bfed6a-29ea-5661-a7d3-9eabc124fc87",
+      "agentId": "e5e237b9-12b5-4eb4-92e7-4166df37c00e",
+      "roomId": "f839d4d4-2f30-4846-84ed-c39693ea7932",
+      "hostId": "583044fa-3e04-4fa5-9937-4c9081f53f08",
+      "generation": 1,
+      "nativeThread": "01a15ca8-8611-7ee2-b789-93ee6d01b82d",
+      "nativeTurn": "01a15cb8-daca-7132-aab5-3b80755ba7b3",
+      "requestDigest": "0d7fb9f724ccde83e7cab54fff176795caddad2939a0df66d861d98e4a6f33e5"
+    },
+    "deliveryState": "running",
+    "nativeConsumptionProved": false,
+    "canRespond": false,
+    "responseMode": "same-agent-context-input",
+    "continuation": {
+      "id": "9c83a849-90a1-49c9-b640-367b748314dd",
+      "event": "de3d86aa-d0a4-4e84-8234-8bd8bc8a55f9",
+      "state": "pending",
+      "native_thread": null,
+      "native_turn": null
+    }
+  },
+  "postCount": 1
+}
