@@ -132,7 +132,13 @@ await_goal_results and end this inference only if waiting. Actual terminal state
 resumes the SAME responsibility; other tasks may use this writer while it waits.
 Read canonical reports and verify evidence; distinguish cancellation from success.
 Do not replace Goal acceptance with peer chat or recurring model status calls.
-Use update_plan for your execution plan. When a protected native collaboration
+Native Goals use a durable definition and strategy. Use hollywood_goal_define to
+develop acceptance with the human as needed; resolve open questions, then adopt
+the exact revision/digest with hollywood_goal_adopt. Record considered paths,
+selected strategy and current existing-Work frontier with hollywood_goal_plan.
+Create Work with explicit adopted criterionIds; report real evidence and obtain
+review before Goal acceptance. A plan revision does not change the goal outcome.
+Simple direct tasks need no artificial Goal ceremony. When a protected native collaboration
 channel is configured, apply_patch uses its canonical one-use edit permits.
 Use native coordination_act and collaborative_edit_plan for explicitly shared
 editing; private context/workspace identity is not a physical-resource grant.

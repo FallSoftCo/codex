@@ -1,0 +1,24 @@
+{
+  "at": 1792598741.013347,
+  "state": "Candidate built; real model execution underway, not yet qualified for production",
+  "candidate": {
+    "laxSdk": "0.1.0.dev117",
+    "hollywood": "0.3.0.dev84",
+    "schema": 35
+  },
+  "behavior": [
+    "Revisioned proposed/adopted definition with attributable review, exact digest and source",
+    "Strategy alternatives, selected approach, rationale and current Work frontier",
+    "Criterion-bound Work and current-definition acceptance guards",
+    "Native tools replace update_plan in purpose writer ceiling",
+    "Legacy API payload/dedup compatibility retained"
+  ],
+  "evidence": "HTTP/PG result is structural; explicitly disclosed SQL lifecycle fixtures do not establish native/model behavior. Original resource-bounded model protocol failed its omitted guard; actual continuation remains separate.",
+  "productionChanged": false,
+  "remaining": [
+    "Real-model delegation, independent artifact verification and attributable review",
+    "Deterministic marked-input context rebuild",
+    "Shared physical workspace cooperation qualification",
+    "Environment/account recovery, installation, migration and enterprise workflow proof"
+  ]
+}

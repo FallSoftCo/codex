@@ -30,7 +30,9 @@ READ_TOOLS = RESOURCE_READ_TOOLS | {
     "hollywood_attention_read",
     "hollywood_attention_list",
 }
-MUTATION_TOOLS = {
+from .goal_contract_tools import NAMES as GOAL_CONTRACT_TOOLS
+
+MUTATION_TOOLS = GOAL_CONTRACT_TOOLS | {
     "hollywood_execution_cancel",
     "hollywood_decision_set",
     "hollywood_work_revise",
@@ -55,7 +57,8 @@ def definitions(spec):
     revision = {"type": "integer", "minimum": 1}
     from .resource_routing import definitions as resource_definitions
     from .placement_control import definitions as placement_definitions
-    return resource_definitions(spec) + placement_definitions(spec) + [
+    from .goal_contract_tools import definitions as contract_definitions
+    return resource_definitions(spec) + placement_definitions(spec) + contract_definitions(spec) + [
         spec(
             "hollywood_portfolio",
             "Global: inspect durable portfolio obligations, original review receipts and held/unknown review state. Dispatch is not acceptance; observation starts no model.",
@@ -155,13 +158,14 @@ def definitions(spec):
                 "ownerId": text,
                 "specification": text,
                 "acceptance": text,
+                "criterionIds": {"type":"array","items":text,"minItems":1,"maxItems":32},
                 "note": note,
             },
             ["workId", "revision", "ownerId", "specification", "acceptance", "note"],
         ),
         spec(
             "hollywood_goal_create",
-            "Record a finite accountable Goal from this current accepted human/agent request or original native standing-role work. The canonical Role persists separately; Goal creation is not a chat self-request or a new human assignment. Optional roomId selects its collaboration room independently of agent context. For another room explicitly set publishScopedIntent=true: only selected Goal intent is published there, never private source text. Original source must be room-visible. reviewBudget bounds authorized material reviews; creation assigns no work.",
+            "Record a finite accountable Goal from this current accepted human/agent request or original native standing-role work. The canonical Role persists separately; Goal creation is not a chat self-request or a new human assignment. Optional roomId selects its collaboration room independently of agent context. For another room explicitly set publishScopedIntent=true: only selected Goal intent is published there, never private source text. Original source must be room-visible. reviewBudget bounds authorized material reviews; creation assigns no work. Native Goals require a developed/adopted definition and current strategy before Work assignment; use hollywood_goal_define/adopt/plan after reading the created Goal.",
             {
                 "roomId": {"type": ["string", "null"]},
                 "publishScopedIntent": {"type": "boolean"},
@@ -260,6 +264,7 @@ def definitions(spec):
                 "ownerId": {"type": ["string", "null"]},
                 "specification": text,
                 "acceptance": text,
+                "criterionIds": {"type":"array","items":text,"minItems":1,"maxItems":32},
                 "dependencies": {"type": "array", "items": text, "maxItems": 16},
             },
             [
@@ -575,6 +580,9 @@ async def invoke(c, name, args, operation):
         )
     if name == "hollywood_attention_read":
         return await c.http("GET", "attention/" + identity("attentionId"))
+    if name in GOAL_CONTRACT_TOOLS:
+        from .goal_contract_tools import execute as contract_execute
+        return await contract_execute(c,name,args,operation)
     if name == "hollywood_goal_read":
         return await c.http("GET", "goals/" + identity("goalId"))
     if name == "hollywood_work_list":
@@ -619,6 +627,7 @@ async def invoke(c, name, args, operation):
             "operationId": operation,
             "id": str(uuid5(UUID(c.config["agentId"]), operation)),
             "sourceEventId": participation(c)["request"]["id"],
+            "requireDefinition": True,
         }
         if publish:
             payload["publishScopedIntent"] = True

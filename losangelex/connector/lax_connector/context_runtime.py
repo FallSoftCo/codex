@@ -142,7 +142,7 @@ class ContextRunner:
         # These wrappers confer no access to tools excluded by the native ceiling.
         allowed=[{"name":name} for name in sorted(self.allowed | {"exec","wait"})]
         if self.purpose=="writer":
-            allowed += [{"name":name} for name in ("exec_command","write_stdin","apply_patch","update_plan")]
+            allowed += [{"name":name} for name in ("exec_command","write_stdin","apply_patch")]
             if self.config.get("nativeCollaborationChannel"):
                 allowed += [{"name":name} for name in ("coordination_act","collaborative_edit_plan")]
         allowed += self.tool_profile["allowedTools"]
@@ -155,7 +155,7 @@ class ContextRunner:
           "config":{"features.goal_external_admission":True,
             "features.goal_external_lifecycle":False,"agents.enabled":False,
             "features.multi_agent":False,"features.multi_agent_v2":False,
-            "tools.update_plan.enabled":self.purpose=="writer",
+            "tools.update_plan.enabled":False,
             "model_reasoning_effort":self.config["effort"],
             **self.tool_profile["overrides"]}}
         record=self.state/"context.json"

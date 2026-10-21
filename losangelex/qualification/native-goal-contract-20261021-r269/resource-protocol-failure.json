@@ -1,0 +1,14 @@
+{
+  "at": 1792598523.2733552,
+  "originalProtocol": "protocol/protocol.json",
+  "originalNativeTotalTokenLimit": 200000,
+  "observedNativeTotalTokens": 203183,
+  "outcome": "Original resource-bounded protocol failed: runner omitted the declared cumulative-token guard. No original bounded pass may be claimed.",
+  "continuation": "Continue ONLY original accepted execution under separately recorded prospective remaining-observation limits; no human request/tool effect is re-posted and no artifacts are repaired. Semantic acceptance and evaluator remain unchanged.",
+  "prospectiveLimits": {
+    "maximumTotalTokensIncludingOriginal": 2000000,
+    "maximumUncachedInputPlusOutputTokens": 500000,
+    "maximumSecondsFromOriginalStart": 1500
+  },
+  "knownCurrentOutcome": "No completed peer artifact/Goal acceptance observed at budget correction time. Original resource failure remains permanent."
+}

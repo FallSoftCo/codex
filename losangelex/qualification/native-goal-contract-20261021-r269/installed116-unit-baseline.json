@@ -1,0 +1,19 @@
+{
+  "tests": 26,
+  "errors": [
+    "test_current_room_keeps_original_wire_and_context (test_scoped_goal_context.ScopedGoalContext.test_current_room_keeps_original_wire_and_context)",
+    "test_explicit_other_room_keeps_original_source_and_context (test_scoped_goal_context.ScopedGoalContext.test_explicit_other_room_keeps_original_source_and_context)",
+    "test_invalid_flag_is_not_truthy_authorization (test_scoped_goal_context.ScopedGoalContext.test_invalid_flag_is_not_truthy_authorization)",
+    "test_other_room_requires_explicit_scope_before_any_send (test_scoped_goal_context.ScopedGoalContext.test_other_room_requires_explicit_scope_before_any_send)",
+    "test_business_work_pins_original_identity_without_planned_calls (test_work_delivery.WorkCaptureTests.test_business_work_pins_original_identity_without_planned_calls)",
+    "test_cancelled_source_or_revoked_write_never_gets_plan_fallback (test_work_delivery.WorkCaptureTests.test_cancelled_source_or_revoked_write_never_gets_plan_fallback)",
+    "test_changed_assignment_or_attempt_is_held_without_ordinary_fallback (test_work_delivery.WorkCaptureTests.test_changed_assignment_or_attempt_is_held_without_ordinary_fallback) (key='workRevision')",
+    "test_changed_assignment_or_attempt_is_held_without_ordinary_fallback (test_work_delivery.WorkCaptureTests.test_changed_assignment_or_attempt_is_held_without_ordinary_fallback) (key='goalId')",
+    "test_changed_assignment_or_attempt_is_held_without_ordinary_fallback (test_work_delivery.WorkCaptureTests.test_changed_assignment_or_attempt_is_held_without_ordinary_fallback) (key='attemptId')",
+    "test_changed_assignment_or_attempt_is_held_without_ordinary_fallback (test_work_delivery.WorkCaptureTests.test_changed_assignment_or_attempt_is_held_without_ordinary_fallback) (key='attemptNumber')",
+    "test_explicit_callback_keeps_channel_and_seeds_only_original_work_grant (test_work_delivery.WorkCaptureTests.test_explicit_callback_keeps_channel_and_seeds_only_original_work_grant)",
+    "test_claim_ready_plan_and_unsettled_conflicts_are_not_retried_as_planned (test_work_delivery.WorkPatchTests.test_claim_ready_plan_and_unsettled_conflicts_are_not_retried_as_planned)"
+  ],
+  "failures": [],
+  "scope": "Installed unchanged SDK116 against maintained test fixture sources; not candidate code. Establish stale baseline failures before any fixture corrections."
+}
