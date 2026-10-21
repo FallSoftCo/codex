@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "features": [
+    {
+      "id": "guided-practice",
+      "version": 3,
+      "title": "Guided practice with coach review",
+      "state": "released"
+    }
+  ]
+}

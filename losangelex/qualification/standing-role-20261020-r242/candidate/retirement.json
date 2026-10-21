@@ -1,0 +1,64 @@
+{
+  "at": 1792552082.2043095,
+  "state": "failed",
+  "error": "RuntimeError: release did not settle within frozen phase window",
+  "pids": {
+    "lax-agent-da1f3acd-ed4beba614c2-reader.service": "0",
+    "lax-agent-da1f3acd-ed4beba614c2-writer.service": "0",
+    "lax-agent-da1f3acd-ed4beba614c2-responder.service": "0",
+    "lax-agent-da1f3acd-a0ab14d4c71f-reader.service": "0",
+    "lax-agent-da1f3acd-a0ab14d4c71f-writer.service": "0",
+    "lax-agent-da1f3acd-a0ab14d4c71f-responder.service": "0",
+    "lax-host-da1f3acd-cfa3d053.service": "0",
+    "lax-collaboration-da1f3acd-cfa3d053.service": "0"
+  },
+  "preStopContexts": [
+    {
+      "agent": "a0ab14d4-c71f-487a-81a4-c03dfa1a59ef",
+      "purpose": "reader",
+      "native_thread": "01a15c64-6e7a-7a62-9ee1-9520dfa1d366",
+      "active_turn": null
+    },
+    {
+      "agent": "a0ab14d4-c71f-487a-81a4-c03dfa1a59ef",
+      "purpose": "responder",
+      "native_thread": "01a15c64-70b5-7420-a445-486dcc95fabb",
+      "active_turn": null
+    },
+    {
+      "agent": "a0ab14d4-c71f-487a-81a4-c03dfa1a59ef",
+      "purpose": "writer",
+      "native_thread": "01a15c64-711c-7c72-ac77-ba8f1c638d1f",
+      "active_turn": null
+    },
+    {
+      "agent": "ed4beba6-14c2-4487-be2e-1927c21d8833",
+      "purpose": "reader",
+      "native_thread": "01a15c64-6de4-7a30-96cc-4dccfedd2705",
+      "active_turn": null
+    },
+    {
+      "agent": "ed4beba6-14c2-4487-be2e-1927c21d8833",
+      "purpose": "responder",
+      "native_thread": "01a15c64-6fde-7940-9510-a93655b3257c",
+      "active_turn": null
+    },
+    {
+      "agent": "ed4beba6-14c2-4487-be2e-1927c21d8833",
+      "purpose": "writer",
+      "native_thread": "01a15c64-70a4-7252-a65f-fed649c5def9",
+      "active_turn": null
+    }
+  ],
+  "originalsRetained": true,
+  "protectedPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "3590210",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+  },
+  "protectedPidsUnchanged": true
+}

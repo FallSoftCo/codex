@@ -1,0 +1,14 @@
+test_argument_count_and_io_errors (__main__.BulletinTests.test_argument_count_and_io_errors) ... ok
+test_duplicates_and_invalid_planned_entries (__main__.BulletinTests.test_duplicates_and_invalid_planned_entries) ... ok
+test_empty_and_all_planned (__main__.BulletinTests.test_empty_and_all_planned) ... ok
+test_invalid_feature_fields (__main__.BulletinTests.test_invalid_feature_fields) ... ok
+test_invalid_root_schema_and_features (__main__.BulletinTests.test_invalid_root_schema_and_features) ... ok
+test_malformed_json_and_duplicate_keys (__main__.BulletinTests.test_malformed_json_and_duplicate_keys) ... ok
+test_mixed_sorted_projection (__main__.BulletinTests.test_mixed_sorted_projection) ... ok
+test_read_only_source (__main__.BulletinTests.test_read_only_source) ... ok
+test_unicode_and_nonempty_whitespace (__main__.BulletinTests.test_unicode_and_nonempty_whitespace) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 4.246s
+
+OK

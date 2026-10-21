@@ -1,0 +1,6 @@
+{
+  "at": 1792551003.4607372,
+  "state": "fixture error before private-source assertion",
+  "error": "The fixture changed an event to direct without setting a recipient, violating hb_event_check. All fresh namespace writes rolled back; no models/workers involved.",
+  "correction": "Set the synthetic direct recipient to the fixture agent. Original assertion remains403. No product change."
+}

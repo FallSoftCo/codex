@@ -1,0 +1,24 @@
+{
+  "at": 1792553518.9597023,
+  "oldInstalledPrototype": "/opt/lax-three-context-20261018-r01/venv-r243",
+  "processReferences": [],
+  "action": "Retain installed prototype for now; retire exact generated Python build intermediates only. Old wheel/dependency receipts retained. No runtime/DB/source deletion.",
+  "intermediates": [
+    {
+      "path": "/aosp/development/lax-three-context-20261018-r01/hollywood/build",
+      "bytes": 1036953
+    },
+    {
+      "path": "/aosp/development/lax-three-context-20261018-r01/hollywood/hollywood_cli.egg-info",
+      "bytes": 18828
+    },
+    {
+      "path": "/aosp/development/lax-three-context-20261018-r01/lax/losangelex/connector/build",
+      "bytes": 903129
+    },
+    {
+      "path": "/aosp/development/lax-three-context-20261018-r01/lax/losangelex/connector/lax_hollywood_connector.egg-info",
+      "bytes": 4706
+    }
+  ]
+}

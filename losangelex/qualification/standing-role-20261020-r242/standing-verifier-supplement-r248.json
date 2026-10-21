@@ -1,0 +1,158 @@
+{
+  "at": 1792552861.166702,
+  "scope": "Post-trial supplementary evaluator audit; frozen r242 scorer/results unchanged",
+  "blindSpot": "Python object equality conflates boolean True and integer1. Frozen unseen cases reject other wrong programs but omit a released version1 valid case. A wrong-output-primitive program passes the frozen checks.",
+  "originalScorerAdmitsBooleanOutputControl": true,
+  "strictJsonPrimitiveComparisonRejectsControl": true,
+  "rows": [
+    {
+      "case": 0,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "guided-practice",
+            "version": 2,
+            "title": "Guided practice with saved feedback"
+          },
+          {
+            "id": "team-review",
+            "version": true,
+            "title": "Team review dashboard"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "guided-practice",
+            "version": 2,
+            "title": "Guided practice with saved feedback"
+          },
+          {
+            "id": "team-review",
+            "version": 1,
+            "title": "Team review dashboard"
+          }
+        ]
+      }
+    },
+    {
+      "case": 1,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 2,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      }
+    },
+    {
+      "case": 3,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 4,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 5,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 6,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 7,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 8,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 9,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 10,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    }
+  ],
+  "policy": "Apply strict JSON comparison as explicitly supplementary evidence to actual outputs. Future tests freeze strict primitive checks and this control before models. No model/source/output repair or score rewrite."
+}

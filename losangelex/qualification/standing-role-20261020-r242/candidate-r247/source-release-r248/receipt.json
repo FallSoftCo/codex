@@ -1,0 +1,11 @@
+{
+  "at": 1792552899.6702921,
+  "capture": "Read-only source preservation during original corrected candidate role work; no model/worker/source changes",
+  "source": {
+    "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+    "path": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/cac6a5d2-a6e0-4d57-8840-4a438e303587/home/work/catalog.json",
+    "sha256": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f"
+  },
+  "bytes": 445,
+  "frozenReleaseSemanticsMatch": true
+}

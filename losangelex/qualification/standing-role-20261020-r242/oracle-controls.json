@@ -1,0 +1,664 @@
+{
+  "at": 1792550528.3429909,
+  "reference": [
+    {
+      "case": 0,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 1,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      },
+      "expected": {
+        "features": [
+          {
+            "id": "a",
+            "version": 11,
+            "title": "Unseen practice"
+          },
+          {
+            "id": "z",
+            "version": 7,
+            "title": "Unseen review"
+          }
+        ]
+      }
+    },
+    {
+      "case": 2,
+      "valid": true,
+      "passed": true,
+      "exitCode": 0,
+      "actual": {
+        "features": []
+      },
+      "expected": {
+        "features": []
+      }
+    },
+    {
+      "case": 3,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 4,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 5,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 6,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 7,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 8,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "case": 9,
+      "valid": false,
+      "passed": true,
+      "exitCode": 2,
+      "actual": null,
+      "expected": null
+    }
+  ],
+  "brokenControls": {
+    "constant-initial": [
+      {
+        "case": 0,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 1,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": {
+          "features": [
+            {
+              "id": "a",
+              "version": 11,
+              "title": "Unseen practice"
+            },
+            {
+              "id": "z",
+              "version": 7,
+              "title": "Unseen review"
+            }
+          ]
+        }
+      },
+      {
+        "case": 2,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 3,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 4,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 5,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 6,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 7,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 8,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 9,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": null
+      }
+    ],
+    "sample-aware": [
+      {
+        "case": 0,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 1,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": {
+          "features": [
+            {
+              "id": "a",
+              "version": 11,
+              "title": "Unseen practice"
+            },
+            {
+              "id": "z",
+              "version": 7,
+              "title": "Unseen review"
+            }
+          ]
+        }
+      },
+      {
+        "case": 2,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "guided-practice",
+              "version": 1,
+              "title": "Guided practice sessions"
+            }
+          ]
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 3,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 4,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 5,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 6,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 7,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 8,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 9,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      }
+    ],
+    "wrong-sort": [
+      {
+        "case": 0,
+        "valid": true,
+        "passed": true,
+        "exitCode": 0,
+        "actual": {
+          "features": []
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 1,
+        "valid": true,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "z",
+              "version": 7,
+              "title": "Unseen review"
+            },
+            {
+              "id": "a",
+              "version": 11,
+              "title": "Unseen practice"
+            }
+          ]
+        },
+        "expected": {
+          "features": [
+            {
+              "id": "a",
+              "version": 11,
+              "title": "Unseen practice"
+            },
+            {
+              "id": "z",
+              "version": 7,
+              "title": "Unseen review"
+            }
+          ]
+        }
+      },
+      {
+        "case": 2,
+        "valid": true,
+        "passed": true,
+        "exitCode": 0,
+        "actual": {
+          "features": []
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 3,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 4,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 5,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 6,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 7,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 8,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 9,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      }
+    ],
+    "bool-as-integer": [
+      {
+        "case": 0,
+        "valid": true,
+        "passed": true,
+        "exitCode": 0,
+        "actual": {
+          "features": []
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 1,
+        "valid": true,
+        "passed": true,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "a",
+              "version": 11,
+              "title": "Unseen practice"
+            },
+            {
+              "id": "z",
+              "version": 7,
+              "title": "Unseen review"
+            }
+          ]
+        },
+        "expected": {
+          "features": [
+            {
+              "id": "a",
+              "version": 11,
+              "title": "Unseen practice"
+            },
+            {
+              "id": "z",
+              "version": 7,
+              "title": "Unseen review"
+            }
+          ]
+        }
+      },
+      {
+        "case": 2,
+        "valid": true,
+        "passed": true,
+        "exitCode": 0,
+        "actual": {
+          "features": []
+        },
+        "expected": {
+          "features": []
+        }
+      },
+      {
+        "case": 3,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 4,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 5,
+        "valid": false,
+        "passed": false,
+        "exitCode": 0,
+        "actual": {
+          "features": [
+            {
+              "id": "PRIVATE-CANARY",
+              "version": 1,
+              "title": "x"
+            }
+          ]
+        },
+        "expected": null
+      },
+      {
+        "case": 6,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 7,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 8,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      },
+      {
+        "case": 9,
+        "valid": false,
+        "passed": true,
+        "exitCode": 2,
+        "actual": null,
+        "expected": null
+      }
+    ]
+  },
+  "claim": "Mechanical checker qualification, not model trials"
+}

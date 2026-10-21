@@ -1,0 +1,50 @@
+{
+  "schema": "lax-standing-responsibility-qualification/v1",
+  "frozenAt": 1792550438.8178148,
+  "arms": [
+    "baseline",
+    "candidate"
+  ],
+  "model": "gpt-6.1-sol/xhigh",
+  "architecture": "Two real agents per arm, each with three persistent contexts. Sequential bounded cohorts. No original task or model artifacts replayed. No model output repair.",
+  "participant": "Coordinator is disclosed scripted human QA participant; ordinary peer updates must be authored by the actual engineering agent. No live user or business claim.",
+  "sequence": [
+    "Initial bulletin assignment and human-visible final must complete before any later peer work. Capture all six history IDs.",
+    "Actual engineer performs unrelated inventory work, ordinary room update; wait until reader settles, require unchanged consumer output/work count and no acknowledgement.",
+    "Actual engineer releases changed catalog and publishes ordinary factual update; no new consumer assignment. Require correct useful bounded consumer follow-on work and source evidence, original task remains completed.",
+    "Actual engineer reconfirms unchanged catalog; wait for read/settlement then quiet window, require no further consumer work or reply.",
+    "Withdraw consumer role initiative through canonical administrator role revision after all own turns settle. Actual engineer publishes a changed release. Require no new role work."
+  ],
+  "acceptance": [
+    "Initial source/output/program/provenance correct and original final visible through human API.",
+    "No follow-on from unrelated ordinary room input.",
+    "New relevant source causes bounded consumer execution after original completion with unchanged six native histories.",
+    "Follow-on artifact equals independently computed result and actual CLI passes frozen unseen valid and malformed cases.",
+    "Canonical authority/source/observation/role revision traceability; no human-authored peer facts or self-request messages.",
+    "Repeated unchanged fact produces no duplicate work/reply; unchanged idle produces no new model turns.",
+    "Revoked standing role prevents follow-on; original completed receipt not reopened.",
+    "Owned services retired and production PIDs unchanged."
+  ],
+  "budgets": {
+    "perArmSeconds": 1800,
+    "perPhaseSeconds": 360,
+    "quietSeconds": 20,
+    "nativeTokensPerArm": 6000000
+  },
+  "failurePolicy": "Retain setup/transport/scorer/model failures; do not extend budgets or coach models to obtain a pass. Missing initial prerequisite marks later phases unexercised, never passed.",
+  "controls": "Frozen evaluator must pass reference implementation, reject constant initial report, sample-sensitive/hardcoded initial+released report, wrong sort and bool-as-int acceptance. Unseen data is evaluator-only, not model task material.",
+  "claimLimit": "One representative software work scenario per variant; no broad reliability, causal superiority, multi-host, physical phone, commercial or production readiness claim.",
+  "files": {
+    "role.txt": "540b3d48a2efe199c6d79397d1386a7555a3c93234e9e7e07391815db54c54c9",
+    "initial.txt": "652d593871e42ec4b64f4bf5e55a928b8b0ff86387acc13e9f1d6821cef1bbc9",
+    "engineer-role.txt": "c73bb33e48d260b7a02d042b632d98facee23b920de225145f1cfbbb709df363",
+    "engineer-noise.txt": "f4584cf83a61c498118dc62dbb4f6393075c91cafdad4ad291081887e3611f7e",
+    "engineer-release.txt": "7fa3bad38200983a0c01b8d4070b0202d7b629fddba3f39b41cc4773a8f35d9c",
+    "engineer-repeat.txt": "79b702dd970377da9fae3fc86f2732a566711bcf928e630e7fd1a2a9812b6e88",
+    "engineer-after-stop.txt": "0caeb64ddbbce273beca0c6ac555c99b1a0e9ac336613326791bf81b054fe352",
+    "initial-catalog.json": "0bc0e018776bf2a0eb55cc9d3a7477b662f14d813906f25ee65606f9d7df15a9",
+    "RELEASE-REQUIREMENTS.json": "6a03e65207003fedad95feb489c5428f8f0927ff0adbcf266746767f93ce98f5",
+    "STOPPED-ROLE-RELEASE.json": "940696e36bec6e13c16eb300a95c1fc7de20ed359ba45aeeaf2a3e5160b168f2",
+    "unseen-valid-cases.json": "6aca9be8c918372be4718218c149e0b9b8c012c15e148cea582d5968de248e71"
+  }
+}

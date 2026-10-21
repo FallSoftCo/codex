@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "features": [
+    {
+      "id": "guided-practice",
+      "version": 1,
+      "title": "Guided practice sessions",
+      "state": "released"
+    },
+    {
+      "id": "team-review",
+      "version": 1,
+      "title": "Team review dashboard",
+      "state": "planned"
+    }
+  ]
+}

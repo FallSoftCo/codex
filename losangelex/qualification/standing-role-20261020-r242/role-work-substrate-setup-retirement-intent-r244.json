@@ -1,0 +1,59 @@
+{
+  "at": 1792551096.5267353,
+  "scope": "Only two accidentally committed fresh synthetic substrate setups; no models/services/execution created",
+  "authorityIds": [
+    "47c14527-5b25-42b4-a870-1522b649f4e8",
+    "bb4b102b-c4f8-4e27-8591-f8f2b0a76b06"
+  ],
+  "authorities": [
+    {
+      "id": "47c14527-5b25-42b4-a870-1522b649f4e8",
+      "name": "Rollback-only role substrate",
+      "next_seq": 0,
+      "created_at": "2026-10-21 02:49:36.733166+00:00"
+    },
+    {
+      "id": "bb4b102b-c4f8-4e27-8591-f8f2b0a76b06",
+      "name": "Rollback-only role substrate",
+      "next_seq": 0,
+      "created_at": "2026-10-21 02:50:06.325061+00:00"
+    }
+  ],
+  "principals": [
+    {
+      "id": "760a6707-3dda-4bea-bb03-a74741f64e77",
+      "authority": "47c14527-5b25-42b4-a870-1522b649f4e8",
+      "name": "Owner",
+      "kind": "human",
+      "administrator": true,
+      "active": true
+    },
+    {
+      "id": "f85f71aa-f497-4ca5-8dae-f354a57c2067",
+      "authority": "47c14527-5b25-42b4-a870-1522b649f4e8",
+      "name": "Global",
+      "kind": "agent",
+      "administrator": true,
+      "active": true
+    },
+    {
+      "id": "e06fac82-8412-4f10-99ee-a0d8291e438e",
+      "authority": "bb4b102b-c4f8-4e27-8591-f8f2b0a76b06",
+      "name": "Owner",
+      "kind": "human",
+      "administrator": true,
+      "active": true
+    },
+    {
+      "id": "ca0f8802-7e55-47b0-b0cf-80cadf4b5583",
+      "authority": "bb4b102b-c4f8-4e27-8591-f8f2b0a76b06",
+      "name": "Global",
+      "kind": "agent",
+      "administrator": true,
+      "active": true
+    }
+  ],
+  "zeroDeliveries": true,
+  "zeroInstalledRuntimeDirectories": true,
+  "action": "Retain setup rows as failed-test evidence; revoke credentials, disable placements/context enrollment/principals. No deletion of unrelated data."
+}

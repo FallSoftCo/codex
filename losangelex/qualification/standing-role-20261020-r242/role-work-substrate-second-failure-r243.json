@@ -1,0 +1,8 @@
+{
+  "at": 1792551058.7534208,
+  "state": "All protocol assertions reached; rollback assertion failed",
+  "error": "The borrowed connection had no outer transaction when bootstrap/configure called c.transaction(); those setup blocks committed before the later implicit transaction. Final c.rollback could not undo earlier commits. Protocol assertions were not weakened.",
+  "correction": "Explicit outer transaction(force_rollback=True), verify absence after it exits. Retire exact failed-fixture namespaces with all original rows captured, no production namespace changes.",
+  "claim": "Not a passed rollback test.",
+  "initialDiagnosis": "An initial autocommit explanation was incorrect; explicit readback showed c.autocommit=False."
+}

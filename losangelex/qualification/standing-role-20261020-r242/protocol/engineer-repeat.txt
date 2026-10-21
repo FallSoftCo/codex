@@ -1,0 +1,1 @@
+Read and verify the existing catalog.json without changing any bytes. Publish an ordinary factual room update reconfirming the same verified release and exact host/path/SHA256. Do not address or assign another agent.

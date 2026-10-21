@@ -1,0 +1,1 @@
+Implement STOPPED-ROLE-RELEASE.json as the next engineering catalog revision, verify it and publish an ordinary factual update with exact source host/path/SHA256. Do not address or assign another agent. Do not edit another workspace.

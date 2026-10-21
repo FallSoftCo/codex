@@ -1,0 +1,11 @@
+{
+  "at": 1792552211.2055268,
+  "failedArm": "candidate",
+  "runtime": "SDK112/H79",
+  "failure": "Hollywood role Work was accepted; server execution-context classified it as observe and LAX rejected non-request. Native turn started, was interrupted in214ms, and terminality settled. No role artifact execution is established.",
+  "originalRoleControl": "9f7bbfbb-1c47-4206-a556-474d91a37395",
+  "originalSourcePeerReport": "4022dfa3-8de2-4915-9663-50e2a9ab7837",
+  "originalInterruptedTurn": "01a15c6a-7576-7443-90a2-9f15ee120b4c",
+  "noReplay": "Do not resume or replay this cancelled role work. A fresh independent cohort will requalify the source fix with the same frozen scenario.",
+  "requalification": "candidate-r247 uses SDK113/H80 and unchanged original r242 task/role/fixtures/scorer/runner/budgets. Additional cohort is a retained corrected attempt, not an original two-arm causal comparison."
+}

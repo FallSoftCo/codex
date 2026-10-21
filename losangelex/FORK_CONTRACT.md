@@ -82,6 +82,14 @@ by substituting a reduced tool set. The three-context candidate qualification
 records distinguish actual-model evidence from remaining integration work;
 they do not establish production replacement readiness.
 
+Ongoing roles and finite deliveries have independent lifetimes. Event-backed
+initiative must use an existing enrolled responsibility and explicit native
+work admission, preserving source evidence and the captured role revision.
+Room facts are not new permissions or human approval authority. Do not emulate
+initiative with self-addressed chat requests, a perpetual setup request or an
+additional task ledger. Bounded qualification and release limitations are
+recorded separately from this target contract.
+
 ## Upstream intake and release
 
 1. Fetch current upstream source separately and record the exact inspected

@@ -1,0 +1,657 @@
+{
+  "at": 1792553598.8716471,
+  "pairedPackages": {
+    "hollywood-cli": "0.3.0.dev80",
+    "lax-hollywood-connector": "0.1.0.dev113"
+  },
+  "nativeBinary": {
+    "path": "/opt/lax-native-pilot-20261020-r172/native/bin/codex-app-server",
+    "sha256": "f28cb6ba879472fcbd2538cb0644813ec6d73dda56c9232cc6988db28cb4c552"
+  },
+  "runtimeModuleBytes": {
+    "hollywood_backbone": {
+      "delivery_recovery.py": {
+        "source": "01fc75acb48e1dbacb67007cf7a678e7b16a1827ffb5414c86c3625ca1d0d433",
+        "installed": "01fc75acb48e1dbacb67007cf7a678e7b16a1827ffb5414c86c3625ca1d0d433"
+      },
+      "context_material.py": {
+        "source": "3a3cd730e3af9853f489a195fd30e2307cfa591123c9f027c2ba67fdedd8251d",
+        "installed": "3a3cd730e3af9853f489a195fd30e2307cfa591123c9f027c2ba67fdedd8251d"
+      },
+      "__init__.py": {
+        "source": "5c6ea9d96038ad11b25c19e7afed028312367c9cab78346da3fa26e033a3bdf8",
+        "installed": "5c6ea9d96038ad11b25c19e7afed028312367c9cab78346da3fa26e033a3bdf8"
+      },
+      "context_cancellations.py": {
+        "source": "41df9985720ee71ce998dbe0da0c3e192a7d7681a69dc4d5fc16324e90d1cfee",
+        "installed": "41df9985720ee71ce998dbe0da0c3e192a7d7681a69dc4d5fc16324e90d1cfee"
+      },
+      "bootstrap.py": {
+        "source": "173cea6055a68eb6f0a1934aafc94cc1e763a1c31edbd784f650e16c280007bf",
+        "installed": "173cea6055a68eb6f0a1934aafc94cc1e763a1c31edbd784f650e16c280007bf"
+      },
+      "collaboration.py": {
+        "source": "958046125b2760b3edb6ad581b2ccc859244fab3bc92981612b066c183c05e30",
+        "installed": "958046125b2760b3edb6ad581b2ccc859244fab3bc92981612b066c183c05e30"
+      },
+      "resource_models.py": {
+        "source": "d1a1677a24644305d7fc4a9bc4986d741c57c4ff597b350ec62ddc07bd944d31",
+        "installed": "d1a1677a24644305d7fc4a9bc4986d741c57c4ff597b350ec62ddc07bd944d31"
+      },
+      "context_room_reads.py": {
+        "source": "a45ddbe561651a00aaf6cee747bfc3862d0d55290e20cb68f2194627cb754acb",
+        "installed": "a45ddbe561651a00aaf6cee747bfc3862d0d55290e20cb68f2194627cb754acb"
+      },
+      "activity.py": {
+        "source": "2c236fc37e31688e3d996e469e1e17f7508b26a8eabc401d14bbb1ef33922e14",
+        "installed": "2c236fc37e31688e3d996e469e1e17f7508b26a8eabc401d14bbb1ef33922e14"
+      },
+      "server.py": {
+        "source": "38d5225fb78bcba1bbbcfde2ed916b8393ce957ad23b8cd3e58b8a67fad9a53d",
+        "installed": "38d5225fb78bcba1bbbcfde2ed916b8393ce957ad23b8cd3e58b8a67fad9a53d"
+      },
+      "collaboration_models_base.py": {
+        "source": "a708076743ea3fb651f2c09c02cbe90bfcf5fabc92c928e7e4a3c97f27d1ac46",
+        "installed": "a708076743ea3fb651f2c09c02cbe90bfcf5fabc92c928e7e4a3c97f27d1ac46"
+      },
+      "edit_plan_models.py": {
+        "source": "f249e8c0f8bcbc5f1bf20b340c1aabc21e35673006e2c481f7e9af186274c2fa",
+        "installed": "f249e8c0f8bcbc5f1bf20b340c1aabc21e35673006e2c481f7e9af186274c2fa"
+      },
+      "physical_workspaces.py": {
+        "source": "36711a4f47d95da14a29bcb8764274bf7d6165ea492a343fd2a8b9687d9efbea",
+        "installed": "36711a4f47d95da14a29bcb8764274bf7d6165ea492a343fd2a8b9687d9efbea"
+      },
+      "delegation.py": {
+        "source": "09f17a0014b0da0e35898433e5a81bbb787632e8f3e04e2d2fffde608b025d80",
+        "installed": "09f17a0014b0da0e35898433e5a81bbb787632e8f3e04e2d2fffde608b025d80"
+      },
+      "edit_plans.py": {
+        "source": "033a6130b60cd44e5919e514dda2f7ca84d42bbff7a84eedb894cd83bed63126",
+        "installed": "033a6130b60cd44e5919e514dda2f7ca84d42bbff7a84eedb894cd83bed63126"
+      },
+      "store.py": {
+        "source": "ac4d12e53dad0586aad08c4f926e31cbf892cea9c12450295b894478b0a0444a",
+        "installed": "ac4d12e53dad0586aad08c4f926e31cbf892cea9c12450295b894478b0a0444a"
+      },
+      "context_work_updates.py": {
+        "source": "b093424800f79ef3a7a85fa87297f3d6d91af3e03a7585bb874abf3c7dbf48fe",
+        "installed": "b093424800f79ef3a7a85fa87297f3d6d91af3e03a7585bb874abf3c7dbf48fe"
+      },
+      "context_execution.py": {
+        "source": "24ab0467ccbc63f5ffb0a4dd1c1689be4941fb498060ca623b8c6a3e97e68259",
+        "installed": "24ab0467ccbc63f5ffb0a4dd1c1689be4941fb498060ca623b8c6a3e97e68259"
+      },
+      "work.py": {
+        "source": "3e922af2a514417f5eb8ec83e142906aeb24f9a56f17301fb15ecbe83055243b",
+        "installed": "3e922af2a514417f5eb8ec83e142906aeb24f9a56f17301fb15ecbe83055243b"
+      },
+      "activity_models.py": {
+        "source": "864e3d850c759a839a52d05de0aab0db437e11ff8badb0d5616f263cb3f34a63",
+        "installed": "864e3d850c759a839a52d05de0aab0db437e11ff8badb0d5616f263cb3f34a63"
+      },
+      "work_edit_authority.py": {
+        "source": "4825b738c1c80d9828b83e59df54fa921eaf14aed6daf20a9f5092be99a4de01",
+        "installed": "4825b738c1c80d9828b83e59df54fa921eaf14aed6daf20a9f5092be99a4de01"
+      },
+      "executors.py": {
+        "source": "dc264b51db1e8d1a5903ce36f2900f073a6604572557c0af10a17a762e525d59",
+        "installed": "dc264b51db1e8d1a5903ce36f2900f073a6604572557c0af10a17a762e525d59"
+      },
+      "edit_validation.py": {
+        "source": "78284b73645ea42469ad9bf58e196f729994057b53bbafcc58b1c5d57b162223",
+        "installed": "78284b73645ea42469ad9bf58e196f729994057b53bbafcc58b1c5d57b162223"
+      },
+      "delivery_edit_models.py": {
+        "source": "beb402ee03b5ce3d7112c36cc19928d6bd96064fa5683b6e54ccc3eeae869fe3",
+        "installed": "beb402ee03b5ce3d7112c36cc19928d6bd96064fa5683b6e54ccc3eeae869fe3"
+      },
+      "context_room_observations.py": {
+        "source": "059a6cbc5d1abc240b9c35dd8e5c7e24d238460bcc0700726c934d435956e6d6",
+        "installed": "059a6cbc5d1abc240b9c35dd8e5c7e24d238460bcc0700726c934d435956e6d6"
+      },
+      "collaboration_models.py": {
+        "source": "99b7b9f97fd1d8356ffc2e5ed044151b7de41a9ebd6d6d8bb6aba2617fd01b1d",
+        "installed": "99b7b9f97fd1d8356ffc2e5ed044151b7de41a9ebd6d6d8bb6aba2617fd01b1d"
+      },
+      "cooperation.py": {
+        "source": "6c7f2875858ad9a54859b053c38c89b8351d414b27892bdc1f5176ef21e5a919",
+        "installed": "6c7f2875858ad9a54859b053c38c89b8351d414b27892bdc1f5176ef21e5a919"
+      },
+      "native_edit_contract.py": {
+        "source": "7f4de95ae20d11dc19d7d8d8741b180d9c5799a2d3bf8bd89360f487732e91f8",
+        "installed": "7f4de95ae20d11dc19d7d8d8741b180d9c5799a2d3bf8bd89360f487732e91f8"
+      },
+      "human_continuations.py": {
+        "source": "56ab4b108c923aa159552c9fb95a0221d2d678019781e4515c9169b5e56e6024",
+        "installed": "56ab4b108c923aa159552c9fb95a0221d2d678019781e4515c9169b5e56e6024"
+      },
+      "attempts.py": {
+        "source": "ec6e5aec0e8047e2a4e3ff2e8cc7c47f1470579cd5bb511cc79fe1d94f6a9457",
+        "installed": "ec6e5aec0e8047e2a4e3ff2e8cc7c47f1470579cd5bb511cc79fe1d94f6a9457"
+      },
+      "delivery_edits.py": {
+        "source": "9d8342175b50e79dbd1453f8d58157a00094dd85eaa31edac0114fb947b23790",
+        "installed": "9d8342175b50e79dbd1453f8d58157a00094dd85eaa31edac0114fb947b23790"
+      },
+      "placement_control.py": {
+        "source": "3a14012b6cc6312edc0d5e54dfcc6c0a58fcccfbdffa42f37a3bd6592e933265",
+        "installed": "3a14012b6cc6312edc0d5e54dfcc6c0a58fcccfbdffa42f37a3bd6592e933265"
+      },
+      "administrative.py": {
+        "source": "0cc36a4b7e06986dc801f488e17bddccf6f4eb82ab99ada79318701ac32443cf",
+        "installed": "0cc36a4b7e06986dc801f488e17bddccf6f4eb82ab99ada79318701ac32443cf"
+      },
+      "context_system.py": {
+        "source": "cbb3bb27d8a90af8031dae8ada5ec69b1ede89cb0b375355cd393d60db0f7dbb",
+        "installed": "cbb3bb27d8a90af8031dae8ada5ec69b1ede89cb0b375355cd393d60db0f7dbb"
+      },
+      "context_peers.py": {
+        "source": "1de63cd5b605300d76ef6143d0ea66c99bae14a836b664a7e83323243f3851cc",
+        "installed": "1de63cd5b605300d76ef6143d0ea66c99bae14a836b664a7e83323243f3851cc"
+      },
+      "agent_resources.py": {
+        "source": "b6a9bec7dc34dfd2cdbb9b87f07509e66d8cc8e0b43902f47dece2e2d362d88d",
+        "installed": "b6a9bec7dc34dfd2cdbb9b87f07509e66d8cc8e0b43902f47dece2e2d362d88d"
+      },
+      "communication.py": {
+        "source": "364c54ad33dcd55e8a92e2831412b474c76bfb847d47919bd793741cf56aba4c",
+        "installed": "364c54ad33dcd55e8a92e2831412b474c76bfb847d47919bd793741cf56aba4c"
+      },
+      "context_admission.py": {
+        "source": "be1c6c43802e83a1cb009cd47397528f9f3d05310a11dd504906c8782ba99e5c",
+        "installed": "be1c6c43802e83a1cb009cd47397528f9f3d05310a11dd504906c8782ba99e5c"
+      },
+      "runtime_observation.py": {
+        "source": "e03f8004790021e2cab89afc9f4a3b881b44523f2fe0bb5390950ba2f17fad47",
+        "installed": "e03f8004790021e2cab89afc9f4a3b881b44523f2fe0bb5390950ba2f17fad47"
+      },
+      "agent_context.py": {
+        "source": "4afa825cf1f2e4d63d7c5324bc212937de179e83e07596b4aac9d9fa784b76ed",
+        "installed": "4afa825cf1f2e4d63d7c5324bc212937de179e83e07596b4aac9d9fa784b76ed"
+      },
+      "native_bindings.py": {
+        "source": "fa33a9d711bd0976003ec0e642fdde6220e1bdbcd8661a3b964c227f702216fa",
+        "installed": "fa33a9d711bd0976003ec0e642fdde6220e1bdbcd8661a3b964c227f702216fa"
+      },
+      "purpose_effects.py": {
+        "source": "8d471a90055c4d0c69d613dc68cab015104179234bf1fe9df42f56e8b3750833",
+        "installed": "8d471a90055c4d0c69d613dc68cab015104179234bf1fe9df42f56e8b3750833"
+      },
+      "purpose_terminal_recovery.py": {
+        "source": "a959389c6b95ec2f0d4e31fe8495d3136e162b1aa47659237f8d9424ad3321be",
+        "installed": "a959389c6b95ec2f0d4e31fe8495d3136e162b1aa47659237f8d9424ad3321be"
+      },
+      "report_reconciliation.py": {
+        "source": "d12ff85a610e42cdc426dc79028dd2c2114fbb8eb3071db98f5050ca28f2c3e9",
+        "installed": "d12ff85a610e42cdc426dc79028dd2c2114fbb8eb3071db98f5050ca28f2c3e9"
+      },
+      "context_peer_updates.py": {
+        "source": "b778bf97a75362e0ec279b05af93c8c56f2e6e3dc75c40537077b49338300eed",
+        "installed": "b778bf97a75362e0ec279b05af93c8c56f2e6e3dc75c40537077b49338300eed"
+      },
+      "memory.py": {
+        "source": "a51f0fc321d4976ad17efffeb9147e14d9ef21d016a9698e5f7e160234d8b18e",
+        "installed": "a51f0fc321d4976ad17efffeb9147e14d9ef21d016a9698e5f7e160234d8b18e"
+      },
+      "report_scope.py": {
+        "source": "9ea63d94f7fb5a7cba3e003c2274cc7f290dda6ee686765acb58ad2859ff8eb7",
+        "installed": "9ea63d94f7fb5a7cba3e003c2274cc7f290dda6ee686765acb58ad2859ff8eb7"
+      },
+      "placement_models.py": {
+        "source": "4a6341e5a9e7c5ef62bfa139d6b542343994a50783b4cdac14d16bd5a4f9525d",
+        "installed": "4a6341e5a9e7c5ef62bfa139d6b542343994a50783b4cdac14d16bd5a4f9525d"
+      },
+      "owned_work_claims.py": {
+        "source": "07f40dd531ea12cf4b5dce98ce0e6afd080a90fd6c0d4ca6669fd672e25d988e",
+        "installed": "07f40dd531ea12cf4b5dce98ce0e6afd080a90fd6c0d4ca6669fd672e25d988e"
+      },
+      "native_controls.py": {
+        "source": "c0563e1d805d110b89a7923d2dfcd7e48f4fe3862d69b83a80cfa2debbb44385",
+        "installed": "c0563e1d805d110b89a7923d2dfcd7e48f4fe3862d69b83a80cfa2debbb44385"
+      },
+      "claims.py": {
+        "source": "9b62b89abbcb9a6fb708ce61076774c157592deb9496ed8dcb61ecf02308939b",
+        "installed": "9b62b89abbcb9a6fb708ce61076774c157592deb9496ed8dcb61ecf02308939b"
+      },
+      "context_inbox.py": {
+        "source": "87364de9e5ab8ccdf2a7770800e277275c2320738166ef3e0401c8bf35b75571",
+        "installed": "87364de9e5ab8ccdf2a7770800e277275c2320738166ef3e0401c8bf35b75571"
+      },
+      "context_capacity.py": {
+        "source": "fa5139a18a17d4bec729d0d89fee0ba5a72d75f28c26834e2bf65360f11e936e",
+        "installed": "fa5139a18a17d4bec729d0d89fee0ba5a72d75f28c26834e2bf65360f11e936e"
+      },
+      "work_resources.py": {
+        "source": "783a631846f9636f582d7616921188f3d03f545cd8dcf14ca1b1f3082b5fb9d6",
+        "installed": "783a631846f9636f582d7616921188f3d03f545cd8dcf14ca1b1f3082b5fb9d6"
+      },
+      "attention.py": {
+        "source": "8014c300cff38a200e226903453864ff6f774ac4b07367184de85a3f57c2c652",
+        "installed": "8014c300cff38a200e226903453864ff6f774ac4b07367184de85a3f57c2c652"
+      },
+      "delivery_edit_recovery.py": {
+        "source": "9d6ae181e3db37482d835d73e3dbee853f9eba073cd2efa30a5c707f5183546d",
+        "installed": "9d6ae181e3db37482d835d73e3dbee853f9eba073cd2efa30a5c707f5183546d"
+      },
+      "native_effects.py": {
+        "source": "336484f62929b3a750d904e58ce588c61f6141a5e5b1320796149889b455488a",
+        "installed": "336484f62929b3a750d904e58ce588c61f6141a5e5b1320796149889b455488a"
+      },
+      "portfolio.py": {
+        "source": "9a6b4c01c41375dbac8e842aba022cdf82693a6b901335bb14b2974e7d61194f",
+        "installed": "9a6b4c01c41375dbac8e842aba022cdf82693a6b901335bb14b2974e7d61194f"
+      },
+      "admission.py": {
+        "source": "005816ae7fb023297eee984338053e2c8a78a8584f106c56c587097116490afb",
+        "installed": "005816ae7fb023297eee984338053e2c8a78a8584f106c56c587097116490afb"
+      },
+      "artifact_roots.py": {
+        "source": "7737409dcc51caba8a32ceb035b3a774934ba64b534682e18b165bb5eeb33b68",
+        "installed": "7737409dcc51caba8a32ceb035b3a774934ba64b534682e18b165bb5eeb33b68"
+      },
+      "resource_directory.py": {
+        "source": "bc046bea93b20cf9092e46c4be6caf4305a9eca92cb8aa1e917734555900f43f",
+        "installed": "bc046bea93b20cf9092e46c4be6caf4305a9eca92cb8aa1e917734555900f43f"
+      },
+      "context_role_work.py": {
+        "source": "ab1ee7d1996a42955e21626743a1bc56618cd8d5863574a8976d14345515acc8",
+        "installed": "ab1ee7d1996a42955e21626743a1bc56618cd8d5863574a8976d14345515acc8"
+      },
+      "physical_models.py": {
+        "source": "ad9d5a238de43f7c6abff3e809130b5506378b5a585a1985b04058b8bec02c89",
+        "installed": "ad9d5a238de43f7c6abff3e809130b5506378b5a585a1985b04058b8bec02c89"
+      },
+      "recovery.py": {
+        "source": "ef64d992797a2ce208fbf159a940b7139b34699f6634355bca38b8641d8be3fb",
+        "installed": "ef64d992797a2ce208fbf159a940b7139b34699f6634355bca38b8641d8be3fb"
+      },
+      "import_v2.py": {
+        "source": "5f0da2b30346758408ab2cd9f6e0fb8b0201b7a1cad446c3628000d39d8bc9a0",
+        "installed": "5f0da2b30346758408ab2cd9f6e0fb8b0201b7a1cad446c3628000d39d8bc9a0"
+      },
+      "context_goal_dependencies.py": {
+        "source": "2ad8bbf4100c99f44cb6ea673cbcd84c82f34b7b07e0c0961c6b95cc00e1b5f5",
+        "installed": "2ad8bbf4100c99f44cb6ea673cbcd84c82f34b7b07e0c0961c6b95cc00e1b5f5"
+      },
+      "context_input_reconciliation.py": {
+        "source": "464128ebc1ae141210dfe66ab60fb1d3401d3a96537e287cad2a445815db4766",
+        "installed": "464128ebc1ae141210dfe66ab60fb1d3401d3a96537e287cad2a445815db4766"
+      },
+      "purpose_claims.py": {
+        "source": "29d04591753e8b3336dc4f9a45761c9911e31a1583f85493fdcade8c0358fe3b",
+        "installed": "29d04591753e8b3336dc4f9a45761c9911e31a1583f85493fdcade8c0358fe3b"
+      },
+      "edit_plan_scope.py": {
+        "source": "ad25280a042640914b4e1a5c7fb1d722561a546dfd01ec2340ed9004d6f194eb",
+        "installed": "ad25280a042640914b4e1a5c7fb1d722561a546dfd01ec2340ed9004d6f194eb"
+      },
+      "goal_origin.py": {
+        "source": "4eeab5c6576c18e62f1c9a89e25818f782ec38258740471fb6c129d03c2d1987",
+        "installed": "4eeab5c6576c18e62f1c9a89e25818f782ec38258740471fb6c129d03c2d1987"
+      },
+      "inbox.py": {
+        "source": "e747ecb6f90f159278ca21fa6c6df079be1d81c079612392e60bc1e1a06ef800",
+        "installed": "e747ecb6f90f159278ca21fa6c6df079be1d81c079612392e60bc1e1a06ef800"
+      },
+      "context_work_frontier.py": {
+        "source": "4b5fab3fd0573594cbd86014c885b33576aa0ce642814f9cec9c052fac05d6ed",
+        "installed": "4b5fab3fd0573594cbd86014c885b33576aa0ce642814f9cec9c052fac05d6ed"
+      },
+      "report_scope_models.py": {
+        "source": "340bcf3b9ae9e2e2078b085e0f34f42c9e54d0cd9f12e64fe1a5173cc990c5b1",
+        "installed": "340bcf3b9ae9e2e2078b085e0f34f42c9e54d0cd9f12e64fe1a5173cc990c5b1"
+      },
+      "portfolio_purpose.py": {
+        "source": "32dff97af0d84545b91c3ce75295eb28c3324e95e3485fae8cfe5f6772d2c827",
+        "installed": "32dff97af0d84545b91c3ce75295eb28c3324e95e3485fae8cfe5f6772d2c827"
+      }
+    },
+    "lax_connector": {
+      "rpc.py": {
+        "source": "31cf8b91f8bf0e9deaf960c6b901a37cd997569ad81c64df0503a93e2b3b5a48",
+        "installed": "31cf8b91f8bf0e9deaf960c6b901a37cd997569ad81c64df0503a93e2b3b5a48"
+      },
+      "service_restart.py": {
+        "source": "aff88971f0a864a0b7aec4281ae5317f27e0764c35e42a16613de253423580af",
+        "installed": "aff88971f0a864a0b7aec4281ae5317f27e0764c35e42a16613de253423580af"
+      },
+      "native_image_upgrade.py": {
+        "source": "1cd7b45f8d954cb0fa97fc2e44618359c01c56d78cc89abf7860b10ee5838f34",
+        "installed": "1cd7b45f8d954cb0fa97fc2e44618359c01c56d78cc89abf7860b10ee5838f34"
+      },
+      "reader_inbox.py": {
+        "source": "659a45960cc5d501a70b82d4cf7f505d0a402e9a24680cebf5e69ed5e147b1f7",
+        "installed": "659a45960cc5d501a70b82d4cf7f505d0a402e9a24680cebf5e69ed5e147b1f7"
+      },
+      "__init__.py": {
+        "source": "ffd5b8f33d88ecd4a02f35b65e5c1f372deb710d896b69f22944b99bc22be5a0",
+        "installed": "ffd5b8f33d88ecd4a02f35b65e5c1f372deb710d896b69f22944b99bc22be5a0"
+      },
+      "native_tool_session.py": {
+        "source": "bc21316b5b7fb57d1df6659dff814649cf1f4656e38a653e2479a80db132db71",
+        "installed": "bc21316b5b7fb57d1df6659dff814649cf1f4656e38a653e2479a80db132db71"
+      },
+      "roles.py": {
+        "source": "7b070800e86db8ead550d6904e88761b92513bea439b5b57c6d60856d7d64462",
+        "installed": "7b070800e86db8ead550d6904e88761b92513bea439b5b57c6d60856d7d64462"
+      },
+      "workflow.py": {
+        "source": "9f399e66e5c9b6193a98c333b3afc9e78944ec073601f36a67eee6a34b58e1c6",
+        "installed": "9f399e66e5c9b6193a98c333b3afc9e78944ec073601f36a67eee6a34b58e1c6"
+      },
+      "effects.py": {
+        "source": "790d863e70b17430fe8a7829494a1bb5d54be49a5fc83f11fbe4adb05d267664",
+        "installed": "790d863e70b17430fe8a7829494a1bb5d54be49a5fc83f11fbe4adb05d267664"
+      },
+      "owner_briefing.py": {
+        "source": "0859a97ee401ec23fe9a28383108c1e630afdc2f20bae42b9fa2b619e74efc07",
+        "installed": "0859a97ee401ec23fe9a28383108c1e630afdc2f20bae42b9fa2b619e74efc07"
+      },
+      "artifact_routing.py": {
+        "source": "c584ee8ceaa71e5595e522614f17319e8ad6ffe4d0c14cda6639947f35c0d217",
+        "installed": "c584ee8ceaa71e5595e522614f17319e8ad6ffe4d0c14cda6639947f35c0d217"
+      },
+      "activity.py": {
+        "source": "0fcfe753148a79bc7638ddf7f7b76373a0624b64607eb0601923fce02c4c5562",
+        "installed": "0fcfe753148a79bc7638ddf7f7b76373a0624b64607eb0601923fce02c4c5562"
+      },
+      "context_contract.py": {
+        "source": "c399027a448630e9aa429cb873ee5243a802ee7c4b85239876ae75e82b3e873c",
+        "installed": "c399027a448630e9aa429cb873ee5243a802ee7c4b85239876ae75e82b3e873c"
+      },
+      "purpose_observer.py": {
+        "source": "dab009ed62658e0d1b25624411d78ddfc04e68e67a8a700fae27ff4763d27920",
+        "installed": "dab009ed62658e0d1b25624411d78ddfc04e68e67a8a700fae27ff4763d27920"
+      },
+      "connector.py": {
+        "source": "4b341874e9837665f3e8524f53248c25263d0bf05260a91d151c3ad0ba645baa",
+        "installed": "4b341874e9837665f3e8524f53248c25263d0bf05260a91d151c3ad0ba645baa"
+      },
+      "native_policy.py": {
+        "source": "b35a687a40b63250ce58139e7a5b9667a8561e12abc8f0af854cc326b0763d87",
+        "installed": "b35a687a40b63250ce58139e7a5b9667a8561e12abc8f0af854cc326b0763d87"
+      },
+      "purpose_install.py": {
+        "source": "30d67091a33d44304c4c3c220d65ae53d8fc4c4e0695613999828df33dfb3d1f",
+        "installed": "30d67091a33d44304c4c3c220d65ae53d8fc4c4e0695613999828df33dfb3d1f"
+      },
+      "continuation_context.py": {
+        "source": "d12c5f5a58a6325a1ce43a79e7919d63166344e34e751731f091d05b2c872ec0",
+        "installed": "d12c5f5a58a6325a1ce43a79e7919d63166344e34e751731f091d05b2c872ec0"
+      },
+      "native_goals.py": {
+        "source": "fd8258dd4952ba50eec02af22abe0de46a5b3209acab35a32565cb1f873914be",
+        "installed": "fd8258dd4952ba50eec02af22abe0de46a5b3209acab35a32565cb1f873914be"
+      },
+      "native_input.py": {
+        "source": "04605379d6b35174bf332addba8c5d072782554053cfd6a5552cf71874927bd2",
+        "installed": "04605379d6b35174bf332addba8c5d072782554053cfd6a5552cf71874927bd2"
+      },
+      "service_admin.py": {
+        "source": "7f0b918e8738a556076f07e54504cce00017d84564fdf9a37b4fc7ca61a85bcd",
+        "installed": "7f0b918e8738a556076f07e54504cce00017d84564fdf9a37b4fc7ca61a85bcd"
+      },
+      "participation.py": {
+        "source": "ffc179e3415e0970986b39d1dcb4631f546e0a8a03ed0c134a43de9b8035c9cc",
+        "installed": "ffc179e3415e0970986b39d1dcb4631f546e0a8a03ed0c134a43de9b8035c9cc"
+      },
+      "collaboration_bridge.py": {
+        "source": "4b6d03b23da92969ff4746219d9878cad1ca89e537c3264bfca2a665af7127c0",
+        "installed": "4b6d03b23da92969ff4746219d9878cad1ca89e537c3264bfca2a665af7127c0"
+      },
+      "tool_profile.py": {
+        "source": "ab2f8436cbf2c52774910f5158948dc80e2c8cba27574f4324363ad9bdb3359c",
+        "installed": "ab2f8436cbf2c52774910f5158948dc80e2c8cba27574f4324363ad9bdb3359c"
+      },
+      "execution_lifecycle.py": {
+        "source": "1865e3e1ff8fcd6a292a3bd4f8ca234c4be2ad769e5a54831e2e74b9774cb8a0",
+        "installed": "1865e3e1ff8fcd6a292a3bd4f8ca234c4be2ad769e5a54831e2e74b9774cb8a0"
+      },
+      "linux_worker.py": {
+        "source": "e48a03d487646dc6a3ca082a8a7800b07d8bda21019d70c13eec6d6876f84e97",
+        "installed": "e48a03d487646dc6a3ca082a8a7800b07d8bda21019d70c13eec6d6876f84e97"
+      },
+      "purpose_resources.py": {
+        "source": "5b57887b8eda1c6274df714cfdc93c71dccc7f91adea59b6147c6093b7d6237a",
+        "installed": "5b57887b8eda1c6274df714cfdc93c71dccc7f91adea59b6147c6093b7d6237a"
+      },
+      "passive_readback.py": {
+        "source": "1f4b0f1fa3c1deff289dccb813f9d73c3d2bcb88263fa3b47f323da8f87ebddc",
+        "installed": "1f4b0f1fa3c1deff289dccb813f9d73c3d2bcb88263fa3b47f323da8f87ebddc"
+      },
+      "purpose_readiness.py": {
+        "source": "ea67cb008ebbb78ad638b5fd75f5dc056f16bc176b1a1a258e164f32f8878e56",
+        "installed": "ea67cb008ebbb78ad638b5fd75f5dc056f16bc176b1a1a258e164f32f8878e56"
+      },
+      "collaboration_install.py": {
+        "source": "1dc60149504dd3dce6eee2df49c7b4634169097e3de63e49d261d362784a2359",
+        "installed": "1dc60149504dd3dce6eee2df49c7b4634169097e3de63e49d261d362784a2359"
+      },
+      "github_client.py": {
+        "source": "41516d4e37ce15475f1ce5689036bbdab7c64a0c19efa6e93b08aae2fe1e0df2",
+        "installed": "41516d4e37ce15475f1ce5689036bbdab7c64a0c19efa6e93b08aae2fe1e0df2"
+      },
+      "environment_identity.py": {
+        "source": "3d89d921ddb11f5cb283c0431475228dfee2f3576dda84be8afee054fe8af4c8",
+        "installed": "3d89d921ddb11f5cb283c0431475228dfee2f3576dda84be8afee054fe8af4c8"
+      },
+      "journal.py": {
+        "source": "cb6b4ce9cab5eacdf656a48dbcfe7d29135626447191f1853e6a6c43042d8a7e",
+        "installed": "cb6b4ce9cab5eacdf656a48dbcfe7d29135626447191f1853e6a6c43042d8a7e"
+      },
+      "purpose_provision.py": {
+        "source": "84ed1f333c76796dbf751a451da749154321b673dde9729cbbdb0756a170e152",
+        "installed": "84ed1f333c76796dbf751a451da749154321b673dde9729cbbdb0756a170e152"
+      },
+      "resource_routing.py": {
+        "source": "74018872c6ff4156f6efae747c20c0f95dbf6df2c33751dbc71fd4b7568ce9c8",
+        "installed": "74018872c6ff4156f6efae747c20c0f95dbf6df2c33751dbc71fd4b7568ce9c8"
+      },
+      "mutation_tools.py": {
+        "source": "58761a72d165e0f7fdb39a2a2b43eb28edb2e49e8f0d25b8a98e76b04d531597",
+        "installed": "58761a72d165e0f7fdb39a2a2b43eb28edb2e49e8f0d25b8a98e76b04d531597"
+      },
+      "placement_control.py": {
+        "source": "c4d723cafc1ac5ea49b2ebe469b7821c5b4e46648193fed2d548cd73e4ecd7ae",
+        "installed": "c4d723cafc1ac5ea49b2ebe469b7821c5b4e46648193fed2d548cd73e4ecd7ae"
+      },
+      "delivery_edit.py": {
+        "source": "c29f96f701e623b0b5dcfd314d1fed869e6f1b261bf109d5b641aa7b42612972",
+        "installed": "c29f96f701e623b0b5dcfd314d1fed869e6f1b261bf109d5b641aa7b42612972"
+      },
+      "errors.py": {
+        "source": "8740481d61cddcd0c60df375471a7176aade96b92631be0df2d29199c07c396a",
+        "installed": "8740481d61cddcd0c60df375471a7176aade96b92631be0df2d29199c07c396a"
+      },
+      "administration.py": {
+        "source": "445b86963b459477d7c46b3d751c0f3d3b7333b1325eb00af2e018ea7f239021",
+        "installed": "445b86963b459477d7c46b3d751c0f3d3b7333b1325eb00af2e018ea7f239021"
+      },
+      "agent_context.py": {
+        "source": "ce081618ada1e45d1f01407f1a3680b9d0abd00a68f81181410a6f1ade32b059",
+        "installed": "ce081618ada1e45d1f01407f1a3680b9d0abd00a68f81181410a6f1ade32b059"
+      },
+      "native_package.py": {
+        "source": "5d698737c7b50dae862caa61cace8ab85c67ab6c3c302465e2ec1081e86e4222",
+        "installed": "5d698737c7b50dae862caa61cace8ab85c67ab6c3c302465e2ec1081e86e4222"
+      },
+      "request_capture.py": {
+        "source": "be5378050a57de8c6a54ff392ec479a64685d8790cc8bf3c5f64d9385c64dd40",
+        "installed": "be5378050a57de8c6a54ff392ec479a64685d8790cc8bf3c5f64d9385c64dd40"
+      },
+      "collaboration_capture.py": {
+        "source": "b644b8dea4d4ef4c294a47bb728c8eb23701a219ce130e29904c7e2473922a9b",
+        "installed": "b644b8dea4d4ef4c294a47bb728c8eb23701a219ce130e29904c7e2473922a9b"
+      },
+      "collaboration_resources.py": {
+        "source": "fd6afd3f80f5dd0cf677fe5d4892f5ec70d1660ed851386025b72b2a0fb60054",
+        "installed": "fd6afd3f80f5dd0cf677fe5d4892f5ec70d1660ed851386025b72b2a0fb60054"
+      },
+      "native_edit_status.py": {
+        "source": "017923d0a4099818df36d603c89688decff655720216d4db76af35383a498e37",
+        "installed": "017923d0a4099818df36d603c89688decff655720216d4db76af35383a498e37"
+      },
+      "environment_client.py": {
+        "source": "2d97b14d8c2979bc3d7a62aa843cc10db019e465e4b48e714b5ed1c7dcc60ce7",
+        "installed": "2d97b14d8c2979bc3d7a62aa843cc10db019e465e4b48e714b5ed1c7dcc60ce7"
+      },
+      "host.py": {
+        "source": "559bb82723eb008b0012c3e0f2ccfc1057c64809a18af3b582510629c99c4fd2",
+        "installed": "559bb82723eb008b0012c3e0f2ccfc1057c64809a18af3b582510629c99c4fd2"
+      },
+      "report_scope.py": {
+        "source": "2e913247bc1e78ec6d5ea5e59970682ef2f79aec66a325b424cf4025a8b253a0",
+        "installed": "2e913247bc1e78ec6d5ea5e59970682ef2f79aec66a325b424cf4025a8b253a0"
+      },
+      "native_tool_catalog.py": {
+        "source": "17f852dc2a44028420c01f57aa104c4fdaba76dc675d54055809fbb4975319e7",
+        "installed": "17f852dc2a44028420c01f57aa104c4fdaba76dc675d54055809fbb4975319e7"
+      },
+      "first_global.py": {
+        "source": "e70c2b264f11e18b6afe95bb39672ccdcff33da6e0adfa5e120a566ef146dfcd",
+        "installed": "e70c2b264f11e18b6afe95bb39672ccdcff33da6e0adfa5e120a566ef146dfcd"
+      },
+      "service_observer.py": {
+        "source": "fcce75bd957ef3687f3a38c848b40242daaee694713464c40f602d2c852a5b8a",
+        "installed": "fcce75bd957ef3687f3a38c848b40242daaee694713464c40f602d2c852a5b8a"
+      },
+      "service_runtime.py": {
+        "source": "a69c7863c9e647b7a029a59a0b9fba40ace07a344f44b32a13d2d929d64675e6",
+        "installed": "a69c7863c9e647b7a029a59a0b9fba40ace07a344f44b32a13d2d929d64675e6"
+      },
+      "terminal_output.py": {
+        "source": "ae96567824b5ea9cee86deba51494eadfd8f208d3981df8f63bca313eecb9acf",
+        "installed": "ae96567824b5ea9cee86deba51494eadfd8f208d3981df8f63bca313eecb9acf"
+      },
+      "execution_scope.py": {
+        "source": "b0cc3dac2a476958b026ae3a3ebbbc0303128eb6e8b366a52f9f1ae604861ef9",
+        "installed": "b0cc3dac2a476958b026ae3a3ebbbc0303128eb6e8b366a52f9f1ae604861ef9"
+      },
+      "context_runtime.py": {
+        "source": "222abf5e2aa88eadb34920085623c2c6366bd89dfc6ec78f5482fff60b3e7063",
+        "installed": "222abf5e2aa88eadb34920085623c2c6366bd89dfc6ec78f5482fff60b3e7063"
+      },
+      "service_memory.py": {
+        "source": "2a02f6c72f048a4598a30dd963836dc6df0c146cdf22049a8b609e5eaadb070a",
+        "installed": "2a02f6c72f048a4598a30dd963836dc6df0c146cdf22049a8b609e5eaadb070a"
+      },
+      "delegation_provenance.py": {
+        "source": "ca9d0222b5aa1564f376efe9b1093950b09e3ac58aff72fa32fcab1a6d8aad5f",
+        "installed": "ca9d0222b5aa1564f376efe9b1093950b09e3ac58aff72fa32fcab1a6d8aad5f"
+      },
+      "native_controls.py": {
+        "source": "b6050281542f183dd09b1b521f455c46cdaef4dd6f4a4e39a19b30893119ed99",
+        "installed": "b6050281542f183dd09b1b521f455c46cdaef4dd6f4a4e39a19b30893119ed99"
+      },
+      "work_delivery.py": {
+        "source": "824001dbdcc5026e501e7d6db44808cdd580f0cd94dec4f38483c9eddfa48c52",
+        "installed": "824001dbdcc5026e501e7d6db44808cdd580f0cd94dec4f38483c9eddfa48c52"
+      },
+      "environment.py": {
+        "source": "0f3209cd84362cc6b122fbae25fa66ddb5e85724bb4c8d584e05a00232f8da2b",
+        "installed": "0f3209cd84362cc6b122fbae25fa66ddb5e85724bb4c8d584e05a00232f8da2b"
+      },
+      "work_resources.py": {
+        "source": "d9807081b9eb94f9dccb070cd7cb91a0ab0e7addb8e3a1660337c9c5430df6f9",
+        "installed": "d9807081b9eb94f9dccb070cd7cb91a0ab0e7addb8e3a1660337c9c5430df6f9"
+      },
+      "attention.py": {
+        "source": "e119e46ac5ee692558577863f27561f25f48bd6edec2f6695865a196b0c03198",
+        "installed": "e119e46ac5ee692558577863f27561f25f48bd6edec2f6695865a196b0c03198"
+      },
+      "purpose_environment.py": {
+        "source": "2ccaae31269ab5427fe37d2917f0868fbf55e87b72e423169b374ce2e3273c1c",
+        "installed": "2ccaae31269ab5427fe37d2917f0868fbf55e87b72e423169b374ce2e3273c1c"
+      },
+      "context_observation.py": {
+        "source": "9869787b194ea021c623de0b70b2fa08a4bb8d2bd7f2e1c2f6207bbfc7d0e385",
+        "installed": "9869787b194ea021c623de0b70b2fa08a4bb8d2bd7f2e1c2f6207bbfc7d0e385"
+      },
+      "mutation_recovery.py": {
+        "source": "6366a5bd1c53beb7a08ad656f99867b0939786b8c40b5a04d3bb6f17876781b8",
+        "installed": "6366a5bd1c53beb7a08ad656f99867b0939786b8c40b5a04d3bb6f17876781b8"
+      },
+      "native_release_transition.py": {
+        "source": "4a976ebdc717e95c6e9b506f292c3779b95960603adbc042fece98ca3c83b12d",
+        "installed": "4a976ebdc717e95c6e9b506f292c3779b95960603adbc042fece98ca3c83b12d"
+      },
+      "native_release.py": {
+        "source": "3c1ef9c49f26672fa0688c596394957b71346267567a0f6f8577805b63c58742",
+        "installed": "3c1ef9c49f26672fa0688c596394957b71346267567a0f6f8577805b63c58742"
+      },
+      "passive_context.py": {
+        "source": "fe0c2ddff7e9666cea4d4c1eb4baae9a291283f997a95b1c10be6599df998192",
+        "installed": "fe0c2ddff7e9666cea4d4c1eb4baae9a291283f997a95b1c10be6599df998192"
+      },
+      "linux_admin.py": {
+        "source": "fa43274cd9009972fd705294bfd8aaeaeb66833334cf583e063e1f330f6ec8f0",
+        "installed": "fa43274cd9009972fd705294bfd8aaeaeb66833334cf583e063e1f330f6ec8f0"
+      },
+      "recovery.py": {
+        "source": "022d6ec1de3d0ae0643041523b5a8876f84ddb83f28d0ccc1ceb9aba43490c67",
+        "installed": "022d6ec1de3d0ae0643041523b5a8876f84ddb83f28d0ccc1ceb9aba43490c67"
+      },
+      "purpose_tool_recovery.py": {
+        "source": "4c9bcc96a41cdfc5ee26da716c2117d380a4c5d86723a7624a42b700868360bc",
+        "installed": "4c9bcc96a41cdfc5ee26da716c2117d380a4c5d86723a7624a42b700868360bc"
+      },
+      "native_contract.py": {
+        "source": "4f079a4c0ab158991fb6d0f4848d503a17844e5ab9044a73ba9d81a05eb0cdbe",
+        "installed": "4f079a4c0ab158991fb6d0f4848d503a17844e5ab9044a73ba9d81a05eb0cdbe"
+      },
+      "native_tools.py": {
+        "source": "06205c22c75aa458e5ee8fbef1b1926b68e005780e393af75296f677a6b8777d",
+        "installed": "06205c22c75aa458e5ee8fbef1b1926b68e005780e393af75296f677a6b8777d"
+      },
+      "purpose_activity.py": {
+        "source": "40963fc41690496b71933f327b7cac73c014554530fc6e9b8487c721252a190b",
+        "installed": "40963fc41690496b71933f327b7cac73c014554530fc6e9b8487c721252a190b"
+      },
+      "native_startup.py": {
+        "source": "34e51ef8cf65158c9803772b1f0e4180b8dc1385fd5f58bdb3f83f3c0dceffd7",
+        "installed": "34e51ef8cf65158c9803772b1f0e4180b8dc1385fd5f58bdb3f83f3c0dceffd7"
+      },
+      "collaboration_upgrade.py": {
+        "source": "aba179d414cbe35e9028fc8f314d9c42259a1e7388d5f897ec1cbf3e9bef842c",
+        "installed": "aba179d414cbe35e9028fc8f314d9c42259a1e7388d5f897ec1cbf3e9bef842c"
+      },
+      "purpose_collaboration.py": {
+        "source": "46ea162936c5905fcc26c57068e76d4ae193597fdca0b071c71c0e87dd31d4c4",
+        "installed": "46ea162936c5905fcc26c57068e76d4ae193597fdca0b071c71c0e87dd31d4c4"
+      },
+      "tool_execution.py": {
+        "source": "a15393b8b582841d2bf5d2fa5309b8199b6a7b949c72b0c33e6ba6f449c15e99",
+        "installed": "a15393b8b582841d2bf5d2fa5309b8199b6a7b949c72b0c33e6ba6f449c15e99"
+      },
+      "purpose_upgrade.py": {
+        "source": "98529bd12a421f0b4867b52d574c84f8f15bdfe83285789bc55f718d412d9679",
+        "installed": "98529bd12a421f0b4867b52d574c84f8f15bdfe83285789bc55f718d412d9679"
+      }
+    }
+  },
+  "wheels": {
+    "/aosp/development/lax-three-context-20261018-r01/qualification/role-work-build-r244/wheels/hollywood_cli-0.3.0.dev78-py3-none-any.whl": {
+      "sha256": "27203225c7394973b1ea6db82e88ba6c22bcb1cf7f0b53b6c0b91ec739e57e23",
+      "bytes": 297706
+    },
+    "/aosp/development/lax-three-context-20261018-r01/qualification/role-work-build-r244/wheels/lax_hollywood_connector-0.1.0.dev112-py3-none-any.whl": {
+      "sha256": "d2efd917045471f63a9b61f506d4031a08a7682b64555f8ca4cfecbf8c4b22e3",
+      "bytes": 267542
+    },
+    "/aosp/development/lax-three-context-20261018-r01/qualification/role-work-build-r245/wheels/hollywood_cli-0.3.0.dev79-py3-none-any.whl": {
+      "sha256": "15de45544fce6a7d3b1c7915341be509e873e03cb2b86764801de71bed4485f9",
+      "bytes": 297872
+    },
+    "/aosp/development/lax-three-context-20261018-r01/qualification/role-work-build-r247/wheels/hollywood_cli-0.3.0.dev80-py3-none-any.whl": {
+      "sha256": "8fdd1c6742c7be2cf198f8074660aef421439d5310fc5a2adaad1328e85c4417",
+      "bytes": 298018
+    },
+    "/aosp/development/lax-three-context-20261018-r01/qualification/role-work-build-r247/wheels/lax_hollywood_connector-0.1.0.dev113-py3-none-any.whl": {
+      "sha256": "b7837981c64cf3c2870f76575d9676732e371189a3b87218db998de3b6058df3",
+      "bytes": 267834
+    }
+  },
+  "allComparedRuntimeModulesMatch": true,
+  "dependencies": "Locked existing SDK111 runtime dependency versions; no production dependency mutation. All new build/install processing wrapped in storage-build on disk."
+}

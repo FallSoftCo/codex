@@ -1,0 +1,1004 @@
+{
+  "at": 1792552657.0861053,
+  "snapshot": {
+    "deliveries": [
+      {
+        "id": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+        "event": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "state": "completed",
+        "result_event": "7e8df1f8-794a-4d74-a250-f69f0362fbfc",
+        "generation": 1,
+        "native_thread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+        "native_turn": "01a15c73-6875-7920-af88-e8b15555bfc8"
+      }
+    ],
+    "contexts": [
+      {
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "purpose": "reader",
+        "native_thread": "01a15c73-1a1f-79e2-b655-bb76ce77efea",
+        "active_turn": null
+      },
+      {
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "purpose": "responder",
+        "native_thread": "01a15c73-1891-7093-8502-325112368547",
+        "active_turn": null
+      },
+      {
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "purpose": "writer",
+        "native_thread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+        "active_turn": null
+      },
+      {
+        "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+        "purpose": "reader",
+        "native_thread": "01a15c73-1a94-7383-b830-90241b39f4ef",
+        "active_turn": null
+      },
+      {
+        "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+        "purpose": "responder",
+        "native_thread": "01a15c73-1a27-7f62-a655-3d101eec80ca",
+        "active_turn": null
+      },
+      {
+        "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+        "purpose": "writer",
+        "native_thread": "01a15c73-1a95-72f0-9c2e-b840fbe40ab4",
+        "active_turn": null
+      }
+    ],
+    "materials": [
+      {
+        "id": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "kind": "input",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "state": "handled",
+        "revision": 2,
+        "value": {}
+      },
+      {
+        "id": "2655e964-6861-5561-a3d3-706a6711fc8c",
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "kind": "need",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "state": "published",
+        "revision": 4,
+        "value": {
+          "workId": "0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+          "inputId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+          "evidence": [
+            {
+              "path": "build_bulletin.py",
+              "sha256": "868baacf11ff306ade393c539610d0db31cd18edad17beacf754aa57e06a826d"
+            },
+            {
+              "path": "test_build_bulletin.py",
+              "sha256": "50e375dfff3a6158ae2101879d830be6fc7164ea2e6875bfb6749b04bc1e547f"
+            },
+            {
+              "path": "bulletin.json",
+              "sha256": "342a722b4ab8b1a65227306b60420a07953fffc5d4b1fdf244258552f79f5d92"
+            },
+            {
+              "path": "bulletin-source.json",
+              "sha256": "7c47fd78d13e84f0e4b88b825356d148847130eedc83d801bc8ccdca6bb1e8b3"
+            }
+          ],
+          "material": "Completed the finite initial deliverable in the local workspace: build_bulletin.py (strict standard-library one-path CLI), bulletin.json (captured actual CLI stdout), bulletin-source.json (exactly hostId/path/sha256), and test_build_bulletin.py. Run `python3 build_bulletin.py /absolute/path/to/catalog.json`; reproduce tests with `python3 -B test_build_bulletin.py` (5 test groups passed through real subprocess executions). Verified malformed input fails nonzero with fixed sanitized diagnostics and no stdout or source mutation; exact schema/fields, duplicate IDs/keys, boolean integer rejection, released-only filtering, lexicographic ordering, and Unicode/control-character data are covered. The actual bulletin contains guided-practice v1 and omits planned team-review. Verified bulletin bytes equal fresh actual-catalog CLI output and an independent projection. Source host: 839294ef-6edc-47b4-a072-8b51dcb1bee8; source path: /var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/cac6a5d2-a6e0-4d57-8840-4a438e303587/home/work/catalog.json; source SHA256: 1d5ed1d7418629ca7a116a5387d529549d200161f26ab0600aca5b5818b54e4a. Source bytes unchanged. No pending dependencies or monitoring held open. This assignment is complete; the distinct ongoing canonical role remains unchanged.",
+          "required": true,
+          "responseKind": "work_result",
+          "prerequisites": [],
+          "publishedEventId": "7e8df1f8-794a-4d74-a250-f69f0362fbfc"
+        }
+      },
+      {
+        "id": "665d6715-d1e2-5808-a1cb-0386c5ff929d",
+        "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+        "kind": "input",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "state": "handled",
+        "revision": 2,
+        "value": {
+          "meaning": "Attributed room context, not an assignment, permission, or reply obligation.",
+          "interpretation": "Fully read: this request is addressed to the bulletin agent, not this engineer. It describes consumption of the engineer catalog and a finite bulletin deliverable, but assigns no bounded catalog implementation to me. There is no unfinished engineer work to update. Retain only as background; no implementation, reply, delegation, or bulletin guidance is warranted under the current work-scoped role.",
+          "roomObservation": true,
+          "responseRequired": false
+        }
+      },
+      {
+        "id": "0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+        "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "kind": "work",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "state": "complete",
+        "revision": 5,
+        "value": {
+          "inputId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+          "evidence": [
+            {
+              "path": "build_bulletin.py",
+              "sha256": "868baacf11ff306ade393c539610d0db31cd18edad17beacf754aa57e06a826d"
+            },
+            {
+              "path": "test_build_bulletin.py",
+              "sha256": "50e375dfff3a6158ae2101879d830be6fc7164ea2e6875bfb6749b04bc1e547f"
+            },
+            {
+              "path": "bulletin.json",
+              "sha256": "342a722b4ab8b1a65227306b60420a07953fffc5d4b1fdf244258552f79f5d92"
+            },
+            {
+              "path": "bulletin-source.json",
+              "sha256": "7c47fd78d13e84f0e4b88b825356d148847130eedc83d801bc8ccdca6bb1e8b3"
+            }
+          ],
+          "progress": [
+            "Read the assigned scope and TEAM.json, then read only its explicitly granted engineering catalog. Actual source host matches this host (839294ef-6edc-47b4-a072-8b51dcb1bee8). Catalog SHA256 is 1d5ed1d7418629ca7a116a5387d529549d200161f26ab0600aca5b5818b54e4a: guided-practice v1 released; team-review v1 planned. No source mutation.",
+            "Implemented build_bulletin.py and real-subprocess regression tests. `python3 -B test_build_bulletin.py` exited 0: all 5 test groups passed (empty/planned, ten shuffled Unicode/control-character sorting cases, strict field/type/duplicate validation including boolean integers, malformed JSON/encoding/deep nesting, sanitized argument/read errors). Each input fixture was hash-checked unchanged. Ran the CLI on the actual engineering catalog; bulletin.json is byte-identical to its stdout. Independently verified released-only sort/projection, exact three-field provenance, source SHA256 1d5ed1d7418629ca7a116a5387d529549d200161f26ab0600aca5b5818b54e4a, and unchanged source bytes. Bulletin contains only guided-practice v1; planned team-review is omitted.",
+            "Completed the finite initial deliverable in the local workspace: build_bulletin.py (strict standard-library one-path CLI), bulletin.json (captured actual CLI stdout), bulletin-source.json (exactly hostId/path/sha256), and test_build_bulletin.py. Run `python3 build_bulletin.py /absolute/path/to/catalog.json`; reproduce tests with `python3 -B test_build_bulletin.py` (5 test groups passed through real subprocess executions). Verified malformed input fails nonzero with fixed sanitized diagnostics and no stdout or source mutation; exact schema/fields, duplicate IDs/keys, boolean integer rejection, released-only filtering, lexicographic ordering, and Unicode/control-character data are covered. The actual bulletin contains guided-practice v1 and omits planned team-review. Verified bulletin bytes equal fresh actual-catalog CLI output and an independent projection. Source host: 839294ef-6edc-47b4-a072-8b51dcb1bee8; source path: /var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/cac6a5d2-a6e0-4d57-8840-4a438e303587/home/work/catalog.json; source SHA256: 1d5ed1d7418629ca7a116a5387d529549d200161f26ab0600aca5b5818b54e4a. Source bytes unchanged. No pending dependencies or monitoring held open. This assignment is complete; the distinct ongoing canonical role remains unchanged."
+          ],
+          "execution": {
+            "status": "inProgress",
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+            "resumeRevision": 0
+          },
+          "objective": "Complete the finite initial local release-bulletin deliverable from the engineer's actual current catalog identified by read-only TEAM.json, within this disposable workspace and the explicitly granted read-only source resources. Implement build_bulletin.py, generate bulletin.json with that actual CLI, preserve exact source provenance in bulletin-source.json, verify real execution, and report completion; do not hold the assignment open for monitoring.",
+          "acceptance": "build_bulletin.py is a standard-library CLI taking one catalog JSON path; for strictly valid schema-1 catalogs it prints only {\"features\":[{\"id\":...,\"version\":...,\"title\":...}]} for released entries in lexicographic id order, omitting planned entries. Validate exact allowed object fields, unique nonempty string ids, positive integer versions excluding booleans, nonempty string titles, planned/released states, and schema; reject malformed input with nonzero exit and sanitized diagnostics without source mutation. Generate bulletin.json using real execution on the actual engineering catalog from TEAM.json. bulletin-source.json must contain exactly hostId (actual source host UUID), path (absolute actual catalog path), and sha256 (SHA256 of the exact catalog bytes used). Verify varied valid and malformed data with real executions and preserve evidence. Report the finite deliverable with source provenance; no new agents, services, network publication, production, accounts, customer work, private control inspection, or unauthorized workspace access. The separately ongoing canonical role persists after completion."
+        }
+      },
+      {
+        "id": "ef82b961-e1f0-52cf-83c3-57c374ce33fb",
+        "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+        "kind": "input",
+        "source": "7e8df1f8-794a-4d74-a250-f69f0362fbfc",
+        "state": "handled",
+        "revision": 2,
+        "value": {
+          "meaning": "Attributed room context, not an assignment, permission, or reply obligation.",
+          "interpretation": "Fully read as an ordinary attributed bulletin-agent completion report, not a peer-completion input or engineer assignment. The reported catalog/output facts are not independently verified here. No unfinished engineer work exists to update, and the work-scoped role does not authorize follow-on implementation or evaluation of the bulletin agent. Retain as background without reply or action.",
+          "roomObservation": true,
+          "responseRequired": false
+        }
+      }
+    ],
+    "events": [
+      {
+        "id": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "seq": 1,
+        "author": "33bdc3e8-15d2-4974-b41f-28ae9f29c15b",
+        "recipient": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "kind": "request",
+        "audience": "room",
+        "body": "Build the local release bulletin from the engineer's current catalog identified in TEAM.json. Deliver build_bulletin.py, a standard-library CLI taking one catalog JSON path and printing only {\"features\":[{\"id\":...,\"version\":...,\"title\":...}]} in lexicographic id order for state=\"released\" entries; omit planned entries. Catalog schema is {\"schema\":1,\"features\":[{\"id\":nonempty string,\"version\":positive integer,\"title\":nonempty string,\"state\":\"planned\"|\"released\"}]}, unique ids, no extra fields, booleans are not integers. Reject malformed input nonzero with sanitized diagnostics and no source mutation. Generate bulletin.json with the actual CLI. Retain source host, path and SHA256 in bulletin-source.json. Complete and report this finite initial deliverable. Existing ongoing responsibility is in your canonical role; do not hold this assignment open as a monitoring task. Verify real execution on varied data. No new agents or services.\nThe provenance file has exactly the JSON fields {\"hostId\":<actual source host UUID>,\"path\":<absolute actual catalog path>,\"sha256\":<SHA256 of the exact catalog bytes used>}.\n",
+        "source": null,
+        "data": {
+          "authorKind": "human"
+        },
+        "created_at": "2026-10-21 03:13:32.267530+00:00"
+      },
+      {
+        "id": "6ca27abf-7075-4010-9778-8b26a68dcb55",
+        "seq": 9,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "progress",
+        "audience": "room",
+        "body": "Canonical edit metadata recorded",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "type": "collaborationProtocol",
+          "authorKind": "agent",
+          "evidenceOnly": false,
+          "nativeAction": {
+            "tool": "apply_patch",
+            "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+            "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+            "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+            "generation": 1,
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "operationId": "native-collaboration:58cac5a7ebbaa98fe6bf6123ed12b2dd319bd710d9724c78074ce350ed1bf6f9",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b"
+          },
+          "deliveryEditReceipt": {
+            "scope": "delivery",
+            "permit": {
+              "id": "e508befc-7701-58f0-af0b-bfec2c3ea64a",
+              "plan": null,
+              "room": "405c2d33-921f-44b4-8e2f-ed5642a4196d",
+              "proof": {
+                "files": [
+                  {
+                    "afterSize": 2672,
+                    "beforeSize": 0,
+                    "afterSha256": "868baacf11ff306ade393c539610d0db31cd18edad17beacf754aa57e06a826d",
+                    "beforeSha256": "absent",
+                    "relativePath": "build_bulletin.py"
+                  },
+                  {
+                    "afterSize": 6193,
+                    "beforeSize": 0,
+                    "afterSha256": "50e375dfff3a6158ae2101879d830be6fc7164ea2e6875bfb6749b04bc1e547f",
+                    "beforeSha256": "absent",
+                    "relativePath": "test_build_bulletin.py"
+                  }
+                ],
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "target": {
+                  "paths": [
+                    {
+                      "relativePath": "build_bulletin.py",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/build_bulletin.py"
+                    },
+                    {
+                      "relativePath": "test_build_bulletin.py",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/test_build_bulletin.py"
+                    }
+                  ],
+                  "schema": "hollywood-physical-target/v1",
+                  "resolution": "beneath-no-symlinks/v1",
+                  "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                  "actionDigest": "f37f58a0653eddd2165e017127b39aed3cfcaf8365345f89c58c290b598da53e",
+                  "grantRevision": 1,
+                  "environmentSha256": "d3e422380aa19f3ff2e35a2b4d726e2971f7cedca1e03e6c705df0bec4692a91",
+                  "workspaceRevision": 1,
+                  "rootIdentitySha256": "49cd0f40b003bbcc7435d80433cb2aa4da6152e57a08fb5478ed684e0425c345"
+                },
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "patchSha256": "3d47344349dc4536807e6d844721f2588f09ee225f4ad6ba718fbbda9ce63abb",
+                "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                "workAuthority": null,
+                "sourceRevision": null,
+                "ownershipClaims": [],
+                "descriptorDigest": "d9ea64018bf2f6b04a6430954e7877de873e2dbd379cb4b36ba20f6f1385a9ce",
+                "contextWorkspaceId": "cf9549bc-56de-451b-898a-efb0585bca8e",
+                "serviceBindingDigest": "906ad1a5ebe27cb36737f7fc7b0c045a6df9ac903ec58734209e868c1dd45a29"
+              },
+              "state": "reserved",
+              "bridge": "8e61e9ba-2ee1-534c-ae37-9334cb9e5336",
+              "source": {
+                "tool": "apply_patch",
+                "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "schema": "hollywood-native-source/v3",
+                "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "generation": 1,
+                "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                "nativeGoalId": null,
+                "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                "roleRevision": 2,
+                "argumentsDigest": "8d855cdb053c7fc164883d4d566654aeb50dd484589916bb327141d938d04643",
+                "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+              },
+              "delivery": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+              "revision": 1,
+              "authority": "d67905e0-6037-4622-969a-95c1f70b79c0",
+              "created_at": "2026-10-21 03:15:34.634995+00:00",
+              "expires_at": "2026-10-21 03:15:49.634451+00:00",
+              "scope_kind": "delivery",
+              "settlement": null,
+              "observation": null,
+              "plan_revision": null,
+              "consent_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "bridge_revision": 1
+            },
+            "schema": "canonical-delivery-edits/v1",
+            "eventId": "6ca27abf-7075-4010-9778-8b26a68dcb55",
+            "mayApply": false,
+            "newExecutionAdmitted": false
+          }
+        },
+        "created_at": "2026-10-21 03:15:34.638043+00:00"
+      },
+      {
+        "id": "e0382b57-8e95-41de-aaf4-6a8cb20522c9",
+        "seq": 10,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "progress",
+        "audience": "room",
+        "body": "Canonical edit metadata recorded",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "type": "collaborationProtocol",
+          "authorKind": "agent",
+          "evidenceOnly": false,
+          "nativeAction": {
+            "tool": "apply_patch",
+            "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+            "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+            "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+            "generation": 1,
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "operationId": "native-collaboration:9ee8b9117e360e005605f2656e668a639ece7c73d2a1ecfe86c14902be1e82a6",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b"
+          },
+          "deliveryEditReceipt": {
+            "scope": "delivery",
+            "permit": {
+              "id": "e508befc-7701-58f0-af0b-bfec2c3ea64a",
+              "plan": null,
+              "room": "405c2d33-921f-44b4-8e2f-ed5642a4196d",
+              "proof": {
+                "files": [
+                  {
+                    "afterSize": 2672,
+                    "beforeSize": 0,
+                    "afterSha256": "868baacf11ff306ade393c539610d0db31cd18edad17beacf754aa57e06a826d",
+                    "beforeSha256": "absent",
+                    "relativePath": "build_bulletin.py"
+                  },
+                  {
+                    "afterSize": 6193,
+                    "beforeSize": 0,
+                    "afterSha256": "50e375dfff3a6158ae2101879d830be6fc7164ea2e6875bfb6749b04bc1e547f",
+                    "beforeSha256": "absent",
+                    "relativePath": "test_build_bulletin.py"
+                  }
+                ],
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "target": {
+                  "paths": [
+                    {
+                      "relativePath": "build_bulletin.py",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/build_bulletin.py"
+                    },
+                    {
+                      "relativePath": "test_build_bulletin.py",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/test_build_bulletin.py"
+                    }
+                  ],
+                  "schema": "hollywood-physical-target/v1",
+                  "resolution": "beneath-no-symlinks/v1",
+                  "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                  "actionDigest": "f37f58a0653eddd2165e017127b39aed3cfcaf8365345f89c58c290b598da53e",
+                  "grantRevision": 1,
+                  "environmentSha256": "d3e422380aa19f3ff2e35a2b4d726e2971f7cedca1e03e6c705df0bec4692a91",
+                  "workspaceRevision": 1,
+                  "rootIdentitySha256": "49cd0f40b003bbcc7435d80433cb2aa4da6152e57a08fb5478ed684e0425c345"
+                },
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "patchSha256": "3d47344349dc4536807e6d844721f2588f09ee225f4ad6ba718fbbda9ce63abb",
+                "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                "workAuthority": null,
+                "sourceRevision": null,
+                "ownershipClaims": [],
+                "descriptorDigest": "d9ea64018bf2f6b04a6430954e7877de873e2dbd379cb4b36ba20f6f1385a9ce",
+                "contextWorkspaceId": "cf9549bc-56de-451b-898a-efb0585bca8e",
+                "serviceBindingDigest": "906ad1a5ebe27cb36737f7fc7b0c045a6df9ac903ec58734209e868c1dd45a29"
+              },
+              "state": "executing",
+              "bridge": "8e61e9ba-2ee1-534c-ae37-9334cb9e5336",
+              "source": {
+                "tool": "apply_patch",
+                "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "schema": "hollywood-native-source/v3",
+                "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "generation": 1,
+                "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                "nativeGoalId": null,
+                "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                "roleRevision": 2,
+                "argumentsDigest": "8d855cdb053c7fc164883d4d566654aeb50dd484589916bb327141d938d04643",
+                "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+              },
+              "delivery": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+              "revision": 2,
+              "authority": "d67905e0-6037-4622-969a-95c1f70b79c0",
+              "created_at": "2026-10-21 03:15:34.634995+00:00",
+              "expires_at": "2026-10-21 03:15:49.634451+00:00",
+              "scope_kind": "delivery",
+              "settlement": null,
+              "observation": null,
+              "plan_revision": null,
+              "consent_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "bridge_revision": 1
+            },
+            "schema": "canonical-delivery-edits/v1",
+            "eventId": "e0382b57-8e95-41de-aaf4-6a8cb20522c9",
+            "mayApply": false,
+            "newExecutionAdmitted": false
+          }
+        },
+        "created_at": "2026-10-21 03:15:34.859453+00:00"
+      },
+      {
+        "id": "3f1d7dbf-6bb9-4b52-8068-bb6ee6f329d0",
+        "seq": 11,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "progress",
+        "audience": "room",
+        "body": "Canonical edit metadata recorded",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "type": "collaborationProtocol",
+          "authorKind": "agent",
+          "evidenceOnly": false,
+          "nativeAction": {
+            "tool": "apply_patch",
+            "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+            "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+            "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+            "generation": 1,
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "operationId": "native-collaboration:758387539956c67f71bd11c1b125c1cf2742e68dba8ee81d40f5c4914ff6cdf1",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b"
+          },
+          "deliveryEditReceipt": {
+            "scope": "delivery",
+            "permit": {
+              "id": "e508befc-7701-58f0-af0b-bfec2c3ea64a",
+              "plan": null,
+              "room": "405c2d33-921f-44b4-8e2f-ed5642a4196d",
+              "proof": {
+                "files": [
+                  {
+                    "afterSize": 2672,
+                    "beforeSize": 0,
+                    "afterSha256": "868baacf11ff306ade393c539610d0db31cd18edad17beacf754aa57e06a826d",
+                    "beforeSha256": "absent",
+                    "relativePath": "build_bulletin.py"
+                  },
+                  {
+                    "afterSize": 6193,
+                    "beforeSize": 0,
+                    "afterSha256": "50e375dfff3a6158ae2101879d830be6fc7164ea2e6875bfb6749b04bc1e547f",
+                    "beforeSha256": "absent",
+                    "relativePath": "test_build_bulletin.py"
+                  }
+                ],
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "target": {
+                  "paths": [
+                    {
+                      "relativePath": "build_bulletin.py",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/build_bulletin.py"
+                    },
+                    {
+                      "relativePath": "test_build_bulletin.py",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/test_build_bulletin.py"
+                    }
+                  ],
+                  "schema": "hollywood-physical-target/v1",
+                  "resolution": "beneath-no-symlinks/v1",
+                  "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                  "actionDigest": "f37f58a0653eddd2165e017127b39aed3cfcaf8365345f89c58c290b598da53e",
+                  "grantRevision": 1,
+                  "environmentSha256": "d3e422380aa19f3ff2e35a2b4d726e2971f7cedca1e03e6c705df0bec4692a91",
+                  "workspaceRevision": 1,
+                  "rootIdentitySha256": "49cd0f40b003bbcc7435d80433cb2aa4da6152e57a08fb5478ed684e0425c345"
+                },
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "patchSha256": "3d47344349dc4536807e6d844721f2588f09ee225f4ad6ba718fbbda9ce63abb",
+                "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                "workAuthority": null,
+                "sourceRevision": null,
+                "ownershipClaims": [],
+                "descriptorDigest": "d9ea64018bf2f6b04a6430954e7877de873e2dbd379cb4b36ba20f6f1385a9ce",
+                "contextWorkspaceId": "cf9549bc-56de-451b-898a-efb0585bca8e",
+                "serviceBindingDigest": "906ad1a5ebe27cb36737f7fc7b0c045a6df9ac903ec58734209e868c1dd45a29"
+              },
+              "state": "settled",
+              "bridge": "8e61e9ba-2ee1-534c-ae37-9334cb9e5336",
+              "source": {
+                "tool": "apply_patch",
+                "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "schema": "hollywood-native-source/v3",
+                "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "generation": 1,
+                "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                "nativeGoalId": null,
+                "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                "roleRevision": 2,
+                "argumentsDigest": "8d855cdb053c7fc164883d4d566654aeb50dd484589916bb327141d938d04643",
+                "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+              },
+              "delivery": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+              "revision": 3,
+              "authority": "d67905e0-6037-4622-969a-95c1f70b79c0",
+              "created_at": "2026-10-21 03:15:34.634995+00:00",
+              "expires_at": "2026-10-21 03:15:49.634451+00:00",
+              "scope_kind": "delivery",
+              "settlement": {
+                "source": {
+                  "tool": "apply_patch",
+                  "callId": "exec-78b393e2-b5e4-4779-9de7-7fe8da6f7b16",
+                  "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                  "schema": "hollywood-native-source/v3",
+                  "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                  "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                  "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                  "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                  "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                  "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                  "generation": 1,
+                  "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                  "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                  "nativeGoalId": null,
+                  "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                  "roleRevision": 2,
+                  "argumentsDigest": "8d855cdb053c7fc164883d4d566654aeb50dd484589916bb327141d938d04643",
+                  "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+                },
+                "outcome": "applied",
+                "filesObserved": [
+                  {
+                    "size": 2672,
+                    "sha256": "868baacf11ff306ade393c539610d0db31cd18edad17beacf754aa57e06a826d",
+                    "relativePath": "build_bulletin.py"
+                  },
+                  {
+                    "size": 6193,
+                    "sha256": "50e375dfff3a6158ae2101879d830be6fc7164ea2e6875bfb6749b04bc1e547f",
+                    "relativePath": "test_build_bulletin.py"
+                  }
+                ],
+                "ownershipTransitions": []
+              },
+              "observation": null,
+              "plan_revision": null,
+              "consent_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "bridge_revision": 1
+            },
+            "schema": "canonical-delivery-edits/v1",
+            "eventId": "3f1d7dbf-6bb9-4b52-8068-bb6ee6f329d0",
+            "mayApply": false,
+            "newExecutionAdmitted": false
+          }
+        },
+        "created_at": "2026-10-21 03:15:35.066003+00:00"
+      },
+      {
+        "id": "097d5ea8-46b7-4520-b6d4-b7c060820bef",
+        "seq": 17,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "progress",
+        "audience": "room",
+        "body": "Canonical edit metadata recorded",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "type": "collaborationProtocol",
+          "authorKind": "agent",
+          "evidenceOnly": false,
+          "nativeAction": {
+            "tool": "apply_patch",
+            "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+            "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+            "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+            "generation": 1,
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "operationId": "native-collaboration:4ee74ef806953987305f896bf329c7247f5654d642cfe2172fda69a5041ce3ba",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b"
+          },
+          "deliveryEditReceipt": {
+            "scope": "delivery",
+            "permit": {
+              "id": "0a5e91f6-be95-5a51-8a5f-fe04db92fceb",
+              "plan": null,
+              "room": "405c2d33-921f-44b4-8e2f-ed5642a4196d",
+              "proof": {
+                "files": [
+                  {
+                    "afterSize": 277,
+                    "beforeSize": 0,
+                    "afterSha256": "7c47fd78d13e84f0e4b88b825356d148847130eedc83d801bc8ccdca6bb1e8b3",
+                    "beforeSha256": "absent",
+                    "relativePath": "bulletin-source.json"
+                  },
+                  {
+                    "afterSize": 87,
+                    "beforeSize": 0,
+                    "afterSha256": "342a722b4ab8b1a65227306b60420a07953fffc5d4b1fdf244258552f79f5d92",
+                    "beforeSha256": "absent",
+                    "relativePath": "bulletin.json"
+                  }
+                ],
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "target": {
+                  "paths": [
+                    {
+                      "relativePath": "bulletin-source.json",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/bulletin-source.json"
+                    },
+                    {
+                      "relativePath": "bulletin.json",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/bulletin.json"
+                    }
+                  ],
+                  "schema": "hollywood-physical-target/v1",
+                  "resolution": "beneath-no-symlinks/v1",
+                  "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                  "actionDigest": "f8fac4db4570e21b0c93aa30dd5a251011b96a56e7cac5b5d4ee37d60f2411ce",
+                  "grantRevision": 1,
+                  "environmentSha256": "d3e422380aa19f3ff2e35a2b4d726e2971f7cedca1e03e6c705df0bec4692a91",
+                  "workspaceRevision": 1,
+                  "rootIdentitySha256": "49cd0f40b003bbcc7435d80433cb2aa4da6152e57a08fb5478ed684e0425c345"
+                },
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "patchSha256": "6a9cd43e2e2ade4140ed8ec811308de22b07ac00cb3ba75cb4411e0b1154c543",
+                "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                "workAuthority": null,
+                "sourceRevision": null,
+                "ownershipClaims": [],
+                "descriptorDigest": "d9ea64018bf2f6b04a6430954e7877de873e2dbd379cb4b36ba20f6f1385a9ce",
+                "contextWorkspaceId": "cf9549bc-56de-451b-898a-efb0585bca8e",
+                "serviceBindingDigest": "906ad1a5ebe27cb36737f7fc7b0c045a6df9ac903ec58734209e868c1dd45a29"
+              },
+              "state": "reserved",
+              "bridge": "8e61e9ba-2ee1-534c-ae37-9334cb9e5336",
+              "source": {
+                "tool": "apply_patch",
+                "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "schema": "hollywood-native-source/v3",
+                "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "generation": 1,
+                "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                "nativeGoalId": null,
+                "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                "roleRevision": 2,
+                "argumentsDigest": "39a73e42a9b99de369f54845490bb68572d6f9c9cad2772737f7f46d106f6120",
+                "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+              },
+              "delivery": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+              "revision": 1,
+              "authority": "d67905e0-6037-4622-969a-95c1f70b79c0",
+              "created_at": "2026-10-21 03:16:20.219141+00:00",
+              "expires_at": "2026-10-21 03:16:35.218687+00:00",
+              "scope_kind": "delivery",
+              "settlement": null,
+              "observation": null,
+              "plan_revision": null,
+              "consent_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "bridge_revision": 1
+            },
+            "schema": "canonical-delivery-edits/v1",
+            "eventId": "097d5ea8-46b7-4520-b6d4-b7c060820bef",
+            "mayApply": false,
+            "newExecutionAdmitted": false
+          }
+        },
+        "created_at": "2026-10-21 03:16:20.221559+00:00"
+      },
+      {
+        "id": "c992c4dd-c89d-4bef-be05-aa7547bd211c",
+        "seq": 18,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "progress",
+        "audience": "room",
+        "body": "Canonical edit metadata recorded",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "type": "collaborationProtocol",
+          "authorKind": "agent",
+          "evidenceOnly": false,
+          "nativeAction": {
+            "tool": "apply_patch",
+            "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+            "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+            "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+            "generation": 1,
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "operationId": "native-collaboration:1e12341378e458859ec77632a31a6960a6e95a4c2effbf08a6293c85f0339a79",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b"
+          },
+          "deliveryEditReceipt": {
+            "scope": "delivery",
+            "permit": {
+              "id": "0a5e91f6-be95-5a51-8a5f-fe04db92fceb",
+              "plan": null,
+              "room": "405c2d33-921f-44b4-8e2f-ed5642a4196d",
+              "proof": {
+                "files": [
+                  {
+                    "afterSize": 277,
+                    "beforeSize": 0,
+                    "afterSha256": "7c47fd78d13e84f0e4b88b825356d148847130eedc83d801bc8ccdca6bb1e8b3",
+                    "beforeSha256": "absent",
+                    "relativePath": "bulletin-source.json"
+                  },
+                  {
+                    "afterSize": 87,
+                    "beforeSize": 0,
+                    "afterSha256": "342a722b4ab8b1a65227306b60420a07953fffc5d4b1fdf244258552f79f5d92",
+                    "beforeSha256": "absent",
+                    "relativePath": "bulletin.json"
+                  }
+                ],
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "target": {
+                  "paths": [
+                    {
+                      "relativePath": "bulletin-source.json",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/bulletin-source.json"
+                    },
+                    {
+                      "relativePath": "bulletin.json",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/bulletin.json"
+                    }
+                  ],
+                  "schema": "hollywood-physical-target/v1",
+                  "resolution": "beneath-no-symlinks/v1",
+                  "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                  "actionDigest": "f8fac4db4570e21b0c93aa30dd5a251011b96a56e7cac5b5d4ee37d60f2411ce",
+                  "grantRevision": 1,
+                  "environmentSha256": "d3e422380aa19f3ff2e35a2b4d726e2971f7cedca1e03e6c705df0bec4692a91",
+                  "workspaceRevision": 1,
+                  "rootIdentitySha256": "49cd0f40b003bbcc7435d80433cb2aa4da6152e57a08fb5478ed684e0425c345"
+                },
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "patchSha256": "6a9cd43e2e2ade4140ed8ec811308de22b07ac00cb3ba75cb4411e0b1154c543",
+                "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                "workAuthority": null,
+                "sourceRevision": null,
+                "ownershipClaims": [],
+                "descriptorDigest": "d9ea64018bf2f6b04a6430954e7877de873e2dbd379cb4b36ba20f6f1385a9ce",
+                "contextWorkspaceId": "cf9549bc-56de-451b-898a-efb0585bca8e",
+                "serviceBindingDigest": "906ad1a5ebe27cb36737f7fc7b0c045a6df9ac903ec58734209e868c1dd45a29"
+              },
+              "state": "executing",
+              "bridge": "8e61e9ba-2ee1-534c-ae37-9334cb9e5336",
+              "source": {
+                "tool": "apply_patch",
+                "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "schema": "hollywood-native-source/v3",
+                "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "generation": 1,
+                "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                "nativeGoalId": null,
+                "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                "roleRevision": 2,
+                "argumentsDigest": "39a73e42a9b99de369f54845490bb68572d6f9c9cad2772737f7f46d106f6120",
+                "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+              },
+              "delivery": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+              "revision": 2,
+              "authority": "d67905e0-6037-4622-969a-95c1f70b79c0",
+              "created_at": "2026-10-21 03:16:20.219141+00:00",
+              "expires_at": "2026-10-21 03:16:35.218687+00:00",
+              "scope_kind": "delivery",
+              "settlement": null,
+              "observation": null,
+              "plan_revision": null,
+              "consent_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "bridge_revision": 1
+            },
+            "schema": "canonical-delivery-edits/v1",
+            "eventId": "c992c4dd-c89d-4bef-be05-aa7547bd211c",
+            "mayApply": false,
+            "newExecutionAdmitted": false
+          }
+        },
+        "created_at": "2026-10-21 03:16:20.439352+00:00"
+      },
+      {
+        "id": "c1a93700-4ab0-438c-aa46-4c08fb807844",
+        "seq": 19,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "progress",
+        "audience": "room",
+        "body": "Canonical edit metadata recorded",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "type": "collaborationProtocol",
+          "authorKind": "agent",
+          "evidenceOnly": false,
+          "nativeAction": {
+            "tool": "apply_patch",
+            "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+            "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+            "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+            "generation": 1,
+            "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+            "operationId": "native-collaboration:de9a3f62a5af0a4d01bf58fa63836a6bba873a158e6e002bea1f4078e7cf8fc8",
+            "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b"
+          },
+          "deliveryEditReceipt": {
+            "scope": "delivery",
+            "permit": {
+              "id": "0a5e91f6-be95-5a51-8a5f-fe04db92fceb",
+              "plan": null,
+              "room": "405c2d33-921f-44b4-8e2f-ed5642a4196d",
+              "proof": {
+                "files": [
+                  {
+                    "afterSize": 277,
+                    "beforeSize": 0,
+                    "afterSha256": "7c47fd78d13e84f0e4b88b825356d148847130eedc83d801bc8ccdca6bb1e8b3",
+                    "beforeSha256": "absent",
+                    "relativePath": "bulletin-source.json"
+                  },
+                  {
+                    "afterSize": 87,
+                    "beforeSize": 0,
+                    "afterSha256": "342a722b4ab8b1a65227306b60420a07953fffc5d4b1fdf244258552f79f5d92",
+                    "beforeSha256": "absent",
+                    "relativePath": "bulletin.json"
+                  }
+                ],
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "target": {
+                  "paths": [
+                    {
+                      "relativePath": "bulletin-source.json",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/bulletin-source.json"
+                    },
+                    {
+                      "relativePath": "bulletin.json",
+                      "resolvedPath": "/var/lib/harness/d67905e0-6037-4622-969a-95c1f70b79c0/purpose-agents/7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0/home/work/bulletin.json"
+                    }
+                  ],
+                  "schema": "hollywood-physical-target/v1",
+                  "resolution": "beneath-no-symlinks/v1",
+                  "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                  "actionDigest": "f8fac4db4570e21b0c93aa30dd5a251011b96a56e7cac5b5d4ee37d60f2411ce",
+                  "grantRevision": 1,
+                  "environmentSha256": "d3e422380aa19f3ff2e35a2b4d726e2971f7cedca1e03e6c705df0bec4692a91",
+                  "workspaceRevision": 1,
+                  "rootIdentitySha256": "49cd0f40b003bbcc7435d80433cb2aa4da6152e57a08fb5478ed684e0425c345"
+                },
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "patchSha256": "6a9cd43e2e2ade4140ed8ec811308de22b07ac00cb3ba75cb4411e0b1154c543",
+                "workspaceId": "38ea47a4-729c-526c-865f-e0179d538292",
+                "workAuthority": null,
+                "sourceRevision": null,
+                "ownershipClaims": [],
+                "descriptorDigest": "d9ea64018bf2f6b04a6430954e7877de873e2dbd379cb4b36ba20f6f1385a9ce",
+                "contextWorkspaceId": "cf9549bc-56de-451b-898a-efb0585bca8e",
+                "serviceBindingDigest": "906ad1a5ebe27cb36737f7fc7b0c045a6df9ac903ec58734209e868c1dd45a29"
+              },
+              "state": "settled",
+              "bridge": "8e61e9ba-2ee1-534c-ae37-9334cb9e5336",
+              "source": {
+                "tool": "apply_patch",
+                "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+                "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                "schema": "hollywood-native-source/v3",
+                "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                "generation": 1,
+                "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                "nativeGoalId": null,
+                "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                "roleRevision": 2,
+                "argumentsDigest": "39a73e42a9b99de369f54845490bb68572d6f9c9cad2772737f7f46d106f6120",
+                "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+              },
+              "delivery": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+              "revision": 3,
+              "authority": "d67905e0-6037-4622-969a-95c1f70b79c0",
+              "created_at": "2026-10-21 03:16:20.219141+00:00",
+              "expires_at": "2026-10-21 03:16:35.218687+00:00",
+              "scope_kind": "delivery",
+              "settlement": {
+                "source": {
+                  "tool": "apply_patch",
+                  "callId": "exec-9ae8fa01-f503-4f3e-8954-e4b3dc1e26c7",
+                  "hostId": "839294ef-6edc-47b4-a072-8b51dcb1bee8",
+                  "schema": "hollywood-native-source/v3",
+                  "agentId": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+                  "claimId": "context-admit:0e4b7f0a-6802-5bd8-864d-1236b1f8623a",
+                  "contextId": "ad0adaf3-1806-42c9-9383-0f568892c184",
+                  "requestId": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+                  "deliveryId": "6ea17e2a-b5aa-4eca-9df3-859a2dbf4ced",
+                  "executorId": "afeca9f1-1050-543a-9a68-660f63f35099",
+                  "generation": 1,
+                  "nativeTurn": "01a15c73-6875-7920-af88-e8b15555bfc8",
+                  "authorityId": "d67905e0-6037-4622-969a-95c1f70b79c0",
+                  "nativeGoalId": null,
+                  "nativeThread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+                  "roleRevision": 2,
+                  "argumentsDigest": "39a73e42a9b99de369f54845490bb68572d6f9c9cad2772737f7f46d106f6120",
+                  "executionScopeId": "execution-5f38214227def20e699b08466c1138b2ace40ff20e59c34dbc32379c3be9a574"
+                },
+                "outcome": "applied",
+                "filesObserved": [
+                  {
+                    "size": 277,
+                    "sha256": "7c47fd78d13e84f0e4b88b825356d148847130eedc83d801bc8ccdca6bb1e8b3",
+                    "relativePath": "bulletin-source.json"
+                  },
+                  {
+                    "size": 87,
+                    "sha256": "342a722b4ab8b1a65227306b60420a07953fffc5d4b1fdf244258552f79f5d92",
+                    "relativePath": "bulletin.json"
+                  }
+                ],
+                "ownershipTransitions": []
+              },
+              "observation": null,
+              "plan_revision": null,
+              "consent_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "bridge_revision": 1
+            },
+            "schema": "canonical-delivery-edits/v1",
+            "eventId": "c1a93700-4ab0-438c-aa46-4c08fb807844",
+            "mayApply": false,
+            "newExecutionAdmitted": false
+          }
+        },
+        "created_at": "2026-10-21 03:16:20.610839+00:00"
+      },
+      {
+        "id": "7e8df1f8-794a-4d74-a250-f69f0362fbfc",
+        "seq": 24,
+        "author": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+        "recipient": null,
+        "kind": "message",
+        "audience": "room",
+        "body": "Completed the local bulletin deliverable:\n- `build_bulletin.py` \u2014 strict, standard-library CLI.\n- `bulletin.json` \u2014 captured CLI output.\n- `bulletin-source.json` \u2014 source host, path, and SHA-256 provenance.\n- `test_build_bulletin.py` \u2014 all 5 test groups passed.\n\nThe bulletin includes `guided-practice` v1 and excludes planned `team-review`. Output was verified against the actual catalog; source bytes were unchanged.\n\nRun: `python3 build_bulletin.py /absolute/path/to/catalog.json`\nTests: `python3 -B test_build_bulletin.py`",
+        "source": "a18c67e3-a6b1-4f1a-bc8c-0b3b5c6ad8ab",
+        "data": {
+          "authorKind": "agent",
+          "nativeContext": {
+            "schema": "lax-purpose-context/v1",
+            "purpose": "responder",
+            "contextId": "b5a751eb-73d9-4c3b-8e6c-18e9e658d7cd",
+            "nativeTurn": "01a15c76-345e-7ff2-aafd-07edbe57bd48",
+            "nativeThread": "01a15c73-1891-7093-8502-325112368547",
+            "communicationId": "2655e964-6861-5561-a3d3-706a6711fc8c",
+            "communicationRevision": 3
+          }
+        },
+        "created_at": "2026-10-21 03:17:07.128697+00:00"
+      }
+    ]
+  },
+  "usage": [
+    {
+      "tokens": 269760,
+      "taskStartedRecords": 3
+    },
+    {
+      "tokens": 49738,
+      "taskStartedRecords": 2
+    }
+  ]
+}

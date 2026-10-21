@@ -81,11 +81,25 @@ class RoleContext:
             UUID(envelope[key])
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", envelope["primaryRole"]):
             raise ValueError("Invalid primary role")
-        if (
-            envelope.get("obligation") != "respond"
-            or not envelope.get("requiresResponse")
-            or request["kind"] != "request"
-        ):
+        addressed = request["kind"] == "request" and envelope.get("obligation") == "respond"
+        role_work = (
+            request["kind"] == "control"
+            and request["data"].get("type") == "roleWork"
+            and request["data"].get("schema") == "lax-role-work/v1"
+            and request["author"] == config["agentId"]
+            and request.get("recipient") == config["agentId"]
+            and envelope.get("nativeGoalScope") == "role"
+            and envelope.get("obligation") == "role_work"
+            and envelope["roleRevision"] == request["data"].get("roleRevision")
+            and envelope.get("executionOrigin") == {
+                "schema": "lax-role-work/v1", "kind": "standing-role",
+                "roleRevision": request["data"].get("roleRevision"),
+                "roleSha256": request["data"].get("roleSha256"),
+                "sourceEventId": request["source"],
+                "observationId": request["data"].get("observationId"),
+            }
+        )
+        if not envelope.get("requiresResponse") or not (addressed or role_work):
             raise ValueError("Observation cannot admit an agent turn")
         if envelope.get("senderKind") not in ("human", "agent"):
             raise ValueError("Unverified sender kind")

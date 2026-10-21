@@ -1,0 +1,18 @@
+{
+  "at": 1792550651.9805906,
+  "protocolSha256": "4fe07ff8060c5734de5d4376f71b1682788a45dd2137d8063387cda11cc0c13f",
+  "scorerSha256": "2f59a14843386bfe260193211bcaed011e2c52a316253eed7c89df9ea4903009",
+  "runnerSha256": "76cb561b5b3412644b55251d1a371efb4ccbc48e2a967ee846d563608d49b722",
+  "oracleControlsSha256": "187c3d0905cb0cd532fc52dd9ea6f0dc71b761012842c6f84a1c68d6bc7b7cd4",
+  "model": "gpt-6.1-sol/xhigh",
+  "protectedPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "3590210",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+  },
+  "noFurtherParticipantInput": true
+}

@@ -1,0 +1,14 @@
+{
+  "mode": "Actual PostgreSQL transaction, synthetic temporary material, all rolled back; not model-behavior evidence.",
+  "indexPages": 3,
+  "materialIDsOnce": 45,
+  "peakIndexBytes": 4489,
+  "detailChunks": 24,
+  "detailContentExact": true,
+  "peakDetailBytes": 4316,
+  "wrongPurposeDenied": true,
+  "changedRevisionRejected": true,
+  "publicationReadOnlyCompleteAfterFinalSequentialChunk": true,
+  "allTemporaryMaterialRolledBack": true,
+  "verifiedAt": "2026-10-21T02:59:49.739256+00:00"
+}

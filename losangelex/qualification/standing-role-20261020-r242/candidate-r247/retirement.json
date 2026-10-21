@@ -1,0 +1,64 @@
+{
+  "at": 1792553150.7900085,
+  "state": "observed",
+  "error": null,
+  "pids": {
+    "lax-agent-d67905e0-7f3a49cad42b-reader.service": "0",
+    "lax-agent-d67905e0-7f3a49cad42b-writer.service": "0",
+    "lax-agent-d67905e0-7f3a49cad42b-responder.service": "0",
+    "lax-agent-d67905e0-cac6a5d2a6e0-reader.service": "0",
+    "lax-agent-d67905e0-cac6a5d2a6e0-writer.service": "0",
+    "lax-agent-d67905e0-cac6a5d2a6e0-responder.service": "0",
+    "lax-host-d67905e0-839294ef.service": "0",
+    "lax-collaboration-d67905e0-839294ef.service": "0"
+  },
+  "preStopContexts": [
+    {
+      "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+      "purpose": "reader",
+      "native_thread": "01a15c73-1a1f-79e2-b655-bb76ce77efea",
+      "active_turn": null
+    },
+    {
+      "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+      "purpose": "responder",
+      "native_thread": "01a15c73-1891-7093-8502-325112368547",
+      "active_turn": null
+    },
+    {
+      "agent": "7f3a49ca-d42b-482c-92bb-ca00f5dbf0a0",
+      "purpose": "writer",
+      "native_thread": "01a15c73-19bf-7613-9b11-3e2245bddf3b",
+      "active_turn": null
+    },
+    {
+      "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+      "purpose": "reader",
+      "native_thread": "01a15c73-1a94-7383-b830-90241b39f4ef",
+      "active_turn": null
+    },
+    {
+      "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+      "purpose": "responder",
+      "native_thread": "01a15c73-1a27-7f62-a655-3d101eec80ca",
+      "active_turn": null
+    },
+    {
+      "agent": "cac6a5d2-a6e0-4d57-8840-4a438e303587",
+      "purpose": "writer",
+      "native_thread": "01a15c73-1a95-72f0-9c2e-b840fbe40ab4",
+      "active_turn": null
+    }
+  ],
+  "originalsRetained": true,
+  "protectedPids": {
+    "hollywood-backbone.service": "3268903",
+    "nextcomp-native-core.service": "2583312",
+    "harness-postgres.service": "3176384",
+    "hollywood-native-pilot-20261019-r01.service": "3590210",
+    "lax-agent-483b0ac5-cccfd79ee934-reader.service": "3590904",
+    "lax-agent-483b0ac5-cccfd79ee934-writer.service": "3590905",
+    "lax-agent-483b0ac5-cccfd79ee934-responder.service": "3590906"
+  },
+  "protectedPidsUnchanged": true
+}

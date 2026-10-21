@@ -1,0 +1,9 @@
+{
+  "at": 1792553642.7773488,
+  "reason": "Retain exact model-produced/captured source bytes and their SHA256, including original extra EOF newline. Do not normalize evidence to satisfy formatting.",
+  "exceptions": {
+    "candidate/source-release-r246/catalog.json": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f",
+    "candidate-r247/source-release-r248/catalog.json": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f"
+  },
+  "checkPolicy": "All other staged files use default git diff --check. These2 evidence files allow only blank-at-EOF; other whitespace checks remain enabled. No repository/global whitespace policy change."
+}

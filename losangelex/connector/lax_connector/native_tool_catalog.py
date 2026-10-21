@@ -142,6 +142,8 @@ TOOLS += [
             "agentId": STRING,
             "primary": ROLE,
             "purpose": STRING,
+            "nativeGoalScope": {"type": "string", "enum": ["role", "work"],
+                "description": "Administrator selects ongoing role responsibility or separately addressed work. Does not grant room, host or resource permissions."},
             "homeRoomId": {"type": ["string", "null"]},
             "revision": {"type": "integer", "minimum": 0},
         },

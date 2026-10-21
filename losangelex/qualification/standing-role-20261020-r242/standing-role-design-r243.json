@@ -1,0 +1,26 @@
+{
+  "schema": "lax-standing-role-native-design/v1",
+  "status": "Reviewable candidate design; no deployment or qualification claim",
+  "scope": "One event-backed bounded execution under an existing ongoing role after a prior finite request completes.",
+  "reuse": "Use existing hb_agent_role native_goal_scope=role, canonical event/delivery/claim/executor and context Work/response handoffs. No new ledger, service, periodic model wake, pseudo-human input, or self-addressed chat request.",
+  "admission": "A reader may explicitly initiate_role_work from a fully read pending ordinary room observation with exact fully read current role revision, objective, acceptance and relevance interpretation. The role is the authority; the external fact is evidence, never a permission grant.",
+  "lifecycle": "Append an attributable control event type roleWork (not request/message), source=external fact, with role revision/digest; exact role snapshot remains private Work material, never automatically copied to room and reader native turn. Atomically create its normal delivery, internal Work handoff and result need. Do not ingest a synthetic input to the reader. Original completed tasks remain completed. A role-work delivery has independent cancellation/result lifecycle.",
+  "fencing": "Require active installed role scope, current role read/revision, source read/post/request room grants, no cancelled source delivery, source authored by another authenticated human/agent. Revalidate captured role at writer admission/begin; existing effect fencing checks current role and executor. Ordinary work-scoped roles cannot use this path. No direct-audience initiation in this first candidate; it must reject rather than widen private context.",
+  "goals": "Role work may subsequently use existing canonical Goal/Work tooling by extending goal-origin recognition to the actual native roleWork control + owned delivery/handoff. No canonical Goal is fabricated for every small task, matching ordinary accepted finite work. Goal prerequisites/review remain unchanged.",
+  "semantics": "The model still decides whether observed facts warrant action within the role. Exact role binding and source provenance do not prove semantic scope compliance. Explicit test must distinguish correct initiative from irrelevant or duplicate work, and honor role withdrawal.",
+  "validation": "Frozen r242 protocol, controls and baseline first. Actual model candidate uses same fixture/scope, independent fresh cohort. Test source/role/purpose/replay/cancellation boundaries against real PostgreSQL and public authenticated API in addition to model journey.",
+  "limits": [
+    "No production defaults/cutover.",
+    "No private-fact initiation without a sharing contract.",
+    "No causal superiority/statistical reliability claim from one pair.",
+    "No claim that role prose mechanically enforces business scope.",
+    "Native unknown/reconciliation defects remain separate observed release gaps.",
+    "Native human questions/approvals from role work require explicit role decision-owner enrollment; rejected in this candidate. Ordinary human-request work retains existing question behavior."
+  ],
+  "humanDecisionBoundary": "Role work source is evidence only. Existing attention source traversal must stop at roleWork. Questions/approvals cannot select a human from evidence authors. Explicit role decision-owner enrollment remains unimplemented and is a release limitation; reject rather than misroute.",
+  "retainedCandidateFailure": {
+    "software": "SDK112/H79",
+    "finding": "Hollywood role Work/delivery was admitted, but existing Store.execution_context classified control as observe and RoleContext.capture permitted only addressed requests. Real turn was interrupted/settled; no follow-on artifact execution. Frozen release phase failed. Do not repair/replay old task.",
+    "fix": "Typed canonical role-work executionOrigin in existing context API; strict LAX capture for that source, not arbitrary observations; native bind capability advertises and requires paired roleWork support. Fresh cohort repeats same frozen protocol, failed attempt retained."
+  }
+}
