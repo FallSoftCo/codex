@@ -1,0 +1,11 @@
+{
+  "at": 1792559230.832167,
+  "sha256": "87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6",
+  "path": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/92d5c8a9-8b30-45fd-ac6c-32887e5e62d8/home/work/definition-proposal.json",
+  "source": {
+    "hostId": "715cb3f5-a488-4992-a114-ae80a138535f",
+    "path": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json",
+    "sha256": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f"
+  },
+  "mode": "Scripted QA human checks frozen proposal shape and actual source before answering; no model coaching or expected output supplied"
+}

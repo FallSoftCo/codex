@@ -1,0 +1,40 @@
+{
+  "schema": "lax-role-goal-endstate-qualification/v1",
+  "frozenAt": 1792558544.6207185,
+  "model": "gpt-6.1-sol/xhigh",
+  "runtime": "SDK116/H81; unchanged native f28cb6b",
+  "actors": "Two actual native agents,6purpose histories; scripted A explicit decision owner and regular B engineering requester. No semantic fixture replaces a model.",
+  "purpose": "Prove native role-origin Goal, new room and canonical peer Work/report/review/acceptance with original role continuation. Not natural goal-development depth or generic relevance.",
+  "sequence": [
+    "A finite setup must complete before B release task; no earlier Goal.",
+    "B asks real peer engineer release. Ordinary actual peer report triggers Global role work without a new consumer human task.",
+    "Global inspects source, writes proposal and asks A about audience citing exact proposal bytes. Human fixture verifies proposal shape/source and question hash, approves exact bytes and chooses internal-operators once.",
+    "Global creates separate room/membership and canonical native Goal from original role work, preserving source scope. Goal/Work acceptance cite reviewed proposal hash and audience.",
+    "Canonical peer Work executes and reports actual readiness.json before native complete; Global independently reads actual evidence, reviews/accepts Work and Goal, and writes correct exact evidence index. Parent role work waits and resumes through the native Goal frontier.",
+    "Both initial setup and role work complete in original histories; one new Goal, one bounded release responsibility, no additional consumer assignment except exact authenticated answer and native review input. B cannot read new room without membership. Retire own cohort and QA listener."
+  ],
+  "budgets": {
+    "seconds": 1500,
+    "perPhaseSeconds": 600,
+    "nativeTokens": 8000000,
+    "quietSeconds": 15
+  },
+  "failurePolicy": "Freeze before models. No extension, coaching/reminders, artifact repair or canonical state rewrite. Inspect uncertain original receipts without rePOST. Preserve every failure. All cleanup limited to own qualification.",
+  "limits": [
+    "Explicit workflow requirement measures mechanism following, not spontaneous judgment",
+    "One local software case, no statistical reliability, multi-host/phone/enterprise readiness",
+    "Reviewed hash referenced by existing canonical prose/evidence; no claim of typed server-enforced definition binding",
+    "No shared-file editing claim; independent registered resources and explicit host/artifact provenance"
+  ],
+  "files": {
+    "engineer-role.txt": "809faea9666c2447b5533496cb7d6a6318435342ebb7a225bde8e24a90ac5766",
+    "role.txt": "b92930203f53e995f49d29f4628ce7ff5c193412c29438dc75f8052066ebfcfa",
+    "engineer-release.txt": "7fa3bad38200983a0c01b8d4070b0202d7b629fddba3f39b41cc4773a8f35d9c",
+    "controls.json": "829d72c426bf00f29a3695f3c286c7ce95ef3e60e8a9d30bf4b9bc9c15d2d36b",
+    "owner-answer.txt": "293eb27c50b9712ff4164922c02d8c3e39694f897fc67274c87a708d3fda80d5",
+    "outcome.py": "b99c88a69ed113b3dbadaad08a3822f39da4b854c27ee3351ce0e5dd622eaec1",
+    "RELEASE-REQUIREMENTS.json": "6a03e65207003fedad95feb489c5428f8f0927ff0adbcf266746767f93ce98f5",
+    "initial-catalog.json": "0bc0e018776bf2a0eb55cc9d3a7477b662f14d813906f25ee65606f9d7df15a9",
+    "initial.txt": "2c41d84b49f18080c27c0f8198d523efdd7e8b1689128fa85041274ad9ccaa66"
+  }
+}

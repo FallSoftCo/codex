@@ -1,0 +1,55 @@
+{
+  "at": 1792559029.2478206,
+  "effectiveGoalTool": {
+    "name": "hollywood_goal_create",
+    "description": "Record a finite accountable Goal from this current accepted human/agent request or original native standing-role work. The canonical Role persists separately; Goal creation is not a chat self-request or a new human assignment. Optional roomId selects its collaboration room independently of agent context. For another room explicitly set publishScopedIntent=true: only selected Goal intent is published there, never private source text. Original source must be room-visible. reviewBudget bounds authorized material reviews; creation assigns no work.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "publishScopedIntent": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "acceptance": {
+          "type": "string"
+        },
+        "reviewBudget": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        }
+      },
+      "required": [
+        "title",
+        "objective",
+        "acceptance",
+        "reviewBudget"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "packages": {
+    "lax-hollywood-connector": "0.1.0.dev116",
+    "hollywood-cli": "0.3.0.dev81"
+  },
+  "originalRunnerSha256": "785b875310cd6f88b5b42b6116cbceee642098ac3d1d8e1464335851667d9c44",
+  "frozenRunnerUnchanged": true,
+  "frozenProtocolUnchanged": true,
+  "scope": "Read-only runtime check after actual run launch. The intended preflight invoked definitions without required spec and failed; outer orchestration still launched runner. Protocol/runner had already been frozen; neither was changed after launch. This is an operator sequencing failure, not preflight success.",
+  "priorOperatorFailuresRetained": [
+    "role-goal-setup-failure-r258.json",
+    "definitions(spec) preflight invocation TypeError before file modification; no product issue demonstrated"
+  ],
+  "newModelInputs": 0
+}

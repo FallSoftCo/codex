@@ -1,0 +1,99 @@
+{
+  "at": 1792559640.7762785,
+  "checks": {
+    "frozen-runner-and-protocol-unchanged": true,
+    "same-six-histories-no-active-turns": true,
+    "room-joins-do-not-move-role-home-or-agent-identity": true,
+    "private-context-workspaces-preserved": true,
+    "one-real-peer-report-to-native-role-initiative": true,
+    "finite-setup-completed-before-release": true,
+    "one-explicit-owner-answer-to-exact-proposal": true,
+    "native-goal-cross-room-origin-preserved": true,
+    "peer-implementation-after-human-review": true,
+    "strict-correct-actual-packet": true,
+    "canonical-report-hashes-actual-native-artifact": true,
+    "reviewed-definition-referenced-in-goal-and-work": true,
+    "real-peer-report-before-completion-independent-global-review": true,
+    "goal-acceptance-after-work-review": true,
+    "parent-role-completes-after-canonical-goal": true,
+    "index-names-actual-accepted-evidence": true,
+    "no-private-note-in-any-room-event-body-or-data": true,
+    "private-answer-not-in-shared-goal-or-work-record": true,
+    "A-sees-original-answer-and-final": true,
+    "B-without-membership-new-room-denied": true,
+    "peer-and-global-real-native-command-activity": true,
+    "all-owned-deliveries-terminal": true,
+    "own-eight-units-stopped": true,
+    "protected-production-services-unchanged": true
+  },
+  "passed": true,
+  "detail": {
+    "commandActivityEventIds": [
+      "65b2367e-1056-4365-8991-07c57b325408",
+      "9bfe6534-f232-44b4-af9d-ea6157179bb1",
+      "e43aa1cc-4064-4789-838a-bbb7e5543b38",
+      "e0e86f15-d2c1-4701-8ba5-2cf0ffa450b3",
+      "53f05031-4292-4119-a745-c0c94962114a",
+      "d853c5f2-6906-407c-a0ad-25a0597ba5be",
+      "dd3913ad-4bc8-4309-8e04-a7842c952f05",
+      "3d416387-dda8-4157-8803-cc96293acc57",
+      "417bbfa1-3274-48b2-97c1-be4a79562108",
+      "8ad3b3c0-50e9-4553-a8fe-0893c442b5d7",
+      "4c0d67f1-d11a-4188-8b68-9f004cb5bcbf",
+      "32b957de-e8a5-4a83-be24-71d00e450f16",
+      "03817b1a-7253-482c-bf02-87a0e5b36c9a"
+    ],
+    "globalCommandsForReview": [
+      {
+        "event": "65b2367e-1056-4365-8991-07c57b325408",
+        "command": "/bin/bash -lc 'pwd && ls -la && cat TEAM.json'",
+        "output": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/92d5c8a9-8b30-45fd-ac6c-32887e5e62d8/home/work\ntotal 16\ndrwx------ 2 hglobal-5ed550ae-92d5c8a98b30 hglobal-5ed550ae-92d5c8a98b30 4096 Oct 21 07:01 .\ndrwx------ 8 hglobal-5ed550ae-92d5c8a98b30 hglobal-5ed550ae-92d5c8a98b30 4096 Oct 21 07:03 ..\n-rw------- 1 hglobal-5ed550ae-92d5c8a98b30 hglobal-5ed550ae-92d5c8a98b30  290 Oct 21 07:01 AGENTS.md\n-rw------- 1 hglobal-5ed550ae-92d5c8a98b30 hglobal-5ed550ae-92d5c8a98b30  777 Oct 21 07:01 TEAM.json\n{\n  \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n  \"roomId\": \"9998105a-b917-4fda-96c4-bcd1266a8290\",\n  \"engineeringAgentId\": \"7fe550ae-f431-4e98-9589-1386c6c506a8\",\n  \"engineeringCatalog\": {\n    \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n    \"path\": \"/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json\",\n    \"access\": \"explicit read-only physical grant and OS ACL\"\n  },\n  \"engineeringArtifacts\": {\n    \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n    \"path\": \"/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work\",\n    \"access\": \"explicit read-only physical grant and OS ACL, for canonical artifact verification\"\n  }\n}\n",
+        "sequence": 3
+      },
+      {
+        "event": "9bfe6534-f232-44b4-af9d-ea6157179bb1",
+        "command": "/bin/bash -lc \"sha256sum TEAM.json && python3 - <<'PY'\nimport json, os\nwith open('TEAM.json') as f:t=json.load(f)\np=t['engineeringCatalog']['path']\nprint('catalog path:',p)\nprint('catalog currently readable:',os.access(p,os.R_OK))\nprint('canonical artifact directory accessible:',os.access(t['engineeringArtifacts']['path'],os.R_OK|os.X_OK))\nPY\"",
+        "output": "20e884ac24f5da08e4b2534356f74536a6460daaa245ae94c7187bf6ffb754ab  TEAM.json\ncatalog path: /var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json\ncatalog currently readable: True\ncanonical artifact directory accessible: True\n",
+        "sequence": 5
+      },
+      {
+        "event": "d853c5f2-6906-407c-a0ad-25a0597ba5be",
+        "command": "/bin/bash -lc \"cat AGENTS.md TEAM.json && python3 - <<'PY'\nimport json,hashlib\nfrom pathlib import Path\nt=json.loads(Path('TEAM.json').read_text()); p=Path(t['engineeringCatalog']['path']); b=p.read_bytes()\nprint('SOURCE BYTES:',len(b),'SHA256:',hashlib.sha256(b).hexdigest()); print(b.decode())\nprint('OWN WORKSPACE FILES:',[p.name for p in Path('.').iterdir()])\nPY\"",
+        "output": "# Disposable native QA scope\nOnly this workspace and read-only TEAM.json resource. No evaluation/runner access, service administration, accounts, production, customer activity or other agents. The human participant is a disclosed scripted QA fixture. Do not inspect private control files.\n\n{\n  \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n  \"roomId\": \"9998105a-b917-4fda-96c4-bcd1266a8290\",\n  \"engineeringAgentId\": \"7fe550ae-f431-4e98-9589-1386c6c506a8\",\n  \"engineeringCatalog\": {\n    \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n    \"path\": \"/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json\",\n    \"access\": \"explicit read-only physical grant and OS ACL\"\n  },\n  \"engineeringArtifacts\": {\n    \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n    \"path\": \"/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work\",\n    \"access\": \"explicit read-only physical grant and OS ACL, for canonical artifact verification\"\n  }\n}\nSOURCE BYTES: 445 SHA256: bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f\n{\n  \"schema\": 1,\n  \"features\": [\n    {\n      \"id\": \"guided-practice\",\n      \"version\": 2,\n      \"title\": \"Guided practice with saved feedback\",\n      \"state\": \"released\"\n    },\n    {\n      \"id\": \"team-review\",\n      \"version\": 1,\n      \"title\": \"Team review dashboard\",\n      \"state\": \"released\"\n    },\n    {\n      \"id\": \"seat-management\",\n      \"version\": 1,\n      \"title\": \"Organization seat management\",\n      \"state\": \"planned\"\n    }\n  ]\n}\n\n\nOWN WORKSPACE FILES: ['TEAM.json', 'AGENTS.md']\n",
+        "sequence": 27
+      },
+      {
+        "event": "dd3913ad-4bc8-4309-8e04-a7842c952f05",
+        "command": "/bin/bash -lc \"python3 - <<'PY'\nimport json, hashlib\nfrom pathlib import Path\np=Path('definition-proposal.json'); b=p.read_bytes(); d=json.loads(b)\nassert set(d)=={'schema','objective','audienceOptions','acceptance','source'}\nassert type(d['schema']) is int and d['schema']==1\nassert d['objective'] and d['audienceOptions']==['internal-operators','buyers'] and d['acceptance']\nassert all(isinstance(s,str) and s for s in d['acceptance'])\nassert set(d['source'])=={'hostId','path','sha256'}\nt=json.loads(Path('TEAM.json').read_text()); assert d['source']['hostId']==t['engineeringCatalog']['hostId']\nb_source=Path(t['engineeringCatalog']['path']).read_bytes(); assert d['source']['sha256']==hashlib.sha256(b_source).hexdigest()\ns=json.loads(b_source); assert type(s['schema']) is int and s['schema']==1\nassert all(type(f['version']) is int and f['version']>0 for f in s['features'])\nprint('proposal size:',len(b),'SHA256:',hashlib.sha256(b).hexdigest()); print('proposal validated; source unchanged')\nPY\"",
+        "output": "proposal size: 2295 SHA256: 87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6\nproposal validated; source unchanged\n",
+        "sequence": 35
+      },
+      {
+        "event": "3d416387-dda8-4157-8803-cc96293acc57",
+        "command": "/bin/bash -lc \"python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nb=Path('definition-proposal.json').read_bytes(); assert hashlib.sha256(b).hexdigest()=='87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6'\nd=json.loads(b); s=Path(d['source']['path']).read_bytes(); assert hashlib.sha256(s).hexdigest()==d['source']['sha256']\nprint('Reviewed proposal unchanged:',len(b),'bytes; source unchanged:',len(s),'bytes')\nPY\"",
+        "output": "Reviewed proposal unchanged: 2295 bytes; source unchanged: 445 bytes\n",
+        "sequence": 43
+      },
+      {
+        "event": "417bbfa1-3274-48b2-97c1-be4a79562108",
+        "command": "/bin/bash -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\n\ndef strict_object(pairs):\n    d={}\n    for k,v in pairs:\n        assert k not in d, ('duplicate key',k)\n        d[k]=v\n    return d\n\ndef parse(b): return json.loads(b,object_pairs_hook=strict_object)\nt=parse(Path('TEAM.json').read_bytes()); proposal=Path('definition-proposal.json').read_bytes()\nassert hashlib.sha256(proposal).hexdigest()=='87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6'\np=parse(proposal); assert set(p)=={'schema','objective','audienceOptions','acceptance','source'}\nassert type(p['schema']) is int and p['schema']==1\nassert p['objective'] and p['acceptance'] and p['audienceOptions']==['internal-operators','buyers']\nassert p['source']['hostId']==t['engineeringCatalog']['hostId'] and p['source']['path']==t['engineeringCatalog']['path']\nsb=Path(t['engineeringCatalog']['path']).read_bytes(); sh=hashlib.sha256(sb).hexdigest()\nassert len(sb)==445 and sh==p['source']['sha256']=='bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f'\ns=parse(sb); assert type(s['schema']) is int and s['schema']==1\nexpected=sorted([{k:f[k] for k in ('id','version','title')} for f in s['features'] if f['state']=='released'],key=lambda f:f['id'])\nassert len(expected)==2 and len({f['id'] for f in expected})==2\nroot=Path(t['engineeringArtifacts']['path']); artifact=root/'readiness.json'\nassert artifact.resolve().is_relative_to(root.resolve())\nb=artifact.read_bytes(); h=hashlib.sha256(b).hexdigest()\nassert len(b)==376 and h=='167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e'\nd=parse(b); assert set(d)=={'schema','audience','sourceSha256','features'}\nassert type(d['schema']) is int and d['schema']==1\nassert d['audience']=='internal-operators' and d['sourceSha256']==sh\nassert type(d['features']) is list and d['features']==expected\nfor f in d['features']:\n    assert set(f)=={'id','version','title'}\n    assert isinstance(f['id'],str) and isinstance(f['title'],str)\n    assert type(f['version']) is int and f['version']>0\nassert [f['id'] for f in d['features']]==sorted(f['id'] for f in d['features'])\nprint('Independently verified artifact path:',artifact)\nprint('Host:',t['engineeringArtifacts']['hostId'])\nprint('Artifact bytes:',len(b),'SHA256:',h)\nprint('Actual packet:',json.dumps(d,sort_keys=True))\nprint('Proposal unchanged; source unchanged; exact schema/types, all and only released features, ordering and titles validated.')\nPY\"",
+        "output": "Independently verified artifact path: /var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/readiness.json\nHost: 715cb3f5-a488-4992-a114-ae80a138535f\nArtifact bytes: 376 SHA256: 167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e\nActual packet: {\"audience\": \"internal-operators\", \"features\": [{\"id\": \"guided-practice\", \"title\": \"Guided practice with saved feedback\", \"version\": 2}, {\"id\": \"team-review\", \"title\": \"Team review dashboard\", \"version\": 1}], \"schema\": 1, \"sourceSha256\": \"bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f\"}\nProposal unchanged; source unchanged; exact schema/types, all and only released features, ordering and titles validated.\n",
+        "sequence": 67
+      },
+      {
+        "event": "8ad3b3c0-50e9-4553-a8fe-0893c442b5d7",
+        "command": "/bin/bash -lc \"python3 - <<'PY'\nimport json,hashlib,uuid\nfrom pathlib import Path\nexpected=json.loads(\\\"{\\\\\\\"goalId\\\\\\\":\\\\\\\"16ebec71-32b0-5117-beab-fb97ee87c40b\\\\\\\",\\\\\\\"workId\\\\\\\":\\\\\\\"5e5476ea-b94f-551c-85c6-68e10b187760\\\\\\\",\\\\\\\"definitionSha256\\\\\\\":\\\\\\\"87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6\\\\\\\",\\\\\\\"packet\\\\\\\":{\\\\\\\"size\\\\\\\":376,\\\\\\\"hostId\\\\\\\":\\\\\\\"715cb3f5-a488-4992-a114-ae80a138535f\\\\\\\",\\\\\\\"sha256\\\\\\\":\\\\\\\"167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e\\\\\\\",\\\\\\\"workspaceId\\\\\\\":\\\\\\\"9b2f557d-9960-40fe-85fd-4105006a4fe1\\\\\\\",\\\\\\\"artifactRoot\\\\\\\":{\\\\\\\"schema\\\\\\\":\\\\\\\"hollywood-artifact-root/v1\\\\\\\",\\\\\\\"workspaceId\\\\\\\":\\\\\\\"7618e885-898f-595e-990e-be6d801df514\\\\\\\",\\\\\\\"grantRevision\\\\\\\":1,\\\\\\\"environmentSha256\\\\\\\":\\\\\\\"d26b8f2c4f612e374430ef238fce2c96f0661220ffc143bc7b275ae65f66a169\\\\\\\",\\\\\\\"workspaceRevision\\\\\\\":1,\\\\\\\"rootIdentitySha256\\\\\\\":\\\\\\\"34f2c08f56c31613e30716a74e84f74bfb4d06745799660da370374aa4b46443\\\\\\\"},\\\\\\\"relativePath\\\\\\\":\\\\\\\"readiness.json\\\\\\\"}}\\\")\nb=Path('readiness-index.json').read_bytes(); d=json.loads(b)\nassert set(d)=={'goalId','workId','definitionSha256','packet'} and d==expected\nfor k in ('goalId','workId'): assert str(uuid.UUID(d[k]))==d[k]\nassert hashlib.sha256(Path('definition-proposal.json').read_bytes()).hexdigest()==d['definitionSha256']\nt=json.loads(Path('TEAM.json').read_text()); e=d['packet']; assert e['relativePath']=='readiness.json' and e['hostId']==t['engineeringArtifacts']['hostId']\np=Path(t['engineeringArtifacts']['path'])/e['relativePath']; packet=p.read_bytes()\nassert len(packet)==e['size'] and hashlib.sha256(packet).hexdigest()==e['sha256']\ns=Path(t['engineeringCatalog']['path']).read_bytes(); assert hashlib.sha256(s).hexdigest()==json.loads(packet)['sourceSha256']\nprint('Verified exact index equality with canonical ArtifactEvidence object, including complete artifactRoot without reconstruction.')\nprint('Index bytes:',len(b),'SHA256:',hashlib.sha256(b).hexdigest())\nprint(b.decode())\nPY\"",
+        "output": "Verified exact index equality with canonical ArtifactEvidence object, including complete artifactRoot without reconstruction.\nIndex bytes: 847 SHA256: 8ce37432bb40d2443af729f6212c22c1139fc621430cc04a207c66f92a2246d0\n{\n  \"goalId\": \"16ebec71-32b0-5117-beab-fb97ee87c40b\",\n  \"workId\": \"5e5476ea-b94f-551c-85c6-68e10b187760\",\n  \"definitionSha256\": \"87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6\",\n  \"packet\": {\n    \"size\": 376,\n    \"hostId\": \"715cb3f5-a488-4992-a114-ae80a138535f\",\n    \"sha256\": \"167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e\",\n    \"workspaceId\": \"9b2f557d-9960-40fe-85fd-4105006a4fe1\",\n    \"artifactRoot\": {\n      \"schema\": \"hollywood-artifact-root/v1\",\n      \"workspaceId\": \"7618e885-898f-595e-990e-be6d801df514\",\n      \"grantRevision\": 1,\n      \"environmentSha256\": \"d26b8f2c4f612e374430ef238fce2c96f0661220ffc143bc7b275ae65f66a169\",\n      \"workspaceRevision\": 1,\n      \"rootIdentitySha256\": \"34f2c08f56c31613e30716a74e84f74bfb4d06745799660da370374aa4b46443\"\n    },\n    \"relativePath\": \"readiness.json\"\n  }\n}\n\n",
+        "sequence": 75
+      },
+      {
+        "event": "03817b1a-7253-482c-bf02-87a0e5b36c9a",
+        "command": "/bin/bash -lc \"python3 - <<'PY'\nimport json,hashlib\nfrom pathlib import Path\nE=json.loads(\\\"{\\\\\\\"size\\\\\\\":376,\\\\\\\"hostId\\\\\\\":\\\\\\\"715cb3f5-a488-4992-a114-ae80a138535f\\\\\\\",\\\\\\\"sha256\\\\\\\":\\\\\\\"167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e\\\\\\\",\\\\\\\"workspaceId\\\\\\\":\\\\\\\"9b2f557d-9960-40fe-85fd-4105006a4fe1\\\\\\\",\\\\\\\"artifactRoot\\\\\\\":{\\\\\\\"schema\\\\\\\":\\\\\\\"hollywood-artifact-root/v1\\\\\\\",\\\\\\\"workspaceId\\\\\\\":\\\\\\\"7618e885-898f-595e-990e-be6d801df514\\\\\\\",\\\\\\\"grantRevision\\\\\\\":1,\\\\\\\"environmentSha256\\\\\\\":\\\\\\\"d26b8f2c4f612e374430ef238fce2c96f0661220ffc143bc7b275ae65f66a169\\\\\\\",\\\\\\\"workspaceRevision\\\\\\\":1,\\\\\\\"rootIdentitySha256\\\\\\\":\\\\\\\"34f2c08f56c31613e30716a74e84f74bfb4d06745799660da370374aa4b46443\\\\\\\"},\\\\\\\"relativePath\\\\\\\":\\\\\\\"readiness.json\\\\\\\"}\\\")\ndef no_dupes(pairs):\n d={}\n for k,v in pairs:\n  assert k not in d;d[k]=v\n return d\ndef read(b):return json.loads(b,object_pairs_hook=no_dupes)\nt=read(Path('TEAM.json').read_bytes()); p=Path('definition-proposal.json').read_bytes(); ph=hashlib.sha256(p).hexdigest()\nassert ph=='87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6'\nsb=Path(t['engineeringCatalog']['path']).read_bytes();sh=hashlib.sha256(sb).hexdigest();s=read(sb)\nassert len(sb)==445 and sh=='bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f'\nassert E['hostId']==t['engineeringArtifacts']['hostId'] and E['relativePath']=='readiness.json'\nf=Path(t['engineeringArtifacts']['path'])/E['relativePath']; b=f.read_bytes(); d=read(b)\nassert len(b)==E['size']==376 and hashlib.sha256(b).hexdigest()==E['sha256']=='167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e'\nassert set(d)=={'schema','audience','sourceSha256','features'} and type(d['schema']) is int and d['schema']==1\nassert d['audience']=='internal-operators' and d['sourceSha256']==sh\nexpected=sorted([{k:f[k] for k in ('id','version','title')} for f in s['features'] if f['state']=='released'],key=lambda f:f['id'])\nassert d['features']==expected and len(expected)==2\nfor f in d['features']:\n assert set(f)=={'id','version','title'} and type(f['version']) is int and f['version']>0\nib=Path('readiness-index.json').read_bytes();i=read(ib)\nassert set(i)=={'goalId','workId','definitionSha256','packet'}\nassert i['goalId']=='16ebec71-32b0-5117-beab-fb97ee87c40b' and i['workId']=='5e5476ea-b94f-551c-85c6-68e10b187760'\nassert i['definitionSha256']==ph and i['packet']==E\nassert len(ib)==847 and hashlib.sha256(ib).hexdigest()=='8ce37432bb40d2443af729f6212c22c1139fc621430cc04a207c",
+        "output": "PASS: actual source, frozen proposal, canonical evidence, exact packet schema/audience/released feature set/order/types and exact index verified read-only. No mutations or duplicate assignment/review.\n",
+        "sequence": 82
+      }
+    ]
+  },
+  "originalResultSha256": "ef25cf4d7dc28f456e888500168c7828ae6c85de8bff49811e0b5a9866c19981",
+  "scope": "Independent actual-state/authenticated API/native evidence audit of same frozen trial, no new model trial. Global command transcripts still need explicit review for actual independent file verification; no typed server-enforced goal-definition guarantee."
+}

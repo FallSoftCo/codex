@@ -1,0 +1,303 @@
+{
+  "schema": "lax-native-role-goal-evidence/v1",
+  "at": 1792560211.9136953,
+  "files": [
+    {
+      "path": "source/role-goal-integration-design-r258.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-integration-design-r258.json",
+      "sha256": "438e90339fc2d665330f9b04bfed824a52c6137121479b4273ccc50516537807",
+      "bytes": 2088
+    },
+    {
+      "path": "source/role-goal-setup-failure-r258.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-setup-failure-r258.json",
+      "sha256": "887bc83f0b7c0f4df3358da255f9c56d4e16112ed3a5d0a1ad2f5d7b958e4b7b",
+      "bytes": 687
+    },
+    {
+      "path": "source/role-goal-runtime-readback-r258.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-runtime-readback-r258.json",
+      "sha256": "ed48ecaaba80181e7c627da53c216c2817cb8fa0bf95c45978b4e7fe3f201b42",
+      "bytes": 2172
+    },
+    {
+      "path": "source/role-goal-independent-audit-r258.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-independent-audit-r258.json",
+      "sha256": "9e727ed6d10692f461483b3f97a7eab8e5d1738fda49db7fec2d08737aa08055",
+      "bytes": 18981
+    },
+    {
+      "path": "source/role-goal-command-review-r259.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-command-review-r259.json",
+      "sha256": "0fe0f6a6c8a270b403845ccb26d3ac4502c24fd4f71779304a1c1b8fd8abf134",
+      "bytes": 5458
+    },
+    {
+      "path": "source/role-goal-wake-causality-r259.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-wake-causality-r259.json",
+      "sha256": "65843364c0be74e5b95aa2f152e952bc6da1242b4f6bf70e01a6edabb497fa9f",
+      "bytes": 3719
+    },
+    {
+      "path": "source/role-goal-runtime-artifacts-r259.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-runtime-artifacts-r259.json",
+      "sha256": "f8d62e7dda5c6b0e14a5f924eee3db8244e6388a60cc1e73d83dff087fa11e89",
+      "bytes": 33561
+    },
+    {
+      "path": "source/role-goal-retirement-r259.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-retirement-r259.json",
+      "sha256": "13422478c8c0aebb165270c5b9b6cea485e7f19635eb19bd75c40d3e70344c14",
+      "bytes": 671
+    },
+    {
+      "path": "source/role-goal-qualification-r259.json",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-qualification-r259.json",
+      "sha256": "06aab1f23c84b9ccefc4b26b1808509cfb6184466d88a0ae33045ebd69e7e4b2",
+      "bytes": 5614
+    },
+    {
+      "path": "source/build_role_goal_r258.sh",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/build_role_goal_r258.sh",
+      "sha256": "3af8ac96401c04d97adc0d0f1dd680d1d289717e9f4098ccd0313aa5f6adb44d",
+      "bytes": 701
+    },
+    {
+      "path": "source/prepare_role_goal_agents_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/prepare_role_goal_agents_r258.py",
+      "sha256": "33dc1500e799dd7c2a0142a82749369bbd584a50d21f06124e1adf8823816170",
+      "bytes": 4291
+    },
+    {
+      "path": "source/continue_role_goal_setup_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/continue_role_goal_setup_r258.py",
+      "sha256": "1e0df4bc81144101af1f6178eef89d353d8ebc44b1cf05de7234e2ab7fbb130d",
+      "bytes": 3722
+    },
+    {
+      "path": "source/install_role_goal_peer_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/install_role_goal_peer_r258.py",
+      "sha256": "81c6a96f3b4dc5c758822ae5afda455902059f308a87a3e5600692957f381531",
+      "bytes": 5986
+    },
+    {
+      "path": "source/enroll_role_goal_humans_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/enroll_role_goal_humans_r258.py",
+      "sha256": "83e483e026572e701bb7dae9247bca4111a123ab14cdf9fc63a01d2760cd3e49",
+      "bytes": 2337
+    },
+    {
+      "path": "source/serve_role_goal_qa_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/serve_role_goal_qa_r258.py",
+      "sha256": "cb9da251fa5f3010aa105fb9e1caadac9d628dab1771b4167390fcaeb8111c1e",
+      "bytes": 443
+    },
+    {
+      "path": "source/run_role_goal_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_role_goal_r258.py",
+      "sha256": "785b875310cd6f88b5b42b6116cbceee642098ac3d1d8e1464335851667d9c44",
+      "bytes": 20206
+    },
+    {
+      "path": "source/audit_role_goal_r258.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/audit_role_goal_r258.py",
+      "sha256": "647669f56f0d641da386f5c439c7e9c693eb8bfa46544b5d21d59fe6db7cd867",
+      "bytes": 10429
+    },
+    {
+      "path": "source/run_standing_r242.py",
+      "source": "/aosp/development/lax-three-context-20261018-r01/qualification/run_standing_r242.py",
+      "sha256": "76cb561b5b3412644b55251d1a371efb4ccbc48e2a967ee846d563608d49b722",
+      "bytes": 13324
+    },
+    {
+      "path": "protocol/RELEASE-REQUIREMENTS.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/RELEASE-REQUIREMENTS.json",
+      "sha256": "6a03e65207003fedad95feb489c5428f8f0927ff0adbcf266746767f93ce98f5",
+      "bytes": 444
+    },
+    {
+      "path": "protocol/controls.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/controls.json",
+      "sha256": "829d72c426bf00f29a3695f3c286c7ce95ef3e60e8a9d30bf4b9bc9c15d2d36b",
+      "bytes": 153
+    },
+    {
+      "path": "protocol/engineer-release.txt",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/engineer-release.txt",
+      "sha256": "7fa3bad38200983a0c01b8d4070b0202d7b629fddba3f39b41cc4773a8f35d9c",
+      "bytes": 387
+    },
+    {
+      "path": "protocol/engineer-role.txt",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/engineer-role.txt",
+      "sha256": "809faea9666c2447b5533496cb7d6a6318435342ebb7a225bde8e24a90ac5766",
+      "bytes": 841
+    },
+    {
+      "path": "protocol/initial-catalog.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/initial-catalog.json",
+      "sha256": "0bc0e018776bf2a0eb55cc9d3a7477b662f14d813906f25ee65606f9d7df15a9",
+      "bytes": 296
+    },
+    {
+      "path": "protocol/initial.txt",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/initial.txt",
+      "sha256": "2c41d84b49f18080c27c0f8198d523efdd7e8b1689128fa85041274ad9ccaa66",
+      "bytes": 377
+    },
+    {
+      "path": "protocol/outcome.py",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/outcome.py",
+      "sha256": "b99c88a69ed113b3dbadaad08a3822f39da4b854c27ee3351ce0e5dd622eaec1",
+      "bytes": 626
+    },
+    {
+      "path": "protocol/owner-answer.txt",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/owner-answer.txt",
+      "sha256": "293eb27c50b9712ff4164922c02d8c3e39694f897fc67274c87a708d3fda80d5",
+      "bytes": 412
+    },
+    {
+      "path": "protocol/protocol.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/protocol.json",
+      "sha256": "70b23bddcdcdde2e73ab69b6ecf0ab3827f2780ac991b85580bbd63a267c7797",
+      "bytes": 3392
+    },
+    {
+      "path": "protocol/role.txt",
+      "source": "/var/lib/lax-role-goal-20261021-r258/protocol/role.txt",
+      "sha256": "b92930203f53e995f49d29f4628ce7ff5c193412c29438dc75f8052066ebfcfa",
+      "bytes": 3177
+    },
+    {
+      "path": "run/execution-intent.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/execution-intent.json",
+      "sha256": "f66d1c2962fcb04db1402e5ff24235111389476ef78869db12baa74f35eea5c5",
+      "bytes": 906
+    },
+    {
+      "path": "run/result.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/result.json",
+      "sha256": "ef25cf4d7dc28f456e888500168c7828ae6c85de8bff49811e0b5a9866c19981",
+      "bytes": 197727
+    },
+    {
+      "path": "run/retirement.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/retirement.json",
+      "sha256": "5c39315ba7c2d9678888593386f46c87db3767fc5a3d7c054ded546ed0a343e3",
+      "bytes": 2206
+    },
+    {
+      "path": "run/role-question-waiting.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/role-question-waiting.json",
+      "sha256": "55ce07922c3763bfc0eae32447b2dbaf508521a3ca2e0783edb7282941034e79",
+      "bytes": 7539
+    },
+    {
+      "path": "run/reviewed-proposal-receipt.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/reviewed-proposal-receipt.json",
+      "sha256": "8e936df5cf74f68054fbbf129569c6018fccaaa5cc31cfb0985cbd7882d03400",
+      "bytes": 703
+    },
+    {
+      "path": "run/reviewed-proposal.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/reviewed-proposal.json",
+      "sha256": "87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6",
+      "bytes": 2295
+    },
+    {
+      "path": "run/owner-a-answer-intent.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/owner-a-answer-intent.json",
+      "sha256": "a3483899d5e5e07fa1c40c2db4bb92e4918976fbbc22c923746b5fffa77680fe",
+      "bytes": 1441
+    },
+    {
+      "path": "run/owner-a-answer-receipt.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/owner-a-answer-receipt.json",
+      "sha256": "7b06be787d28f055f25d6983b630e6a62480fecc11f0838fddb6c2ff46ad3db6",
+      "bytes": 4505
+    },
+    {
+      "path": "run/source-b-private-question-denied.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/source-b-private-question-denied.json",
+      "sha256": "96a12ce3b3a45f70f0b629a4b3372692966a66698e726e38b9eb4a5004c46f5f",
+      "bytes": 112
+    },
+    {
+      "path": "run/source-b-answer-denied.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/source-b-answer-denied.json",
+      "sha256": "dd2f80a4b6574ff1cb636613f4705f31ffd50fd65bfc0cea415492d191c9bd72",
+      "bytes": 112
+    },
+    {
+      "path": "run/agent-as-human-answer-denied.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/agent-as-human-answer-denied.json",
+      "sha256": "d83c7def9113cf60a7829e69c8a66c2faa00738ce6a9ff164b4dae77fd505205",
+      "bytes": 112
+    },
+    {
+      "path": "run/source-b-new-room-read-denied.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/run/source-b-new-room-read-denied.json",
+      "sha256": "5c961271f6c55c83c9dcc7398a35d0189e4e8271de6912408c808bdd6c91a164",
+      "bytes": 112
+    },
+    {
+      "path": "installation/public.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/public.json",
+      "sha256": "6703b6074e03bbb7fd71f4ccb6f08dd530677531a3038530f32b4e3044c0b89e",
+      "bytes": 1069
+    },
+    {
+      "path": "installation/fixture-receipt.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/fixture-receipt.json",
+      "sha256": "96ffb2a5d07034032018a15798ed3f8fbc8b076047ae8dba2dcc2f8f6063713d",
+      "bytes": 1366
+    },
+    {
+      "path": "installation/human-owner-readback.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/human-owner-readback.json",
+      "sha256": "fb85c876759f7c2b78a88efe951fa1764283a58649d9d6f21076f3d01c21b571",
+      "bytes": 3794
+    },
+    {
+      "path": "installation/listener-race-recovery-intent.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/listener-race-recovery-intent.json",
+      "sha256": "d63e096a787007445674a797b5e886e63a918f5577b2b260d0a3002b10b719aa",
+      "bytes": 349
+    },
+    {
+      "path": "installation/peer-public.json",
+      "source": "/var/lib/lax-role-goal-20261021-r258/role-goal-r258/peer/public.json",
+      "sha256": "15b402cdb97951681d75992eac4a9935234a091dcb843c470eb3d1150edb8fb1",
+      "bytes": 949
+    },
+    {
+      "path": "artifacts/global/definition-proposal.json",
+      "source": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/92d5c8a9-8b30-45fd-ac6c-32887e5e62d8/home/work/definition-proposal.json",
+      "sha256": "87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6",
+      "bytes": 2295
+    },
+    {
+      "path": "artifacts/global/readiness-index.json",
+      "source": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/92d5c8a9-8b30-45fd-ac6c-32887e5e62d8/home/work/readiness-index.json",
+      "sha256": "8ce37432bb40d2443af729f6212c22c1139fc621430cc04a207c66f92a2246d0",
+      "bytes": 847
+    },
+    {
+      "path": "artifacts/peer/readiness.json",
+      "source": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/readiness.json",
+      "sha256": "167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e",
+      "bytes": 376
+    },
+    {
+      "path": "artifacts/peer/catalog.json",
+      "source": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json",
+      "sha256": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f",
+      "bytes": 445
+    }
+  ],
+  "credentialScan": "Exact copied bytes checked against enrolled own human/purpose and database credentials; no values stored. Explicit source/evidence allowlist only.",
+  "models": "Actual model run retained; not deterministic semantic simulation.",
+  "limits": "One bounded instructed workflow, no production promotion."
+}

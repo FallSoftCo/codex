@@ -1,0 +1,84 @@
+{
+  "schema": "lax-native-role-goal-qualification/v1",
+  "at": 1792560009.0974264,
+  "runtime": {
+    "lax-hollywood-connector": "0.1.0.dev116",
+    "hollywood-cli": "0.3.0.dev81"
+  },
+  "sourceDelta": "SDK116 reconciles native Goal tool description with existing handler/Hollywood role-work origin. No Hollywood schema/runtime change, new component, model context or task ledger.",
+  "trial": {
+    "result": "bounded-native-role-goal-peer-delivery-passed",
+    "seconds": 637.7565965652466,
+    "realNativeAgents": 2,
+    "persistentContexts": 6,
+    "rooms": 2,
+    "scriptedHumanPrincipals": 2,
+    "goalId": "16ebec71-32b0-5117-beab-fb97ee87c40b",
+    "canonicalPeerWorkId": "5e5476ea-b94f-551c-85c6-68e10b187760",
+    "roleDeliveryId": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+    "independentAudit": true,
+    "auditCheckCount": 24,
+    "explicitCooperationPolicy": {
+      "policy": "leader_award",
+      "planner": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "reviewer": null,
+      "revision": 1
+    }
+  },
+  "observed": [
+    "Initial finite setup completed before engineering release; no perpetual setup Goal.",
+    "Actual peer reported new verified release requested by regular B. Global initiated one bounded role Work without a new human task.",
+    "A reviewed exact immutable proposal SHA and selected audience through authenticated native question/answer. Peer implementation was assigned afterward.",
+    "Global created new collaboration room and explicit peer membership, preserving both agent home roles, workspaces and6histories. Goal intent retained its original role-work provenance across rooms.",
+    "Peer executed canonical Work in its own registered resource, reported actual artifact evidence before completion; Global read/rehashed actual files and verified schema/features/source/proposal before independent Work acceptance.",
+    "Original role Work received an actual waiting receipt. Reader later applied relevant peer observation across rooms to that same Work, resuming writer. Parent accepted canonical Work/Goal, wrote exact artifact index and completed after Goal acceptance.",
+    "Canonical queued review later reverified already accepted state and completed; no second Work assignment or acceptance. All own deliveries settled, no observer-created model polling or manual output repair."
+  ],
+  "validationDetails": {
+    "frozenProtocol": "/var/lib/lax-role-goal-20261021-r258/protocol/protocol.json",
+    "frozenRunner": "/aosp/development/lax-three-context-20261018-r01/qualification/run_role_goal_r258.py",
+    "actualCommandVerification": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-command-review-r259.json",
+    "exactWakeCausality": "/aosp/development/lax-three-context-20261018-r01/qualification/role-goal-wake-causality-r259.json",
+    "sourceRuntimeMatched": true,
+    "moduleCount": 155,
+    "cleanup": {
+      "at": 1792560008.7833498,
+      "ownServicePids": {
+        "lax-agent-5ed550ae-92d5c8a98b30-reader.service": "0",
+        "lax-agent-5ed550ae-92d5c8a98b30-writer.service": "0",
+        "lax-agent-5ed550ae-92d5c8a98b30-responder.service": "0",
+        "lax-agent-5ed550ae-7fe550aef431-reader.service": "0",
+        "lax-agent-5ed550ae-7fe550aef431-writer.service": "0",
+        "lax-agent-5ed550ae-7fe550aef431-responder.service": "0",
+        "lax-host-5ed550ae-715cb3f5.service": "0",
+        "lax-collaboration-5ed550ae-715cb3f5.service": "0"
+      },
+      "allOwnUnitsStopped": true,
+      "private18786ListenerAbsent": true,
+      "liveSchemaStillUntouched": true,
+      "originalsAndNativeHistoriesRetained": true
+    },
+    "authorityHasExactlyTwoAgentsAndRooms": {
+      "agentCount": 2,
+      "roomCount": 2,
+      "installedAgentDirectoriesMatch": true
+    }
+  },
+  "operatorFailuresRetained": [
+    "QA listener readiness race before role PUT; original bootstrap committed,0administrative receipts/deliveries/contexts. Inspected and continued exact existing namespace using fresh named pre-dispatch role command, no rebootstrap.",
+    "Preflight helper invoked definitions without spec. Outer orchestration still launched runner; no proposed runner edits executed. Later read-only runtime/TOOLS check confirmed original frozen protocol and runner bytes unchanged. This is not a successful preflight.",
+    "Supplemental audit hypothesis that verification command must use queued review delivery was false. Actual correct primary command used the resumed parent Role scope; later verification used review scope. Original frozen trial result unchanged."
+  ],
+  "limits": [
+    "Explicit required Goal/team/proposal procedure, not evidence of natural conversation depth or spontaneous goal-development adoption",
+    "Reviewed SHA referenced by existing Goal/Work prose and independently checked against actual bytes; no typed server-enforced goal-definition/evidence binding",
+    "Reader-applied peer observation caused actual wake; this run does not isolate terminal-Goal-only wake",
+    "One redundant queued canonical review produced an extra bounded verification/status inference; no duplicate business acceptance. Retained as a real efficiency/UX limitation, not erased",
+    "No shared-file collaborative editing, many-agent scale, arbitrary crashes/compaction, multi-host, phone/push or autonomous enterprise readiness",
+    "No statistical/causal superiority over capable single-context baseline",
+    "Only the recorded explicit cooperation policy was exercised; other modes remain unqualified."
+  ],
+  "productionPromoted": false,
+  "productionSchemaMigrated": false,
+  "phoneChanged": false
+}

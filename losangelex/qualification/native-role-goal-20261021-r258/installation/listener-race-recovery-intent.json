@@ -1,0 +1,9 @@
+{
+  "at": 1792558673.039804,
+  "originalOperation": "standing-r242:role-goal-r258:role",
+  "originalState": "pre-dispatch connection refused; no server receipt/role change/delivery/context",
+  "freshOperation": "role-goal-r258:role-after-ready",
+  "hostId": "715cb3f5-a488-4992-a114-ae80a138535f",
+  "noBootstrapReplay": true,
+  "modelsStarted": 0
+}

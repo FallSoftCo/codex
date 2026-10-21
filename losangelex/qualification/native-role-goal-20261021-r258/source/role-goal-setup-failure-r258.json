@@ -1,0 +1,10 @@
+{
+  "at": 1792558671.033455,
+  "attempt": "r258 QA provisioning",
+  "result": "setup failure before native/model start",
+  "cause": "Operator launched dependent preparation while test service start command was still running; connection refused on role PUT and original receipt GET.",
+  "canonicalStateInspected": "Only bootstrap authority/Global/Owner/room/role revision1; no administrative command, delivery or context system.",
+  "recovery": "Original bootstrap/journal retained; new named role operation after health/readiness with fresh exact state checks; remaining initial installation resumes without rebootstrap.",
+  "modelCalls": 0,
+  "productCodeChangedToHideFailure": false
+}

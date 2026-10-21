@@ -1,0 +1,62 @@
+{
+  "at": 1792559884.594819,
+  "mode": "Supplemental exact original operation/material readback,0newmodels",
+  "nativeGoalWaitReceipts": [
+    {
+      "operation": "context-tool:e1b94741d3b0da84b6b33cdd003c31172d05274cdd7fdc0a477b32a864d83398",
+      "result": {
+        "goals": [
+          {
+            "state": "active",
+            "goalId": "16ebec71-32b0-5117-beab-fb97ee87c40b",
+            "revision": 4
+          }
+        ],
+        "state": "waiting",
+        "workId": "f3b84729-9d84-5b9a-a281-96e620157165",
+        "instruction": "End this inference while waiting; exact terminal Goal facts resume this same responsibility. Review acceptance/evidence before final response."
+      }
+    },
+    {
+      "operation": "context-tool:f38694500dc3c989b99f11950962faa1c18eeb610200e326896ca27076dcc965",
+      "result": {
+        "goals": [
+          {
+            "state": "accepted",
+            "goalId": "16ebec71-32b0-5117-beab-fb97ee87c40b",
+            "revision": 8
+          }
+        ],
+        "state": "results_available",
+        "workId": "f3b84729-9d84-5b9a-a281-96e620157165",
+        "instruction": "Read current work and canonical results; terminal cancellation is not successful acceptance."
+      }
+    }
+  ],
+  "relevantPeerObservationUpdate": {
+    "roomId": "ae36a84b-bfa8-55c2-bdf8-4bfd387057cc",
+    "audience": "room",
+    "authorId": "7fe550ae-f431-4e98-9589-1386c6c506a8",
+    "authorKind": "agent",
+    "observationId": "9168a217-cbd0-5224-93ec-ecbf0f8f3808",
+    "sourceEventId": "aa00fc44-0aa3-4195-aba0-f2e2943471d6",
+    "interpretation": "Existing engineering peer reports readiness.json for the already assigned internal-operators packet and same source revision; this is not a new release or new task. It claims 376 bytes, SHA256 167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e, canonical Work 5e5476ea-b94f-551c-85c6-68e10b187760 submitted revision 3 in attempt 1f785416-a3f1-43e0-9196-0c7b6e280f25, report event 43b0b391-7e0f-4178-b466-44c4177c37ec. Treat chat as a locator/claim only, not canonical acceptance. Existing responsibility is already event-backed waiting on native Goal 16ebec71-32b0-5117-beab-fb97ee87c40b for independent review; preserve that wait and original objective. Canonical report/evidence and actual file verification remain required before Work/Goal acceptance and verified index. No acknowledgement, duplicate assignment or initiative is warranted."
+  },
+  "actualCommandScopes": [
+    {
+      "id": "417bbfa1-3274-48b2-97c1-be4a79562108",
+      "seq": 67,
+      "delivery": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+      "turn": "01a15cde-50da-76e3-9d29-3f375bf37fbd"
+    },
+    {
+      "id": "03817b1a-7253-482c-bf02-87a0e5b36c9a",
+      "seq": 82,
+      "delivery": "39c95e97-32d9-4237-b02f-040ec50a3e2f",
+      "turn": "01a15cdf-e821-77e2-922b-d035eb82b93d"
+    }
+  ],
+  "observation": "Parent role work really called await_goal_results and received waiting while Goal active. Reader then interpreted the real peer report in the collaboration room and amended this existing Work. That event resumed the parent writer, which verified and accepted peer Work and Goal. The separately queued canonical review Work later observed already accepted state, reverified actual files and closed without a second assignment/review acceptance.",
+  "limits": "This run does not isolate terminal-Goal-only wake. Additional naive audit assumption that all review commands must belong to the queued review delivery was rejected by actual scope: primary verification belongs correctly to the resumed parent Role Work. This was an unfrozen audit hypothesis, not a product failure or altered original score.",
+  "frozenTrialScoreUnchanged": true
+}

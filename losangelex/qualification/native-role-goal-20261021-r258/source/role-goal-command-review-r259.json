@@ -1,0 +1,61 @@
+{
+  "at": 1792559699.2978055,
+  "mode": "Recorded operator source review of actual native command, not a new model trial",
+  "reviewCommand": {
+    "eventId": "417bbfa1-3274-48b2-97c1-be4a79562108",
+    "sequence": 67,
+    "deliveryId": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+    "nativeTurn": "01a15cde-50da-76e3-9d29-3f375bf37fbd",
+    "command": "/bin/bash -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\n\ndef strict_object(pairs):\n    d={}\n    for k,v in pairs:\n        assert k not in d, ('duplicate key',k)\n        d[k]=v\n    return d\n\ndef parse(b): return json.loads(b,object_pairs_hook=strict_object)\nt=parse(Path('TEAM.json').read_bytes()); proposal=Path('definition-proposal.json').read_bytes()\nassert hashlib.sha256(proposal).hexdigest()=='87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6'\np=parse(proposal); assert set(p)=={'schema','objective','audienceOptions','acceptance','source'}\nassert type(p['schema']) is int and p['schema']==1\nassert p['objective'] and p['acceptance'] and p['audienceOptions']==['internal-operators','buyers']\nassert p['source']['hostId']==t['engineeringCatalog']['hostId'] and p['source']['path']==t['engineeringCatalog']['path']\nsb=Path(t['engineeringCatalog']['path']).read_bytes(); sh=hashlib.sha256(sb).hexdigest()\nassert len(sb)==445 and sh==p['source']['sha256']=='bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f'\ns=parse(sb); assert type(s['schema']) is int and s['schema']==1\nexpected=sorted([{k:f[k] for k in ('id','version','title')} for f in s['features'] if f['state']=='released'],key=lambda f:f['id'])\nassert len(expected)==2 and len({f['id'] for f in expected})==2\nroot=Path(t['engineeringArtifacts']['path']); artifact=root/'readiness.json'\nassert artifact.resolve().is_relative_to(root.resolve())\nb=artifact.read_bytes(); h=hashlib.sha256(b).hexdigest()\nassert len(b)==376 and h=='167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e'\nd=parse(b); assert set(d)=={'schema','audience','sourceSha256','features'}\nassert type(d['schema']) is int and d['schema']==1\nassert d['audience']=='internal-operators' and d['sourceSha256']==sh\nassert type(d['features']) is list and d['features']==expected\nfor f in d['features']:\n    assert set(f)=={'id','version','title'}\n    assert isinstance(f['id'],str) and isinstance(f['title'],str)\n    assert type(f['version']) is int and f['version']>0\nassert [f['id'] for f in d['features']]==sorted(f['id'] for f in d['features'])\nprint('Independently verified artifact path:',artifact)\nprint('Host:',t['engineeringArtifacts']['hostId'])\nprint('Artifact bytes:',len(b),'SHA256:',h)\nprint('Actual packet:',json.dumps(d,sort_keys=True))\nprint('Proposal unchanged; source unchanged; exact schema/types, all and only released features, ordering and titles validated.')\nPY\"",
+    "output": "Independently verified artifact path: /var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/readiness.json\nHost: 715cb3f5-a488-4992-a114-ae80a138535f\nArtifact bytes: 376 SHA256: 167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e\nActual packet: {\"audience\": \"internal-operators\", \"features\": [{\"id\": \"guided-practice\", \"title\": \"Guided practice with saved feedback\", \"version\": 2}, {\"id\": \"team-review\", \"title\": \"Team review dashboard\", \"version\": 1}], \"schema\": 1, \"sourceSha256\": \"bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f\"}\nProposal unchanged; source unchanged; exact schema/types, all and only released features, ordering and titles validated.\n"
+  },
+  "subsequentReviewEvent": {
+    "eventId": "739a168a-6dc2-492e-b5a7-43a00895ef8e",
+    "sequence": 68,
+    "author": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8"
+  },
+  "canonicalGoalReviewInput": {
+    "id": "5b228c78-3dde-4e90-b943-926b4c05ec69",
+    "seq": 65,
+    "author": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+    "room": "ae36a84b-bfa8-55c2-bdf8-4bfd387057cc",
+    "kind": "request",
+    "data": {
+      "goalId": "16ebec71-32b0-5117-beab-fb97ee87c40b",
+      "policy": "bounded-worker-report",
+      "authorKind": "agent",
+      "goalReview": true,
+      "triggerDigest": "8a7c67a8d1b63f353eb92424f4d8bc4efbbaa40fd9bc8d69881da4e3f1514d73",
+      "cooperationRevision": 1
+    },
+    "delivery": "39c95e97-32d9-4237-b02f-040ec50a3e2f",
+    "state": "completed"
+  },
+  "goalReviewMaterials": [
+    {
+      "id": "5b228c78-3dde-4e90-b943-926b4c05ec69",
+      "kind": "input",
+      "state": "handled",
+      "source": "5b228c78-3dde-4e90-b943-926b4c05ec69",
+      "applied_to_work": null,
+      "work_id": null
+    },
+    {
+      "id": "d1702ae1-45f5-5235-831e-9457b674b61a",
+      "kind": "need",
+      "state": "published",
+      "source": "5b228c78-3dde-4e90-b943-926b4c05ec69",
+      "applied_to_work": null,
+      "work_id": "9ef464ba-e77b-5964-80e8-a6655580c0a2"
+    },
+    {
+      "id": "9ef464ba-e77b-5964-80e8-a6655580c0a2",
+      "kind": "work",
+      "state": "complete",
+      "source": "5b228c78-3dde-4e90-b943-926b4c05ec69",
+      "applied_to_work": null,
+      "work_id": null
+    }
+  ],
+  "interpretation": "Global native Python command reads actual authorized peer artifact bytes and source catalog, recomputes hashes, validates exact schema/types/feature set and proposal hash, exits0 before independent canonical Work acceptance. Not mere echo of a peer claim."
+}

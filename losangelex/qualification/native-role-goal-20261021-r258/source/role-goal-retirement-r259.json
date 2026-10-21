@@ -1,0 +1,17 @@
+{
+  "at": 1792560008.7833498,
+  "ownServicePids": {
+    "lax-agent-5ed550ae-92d5c8a98b30-reader.service": "0",
+    "lax-agent-5ed550ae-92d5c8a98b30-writer.service": "0",
+    "lax-agent-5ed550ae-92d5c8a98b30-responder.service": "0",
+    "lax-agent-5ed550ae-7fe550aef431-reader.service": "0",
+    "lax-agent-5ed550ae-7fe550aef431-writer.service": "0",
+    "lax-agent-5ed550ae-7fe550aef431-responder.service": "0",
+    "lax-host-5ed550ae-715cb3f5.service": "0",
+    "lax-collaboration-5ed550ae-715cb3f5.service": "0"
+  },
+  "allOwnUnitsStopped": true,
+  "private18786ListenerAbsent": true,
+  "liveSchemaStillUntouched": true,
+  "originalsAndNativeHistoriesRetained": true
+}

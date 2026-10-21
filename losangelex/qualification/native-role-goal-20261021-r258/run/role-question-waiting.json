@@ -1,0 +1,128 @@
+{
+  "at": 1792559230.8304446,
+  "attention": {
+    "id": "09c8e3f9-e7fa-5d2b-ab32-8d6560ddc301",
+    "authority": "5ed550ae-1bae-4775-8773-d797b2ffb870",
+    "delivery": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+    "agent": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+    "human": "90e34b28-3ad9-4f7c-bd61-227fbc34181f",
+    "room": "9998105a-b917-4fda-96c4-bcd1266a8290",
+    "event": "ae3af43c-226a-41cc-a196-5077e2710d59",
+    "generation": 1,
+    "claim_id": "context-admit:f3b84729-9d84-5b9a-a281-96e620157165",
+    "native_thread": "01a15cd7-838e-7b01-b9f2-6dc66bb9fdda",
+    "native_turn": "01a15cda-232b-7401-b345-251717cce6ee",
+    "native_slot": "exec-5d4480a7-c83c-47ad-9f55-671ff6ef30be",
+    "method": "hollywood/question",
+    "request": {
+      "questions": [
+        {
+          "id": "release-readiness-audience",
+          "header": "Packet audience",
+          "isOther": true,
+          "options": [
+            {
+              "label": "internal-operators",
+              "description": "Operational readiness record for internal operators; not a buyer-facing claim inventory."
+            },
+            {
+              "label": "buyers",
+              "description": "Buyer-oriented inventory of verified released capabilities only; no permission to publish externally."
+            }
+          ],
+          "isSecret": false,
+          "question": "For enrolled decision owner 90e34b28-3ad9-4f7c-bd61-227fbc34181f: I independently verified the changed catalog (445 bytes; SHA256 bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f). I propose one canonical readiness.json containing only released Guided practice v2 with saved feedback and Team review dashboard v1, excluding planned Seat management, with source hashing and independent artifact verification. The immutable definition-proposal.json is 2295 bytes, exact SHA256 87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6. The audience label is consequential: internal-operators makes this an operational readiness record; buyers makes it a buyer-facing released-capability inventory (without deployment, external publication, or contacting buyers). Both preserve exact source titles and omit planned features. Which audience should the Goal and engineering Work use for this reviewed proposal?"
+        }
+      ],
+      "isBlocking": false
+    },
+    "digest": "ea31ffa9ab370e6c0a7ff68f9a630da1a7764f3a9b5953c86f3e579ffd2dfc30",
+    "state": "pending",
+    "response": null,
+    "response_author": null,
+    "response_event": null,
+    "revision": 1,
+    "created_at": "2026-10-21 05:07:00.136078+00:00",
+    "updated_at": "2026-10-21 05:07:00.136078+00:00"
+  },
+  "roleDelivery": {
+    "id": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+    "authority": "5ed550ae-1bae-4775-8773-d797b2ffb870",
+    "event": "c0954e2c-94c3-4a11-85fa-d43d176cae12",
+    "agent": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+    "host": "715cb3f5-a488-4992-a114-ae80a138535f",
+    "generation": 1,
+    "claim_id": "context-admit:f3b84729-9d84-5b9a-a281-96e620157165",
+    "native_thread": "01a15cd7-838e-7b01-b9f2-6dc66bb9fdda",
+    "native_turn": "01a15cda-232b-7401-b345-251717cce6ee",
+    "state": "running",
+    "result_event": null,
+    "revision": 3,
+    "updated_at": "2026-10-21 05:06:02.233953+00:00",
+    "cancellation_requested": false
+  },
+  "roleOrigin": {
+    "id": "c0954e2c-94c3-4a11-85fa-d43d176cae12",
+    "authority": "5ed550ae-1bae-4775-8773-d797b2ffb870",
+    "seq": 25,
+    "room": "9998105a-b917-4fda-96c4-bcd1266a8290",
+    "author": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+    "recipient": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+    "kind": "control",
+    "audience": "room",
+    "body": "For the newly reported catalog revision bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f, independently inspect the authorized actual source and deliver one audience-approved release-readiness packet through the required finite native Goal and canonical engineering peer Work, with a verified readiness-index.json.",
+    "source": "bf4b1065-dca3-4aca-b7e5-e5237b1b8819",
+    "data": {
+      "type": "roleWork",
+      "schema": "lax-role-work/v1",
+      "acceptance": "Independently verify catalog source bytes read-only through TEAM.json at host 715cb3f5-a488-4992-a114-ae80a138535f, /var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json and confirm this changed revision. Before implementation create definition-proposal.json with exactly the role-specified schema/objective/audienceOptions/acceptance/source fields; explain internal-operators versus buyers to enrolled decision owner 90e34b28-3ad9-4f7c-bd61-227fbc34181f and ask the consequential audience choice citing the exact proposal SHA256. Freeze reviewed proposal bytes. Use a separately named release-readiness collaboration room with existing engineering peer 7fe550ae-f431-4e98-9589-1386c6c506a8 granted access without replacing contexts/home identities. Native Goal acceptance and canonical delegated Work acceptance must cite reviewed proposal SHA256 and authenticated audience. Independently verify submitted canonical ArtifactEvidence against actual source/artifact files, including exact readiness.json schema, chosen audience, source SHA256, all and only released features sorted by id, positive integer versions excluding booleans. Accept Work and Goal only on verified evidence. Write and verify readiness-index.json with exactly actual goalId, canonical workId, definitionSha256 and the exact selected readiness.json ArtifactEvidence object. Retain this original role responsibility via event-backed wait while Goal/review is active; finish only after accepted canonical Goal/evidence and verified index. Keep initial setup complete, no unchanged-source re-initiative or deployments/external actions/new agents/out-of-scope workspaces.",
+      "authorKind": "agent",
+      "nativeTurn": "01a15cd9-c591-7b33-aaec-eb6bb8e4ba9c",
+      "roleSha256": "b19a4f361f72f18429719b4e0ce80eadbc8d60d376141e141fb3b0b95ae4eb9d",
+      "nativeThread": "01a15cd7-82cb-7481-81a4-89f3ccd9c9b8",
+      "roleRevision": 2,
+      "observationId": "a7175d79-cd1a-51e0-9756-738212ea2fbb",
+      "sourceEventId": "bf4b1065-dca3-4aca-b7e5-e5237b1b8819",
+      "readerContextId": "fe58004b-9832-4306-99e1-a5a8fe6c0996"
+    },
+    "created_at": "2026-10-21 05:05:57.186620+00:00"
+  },
+  "contexts": [
+    {
+      "agent": "7fe550ae-f431-4e98-9589-1386c6c506a8",
+      "purpose": "reader",
+      "native_thread": "01a15cd7-82d5-76b2-aa21-2d2999442fcc",
+      "active_turn": null
+    },
+    {
+      "agent": "7fe550ae-f431-4e98-9589-1386c6c506a8",
+      "purpose": "responder",
+      "native_thread": "01a15cd7-845d-7112-ac0b-870c4ae450a1",
+      "active_turn": null
+    },
+    {
+      "agent": "7fe550ae-f431-4e98-9589-1386c6c506a8",
+      "purpose": "writer",
+      "native_thread": "01a15cd7-8404-7790-bbeb-7559138d536e",
+      "active_turn": null
+    },
+    {
+      "agent": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "purpose": "reader",
+      "native_thread": "01a15cd7-82cb-7481-81a4-89f3ccd9c9b8",
+      "active_turn": null
+    },
+    {
+      "agent": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "purpose": "responder",
+      "native_thread": "01a15cd7-8201-7983-aaa4-6c8d3036bab7",
+      "active_turn": null
+    },
+    {
+      "agent": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "purpose": "writer",
+      "native_thread": "01a15cd7-838e-7b01-b9f2-6dc66bb9fdda",
+      "active_turn": null
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "reference": true,
+  "wrongAudienceRejected": true,
+  "wrongSourceRejected": true,
+  "missingReleasedFeaturesRejected": true,
+  "modelsStarted": 0
+}

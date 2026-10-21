@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "objective": "Deliver one independently verified release-readiness packet for the reported catalog revision, for the audience selected by the enrolled decision owner, using canonical engineering Work and a finite Goal; do not deploy or publish externally.",
+  "audienceOptions": ["internal-operators", "buyers"],
+  "acceptance": [
+    "Obtain the enrolled decision owner's authenticated audience choice against this proposal's exact SHA256; freeze these proposal bytes and cite the reviewed SHA256 and selected audience in Goal and Work acceptance.",
+    "The engineering peer submits canonical evidence for readiness.json with exactly schema, audience, sourceSha256 and features; schema is integer 1 and audience equals the authenticated choice.",
+    "sourceSha256 equals the SHA256 of the actual 445-byte catalog.json source: bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f.",
+    "features contains all and only released catalog entries, sorted by id: guided-practice version 2 titled Guided practice with saved feedback, then team-review version 1 titled Team review dashboard; omit planned seat-management.",
+    "Each feature contains exactly id, version and title copied from source; versions are positive JSON integers, never booleans.",
+    "Independently verify canonical ArtifactEvidence against the actual source and readiness.json bytes read-only through TEAM.json before accepting Work and Goal; peer chat alone is not acceptance.",
+    "Write and verify readiness-index.json with exactly goalId, workId, definitionSha256 and packet, using the actual Goal and canonical peer Work UUIDs, reviewed proposal SHA256 and exact selected readiness.json canonical ArtifactEvidence object.",
+    "Use a separate release-readiness collaboration room with the existing engineering peer, preserve home identities and source attribution, and perform no deployment, external publication, customer activity, service administration or new-agent creation."
+  ],
+  "source": {
+    "hostId": "715cb3f5-a488-4992-a114-ae80a138535f",
+    "path": "/var/lib/harness/5ed550ae-1bae-4775-8773-d797b2ffb870/purpose-agents/7fe550ae-f431-4e98-9589-1386c6c506a8/home/work/catalog.json",
+    "sha256": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f"
+  }
+}

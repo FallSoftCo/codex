@@ -1,0 +1,20 @@
+{
+  "goalId": "16ebec71-32b0-5117-beab-fb97ee87c40b",
+  "workId": "5e5476ea-b94f-551c-85c6-68e10b187760",
+  "definitionSha256": "87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6",
+  "packet": {
+    "size": 376,
+    "hostId": "715cb3f5-a488-4992-a114-ae80a138535f",
+    "sha256": "167bae459bd0eda6843a26f30c2e616c17c96550530ac68057d9f9aa8a9fec5e",
+    "workspaceId": "9b2f557d-9960-40fe-85fd-4105006a4fe1",
+    "artifactRoot": {
+      "schema": "hollywood-artifact-root/v1",
+      "workspaceId": "7618e885-898f-595e-990e-be6d801df514",
+      "grantRevision": 1,
+      "environmentSha256": "d26b8f2c4f612e374430ef238fce2c96f0661220ffc143bc7b275ae65f66a169",
+      "workspaceRevision": 1,
+      "rootIdentitySha256": "34f2c08f56c31613e30716a74e84f74bfb4d06745799660da370374aa4b46443"
+    },
+    "relativePath": "readiness.json"
+  }
+}

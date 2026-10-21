@@ -1,0 +1,82 @@
+{
+  "at": 1792559230.8940134,
+  "result": {
+    "attention": {
+      "id": "09c8e3f9-e7fa-5d2b-ab32-8d6560ddc301",
+      "authority": "5ed550ae-1bae-4775-8773-d797b2ffb870",
+      "delivery": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+      "agent": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "human": "90e34b28-3ad9-4f7c-bd61-227fbc34181f",
+      "room": "9998105a-b917-4fda-96c4-bcd1266a8290",
+      "event": "ae3af43c-226a-41cc-a196-5077e2710d59",
+      "generation": 1,
+      "claim_id": "context-admit:f3b84729-9d84-5b9a-a281-96e620157165",
+      "native_thread": "01a15cd7-838e-7b01-b9f2-6dc66bb9fdda",
+      "native_turn": "01a15cda-232b-7401-b345-251717cce6ee",
+      "native_slot": "exec-5d4480a7-c83c-47ad-9f55-671ff6ef30be",
+      "method": "hollywood/question",
+      "request": {
+        "questions": [
+          {
+            "id": "release-readiness-audience",
+            "header": "Packet audience",
+            "isOther": true,
+            "options": [
+              {
+                "label": "internal-operators",
+                "description": "Operational readiness record for internal operators; not a buyer-facing claim inventory."
+              },
+              {
+                "label": "buyers",
+                "description": "Buyer-oriented inventory of verified released capabilities only; no permission to publish externally."
+              }
+            ],
+            "isSecret": false,
+            "question": "For enrolled decision owner 90e34b28-3ad9-4f7c-bd61-227fbc34181f: I independently verified the changed catalog (445 bytes; SHA256 bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f). I propose one canonical readiness.json containing only released Guided practice v2 with saved feedback and Team review dashboard v1, excluding planned Seat management, with source hashing and independent artifact verification. The immutable definition-proposal.json is 2295 bytes, exact SHA256 87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6. The audience label is consequential: internal-operators makes this an operational readiness record; buyers makes it a buyer-facing released-capability inventory (without deployment, external publication, or contacting buyers). Both preserve exact source titles and omit planned features. Which audience should the Goal and engineering Work use for this reviewed proposal?"
+          }
+        ],
+        "isBlocking": false
+      },
+      "digest": "ea31ffa9ab370e6c0a7ff68f9a630da1a7764f3a9b5953c86f3e579ffd2dfc30",
+      "state": "response_submitted",
+      "response": {
+        "answers": {
+          "release-readiness-audience": {
+            "answers": [
+              "Reviewed definition-proposal.json SHA256 87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6. Choose internal-operators for the reviewed proposal. Approve only the local release-readiness packet and independent evidence review against that exact proposal and actual source revision. No customer publication, deployment or broader authority is granted. PRIVATE QA NOTE qa-goal-owner-note-258 is not for room chatter or artifacts; publish only the selected scope, reviewed proposal hash and factual outcome.\n"
+            ]
+          }
+        }
+      },
+      "response_author": "90e34b28-3ad9-4f7c-bd61-227fbc34181f",
+      "response_event": "26e1eebd-3d26-47ea-9626-beaecaaf6767",
+      "revision": 2,
+      "created_at": "2026-10-21 05:07:00.136078+00:00",
+      "updated_at": "2026-10-21 05:07:10.888107+00:00"
+    },
+    "scope": {
+      "authorityId": "5ed550ae-1bae-4775-8773-d797b2ffb870",
+      "attentionId": "09c8e3f9-e7fa-5d2b-ab32-8d6560ddc301",
+      "deliveryId": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+      "agentId": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "roomId": "9998105a-b917-4fda-96c4-bcd1266a8290",
+      "hostId": "715cb3f5-a488-4992-a114-ae80a138535f",
+      "generation": 1,
+      "nativeThread": "01a15cd7-838e-7b01-b9f2-6dc66bb9fdda",
+      "nativeTurn": "01a15cda-232b-7401-b345-251717cce6ee",
+      "requestDigest": "ea31ffa9ab370e6c0a7ff68f9a630da1a7764f3a9b5953c86f3e579ffd2dfc30"
+    },
+    "deliveryState": "running",
+    "nativeConsumptionProved": false,
+    "canRespond": false,
+    "responseMode": "same-agent-context-input",
+    "continuation": {
+      "id": "bf152f22-e03f-4747-99f6-032a45dc6004",
+      "event": "26e1eebd-3d26-47ea-9626-beaecaaf6767",
+      "state": "pending",
+      "native_thread": null,
+      "native_turn": null
+    }
+  },
+  "postCount": 1
+}

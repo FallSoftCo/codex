@@ -1,0 +1,2 @@
+# Preserve exact engineer source bytes, including installer EOF.
+artifacts/peer/catalog.json whitespace=-blank-at-eof

@@ -161,7 +161,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_goal_create",
-            "Record an accountable Goal from this current authenticated human/agent request. Optional roomId selects its collaboration room independently of agent context. For another room explicitly set publishScopedIntent=true: only selected Goal intent is published there, never private source text. Original source must be room-visible. reviewBudget bounds authorized material reviews; creation assigns no work.",
+            "Record a finite accountable Goal from this current accepted human/agent request or original native standing-role work. The canonical Role persists separately; Goal creation is not a chat self-request or a new human assignment. Optional roomId selects its collaboration room independently of agent context. For another room explicitly set publishScopedIntent=true: only selected Goal intent is published there, never private source text. Original source must be room-visible. reviewBudget bounds authorized material reviews; creation assigns no work.",
             {
                 "roomId": {"type": ["string", "null"]},
                 "publishScopedIntent": {"type": "boolean"},

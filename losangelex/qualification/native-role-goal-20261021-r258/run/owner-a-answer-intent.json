@@ -1,0 +1,28 @@
+{
+  "at": 1792559230.8666222,
+  "path": "attention/09c8e3f9-e7fa-5d2b-ab32-8d6560ddc301/response",
+  "body": {
+    "operationId": "role-goal-r258:answer-a",
+    "scope": {
+      "authorityId": "5ed550ae-1bae-4775-8773-d797b2ffb870",
+      "attentionId": "09c8e3f9-e7fa-5d2b-ab32-8d6560ddc301",
+      "deliveryId": "7f27c3ab-5933-5973-b34b-b66974b3425e",
+      "agentId": "92d5c8a9-8b30-45fd-ac6c-32887e5e62d8",
+      "roomId": "9998105a-b917-4fda-96c4-bcd1266a8290",
+      "hostId": "715cb3f5-a488-4992-a114-ae80a138535f",
+      "generation": 1,
+      "nativeThread": "01a15cd7-838e-7b01-b9f2-6dc66bb9fdda",
+      "nativeTurn": "01a15cda-232b-7401-b345-251717cce6ee",
+      "requestDigest": "ea31ffa9ab370e6c0a7ff68f9a630da1a7764f3a9b5953c86f3e579ffd2dfc30"
+    },
+    "response": {
+      "answers": {
+        "release-readiness-audience": {
+          "answers": [
+            "Reviewed definition-proposal.json SHA256 87a7c2174e37a05927a04e0df5bf91a545d310c3fdebf95c6909607523b6d7f6. Choose internal-operators for the reviewed proposal. Approve only the local release-readiness packet and independent evidence review against that exact proposal and actual source revision. No customer publication, deployment or broader authority is granted. PRIVATE QA NOTE qa-goal-owner-note-258 is not for room chatter or artifacts; publish only the selected scope, reviewed proposal hash and factual outcome.\n"
+          ]
+        }
+      }
+    }
+  }
+}

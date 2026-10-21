@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "audience": "internal-operators",
+  "sourceSha256": "bbe758abbe79229ebd2ce8028284cad57186cc10e06789a67f65ab20bc72d42f",
+  "features": [
+    {
+      "id": "guided-practice",
+      "version": 2,
+      "title": "Guided practice with saved feedback"
+    },
+    {
+      "id": "team-review",
+      "version": 1,
+      "title": "Team review dashboard"
+    }
+  ]
+}
