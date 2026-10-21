@@ -1,0 +1,8 @@
+{
+  "at": 1792601514.756441,
+  "outcome": "Real SDK118 upgrade failed before inference: cached original SDK117 bind receipt lacks newly required capability markers. Original immutable receipt was correctly retained by Hollywood. The accepted follow-up remains pending.",
+  "correction": "SDK119 includes marked-context/v1 in bind negotiation operation identity. This requests a new attributable handshake without changing original identity/history or any old receipt.",
+  "sourceInputsChanged": false,
+  "taskPostRepeated": false,
+  "candidate118Qualified": false
+}

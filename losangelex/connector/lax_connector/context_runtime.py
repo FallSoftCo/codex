@@ -192,7 +192,7 @@ class ContextRunner:
             raise RuntimeError("Native policy hides a required purpose tool or code-mode wrapper")
         binding=await self.request("bind",{"runtimeProtocol":"lax-purpose-runtime/v3","workScheduling":2},
             operation="bind:"+hashlib.sha256(json.dumps([self.config["contextIds"][self.purpose],self.thread,
-                "lax-purpose-runtime/v3",2,1,1],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
+                "lax-purpose-runtime/v3",2,1,1,"marked-context/v1"],separators=(",",":")).encode()).hexdigest(),turn="bootstrap")
         if binding.get("contextSelection")!=1 or binding.get("contextRebuildSnapshot")!=1:
             raise RuntimeError("Paired Hollywood marked-context contract unavailable; do not start this candidate")
         if binding.get("runtimeProtocol")!="lax-purpose-runtime/v3":

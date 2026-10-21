@@ -1,0 +1,21 @@
+{
+  "at": 1792601647.1023762,
+  "checks": [
+    "required definition blocks premature Work",
+    "unsubscribed human cannot read Goal contract",
+    "unresolved recorded question blocks adoption",
+    "exact definition digest and actual authenticated review identity",
+    "Work criteria and current strategy required for assignment",
+    "original assignment captures definition/strategy/criteria",
+    "changed adopted definition fences old acceptance and Goal control epoch",
+    "old strategy and old accepted Work cannot satisfy current Goal",
+    "explicitly cancelled superseded path is preserved without blocking verified current completion",
+    "current typed bindings and complete criterion coverage permit acceptance",
+    "original accepted receipt remains unchanged after definition/plan updates",
+    "legacy Goal/Work API payloads and original creation dedup remain compatible"
+  ],
+  "passed": true,
+  "modelsStarted": 0,
+  "lifecycleFixtures": "Explicit SQL terminal-state projections; not actual model or filesystem execution",
+  "liveProductionChanged": false
+}

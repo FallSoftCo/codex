@@ -1,6 +1,6 @@
 {
   "at": 1792598741.013347,
-  "state": "Candidate built; real model execution underway, not yet qualified for production",
+  "state": "Real native Goal/Work/required reply completed and independently audited; original resource-bounded protocols failed and remain retained. No production qualification claim.",
   "candidate": {
     "laxSdk": "0.1.0.dev117",
     "hollywood": "0.3.0.dev84",
@@ -20,5 +20,7 @@
     "Deterministic marked-input context rebuild",
     "Shared physical workspace cooperation qualification",
     "Environment/account recovery, installation, migration and enterprise workflow proof"
-  ]
+  ],
+  "nativeEvidence": "Actual engineer implementation, native supervisor independent tests, canonical report/review/acceptance, completed internal task and published required reply; no operator artifact repair.",
+  "originalBudgetFailuresRetained": true
 }

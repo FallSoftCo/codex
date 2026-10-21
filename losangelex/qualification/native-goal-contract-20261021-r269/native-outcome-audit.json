@@ -1,0 +1,46 @@
+{
+  "at": 1792599423.6136665,
+  "behavioralArtifactAuditPassed": true,
+  "canonicalGoalId": "974e37b3-6731-5b33-9c9f-deba9575d06f",
+  "definitionRevision": 1,
+  "planRevision": 1,
+  "acceptedPeerWork": [
+    "ac48bc63-ac95-519b-b8d2-fdf4b1b79bf7"
+  ],
+  "artifactHashes": {
+    "expense_report.py": "c5dce83b61f170e46cb9c870f913ba02bc18cd62512cb40a3b314ee81dffbdd9",
+    "test_expense_report.py": "f56c3a137ec79859cb1889fd40db969d7e533c3b482cdf8f8c99487e925fde39",
+    "report.json": "bdc1d3c2cbd3fc5125c4cc6d46fb8a2a04e61f28ac12678b75243ddcbb3f9cb7",
+    "USAGE.txt": "44034187a2a2e72e44612a9ad7a5d852a131c483e9964af6864b5d84b1ae7dbd"
+  },
+  "independentChecks": [
+    {
+      "exitCode": 0,
+      "invalid": false
+    },
+    {
+      "exitCode": 0,
+      "invalid": false
+    },
+    {
+      "exitCode": 0,
+      "invalid": false
+    },
+    {
+      "exitCode": 1,
+      "invalid": true
+    },
+    {
+      "exitCode": 1,
+      "invalid": true
+    }
+  ],
+  "nativeSupervisorCommandCount": 5,
+  "nativeSupervisorAdditionalInputVerification": true,
+  "originalRequestPosts": 1,
+  "operatorModelCoaching": false,
+  "operatorArtifactRepair": false,
+  "fullProtocolPassed": false,
+  "reason": "Original declared resource protocol failed; continuation reached accepted Goal/Work but exceeded its cumulative total-token limit before full parent/response settlement. This audit does not erase either limit failure.",
+  "remaining": "Use preserved original unfinished context work for checkpoint/refill continuation; no human message replay."
+}
