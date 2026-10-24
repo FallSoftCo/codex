@@ -328,3 +328,24 @@ placement is therefore not a complete healthy-startup qualification boundary. Ve
 incarnations and the original context bindings; stale status files or a
 successful systemctl start are insufficient. Do not use installation activation
 as a restart command or restart deliberately stopped agents.
+
+
+## Native shared human decisions
+
+hollywood_ask may declare responseRoomId when teammates need to authenticate a
+human decision. The paired backend adds a mandatory audience notice to the
+questions and publishes the human's single answer in that room. The original
+agent receives its existing same-context continuation from that same event.
+Teammates read the native room event rather than the private attention receipt.
+
+The asker and human need current target-room read/post rights. Omit the field
+for a private answer. Publication never grants access to private controls,
+another agent's context, Work or execution. The new top-level versioned API
+field is rejected by unaware backends rather than silently ignored. Ordinary
+private questions retain their previous payload and result shape.
+
+The current NextComp question renderer displays the complete question text in
+its scrollable dialog, so the enforced audience notice uses that existing
+contract. This is source inspection, not physical-phone proof. The separate
+known client gate for nonblocking questions after their input delivery completes
+still needs qualification; it must follow authoritative canRespond.

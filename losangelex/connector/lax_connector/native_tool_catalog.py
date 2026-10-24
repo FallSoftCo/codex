@@ -83,8 +83,10 @@ TOOLS += [
         ["attentionId","reason"]),
     spec(
         "hollywood_ask",
-        "Ask the attributable human a necessary scoped question through Hollywood. Returns a durable pending receipt immediately; retain the unfinished outcome and continue other obligations or end this inference slice. The authenticated answer later arrives as primary input in your same context. Do not claim an answer or completed work from acceptance. Do not request secrets in chat.",
+        "Ask the attributable human a necessary scoped question through Hollywood. For a decision teammates must authenticate, set responseRoomId to their shared room: Hollywood displays the reply audience and publishes the one real human response there, retaining your same-context continuation. You and the human need read/post access there. Omit for a private response; room membership never grants private attention access. Returns a pending receipt, not an answer or completed work. Keep unfinished obligations open and continue other work or end this inference slice; do not poll models, repeat the question, or request secrets.",
         {
+            "responseRoomId": {**STRING,
+                "description": "Optional declared room for the authenticated human answer. Private controls stay private; teammates read the shared response event."},
             "questions": {
                 "type": "array",
                 "minItems": 1,

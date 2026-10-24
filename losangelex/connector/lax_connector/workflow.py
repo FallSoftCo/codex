@@ -188,7 +188,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_attention_read",
-            "Read one authorized native question/approval, exact execution scope, response and attributable human. Reading does not answer or resume it.",
+            "Read a private native question/approval only as its original agent, attributable human, or enterprise administrator. Room membership alone is insufficient. For a shared human decision, read its response event in the declared room; that does not expose private controls. Reading never answers or resumes.",
             {"attentionId": text},
             ["attentionId"],
         ),

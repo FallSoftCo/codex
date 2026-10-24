@@ -87,12 +87,17 @@ class Attention:
             "request": request,
             "summary": summary,
         }
+        if params.get("responseRoomId") is not None:
+            if method != "hollywood/question" or response_mode != "agent-continuation":
+                raise ValueError("Room responses require a nonblocking native Hollywood question")
+            payload["responsePublication"] = {
+                "version": 1, "roomId": str(UUID(params["responseRoomId"]))}
         saved(path, {"state": "create-intent", "payload": payload})
         try:
             receipt = await c.http("POST", "attention", payload)
         except Exception as error:
             from .errors import HttpFailure
-            if isinstance(error,HttpFailure) and error.status in (400,403,409):
+            if isinstance(error,HttpFailure) and error.status in (400,403,409,422):
                 raise
             # Read the SAME deterministic identity after an unconfirmed create.
             # Failure to establish it holds the original call; no replacement.
@@ -106,6 +111,11 @@ class Attention:
                 raise RuntimeError(
                     "Attention readback belongs to another native execution"
                 )
+        if "responsePublication" in payload:
+            publication = receipt["attention"]["request"].get("responsePublication", {})
+            if (publication.get("version") != 1
+                    or publication.get("roomId") != payload["responsePublication"]["roomId"]):
+                raise RuntimeError("Original question lacks the declared response publication; inspect its receipt without repeating")
         if response_mode == "native-callback":
             self.pending[str(slot)] = {
                 "identity": identity, "path": path, "receipt": receipt,
@@ -143,6 +153,8 @@ class Attention:
             "accepted": True, "attentionId": identity,
             "state": receipt["attention"]["state"], "scope": receipt["scope"],
             "responseMode": "same-agent-context-input",
+            **({"responsePublication": receipt["attention"]["request"]["responsePublication"]}
+               if "responsePublication" in receipt["attention"]["request"] else {}),
             "instruction": "The question is durable and awaiting an authenticated human answer. Keep the unfinished outcome pending. You may finish this inference slice and handle other obligations; the answer becomes a new input in your existing context. Do not poll models or repeat the question.",
         }
 
