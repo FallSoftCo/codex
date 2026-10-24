@@ -208,9 +208,32 @@ class IdleContextRebuild:
         require(native is None or native == installed, "Recovered native idle receipt differs")
         await asyncio.to_thread(verify, operation["originalHistory"], operation["request"],
             operation["response"], installed, native_mode="idle_request")
-        receipt = await r.agent.http(r.purpose, "GET",
-            f"agents/{r.config['agentId']}/contexts/{r.purpose}/operations/" +
-            operation["installedOperationId"])
+        try:
+            receipt = await r.agent.http(r.purpose, "GET",
+                f"agents/{r.config['agentId']}/contexts/{r.purpose}/operations/" +
+                operation["installedOperationId"])
+        except Exception as error:
+            from .errors import HttpFailure
+            # Native committed and synced the exact original checkpoint before
+            # asking for acknowledgement. A lost/locally refused first callback
+            # may therefore have no Hollywood metadata receipt yet. Complete
+            # only that metadata transaction after independent file proof;
+            # never send another native replacement or inference.
+            require(isinstance(error, HttpFailure) and error.status == 404
+                    and error.code == "CONTEXT_OPERATION_NOT_FOUND"
+                    and operation.get("state") in (
+                        "native_dispatch_intent", "history_verifying", "held")
+                    and operation.get("hostReceipt") is None,
+                    "Original Hollywood idle receipt unavailable; no metadata completion")
+            require(not r.agent.stop.is_set() and connection(r) == captured
+                    and path.read_bytes() == original_bytes,
+                    "Original idle owner changed before metadata completion")
+            receipt = await r.request("rebuild_installed", {
+                "schema": SCHEMA,
+                "snapshotOperationId": operation["snapshotOperationId"],
+                "nativeReceipt": installed,
+                "preflight": operation["preflight"]},
+                operation=operation["installedOperationId"], turn=installed["turnId"])
         require(receipt.get("schema") == SCHEMA and receipt.get("status") == "recorded"
                 and receipt["nativeReceipt"] == installed
                 and receipt["preflight"] == operation["preflight"]

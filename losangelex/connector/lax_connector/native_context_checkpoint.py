@@ -78,7 +78,14 @@ def verify_checkpoint(raw_line, body, base, request, response, mode):
     require(0 < len(base) <= len(history) <= 256
             and len(raw_items) == len(raw_metadata) == len(history) == len(metadata),
             "Native checkpoint attribution is not aligned")
-    require(all(len(item) <= 32768 for item in raw_items)
+    # Match native core: only an atomic, core-owned AdditionalTools prefix
+    # item uses the existing aggregate allowance. Canonical data and all other
+    # prefix items keep their individual 32 KiB limit. Exact native source
+    # provenance and group digests are verified below before acknowledgement.
+    require(all(len(raw) <= (262144 if index < len(base)
+                             and history[index].get("type") == "additional_tools"
+                             else 32768)
+                for index, raw in enumerate(raw_items))
             and len(b"[" + b",".join(raw_items) + b"]") <= 1048576,
             "Native model item or wire budget exceeded")
     require(sum(map(len, raw_metadata[:len(base)])) <= 262144,

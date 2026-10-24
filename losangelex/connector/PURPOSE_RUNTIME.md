@@ -299,3 +299,32 @@ comparison, including the existing explicit bridge-dependency transition. Native
 operation admission still verifies its current work/resource/source bindings.
 Private workspace incarnation, configuration and installed dependency hashes
 remain pinned. The exact v1 seal comparison remains unchanged.
+
+
+## Original idle checkpoint acknowledgement recovery
+
+Native core synchronizes its original replacement checkpoint before requesting
+Hollywood acknowledgement. If the first SDK callback fails before Hollywood
+records it, cold recovery verifies the exact original file identity, prefix,
+checkpoint, ordered source groups, digests and scope. The SDK uses the same
+typed prefix/data limits as native core.
+
+After that proof, an authenticated HTTP404 / CONTEXT_OPERATION_NOT_FOUND for the
+original installed operation may complete only its missing metadata transaction,
+under the original operation ID, snapshot and native receipt. Hollywood still
+rechecks the current binding, pending rebuild, selection and source revisions.
+Existing receipts are read and compared. Other errors remain held. An uncertain
+previous metadata submission uses its existing operation journal and is not
+blindly submitted again. No native replacement, inference, Work or command is
+replayed; original native journals remain unchanged.
+
+For a drained software upgrade, keep owned purpose services stopped during
+publication and integrity checks. Restore only the authorized prior placement
+while those services are stopped, then explicitly start that same owned set.
+Current Hollywood context actions require an enabled placement, including
+the pending/read actions and first checkpoint-metadata acknowledgement used by
+startup. The own-operation receipt GET remains available while paused. A paused
+placement is therefore not a complete healthy-startup qualification boundary. Verify fresh statuses from the new service
+incarnations and the original context bindings; stale status files or a
+successful systemctl start are insufficient. Do not use installation activation
+as a restart command or restart deliberately stopped agents.
