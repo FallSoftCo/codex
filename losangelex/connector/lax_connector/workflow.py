@@ -20,6 +20,7 @@ READ_TOOLS = RESOURCE_READ_TOOLS | {
     PLACEMENT_READ_TOOL,
     "hollywood_portfolio",
     "hollywood_execution_read",
+    "hollywood_execution_evidence",
     "hollywood_briefing",
     "hollywood_decisions",
     "hollywood_work_attempts",
@@ -77,6 +78,12 @@ def definitions(spec):
             "Inspect an authorized original execution receipt, native pointers and admission timestamps. Reading never starts or retries execution.",
             {"deliveryId": text},
             ["deliveryId"],
+        ),
+        spec(
+            "hollywood_execution_evidence",
+            "Read a bounded original evidence index for your own delivery: canonical execution event IDs and installed checkpoint operation IDs. Follow both returned cursors. Select explicit originals in request_peer evidenceReferences for server-authenticated scoped sharing; this read starts no execution and grants no peer access.",
+            {"deliveryId":text,"after":{"type":"integer","minimum":0},
+             "afterOperation":{"type":"string","maxLength":128}}, ["deliveryId"],
         ),
         spec(
             "hollywood_execution_cancel",
@@ -526,6 +533,10 @@ async def invoke(c, name, args, operation):
         )
     if name == "hollywood_execution_read":
         return await c.http("GET", "deliveries/" + identity("deliveryId"))
+    if name == "hollywood_execution_evidence":
+        from urllib.parse import urlencode
+        query = urlencode({"after":args.get("after",0),"afterOperation":args.get("afterOperation","")})
+        return await c.http("GET", "deliveries/" + identity("deliveryId") + "/evidence?" + query)
     if name == "hollywood_execution_cancel":
         return await c.http(
             "POST", "deliveries/" + identity("deliveryId") + "/cancel", {}

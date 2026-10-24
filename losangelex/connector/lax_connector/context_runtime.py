@@ -1218,6 +1218,8 @@ class ContextAgent:
             and path == f"agents/{self.config['agentId']}/contexts/{purpose}"
         ):
             payload = {**payload, "runtimeProtocol": "lax-purpose-runtime/v3"}
+            if payload.get("action") in ("peer_request", "publish"):
+                payload["requiredCapability"] = "scoped-execution-evidence/v1"
         token = self.config["tokens"][purpose]
         headers = {"Authorization": "Bearer " + token}
         if native_source:

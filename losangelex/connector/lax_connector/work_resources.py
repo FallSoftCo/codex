@@ -41,6 +41,6 @@ def definitions(spec):
     return [
         spec(READ_TOOL, "Read the original Work's explicit physical resource selection and current effective state. This is distinct from the agent's private context and default; no mutation is admitted.",
              {"workId": string}, ["workId"]),
-        spec(SELECT_TOOL, "Administrator: select an already authorized local physical resource for one exact unfinished Work using inspected Work/routing/root/agent-grant revisions. Requires the enrolled native bridge capability. The agent identity, private workspace and default remain unchanged. Cleared or stale routing holds Work-relative intent; it never silently selects another root. Settle original claims/consents/mutations before rerouting away.",
+        spec(SELECT_TOOL, "Administrator: select an already authorized local physical resource for one exact unfinished Work using inspected Work/routing/root/agent-grant revisions. Requires the enrolled native bridge capability and current read access. Read-only review resources are valid selections; actual mutation separately requires write access and native permits. The agent identity, private workspace and default remain unchanged. Cleared or stale routing holds Work-relative intent; it never silently selects another root. Settle original claims/consents/mutations before rerouting away.",
              fields, list(fields)),
     ]

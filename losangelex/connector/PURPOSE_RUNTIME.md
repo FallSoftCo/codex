@@ -349,3 +349,26 @@ its scrollable dialog, so the enforced audience notice uses that existing
 contract. This is source inspection, not physical-phone proof. The separate
 known client gate for nonblocking questions after their input delivery completes
 still needs qualification; it must follow authoritative canRespond.
+
+
+## Selected execution evidence
+
+SDK160/Hollywood116 extend the existing `request_peer`/Responder message path
+with optional `evidenceReferences` (version1, original deliveryId, selected
+eventIds and contextOperationIds; at most8references and16KiB). Hollywood copies
+only authorized original execution events and installed checkpoint metadata in
+the message transaction. The peer reads `data.executionEvidence` in its actual
+request. This is canonical communication provenance, not manager-supplied proof,
+filesystem attestation, new work or original-scope/private-control access.
+`hollywood_execution_evidence` discovers the owned originals with bounded
+pagination. An absent attachment preserves the old message fingerprint.
+
+New SDK peer-request/publication calls require the server capability explicitly
+in the strict ContextCall envelope. Older servers reject before admission rather
+than silently discarding attachments. Deploy all Hollywood replicas before the
+SDK. Downgrading either component requires settling or explicitly withdrawing
+pending evidence-bearing communication; do not roll an old pair over new needs.
+
+A read-only agent grant is valid for Work resource selection. Actual native
+mutation separately requires can_write and current native admission; selection
+is not permission to edit.
