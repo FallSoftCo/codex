@@ -117,6 +117,18 @@ pub(crate) fn encoded_size(value: &impl serde::Serialize, limit: usize) -> io::R
 }
 
 pub(crate) const MAX_REFILL_DATA: usize = 256 * 1024;
+pub(crate) const MAX_REFILL_ITEM_BYTES: usize = 32 * 1024;
+
+/// Bound a core-produced or provenance-verified native prefix item.
+/// AdditionalTools carries the native tool vocabulary, rather than retained
+/// task data. Preserve that atomic declaration within the existing aggregate
+/// budget. Never use this allowance for host-supplied refill fragments.
+pub(crate) fn native_prefix_item_byte_limit(item: &ResponseItem) -> usize {
+    match item {
+        ResponseItem::AdditionalTools { .. } => MAX_REFILL_DATA,
+        _ => MAX_REFILL_ITEM_BYTES,
+    }
+}
 const MAX_ITEMS: usize = 256;
 const MAX_WIRE: usize = 1024 * 1024;
 const MAX_OUTPUT: usize = 16 * 1024;

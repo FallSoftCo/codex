@@ -380,6 +380,7 @@ pub(super) async fn run(
             .collect();
     replacement =
         super::context_prefix::stamp(sess, codex_history::NativeContextKind::Prefix, replacement);
+    let prefix_item_count = replacement.len();
     match policy.evidence {
         crate::context_refill::RetainedContextEvidence::IndexOnly => {
             replacement.extend(validate_response(&request, &response).map_err(|_| held())?);
@@ -397,8 +398,15 @@ pub(super) async fn run(
     let wire_items: Vec<_> = replacement.iter().map(|entry| &entry.item).collect();
     let encoded = serde_json::to_vec(&wire_items).map_err(|_| held())?;
     if encoded.len() > 1024 * 1024
-        || replacement.iter().any(|item| {
-            serde_json::to_vec(&item.item).map_or(true, |bytes| bytes.len() > 32 * 1024)
+        || replacement.iter().take(prefix_item_count).any(|item| {
+            serde_json::to_vec(&item.item).map_or(true, |bytes| {
+                bytes.len() > crate::context_refill::native_prefix_item_byte_limit(&item.item)
+            })
+        })
+        || replacement.iter().skip(prefix_item_count).any(|item| {
+            serde_json::to_vec(&item.item).map_or(true, |bytes| {
+                bytes.len() > crate::context_refill::MAX_REFILL_ITEM_BYTES
+            })
         })
     {
         return Err(held());

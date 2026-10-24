@@ -54,6 +54,7 @@ fn invocation(session: Arc<Session>, turn: Arc<TurnContext>, arguments: Value) -
         call_id: "call-1".to_string(),
         tool_name: codex_tools::ToolName::plain("collaborative_edit_plan"),
         source: ToolCallSource::Direct,
+        environments: Default::default(),
         payload: ToolPayload::Function {
             arguments: arguments.to_string(),
         },

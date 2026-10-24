@@ -30,6 +30,7 @@ pub mod dynamic_tools;
 mod environment;
 pub mod error;
 pub mod exec_output;
+pub mod hooks;
 pub mod inference_completion;
 pub mod items;
 mod legacy_events;

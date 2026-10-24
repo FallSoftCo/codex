@@ -91,7 +91,7 @@ async fn durable_adjacent_receipt_has_non_circular_exact_prefix() {
         serde_json::to_value(&items).unwrap(),
         serde_json::to_value(vec![
             RolloutItem::EventMsg(EventMsg::ContextWindowRefillIntent(intent())),
-            RolloutItem::Compacted(checkpoint()),
+            RolloutItem::Compacted(Box::new(checkpoint())),
             RolloutItem::EventMsg(EventMsg::ContextWindowRefillInstalled(receipt)),
         ])
         .unwrap()
@@ -233,7 +233,7 @@ async fn partial_durability_and_lost_ack_never_reopen_or_replay_later_queue() {
         );
         assert_eq!(
             serde_json::to_value(&items[1]).unwrap(),
-            serde_json::to_value(RolloutItem::Compacted(checkpoint())).unwrap()
+            serde_json::to_value(RolloutItem::Compacted(Box::new(checkpoint()))).unwrap()
         );
         let text = String::from_utf8(original.clone()).unwrap();
         assert!(!text.contains("forbidden-later-operation"));

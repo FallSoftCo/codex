@@ -219,7 +219,7 @@ impl Borrow<ResponseItem> for ResponseItemEnvelope {
 /// Persisted rollout item used by core history and rollout storage.
 #[derive(Debug, Clone)]
 pub enum RolloutItem {
-    SessionMeta(SessionMetaLine),
+    SessionMeta(Box<SessionMetaLine>),
     /// Private registered-agent state, never an authority or model context item.
     SessionState(codex_protocol::protocol::SessionStateUpdate),
     ResponseItem(ResponseItemEnvelope),
@@ -227,7 +227,7 @@ pub enum RolloutItem {
     InterAgentCommunicationMetadata {
         trigger_turn: bool,
     },
-    Compacted(CompactedItem),
+    Compacted(Box<CompactedItem>),
     TurnContext(TurnContextItem),
     TokenUsageRecord(TokenUsageRecord),
     WorldState(WorldStateItem),

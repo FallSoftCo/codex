@@ -164,8 +164,15 @@ pub(crate) fn read(
         }
         let item_bytes = serde_json::to_vec(&item.item)?.len();
         bytes += item_bytes;
-        if item_bytes > 32768 || bytes > 262144 || result.len() >= 256 {
-            return Err(refuse());
+        if item_bytes > crate::context_refill::native_prefix_item_byte_limit(&item.item) {
+            return Err(io::Error::other(
+                "native core prefix item exceeds its typed byte bound",
+            ));
+        }
+        if bytes > crate::context_refill::MAX_REFILL_DATA || result.len() >= 256 {
+            return Err(io::Error::other(
+                "native core prefix exceeds its aggregate bound",
+            ));
         }
         metadata_bytes += crate::context_refill::encoded_size(
             &item.metadata,

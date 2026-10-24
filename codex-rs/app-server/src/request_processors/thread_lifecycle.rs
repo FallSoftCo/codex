@@ -25,8 +25,6 @@ pub(super) struct ListenerTaskContext {
     pub(super) pending_thread_unloads: PendingThreadUnloads,
     pub(super) thread_watch_manager: ThreadWatchManager,
     pub(super) codex_home: PathBuf,
-    pub(super) thread_unload_delay: Duration,
-    pub(super) state_db: Option<StateDbHandle>,
     pub(super) skills_watcher: Arc<SkillsWatcher>,
     pub(super) turn_cost_worker: Option<crate::turn_cost_worker::TurnCostWorkerHandle>,
 }
@@ -248,10 +246,12 @@ pub(super) async fn ensure_listener_task_running(
     thread_state: Arc<Mutex<ThreadState>>,
 ) -> Result<(), JSONRPCErrorError> {
     let (cancel_tx, mut cancel_rx) = oneshot::channel();
+    let config_snapshot = conversation.config_snapshot().await;
+    let config = conversation.config().await;
     let Some(mut unloading_state) = UnloadingState::new(
         &listener_task_context,
         conversation_id,
-        listener_task_context.thread_unload_delay,
+        config.thread_unload_delay,
     )
     .await
     else {
@@ -259,7 +259,6 @@ pub(super) async fn ensure_listener_task_running(
             "thread {conversation_id} is closing; retry after the thread is closed"
         )));
     };
-    let config = conversation.config().await;
     let environments = conversation.environment_selections().await;
     let watch_registration = listener_task_context
         .skills_watcher
@@ -269,7 +268,6 @@ pub(super) async fn ensure_listener_task_running(
             &environments,
         )
         .await;
-    let config_snapshot = conversation.config_snapshot().await;
     let is_v2_child = conversation.multi_agent_version() == Some(MultiAgentVersion::V2)
         && matches!(config_snapshot.session_source, SessionSource::SubAgent(_));
     let thread_settings_baseline = thread_settings_from_config_snapshot(&config_snapshot);
@@ -303,7 +301,6 @@ pub(super) async fn ensure_listener_task_running(
         thread_watch_manager,
         codex_home,
         turn_cost_worker,
-        state_db: _,
         ..
     } = listener_task_context;
     let outgoing_for_task = Arc::clone(&outgoing);
@@ -366,8 +363,10 @@ pub(super) async fn ensure_listener_task_running(
                             .then(|| thread_state.turn_summary.clone());
                         (thread_state.experimental_raw_events, terminal)
                     };
-                    if matches!(&event.msg, EventMsg::RawResponseCompleted(_))
-                        && !raw_events_enabled
+                    if matches!(
+                        &event.msg,
+                        EventMsg::RawResponseCompleted(_) | EventMsg::PrivateSessionEvent(_)
+                    ) && !raw_events_enabled
                     {
                         continue;
                     }
@@ -415,8 +414,9 @@ pub(super) async fn ensure_listener_task_running(
                         &event.msg,
                         EventMsg::TurnStarted(_) | EventMsg::TurnComplete(_)
                     );
+                    let is_shutdown_complete = matches!(event.msg, EventMsg::ShutdownComplete);
                     apply_bespoke_event_handling(
-                        event.clone(),
+                        event,
                         conversation_id,
                         conversation.clone(),
                         thread_manager.clone(),
@@ -425,7 +425,7 @@ pub(super) async fn ensure_listener_task_running(
                         thread_watch_manager.clone(),
                     )
                     .await;
-                    if matches!(event.msg, EventMsg::ShutdownComplete)
+                    if is_shutdown_complete
                         && let Some(completion_tx) = thread_state
                             .lock()
                             .await

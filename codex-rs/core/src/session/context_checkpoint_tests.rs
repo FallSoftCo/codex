@@ -35,7 +35,7 @@ async fn native_checkpoint_cold_replay_restores_baseline_and_keeps_later_updates
                     }
                 }
             })).unwrap();
-            let mut records = vec![RolloutItem::Compacted(checkpoint)];
+            let mut records = vec![RolloutItem::Compacted(Box::new(checkpoint))];
             // Cold reopen goes through the existing rollout wire, never saved live handles.
             let reopen = |items: &Vec<RolloutItem>| {
                 serde_json::from_slice::<Vec<RolloutItem>>(&serde_json::to_vec(items).unwrap())

@@ -125,7 +125,7 @@ impl RolloutWriterState {
         };
         for item in [
             RolloutItem::EventMsg(EventMsg::ContextWindowRefillIntent(intent)),
-            RolloutItem::Compacted(checkpoint),
+            RolloutItem::Compacted(Box::new(checkpoint)),
         ] {
             writer
                 .write_rollout_item(&item, self.ordinal_state.current()?)

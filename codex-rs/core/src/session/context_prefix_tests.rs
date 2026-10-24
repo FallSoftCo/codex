@@ -234,3 +234,59 @@ async fn opting_in_legacy_context_establishes_base_on_normal_step_without_hiding
     assert!(!needs_initial_group(&session, &history));
     assert!(read(&history, &session.thread_id.to_string(), "context-original").is_err());
 }
+
+#[tokio::test]
+async fn real_managed_tool_declarations_survive_prefix_record_and_reopen() {
+    // Tool declarations captured from the actual R320 managed delivery, with
+    // no conversation, credentials or expected semantic answer in this fixture.
+    let tools: ResponseItem = serde_json::from_str(include_str!(
+        "../../assets/lax-native-tools-retention-r320.json"
+    ))
+    .unwrap();
+    assert!(serde_json::to_vec(&tools).unwrap().len() > 32768);
+    let (session, turn) = super::super::tests::make_session_and_context().await;
+    enable(&session);
+    session
+        .record_native_context_items(
+            &turn,
+            turn.model_info(),
+            &[tools.clone()],
+            NativeContextKind::Prefix,
+        )
+        .await;
+    let thread = session.thread_id.to_string();
+    let history = session.clone_history().await;
+    let expected = read(&history, &thread, "context-original").unwrap();
+    assert_eq!(expected[0].item, tools);
+    let records: Vec<RolloutItem> = serde_json::from_slice(&persisted_bytes(&history)).unwrap();
+    let mut reopened = ContextManager::new();
+    reopened.replace_annotated(
+        records
+            .into_iter()
+            .map(|record| match record {
+                RolloutItem::ResponseItem(item) => item,
+                _ => panic!("unexpected record"),
+            })
+            .collect(),
+    );
+    assert_eq!(
+        read(&reopened, &thread, "context-original").unwrap(),
+        expected
+    );
+    let mut client_authored = expected;
+    client_authored[0]
+        .metadata
+        .as_mut()
+        .unwrap()
+        .client_authored = true;
+    reopened.replace_annotated(client_authored);
+    assert!(read(&reopened, &thread, "context-original").is_err());
+
+    // The native tools exception must not relax the ordinary item bound.
+    reopened.replace_annotated(stamp(
+        &session,
+        NativeContextKind::Prefix,
+        vec![message(&"x".repeat(32769)).into()],
+    ));
+    assert!(read(&reopened, &thread, "context-original").is_err());
+}

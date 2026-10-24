@@ -42,6 +42,7 @@ async fn restart_client_rejects_subagent_threads() {
             call_id: "call-1".to_string(),
             tool_name: codex_tools::ToolName::plain(RESTART_CLIENT_TOOL_NAME),
             source: ToolCallSource::Direct,
+            environments: Default::default(),
             payload: ToolPayload::Function {
                 arguments: json!({
                     "reason": "roll to latest build",
@@ -77,6 +78,7 @@ async fn restart_client_emits_restart_event_and_returns_requested_status() {
             call_id: "call-1".to_string(),
             tool_name: codex_tools::ToolName::plain(RESTART_CLIENT_TOOL_NAME),
             source: ToolCallSource::Direct,
+            environments: Default::default(),
             payload: ToolPayload::Function {
                 arguments: json!({
                     "reason": "roll to latest build",

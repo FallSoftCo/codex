@@ -317,3 +317,53 @@ async fn explicit_cold_resume_captures_fresh_primary_owner() -> Result<()> {
     assert_eq!(mock.requests().len(), 1);
     Ok(())
 }
+
+#[tokio::test]
+async fn sample_cannot_fork_canonically_owned_context() -> Result<()> {
+    let server = responses::start_mock_server().await;
+    let mock = responses::mount_sse_once(
+        &server,
+        responses::sse(vec![responses::ev_completed("must-not-sample")]),
+    )
+    .await;
+    let home = TempDir::new()?;
+    MockResponsesConfig::new(&server.uri()).write(home.path())?;
+    let mut rpc = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized()
+        .await?;
+    let parent = rpc
+        .start_thread(ThreadStartParams {
+            primary_context_input: Some(policy()),
+            inference_completion: Some(InferenceCompletionPolicy::HostTool),
+            dynamic_tools: Some(declarations()),
+            ..Default::default()
+        })
+        .await?;
+    let id = rpc
+        .send_raw_request(
+            "thread/sample",
+            Some(json!({
+                "threadId": parent.thread.id,
+                "expectedTurnId": "original-finished-turn",
+                "prompt": "This must not bypass canonical input ownership"
+            })),
+        )
+        .await?;
+    let error = timeout(
+        WAIT,
+        rpc.read_stream_until_error_message(RequestId::Integer(id)),
+    )
+    .await??;
+    assert_eq!(
+        error.error.message,
+        "thread/sample cannot fork a canonically owned context"
+    );
+    assert_eq!(mock.requests().len(), 0);
+    let list_id = rpc
+        .send_raw_request("thread/loaded/list", Some(json!({})))
+        .await?;
+    let loaded: ThreadLoadedListResponse = timeout(WAIT, rpc.read_response(list_id)).await??;
+    assert_eq!(loaded.data, vec![parent.thread.id]);
+    Ok(())
+}

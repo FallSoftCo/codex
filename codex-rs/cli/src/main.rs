@@ -54,6 +54,7 @@ static ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod app_cmd;
 mod cloud_config;
+mod config_override_args;
 mod daemon_install;
 mod daemon_telemetry;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -72,6 +73,7 @@ mod exec_server_telemetry;
 mod marketplace_cmd;
 mod mcp_cmd;
 mod mcp_login;
+mod migrate_nfs_db;
 mod migrate_rollouts;
 mod plugin_cmd;
 mod queue_cmd;
@@ -221,6 +223,9 @@ enum Subcommand {
 
     /// Inspect or migrate legacy local sessions to paginated thread history.
     MigrateRollouts(migrate_rollouts::MigrateRolloutsCommand),
+
+    /// [experimental] Migrate configured SQLite databases to DELETE mode in place.
+    MigrateNfsDb(migrate_nfs_db::MigrateNfsDbCommand),
 
     /// Unarchive a saved session by id or session name.
     Unarchive(SessionArchiveCommand),
@@ -1005,6 +1010,12 @@ struct LogoutCommand {
 
 #[derive(Debug, Parser)]
 struct AppServerCommand {
+    #[command(flatten)]
+    startup_config: codex_app_server::StartupConfigArgs,
+
+    /// Load frozen cloud skills from a JSON snapshot instead of a live skill service.
+    #[arg(long, value_name = "PATH")]
+    cloud_skills_snapshot: Option<PathBuf>,
     /// Omit to run the app server; specify a subcommand for tooling.
     #[command(subcommand)]
     subcommand: Option<AppServerSubcommand>,
@@ -1487,7 +1498,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString>,
 {
-    MultitoolCli::try_parse_from(rewrite_name_shorthand_args(args))
+    config_override_args::try_parse_from(rewrite_name_shorthand_args(args))
 }
 
 fn rewrite_name_shorthand_args<I, T>(args: I) -> Vec<OsString>
@@ -1801,6 +1812,8 @@ async fn cli_main(
         }
         Some(Subcommand::AppServer(app_server_cli)) => {
             let AppServerCommand {
+                startup_config,
+                cloud_skills_snapshot,
                 subcommand,
                 code_mode_host,
                 strict_config: app_server_strict_config,
@@ -1818,6 +1831,21 @@ async fn cli_main(
                 root_remote_auth_token_env.as_deref(),
                 subcommand.as_ref(),
             )?;
+            if startup_config.print_startup_config {
+                anyhow::ensure!(
+                    subcommand.is_none(),
+                    "--print-startup-config cannot run a subcommand"
+                );
+                return codex_app_server::print_startup_config(
+                    arg0_paths,
+                    root_config_overrides,
+                    LoaderOverrides::default(),
+                    strict_config,
+                    startup_config,
+                )
+                .await
+                .map_err(Into::into);
+            }
             match subcommand {
                 None => {
                     let transport = if stdio {
@@ -1826,7 +1854,16 @@ async fn cli_main(
                         listen
                     };
                     let auth = auth.try_into_settings()?;
+                    if managed_daemon
+                        && matches!(
+                            &transport,
+                            codex_app_server::AppServerTransport::UnixSocket { .. }
+                        )
+                    {
+                        let _ = codex_app_server_daemon::maintain_stderr_log();
+                    }
                     let runtime_options = codex_app_server::AppServerRuntimeOptions {
+                        cloud_skills_snapshot,
                         code_mode_host_transport: code_mode_host.into(),
                         managed_daemon,
                         remote_control_startup_mode: match (remote_control, remote_control_disabled)
@@ -2132,6 +2169,19 @@ async fn cli_main(
                 "migrate-rollouts",
             )?;
             migrate_rollouts::run(command, root_config_overrides).await?;
+        }
+        Some(Subcommand::MigrateNfsDb(command)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "migrate-nfs-db",
+            )?;
+            migrate_nfs_db::run(
+                command,
+                root_config_overrides,
+                loader_overrides_for_profile(interactive.config_profile_v2.as_ref())?,
+            )
+            .await?;
         }
         Some(Subcommand::Unarchive(cmd)) => {
             let output = run_session_archive_cli_command(
@@ -2530,12 +2580,13 @@ fn profile_v2_for_subcommand<'a>(
         | Subcommand::Unarchive(_)
         | Subcommand::Fork(_)
         | Subcommand::Mcp(_)
+        | Subcommand::MigrateNfsDb(_)
         | Subcommand::Sandbox(_)
         | Subcommand::Debug(DebugCommand {
             subcommand: DebugSubcommand::PromptInput(_),
         }) => Ok(Some(profile_v2)),
         _ => anyhow::bail!(
-            "--profile only applies to runtime commands and `codex mcp`: `codex`, `codex exec`, `codex review`, `codex resume`, `codex queue`, `codex archive`, `codex delete`, `codex unarchive`, `codex fork`, `codex mcp`, `codex sandbox`, and `codex debug prompt-input`."
+            "--profile only applies to runtime commands, `codex mcp`, and `codex migrate-nfs-db`: `codex`, `codex exec`, `codex review`, `codex resume`, `codex queue`, `codex archive`, `codex delete`, `codex unarchive`, `codex fork`, `codex mcp`, `codex migrate-nfs-db`, `codex sandbox`, and `codex debug prompt-input`."
         ),
     }
 }
@@ -3475,6 +3526,7 @@ fn unsupported_subcommand_name_for_strict_config(
         Some(Subcommand::Mcp(_)) => Some("mcp"),
         Some(Subcommand::Plugin(_)) => Some("plugin"),
         Some(Subcommand::MigrateRollouts(_)) => Some("migrate-rollouts"),
+        Some(Subcommand::MigrateNfsDb(_)) => Some("migrate-nfs-db"),
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         Some(Subcommand::App(_)) => Some("app"),
         Some(Subcommand::Login(_)) => Some("login"),

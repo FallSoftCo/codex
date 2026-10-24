@@ -265,3 +265,37 @@ may recover by resubmitting that same idempotent metadata transaction. The
 journal retains the recovery observation and accepted receipt. It starts no
 replacement native thread, inference, Work or tool execution. Unknown non-bind
 operations, external effects and permission failures do not use this recovery.
+
+
+## Retained native tool declarations
+
+Native Writer retention distinguishes the core-owned prefix from canonical
+task data. The prefix includes the native tool declarations needed after a
+context reset. An atomic AdditionalTools declaration can use the existing
+256 KiB aggregate refill budget; ordinary prefix items and retained task items
+remain limited to 32 KiB each. The combined decoded budget, item count and
+wire bounds remain unchanged. Host fragments cannot supply a prefix or use
+this native declaration allowance.
+
+Recorded-prefix reads still verify the original thread/context, complete
+ordered groups, exact digests and non-client authorship. Active and idle
+replacement apply the same item rules. A size refusal is reported separately
+from incomplete or changed provenance. The R320 candidate was prompted by an
+actual managed declaration that exceeded the data-item bound; the original
+failure and subsequent runtime recovery qualification are retained separately.
+
+
+## Current resources and installation integrity
+
+A v2 installation seal pins installed code, configuration, identity and private
+workspace identity. Its full resource catalog is a historical readiness
+observation. Current grants and catalog revisions remain Hollywood authority;
+they are verified together with actual Unix access on every readiness check.
+Adding an authorized shared workspace does not change installed code or invalidate
+the agent. It does not automatically alter the original seal file.
+
+Resource observations and their revisions are excluded only from v2 installation
+comparison, including the existing explicit bridge-dependency transition. Native
+operation admission still verifies its current work/resource/source bindings.
+Private workspace incarnation, configuration and installed dependency hashes
+remain pinned. The exact v1 seal comparison remains unchanged.

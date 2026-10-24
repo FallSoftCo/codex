@@ -38,6 +38,7 @@ fn invocation(
         call_id: "call-1".to_string(),
         tool_name: codex_tools::ToolName::plain(tool_name),
         source: ToolCallSource::Direct,
+        environments: Default::default(),
         payload: ToolPayload::Function {
             arguments: arguments.to_string(),
         },

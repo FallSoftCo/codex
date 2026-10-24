@@ -307,11 +307,27 @@ def verify(value):
     }
 
 
+def sealed_dependencies(result):
+    """Compare installed v2 identity/code, after verifying live authorization.
+
+    The complete resource observation is retained as evidence in the original
+    seal. Its catalog and authorization revisions are not installation authority.
+    Every activation still calls verify() for all current grants and Unix access.
+    The original v1 contract remains exact.
+    """
+    if result.get("schema") != "lax-purpose-readiness/v2":
+        return result
+    observations = {"resourceAccess", "physicalWorkspaceRevision", "physicalGrantRevision"}
+    if not observations <= result.keys():
+        raise ValueError("Complete v2 sealed resource observation required")
+    return {key: value for key, value in result.items() if key not in observations}
+
+
 def seal(value):
     result = verify(value)
     record = directory(value["authorityId"], value["agentId"])
     path = record / "readiness.json"
-    if path.exists() and protected(path) != result:
+    if path.exists() and sealed_dependencies(protected(path)) != sealed_dependencies(result):
         raise ValueError(
             "Sealed dependencies changed; explicit setup reconciliation required"
         )
@@ -323,7 +339,7 @@ def seal(value):
 def require_sealed(value):
     current = verify(value)
     path = directory(value["authorityId"], value["agentId"]) / "readiness.json"
-    if not path.exists() or protected(path) != current:
+    if not path.exists() or sealed_dependencies(protected(path)) != sealed_dependencies(current):
         raise PermissionError(
             "Prepared agent is not sealed against current native dependencies"
         )

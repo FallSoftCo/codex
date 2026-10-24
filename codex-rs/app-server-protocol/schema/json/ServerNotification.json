@@ -663,6 +663,7 @@
             "rateLimitExceeded",
             "flexUnavailable",
             "serverOverloaded",
+            "modelNotFound",
             "cyberPolicy",
             "misalignmentPolicyViolation",
             "tooManyDenials",
@@ -2616,6 +2617,8 @@
     },
     "HookEventName": {
       "enum": [
+        "preModelRequest",
+        "postModelRequest",
         "preToolUse",
         "permissionRequest",
         "postToolUse",
@@ -2747,7 +2750,7 @@
           "default": "unknown"
         },
         "sourcePath": {
-          "$ref": "#/definitions/AbsolutePathBuf"
+          "$ref": "#/definitions/LegacyAppPathString"
         },
         "startedAt": {
           "format": "int64",
@@ -3654,6 +3657,8 @@
         "edu",
         "edu_plus",
         "edu_pro",
+        "sci",
+        "sci_plus",
         "unknown"
       ],
       "type": "string"

@@ -241,3 +241,17 @@ fn core_prefix_consumes_the_same_decoded_budget_as_selected_evidence() {
     *prefix.last_mut().unwrap() = prefix_item(remaining + 1);
     assert!(validate(&request, &response, &prefix).is_err());
 }
+
+#[test]
+fn native_tool_prefix_and_retained_data_keep_distinct_item_bounds() {
+    let tools: ResponseItem = serde_json::from_str(include_str!(
+        "../assets/lax-native-tools-retention-r320.json"
+    ))
+    .unwrap();
+    let prefix = vec![ResponseItemEnvelope::new(tools.clone())];
+    let (request, response) = fixture(32768);
+    let replacement = validate(&request, &response, &prefix).unwrap();
+    assert_eq!(replacement[0].item, tools);
+    let (request, oversized_data) = fixture(32769);
+    assert!(validate(&request, &oversized_data, &prefix).is_err());
+}

@@ -332,12 +332,20 @@ pub(crate) fn validate(
         Ok::<_, io::Error>(bytes + serde_json::to_vec(&item.item)?.len())
     })?;
     require(canonical.len() + descriptor_bytes + data.len() + prefix_bytes <= 262144)?;
+    for item in prefix {
+        require(
+            serde_json::to_vec(&item.item)?.len()
+                <= crate::context_refill::native_prefix_item_byte_limit(&item.item),
+        )?;
+    }
+    for item in &result {
+        require(
+            serde_json::to_vec(&item.item)?.len() <= crate::context_refill::MAX_REFILL_ITEM_BYTES,
+        )?;
+    }
     let mut replacement = prefix.to_vec();
     replacement.extend(result);
     require(replacement.len() <= 256)?;
-    for item in &replacement {
-        require(serde_json::to_vec(&item.item)?.len() <= 32768)?;
-    }
     let wire_items: Vec<_> = replacement.iter().map(|entry| &entry.item).collect();
     require(serde_json::to_vec(&wire_items)?.len() <= 1048576)?;
     Ok(replacement)

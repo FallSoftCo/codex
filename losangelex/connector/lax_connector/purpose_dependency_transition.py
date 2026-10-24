@@ -2,11 +2,11 @@
 
 Live readiness remains mandatory. This admin operation reconciles only the two
 shared bridge files and revision pinned by a prior seal; agent-owned installation,
-identity, workspace and environment evidence must remain exactly unchanged.
+identity, private workspace and environment evidence remain unchanged. Current
+resource authorization is verified live; it is not frozen by installation.
 """
 import argparse
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +17,7 @@ from .journal import saved
 from .native_image_upgrade import registry_lock
 from .purpose_install import checksum, directory, protected
 from .purpose_observer import installation
-from .purpose_readiness import verify, require_sealed
+from .purpose_readiness import verify, require_sealed, sealed_dependencies
 from .purpose_upgrade import offline, publish
 
 
@@ -31,9 +31,11 @@ def approved(before, current, transition, agent, bridge_path, channel_path,
                     for key in ("authorityId", "hostId")),
             "Dependency transition belongs to another installation")
     require(set(before) == set(current), "Readiness schema changed; explicit migration required")
-    require(all(before[key] == current[key] for key in before
+    installed_before = sealed_dependencies(before)
+    installed_current = sealed_dependencies(current)
+    require(all(installed_before[key] == installed_current[key] for key in installed_before
                 if key not in ("dependencyFiles", "bridgeRevision")),
-            "Agent-owned installation or authorization changed")
+            "Agent-owned installation changed")
     original = transition["originalArtifactHashes"]
     allowed = {bridge_path, channel_path}
     require(allowed <= set(original)
