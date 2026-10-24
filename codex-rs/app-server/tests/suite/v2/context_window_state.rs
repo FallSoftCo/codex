@@ -26,7 +26,7 @@ async fn read(rpc: &mut TestAppServer, thread: &str) -> Result<ThreadContextWind
             Some(json!({"threadId":thread})),
         )
         .await?;
-    Ok(timeout(WAIT, rpc.read_response(id)).await??)
+    timeout(WAIT, rpc.read_response(id)).await?
 }
 
 async fn materialize(rpc: &mut TestAppServer, thread: &str) -> Result<()> {

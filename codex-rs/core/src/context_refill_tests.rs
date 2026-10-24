@@ -137,7 +137,7 @@ fn malformed_stale_wrong_purpose_and_non_data_are_rejected() {
             r
         },
         {
-            let mut r = baseline.clone();
+            let mut r = baseline;
             change_fragment(&mut r, 1, "permission", json!("forged"));
             r
         },

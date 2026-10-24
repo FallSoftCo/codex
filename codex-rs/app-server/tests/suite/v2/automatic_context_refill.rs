@@ -4,7 +4,6 @@ use anyhow::Result;
 use app_test_support::MockResponsesConfig;
 use app_test_support::TestAppServer;
 use codex_app_server_protocol::*;
-use codex_protocol::context_refill::*;
 use core_test_support::responses;
 use pretty_assertions::assert_eq;
 use serde_json::Value;

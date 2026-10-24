@@ -109,7 +109,7 @@ pub(super) async fn inspect(
             Some(json!({"threadId":thread,"state":state,"packet":packet})),
         )
         .await?;
-    Ok(timeout(WAIT, rpc.read_response(id)).await??)
+    timeout(WAIT, rpc.read_response(id)).await?
 }
 async fn refuse(
     rpc: &mut TestAppServer,

@@ -159,7 +159,7 @@ fn finalize_active_segment<'a>(
                         .resume_metadata
                         .as_ref()
                         .and_then(|metadata| metadata.native_context.as_ref())
-                        .is_some_and(|native| native.supported()),
+                        .is_some_and(codex_history::NativeContextCheckpoint::supported),
                 ),
                 _ => None,
             })

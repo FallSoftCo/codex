@@ -126,7 +126,7 @@ fn incomplete_reordered_changed_and_wrong_purpose_packets_are_rejected() {
     f["content"] = Value::String("tampered".into());
     broken.items[index]["output"] = f.to_string().into();
     assert!(validate(&request, &broken, &[]).is_err());
-    let mut wrong = request.clone();
+    let mut wrong = request;
     wrong.purpose = ContextRefillPurpose::Reader;
     assert!(validate(&wrong, &response, &[]).is_err());
 }
