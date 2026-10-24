@@ -151,7 +151,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_revise",
-            "Goal manager: explicitly prepare rework only after completed work was independently rejected. Preserve its old attempt/evidence; unknown or unsettled execution cannot reopen. This does not assign/start the next attempt.",
+            "Goal manager: revise completed work only after independent rejection. For a changed Goal that supersedes unfinished intent, cancel that obsolete Work, observe known settlement, then create distinct current criterion-bound Work and select its strategy; retain the cancelled old attempt. Do not manufacture a blocked report merely to revise unfinished intent. Unknown effects remain held; no automatic retry, assignment or service start.",
             {
                 "workId": text,
                 "revision": revision,
@@ -324,7 +324,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_cancel",
-            "Goal manager: request cancellation of this work. A cancellation request never proves external effects stopped or were undone.",
+            "Goal manager: request cancellation of this work, including obsolete intent after a Goal definition change. Inspect settlement before replacing it with distinct current criterion-bound Work. Preserve original attempts/effects; cancellation never proves effects stopped or were undone and does not resume anything.",
             {"workId": text, "revision": revision, "note": note},
             ["workId", "revision", "note"],
         ),

@@ -239,11 +239,7 @@ class NativeTools:
                         "originalOperationId": operation,
                         **(error.public_details() if isinstance(error, ToolValidationError) else {}),
                         **(
-                            {
-                                "status": error.status,
-                                "message": str(error)[:250],
-                                "next": "Inspect the current authorized resource/revision before a corrected command",
-                            }
+                            error.public_details()
                             if isinstance(error, HttpFailure)
                             else {}
                         ),

@@ -146,7 +146,8 @@ class Connector(NativeTools):
                     "Hollywood reply shape unconfirmed; reconcile the original operation"
                 )
             if response.status != 200:
-                raise HttpFailure(response.status, data.get("error", "request failed"))
+                raise HttpFailure(response.status, data.get("error", "request failed"),
+                                  code=data.get("code"), next_action=data.get("next"))
             return data
 
     async def event(self, method, params):

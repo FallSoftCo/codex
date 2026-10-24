@@ -94,7 +94,8 @@ def upgrade(spec):
         raise PermissionError("Installation administrator required")
     if set(spec) - {"schema", "operationId", "authorityId", "agentId",
                     "expectedInstallationSha256", "interpreter", "pythonRoot", "toolProfileFile",
-                    "binary", "expectedBinarySha256", "contextRebuildEnabled"}:
+                    "binary", "expectedBinarySha256", "contextRebuildEnabled", "automaticContextRefill",
+                    "nativeActionRetention", "resourceReadinessVersion"}:
         raise ValueError("Unsupported purpose upgrade field")
     if spec["schema"] != SCHEMA:
         raise ValueError("Explicit purpose upgrade required")
@@ -104,14 +105,21 @@ def upgrade(spec):
         digest = spec["expectedBinarySha256"]
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             raise ValueError("Explicit native executable SHA256 required")
-    if "contextRebuildEnabled" in spec and type(spec["contextRebuildEnabled"]) is not bool:
-        raise ValueError("Explicit context rebuild opt-in must be boolean")
+    settings = install.context_settings(spec)
+    if "resourceReadinessVersion" in spec and (
+            type(spec["resourceReadinessVersion"]) is not int
+            or spec["resourceReadinessVersion"] not in (1, 2)):
+        raise ValueError("Explicit resource-readiness version1/2 required")
     operation = str(UUID(spec["operationId"]))
     record = install.directory(spec["authorityId"], spec["agentId"])
     with registry_lock(record):
         manifest_path = record / "installation.json"
         value = install.protected(manifest_path)
         config = install.protected(value["config"])
+        readiness_version = spec.get("resourceReadinessVersion",
+                                     value.get("resourceReadinessVersion", 1))
+        if readiness_version < value.get("resourceReadinessVersion", 1):
+            raise ValueError("Resource-readiness downgrade requires explicit migration")
         intent_path = record / ("upgrade-" + operation + ".json")
         if intent_path.exists():
             raise ValueError("Original upgrade exists; inspect its status, do not replay")
@@ -160,8 +168,7 @@ def upgrade(spec):
                         raise PermissionError("Native package parent is not protected")
             image = binary.stat()
             updated = {**config, "pythonRoot": str(root), "binary": str(binary)}
-            if "contextRebuildEnabled" in spec:
-                updated["contextRebuildEnabled"]=spec["contextRebuildEnabled"]
+            updated.update(settings)
             if "toolProfileFile" in spec:
                 from .tool_profile import read
                 source = Path(spec["toolProfileFile"])
@@ -188,7 +195,8 @@ def upgrade(spec):
             new_value = {**value, "binary": str(binary), "binaryDevice": image.st_dev,
                          "binaryInode": image.st_ino, "configSha256": hashlib.sha256(base64.b64decode(changes[0]["data"])).hexdigest(),
                          "interpreter": str(interpreter), "pythonRoot": str(root), "runtime": runtime,
-                         "unitDefinitionDigests": definitions, "nativePackage": package}
+                         "unitDefinitionDigests": definitions, "nativePackage": package,
+                         "resourceReadinessVersion": readiness_version}
             changes.append(stage(manifest_path, new_value))
             paths = [Path(i["path"]) for i in changes] + [record / "readiness.json"]
             receipt = {"schema": SCHEMA, "operationId": operation, "state": "intent",

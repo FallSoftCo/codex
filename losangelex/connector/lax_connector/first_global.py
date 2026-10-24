@@ -50,6 +50,8 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
         raise PermissionError("First Global installation requires the host administrator")
     if profile.get("schema") != SCHEMA:
         raise ValueError("Explicit native first-Global profile required")
+    # Reject incomplete explicit context contracts before any provisioning.
+    purpose_install.context_settings(profile)
     route = urlsplit(profile["hollywoodUrl"])
     if route.scheme != "http" or route.hostname not in ("127.0.0.1", "localhost", "::1") or route.username or route.password or route.query or route.fragment or route.path not in ("", "/"):
         raise ValueError("First-host bootstrap requires the actual same-host private Hollywood endpoint")
@@ -121,7 +123,8 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
         "global": True, "hollywoodUrl": profile["hollywoodUrl"], "machineIdentity": host.machine_identity(),
         **{k: profile[k] for k in ("binary", "interpreter", "pythonRoot", "model", "effort", "approvedModelAuthFile")},
         "nativeCollaborationChannel": str(channel)}
-    for optional in ("environmentProfileFile", "serviceMemoryMaxBytes", "toolProfileFile", "contextRebuildEnabled"):
+    for optional in ("environmentProfileFile", "serviceMemoryMaxBytes", "toolProfileFile",
+                     "contextRebuildEnabled", "automaticContextRefill", "nativeActionRetention"):
         if optional in profile:
             spec[optional] = profile[optional]
     original(spec_path, spec)

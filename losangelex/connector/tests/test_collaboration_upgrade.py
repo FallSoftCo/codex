@@ -68,7 +68,9 @@ class BridgeUpgradeTests(unittest.TestCase):
             + str(self.controller)
             + "\n"
         )
-        self.enterContext(patch("lax_connector.resource_routing.seed_defaults", return_value=[]))
+        self.enterContext(
+            patch("lax_connector.resource_routing.seed_defaults", return_value=[])
+        )
         self.calls = []
         self.info = {
             "ActiveState": "inactive",
@@ -113,19 +115,26 @@ class BridgeUpgradeTests(unittest.TestCase):
             )
         )
 
+        upgrade_features = ["canonical-work-resource-routing/v1"]
+        self.features = upgrade_features
+
         def request(url, token, method, route, body=None):
             self.calls.append((token, method, route, copy.deepcopy(body)))
             if method == "GET" and route.endswith("/collaboration-bridge"):
                 return {
-                    "resourceRouting": "canonical-agent-resources/v1", "resourceDefaults": True, "resourceMetadata": True,
-                    "placementControl": "canonical-placement-control/v1", "pausedResourceSetup": True,
+                    "resourceRouting": "canonical-agent-resources/v1",
+                    "resourceDefaults": True,
+                    "resourceMetadata": True,
+                    "placementControl": "canonical-placement-control/v1",
+                    "pausedResourceSetup": True,
                     "bridge": {
                         "state": "active",
                         "protocol": "canonical-edit-plans/v2",
                         "revision": 4,
                         "adapter_sha256": "a" * 64,
                         "controller": self.agent,
-                    }
+                        "features": list(upgrade_features),
+                    },
                 }
             if method == "PUT":
                 return {"accepted": True, "revision": 5}
@@ -153,10 +162,25 @@ class BridgeUpgradeTests(unittest.TestCase):
             "lax-automatic-native-capture/v2",
         )
         self.assertEqual(len([x for x in self.calls if x[1] == "PUT"]), 2)
+        bridge_put = next(
+            row
+            for row in self.calls
+            if row[1] == "PUT" and row[2].endswith("/collaboration-bridge")
+        )
+        self.assertEqual(bridge_put[3]["features"], self.features)
         upgrade.require_settled_upgrades(self.state)
         with self.assertRaises(Held):
             upgrade.upgrade(self.prepared, **self.kwargs)
         self.assertEqual(len([x for x in self.calls if x[1] == "PUT"]), 2)
+
+    def test_unsupported_capability_does_not_create_an_upgrade_intent(self):
+        self.fixture()
+        self.features.append("future-unsupported-routing/v1")
+        with self.assertRaisesRegex(Held, "cannot remove an installed capability"):
+            upgrade.upgrade(self.prepared, **self.kwargs)
+        self.assertFalse([row for row in self.calls if row[1] == "PUT"])
+        self.assertFalse(list((self.state / "upgrades").glob("*-intent.json")))
+        self.assertEqual(json.loads(self.config_path.read_text()), self.old)
 
     def test_original_artifact_or_revision_cas_change_is_held(self):
         self.fixture()

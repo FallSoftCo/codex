@@ -31,7 +31,7 @@ def definitions(spec):
         {**common,"definitionRevision":rev,"definitionSha256":text},
         [*common,"definitionRevision","definitionSha256"]),
       spec("hollywood_goal_plan",
-        "Record a durable strategy against the adopted Goal definition: alternatives considered, selected approach and rationale, current frontier of existing Work IDs and conditions for replanning. One alternative is sufficient when warranted; do not invent ceremony. Existing Work owns task dependencies and execution. Read current Goal/Work first; this records no execution. Change the plan as evidence warrants while preserving the adopted outcome.",
+        "Record a durable strategy against the adopted Goal definition: alternatives considered, selected approach and rationale, current frontier of existing Work IDs and conditions for replanning. One alternative is sufficient when warranted; do not invent ceremony. Existing Work owns dependencies and execution. Read current Goal/Work first. For changed adopted criteria, obsolete unfinished Work must be explicitly cancelled/settled; create replacement Work bound to current criteria before selecting it. Completed rejected Work has a separate revision path. Retain retired paths/effects; never relabel old evidence. This records no execution.",
         {**common,"planRevision":{"type":"integer","minimum":0},"definitionRevision":rev,"strategy":strategy},
         [*common,"planRevision","definitionRevision","strategy"])
     ]

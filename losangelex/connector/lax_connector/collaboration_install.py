@@ -26,6 +26,9 @@ from .journal import saved
 from .service_observer import protected, expected_owner
 
 
+SUPPORTED_FEATURES = ("canonical-work-resource-routing/v1",)
+
+
 def protected_tree(path, mode):
     path = Path(path)
     require(path.is_absolute(), "Absolute protected installation path required")
@@ -360,7 +363,7 @@ def apply(directory):
     if existing:
         require(
             existing["state"] == "active"
-            and existing.get("features", []) == ["canonical-work-resource-routing/v1"]
+            and existing.get("features", []) == list(SUPPORTED_FEATURES)
             and existing["protocol"] == "canonical-edit-plans/v2"
             and str(existing["controller"]) == str(policy["controller"])
             and existing["adapter_sha256"] == manifest["adapterSha256"]
@@ -374,7 +377,7 @@ def apply(directory):
             "controllerId": str(policy["controller"]),
             "state": "active",
             "protocol": "canonical-edit-plans/v2",
-            "features": ["canonical-work-resource-routing/v1"],
+            "features": list(SUPPORTED_FEATURES),
             "adapterSha256": manifest["adapterSha256"],
             "enrollmentSha256": manifest["enrollmentSha256"],
         }
@@ -473,7 +476,10 @@ def main():
     actions.add_argument("--prepare", type=Path)
     actions.add_argument("--apply", type=Path)
     actions.add_argument("--upgrade", type=Path)
+    actions.add_argument("--reconcile-rejected", type=Path)
     parser.add_argument("--expected-bridge-revision", type=int)
+    parser.add_argument("--operation-id")
+    parser.add_argument("--expected-capture-sha256")
     parser.add_argument("--expected-config-sha256")
     parser.add_argument("--expected-unit-sha256")
     parser.add_argument("--expected-descriptor-sha256")
@@ -485,6 +491,17 @@ def main():
     upgrade_args = [args.expected_bridge_revision, args.expected_config_sha256,
                     args.expected_unit_sha256, args.expected_descriptor_sha256,
                     args.controller_unit, args.expected_controller_unit_sha256]
+    if args.reconcile_rejected:
+        if (not args.operation_id or not args.expected_capture_sha256
+                or any(value is not None for value in upgrade_args)
+                or args.scope_agent_id or args.output):
+            parser.error("Rejected-upgrade reconciliation requires only --operation-id and --expected-capture-sha256")
+        from .collaboration_upgrade import reconcile_rejected
+        print(json.dumps(reconcile_rejected(args.reconcile_rejected, args.operation_id,
+                                          expected_capture_sha256=args.expected_capture_sha256)))
+        return
+    if args.operation_id or args.expected_capture_sha256:
+        parser.error("Original rejected capture options require --reconcile-rejected")
     if args.upgrade:
         if not all(upgrade_args) or not args.scope_agent_id or args.output:
             parser.error("Upgrade requires original bridge/config/unit/descriptor CAS values and explicit --scope-agent-id; no output")

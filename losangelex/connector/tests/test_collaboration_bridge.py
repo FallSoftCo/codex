@@ -71,7 +71,7 @@ class NativeBoundaryTests(unittest.TestCase):
     def test_model_reply_bound_preserves_original_record_without_relay_repeat(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/"commands").mkdir();info=root.stat()
-            bridge=object.__new__(Bridge);bridge.state=root
+            bridge=object.__new__(Bridge);bridge.state=root;bridge.config={}
             work="30000000-0000-0000-0000-000000000001"
             plan="40000000-0000-0000-0000-000000000001"
             record={"ports":["edit-plans"],"work":{"id":work},"sourceBase":{"agentId":"owner"},

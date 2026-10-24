@@ -31,23 +31,31 @@ def require_settled_upgrades(state):
     require(len(intents) <= 128, "Bounded bridge upgrade history required")
     for path in intents:
         value = observer.protected(path)
-        result = path.with_name(
-            path.name.removesuffix("-intent.json") + "-accepted.json"
-        )
+        prefix = path.name.removesuffix("-intent.json")
+        results = [path.with_name(prefix + suffix)
+                   for suffix in ("-accepted.json", "-rejected.json")
+                   if path.with_name(prefix + suffix).exists()]
         require(
-            result.exists(),
+            len(results) == 1,
             "Original bridge upgrade is unsettled; explicit original-effect reconciliation required",
         )
-        accepted = observer.protected(result)
+        result = observer.protected(results[0])
         require(
-            accepted.get("state") == "accepted"
-            and all(
-                accepted.get(key) == entry
-                for key, entry in value.items()
-                if key != "state"
-            ),
+            result.get("state") in {"accepted", "rejected"}
+            and all(result.get(key) == entry for key, entry in value.items()
+                    if key != "state"),
             "Original bridge upgrade evidence changed",
         )
+        if result["state"] == "rejected":
+            evidence = result["rejectedAdministrativeCapture"]
+            journal = observer.protected(Path(evidence["path"]))
+            require(
+                file_sha(Path(evidence["path"])) == evidence["sha256"]
+                and journal["state"] == "rejected"
+                and journal["status"] in (400, 403, 409)
+                and journal["payload"]["operationId"] == "upgrade-bridge:" + value["operationId"],
+                "Original rejected bridge capture evidence changed",
+            )
 
 
 def file_sha(path):
@@ -104,6 +112,26 @@ def _drain(config, state, agents, relay):
         require(False, "Bounded executor inspection exhausted")
     snapshots = {}
     for agent in sorted(agents):
+        from .purpose_observer import installation as purpose_installation, validate as validate_purpose
+        purpose = purpose_installation(authority, agent)
+        if purpose is not None:
+            # Three-purpose consumers keep durable unfinished Work while offline.
+            # Reuse their existing unit/descendant/placement/wake/canonical drain;
+            # never require an obsolete connector.json or a terminal business Goal.
+            from .purpose_upgrade import offline
+            from .purpose_install import directory as purpose_directory
+            validate_purpose(purpose)
+            record = purpose_directory(authority, agent)
+            pointer = record / "current-upgrade.json"
+            require(not pointer.exists() or observer.protected(pointer)["state"] == "accepted",
+                    "Original purpose software upgrade remains unsettled")
+            local = observer.protected(Path(purpose["config"]))
+            snapshots[agent] = {
+                "kind": "independent-purpose-services",
+                "installationSha256": file_sha(record / "installation.json"),
+                "offline": offline(purpose, local),
+            }
+            continue
         uid, home, binary = observer.expected_owner(authority, agent)
         unit = observer.properties(observer.installed_unit(authority, agent))
         require(
@@ -213,7 +241,7 @@ def upgrade(
     expected_controller_unit_sha256,
     agents,
 ):
-    from .collaboration_install import adapter_digest, write_original
+    from .collaboration_install import SUPPORTED_FEATURES, adapter_digest, write_original
 
     require(os.geteuid() == 0, "Verified installation administrator required")
     directory = protected_directory(directory)
@@ -418,16 +446,18 @@ def upgrade(
             "Reviewed controller unit does not serve the original configuration",
         )
         for agent in sorted(agents):
-            root_fd = stack.enter_context(
-                registry_lock(
-                    observer.directory(old["authorityId"], old["hostId"], agent)
-                )
-            )
+            from .purpose_observer import installation as purpose_installation
+            from .purpose_install import directory as purpose_directory
+            purpose = purpose_installation(old["authorityId"], agent)
+            record = (purpose_directory(old["authorityId"], agent) if purpose is not None
+                      else observer.directory(old["authorityId"], old["hostId"], agent))
+            root_fd = stack.enter_context(registry_lock(record))
             require_settled_transition(root_fd)
             uid, home, _ = observer.expected_owner(old["authorityId"], agent)
             fd = _open_directory(home / "state", uid)
             stack.callback(os.close, fd)
-            lock = os.open("connector.lock", os.O_RDWR | os.O_NOFOLLOW, dir_fd=fd)
+            lock = os.open("agent.lock" if purpose is not None else "connector.lock",
+                           os.O_RDWR | os.O_NOFOLLOW, dir_fd=fd)
             stack.callback(os.close, lock)
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         bridge_info = observer.properties(unit_path.name)
@@ -460,6 +490,11 @@ def upgrade(
             and policy["revision"] == expected_revision
             and policy["adapter_sha256"] == old["adapterSha256"],
             "Original canonical bridge revision or adapter changed",
+        )
+        features = list(SUPPORTED_FEATURES)
+        require(
+            set(policy.get("features", [])) <= set(features),
+            "Reviewed bridge upgrade cannot remove an installed capability",
         )
         new = json.loads(json.dumps(prepared))
         for root in new["automaticCapture"]["resources"]:
@@ -514,6 +549,7 @@ def upgrade(
             "protocol": "canonical-edit-plans/v2",
             "adapterSha256": manifest["adapterSha256"],
             "enrollmentSha256": manifest["enrollmentSha256"],
+            "features": features,
         }
         canonical = administrative_put(
             state,
@@ -593,3 +629,93 @@ def upgrade(
         }
         write_original(result_path, result)
         return result
+
+
+def reconcile_rejected(directory, operation, *, expected_capture_sha256):
+    """Seal a known rejected original bridge CAS after unchanged offline readback.
+
+    Pending requests, successful original receipts, changed canonical policy or
+    changed local artifacts remain held. This operation performs only reads and
+    writes a separate terminal rejection receipt; it never repeats the CAS.
+    """
+    import urllib.error
+    from .collaboration_install import write_original
+
+    require(os.geteuid() == 0, "Verified installation administrator required")
+    directory = protected_directory(directory)
+    manifest = observer.protected(directory / "setup.json")
+    state = protected_directory(manifest["stateDirectory"])
+    require(isinstance(operation, str) and len(operation) == 64
+            and all(c in "0123456789abcdef" for c in operation),
+            "Exact original bridge upgrade identity required")
+    lock = os.open(state / "bridge-upgrade.lock",
+                   os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        base = state / "upgrades" / operation
+        intent = observer.protected(Path(str(base) + "-intent.json"))
+        require(not any(Path(str(base) + suffix).exists()
+                        for suffix in ("-accepted.json", "-rejected.json")),
+                "Original upgrade already settled; inspect its receipt")
+        route = "hosts/" + intent["hostId"] + "/collaboration-bridge"
+        command = "upgrade-bridge:" + operation
+        capture = state / "administration" / (digest([route, command]) + ".json")
+        rejected = observer.protected(capture)
+        require(file_sha(capture) == expected_capture_sha256
+                and rejected["state"] == "rejected"
+                and rejected["status"] in (400, 403, 409)
+                and rejected["identity"]["method"] == "PUT"
+                and rejected["identity"]["path"] == "/hollywood/v3/" + route
+                and rejected["payload"]["operationId"] == command
+                and rejected["payload"]["revision"] == intent["expectedBridgeRevision"]
+                and rejected["payload"]["adapterSha256"] == intent["newAdapterSha256"],
+                "Reviewed original rejection evidence required")
+        old = observer.protected(Path(manifest["configPath"]))
+        require((old["authorityId"], old["hostId"]) ==
+                (intent["authorityId"], intent["hostId"]),
+                "Original upgrade authority/host differs")
+        require(all(file_sha(Path(path)) == checksum
+                    for path, checksum in intent["originalArtifactHashes"].items())
+                and file_sha(Path(manifest["controllerConfig"])) == intent["controllerConfigSha256"],
+                "Original local artifacts changed after rejection")
+        for unit in (intent["controllerUnit"], Path(manifest["unitPath"]).name):
+            info = observer.properties(unit)
+            require(info["ActiveState"] in {"inactive", "failed"}
+                    and int(info["MainPID"]) == 0
+                    and (not info["ControlGroup"] or not observer.members(info["ControlGroup"])),
+                    "Original bridge/controller must remain stopped and empty")
+            if unit == intent["controllerUnit"]:
+                require(observer.unit_definition(info) == intent["controllerUnitSha256"],
+                        "Original controller unit changed after rejection")
+        admin = observer.protected(Path(manifest["administratorConfig"]))
+        def read(route):
+            return request(admin["hollywoodUrl"], admin["token"], "GET", route)
+        current = read(route)["bridge"]
+        require(current and current["revision"] == intent["expectedBridgeRevision"]
+                and current["adapter_sha256"] == old["adapterSha256"]
+                and current["enrollment_sha256"] == rejected["payload"]["enrollmentSha256"]
+                and str(current["controller"]) == rejected["payload"]["controllerId"]
+                and current["state"] == "active",
+                "Original canonical bridge changed; rejection remains held")
+        try:
+            read("administration/commands/" + command)
+        except urllib.error.HTTPError as error:
+            require(error.code == 403,
+                    "Original receipt lookup failed ambiguously; rejection remains held")
+        else:
+            require(False, "Original canonical command was accepted; do not seal rejection")
+        relay = lambda method, route, body=None: request(
+            old["hollywoodUrl"], old["token"], method, route, body)
+        first = _drain(old, state, set(intent["agents"]), relay)
+        require(_drain(old, state, set(intent["agents"]), relay) == first,
+                "Original consumer drainage changed during reconciliation")
+        result = {**intent, "state": "rejected",
+                  "rejectedAdministrativeCapture": {"path": str(capture),
+                      "sha256": expected_capture_sha256, "status": rejected["status"]},
+                  "canonicalBridgeObserved": current,
+                  "localArtifactsUnchanged": True, "originalRequestRepeated": False,
+                  "unknownEffectsCleared": False}
+        write_original(Path(str(base) + "-rejected.json"), result)
+        return result
+    finally:
+        os.close(lock)

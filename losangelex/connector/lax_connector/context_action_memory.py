@@ -4,6 +4,10 @@ import json
 
 KINDS={"commandExecution","fileChange","dynamicToolCall","mcpToolCall"}
 TERMINAL={"completed","failed","declined","cancelled","interrupted"}
+# These are owned context retrieval handlers, not arbitrary dynamic/MCP tools.
+# Their canonical read fences survive in the refill snapshot. Keep the original
+# trace, but do not fill the effect replay index with completed retrievals.
+CONTEXT_READS={"context_read","context_material_read","context_selection","context_action_read"}
 
 
 def scope(runner,turn):
@@ -15,7 +19,7 @@ def scope(runner,turn):
     return matched[0] if len(matched)==1 else None
 
 
-def index(runner,content):
+def collect(runner,content):
     if runner.purpose!="writer":return []
     sources={x["source"] for x in content["obligations"]}
     tools=runner.state/"native-tools"
@@ -39,41 +43,102 @@ def index(runner,content):
             if turn not in scopes:scopes[turn]=scope(runner,turn)
             owner=scopes[turn]
             if not owner or owner["sourceRequestId"] not in sources:continue
+            key=(turn,item["id"])
+            # The paired current-index/selection callbacks only reconstruct or
+            # select canonical evidence. Their own in-flight callback is not an
+            # unknown execution effect and must not block that reconstruction.
+            metadata_callback = (runner.config.get("nativeActionRetention", 0)==1
+                and item.get("tool") in ("context_action_read","retain_native_action"))
+            if (item["type"]=="dynamicToolCall" and item.get("namespace") is None
+                    and (metadata_callback or item.get("tool") in CONTEXT_READS
+                         and item.get("status") in TERMINAL)):
+                actions.pop(key,None)
+                continue
             encoded=json.dumps(item,sort_keys=True,separators=(",",":"))
-            actions[(turn,item["id"])]={
+            actions[key]={
                 "nativeTurn":turn,"itemId":item["id"],"type":item["type"],
                 "status":item.get("status"),"materialId":owner["materialId"],
                 "deliveryId":owner["deliveryId"],"sha256":hashlib.sha256(encoded.encode()).hexdigest(),
                 "contentBytes":len(encoded.encode()),"retrieval":"context_action_read"}
-            if len(actions)>256:
-                raise RuntimeError("Unfinished work action index exceeds reset budget; no actions omitted")
+            if isinstance(item.get("tool"),str):
+                actions[key]["tool"]=item["tool"][:128]
+            if isinstance(item.get("namespace"),str):
+                actions[key]["namespace"]=item["namespace"][:128]
+            if isinstance(item.get("command"),str):
+                actions[key]["commandPreview"]=item["command"][:240]
+            if len(actions)>50000:
+                raise RuntimeError("Unfinished work action archive exceeds declared budget; no actions omitted")
     for action in actions.values():
         if action["status"] not in TERMINAL:
             raise RuntimeError("Original native action is not terminal; preserve its running context before rebuilding")
     return [actions[key] for key in sorted(actions)]
 
 
+def index(runner,content):
+    from .context_action_pages import store_index
+    return store_index(runner,collect(runner,content))
+
+
+async def load_action(runner,native_turn,item_id):
+    """One complete authenticated original canonical item, without replay."""
+    if runner.purpose!="writer":
+        raise PermissionError("Native execution action history belongs to the writer")
+    for identity in (native_turn,item_id):
+        if not isinstance(identity,str) or not 1<=len(identity)<=128 or "/" in identity:
+            raise ValueError("Invalid original native action identity")
+    owner=scope(runner,native_turn)
+    if not owner:raise PermissionError("Original action has no owned execution scope")
+    from .context_action_pages import authorize_source
+    await authorize_source(runner,owner)
+    result=await runner.rpc.call("thread/items/read",{"threadId":runner.thread,
+        "turnId":native_turn,"itemIds":[item_id]})
+    entries=result["data"]
+    if len(entries)!=1 or entries[0]["turnId"]!=native_turn:
+        raise RuntimeError("Original native action unavailable")
+    item=entries[0]["item"]
+    if item.get("id")!=item_id or item.get("type") not in KINDS:
+        raise PermissionError("Original action pointer does not name execution data")
+    return owner,item,json.dumps(item,sort_keys=True,separators=(",",":"))
+
+
 async def read(runner,value):
     if runner.purpose!="writer":
         raise PermissionError("Native execution action history belongs to the writer")
+    if "current" in value:
+        from .retained_context_packet import enabled
+        if value!={"current":True} or not enabled(runner):
+            raise ValueError("Explicit paired current-action discovery required")
+        if not runner.active or not runner.accepting or runner.execution_scope is None:
+            raise PermissionError("Current accepted Writer execution required")
+        owner=scope(runner,runner.turn)
+        if owner is None or owner!=runner.execution_scope.as_dict():
+            raise PermissionError("Current original execution scope changed")
+        from .context_action_pages import authorize_source
+        await authorize_source(runner,owner)
+        import asyncio
+        result=await asyncio.to_thread(index,runner,{"obligations":[{"source":owner["sourceRequestId"]}]})
+        return result or {"schema":"lax-native-action-index/v2","nativeThread":runner.thread,
+            "actionCount":0,"recentActions":[],
+            "meaning":"No terminal execution evidence for this original responsibility."}
+    if "indexSha256" in value:
+        from .context_action_pages import read_index
+        return await read_index(runner,value)
     if set(value)-{"nativeTurn","itemId","offset","sha256"} or not {"nativeTurn","itemId"}<=set(value):
         raise ValueError("Exact native action pointer required")
     for field in ("nativeTurn","itemId"):
         if not isinstance(value[field],str) or not 1<=len(value[field])<=128 or "/" in value[field]:
             raise ValueError("Invalid original native action identity")
-    owner=scope(runner,value["nativeTurn"])
-    if not owner:raise PermissionError("Original action has no owned execution scope")
-    # Current Hollywood permission on the original material, not stale local access.
-    await runner.request("read",{"reference":owner["materialId"]})
-    result=await runner.rpc.call("thread/items/read",{"threadId":runner.thread,
-        "turnId":value["nativeTurn"],"itemIds":[value["itemId"]]})
-    entries=result["data"]
-    if len(entries)!=1 or entries[0]["turnId"]!=value["nativeTurn"]:
-        raise RuntimeError("Original native action unavailable")
-    item=entries[0]["item"]
-    if item.get("id")!=value["itemId"] or item.get("type") not in KINDS:
-        raise PermissionError("Original action pointer does not name execution data")
-    encoded=json.dumps(item,sort_keys=True,separators=(",",":"))
+    offset=value.get("offset",0)
+    if type(offset) is not int or offset<0:
+        raise ValueError("Invalid action chunk offset")
+    if offset and not value.get("sha256"):
+        from .errors import ToolValidationError
+        raise ToolValidationError(
+            "ACTION_READ_DIGEST_REQUIRED",
+            "A nonzero action offset requires the SHA256 returned by its first chunk.",
+            "Reuse the previous chunk's nextRead arguments, or supply its exact "
+            "nativeTurn/itemId/nextOffset/sha256. No native read or effect was dispatched.")
+    owner,item,encoded=await load_action(runner,value["nativeTurn"],value["itemId"])
     sha=hashlib.sha256(encoded.encode()).hexdigest();offset=value.get("offset",0)
     if type(offset) is not int or not 0<=offset<max(1,len(encoded)):
         raise ValueError("Invalid action chunk offset")
@@ -82,4 +147,7 @@ async def read(runner,value):
     end=min(len(encoded),offset+3072)
     return {"nativeTurn":value["nativeTurn"],"itemId":value["itemId"],"sha256":sha,
         "offset":offset,"content":encoded[offset:end],"nextOffset":end if end<len(encoded) else None,
-        "totalBytes":len(encoded),"meaning":"Original native action evidence, never authority to replay it."}
+        "totalBytes":len(encoded),
+        "nextRead":{"nativeTurn":value["nativeTurn"],"itemId":value["itemId"],
+                    "offset":end,"sha256":sha} if end<len(encoded) else None,
+        "meaning":"Original native action evidence, never authority to replay it."}

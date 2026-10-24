@@ -69,7 +69,7 @@ Preparation creates immutable root-owned files and a service definition. It
 starts no service and changes no canonical registration.
 
 ```sh
-lax-collaboration --prepare /run/owned-setup/policy.json --output /run/owned-setup/prepared
+lax-collaboration --prepare /var/lib/harness/owned-setup/policy.json --output /var/lib/harness/owned-setup/prepared
 ```
 
 The policy file and all its ancestors must be protected from other users. Its
@@ -107,7 +107,7 @@ Review `setup.json`, the unit, source hashes and protected configuration before
 applying that exact prepared cut:
 
 ```sh
-lax-collaboration --apply /run/owned-setup/prepared
+lax-collaboration --apply /var/lib/harness/owned-setup/prepared
 ```
 
 Apply uses explicit administrator CAS operations, preserves original receipts
@@ -261,7 +261,7 @@ Privileged concurrent placement/configuration changes must remain excluded by
 that orchestration; this local operation is not a server admission lease.
 
 ```sh
-lax-collaboration --upgrade /run/owned-setup/prepared \
+lax-collaboration --upgrade /var/lib/harness/owned-setup/prepared \
   --expected-bridge-revision 7 \
   --controller-unit <installed-controller.service> \
   --expected-controller-unit-sha256 <SHA256-of-installed-controller-unit-bytes> \
@@ -428,3 +428,58 @@ renews restart approval using status.restartReview and the old policy digest,
 then resumes placement after canary qualification. Restart approvals are not
 changed by release approval. Rollback requires a new preparation with inverse
 old/new paths after independent drain; no database rewind or history rewrite.
+
+
+### A rejected bridge upgrade
+
+Upgrade preserves the implemented routing capability set. An unsupported
+installed capability holds the upgrade before any new intent or canonical
+write; use a candidate that implements that capability.
+
+A definite original HTTP rejection is distinct from an uncertain response.
+Inspect the protected administrative capture and original canonical command
+receipt first. For a reviewed 400/403/409 rejection, the installer can record a
+separate terminal rejection receipt without repeating the original request:
+
+    lax-collaboration --reconcile-rejected /var/lib/harness/owned-setup/prepared \
+      --operation-id ORIGINAL_UPGRADE_DIGEST \
+      --expected-capture-sha256 REVIEWED_ADMINISTRATIVE_CAPTURE_SHA256
+
+This requires the original local artifacts and canonical bridge to remain
+unchanged, all affected consumers paused and drained, and the bridge/controller
+stopped. Pending captures, an accepted original command, changed state or unknown
+effects remain held. It starts no service or model. Retain the rejected intent,
+capture, archive and result; prepare a corrected immutable candidate with a new
+operation for a subsequent upgrade. A rejected receipt never means an upgrade
+was accepted.
+
+Purpose-separated installations retain their existing unfinished Goals and Work
+during an offline software upgrade. Drain checks use their reader, writer and
+responder units, original agent.lock, native operations and paused placement.
+They do not require the retired single-connector layout or terminal business
+work. Refresh each affected installation's readiness receipt after explicit
+bridge/controller activation, before restoring its previous placement state.
+
+## Authorized resource access at installation
+
+The purpose installer checks every current active readable local resource grant,
+not only the private execution workspace. It verifies canonical authority, host,
+root incarnation and grant revisions, then checks root traversal/read access and
+granted write access as the actual installed Unix UID. This check reads metadata;
+it does not create probe files or change ACLs, ownership or Git metadata.
+
+A Hollywood grant does not grant Unix permissions. An inaccessible shared parent
+or root prevents a new readiness seal with a concrete resource-path error. The
+installation administrator must prepare the intended access explicitly. Root
+access does not prove descendant-file permissions or native mount views; native
+operations retain their own physical-target and effect-admission checks.
+
+New installations record resourceReadinessVersion=2 and a
+lax-purpose-readiness/v2 seal containing the complete resource-access evidence.
+Existing manifests without that field retain the exact v1 private-root contract;
+the old interpreter is not asked to import the new probe. That v1 seal makes no
+shared-root readiness claim. An explicit drained purpose upgrade with
+resourceReadinessVersion=2 validates the original seal, then publishes the new
+manifest and v2 seal through the existing backed-up upgrade receipt. No activation
+implicitly changes seal versions or resumes stopped work. Downgrading the
+readiness version is refused; rollback remains an explicit offline operation.

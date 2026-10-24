@@ -1,10 +1,20 @@
 """Canonical transport errors shared by CLI, callbacks and imported connectors."""
+import re
 
 
 class HttpFailure(RuntimeError):
-    def __init__(self, status, message):
+    def __init__(self, status, message, *, code=None, next_action=None):
         super().__init__(f"Hollywood {status}: {message}")
         self.status = status
+        self.code = code if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,79}", code) else None
+        self.next_action = (next_action if isinstance(next_action, str)
+                            and 0 < len(next_action) <= 1500 else None)
+
+    def public_details(self):
+        return {"status": self.status, "message": str(self)[:250],
+                **({"code": self.code} if self.code else {}),
+                "next": self.next_action or
+                    "Inspect the current authorized resource/revision before a corrected command"}
 
 
 class ToolValidationError(ValueError):

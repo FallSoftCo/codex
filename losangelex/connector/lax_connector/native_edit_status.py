@@ -6,6 +6,10 @@ from .collaboration_bridge import protected_directory,require,receive,PLAN_ACTIO
 from .owner_briefing import guardian_peer
 from .service_observer import protected
 
+CLAIM_ACTIONS={"acquire","renew","release","handoff","accept","inspect"}
+CLAIM_SNAPSHOT_FIELDS={"id","work","owner","host","workspace_id","relative_path","kind",
+    "source_revision","content_sha256","state","revision","expires_at","target_work","origin_delivery"}
+
 FIELDS={"schema","agentId","deliveryId","generation","claimId","contextId","nativeThread","nativeTurn","roleRevision","after"}
 
 def carry(capture,peer,frame,owner):
@@ -34,16 +38,28 @@ def carry(capture,peer,frame,owner):
             continue
         command=wire.get("command") or {}
         phase=command.get("action")
-        if phase not in PLAN_ACTIONS | {"preflight","begin","settle"}:
+        claim_metadata=phase in CLAIM_ACTIONS and "claimId" in command
+        if not claim_metadata and phase not in PLAN_ACTIONS | {"preflight","begin","settle"}:
             continue
         rejected=old["state"]=="rejected" and old.get("status") in (400,403,409)
+        metadata=claim_metadata or phase in PLAN_ACTIONS
         boundary=("preflight_rejected_no_admission" if rejected and phase=="preflight"
-            else "metadata_request_rejected" if rejected and phase in PLAN_ACTIONS
-            else "inspect_original_metadata" if old["state"]=="completed" and phase in PLAN_ACTIONS
+            else "metadata_request_rejected" if rejected and metadata
+            else "inspect_original_claim" if old["state"]=="completed" and claim_metadata
+            else "inspect_original_metadata" if old["state"]=="completed" and metadata
             else "inspect_original_permit" if old["state"]=="completed" else "original_effect_unsettled")
+        claim_snapshot=None
+        if claim_metadata and old["state"]=="completed":
+            result=old.get("result") or {}
+            receipt=result.get("receipt",result)
+            require(isinstance(receipt.get("claim"),dict),"Original accepted claim receipt unavailable")
+            claim_snapshot={k:v for k,v in receipt["claim"].items() if k in CLAIM_SNAPSHOT_FIELDS}
         rows.append({"cursor":path.stem,"operationId":wire["operationId"],"nativeThread":source["nativeThread"],
             "nativeTurn":source["nativeTurn"],"callId":source["callId"],"phase":phase,
             "receiptState":old["state"],"httpStatus":old.get("status"),
+            "domain":"path_claim" if claim_metadata else "edit_plan" if phase in PLAN_ACTIONS else "mutation",
+            "claimId":command.get("claimId") if claim_metadata else None,
+            "claimReceipt":claim_snapshot,"claimReceiptIsHistorical":claim_snapshot is not None,
             "confirmedPostRejected":rejected,"effectBoundary":boundary,
             "proposedPermitId":command.get("permitId"),"planId":command.get("planId"),
             "rejection":old.get("rejection"),
@@ -57,7 +73,7 @@ def carry(capture,peer,frame,owner):
     return {"success":True,"result":{"schema":"lax-native-edit-status/v1",
         "agentId":frame["agentId"],"deliveryId":frame["deliveryId"],"generation":frame["generation"],
         "operations":rows,"nextCursor":next_cursor,"mayApply":False,
-        "meaning":"Original protected plan/consent/mutation receipts. A rejected metadata request is separate from prior or pending filesystem effects. A confirmed preflight HTTP rejection admitted no mutation; a missing record alone proves nothing. Pending/unknown or begun effects retain their original receipts and locks."},
+        "meaning":"Original protected path-claim/plan/consent/mutation receipts. Claim snapshots are historical accepted receipts, not current ownership or mutation authority. Use scoped coordination inspection to read current claim state; write actions retain exact revision CAS. A rejected metadata request is separate from prior or pending filesystem effects. A confirmed preflight HTTP rejection admitted no mutation; a missing record alone proves nothing. Pending/unknown or begun effects retain their original receipts and locks."},
         "canonicalReceipt":None,"holdReason":None}
 
 def read(c,arguments):

@@ -5,6 +5,16 @@ from .journal import saved
 
 
 async def rebuild(runner,request_id,pending):
+    from .retained_context_packet import enabled
+    if enabled(runner):
+        if not runner.config.get("contextRebuildEnabled",False):
+            raise RuntimeError("Native context rebuild is disabled")
+        return await runner.automatic.idle.rebuild(request_id,pending)
+    async with runner.effect_lock:
+        return await legacy_rebuild(runner,request_id,pending)
+
+
+async def legacy_rebuild(runner,request_id,pending):
     if not runner.config.get("contextRebuildEnabled",False):
         raise RuntimeError("Context rebuild requires an explicitly qualified native profile")
     if runner.active or runner.accepting or runner.closing:

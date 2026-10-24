@@ -29,8 +29,10 @@ When available, request_context_rebuild queues a fresh window after this inferen
 it does not complete work or start another model turn. Refill uses exact
 marked records and canonical state, without a model-written summary.
 After rebuilding, retrieve missing evidence through the same tools. The writer
-receives an original native-action index for unfinished work; context_action_read
-retrieves exact original results. A fresh context never authorizes replaying an effect.
+receives a bounded original native-action index for unfinished work. A v2 descriptor
+contains a recent preview, total count and indexSha256; use context_action_read with
+indexSha256/pageOffset for original pages, or nativeTurn/itemId for exact results.
+A preview is not the whole ledger. A fresh context never authorizes replaying an effect.
 Retrieve missing facts; do not invent results, promises or human approvals.
 No polling loops, self-requests or acknowledgements to acknowledgements.
 """
@@ -46,6 +48,7 @@ A delivery receipt proves availability, never understanding or completed work.
 New arrivals join this history at native model-step boundaries; the writer keeps
 executing independently. Preserve original input identities and objectives.
 Use retrieval for deeper history, missing evidence or a newer material revision.
+Use context_writer_evidence_read on a writerOutcome inputId for its complete original native item index and exact selected result/final-message chunks. Follow nextRead for full pages/chunks; this does not execute a tool or start the Writer. The outcome preview is not the full receipt. Evidence availability is a new internal fact, never a repeated human request. Read missing original results before assessing a retry; do not invent omitted text or effects.\nA writerOutcome is internal native execution evidence, NOT another human message, assignment or reply obligation. Read it and its current original Work completely. Use review_writer_outcome to assess why the Writer stopped and provide specific evidence-grounded continuation guidance, or hold when uncertain/blocked. Preserve the accepted objective, criteria and plan. Do not accept, answer, amend or acknowledge the outcome as conversation. Native item descriptors are a projection, not full execution evidence; absence of settlement never proves Work complete. Unknown effects cannot be retried. At most two continuations are allowed for unchanged work inputs; repeated empty finals need an honest hold and useful blocker communication, not blind retries.
 A roomObservation is optional attributable context, NOT an assignment or response
 obligation. Read it fully, retrieve relevant authorized history when needed, and
 use record_room_observation with a bounded relevance interpretation. If it affects
@@ -205,7 +208,9 @@ E={"type":"array","maxItems":16,"items":{"type":"object","properties":{
    "path":S,"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}},
    "required":["path","sha256"],"additionalProperties":False}}
 
-def tools(purpose,enable_rebuild=False):
+def tools(purpose,enable_rebuild=False,*,native_action_retention=0):
+    if type(native_action_retention) is not int or native_action_retention not in (0,1):
+        raise ValueError("Explicit native-action retention version required")
     result=[
       spec("context_read","List bounded purpose-scoped material references, states and revisions. This is an index, not full material. Follow nextCursor via after; history is an explicit choice.",
            {"view":{"type":"string","enum":["active","history"]},"after":{"type":"string","minLength":1,"maxLength":512}},[]),
@@ -242,6 +247,11 @@ def tools(purpose,enable_rebuild=False):
                ["observationId","roleRevision","objective","acceptance","body"]),
           spec("accept_work","Accept an input as continuing execution work; retain its final response pending evidence.",
                {"inputId":ID,"objective":S,"acceptance":S},["inputId","objective","acceptance"]),
+          spec("context_writer_evidence_read","Read this agent\'s original Writer native evidence after Hollywood authorization. Omit itemId for complete index pages; supply itemId for exact serialized item chunks. Follow nextRead; nonzero item offset requires prior sha256. Read only, no Writer/model startup or effect replay. Host ownership is verified; no cross-host filesystem access.",
+               {"inputId":ID,"pageOffset":{"type":"integer","minimum":0},"itemId":{"type":"string","minLength":1,"maxLength":128},"offset":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}},["inputId"]),
+          spec("review_writer_outcome","Assess original internal Writer termination after reading its native outcome and current Work. Continue that same Work with concrete guidance, or hold; never completes Work or responds to a human. Unknown effects, cancellation, stale revisions and exhausted continuation budget cannot resume.",
+               {"inputId":ID,"workId":ID,"workRevision":{"type":"integer","minimum":1},"decision":{"type":"string","enum":["continue","hold"]},"body":S},
+               ["inputId","workId","workRevision","decision","body"]),
           spec("apply_work_update","Apply an ordinary read follow-up to existing unfinished work. A canonicalAssignment must instead be accepted as its own Work, even for this same agent; it cannot be merged into a parent waiting on its Goal. Human answers need no acknowledgement.",
                {"inputId":ID,"workId":ID,"workRevision":{"type":"integer","minimum":1},"body":S},
                ["inputId","workId","workRevision","body"]),
@@ -250,14 +260,25 @@ def tools(purpose,enable_rebuild=False):
           spec("apply_peer_result","Record interpretation of an actual peer-completion input on its original work. No acknowledgement or new execution request is sent.",
                {"inputId":ID,"body":S},["inputId","body"]),
         ]
+    if purpose=="writer" and native_action_retention==1:
+        result += [spec("retain_native_action",
+          "Retain a whole original terminal action for future context rebuilding. First use context_action_read to obtain nativeTurn, itemId and its exact sha256, and context_selection for selectionRevision. This stages an immutable original-host pin, checks current permissions and the actual native core-prefix budget, then adopts the selection. It never repeats the command. Whole item limit32768 bytes, aggregate65536; oversized items are refused without truncation.",
+          {"nativeTurn":{"type":"string","minLength":1,"maxLength":128},
+           "itemId":{"type":"string","minLength":1,"maxLength":128},
+           "sha256":{"type":"string","minLength":64,"maxLength":64,"pattern":"^[a-f0-9]{64}$"},
+           "selectionRevision":{"type":"integer","minimum":0},
+           "reason":{"type":"string","minLength":1,"maxLength":500}},
+          ["nativeTurn","itemId","sha256","selectionRevision","reason"])]
     if purpose=="writer":
         result += [
-          spec("context_action_read","Read an original native action named by the context_actions index, including command, output or mutation receipt. Bounded chunks, current source permission and original thread ownership apply. Evidence never authorizes repeating an effect.",
+          spec("context_action_read","Read original native evidence: supply indexSha256/pageOffset for an index page, OR nativeTurn/itemId for an action's first chunk. Continue with the returned nextRead arguments. A manual nonzero offset REQUIRES the sha256 returned by the previous chunk. Source permission is rechecked without changing material-read proofs. Never repeat an effect.",
                {"nativeTurn":{"type":"string","minLength":1,"maxLength":128},
                 "itemId":{"type":"string","minLength":1,"maxLength":128},
                 "offset":{"type":"integer","minimum":0},
-                "sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}},["nativeTurn","itemId"]),
-          spec("record_progress","Record verified execution progress internally and continue working.",
+                "sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+                "indexSha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+                "pageOffset":{"type":"integer","minimum":0}},[]),
+          spec("record_progress","Record verified execution progress internally and continue working. body accepts 1–4000 characters; use focused entries and artifact references for larger findings.",
                {"workId":ID,"body":S,"evidence":E},["workId","body"]),
           spec("complete_work","Record verified acceptance outcome and evidence after reading current complete work material and resolving peer prerequisites.",
                {"workId":ID,"body":S,"evidence":E},["workId","body","evidence"]),
@@ -282,9 +303,19 @@ def tools(purpose,enable_rebuild=False):
         ]:
             result += [spec(name,description,{"communicationId":ID,"revision":{"type":"integer","minimum":1},"body":S},
                             ["communicationId","revision"] + ([] if name=="publish_response" else ["body"]))]
+    if purpose=="writer":
+        action_read=next(t for t in result if t["name"]=="context_action_read")
+        action_read["inputSchema"]["oneOf"]=[{"required":["indexSha256"]},
+            {"required":["nativeTurn","itemId"]}]
+        if native_action_retention==1:
+            action_read["description"] += (
+                " Use {current:true} to discover the current accepted responsibility's "
+                "terminal action index before selecting evidence; no command is repeated.")
+            action_read["inputSchema"]["properties"]["current"]={"type":"boolean","enum":[True]}
+            action_read["inputSchema"]["oneOf"].append({"required":["current"]})
     return result
 
-ACTIONS={"context_selection":"selection","retain_context_input":"select","request_context_rebuild":"rebuild_request","context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
+ACTIONS={"review_writer_outcome":"review_writer_outcome","context_selection":"selection","retain_context_input":"select","request_context_rebuild":"rebuild_request","context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
          "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers","await_goal_results":"wait_goals",

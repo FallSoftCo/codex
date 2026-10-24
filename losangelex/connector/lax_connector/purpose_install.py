@@ -128,8 +128,34 @@ def model_account(path):
     return hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
 
 
+
+def context_settings(spec):
+    """Validate explicit context policy before installation or upgrade effects."""
+    settings = {}
+    if "contextRebuildEnabled" in spec:
+        if type(spec["contextRebuildEnabled"]) is not bool:
+            raise ValueError("Explicit context rebuild opt-in must be boolean")
+        settings["contextRebuildEnabled"] = spec["contextRebuildEnabled"]
+    if "automaticContextRefill" in spec:
+        policy = spec["automaticContextRefill"]
+        if policy is not None and (not isinstance(policy, dict)
+                or set(policy) != {"type"} or policy["type"] not in ("canonical", "disabled")):
+            raise ValueError("Explicit canonical or disabled automatic refill policy required")
+        settings["automaticContextRefill"] = dict(policy) if policy is not None else None
+    if "nativeActionRetention" in spec:
+        version = spec["nativeActionRetention"]
+        if type(version) is not int or version not in (0,1):
+            raise ValueError("Explicit native-action retention version0/1 required")
+        if version and (settings.get("contextRebuildEnabled") is not True
+                or settings.get("automaticContextRefill") != {"type":"canonical"}):
+            raise ValueError("Retained-native Writer requires explicit rebuild and canonical refill")
+        settings["nativeActionRetention"] = version
+    return settings
+
+
 def install(spec, *, prepare_only=False):
     if os.geteuid()!=0:raise PermissionError("Verified root installation required")
+    settings=context_settings(spec)
     authority,agent,host=[str(UUID(spec[k])) for k in ("authorityId","agentId","hostId")]
     if spec["machineIdentity"]!=machine_identity():raise ValueError("Installation host identity differs")
     record=directory(authority,agent)
@@ -192,10 +218,7 @@ def install(spec, *, prepare_only=False):
         sandbox="danger-full-access",approvalPolicy="never",requireAdministrator=bool(spec.get("global")),
         installedPurposeRuntime=True,installationRecord=str(accepted),pythonRoot=spec["pythonRoot"],
         workerServiceMemoryMaxBytes=spec.get("serviceMemoryMaxBytes",8*1024**3))
-    if "contextRebuildEnabled" in spec:
-        if type(spec["contextRebuildEnabled"]) is not bool:
-            raise ValueError("Explicit context rebuild opt-in must be boolean")
-        config["contextRebuildEnabled"]=spec["contextRebuildEnabled"]
+    config.update(settings)
     if spec.get("nativeCollaborationChannel"):
         config["nativeCollaborationChannel"]=spec["nativeCollaborationChannel"]
     if spec.get("sourceConfig"):
@@ -280,6 +303,7 @@ WantedBy=multi-user.target
         "interpreter":spec["interpreter"],"pythonRoot":spec["pythonRoot"],"runtime":runtime,
         "approvedModelAccountDigest":auth_account,
         "machineIdentity":machine_identity(),"nativePackage":package,"sudoVerifiedUid":0,
+        "resourceReadinessVersion":2,
         "servicesStarted":False,"historicalSessionsResumed":False}
     saved(accepted,value)
     if prepare_only:

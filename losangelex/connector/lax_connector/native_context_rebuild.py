@@ -35,7 +35,7 @@ def refill_items(snapshot,operation,actions=None):
     action_sha=hashlib.sha256(actions_encoded.encode()).hexdigest()
     for offset in range(0,len(actions_encoded),3072):
         items.append({"type":"function_call_output","namespace":"lax","name":"context_actions",
-            "output":json.dumps({"schema":"lax-native-action-index/v1","sha256":action_sha,
+            "output":json.dumps({"schema":"lax-native-action-index/v2" if isinstance(actions,dict) else "lax-native-action-index/v1","sha256":action_sha,
                 "offset":offset,"content":actions_encoded[offset:offset+3072],
                 "totalBytes":len(actions_encoded),"retrieval":"context_action_read",
                 "meaning":"Original action receipts for unfinished work. Never replay an effect merely because context was reset."},
@@ -79,8 +79,27 @@ async def install(runner,snapshot,operation,actions=None):
             return previous["receipt"]
         raise RuntimeError("Original context rebuild has an uncertain/unfinished native outcome; inspect its original checkpoint and refill, do not repeat it")
     observed=await runner.rpc.call("thread/read",{"threadId":runner.thread,"includeTurns":False})
-    if observed["thread"]["status"]["type"]!="idle":
-        raise RuntimeError("Context rebuild cannot replace an active native inference")
+    status = observed["thread"]["status"]["type"]
+    if status != "idle":
+        # A failed inference has systemError status even after terminality.
+        # Verify the newest original turn and authenticated domain release;
+        # neither a status label nor an older failed turn proves quiescence.
+        if status != "systemError":
+            raise RuntimeError("Context rebuild cannot replace an active native inference")
+        wake = json.loads((runner.state / "wake.json").read_text())
+        latest = await runner.rpc.call("thread/turns/list", {
+            "threadId": runner.thread, "limit": 1, "sortDirection": "desc",
+            "itemsView": "summary"}, timeout=15)
+        turns = latest["data"]
+        if (wake.get("state") != "finished" or wake.get("nativeThread") != runner.thread
+                or len(turns) != 1 or turns[0]["id"] != wake.get("nativeTurn")
+                or turns[0]["status"] != "failed"):
+            raise RuntimeError("Newest original failed inference is not confirmed")
+        ended = await runner.agent.http(runner.purpose, "GET",
+            f"agents/{runner.config['agentId']}/contexts/{runner.purpose}/operations/context-end:" + turns[0]["id"])
+        if (ended.get("nativeTurn") != turns[0]["id"] or ended.get("state") != "failed"
+                or not (ended.get("admission") or {}).get("capacityReleased")):
+            raise RuntimeError("Original failed inference release is not confirmed")
     path=Path(observed["thread"]["path"])
     before_bytes=path.stat().st_size
     value={"state":"reset_intent","operationId":operation,"nativeThread":runner.thread,

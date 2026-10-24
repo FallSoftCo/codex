@@ -420,9 +420,14 @@ class Bridge:
             else:
                 require(port == "coordination" and source["tool"] == "coordination_act", "Unimplemented canonical native port")
             require(policy.get("physicalTargets") is True and policy["bridge"]["protocol"] == "canonical-edit-plans/v2", "Registered physical-target protocol unavailable")
-            require(record.get("work") is not None and command["workId"] == record["work"]["id"],
+            from .collaboration_cleanup import permitted as cleanup_permitted, root as cleanup_root
+            cleanup = cleanup_permitted(port, command)
+            require(cleanup or (record.get("work") is not None
+                    and command["workId"] == record["work"]["id"]),
                     "Planned native intent requires captured admitted work; ordinary patches use delivery scope")
-            if self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2":
+            if cleanup:
+                root = cleanup_root(self, record, port, command, frame["evidence"]["environmentId"])
+            elif self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2":
                 from .resource_routing import intent_root
                 root = intent_root(self, record, policy, frame["evidence"]["environmentId"])
             else:
@@ -470,7 +475,7 @@ class Bridge:
             result = self.relay(record, source, port, command, root, paths)
             if port == "coordination" and command["action"] == "acquire":
                 saved(locator, {"workspaceId": root["workspaceId"], "relativePath": command["relativePath"]})
-            if port == "edit-plans":
+            if port == "edit-plans" and not cleanup:
                 saved(self.plan_pointer(record, root), {"planId": str(UUID(command["planId"]))})
         receipt = result.get("receipt", result)
         reply = {"success": True, "result": result, "canonicalReceipt": receipt, "holdReason": None}

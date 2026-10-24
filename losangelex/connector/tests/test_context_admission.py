@@ -1,4 +1,5 @@
 """Admission must precede inference; no semantic-model behavior is simulated."""
+
 import asyncio
 import json
 import tempfile
@@ -14,11 +15,17 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             calls = []
+
             async def request(action, value=None, **kwargs):
                 calls.append((action, value, kwargs))
-                return {"delivery": None, "admission": {"reason": "host_capacity_exhausted"}}
+                return {
+                    "delivery": None,
+                    "admission": {"reason": "host_capacity_exhausted"},
+                }
+
             async def rpc(*args, **kwargs):
                 self.fail("A deferred work item reached native RPC")
+
             runner = ContextRunner.__new__(ContextRunner)
             runner.purpose = "writer"
             runner.state = root
@@ -27,19 +34,26 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
             runner.rpc = SimpleNamespace(call=rpc)
             await runner.run("same-original-work", [{"id": "work-reference"}])
             self.assertEqual([v[0] for v in calls], ["admit"])
-            self.assertEqual(calls[0][2], {
-                "operation": "context-admit:work-reference", "turn": "admission"})
+            self.assertEqual(
+                calls[0][2],
+                {"operation": "context-admit:work-reference", "turn": "admission"},
+            )
             self.assertFalse(runner.active)
             self.assertFalse((root / "wake.json").exists())
-            self.assertEqual(json.loads((root / "admission-wait.json").read_text()),
-                {"delivery": None, "admission": {"reason": "host_capacity_exhausted"}})
+            self.assertEqual(
+                json.loads((root / "admission-wait.json").read_text()),
+                {"delivery": None, "admission": {"reason": "host_capacity_exhausted"}},
+            )
 
     async def test_unconfirmed_admission_holds_without_submitting_inference(self):
         with tempfile.TemporaryDirectory() as tmp:
+
             async def request(*args, **kwargs):
                 raise RuntimeError("Original admission receipt unavailable")
+
             async def rpc(*args, **kwargs):
                 self.fail("An uncertain admission reached native RPC")
+
             runner = ContextRunner.__new__(ContextRunner)
             runner.purpose = "writer"
             runner.state = Path(tmp)
@@ -55,6 +69,7 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
     async def test_cached_acceptance_cannot_bypass_current_authorization(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls = []
+
             async def request(action, value=None, **kwargs):
                 calls.append(action)
                 if action == "admit":
@@ -62,8 +77,10 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
                 if action == "ready":
                     raise PermissionError("Current original work cancelled")
                 self.fail("Unexpected context request")
+
             async def rpc(*args, **kwargs):
                 self.fail("Revoked current authorization reached native RPC")
+
             runner = ContextRunner.__new__(ContextRunner)
             runner.purpose = "writer"
             runner.state = Path(tmp)
@@ -81,12 +98,17 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
         for purpose in ("reader", "responder"):
             with self.subTest(purpose=purpose), tempfile.TemporaryDirectory() as tmp:
                 calls = []
+
                 async def request(action, value=None, **kwargs):
                     calls.append(action)
-                    return {"permit": {"id": "original-permit", "state": "queued"},
-                            "admission": {"reason": "host_capacity_exhausted"}}
+                    return {
+                        "permit": {"id": "original-permit", "state": "queued"},
+                        "admission": {"reason": "host_capacity_exhausted"},
+                    }
+
                 async def rpc(*args, **kwargs):
                     self.fail("A queued communication context reached inference")
+
                 runner = ContextRunner.__new__(ContextRunner)
                 runner.purpose = purpose
                 runner.state = Path(tmp)
@@ -98,33 +120,54 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(runner.active)
                 self.assertFalse((runner.state / "wake.json").exists())
 
-    async def test_exact_permit_precedes_submission_and_survives_begin_and_terminal_callbacks(self):
+    async def test_exact_permit_precedes_submission_and_survives_begin_and_terminal_callbacks(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as tmp:
             calls = []
             runner = ContextRunner.__new__(ContextRunner)
+
             async def request(action, value=None, **kwargs):
                 calls.append(action)
                 if action == "reserve":
                     return {"permit": {"id": "original-permit", "state": "reserved"}}
                 self.assertEqual(value["permitId"], "original-permit")
                 return {}
+
             async def rpc(method, params, **kwargs):
                 calls.append(method)
                 self.assertEqual(calls[:3], ["reserve", "currentPermit", "turn/start"])
-                runner.finished.set_result({"id": "original-turn", "status": "completed"})
+                runner.finished.set_result(
+                    {"id": "original-turn", "status": "completed"}
+                )
                 return {"turn": {"id": "original-turn"}}
+
             async def http(purpose, method, path, payload=None):
                 self.assertEqual((purpose, method), ("reader", "GET"))
-                self.assertTrue(path.startswith("agents/original-agent/contexts/reader/operations/"))
+                self.assertTrue(
+                    path.startswith("agents/original-agent/contexts/reader/operations/")
+                )
                 calls.append("currentPermit")
-                return {"currentPermit": {"id": "original-permit",
-                    "state": "reserved", "native_turn": None}}
+                return {
+                    "currentPermit": {
+                        "id": "original-permit",
+                        "state": "reserved",
+                        "native_turn": None,
+                    }
+                }
+
             runner.agent = SimpleNamespace(http=http)
-            runner.inbox = None  # This fixture isolates permit admission, not input delivery.
+            runner.inbox = (
+                None  # This fixture isolates permit admission, not input delivery.
+            )
             runner.native_tools = None
             runner.purpose = "reader"
             runner.thread = "original-reader-thread"
-            runner.config = {"agentId": "original-agent", "model": "unchanged", "effort": "unchanged"}
+            runner.config = {
+                "agentId": "original-agent",
+                "model": "unchanged",
+                "effort": "unchanged",
+            }
             runner.state = Path(tmp)
             runner.admitted = asyncio.Event()
             runner.effect_lock = asyncio.Lock()
@@ -132,21 +175,39 @@ class ContextAdmissionTests(unittest.IsolatedAsyncioTestCase):
             runner.rpc = SimpleNamespace(call=rpc)
             runner.trace = lambda *_: None
             runner.activity = None
+            runner.automatic = SimpleNamespace(pending=None)
             await runner.run("material", [{"id": "original-material"}])
-            self.assertEqual(calls, ["reserve", "currentPermit", "turn/start", "begin", "end"])
+            self.assertEqual(
+                calls, ["reserve", "currentPermit", "turn/start", "begin", "end"]
+            )
             self.assertFalse(runner.active)
-            self.assertEqual(json.loads((runner.state / "wake.json").read_text())["state"], "finished")
+            self.assertEqual(
+                json.loads((runner.state / "wake.json").read_text())["state"],
+                "finished",
+            )
 
-    async def test_confirmed_deferral_can_retry_same_admission_then_retains_accepted_receipt(self):
+    async def test_confirmed_deferral_can_retry_same_admission_then_retains_accepted_receipt(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as tmp:
             calls = []
-            responses = iter((
-                {"delivery": None, "admission": {"reason": "host_capacity_stale"}},
-                {"delivery": {"id": "original", "generation": 1, "claim_id": "admit:original"}},
-            ))
+            responses = iter(
+                (
+                    {"delivery": None, "admission": {"reason": "host_capacity_stale"}},
+                    {
+                        "delivery": {
+                            "id": "original",
+                            "generation": 1,
+                            "claim_id": "admit:original",
+                        }
+                    },
+                )
+            )
+
             async def http(purpose, method, path, payload=None):
                 calls.append((purpose, method, path, payload))
                 return next(responses)
+
             runner = ContextRunner.__new__(ContextRunner)
             runner.purpose = "writer"
             runner.thread = "original-writer-thread"

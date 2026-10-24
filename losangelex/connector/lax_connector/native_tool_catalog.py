@@ -75,7 +75,7 @@ TOOLS = [
 ROLE = {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
 TOOLS += [
     spec("lax_native_edit_status",
-        "Read protected original plan, consent and mutation receipts for this current work, including rejected metadata calls. Distinguishes a confirmed preflight rejection (no mutation admission) from pending/unknown or begun effects. Inspection grants no mutation and no automatic retry; missing records prove nothing.",
+        "Read protected original path-claim, plan, consent and mutation receipts for this current work, including rejected coordination calls. Claim receipts are historical; coordination_act inspect reads the current claim without requiring its exact revision, while mutations retain exact revision CAS. Distinguishes a confirmed preflight rejection (no mutation admission) from pending/unknown or begun effects. Inspection grants no mutation and no automatic retry; missing records prove nothing.",
         {"after":{"type":"string","pattern":"^[a-f0-9]{64}$"}},[]),
     spec("hollywood_withdraw_question",
         "Withdraw your own unanswered nonblocking question when verified facts make it obsolete. Retains the original question and an attributed reason; never supplies a human answer or accepts an approval.",

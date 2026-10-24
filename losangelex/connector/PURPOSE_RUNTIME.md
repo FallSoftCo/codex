@@ -162,8 +162,91 @@ definition and observes real PID/cgroup/incarnation facts. A rejected resident
 attestation occurs before inference reservation and is reported as held, inactive.
 
 An explicit service restart can continue eligible material after the original
-inference is definitively interrupted. A stable restart token prevents unchanged
-polling from chaining completed inferences. Unknown native turns remain held;
-cancelled Work is not resumed. An intentionally stopped service stays stopped
-until explicitly activated. This does not establish enterprise boot policy or
-automatic recovery from every host/network failure.
+inference is definitively interrupted. The writer first verifies that exact
+native terminal through its existing RPC history. It then uses the existing
+context operation channel's resume_interrupted action with only the original
+native turn. Hollywood derives the released inference permit from the original
+context-end receipt and checks the same agent, context, thread and host. Only
+still unfinished, nonwaiting, noncancelled material whose last execution matches
+that interrupted turn can receive one continuation revision. The original
+operation receipt deduplicates recovery; a different operation cannot advance
+already eligible material again. A local restart fingerprint alone is
+insufficient to make consumed canonical work eligible.
+
+The paired bind contract advertises interruptedContinuation=1. Startup never
+repeats the original inference or infers work completion. Normal placement,
+capacity, ownership and original-effect checks still govern the next inference.
+Unknown, running, failed or completed originals do not trigger this recovery.
+A stable restart token prevents unchanged polling from chaining completed
+inferences. An intentionally stopped service stays stopped until explicitly
+activated. This does not establish enterprise boot policy or automatic recovery
+from every host/network failure.
+
+
+## Native tool-owned inference lifecycle
+
+Purpose profiles opt in to native `inferenceCompletion: "hostTool"` on start
+and every cold resume. They verify the native capability and effective response.
+Provider tool selection retains the supported automatic behavior. The native
+host completion contract is independent of provider request-format controls.
+Nonfinal provider continuations remain ordinary sampling; a final response
+without authenticated settlement fails this native inference. Successful scoped host settlement ends inference only
+after admitted tools drain. A plain/empty final without tools fails that native
+inference; it does not finish Work, publish a reply or automatically start again.
+
+Native failure remains visible and held for explicit diagnosis.
+A corrected native image advertises host_tool_inference_auto_transport/v1.
+Explicit --reconcile-only --acknowledge-provider-rejection purpose:native-turn
+verifies an original unsupported-tool-choice400 response, native items, known
+effect journals and canonical failed permit/end before acknowledging that
+specific rejection. Original failed receipts remain unchanged; normal startup
+only reads the accepted acknowledgement. No model or source input is replayed.
+ Accepted Work
+and original receipts remain durable. Known pre-model failures retain their
+separate narrow recovery. An owner may explicitly recover the latest confirmed
+completed-but-unsettled writer inference with `--reconcile-only
+--resume-unsettled-native-turn <original-id>`. This verifies the exact original
+thread/turn, terminal native actions, reconciled journals, released canonical
+permit and still-current unfinished Work before advancing the existing Work
+continuation revision once. It starts no model, submits no input and replays no
+effect. Unknown outcomes, waiting/cancelled/completed Work and other active
+inferences remain fenced. Repeated unchanged polling never invokes this action.
+
+## Shared bridge maintenance
+
+A purpose installation pins its own files and the enrolled shared bridge dependencies.
+A drained bridge upgrade can legitimately change those shared pins; this does not
+authorize changing an agent's config, units, identity, environment or workspace.
+
+Retain the original accepted `collaboration_upgrade` receipt. With all affected
+placements paused and purpose services stopped, activate only the accepted bridge.
+Use the administrator CLI `lax-reconcile-agent-dependencies` with the authority,
+agent, a new operation UUID, exact old readiness SHA256 and the original protected
+`*-accepted.json` bridge receipt. It checks the live root socket and canonical
+enrollment, accepts only the reviewed bridge-file/revision delta, retains the
+exact prior seal and publishes an attributable reconciliation receipt. No model
+or service starts, permission changes or task replay occur in that operation.
+
+Then perform the reviewed purpose software upgrade and matching host/API rollout.
+The ordinary runtime `require_sealed` and live-peer checks remain mandatory.
+Restore only the prior placement choices authorized for this maintenance scope;
+restoring a placement does not start a deliberately stopped service.
+
+If a reply is lost, inspect `--status` for the same operation and its original
+readiness hashes before any further write. An unsettled reconciliation is not
+permission to repeat it or discard its journal. For rollback, use the accepted
+reverse bridge transition and the same checked dependency reconciliation; do not
+blindly restore an obsolete seal or revert business/native history.
+
+## Explicit context policy for newly provisioned peers
+
+Native peer provisioning inherits the validated explicit context settings from
+the provisioning agent: rebuild enablement, automatic refill policy and native
+action-retention version. Omitted settings remain omitted. A retained-native
+Writer requires both rebuild enablement and canonical refill. Incomplete policy
+is refused before writing the provisioning journal or submitting configuration.
+
+This propagation applies to a new peer's original installation intent. It does
+not upgrade existing peers, rewrite old provisioning intents, resume stopped
+services, or establish all-purpose native retention. Whole retained execution
+evidence remains a Writer capability in the current qualified candidate.
