@@ -250,3 +250,18 @@ This propagation applies to a new peer's original installation intent. It does
 not upgrade existing peers, rewrite old provisioning intents, resume stopped
 services, or establish all-purpose native retention. Whole retained execution
 evidence remains a Writer capability in the current qualified candidate.
+
+## Original bootstrap binding recovery
+
+A new context is ready after its canonical bind and healthy runtime status,
+not merely after context.json contains a native thread ID. A lost bootstrap
+HTTP callback keeps the original binding journal. On restart the runtime first
+reads that exact operation receipt. A paired Hollywood backend reports an
+absent own-purpose receipt as HTTP404 / CONTEXT_OPERATION_NOT_FOUND; wrong-purpose
+and authorization failures remain HTTP403.
+
+Only action=bind with nativeTurn=bootstrap and the identical original request
+may recover by resubmitting that same idempotent metadata transaction. The
+journal retains the recovery observation and accepted receipt. It starts no
+replacement native thread, inference, Work or tool execution. Unknown non-bind
+operations, external effects and permission failures do not use this recovery.
