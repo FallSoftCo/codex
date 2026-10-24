@@ -125,7 +125,17 @@ pub enum RolloutRecorderParams {
     },
 }
 
+#[path = "recorder_refill.rs"]
+mod context_refill;
+
 enum RolloutCmd {
+    ContextRefill {
+        intent: Box<codex_protocol::context_refill::ContextWindowRefillIntentEvent>,
+        checkpoint: Box<crate::CompactedItem>,
+        ack: oneshot::Sender<
+            std::io::Result<codex_protocol::context_refill::ContextWindowInstalledParams>,
+        >,
+    },
     AddItems(Vec<RolloutItem>),
     Persist {
         ack: oneshot::Sender<std::io::Result<()>>,
@@ -990,6 +1000,8 @@ impl RolloutRecorder {
                     rollout_path: path,
                     ordinal_state,
                     last_logged_error: None,
+                    #[cfg(test)]
+                    refill_fault: None,
                 }
             }
             RolloutRecorderParams::Resume { path } => {
@@ -1004,6 +1016,8 @@ impl RolloutRecorder {
                     rollout_path: path,
                     ordinal_state,
                     last_logged_error: None,
+                    #[cfg(test)]
+                    refill_fault: None,
                 }
             }
         };
@@ -1798,6 +1812,8 @@ struct RolloutWriterState {
     rollout_path: PathBuf,
     ordinal_state: RolloutOrdinalState,
     last_logged_error: Option<String>,
+    #[cfg(test)]
+    refill_fault: Option<context_refill::RefillFault>,
 }
 
 impl RolloutWriterState {
@@ -1957,6 +1973,26 @@ async fn rollout_writer(
     // Process rollout commands
     while let Some(cmd) = rx.recv().await {
         match cmd {
+            RolloutCmd::ContextRefill {
+                intent,
+                checkpoint,
+                ack,
+            } => {
+                match state
+                    .install_context_refill_once(*intent, *checkpoint)
+                    .await
+                {
+                    Ok(receipt) => {
+                        let _ = ack.send(Ok(receipt));
+                    }
+                    Err(err) => {
+                        let _ = ack.send(Err(clone_io_error(&err)));
+                        // Terminal poison: drop receiver and all pending barriers.
+                        // Ordinary recovery must NEVER reopen/replay this suffix.
+                        return Err(err);
+                    }
+                }
+            }
             RolloutCmd::AddItems(items) => {
                 state.add_items(items);
                 state.flush_if_materialized().await;

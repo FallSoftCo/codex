@@ -114,7 +114,12 @@ impl SessionTask for RegularTask {
             .await?;
             // Terminal errors are already reported. Let task completion preserve pending
             // input instead of restarting the failed turn for that same input.
-            if ctx.terminal_error.lock().await.is_some() {
+            if ctx.terminal_error.lock().await.is_some()
+                || ctx
+                    .extension_data
+                    .get::<crate::tools::handlers::DynamicToolTurnCompletion>()
+                    .is_some()
+            {
                 return Ok(last_agent_message);
             }
             if !sess.input_queue.has_pending_input(&sess.active_turn).await {

@@ -537,6 +537,17 @@ impl ThreadStore for LocalThreadStore {
         Box::pin(async move { live_writer::resume_thread(self, params).await })
     }
 
+    fn install_context_refill(
+        &self,
+        thread_id: ThreadId,
+        intent: codex_protocol::context_refill::ContextWindowRefillIntentEvent,
+        checkpoint: codex_rollout::CompactedItem,
+    ) -> ThreadStoreFuture<'_, codex_protocol::context_refill::ContextWindowInstalledParams> {
+        Box::pin(async move {
+            live_writer::install_context_refill(self, thread_id, intent, checkpoint).await
+        })
+    }
+
     fn append_items(&self, params: AppendThreadItemsParams) -> ThreadStoreFuture<'_, ()> {
         Box::pin(async move { live_writer::append_items(self, params).await })
     }

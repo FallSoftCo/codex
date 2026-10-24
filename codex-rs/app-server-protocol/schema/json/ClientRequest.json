@@ -213,6 +213,78 @@
         }
       ]
     },
+    "AutomaticContextRefillPolicy": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "disabled"
+              ],
+              "title": "DisabledAutomaticContextRefillPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "DisabledAutomaticContextRefillPolicy",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "contextId": {
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/definitions/ContextRefillPurpose"
+            },
+            "type": {
+              "enum": [
+                "canonical"
+              ],
+              "title": "CanonicalAutomaticContextRefillPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "contextId",
+            "purpose",
+            "type"
+          ],
+          "title": "CanonicalAutomaticContextRefillPolicy",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Explicit negotiated whole-item evidence extension. Writer only; omission never restores this policy from native history.",
+          "properties": {
+            "contextId": {
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/definitions/ContextRefillPurpose"
+            },
+            "type": {
+              "enum": [
+                "canonicalRetainedActions"
+              ],
+              "title": "CanonicalRetainedActionsAutomaticContextRefillPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "contextId",
+            "purpose",
+            "type"
+          ],
+          "title": "CanonicalRetainedActionsAutomaticContextRefillPolicy",
+          "type": "object"
+        }
+      ]
+    },
     "ByteRange": {
       "properties": {
         "end": {
@@ -766,6 +838,182 @@
           "type": "object"
         }
       ]
+    },
+    "ContextRefillPurpose": {
+      "enum": [
+        "reader",
+        "writer",
+        "responder"
+      ],
+      "type": "string"
+    },
+    "ContextWindowPreflight": {
+      "additionalProperties": false,
+      "description": "Read-only measurement of the exact native context and selected data. This neither installs history nor grants permission for any execution.",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "packetSha256": {
+          "type": "string"
+        },
+        "prefixItemCount": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "replacementItemCount": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "replacementSha256": {
+          "type": "string"
+        },
+        "replacementWireBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/definitions/ContextWindowState"
+        }
+      },
+      "required": [
+        "operationId",
+        "packetSha256",
+        "prefixItemCount",
+        "replacementItemCount",
+        "replacementSha256",
+        "replacementWireBytes",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ContextWindowRefillResponse": {
+      "additionalProperties": false,
+      "description": "Exact immutable canonical snapshot and original action-reference data.",
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "historyVersion": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "nativeActionsSha256": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/ContextRefillPurpose"
+        },
+        "selectionRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "snapshotOperationId": {
+          "type": "string"
+        },
+        "snapshotReadPoint": {
+          "type": "string"
+        },
+        "snapshotSha256": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "historyVersion",
+        "items",
+        "nativeActionsSha256",
+        "operationId",
+        "purpose",
+        "selectionRevision",
+        "snapshotOperationId",
+        "snapshotReadPoint",
+        "snapshotSha256",
+        "threadId",
+        "totalBytes",
+        "turnId",
+        "windowId"
+      ],
+      "type": "object"
+    },
+    "ContextWindowState": {
+      "additionalProperties": false,
+      "description": "Read-only native identity cut for a future CAS preflight/replacement. Reading it neither starts/aborts a turn nor acknowledges an unsettled operation.",
+      "properties": {
+        "activeTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "heldOperationId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "historyVersion": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "idle": {
+          "type": "boolean"
+        },
+        "lastStartedTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "purpose": {
+          "$ref": "#/definitions/ContextRefillPurpose"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "historyVersion",
+        "idle",
+        "purpose",
+        "threadId",
+        "windowId"
+      ],
+      "type": "object"
     },
     "ConversationTextRole": {
       "enum": [
@@ -1801,6 +2049,25 @@
         "original"
       ],
       "type": "string"
+    },
+    "InferenceCompletionPolicy": {
+      "description": "Supplied again on cold resume; never inferred from saved room/history data.",
+      "oneOf": [
+        {
+          "description": "Ordinary caller: a model final may end an inference.",
+          "enum": [
+            "model"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Only authenticated host settlement may successfully end the inference after admitted tools drain. Provider tool selection is independent.",
+          "enum": [
+            "hostTool"
+          ],
+          "type": "string"
+        }
+      ]
     },
     "InitializeCapabilities": {
       "description": "Client-declared capabilities negotiated during initialize.",
@@ -2892,6 +3159,52 @@
         "pluginNames"
       ],
       "type": "object"
+    },
+    "PrimaryContextInputPolicy": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "disabled"
+              ],
+              "title": "DisabledPrimaryContextInputPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "DisabledPrimaryContextInputPolicy",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "contextId": {
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/definitions/ContextRefillPurpose"
+            },
+            "type": {
+              "enum": [
+                "canonical"
+              ],
+              "title": "CanonicalPrimaryContextInputPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "contextId",
+            "purpose",
+            "type"
+          ],
+          "title": "CanonicalPrimaryContextInputPolicy",
+          "type": "object"
+        }
+      ]
     },
     "ProcessTerminalSize": {
       "description": "PTY size in character cells for `process/spawn` PTY sessions.",
@@ -5399,6 +5712,17 @@
           ],
           "description": "Override where approval requests are routed for review on this thread and subsequent turns."
         },
+        "automaticContextRefill": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AutomaticContextRefillPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path."
+        },
         "baseInstructions": {
           "type": [
             "string",
@@ -5428,6 +5752,17 @@
           "description": "When true, return only thread metadata and live-resume state without populating `thread.turns`. This is useful when the client plans to call `thread/turns/list` immediately after resuming. Full-history hydration is deprecated for paginated threads; use this with `thread/turns/list` and `thread/items/list` instead.",
           "type": "boolean"
         },
+        "inferenceCompletion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InferenceCompletionPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions."
+        },
         "model": {
           "description": "Configuration overrides for the resumed thread, if any.",
           "type": [
@@ -5451,6 +5786,17 @@
             }
           ],
           "description": "@deprecated `friendly` and `pragmatic` no longer select a style. Changing this does not rewrite the thread's existing instructions."
+        },
+        "primaryContextInput": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PrimaryContextInputPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit first-sample canonical admission; never restored from history."
         },
         "sandbox": {
           "anyOf": [
@@ -5725,6 +6071,17 @@
           ],
           "description": "Override where approval requests are routed for review on this thread and subsequent turns."
         },
+        "automaticContextRefill": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AutomaticContextRefillPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path."
+        },
         "baseInstructions": {
           "type": [
             "string",
@@ -5756,6 +6113,17 @@
             "null"
           ]
         },
+        "inferenceCompletion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InferenceCompletionPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions."
+        },
         "model": {
           "type": [
             "string",
@@ -5778,6 +6146,17 @@
             }
           ],
           "description": "@deprecated `friendly` and `pragmatic` no longer select a style."
+        },
+        "primaryContextInput": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PrimaryContextInputPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit first-sample canonical admission; never restored from history."
         },
         "sandbox": {
           "anyOf": [

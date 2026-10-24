@@ -435,6 +435,14 @@ class AutoReviewRequirements(BaseModel):
     required_on_models: Annotated[list[str] | None, Field(alias="requiredOnModels")] = None
 
 
+class DisabledAutomaticContextRefillPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    type: Annotated[Literal["disabled"], Field(title="DisabledAutomaticContextRefillPolicyType")]
+
+
 class BrowserUseAccessApprovalLifetime(Enum):
     turn = "turn"
     thread = "thread"
@@ -1140,6 +1148,71 @@ class ContextCompactedNotification(BaseModel):
     )
     thread_id: Annotated[str, Field(alias="threadId")]
     turn_id: Annotated[str, Field(alias="turnId")]
+
+
+class ContextRefillPurpose(Enum):
+    reader = "reader"
+    writer = "writer"
+    responder = "responder"
+
+
+class ContextWindowInstalledParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    context_id: Annotated[str, Field(alias="contextId")]
+    native_actions_sha256: Annotated[str, Field(alias="nativeActionsSha256")]
+    native_history_bytes: Annotated[int, Field(alias="nativeHistoryBytes", ge=0)]
+    native_history_sha256: Annotated[str, Field(alias="nativeHistorySha256")]
+    operation_id: Annotated[str, Field(alias="operationId")]
+    previous_window_id: Annotated[str, Field(alias="previousWindowId")]
+    purpose: ContextRefillPurpose
+    selection_revision: Annotated[int, Field(alias="selectionRevision", ge=0)]
+    snapshot_operation_id: Annotated[str, Field(alias="snapshotOperationId")]
+    snapshot_read_point: Annotated[str, Field(alias="snapshotReadPoint")]
+    snapshot_sha256: Annotated[str, Field(alias="snapshotSha256")]
+    thread_id: Annotated[str, Field(alias="threadId")]
+    total_bytes: Annotated[int, Field(alias="totalBytes", ge=0)]
+    turn_id: Annotated[str, Field(alias="turnId")]
+    window_id: Annotated[str, Field(alias="windowId")]
+
+
+class ContextWindowRefillResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    context_id: Annotated[str, Field(alias="contextId")]
+    history_version: Annotated[int, Field(alias="historyVersion", ge=0)]
+    items: list
+    native_actions_sha256: Annotated[str, Field(alias="nativeActionsSha256")]
+    operation_id: Annotated[str, Field(alias="operationId")]
+    purpose: ContextRefillPurpose
+    selection_revision: Annotated[int, Field(alias="selectionRevision", ge=0)]
+    snapshot_operation_id: Annotated[str, Field(alias="snapshotOperationId")]
+    snapshot_read_point: Annotated[str, Field(alias="snapshotReadPoint")]
+    snapshot_sha256: Annotated[str, Field(alias="snapshotSha256")]
+    thread_id: Annotated[str, Field(alias="threadId")]
+    total_bytes: Annotated[int, Field(alias="totalBytes", ge=0)]
+    turn_id: Annotated[str, Field(alias="turnId")]
+    window_id: Annotated[str, Field(alias="windowId")]
+
+
+class ContextWindowState(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    active_turn_id: Annotated[str | None, Field(alias="activeTurnId")] = None
+    context_id: Annotated[str, Field(alias="contextId")]
+    held_operation_id: Annotated[str | None, Field(alias="heldOperationId")] = None
+    history_version: Annotated[int, Field(alias="historyVersion", ge=0)]
+    idle: bool
+    last_started_turn_id: Annotated[str | None, Field(alias="lastStartedTurnId")] = None
+    purpose: ContextRefillPurpose
+    thread_id: Annotated[str, Field(alias="threadId")]
+    window_id: Annotated[str, Field(alias="windowId")]
 
 
 class ConversationTextRole(Enum):
@@ -2197,6 +2270,11 @@ class InAppBrowserRequirements(BaseModel):
     allow_external_browser_settings_import: Annotated[
         bool | None, Field(alias="allowExternalBrowserSettingsImport")
     ] = None
+
+
+class InferenceCompletionPolicy(Enum):
+    model = "model"
+    host_tool = "hostTool"
 
 
 class InitializeCapabilities(BaseModel):
@@ -3645,6 +3723,33 @@ class PluginsMigration(BaseModel):
     )
     marketplace_name: Annotated[str, Field(alias="marketplaceName")]
     plugin_names: Annotated[list[str], Field(alias="pluginNames")]
+
+
+class DisabledPrimaryContextInputPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    type: Annotated[Literal["disabled"], Field(title="DisabledPrimaryContextInputPolicyType")]
+
+
+class CanonicalPrimaryContextInputPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    context_id: Annotated[str, Field(alias="contextId")]
+    purpose: ContextRefillPurpose
+    type: Annotated[Literal["canonical"], Field(title="CanonicalPrimaryContextInputPolicyType")]
+
+
+class PrimaryContextInputPolicy(
+    RootModel[DisabledPrimaryContextInputPolicy | CanonicalPrimaryContextInputPolicy]
+):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    root: DisabledPrimaryContextInputPolicy | CanonicalPrimaryContextInputPolicy
 
 
 class ProcessExitedNotification(BaseModel):
@@ -6159,44 +6264,6 @@ class ThreadRealtimeTranscriptRole(Enum):
     assistant = "assistant"
 
 
-class ThreadResumeParams(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-    approval_policy: Annotated[AskForApproval | None, Field(alias="approvalPolicy")] = None
-    approvals_reviewer: Annotated[
-        ApprovalsReviewer | None,
-        Field(
-            alias="approvalsReviewer",
-            description="Override where approval requests are routed for review on this thread and subsequent turns.",
-        ),
-    ] = None
-    base_instructions: Annotated[str | None, Field(alias="baseInstructions")] = None
-    config: dict[str, Any] | None = None
-    cwd: str | None = None
-    developer_instructions: Annotated[str | None, Field(alias="developerInstructions")] = None
-    exclude_turns: Annotated[
-        bool | None,
-        Field(
-            alias="excludeTurns",
-            description="When true, return only thread metadata and live-resume state without populating `thread.turns`. This is useful when the client plans to call `thread/turns/list` immediately after resuming. Full-history hydration is deprecated for paginated threads; use this with `thread/turns/list` and `thread/items/list` instead.",
-        ),
-    ] = None
-    model: Annotated[
-        str | None, Field(description="Configuration overrides for the resumed thread, if any.")
-    ] = None
-    model_provider: Annotated[str | None, Field(alias="modelProvider")] = None
-    personality: Annotated[
-        Personality | None,
-        Field(
-            description="@deprecated `friendly` and `pragmatic` no longer select a style. Changing this does not rewrite the thread's existing instructions."
-        ),
-    ] = None
-    sandbox: SandboxMode | None = None
-    service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
-    thread_id: Annotated[str, Field(alias="threadId")]
-
-
 class ThreadRevertParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -7082,6 +7149,46 @@ class AppsReadResponse(BaseModel):
     missing_app_ids: Annotated[list[str], Field(alias="missingAppIds")]
 
 
+class CanonicalAutomaticContextRefillPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    context_id: Annotated[str, Field(alias="contextId")]
+    purpose: ContextRefillPurpose
+    type: Annotated[Literal["canonical"], Field(title="CanonicalAutomaticContextRefillPolicyType")]
+
+
+class CanonicalRetainedActionsAutomaticContextRefillPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    context_id: Annotated[str, Field(alias="contextId")]
+    purpose: ContextRefillPurpose
+    type: Annotated[
+        Literal["canonicalRetainedActions"],
+        Field(title="CanonicalRetainedActionsAutomaticContextRefillPolicyType"),
+    ]
+
+
+class AutomaticContextRefillPolicy(
+    RootModel[
+        DisabledAutomaticContextRefillPolicy
+        | CanonicalAutomaticContextRefillPolicy
+        | CanonicalRetainedActionsAutomaticContextRefillPolicy
+    ]
+):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    root: (
+        DisabledAutomaticContextRefillPolicy
+        | CanonicalAutomaticContextRefillPolicy
+        | CanonicalRetainedActionsAutomaticContextRefillPolicy
+    )
+
+
 class BrowserUseConfig(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -7129,15 +7236,6 @@ class InitializeRequest(BaseModel):
     id: RequestId
     method: Annotated[Literal["initialize"], Field(title="InitializeRequestMethod")]
     params: InitializeParams
-
-
-class ThreadResumeRequest(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-    id: RequestId
-    method: Annotated[Literal["thread/resume"], Field(title="Thread/resumeRequestMethod")]
-    params: ThreadResumeParams
 
 
 class ThreadArchiveRequest(BaseModel):
@@ -8320,6 +8418,20 @@ class ContentItem(
         | InputAudioContentItem
         | OutputTextContentItem
     )
+
+
+class ContextWindowPreflight(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    operation_id: Annotated[str, Field(alias="operationId")]
+    packet_sha256: Annotated[str, Field(alias="packetSha256")]
+    prefix_item_count: Annotated[int, Field(alias="prefixItemCount", ge=0)]
+    replacement_item_count: Annotated[int, Field(alias="replacementItemCount", ge=0)]
+    replacement_sha256: Annotated[str, Field(alias="replacementSha256")]
+    replacement_wire_bytes: Annotated[int, Field(alias="replacementWireBytes", ge=0)]
+    state: ContextWindowState
 
 
 class ExperimentalFeature(BaseModel):
@@ -10648,6 +10760,65 @@ class ThreadResumeInitialTurnsPageParams(BaseModel):
     ] = None
 
 
+class ThreadResumeParams(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    approval_policy: Annotated[AskForApproval | None, Field(alias="approvalPolicy")] = None
+    approvals_reviewer: Annotated[
+        ApprovalsReviewer | None,
+        Field(
+            alias="approvalsReviewer",
+            description="Override where approval requests are routed for review on this thread and subsequent turns.",
+        ),
+    ] = None
+    automatic_context_refill: Annotated[
+        AutomaticContextRefillPolicy | None,
+        Field(
+            alias="automaticContextRefill",
+            description="Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path.",
+        ),
+    ] = None
+    base_instructions: Annotated[str | None, Field(alias="baseInstructions")] = None
+    config: dict[str, Any] | None = None
+    cwd: str | None = None
+    developer_instructions: Annotated[str | None, Field(alias="developerInstructions")] = None
+    exclude_turns: Annotated[
+        bool | None,
+        Field(
+            alias="excludeTurns",
+            description="When true, return only thread metadata and live-resume state without populating `thread.turns`. This is useful when the client plans to call `thread/turns/list` immediately after resuming. Full-history hydration is deprecated for paginated threads; use this with `thread/turns/list` and `thread/items/list` instead.",
+        ),
+    ] = None
+    inference_completion: Annotated[
+        InferenceCompletionPolicy | None,
+        Field(
+            alias="inferenceCompletion",
+            description="Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions.",
+        ),
+    ] = None
+    model: Annotated[
+        str | None, Field(description="Configuration overrides for the resumed thread, if any.")
+    ] = None
+    model_provider: Annotated[str | None, Field(alias="modelProvider")] = None
+    personality: Annotated[
+        Personality | None,
+        Field(
+            description="@deprecated `friendly` and `pragmatic` no longer select a style. Changing this does not rewrite the thread's existing instructions."
+        ),
+    ] = None
+    primary_context_input: Annotated[
+        PrimaryContextInputPolicy | None,
+        Field(
+            alias="primaryContextInput",
+            description="Explicit first-sample canonical admission; never restored from history.",
+        ),
+    ] = None
+    sandbox: SandboxMode | None = None
+    service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
+    thread_id: Annotated[str, Field(alias="threadId")]
+
+
 class ThreadSection(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -10745,16 +10916,37 @@ class ThreadStartParams(BaseModel):
             description="Override where approval requests are routed for review on this thread and subsequent turns.",
         ),
     ] = None
+    automatic_context_refill: Annotated[
+        AutomaticContextRefillPolicy | None,
+        Field(
+            alias="automaticContextRefill",
+            description="Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path.",
+        ),
+    ] = None
     base_instructions: Annotated[str | None, Field(alias="baseInstructions")] = None
     config: dict[str, Any] | None = None
     cwd: str | None = None
     developer_instructions: Annotated[str | None, Field(alias="developerInstructions")] = None
     ephemeral: bool | None = None
+    inference_completion: Annotated[
+        InferenceCompletionPolicy | None,
+        Field(
+            alias="inferenceCompletion",
+            description="Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions.",
+        ),
+    ] = None
     model: str | None = None
     model_provider: Annotated[str | None, Field(alias="modelProvider")] = None
     personality: Annotated[
         Personality | None,
         Field(description="@deprecated `friendly` and `pragmatic` no longer select a style."),
+    ] = None
+    primary_context_input: Annotated[
+        PrimaryContextInputPolicy | None,
+        Field(
+            alias="primaryContextInput",
+            description="Explicit first-sample canonical admission; never restored from history.",
+        ),
     ] = None
     sandbox: SandboxMode | None = None
     service_name: Annotated[str | None, Field(alias="serviceName")] = None
@@ -10993,6 +11185,15 @@ class ThreadStartRequest(BaseModel):
     id: RequestId
     method: Annotated[Literal["thread/start"], Field(title="Thread/startRequestMethod")]
     params: ThreadStartParams
+
+
+class ThreadResumeRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[Literal["thread/resume"], Field(title="Thread/resumeRequestMethod")]
+    params: ThreadResumeParams
 
 
 class ThreadForkRequest(BaseModel):
@@ -12802,6 +13003,13 @@ class ThreadResumeResponse(BaseModel):
             description="Saved list of disabled plugin IDs. Does not yet filter plugin capabilities.",
         ),
     ] = []
+    inference_completion: Annotated[
+        InferenceCompletionPolicy | None,
+        Field(
+            alias="inferenceCompletion",
+            description="Effective lifecycle for this loaded owner. Older servers omit this.",
+        ),
+    ] = None
     instruction_sources: Annotated[
         list[LegacyAppPathString] | None,
         Field(
@@ -12890,6 +13098,13 @@ class ThreadStartResponse(BaseModel):
             description="Saved list of disabled plugin IDs. Does not yet filter plugin capabilities.",
         ),
     ] = []
+    inference_completion: Annotated[
+        InferenceCompletionPolicy | None,
+        Field(
+            alias="inferenceCompletion",
+            description="Effective lifecycle for this loaded owner. Older servers omit this.",
+        ),
+    ] = None
     instruction_sources: Annotated[
         list[LegacyAppPathString] | None,
         Field(

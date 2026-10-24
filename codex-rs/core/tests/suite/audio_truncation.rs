@@ -122,6 +122,7 @@ async fn dynamic_tool_audio_exceeding_the_output_budget_is_omitted() -> Result<(
         .submit(Op::DynamicToolResponse {
             id: request.call_id,
             response: DynamicToolResponse {
+                turn_control: None,
                 code_mode_text: None,
                 context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputAudio {

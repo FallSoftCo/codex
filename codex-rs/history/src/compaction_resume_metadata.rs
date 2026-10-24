@@ -14,6 +14,10 @@ use serde::Serialize;
 /// compactions that did not. Each field is authoritative, including an intentionally absent value.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct CompactionResumeMetadata {
+    /// Complete native rendering state for selected-context reconstruction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_context: Option<NativeContextCheckpoint>,
+
     /// Selected runtime, including when the companion turn context is absent.
     pub multi_agent_version: Option<MultiAgentVersion>,
     /// Turn identity used to admit continuations after cold resume.
@@ -54,5 +58,38 @@ pub fn resume_multi_agent_version(item: &RolloutItem) -> Option<MultiAgentVersio
         | RolloutItem::SecurityRiskScore(_)
         | RolloutItem::RealtimeItem(_)
         | RolloutItem::EventMsg(_) => None,
+    }
+}
+
+/// Native rendering state persisted atomically inside a context checkpoint.
+/// This is data for reconstruction, never a saved permission or runtime policy.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NativeContextCheckpoint {
+    pub schema: String,
+    pub thread_id: String,
+    pub context_id: String,
+    pub mode: NativeContextCheckpointMode,
+    pub world_state: codex_protocol::protocol::WorldStateItem,
+    pub reference_context: Option<codex_protocol::protocol::TurnContextItem>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeContextCheckpointMode {
+    StepBoundary,
+    IdleRequest,
+}
+
+impl NativeContextCheckpoint {
+    /// Validate reconstruction data only; callers separately enforce ownership,
+    /// native cut identity, durable receipts and fresh execution permissions.
+    pub fn supported(&self) -> bool {
+        self.schema == "lax-native-context-checkpoint/v1"
+            && !self.thread_id.is_empty()
+            && self.thread_id.len() <= 128
+            && !self.context_id.is_empty()
+            && self.context_id.len() <= 256
+            && self.world_state.full
     }
 }

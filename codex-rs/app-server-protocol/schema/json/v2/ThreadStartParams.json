@@ -63,6 +63,78 @@
         }
       ]
     },
+    "AutomaticContextRefillPolicy": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "disabled"
+              ],
+              "title": "DisabledAutomaticContextRefillPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "DisabledAutomaticContextRefillPolicy",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "contextId": {
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/definitions/ContextRefillPurpose"
+            },
+            "type": {
+              "enum": [
+                "canonical"
+              ],
+              "title": "CanonicalAutomaticContextRefillPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "contextId",
+            "purpose",
+            "type"
+          ],
+          "title": "CanonicalAutomaticContextRefillPolicy",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Explicit negotiated whole-item evidence extension. Writer only; omission never restores this policy from native history.",
+          "properties": {
+            "contextId": {
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/definitions/ContextRefillPurpose"
+            },
+            "type": {
+              "enum": [
+                "canonicalRetainedActions"
+              ],
+              "title": "CanonicalRetainedActionsAutomaticContextRefillPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "contextId",
+            "purpose",
+            "type"
+          ],
+          "title": "CanonicalRetainedActionsAutomaticContextRefillPolicy",
+          "type": "object"
+        }
+      ]
+    },
     "CapabilityRootLocation": {
       "description": "Location used to resolve a selected capability root.",
       "oneOf": [
@@ -93,6 +165,14 @@
           "type": "object"
         }
       ]
+    },
+    "ContextRefillPurpose": {
+      "enum": [
+        "reader",
+        "writer",
+        "responder"
+      ],
+      "type": "string"
     },
     "DynamicToolNamespaceTool": {
       "oneOf": [
@@ -259,6 +339,25 @@
       },
       "type": "object"
     },
+    "InferenceCompletionPolicy": {
+      "description": "Supplied again on cold resume; never inferred from saved room/history data.",
+      "oneOf": [
+        {
+          "description": "Ordinary caller: a model final may end an inference.",
+          "enum": [
+            "model"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Only authenticated host settlement may successfully end the inference after admitted tools drain. Provider tool selection is independent.",
+          "enum": [
+            "hostTool"
+          ],
+          "type": "string"
+        }
+      ]
+    },
     "LegacyAppPathString": {
       "type": "string"
     },
@@ -295,6 +394,52 @@
         "pragmatic"
       ],
       "type": "string"
+    },
+    "PrimaryContextInputPolicy": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "disabled"
+              ],
+              "title": "DisabledPrimaryContextInputPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "DisabledPrimaryContextInputPolicy",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "contextId": {
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/definitions/ContextRefillPurpose"
+            },
+            "type": {
+              "enum": [
+                "canonical"
+              ],
+              "title": "CanonicalPrimaryContextInputPolicyType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "contextId",
+            "purpose",
+            "type"
+          ],
+          "title": "CanonicalPrimaryContextInputPolicy",
+          "type": "object"
+        }
+      ]
     },
     "SandboxMode": {
       "enum": [
@@ -427,6 +572,17 @@
       ],
       "description": "Override where approval requests are routed for review on this thread and subsequent turns."
     },
+    "automaticContextRefill": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AutomaticContextRefillPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path."
+    },
     "baseInstructions": {
       "type": [
         "string",
@@ -458,6 +614,17 @@
         "null"
       ]
     },
+    "inferenceCompletion": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/InferenceCompletionPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions."
+    },
     "model": {
       "type": [
         "string",
@@ -480,6 +647,17 @@
         }
       ],
       "description": "@deprecated `friendly` and `pragmatic` no longer select a style."
+    },
+    "primaryContextInput": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/PrimaryContextInputPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Explicit first-sample canonical admission; never restored from history."
     },
     "sandbox": {
       "anyOf": [

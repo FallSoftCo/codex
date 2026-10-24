@@ -282,6 +282,7 @@ pub(crate) fn non_delegation_tool_specs() -> Vec<DynamicToolSpec> {
 
 pub(crate) fn failure_response(message: impl Into<String>) -> DynamicToolCallResponse {
     DynamicToolCallResponse {
+        turn_control: None,
         code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputText {
@@ -318,6 +319,7 @@ pub(crate) async fn execute(
 fn success_response(value: Value) -> Result<DynamicToolCallResponse, String> {
     let text = response::serialize(value)?;
     Ok(DynamicToolCallResponse {
+        turn_control: None,
         code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputText { text }],

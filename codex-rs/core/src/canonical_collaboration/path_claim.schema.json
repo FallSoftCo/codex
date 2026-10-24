@@ -147,19 +147,20 @@
           "type": "string"
         },
         "kind": {
+          "type": "string",
           "enum": [
-            "file",
-            "directory"
+            "file"
           ],
-          "title": "Kind",
-          "type": "string"
+          "description": "This native physical-observation port supports file claims only. Directory observation is not implemented."
         },
         "sourceRevision": {
+          "description": "Exact current Git HEAD revision (40 or 64 lowercase hex characters) of the registered physical checkout. Read it from that checkout; it is not a file digest or a prior claim revision.",
           "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
           "title": "Sourcerevision",
           "type": "string"
         },
         "contentSha256": {
+          "description": "For a file that does not exist, use the literal string absent. For an existing file, use SHA256 of its exact current bytes (64 lowercase hex characters). An empty existing file has SHA256(empty); that digest must not represent a missing file. The native bridge independently observes the physical target before admission.",
           "pattern": "^(absent|[a-f0-9]{64})$",
           "title": "Contentsha256",
           "type": "string"
@@ -168,7 +169,8 @@
           "maximum": 3600,
           "minimum": 1,
           "title": "Leaseseconds",
-          "type": "integer"
+          "type": "integer",
+          "description": "Requested lease lifetime in whole seconds, from 1 through 3600 inclusive. Expiry does not release uncertain effects."
         }
       },
       "required": [
@@ -280,6 +282,7 @@
           "type": "string"
         },
         "claimRevision": {
+          "description": "Wire-compatible hint only for inspection. Reads return the current claim; mutations require exact revision CAS.",
           "minimum": 0,
           "title": "Claimrevision",
           "type": "integer"

@@ -854,6 +854,42 @@ impl CodexThread {
         Ok(())
     }
 
+    /// Inspect the explicitly enrolled native context without changing history.
+    pub async fn canonical_context_window_state(
+        &self,
+        expected_owner_epoch: u64,
+    ) -> CodexResult<codex_protocol::context_refill::ContextWindowState> {
+        crate::session::context_refill::read_window_state(&self.session, expected_owner_epoch).await
+    }
+
+    /// Measure exact current native context and supplied canonical data without
+    /// starting work or authorizing an installation.
+    pub async fn preflight_canonical_context_window(
+        &self,
+        expected_owner_epoch: u64,
+        state: codex_protocol::context_refill::ContextWindowState,
+        packet: codex_protocol::context_refill::ContextWindowRefillResponse,
+    ) -> CodexResult<codex_protocol::context_refill::ContextWindowPreflight> {
+        crate::session::context_idle::preflight(&self.session, expected_owner_epoch, state, packet)
+            .await
+    }
+
+    /// Replace one explicitly owned idle native cut using its exact preflight.
+    pub async fn replace_idle_canonical_context_window(
+        &self,
+        expected_owner_epoch: u64,
+        preflight: codex_protocol::context_refill::ContextWindowPreflight,
+        packet: codex_protocol::context_refill::ContextWindowRefillResponse,
+    ) -> CodexResult<codex_protocol::context_refill::ContextWindowInstalledParams> {
+        crate::session::context_idle::replace_idle(
+            &self.session,
+            expected_owner_epoch,
+            preflight,
+            packet,
+        )
+        .await
+    }
+
     /// Record raw Responses API items without starting a new turn.
     pub async fn inject_response_items(&self, items: Vec<ResponseItem>) -> CodexResult<()> {
         self.inject_response_items_for_turn(items).await?;

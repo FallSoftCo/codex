@@ -289,6 +289,7 @@ fn thread_resume_params_accept_turns_page_bootstrap() {
 #[test]
 fn thread_resume_response_round_trips_initial_turns_page() {
     let response = ThreadResumeResponse {
+        inference_completion: None,
         tool_policy: None,
         disabled_plugin_ids: Vec::new(),
         thread: Thread {
@@ -4890,6 +4891,7 @@ fn codex_error_info_serializes_active_turn_not_steerable_turn_kind_in_camel_case
 #[test]
 fn dynamic_tool_response_serializes_content_items() {
     let value = serde_json::to_value(DynamicToolCallResponse {
+        turn_control: None,
         code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![DynamicToolCallOutputContentItem::InputText {
@@ -4902,6 +4904,7 @@ fn dynamic_tool_response_serializes_content_items() {
     assert_eq!(
         value,
         json!({
+            "turnControl": null,
             "codeModeText": null,
             "contentItems": [
                 {
@@ -4917,6 +4920,7 @@ fn dynamic_tool_response_serializes_content_items() {
 #[test]
 fn dynamic_tool_response_serializes_text_image_and_audio_content_items() {
     let value = serde_json::to_value(DynamicToolCallResponse {
+        turn_control: None,
         code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: vec![
@@ -4937,6 +4941,7 @@ fn dynamic_tool_response_serializes_text_image_and_audio_content_items() {
     assert_eq!(
         value,
         json!({
+            "turnControl": null,
             "codeModeText": null,
             "contentItems": [
                 {

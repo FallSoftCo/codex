@@ -256,7 +256,7 @@ pub(crate) fn specification(name: &str) -> codex_tools::ToolSpec {
     } else {
         (
             include_str!("canonical_collaboration/path_claim.schema.json"),
-            "Record canonical physical path ownership for already admitted work, with revision/content expectations, explicit reviewed release or offered/accepted handoff. Expiry and unknown effects retain ownership. Claim inspection never grants permission to patch.",
+            "Record canonical file ownership for already admitted work. Acquire uses the current registered checkout Git HEAD as sourceRevision. contentSha256 is the literal absent for a missing file, or SHA256 of exact current bytes for an existing file; SHA256(empty) denotes an existing empty file, not absence. This native observation port supports file claims only. Inspect original state before correcting a rejected request; unknown effects retain ownership and do not authorize replay. Claim inspection never grants permission to patch. Release or handoff requires an explicit reviewed effect disposition.",
         )
     };
     let input: Value =

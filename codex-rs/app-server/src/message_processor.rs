@@ -1704,6 +1704,21 @@ impl MessageProcessor {
                     )
                     .await
             }
+            ClientRequest::ThreadContextWindowRead { params, .. } => {
+                self.turn_processor
+                    .thread_context_window_read(&request_id, params)
+                    .await
+            }
+            ClientRequest::ThreadContextWindowPreflight { params, .. } => {
+                self.turn_processor
+                    .thread_context_window_preflight(&request_id, params)
+                    .await
+            }
+            ClientRequest::ThreadContextWindowReplaceIdle { params, .. } => {
+                self.turn_processor
+                    .thread_context_window_replace_idle(&request_id, params)
+                    .await
+            }
             ClientRequest::ThreadInjectItems { params, .. } => {
                 self.turn_processor
                     .thread_inject_items(&request_id, params)

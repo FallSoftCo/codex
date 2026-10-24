@@ -5,6 +5,9 @@ import type { Personality } from "../Personality";
 import type { JsonValue } from "../serde_json/JsonValue";
 import type { ApprovalsReviewer } from "./ApprovalsReviewer";
 import type { AskForApproval } from "./AskForApproval";
+import type { AutomaticContextRefillPolicy } from "./AutomaticContextRefillPolicy";
+import type { InferenceCompletionPolicy } from "./InferenceCompletionPolicy";
+import type { PrimaryContextInputPolicy } from "./PrimaryContextInputPolicy";
 import type { SandboxMode } from "./SandboxMode";
 
 /**
@@ -23,7 +26,18 @@ import type { SandboxMode } from "./SandboxMode";
  *
  * Prefer using thread_id whenever possible.
  */
-export type ThreadResumeParams = {threadId: string, /**
+export type ThreadResumeParams = {/**
+ * Per-owner lifecycle, supplied again on cold resume. Omission uses model
+ * completion; this grants no execution permissions.
+ */
+inferenceCompletion?: InferenceCompletionPolicy | null, /**
+ * Per-owner runtime opt-in. Never restored from persisted history.
+ * Absent/null/disabled keeps the ordinary automatic compaction path.
+ */
+automaticContextRefill?: AutomaticContextRefillPolicy | null, /**
+ * Explicit first-sample canonical admission; never restored from history.
+ */
+primaryContextInput?: PrimaryContextInputPolicy | null, threadId: string, /**
  * Configuration overrides for the resumed thread, if any.
  */
 model?: string | null, modelProvider?: string | null, serviceTier?: string | null | null, cwd?: string | null, approvalPolicy?: AskForApproval | null, /**

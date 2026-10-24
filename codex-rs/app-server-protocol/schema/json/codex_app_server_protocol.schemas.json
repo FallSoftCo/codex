@@ -2976,6 +2976,535 @@
       "title": "CommandExecutionRequestApprovalResponse",
       "type": "object"
     },
+    "ContextInputParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "materialIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "materialIds",
+        "operationId",
+        "purpose",
+        "threadId",
+        "turnId"
+      ],
+      "title": "ContextInputParams",
+      "type": "object"
+    },
+    "ContextInputResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "admissionOperationId": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "fragments": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "materialIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "admissionOperationId",
+        "contextId",
+        "fragments",
+        "materialIds",
+        "operationId",
+        "purpose",
+        "threadId",
+        "turnId"
+      ],
+      "title": "ContextInputResponse",
+      "type": "object"
+    },
+    "ContextWindowIdleInstalledParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Durable checkpoint provenance; prefix excludes the following receipt itself.",
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "nativeActionsSha256": {
+          "type": "string"
+        },
+        "nativeHistoryBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "nativeHistorySha256": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "previousWindowId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "selectionRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "snapshotOperationId": {
+          "type": "string"
+        },
+        "snapshotReadPoint": {
+          "type": "string"
+        },
+        "snapshotSha256": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "nativeActionsSha256",
+        "nativeHistoryBytes",
+        "nativeHistorySha256",
+        "operationId",
+        "previousWindowId",
+        "purpose",
+        "selectionRevision",
+        "snapshotOperationId",
+        "snapshotReadPoint",
+        "snapshotSha256",
+        "threadId",
+        "totalBytes",
+        "turnId",
+        "windowId"
+      ],
+      "title": "ContextWindowInstalledParams",
+      "type": "object"
+    },
+    "ContextWindowIdleInstalledResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Host acknowledgement required before any next provider sample.",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/ContextWindowInstalledStatus"
+        }
+      },
+      "required": [
+        "operationId",
+        "status"
+      ],
+      "title": "ContextWindowInstalledResponse",
+      "type": "object"
+    },
+    "ContextWindowInstalledParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Durable checkpoint provenance; prefix excludes the following receipt itself.",
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "nativeActionsSha256": {
+          "type": "string"
+        },
+        "nativeHistoryBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "nativeHistorySha256": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "previousWindowId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "selectionRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "snapshotOperationId": {
+          "type": "string"
+        },
+        "snapshotReadPoint": {
+          "type": "string"
+        },
+        "snapshotSha256": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "nativeActionsSha256",
+        "nativeHistoryBytes",
+        "nativeHistorySha256",
+        "operationId",
+        "previousWindowId",
+        "purpose",
+        "selectionRevision",
+        "snapshotOperationId",
+        "snapshotReadPoint",
+        "snapshotSha256",
+        "threadId",
+        "totalBytes",
+        "turnId",
+        "windowId"
+      ],
+      "title": "ContextWindowInstalledParams",
+      "type": "object"
+    },
+    "ContextWindowInstalledResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Host acknowledgement required before any next provider sample.",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/ContextWindowInstalledStatus"
+        }
+      },
+      "required": [
+        "operationId",
+        "status"
+      ],
+      "title": "ContextWindowInstalledResponse",
+      "type": "object"
+    },
+    "ContextWindowInstalledStatus": {
+      "enum": [
+        "recorded"
+      ],
+      "type": "string"
+    },
+    "ContextWindowReconcileParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Durable checkpoint provenance; prefix excludes the following receipt itself.",
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "nativeActionsSha256": {
+          "type": "string"
+        },
+        "nativeHistoryBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "nativeHistorySha256": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "previousWindowId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "selectionRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "snapshotOperationId": {
+          "type": "string"
+        },
+        "snapshotReadPoint": {
+          "type": "string"
+        },
+        "snapshotSha256": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "nativeActionsSha256",
+        "nativeHistoryBytes",
+        "nativeHistorySha256",
+        "operationId",
+        "previousWindowId",
+        "purpose",
+        "selectionRevision",
+        "snapshotOperationId",
+        "snapshotReadPoint",
+        "snapshotSha256",
+        "threadId",
+        "totalBytes",
+        "turnId",
+        "windowId"
+      ],
+      "title": "ContextWindowInstalledParams",
+      "type": "object"
+    },
+    "ContextWindowReconcileResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Host acknowledgement required before any next provider sample.",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/ContextWindowInstalledStatus"
+        }
+      },
+      "required": [
+        "operationId",
+        "status"
+      ],
+      "title": "ContextWindowInstalledResponse",
+      "type": "object"
+    },
+    "ContextWindowRefillParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Owner-bound request at a drained automatic window boundary.",
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "historyVersion": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/definitions/ContextWindowRefillPhase"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "reason": {
+          "$ref": "#/definitions/ContextWindowRefillReason"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "historyVersion",
+        "operationId",
+        "phase",
+        "purpose",
+        "reason",
+        "threadId",
+        "turnId",
+        "windowId"
+      ],
+      "title": "ContextWindowRefillParams",
+      "type": "object"
+    },
+    "ContextWindowRefillPhase": {
+      "enum": [
+        "preTurn",
+        "midTurn",
+        "postTurn"
+      ],
+      "type": "string"
+    },
+    "ContextWindowRefillReason": {
+      "oneOf": [
+        {
+          "enum": [
+            "contextLimit",
+            "modelDownshift",
+            "compHashChanged"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Explicit native maintenance, not a provider or context-limit event.",
+          "enum": [
+            "explicitRequest"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "ContextWindowRefillResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Exact immutable canonical snapshot and original action-reference data.",
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "historyVersion": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "nativeActionsSha256": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/definitions/v2/ContextRefillPurpose"
+        },
+        "selectionRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "snapshotOperationId": {
+          "type": "string"
+        },
+        "snapshotReadPoint": {
+          "type": "string"
+        },
+        "snapshotSha256": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "windowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contextId",
+        "historyVersion",
+        "items",
+        "nativeActionsSha256",
+        "operationId",
+        "purpose",
+        "selectionRevision",
+        "snapshotOperationId",
+        "snapshotReadPoint",
+        "snapshotSha256",
+        "threadId",
+        "totalBytes",
+        "turnId",
+        "windowId"
+      ],
+      "title": "ContextWindowRefillResponse",
+      "type": "object"
+    },
     "DynamicToolCallParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -3035,6 +3564,18 @@
         },
         "success": {
           "type": "boolean"
+        },
+        "turnControl": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DynamicToolTurnControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Successful authenticated host tool control; null continues ordinary inference."
         }
       },
       "required": [
@@ -3043,6 +3584,18 @@
       ],
       "title": "DynamicToolCallResponse",
       "type": "object"
+    },
+    "DynamicToolTurnControl": {
+      "description": "Authenticated tool-owner lifecycle control, never model tool arguments or text.",
+      "oneOf": [
+        {
+          "description": "End this native inference after all admitted tool handlers are recorded.",
+          "enum": [
+            "complete"
+          ],
+          "type": "string"
+        }
+      ]
     },
     "ExecCommandApprovalParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -6410,6 +6963,131 @@
       "description": "Request initiated from the server and sent to the client.",
       "oneOf": [
         {
+          "description": "Original owner prepares canonical purpose input before the first model sample.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "thread/contextInput"
+              ],
+              "title": "Thread/contextInputRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/ContextInputParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Thread/contextInputRequest",
+          "type": "object"
+        },
+        {
+          "description": "Owner-only canonical refill at a drained native automatic boundary.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "thread/contextWindow/refill"
+              ],
+              "title": "Thread/contextWindow/refillRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/ContextWindowRefillParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Thread/contextWindow/refillRequest",
+          "type": "object"
+        },
+        {
+          "description": "Host acknowledgement of the original strictly durable native install.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "thread/contextWindow/installed"
+              ],
+              "title": "Thread/contextWindow/installedRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/ContextWindowInstalledParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Thread/contextWindow/installedRequest",
+          "type": "object"
+        },
+        {
+          "description": "Idle maintenance acknowledgement, distinct from live-turn continuation.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "thread/contextWindow/idleInstalled"
+              ],
+              "title": "Thread/contextWindow/idleInstalledRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/ContextWindowInstalledParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Thread/contextWindow/idleInstalledRequest",
+          "type": "object"
+        },
+        {
+          "description": "Owner-only read-only observation of an original installed receipt on cold resume.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "thread/contextWindow/reconcile"
+              ],
+              "title": "Thread/contextWindow/reconcileRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/ContextWindowInstalledParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Thread/contextWindow/reconcileRequest",
+          "type": "object"
+        },
+        {
           "description": "NEW APIs Sent when approval is requested for a specific command execution. This request is used for Turns started via turn/start.",
           "properties": {
             "id": {
@@ -8239,6 +8917,78 @@
           }
         },
         "type": "object"
+      },
+      "AutomaticContextRefillPolicy": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "disabled"
+                ],
+                "title": "DisabledAutomaticContextRefillPolicyType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "DisabledAutomaticContextRefillPolicy",
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "contextId": {
+                "type": "string"
+              },
+              "purpose": {
+                "$ref": "#/definitions/v2/ContextRefillPurpose"
+              },
+              "type": {
+                "enum": [
+                  "canonical"
+                ],
+                "title": "CanonicalAutomaticContextRefillPolicyType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contextId",
+              "purpose",
+              "type"
+            ],
+            "title": "CanonicalAutomaticContextRefillPolicy",
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Explicit negotiated whole-item evidence extension. Writer only; omission never restores this policy from native history.",
+            "properties": {
+              "contextId": {
+                "type": "string"
+              },
+              "purpose": {
+                "$ref": "#/definitions/v2/ContextRefillPurpose"
+              },
+              "type": {
+                "enum": [
+                  "canonicalRetainedActions"
+                ],
+                "title": "CanonicalRetainedActionsAutomaticContextRefillPolicyType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contextId",
+              "purpose",
+              "type"
+            ],
+            "title": "CanonicalRetainedActionsAutomaticContextRefillPolicy",
+            "type": "object"
+          }
+        ]
       },
       "BrowserUseAccessApprovalLifetime": {
         "enum": [
@@ -10861,6 +11611,257 @@
           "turnId"
         ],
         "title": "ContextCompactedNotification",
+        "type": "object"
+      },
+      "ContextRefillPurpose": {
+        "enum": [
+          "reader",
+          "writer",
+          "responder"
+        ],
+        "type": "string"
+      },
+      "ContextWindowInstalledParams": {
+        "additionalProperties": false,
+        "description": "Durable checkpoint provenance; prefix excludes the following receipt itself.",
+        "properties": {
+          "contextId": {
+            "type": "string"
+          },
+          "nativeActionsSha256": {
+            "type": "string"
+          },
+          "nativeHistoryBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "nativeHistorySha256": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "previousWindowId": {
+            "type": "string"
+          },
+          "purpose": {
+            "$ref": "#/definitions/v2/ContextRefillPurpose"
+          },
+          "selectionRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "snapshotOperationId": {
+            "type": "string"
+          },
+          "snapshotReadPoint": {
+            "type": "string"
+          },
+          "snapshotSha256": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "totalBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contextId",
+          "nativeActionsSha256",
+          "nativeHistoryBytes",
+          "nativeHistorySha256",
+          "operationId",
+          "previousWindowId",
+          "purpose",
+          "selectionRevision",
+          "snapshotOperationId",
+          "snapshotReadPoint",
+          "snapshotSha256",
+          "threadId",
+          "totalBytes",
+          "turnId",
+          "windowId"
+        ],
+        "type": "object"
+      },
+      "ContextWindowPreflight": {
+        "additionalProperties": false,
+        "description": "Read-only measurement of the exact native context and selected data. This neither installs history nor grants permission for any execution.",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "packetSha256": {
+            "type": "string"
+          },
+          "prefixItemCount": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "replacementItemCount": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "replacementSha256": {
+            "type": "string"
+          },
+          "replacementWireBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/definitions/v2/ContextWindowState"
+          }
+        },
+        "required": [
+          "operationId",
+          "packetSha256",
+          "prefixItemCount",
+          "replacementItemCount",
+          "replacementSha256",
+          "replacementWireBytes",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContextWindowRefillResponse": {
+        "additionalProperties": false,
+        "description": "Exact immutable canonical snapshot and original action-reference data.",
+        "properties": {
+          "contextId": {
+            "type": "string"
+          },
+          "historyVersion": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "items": {
+            "items": true,
+            "type": "array"
+          },
+          "nativeActionsSha256": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "purpose": {
+            "$ref": "#/definitions/v2/ContextRefillPurpose"
+          },
+          "selectionRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "snapshotOperationId": {
+            "type": "string"
+          },
+          "snapshotReadPoint": {
+            "type": "string"
+          },
+          "snapshotSha256": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "totalBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contextId",
+          "historyVersion",
+          "items",
+          "nativeActionsSha256",
+          "operationId",
+          "purpose",
+          "selectionRevision",
+          "snapshotOperationId",
+          "snapshotReadPoint",
+          "snapshotSha256",
+          "threadId",
+          "totalBytes",
+          "turnId",
+          "windowId"
+        ],
+        "type": "object"
+      },
+      "ContextWindowState": {
+        "additionalProperties": false,
+        "description": "Read-only native identity cut for a future CAS preflight/replacement. Reading it neither starts/aborts a turn nor acknowledges an unsettled operation.",
+        "properties": {
+          "activeTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contextId": {
+            "type": "string"
+          },
+          "heldOperationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "historyVersion": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "idle": {
+            "type": "boolean"
+          },
+          "lastStartedTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "$ref": "#/definitions/v2/ContextRefillPurpose"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contextId",
+          "historyVersion",
+          "idle",
+          "purpose",
+          "threadId",
+          "windowId"
+        ],
         "type": "object"
       },
       "ConversationTextRole": {
@@ -14296,6 +15297,25 @@
           }
         },
         "type": "object"
+      },
+      "InferenceCompletionPolicy": {
+        "description": "Supplied again on cold resume; never inferred from saved room/history data.",
+        "oneOf": [
+          {
+            "description": "Ordinary caller: a model final may end an inference.",
+            "enum": [
+              "model"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Only authenticated host settlement may successfully end the inference after admitted tools drain. Provider tool selection is independent.",
+            "enum": [
+              "hostTool"
+            ],
+            "type": "string"
+          }
+        ]
       },
       "InputModality": {
         "description": "Canonical user-input modality tags advertised by a model.",
@@ -18258,6 +19278,52 @@
           "pluginNames"
         ],
         "type": "object"
+      },
+      "PrimaryContextInputPolicy": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "disabled"
+                ],
+                "title": "DisabledPrimaryContextInputPolicyType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "DisabledPrimaryContextInputPolicy",
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "contextId": {
+                "type": "string"
+              },
+              "purpose": {
+                "$ref": "#/definitions/v2/ContextRefillPurpose"
+              },
+              "type": {
+                "enum": [
+                  "canonical"
+                ],
+                "title": "CanonicalPrimaryContextInputPolicyType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contextId",
+              "purpose",
+              "type"
+            ],
+            "title": "CanonicalPrimaryContextInputPolicy",
+            "type": "object"
+          }
+        ]
       },
       "ProcessExitedNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -24811,6 +25877,17 @@
             ],
             "description": "Override where approval requests are routed for review on this thread and subsequent turns."
           },
+          "automaticContextRefill": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/AutomaticContextRefillPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path."
+          },
           "baseInstructions": {
             "type": [
               "string",
@@ -24840,6 +25917,17 @@
             "description": "When true, return only thread metadata and live-resume state without populating `thread.turns`. This is useful when the client plans to call `thread/turns/list` immediately after resuming. Full-history hydration is deprecated for paginated threads; use this with `thread/turns/list` and `thread/items/list` instead.",
             "type": "boolean"
           },
+          "inferenceCompletion": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/InferenceCompletionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions."
+          },
           "model": {
             "description": "Configuration overrides for the resumed thread, if any.",
             "type": [
@@ -24863,6 +25951,17 @@
               }
             ],
             "description": "@deprecated `friendly` and `pragmatic` no longer select a style. Changing this does not rewrite the thread's existing instructions."
+          },
+          "primaryContextInput": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/PrimaryContextInputPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explicit first-sample canonical admission; never restored from history."
           },
           "sandbox": {
             "anyOf": [
@@ -24925,6 +26024,17 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "inferenceCompletion": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/InferenceCompletionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Effective lifecycle for this loaded owner. Older servers omit this."
           },
           "instructionSources": {
             "default": [],
@@ -25531,6 +26641,17 @@
             ],
             "description": "Override where approval requests are routed for review on this thread and subsequent turns."
           },
+          "automaticContextRefill": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/AutomaticContextRefillPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-owner runtime opt-in. Never restored from persisted history. Absent/null/disabled keeps the ordinary automatic compaction path."
+          },
           "baseInstructions": {
             "type": [
               "string",
@@ -25562,6 +26683,17 @@
               "null"
             ]
           },
+          "inferenceCompletion": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/InferenceCompletionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-owner lifecycle, supplied again on cold resume. Omission uses model completion; this grants no execution permissions."
+          },
           "model": {
             "type": [
               "string",
@@ -25584,6 +26716,17 @@
               }
             ],
             "description": "@deprecated `friendly` and `pragmatic` no longer select a style."
+          },
+          "primaryContextInput": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/PrimaryContextInputPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explicit first-sample canonical admission; never restored from history."
           },
           "sandbox": {
             "anyOf": [
@@ -25656,6 +26799,17 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "inferenceCompletion": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/InferenceCompletionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Effective lifecycle for this loaded owner. Older servers omit this."
           },
           "instructionSources": {
             "default": [],

@@ -792,6 +792,9 @@ mod thread_processor_behavior_tests {
     fn collect_resume_override_mismatches_includes_service_tier() {
         let cwd = test_path_buf("/tmp").abs();
         let request = ThreadResumeParams {
+            inference_completion: None,
+            automatic_context_refill: None,
+            primary_context_input: None,
             thread_id: "thread-1".to_string(),
             history: None,
             path: None,

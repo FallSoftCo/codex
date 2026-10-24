@@ -193,6 +193,62 @@ impl TurnRequestProcessor {
         .map(|response| Some(response.into()))
     }
 
+    /// Read only the explicitly owned native window cut; never start or steer.
+    pub(crate) async fn thread_context_window_read(
+        &self,
+        request_id: &ConnectionRequestId,
+        params: ThreadContextWindowReadParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (_, thread) = self.load_thread(&params.thread_id).await?;
+        let epoch =
+            crate::context_refill::request_owner_epoch(&self.outgoing, request_id.connection_id)
+                .await?;
+        let state = thread
+            .canonical_context_window_state(epoch)
+            .await
+            .map_err(|err| invalid_request(format!("native window read refused: {err}")))?;
+        Ok(Some(ThreadContextWindowReadResponse { state }.into()))
+    }
+
+    /// Validation reads the original owned native cut and never admits execution.
+    pub(crate) async fn thread_context_window_preflight(
+        &self,
+        request_id: &ConnectionRequestId,
+        params: ThreadContextWindowPreflightParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (_, thread) = self.load_thread(&params.thread_id).await?;
+        let epoch =
+            crate::context_refill::request_owner_epoch(&self.outgoing, request_id.connection_id)
+                .await?;
+        let preflight = thread
+            .preflight_canonical_context_window(epoch, params.state, params.packet)
+            .await
+            .map_err(|err| invalid_request(format!("native preflight refused: {err}")))?;
+        Ok(Some(
+            ThreadContextWindowPreflightResponse { preflight }.into(),
+        ))
+    }
+
+    pub(crate) async fn thread_context_window_replace_idle(
+        &self,
+        request_id: &ConnectionRequestId,
+        params: ThreadContextWindowReplaceIdleParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (_, thread) = self.load_thread(&params.thread_id).await?;
+        let epoch =
+            crate::context_refill::request_owner_epoch(&self.outgoing, request_id.connection_id)
+                .await?;
+        let receipt = thread
+            .replace_idle_canonical_context_window(epoch, params.preflight, params.packet)
+            .await
+            .map_err(|err| {
+                invalid_request(format!("native idle replacement refused or held: {err}"))
+            })?;
+        Ok(Some(
+            ThreadContextWindowReplaceIdleResponse { receipt }.into(),
+        ))
+    }
+
     pub(crate) async fn thread_inject_items(
         &self,
         request_id: &ConnectionRequestId,

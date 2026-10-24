@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "ContextRefillPurpose": {
+      "enum": [
+        "reader",
+        "writer",
+        "responder"
+      ],
+      "type": "string"
+    }
+  },
+  "properties": {
+    "contextId": {
+      "type": "string"
+    },
+    "materialIds": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "purpose": {
+      "$ref": "#/definitions/ContextRefillPurpose"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contextId",
+    "materialIds",
+    "operationId",
+    "purpose",
+    "threadId",
+    "turnId"
+  ],
+  "title": "ContextInputParams",
+  "type": "object"
+}

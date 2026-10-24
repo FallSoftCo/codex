@@ -243,6 +243,9 @@ use codex_protocol::exec_output::StreamOutput;
 pub(crate) mod async_compaction;
 mod code_mode_warning;
 mod config_refresh;
+pub(crate) mod context_idle;
+pub(crate) mod context_prefix;
+pub(crate) mod context_refill;
 pub(crate) mod context_window;
 mod daemon_recovery;
 mod environment;
@@ -252,11 +255,13 @@ mod guardian_checkpoint;
 mod handlers;
 mod inject;
 pub(crate) mod legacy_hollywood_idle;
+mod primary_context_input;
 mod reasoning_effort;
 mod submission;
 pub(crate) use reasoning_effort::RequestEffortUsage;
 pub(crate) use submission::Submission;
 mod input_queue;
+mod lax_context_contract;
 mod mcp;
 mod mcp_prewarm;
 mod mcp_refresh;
@@ -305,6 +310,8 @@ use self::turn::agent_message_text;
 use self::turn::collect_explicit_app_ids_from_skill_items;
 use self::turn::realtime_text_for_event;
 use self::turn_context::TurnContext;
+#[cfg(test)]
+mod context_checkpoint_tests;
 #[cfg(test)]
 mod rollout_reconstruction_tests;
 
@@ -2007,6 +2014,9 @@ impl Session {
                 },
             );
             state.set_previous_turn_settings(previous_turn_settings.clone());
+            // No runtime policy is restored. Safety holds survive both resume and
+            // fork, including explicit opt-out, without reinstalling or replaying.
+            state.canonical_refill = context_refill::recover_hold(rollout_items);
         }
         let prefix_tokens = if matches!(
             turn_context.config.model_auto_compact_token_limit_scope,
@@ -3887,8 +3897,13 @@ impl Session {
             .render_step_world_state(&world_state);
         let items = crate::context_manager::updates::merge_world_state_updates(fragments);
         if !items.is_empty() {
-            self.record_conversation_items(turn_context, &step_context.settings.model_info, &items)
-                .await;
+            self.record_native_context_items(
+                turn_context,
+                &step_context.settings.model_info,
+                &items,
+                codex_history::NativeContextKind::Update,
+            )
+            .await;
         }
 
         self.state
@@ -4461,6 +4476,7 @@ impl Session {
                 compaction_response_id: metadata.compaction_response_id,
                 latest_token_usage_record: state.latest_token_usage_record.clone(),
                 resume_metadata: Some(CompactionResumeMetadata {
+                    native_context: None,
                     multi_agent_version: self.multi_agent_version(),
                     last_started_turn_id: state.last_started_turn_id.clone(),
                     turn_attribution: state.turn_attribution.clone(),
@@ -4959,8 +4975,15 @@ impl Session {
             crate::context_manager::updates::merge_world_state_updates(context_updates)
                 .into_iter()
                 .map(ResponseItemEnvelope::new)
-                .chain(retained_client_items)
                 .collect();
+        let context_items = context_prefix::stamp(
+            self,
+            codex_history::NativeContextKind::Prefix,
+            context_items,
+        )
+        .into_iter()
+        .chain(retained_client_items)
+        .collect();
         let turn_context_item = step_context.to_turn_context_item();
         self.replace_compacted_history(
             context_items,
@@ -5004,13 +5027,16 @@ impl Session {
         step_context: &StepContext,
     ) -> CodexResult<Arc<WorldState>> {
         let turn_context = step_context.turn.as_ref();
-        let reference_context_item = {
+        let (reference_context_item, needs_native_base) = {
             let state = self.state.lock().await;
-            state.reference_context_item()
+            (
+                state.reference_context_item(),
+                context_prefix::needs_initial_group(self, &state.history),
+            )
         };
         let turn_context_item = step_context.to_turn_context_item();
         let turn_context_changed = reference_context_item.as_ref() != Some(&turn_context_item);
-        let should_inject_full_context = reference_context_item.is_none();
+        let should_inject_full_context = reference_context_item.is_none() || needs_native_base;
         let world_state = self
             .build_world_state_for_step(step_context, should_inject_full_context)
             .await?;
@@ -5053,10 +5079,15 @@ impl Session {
             return Ok(Arc::new(world_state));
         }
         if !context_items.is_empty() {
-            self.record_conversation_items(
+            self.record_native_context_items(
                 turn_context,
                 &step_context.settings.model_info,
                 &context_items,
+                if should_inject_full_context {
+                    codex_history::NativeContextKind::Prefix
+                } else {
+                    codex_history::NativeContextKind::Update
+                },
             )
             .await;
         }

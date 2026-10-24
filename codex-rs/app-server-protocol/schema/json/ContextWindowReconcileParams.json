@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "ContextRefillPurpose": {
+      "enum": [
+        "reader",
+        "writer",
+        "responder"
+      ],
+      "type": "string"
+    }
+  },
+  "description": "Durable checkpoint provenance; prefix excludes the following receipt itself.",
+  "properties": {
+    "contextId": {
+      "type": "string"
+    },
+    "nativeActionsSha256": {
+      "type": "string"
+    },
+    "nativeHistoryBytes": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "nativeHistorySha256": {
+      "type": "string"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "previousWindowId": {
+      "type": "string"
+    },
+    "purpose": {
+      "$ref": "#/definitions/ContextRefillPurpose"
+    },
+    "selectionRevision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "snapshotOperationId": {
+      "type": "string"
+    },
+    "snapshotReadPoint": {
+      "type": "string"
+    },
+    "snapshotSha256": {
+      "type": "string"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "totalBytes": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "turnId": {
+      "type": "string"
+    },
+    "windowId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contextId",
+    "nativeActionsSha256",
+    "nativeHistoryBytes",
+    "nativeHistorySha256",
+    "operationId",
+    "previousWindowId",
+    "purpose",
+    "selectionRevision",
+    "snapshotOperationId",
+    "snapshotReadPoint",
+    "snapshotSha256",
+    "threadId",
+    "totalBytes",
+    "turnId",
+    "windowId"
+  ],
+  "title": "ContextWindowInstalledParams",
+  "type": "object"
+}

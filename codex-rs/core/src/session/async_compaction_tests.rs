@@ -165,3 +165,99 @@ async fn cancelled_turn_skips_launch_but_preserves_existing_work(trigger: Compac
     assert_eq!(request.requests().len(), 1);
     shutdown(&sess).await;
 }
+
+#[tokio::test]
+async fn recovered_refill_without_opt_in_cannot_start_background_sample() {
+    let server = responses::start_mock_server().await;
+    let mut provider =
+        codex_model_provider_info::built_in_model_providers(/*openai_base_url*/ None)["openai"]
+            .clone();
+    provider.base_url = Some(format!("{}/v1", server.uri()));
+    provider.supports_websockets = false;
+    let server_uri = server.uri();
+    let (sess, turn, _events) =
+        crate::session::tests::make_session_and_context_with_auth_and_config_and_rx(
+            CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+            Vec::new(),
+            move |config| {
+                config.model = Some("gpt-5.2".to_string());
+                config.model_context_window = Some(100_000);
+                config.model_auto_compact_token_limit = Some(90_000);
+                config.model_provider = provider;
+                config.chatgpt_base_url = server_uri;
+                config.features.enable(Feature::AsyncCompaction).unwrap();
+                config.features.disable(Feature::TokenBudget).unwrap();
+            },
+        )
+        .await;
+    let request = responses::mount_sse_once(
+        &server,
+        responses::sse(vec![responses::ev_completed("must-not-dispatch")]),
+    )
+    .await;
+    let cancel = CancellationToken::new();
+    let step = sess
+        .capture_step_context(Arc::clone(&turn), &cancel)
+        .await
+        .unwrap();
+    let original: ResponseItem = serde_json::from_value(serde_json::json!({
+        "type": "message", "role": "user",
+        "content": [{"type": "input_text", "text": "original held work"}]
+    }))
+    .unwrap();
+    sess.replace_history(vec![original], /*reference_context_item*/ None)
+        .await;
+    sess.update_token_usage_info(
+        &turn,
+        Some(&TokenUsage {
+            input_tokens: 70_000,
+            total_tokens: 70_000,
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+    let installed = serde_json::from_value(serde_json::json!({
+        "threadId":"thread","turnId":"turn","operationId":"original",
+        "contextId":"context","purpose":"writer","snapshotOperationId":"original",
+        "snapshotReadPoint":"cut","snapshotSha256":"a".repeat(64),
+        "nativeActionsSha256":"b".repeat(64),"selectionRevision":1,"totalBytes":2,
+        "previousWindowId":"old","windowId":"new",
+        "nativeHistoryBytes":100,"nativeHistorySha256":"c".repeat(64)
+    }))
+    .unwrap();
+    let marker = codex_history::RolloutItem::EventMsg(
+        codex_protocol::protocol::EventMsg::ContextWindowRefillInstalled(installed),
+    );
+    sess.state.lock().await.canonical_refill =
+        super::super::context_refill::recover_hold(&[marker]);
+    // No runtime callback policy was installed. The recovered marker alone must
+    // suppress this otherwise eligible, already model-pinned speculative path.
+    assert!(!super::super::context_refill::configured(&sess));
+    let status = super::super::context_window::context_window_token_status(&sess, &turn).await;
+    let auth = sess.services.model_client.auth_owner_generation();
+    maybe_start(
+        &sess,
+        &step,
+        &Arc::new(WorldState::default()),
+        CompactionPhase::MidTurn,
+        &cancel,
+        &status,
+        (Some("routing".to_string()), auth),
+    )
+    .await;
+    assert!(
+        sess.state
+            .lock()
+            .await
+            .async_compaction
+            .last_attempt
+            .is_none()
+    );
+    assert_eq!(request.requests().len(), 0);
+    assert!(
+        super::super::context_refill::check_sampling(&sess, &cancel)
+            .await
+            .is_err()
+    );
+}

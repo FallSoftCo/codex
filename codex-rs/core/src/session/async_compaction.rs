@@ -63,7 +63,8 @@ pub(super) async fn maybe_start(
     if matches!(phase, CompactionPhase::PreTurn) && turn_state.is_none() {
         return;
     }
-    if !enabled(turn_context)
+    if super::context_refill::configured(sess)
+        || !enabled(turn_context)
         || token_status.token_limit_reached
         || (matches!(phase, CompactionPhase::PostTurn)
             && token_status.turn_end_compaction_threshold_reached)
@@ -90,7 +91,10 @@ pub(super) async fn maybe_start(
         auth_owner_generation,
     };
     // Stop blocks new launches; already-running compaction remains session-owned.
-    if turn_cancellation.is_cancelled()
+    // Recovered native markers remain held even when runtime opt-in is omitted.
+    // Do not let speculative provider work bypass the foreground sampling fence.
+    if state.canonical_refill.is_some()
+        || turn_cancellation.is_cancelled()
         || state.shutting_down
         || state.async_compaction.last_attempt.as_ref() == Some(&attempt)
         || state.history.annotated_items().is_empty()
@@ -145,10 +149,13 @@ pub(super) async fn take_ready(
     sess: &Session,
     turn_context: &TurnContext,
 ) -> Option<Box<BackgroundCompactionCandidate>> {
-    if !enabled(turn_context) {
+    if super::context_refill::configured(sess) || !enabled(turn_context) {
         return None;
     }
     let mut state = sess.state.lock().await;
+    if state.canonical_refill.is_some() {
+        return None;
+    }
     let candidate = state.async_compaction.result.as_mut()?.try_recv().ok()?;
     state.async_compaction.result = None;
     (candidate.prefix.generation == state.history.history_version()).then_some(candidate)
@@ -158,11 +165,14 @@ pub(crate) async fn wait_for_pending(
     sess: &Session,
     step_context: &StepContext,
 ) -> Option<Box<BackgroundCompactionCandidate>> {
-    if !enabled(&step_context.turn) {
+    if super::context_refill::configured(sess) || !enabled(&step_context.turn) {
         return None;
     }
     let result = {
         let mut state = sess.state.lock().await;
+        if state.canonical_refill.is_some() {
+            return None;
+        }
         let result = state.async_compaction.result.take()?;
         let model = &step_context.settings.model_info;
         let attempt = state.async_compaction.last_attempt.as_ref()?;

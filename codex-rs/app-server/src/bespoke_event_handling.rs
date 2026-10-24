@@ -159,8 +159,12 @@ pub(crate) async fn apply_bespoke_event_handling(
     } = event;
     match msg {
         EventMsg::TurnStarted(payload) => {
-            // While not technically necessary as it was already done on TurnComplete, be extra cautios and abort any pending server requests.
-            outgoing.abort_pending_server_requests().await;
+            // Core can already be waiting on a callback for this new turn.
+            outgoing
+                .abort_server_requests(crate::request_turn_cleanup::TurnRequestCleanup::Starting(
+                    &payload.turn_id,
+                ))
+                .await;
             thread_watch_manager
                 .note_turn_started(&conversation_id.to_string())
                 .await;
@@ -191,8 +195,11 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .await;
         }
         EventMsg::TurnComplete(turn_complete_event) => {
-            // All per-thread requests are bound to a turn, so abort them.
-            outgoing.abort_pending_server_requests().await;
+            outgoing
+                .abort_server_requests(crate::request_turn_cleanup::TurnRequestCleanup::Ending(
+                    &turn_complete_event.turn_id,
+                ))
+                .await;
             respond_to_pending_interrupts(&thread_state, &outgoing).await;
             let turn_failed = thread_state.lock().await.turn_summary.last_error.is_some();
             if let Some(state_db) = conversation.state_db() {
@@ -1241,8 +1248,15 @@ pub(crate) async fn apply_bespoke_event_handling(
         }
         // If this is a TurnAborted, reply to any pending interrupt requests.
         EventMsg::TurnAborted(turn_aborted_event) => {
-            // All per-thread requests are bound to a turn, so abort them.
-            outgoing.abort_pending_server_requests().await;
+            if let Some(turn_id) = turn_aborted_event.turn_id.as_deref() {
+                outgoing
+                    .abort_server_requests(crate::request_turn_cleanup::TurnRequestCleanup::Ending(
+                        turn_id,
+                    ))
+                    .await;
+            } else {
+                outgoing.abort_pending_server_requests().await;
+            }
             respond_to_pending_interrupts(&thread_state, &outgoing).await;
 
             thread_watch_manager

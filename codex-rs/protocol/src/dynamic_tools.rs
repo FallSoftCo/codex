@@ -55,9 +55,21 @@ pub struct DynamicToolCallRequest {
     pub arguments: JsonValue,
 }
 
+/// Authenticated tool-owner lifecycle control, never model tool arguments or text.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum DynamicToolTurnControl {
+    /// End this native inference after all admitted tool handlers are recorded.
+    Complete,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicToolResponse {
+    /// Optional host control; successful tools only. Never sent as model history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_control: Option<DynamicToolTurnControl>,
     /// Optional bounded programmatic text for code mode; never automatically added to model history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code_mode_text: Option<String>,

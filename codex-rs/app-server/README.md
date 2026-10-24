@@ -677,3 +677,143 @@ those identities. Human messages retain their existing input path. The returned 
 native admission, not successful execution or completion of the peer request.
 The transport retains the original operation journal and reconciles uncertain
 admission before retrying.
+
+## Native automatic canonical refill (opt-in)
+
+The `canonical_context_window_refill/v1` initialize capability advertises the
+owner-fenced callback channel, not qualification or permission. At `thread/start`
+or a **cold** `thread/resume`, an authenticated host may supply
+`automaticContextRefill: {"type":"canonical","contextId":"...","purpose":"writer"}`
+(`reader` and `responder` are also supported). Missing, null, or
+`{"type":"disabled"}` leaves vanilla automatic compaction unchanged. The policy
+is runtime-only: persisted histories, daemon recovery, and old sessions never
+activate it. Ephemeral threads are rejected. Loaded canonical threads cannot
+be rebound or attached through resume; release at an idle boundary first.
+The hosting connector also requires its independent `activeContextRefill:1`
+host capability before opting in.
+
+After foreground tools drain, before an automatic summary/replacement, core sends
+`thread/contextWindow/refill` **only to the original connection**. K is
+`{threadId,turnId,contextId,purpose}`; I adds native `operationId`, `windowId`,
+`historyVersion`, `reason` (`contextLimit|modelDownshift|compHashChanged`) and
+`phase` (`preTurn|midTurn|postTurn`). The response echoes K/I and adds
+`snapshotOperationId` (the original operation), `snapshotReadPoint`,
+`snapshotSha256`, `nativeActionsSha256`, `selectionRevision`, `totalBytes`
+(snapshot UTF-8 only), and strictly bounded canonical string-output `items`.
+No host-provided messages, roles, instructions, calls, or extra outputs are
+accepted. Core owns the typed instruction prefix; the action digest binds the
+delivered v2 descriptor, never its full cached index.
+
+Core strictly appends intent, full replacement checkpoint, and adjacent installed
+receipt, checking flush/sync on the original file handle. The native history
+prefix ends through the checkpoint newline, before the receipt (no self-hash).
+Any uncertain write poisons the writer and prevents queued flush/shutdown replay.
+Then `thread/contextWindow/installed` carries K, the original operation, exact
+snapshot provenance/digests/bytes, previous/new window IDs, and
+`nativeHistoryBytes/nativeHistorySha256`. Only an exact
+`{"operationId":"ORIGINAL","status":"recorded"}` reply permits the next full
+provider request. A response-write event alone is not an installed acknowledgement.
+
+Timeout, disconnect, cancellation, stale history, malformed data, partial durability
+or a lost acknowledgement holds the **same original** operation. No retry,
+retransmit, new reset, summary fallback, inbox acknowledgement, Work/permit/resume
+bump, or model wake is inferred. Other subscribers cannot receive or answer the
+callbacks; pending-request hydration excludes this private channel. The existing
+explicit idle compact/inject APIs retain their guards. Inspect original durable
+receipts read-only; never replay an unknown operation.
+
+The original owner-disconnect cancellation token fences the final provider
+stream-open future (including suspended connect/auth preparation), and each
+response wait. A preliminary pre-prompt check alone is not sufficient. Default
+threads retain their existing cancellation behavior.
+
+**Cold recovery limitation:** native intent/installed records restore a held
+original operation on resume **and fork**, even with omitted/disabled policy.
+They never auto-enable callbacks. This version has no durable native host-ack
+record, so even a previously acknowledged automatic checkpoint remains held
+after cold recovery; this is a conservative availability restriction, not proof
+of an incomplete operation. There is no automatic retry/unlock/reinstall.
+Before a complete native intent exists (including a truncated first append),
+the authenticated connector's durable pending/unknown journal is the recovery
+fence. A native installed record alone is not proof of the host's recorded
+acknowledgement. Inspect the original journals/receipts without replay.
+
+
+### Native tool-owner turn completion
+
+A successful dynamic-tool response can include turnControl: "complete". This is
+typed authenticated tool-owner metadata, separate from contentItems and model
+tool arguments. Native execution records and drains the sampling batch's pending
+tool handlers, then completes that original inference before compaction or a
+follow-up model call. Pending inputs remain queued; this does not accept a Goal,
+complete business Work, or cancel already accepted external jobs. A failed tool
+response cannot request completion. The initialize capability is
+dynamic_tool_turn_control/v1.
+
+LAX purpose runtimes negotiate toolCompletion: 1 on the existing Hollywood bind.
+Hollywood defaults the per-purpose contract to zero for existing bindings. Under
+the negotiated contract, the original tool transaction closes callbacks and
+returns scoped inferenceControl only when its entire captured material batch
+has settled. Raw later room arrivals remain pending. The runtime validates and
+maps that control into the native response; it does not infer closure from final
+text or make an auxiliary read that could disguise accepted Work as a failed
+send. Original operation receipts preserve retry provenance.
+
+
+### Retained-context window inspection (candidate)
+
+The experimental `thread/contextWindow/read` method accepts `{"threadId":"..."}`
+for a thread explicitly opened on the same initialized connection with the
+Writer-only `canonicalRetainedActions` automatic-context policy. It returns a
+`state` containing the native thread/context/window identity, history version,
+last started turn, active turn, idle status and any unacknowledged refill
+operation. It performs no turn admission, interruption, context preparation,
+provider request, history write or acknowledgement. Omission of that policy on
+cold resume disables this method; saved history does not grant the policy.
+
+These identities describe the current native read cut. They are prerequisites
+for future CAS preflight/replacement, and are not a completion or persistence
+receipt. Retained-payload selection and idle replacement are not advertised as a
+qualified capability by this candidate yet.
+
+
+The experimental `thread/contextWindow/preflight` method accepts `threadId`,
+the exact `state` obtained from `thread/contextWindow/read`, and a canonical
+`packet` (`ContextWindowRefillResponse`). It uses the same explicitly enrolled
+Writer-only owner connection. It reads the latest complete native core-context
+prefix and updates from native-produced history provenance, then validates the
+combined native prefix and selected data. It returns packet/replacement hashes
+and measured item/byte counts. JSON object-key reordering does not change those
+hashes.
+
+Preflight can inspect an active or idle turn. It does not start, steer, stop or
+complete work, refresh credentials or tool connections, install a checkpoint,
+or acknowledge an unsettled operation. A stale cut, held operation, incomplete
+native provenance or invalid/oversized packet is refused. Saved provenance does
+not enable a policy on resume and grants no execution authority. This method
+does not yet implement an idle replacement or certify Hollywood source
+authorization; those remain separate host-side and installation contracts.
+
+### Experimental idle selected-context replacement
+
+An explicitly owned canonicalRetainedActions Writer can call
+thread/contextWindow/preflight, then thread/contextWindow/replaceIdle with
+the exact returned preflight and original packet. The latter rejects an active
+or reserved turn, pending startup model prewarm, changed cut, held operation,
+invalid data, or excessive complete checkpoint size before admitting a write.
+It never starts, steers, aborts or samples a model turn. The existing strict
+intent/checkpoint/installed transaction carries the native baseline, reference
+context and idle_request mode; its intent uses explicitRequest.
+
+The original owner must handle the separate server request
+thread/contextWindow/idleInstalled. This does not use the automatic live-turn
+installed path. Only its exact durable acknowledgement completes the mutation.
+A lost/failed result remains held; inspect and cold-reconcile the same receipt
+using thread/contextWindow/reconcile, never repeat replacement or an external
+effect. Subsequent execution still captures current native permissions normally.
+
+This is a new negotiated capability. Existing canonical profiles are unchanged.
+An old runtime/SDK cannot be assumed to understand new idle receipts or the
+explicit cause: qualify contract downgrade/reader compatibility before activation.
+Native scripted-provider tests do not establish Hollywood authorization, model
+retention semantics, or production replacement readiness.

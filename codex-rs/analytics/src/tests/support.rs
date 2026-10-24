@@ -145,6 +145,7 @@ pub(super) fn sample_thread_start_response(
     model: &str,
 ) -> ClientResponsePayload {
     ClientResponsePayload::ThreadStart(ThreadStartResponse {
+        inference_completion: None,
         tool_policy: None,
         disabled_plugin_ids: Vec::new(),
         thread: sample_thread_with_metadata(
@@ -212,6 +213,7 @@ pub(super) fn sample_thread_resume_response_with_source(
     parent_thread_id: Option<String>,
 ) -> ClientResponsePayload {
     ClientResponsePayload::ThreadResume(ThreadResumeResponse {
+        inference_completion: None,
         tool_policy: None,
         disabled_plugin_ids: Vec::new(),
         thread: sample_thread_with_metadata(

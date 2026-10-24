@@ -8,6 +8,8 @@ pub use heartbeat::UserInputOrigin;
 mod compaction_resume_metadata;
 pub use codex_protocol::turn_input::TurnAttribution;
 pub use compaction_resume_metadata::CompactionResumeMetadata;
+pub use compaction_resume_metadata::NativeContextCheckpoint;
+pub use compaction_resume_metadata::NativeContextCheckpointMode;
 pub use compaction_resume_metadata::PreviousTurnSettings;
 pub use compaction_resume_metadata::resume_multi_agent_version;
 
@@ -65,6 +67,10 @@ pub struct ResponseItemEnvelope {
 ///
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 pub struct CodexHarnessMetadata {
+    /// Exact native-produced context provenance, never client input or authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_context_origin: Option<NativeContextOrigin>,
+
     /// Complete retained records actually delivered by this Guardian message. Host-only.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guardian_sources: Vec<RetainedSource>,
@@ -283,7 +289,10 @@ pub use retained_context::RetainedSourceRole;
 pub use retained_context::RetainedUserMessage;
 pub use retained_context::VerifiedAnswer;
 pub use retained_context::VerifiedQuestionAnswer;
+mod native_context_origin;
 mod rollout_payload;
+pub use native_context_origin::NativeContextKind;
+pub use native_context_origin::NativeContextOrigin;
 
 pub use guardian_history::GuardianHistoryCheckpoint;
 pub use guardian_history::GuardianRetainedOmissions;

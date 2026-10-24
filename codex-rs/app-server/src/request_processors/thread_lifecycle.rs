@@ -1034,6 +1034,14 @@ pub(super) async fn handle_pending_thread_resume_request(
     thread.session_id = session_id;
 
     let response = ThreadResumeResponse {
+        inference_completion: Some(
+            conversation
+                .thread_extension_data()
+                .get::<codex_app_server_protocol::InferenceCompletionPolicy>()
+                .as_deref()
+                .copied()
+                .unwrap_or_default(),
+        ),
         tool_policy: super::thread_processor::tool_policy_snapshot(conversation.as_ref()),
         thread,
         disabled_plugin_ids,

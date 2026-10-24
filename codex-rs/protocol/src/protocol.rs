@@ -1562,6 +1562,12 @@ pub enum EventMsg {
     /// Conversation history was compacted (either automatically or manually).
     ContextCompacted(ContextCompactedEvent),
 
+    /// Durable same-turn canonical refill intent immediately before its checkpoint.
+    ContextWindowRefillIntent(crate::context_refill::ContextWindowRefillIntentEvent),
+
+    /// Durable receipt immediately after the checkpoint; excludes itself from the hash.
+    ContextWindowRefillInstalled(crate::context_refill::ContextWindowRefillInstalledEvent),
+
     /// Legacy persisted marker for dropping the last N user turns.
     /// Retained for replay of existing rollouts; live rollback operations are unsupported.
     ThreadRolledBack(ThreadRolledBackEvent),

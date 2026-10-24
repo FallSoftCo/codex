@@ -175,6 +175,13 @@ pub(super) async fn maybe_record(
         return;
     };
 
+    let contract = turn_context
+        .extension_data
+        .get::<super::lax_context_contract::LaxContextContract>();
+    let reminder_template = contract
+        .as_ref()
+        .and_then(|contract| contract.reminder)
+        .unwrap_or(config.reminder_message_template.as_str());
     if config
         .reminder_threshold_tokens
         .is_some_and(|threshold| base_window_tokens_remaining <= threshold)
@@ -186,7 +193,7 @@ pub(super) async fn maybe_record(
         if reminder_due {
             let response_item =
                 ContextualUserFragment::into(crate::context::TokenBudgetReminder::new(
-                    &config.reminder_message_template,
+                    reminder_template,
                     base_window_tokens_remaining,
                 ));
             sess.record_conversation_items(
@@ -201,7 +208,11 @@ pub(super) async fn maybe_record(
     if !allow_auto_compact_fallback || base_window_tokens_remaining != 0 {
         return;
     }
-    let Some(prompt) = config.auto_compact_fallback_prompt.as_deref() else {
+    let Some(prompt) = contract
+        .as_ref()
+        .and_then(|contract| contract.fallback)
+        .or(config.auto_compact_fallback_prompt.as_deref())
+    else {
         return;
     };
 

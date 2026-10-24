@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "ContextWindowInstalledStatus": {
+      "enum": [
+        "recorded"
+      ],
+      "type": "string"
+    }
+  },
+  "description": "Host acknowledgement required before any next provider sample.",
+  "properties": {
+    "operationId": {
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/definitions/ContextWindowInstalledStatus"
+    }
+  },
+  "required": [
+    "operationId",
+    "status"
+  ],
+  "title": "ContextWindowInstalledResponse",
+  "type": "object"
+}

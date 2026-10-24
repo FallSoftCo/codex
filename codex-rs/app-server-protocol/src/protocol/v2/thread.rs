@@ -27,10 +27,21 @@ use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::config_types::MultiAgentMode;
 use codex_protocol::config_types::Personality;
 use codex_protocol::config_types::ReasoningSummary;
+pub use codex_protocol::context_input::ContextInputParams;
+pub use codex_protocol::context_input::ContextInputResponse;
+pub use codex_protocol::context_input::PrimaryContextInputPolicy;
+pub use codex_protocol::context_refill::AutomaticContextRefillPolicy;
+pub use codex_protocol::context_refill::ContextWindowInstalledParams;
+pub use codex_protocol::context_refill::ContextWindowInstalledResponse;
+pub use codex_protocol::context_refill::ContextWindowPreflight;
+pub use codex_protocol::context_refill::ContextWindowRefillParams;
+pub use codex_protocol::context_refill::ContextWindowRefillResponse;
+pub use codex_protocol::context_refill::ContextWindowState;
 pub use codex_protocol::dynamic_tools::DynamicToolFunctionSpec;
 pub use codex_protocol::dynamic_tools::DynamicToolNamespaceSpec;
 pub use codex_protocol::dynamic_tools::DynamicToolNamespaceTool;
 pub use codex_protocol::dynamic_tools::DynamicToolSpec;
+pub use codex_protocol::inference_completion::InferenceCompletionPolicy;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::ThreadGoalStatus as CoreThreadGoalStatus;
@@ -81,6 +92,17 @@ pub struct ThreadToolName {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadStartParams {
+    /// Per-owner lifecycle, supplied again on cold resume. Omission uses model
+    /// completion; this grants no execution permissions.
+    #[ts(optional = nullable)]
+    pub inference_completion: Option<InferenceCompletionPolicy>,
+    /// Per-owner runtime opt-in. Never restored from persisted history.
+    /// Absent/null/disabled keeps the ordinary automatic compaction path.
+    #[ts(optional = nullable)]
+    pub automatic_context_refill: Option<AutomaticContextRefillPolicy>,
+    /// Explicit first-sample canonical admission; never restored from history.
+    #[ts(optional = nullable)]
+    pub primary_context_input: Option<PrimaryContextInputPolicy>,
     #[ts(optional = nullable)]
     pub model: Option<String>,
     #[ts(optional = nullable)]
@@ -218,6 +240,10 @@ pub struct MockExperimentalMethodResponse {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadStartResponse {
+    /// Effective lifecycle for this loaded owner. Older servers omit this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub inference_completion: Option<InferenceCompletionPolicy>,
     pub thread: Thread,
     /// Effective captured allowlist after intersection with the base policy.
     /// Omitted means no allowlist ceiling, not a grant of tool permissions.
@@ -390,6 +416,17 @@ pub struct ThreadSettingsUpdatedNotification {
 ///
 /// Prefer using thread_id whenever possible.
 pub struct ThreadResumeParams {
+    /// Per-owner lifecycle, supplied again on cold resume. Omission uses model
+    /// completion; this grants no execution permissions.
+    #[ts(optional = nullable)]
+    pub inference_completion: Option<InferenceCompletionPolicy>,
+    /// Per-owner runtime opt-in. Never restored from persisted history.
+    /// Absent/null/disabled keeps the ordinary automatic compaction path.
+    #[ts(optional = nullable)]
+    pub automatic_context_refill: Option<AutomaticContextRefillPolicy>,
+    /// Explicit first-sample canonical admission; never restored from history.
+    #[ts(optional = nullable)]
+    pub primary_context_input: Option<PrimaryContextInputPolicy>,
     pub thread_id: String,
 
     /// [UNSTABLE] FOR CODEX CLOUD - DO NOT USE.
@@ -487,6 +524,10 @@ pub struct ThreadResumeParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadResumeResponse {
+    /// Effective lifecycle for this loaded owner. Older servers omit this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub inference_completion: Option<InferenceCompletionPolicy>,
     pub thread: Thread,
     /// Effective captured allowlist after intersection with the base policy.
     /// Omitted means no allowlist ceiling, not a grant of tool permissions.
@@ -2243,4 +2284,54 @@ pub struct ThreadQueueChangedNotification {
 pub struct ContextCompactedNotification {
     pub thread_id: String,
     pub turn_id: String,
+}
+
+/// Non-mutating native context identity inspection for an explicitly owned profile.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReadParams {
+    pub thread_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReadResponse {
+    pub state: ContextWindowState,
+}
+
+/// Read-only native packet validation under the expected exact owned context cut.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowPreflightParams {
+    pub thread_id: String,
+    pub state: ContextWindowState,
+    pub packet: ContextWindowRefillResponse,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowPreflightResponse {
+    pub preflight: ContextWindowPreflight,
+}
+
+/// Install the exact preflighted idle context. Unknown replies require inspecting
+/// the original durable receipt, never retrying this mutation.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReplaceIdleParams {
+    pub thread_id: String,
+    pub preflight: ContextWindowPreflight,
+    pub packet: ContextWindowRefillResponse,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReplaceIdleResponse {
+    pub receipt: ContextWindowInstalledParams,
 }

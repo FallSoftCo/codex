@@ -444,6 +444,10 @@ impl ContextManager {
         self.reference_context_item = item;
     }
 
+    pub(crate) fn reference_context_item_ref(&self) -> Option<&TurnContextItem> {
+        self.reference_context_item.as_ref()
+    }
+
     pub(crate) fn reference_context_item(&self) -> Option<TurnContextItem> {
         self.reference_context_item.clone()
     }
@@ -486,6 +490,11 @@ impl ContextManager {
 
     pub(crate) fn set_world_state_baseline(&mut self, snapshot: WorldStateSnapshot) {
         self.world_state_baseline = Some(snapshot);
+    }
+
+    /// Borrow reconstruction data so maintenance can admit its size before copying.
+    pub(crate) fn world_state_snapshot(&self) -> Option<&WorldStateSnapshot> {
+        self.world_state_baseline.as_ref()
     }
 
     pub(crate) fn world_state_checkpoint(&self) -> Option<WorldStateItem> {

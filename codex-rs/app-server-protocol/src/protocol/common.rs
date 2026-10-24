@@ -927,6 +927,24 @@ client_request_definitions! {
         serialization: None,
         response: v2::ThreadItemsReadResponse,
     },
+    #[experimental("thread/contextWindow/read")]
+    ThreadContextWindowRead => "thread/contextWindow/read" {
+        params: v2::ThreadContextWindowReadParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextWindowReadResponse,
+    },
+    #[experimental("thread/contextWindow/preflight")]
+    ThreadContextWindowPreflight => "thread/contextWindow/preflight" {
+        params: v2::ThreadContextWindowPreflightParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextWindowPreflightResponse,
+    },
+    #[experimental("thread/contextWindow/replaceIdle")]
+    ThreadContextWindowReplaceIdle => "thread/contextWindow/replaceIdle" {
+        params: v2::ThreadContextWindowReplaceIdleParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextWindowReplaceIdleResponse,
+    },
     /// Append raw Responses API items to the thread history without starting a user turn.
     ThreadInjectItems => "thread/inject_items" {
         params: v2::ThreadInjectItemsParams,
@@ -1838,6 +1856,34 @@ impl TryFrom<JSONRPCRequest> for ServerRequest {
 }
 
 server_request_definitions! {
+    /// Original owner prepares canonical purpose input before the first model sample.
+    ContextInput => "thread/contextInput" {
+        params: v2::ContextInputParams,
+        response: v2::ContextInputResponse,
+    },
+    /// Owner-only canonical refill at a drained native automatic boundary.
+    ContextWindowRefill => "thread/contextWindow/refill" {
+        params: v2::ContextWindowRefillParams,
+        response: v2::ContextWindowRefillResponse,
+    },
+    /// Host acknowledgement of the original strictly durable native install.
+    ContextWindowInstalled => "thread/contextWindow/installed" {
+        params: v2::ContextWindowInstalledParams,
+        response: v2::ContextWindowInstalledResponse,
+    },
+
+    /// Idle maintenance acknowledgement, distinct from live-turn continuation.
+    ContextWindowIdleInstalled => "thread/contextWindow/idleInstalled" {
+        params: v2::ContextWindowInstalledParams,
+        response: v2::ContextWindowInstalledResponse,
+    },
+
+    /// Owner-only read-only observation of an original installed receipt on cold resume.
+    ContextWindowReconcile => "thread/contextWindow/reconcile" {
+        params: v2::ContextWindowInstalledParams,
+        response: v2::ContextWindowInstalledResponse,
+    },
+
     /// NEW APIs
     /// Sent when approval is requested for a specific command execution.
     /// This request is used for Turns started via turn/start.
@@ -3288,6 +3334,7 @@ mod tests {
         let response = ClientResponse::ThreadStart {
             request_id: RequestId::Integer(7),
             response: v2::ThreadStartResponse {
+                inference_completion: None,
                 tool_policy: None,
                 disabled_plugin_ids: Vec::new(),
                 thread: v2::Thread {

@@ -12,6 +12,7 @@ mod attestation;
 #[path = "auth_storage_originator_tests.rs"]
 mod auth_storage_originator;
 mod auto_env;
+mod automatic_context_refill;
 #[path = "bedrock_gov_cloud_tests.rs"]
 mod bedrock_gov_cloud;
 #[path = "bedrock_service_tier_tests.rs"]
@@ -39,6 +40,9 @@ mod connection_handling_stdio;
 mod connection_handling_websocket;
 #[cfg(unix)]
 mod connection_handling_websocket_unix;
+mod context_window_preflight;
+mod context_window_replace_idle;
+mod context_window_state;
 #[cfg(unix)]
 mod curated_mcp_sync;
 mod current_time;
@@ -68,6 +72,7 @@ mod guardian_v2;
 mod history_notes_extension;
 mod hooks_list;
 mod host_skills;
+mod host_tool_inference;
 mod imagegen_extension;
 mod initialize;
 mod luna_reserve;
@@ -103,6 +108,7 @@ mod plugin_reconcile;
 mod plugin_search;
 mod plugin_share;
 mod plugin_uninstall;
+mod primary_context_input;
 mod process_exec;
 mod projects;
 mod rate_limit_reset_credits;

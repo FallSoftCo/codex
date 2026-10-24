@@ -1439,6 +1439,12 @@ impl Drop for ModelClientSession {
 }
 
 impl ModelClientSession {
+    /// Force full replacement on the next request; never append to an old response.
+    /// Keep the live turn state and task identity, only discard provider continuation.
+    pub(crate) fn reset_after_canonical_refill(&mut self) {
+        self.websocket_session.reset(Some("canonical_refill"));
+    }
+
     pub(crate) fn inference_tools_changed(&self, tools: &Arc<[ToolSpec]>) -> bool {
         let previous = self
             .client

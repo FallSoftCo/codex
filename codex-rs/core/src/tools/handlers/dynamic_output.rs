@@ -8,9 +8,14 @@ use serde_json::Value;
 pub(super) struct DynamicToolOutput {
     pub(super) model: FunctionToolOutput,
     pub(super) code_mode_text: Option<String>,
+    pub(super) metadata: Option<Value>,
 }
 
 impl ToolOutput for DynamicToolOutput {
+    fn tool_result_metadata(&self) -> Option<&Value> {
+        self.metadata.as_ref()
+    }
+
     fn log_output(&self) -> String {
         self.model.log_output()
     }

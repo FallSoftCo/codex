@@ -26,6 +26,7 @@ use codex_protocol::approvals::ExecApprovalKind as CoreExecApprovalKind;
 use codex_protocol::approvals::GuardianAssessmentAction as CoreGuardianAssessmentAction;
 use codex_protocol::approvals::GuardianAssessmentDecisionSource as CoreGuardianAssessmentDecisionSource;
 use codex_protocol::approvals::GuardianCommandSource as CoreGuardianCommandSource;
+pub use codex_protocol::dynamic_tools::DynamicToolTurnControl;
 use codex_protocol::items::AgentMessageContent as CoreAgentMessageContent;
 pub use codex_protocol::items::AgentMessageDelivery;
 pub use codex_protocol::items::AsyncUserInputQuestion;
@@ -1678,6 +1679,9 @@ pub struct DynamicToolCallParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct DynamicToolCallResponse {
+    /// Successful authenticated host tool control; null continues ordinary inference.
+    #[serde(default)]
+    pub turn_control: Option<DynamicToolTurnControl>,
     /// Bounded programmatic text for code mode, or null; never added to model history.
     #[serde(default)]
     pub code_mode_text: Option<String>,

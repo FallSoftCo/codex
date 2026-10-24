@@ -13,6 +13,7 @@ use codex_async_utils::OrCancelExt;
 use codex_protocol::dynamic_tools::DynamicToolFunctionSpec;
 use codex_protocol::dynamic_tools::DynamicToolNamespaceSpec;
 use codex_protocol::dynamic_tools::DynamicToolResponse;
+use codex_protocol::dynamic_tools::DynamicToolTurnControl;
 use codex_protocol::items::DynamicToolCallItem;
 use codex_protocol::items::DynamicToolCallStatus;
 use codex_protocol::items::TurnItem;
@@ -30,6 +31,11 @@ use std::time::Instant;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+
+/// Validated tool-owner request scoped to this original native turn.
+pub(crate) struct DynamicToolTurnCompletion {
+    pub(crate) call_id: String,
+}
 
 pub struct DynamicToolHandler {
     tool_name: ToolName,
@@ -143,6 +149,7 @@ impl DynamicToolHandler {
         };
 
         let args: Value = parse_arguments(&arguments)?;
+        let control_call_id = call_id.clone();
         let response = request_dynamic_tool(
             &session,
             turn.as_ref(),
@@ -159,6 +166,7 @@ impl DynamicToolHandler {
         })?;
 
         let DynamicToolResponse {
+            turn_control,
             content_items,
             success,
             context_fragments: _,
@@ -168,10 +176,21 @@ impl DynamicToolHandler {
             .into_iter()
             .map(FunctionCallOutputContentItem::from)
             .collect::<Vec<_>>();
+        let metadata = if let Some(DynamicToolTurnControl::Complete) = turn_control {
+            turn.extension_data.insert(DynamicToolTurnCompletion {
+                call_id: control_call_id.clone(),
+            });
+            Some(serde_json::json!({"laxTurnControl": {
+                "kind": "complete", "callId": control_call_id
+            }}))
+        } else {
+            None
+        };
         Ok(boxed_tool_output(
             super::dynamic_output::DynamicToolOutput {
                 model: FunctionToolOutput::from_content(body, Some(success)),
                 code_mode_text,
+                metadata,
             },
         ))
     }
@@ -260,7 +279,9 @@ async fn request_dynamic_tool(
                     "dynamic code-mode data exceeds262144 bytes; no context appended".to_string(),
                 ))
             } else if !response.success
-                && (!response.context_fragments.is_empty() || response.code_mode_text.is_some())
+                && (!response.context_fragments.is_empty()
+                    || response.code_mode_text.is_some()
+                    || response.turn_control.is_some())
             {
                 Err(FunctionCallError::RespondToModel(
                     "failed dynamic tools cannot supply context fragments".to_string(),
@@ -278,6 +299,7 @@ async fn request_dynamic_tool(
                 response.success = false;
                 response.context_fragments.clear();
                 response.code_mode_text = None;
+                response.turn_control = None;
                 response.content_items = vec![
                     codex_protocol::dynamic_tools::DynamicToolCallOutputContentItem::InputText {
                         text: error.to_string(),

@@ -1723,6 +1723,9 @@ impl ThreadRequestProcessor {
         request_context: RequestContext,
     ) -> Result<(), JSONRPCErrorError> {
         let ThreadStartParams {
+            inference_completion,
+            automatic_context_refill,
+            primary_context_input,
             model,
             model_provider,
             allow_provider_model_fallback,
@@ -1836,6 +1839,9 @@ impl ThreadRequestProcessor {
                 typesafe_overrides,
                 dynamic_tools,
                 additional_tool_allowlist,
+                automatic_context_refill,
+                primary_context_input,
+                inference_completion,
                 selected_capability_roots.unwrap_or_default(),
                 history_mode.map(Into::into),
                 session_start_source,
@@ -1920,6 +1926,9 @@ impl ThreadRequestProcessor {
         typesafe_overrides: ConfigOverrides,
         dynamic_tools: Option<Vec<DynamicToolSpec>>,
         additional_tool_allowlist: Option<AdditionalToolAllowlist>,
+        automatic_context_refill: Option<codex_app_server_protocol::AutomaticContextRefillPolicy>,
+        primary_context_input: Option<codex_app_server_protocol::PrimaryContextInputPolicy>,
+        inference_completion: Option<codex_app_server_protocol::InferenceCompletionPolicy>,
         selected_capability_roots: Vec<SelectedCapabilityRoot>,
         history_mode: Option<ThreadHistoryMode>,
         session_start_source: Option<codex_app_server_protocol::ThreadStartSource>,
@@ -2063,6 +2072,31 @@ impl ThreadRequestProcessor {
                 .then_some(ThreadHistoryMode::Paginated)
         });
         let mut thread_extension_init = ExtensionDataInit::new();
+        if let Some(policy) = inference_completion {
+            thread_extension_init.insert(policy);
+        }
+        if let Some(policy) = crate::context_refill::configure_primary(
+            primary_context_input,
+            automatic_context_refill.as_ref(),
+            inference_completion,
+            Arc::clone(&listener_task_context.outgoing),
+            Some(request_id.connection_id),
+            config.ephemeral,
+        )
+        .await?
+        {
+            thread_extension_init.insert(policy);
+        }
+        if let Some(policy) = crate::context_refill::configure(
+            automatic_context_refill,
+            Arc::clone(&listener_task_context.outgoing),
+            Some(request_id.connection_id),
+            config.ephemeral,
+        )
+        .await?
+        {
+            thread_extension_init.insert(policy);
+        }
         if let Some(allowed) = additional_tool_allowlist {
             thread_extension_init.insert(allowed);
         }
@@ -2266,6 +2300,7 @@ impl ThreadRequestProcessor {
         let thread_originator = config_snapshot.originator.clone();
 
         let response = ThreadStartResponse {
+            inference_completion: Some(inference_completion.unwrap_or_default()),
             tool_policy: effective_tool_policy,
             thread: thread.clone(),
             disabled_plugin_ids: config_snapshot.disabled_plugin_ids,
@@ -4545,6 +4580,9 @@ impl ThreadRequestProcessor {
         };
 
         let ThreadResumeParams {
+            inference_completion,
+            automatic_context_refill,
+            primary_context_input,
             thread_id,
             history,
             path,
@@ -4847,6 +4885,37 @@ impl ThreadRequestProcessor {
 
         let response_history = thread_history.clone();
         let mut thread_extension_init = ExtensionDataInit::new();
+        if let Some(policy) = inference_completion {
+            thread_extension_init.insert(policy);
+        }
+        if let Some(policy) = crate::context_refill::configure_primary(
+            primary_context_input,
+            automatic_context_refill.as_ref(),
+            inference_completion,
+            Arc::clone(&self.outgoing),
+            match target {
+                ThreadResumeTarget::Client(request_id) => Some(request_id.connection_id),
+                ThreadResumeTarget::DaemonRecovery(_) => None,
+            },
+            config.ephemeral,
+        )
+        .await?
+        {
+            thread_extension_init.insert(policy);
+        }
+        if let Some(policy) = crate::context_refill::configure(
+            automatic_context_refill,
+            Arc::clone(&self.outgoing),
+            match target {
+                ThreadResumeTarget::Client(request_id) => Some(request_id.connection_id),
+                ThreadResumeTarget::DaemonRecovery(_) => None,
+            },
+            config.ephemeral,
+        )
+        .await?
+        {
+            thread_extension_init.insert(policy);
+        }
         if let Some(allowed) = additional_tool_allowlist {
             thread_extension_init.insert(allowed);
         }
@@ -5054,6 +5123,7 @@ impl ThreadRequestProcessor {
 
                 let thread_originator = config_snapshot.originator.clone();
                 let response = ThreadResumeResponse {
+                    inference_completion: Some(inference_completion.unwrap_or_default()),
                     tool_policy: tool_policy_snapshot(codex_thread.as_ref()),
                     thread,
                     disabled_plugin_ids: config_snapshot.disabled_plugin_ids,
@@ -5203,6 +5273,42 @@ impl ThreadRequestProcessor {
         };
 
         if let Some((existing_thread_id, existing_thread, mut source_thread)) = running_thread {
+            if matches!(
+                params.primary_context_input.as_ref(),
+                Some(codex_app_server_protocol::PrimaryContextInputPolicy::Canonical { .. })
+            ) || existing_thread
+                .thread_extension_data()
+                .get::<codex_core::primary_context_input::PrimaryContextInput>()
+                .is_some()
+            {
+                return Err(invalid_request(
+                    "primary input ownership requires an idle released cold-resume boundary",
+                ));
+            }
+            if matches!(
+                params.automatic_context_refill.as_ref(),
+                Some(codex_app_server_protocol::AutomaticContextRefillPolicy::Canonical { .. })
+            ) || existing_thread
+                .thread_extension_data()
+                .get::<codex_core::context_refill::AutomaticContextRefill>()
+                .is_some()
+            {
+                return Err(invalid_request(
+                    "cannot attach or replace automatic refill ownership on a loaded thread; cold resume at an idle released boundary is required",
+                ));
+            }
+            if params.inference_completion.is_some()
+                || existing_thread
+                    .thread_extension_data()
+                    .get::<codex_app_server_protocol::InferenceCompletionPolicy>()
+                    .is_some_and(|policy| {
+                        *policy == codex_app_server_protocol::InferenceCompletionPolicy::HostTool
+                    })
+            {
+                return Err(invalid_request(
+                    "cannot attach or replace host-tool lifecycle ownership on a loaded thread; cold resume at an idle released boundary is required",
+                ));
+            }
             if params.tool_policy.is_some() {
                 return Err(invalid_request(format!(
                     "cannot replace tool policy on loaded thread {existing_thread_id}; release it at an idle ownership boundary before cold resume"

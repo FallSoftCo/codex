@@ -64,6 +64,18 @@
           "type": "object"
         }
       ]
+    },
+    "DynamicToolTurnControl": {
+      "description": "Authenticated tool-owner lifecycle control, never model tool arguments or text.",
+      "oneOf": [
+        {
+          "description": "End this native inference after all admitted tool handlers are recorded.",
+          "enum": [
+            "complete"
+          ],
+          "type": "string"
+        }
+      ]
     }
   },
   "properties": {
@@ -90,6 +102,18 @@
     },
     "success": {
       "type": "boolean"
+    },
+    "turnControl": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DynamicToolTurnControl"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Successful authenticated host tool control; null continues ordinary inference."
     }
   },
   "required": [

@@ -31,6 +31,7 @@ use tracing::Span;
 use tracing::warn;
 
 use crate::error_code::internal_error;
+use crate::request_turn_cleanup::TurnRequestCleanup;
 use crate::server_request_error::TURN_TRANSITION_PENDING_REQUEST_ERROR_REASON;
 pub(crate) use codex_app_server_transport::ConnectionId;
 pub(crate) use codex_app_server_transport::OutgoingError;
@@ -129,6 +130,8 @@ pub(crate) enum OutgoingEnvelope {
 pub(crate) struct OutgoingMessageSender {
     verification_auth: OnceLock<Arc<codex_login::AuthManager>>,
     verification_connections: Mutex<HashSet<ConnectionId>>,
+    pub(crate) refill_connections:
+        Mutex<HashMap<ConnectionId, Arc<crate::context_refill::ConnectionLease>>>,
     next_server_request_id: AtomicI64,
     sender: mpsc::Sender<OutgoingEnvelope>,
     request_id_to_callback: Mutex<HashMap<RequestId, PendingCallbackEntry>>,
@@ -148,6 +151,7 @@ pub(crate) struct ThreadScopedOutgoingMessageSender {
 
 struct PendingCallbackEntry {
     verification_owner: Option<ConnectionId>,
+    refill_owner: Option<(ConnectionId, Arc<crate::context_refill::ConnectionLease>)>,
     verification_auth_revision: Option<u64>,
     verification_identity: Option<user_verification_auth::Identity>,
     callback: oneshot::Sender<ClientRequestResult>,
@@ -219,8 +223,12 @@ impl ThreadScopedOutgoingMessageSender {
     }
 
     pub(crate) async fn abort_pending_server_requests(&self) {
+        self.abort_server_requests(TurnRequestCleanup::All).await;
+    }
+
+    pub(crate) async fn abort_server_requests(&self, cleanup: TurnRequestCleanup<'_>) {
         self.outgoing
-            .cancel_requests_for_thread(
+            .cancel_scoped_requests_for_thread(
                 self.thread_id,
                 Some({
                     let mut error = internal_error(
@@ -231,6 +239,7 @@ impl ThreadScopedOutgoingMessageSender {
                     }));
                     error
                 }),
+                cleanup,
             )
             .await
     }
@@ -252,6 +261,7 @@ impl OutgoingMessageSender {
             verification_auth: OnceLock::new(),
             verification_connections: Mutex::new(HashSet::new()),
             next_server_request_id: AtomicI64::new(0),
+            refill_connections: Mutex::new(HashMap::new()),
             sender,
             request_id_to_callback: Mutex::new(HashMap::new()),
             request_contexts: Mutex::new(HashMap::new()),
@@ -279,6 +289,16 @@ impl OutgoingMessageSender {
     }
 
     pub(crate) async fn connection_closed(&self, connection_id: ConnectionId) {
+        // Invalidate synchronous sampling checks before waiting for callback cleanup.
+        if let Some(lease) = self.refill_connections.lock().await.remove(&connection_id) {
+            lease.closed.cancel();
+        }
+        self.request_id_to_callback.lock().await.retain(|_, entry| {
+            entry
+                .refill_owner
+                .as_ref()
+                .is_none_or(|(owner, _)| *owner != connection_id)
+        });
         self.disconnect_user_verification_connection(connection_id)
             .await;
         let mut request_contexts = self.request_contexts.lock().await;
@@ -339,8 +359,60 @@ impl OutgoingMessageSender {
         request: ServerRequestPayload,
         thread_id: Option<ThreadId>,
     ) -> (RequestId, oneshot::Receiver<ClientRequestResult>) {
+        self.send_request_checked(
+            connection_ids,
+            request,
+            thread_id,
+            /*refill_lease*/ None,
+        )
+        .await
+    }
+
+    pub(crate) async fn send_refill_request(
+        &self,
+        owner: ConnectionId,
+        lease: &Arc<crate::context_refill::ConnectionLease>,
+        request: ServerRequestPayload,
+        thread_id: ThreadId,
+    ) -> (RequestId, oneshot::Receiver<ClientRequestResult>) {
+        self.send_request_checked(Some(&[owner]), request, Some(thread_id), Some(lease))
+            .await
+    }
+
+    async fn send_request_checked(
+        &self,
+        connection_ids: Option<&[ConnectionId]>,
+        request: ServerRequestPayload,
+        thread_id: Option<ThreadId>,
+        refill_lease: Option<&Arc<crate::context_refill::ConnectionLease>>,
+    ) -> (RequestId, oneshot::Receiver<ClientRequestResult>) {
         let id = self.next_request_id();
         let outgoing_message_id = id.clone();
+        let canonical_refill = matches!(
+            &request,
+            ServerRequestPayload::ContextInput(_)
+                | ServerRequestPayload::ContextWindowRefill(_)
+                | ServerRequestPayload::ContextWindowInstalled(_)
+                | ServerRequestPayload::ContextWindowIdleInstalled(_)
+                | ServerRequestPayload::ContextWindowReconcile(_)
+        );
+        let refill_owner = if canonical_refill {
+            match connection_ids {
+                Some([owner]) => self
+                    .refill_connections
+                    .lock()
+                    .await
+                    .get(owner)
+                    .filter(|lease| {
+                        !lease.closed.is_cancelled()
+                            && refill_lease.is_some_and(|expected| Arc::ptr_eq(expected, lease))
+                    })
+                    .map(|lease| (*owner, Arc::clone(lease))),
+                _ => None,
+            }
+        } else {
+            None
+        };
         let request = request.request_with_id(outgoing_message_id.clone());
         let user_verification = matches!(
             &request,
@@ -361,6 +433,9 @@ impl OutgoingMessageSender {
                     || verification_identity != self.verification_identity())
         };
         let (tx_approve, rx_approve) = oneshot::channel();
+        if canonical_refill && refill_owner.is_none() {
+            return (outgoing_message_id, rx_approve);
+        }
         // One app owns this ceremony. Reconnect and other subscribers cannot answer it.
         let verification_owner = if user_verification {
             let eligible = self.verification_connections.lock().await;
@@ -384,6 +459,7 @@ impl OutgoingMessageSender {
                 id,
                 PendingCallbackEntry {
                     verification_owner,
+                    refill_owner: refill_owner.clone(),
                     verification_auth_revision,
                     verification_identity: verification_identity.clone(),
                     callback: tx_approve,
@@ -392,6 +468,17 @@ impl OutgoingMessageSender {
                     _diagnostics_guard: PENDING_SERVER_REQUESTS.track(),
                 },
             );
+        }
+        // Recheck original connection after registration, including disconnect races.
+        if refill_owner
+            .as_ref()
+            .is_some_and(|(_, lease)| lease.closed.is_cancelled())
+        {
+            self.request_id_to_callback
+                .lock()
+                .await
+                .remove(&outgoing_message_id);
+            return (outgoing_message_id, rx_approve);
         }
         // Disconnect may finish its callback cleanup before registration acquires the lock.
         // Recheck afterward so that ordering cannot leave an orphaned verification callback.
@@ -429,7 +516,7 @@ impl OutgoingMessageSender {
                     {
                         send_error = Some(err);
                         break;
-                    } else {
+                    } else if !canonical_refill {
                         self.analytics_events_client
                             .track_server_request(connection_id.0, request.clone());
                     }
@@ -482,6 +569,7 @@ impl OutgoingMessageSender {
             Some((id, entry)) => {
                 let completed_at_ms = now_unix_timestamp_ms();
                 if entry.verification_owner.is_none()
+                    && entry.refill_owner.is_none()
                     && let Ok(response) = entry.request.response_from_result(result.clone())
                 {
                     tracing::info!("<- response: {response:?}");
@@ -571,6 +659,15 @@ impl OutgoingMessageSender {
     ) -> Option<(RequestId, PendingCallbackEntry)> {
         let mut callbacks = self.request_id_to_callback.lock().await;
         let entry = callbacks.get(id)?;
+        if let Some((owner, lease)) = &entry.refill_owner {
+            if *owner != connection_id {
+                return None;
+            }
+            if lease.closed.is_cancelled() {
+                callbacks.remove(id);
+                return None;
+            }
+        }
         if let Some(owner) = entry.verification_owner {
             if owner != connection_id {
                 return None;
@@ -593,8 +690,10 @@ impl OutgoingMessageSender {
         let mut requests = request_id_to_callback
             .values()
             .filter_map(|entry| {
-                (entry.thread_id == Some(thread_id) && entry.verification_owner.is_none())
-                    .then_some(entry.request.clone())
+                (entry.thread_id == Some(thread_id)
+                    && entry.verification_owner.is_none()
+                    && entry.refill_owner.is_none())
+                .then_some(entry.request.clone())
             })
             .collect::<Vec<_>>();
         requests.sort_by(|left, right| left.id().cmp(right.id()));
@@ -606,12 +705,23 @@ impl OutgoingMessageSender {
         thread_id: ThreadId,
         error: Option<JSONRPCErrorError>,
     ) {
+        self.cancel_scoped_requests_for_thread(thread_id, error, TurnRequestCleanup::All)
+            .await;
+    }
+
+    async fn cancel_scoped_requests_for_thread(
+        &self,
+        thread_id: ThreadId,
+        error: Option<JSONRPCErrorError>,
+        cleanup: TurnRequestCleanup<'_>,
+    ) {
         let entries = {
             let mut request_id_to_callback = self.request_id_to_callback.lock().await;
             let request_ids = request_id_to_callback
                 .iter()
                 .filter_map(|(request_id, entry)| {
-                    (entry.thread_id == Some(thread_id)).then_some(request_id.clone())
+                    (entry.thread_id == Some(thread_id) && cleanup.cancels(&entry.request))
+                        .then_some(request_id.clone())
                 })
                 .collect::<Vec<_>>();
 
@@ -1633,3 +1743,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "turn_request_cleanup_tests.rs"]
+mod turn_request_cleanup_tests;

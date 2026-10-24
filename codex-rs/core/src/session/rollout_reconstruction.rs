@@ -149,7 +149,21 @@ fn finalize_active_segment<'a>(
             .world_state_replay
             .iter()
             .take_while(|item| !matches!(item, RolloutItem::Compacted(_)))
-            .any(|item| matches!(item, RolloutItem::WorldState(state) if state.full));
+            .any(|item| matches!(item, RolloutItem::WorldState(state) if state.full))
+        || active_segment
+            .world_state_replay
+            .iter()
+            .find_map(|item| match item {
+                RolloutItem::Compacted(checkpoint) => Some(
+                    checkpoint
+                        .resume_metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.native_context.as_ref())
+                        .is_some_and(|native| native.supported()),
+                ),
+                _ => None,
+            })
+            .unwrap_or(false);
     world_state_replay.extend(active_segment.world_state_replay);
 
     // A surviving replacement-history compaction is a complete history base. Once we
@@ -304,7 +318,15 @@ impl ContextManager {
                         active_segment.reference_context_item,
                         TurnReferenceContextItem::NeverSet
                     ) {
-                        active_segment.reference_context_item = TurnReferenceContextItem::Cleared;
+                        active_segment.reference_context_item = compacted
+                            .resume_metadata
+                            .as_ref()
+                            .and_then(|metadata| metadata.native_context.as_ref())
+                            .filter(|native| native.supported())
+                            .and_then(|native| native.reference_context.clone())
+                            .map_or(TurnReferenceContextItem::Cleared, |context| {
+                                TurnReferenceContextItem::Latest(Box::new(context))
+                            });
                     }
                     if active_segment.history_checkpoint.is_none()
                         && compacted.replacement_history.is_some()
@@ -561,7 +583,11 @@ impl ContextManager {
         }
 
         let reference_context_item = match reference_context_item {
-            TurnReferenceContextItem::NeverSet | TurnReferenceContextItem::Cleared => None,
+            TurnReferenceContextItem::NeverSet => resume_metadata
+                .and_then(|metadata| metadata.native_context.as_ref())
+                .filter(|native| native.supported())
+                .and_then(|native| native.reference_context.clone()),
+            TurnReferenceContextItem::Cleared => None,
             TurnReferenceContextItem::Latest(turn_reference_context_item) => {
                 Some(*turn_reference_context_item)
             }
@@ -575,10 +601,20 @@ impl ContextManager {
         // Replay the collected world-state records chronologically so compaction resets and merge
         // patches keep their original meaning.
         world_state_replay.reverse();
-        let mut world_state_baseline: Option<WorldStateSnapshot> = None;
+        let mut world_state_baseline = resume_metadata
+            .and_then(|metadata| metadata.native_context.as_ref())
+            .filter(|native| native.supported())
+            .map(|native| WorldStateSnapshot::from(&native.world_state.state));
         for item in world_state_replay {
             match item {
-                RolloutItem::Compacted(_) => world_state_baseline = None,
+                RolloutItem::Compacted(checkpoint) => {
+                    world_state_baseline = checkpoint
+                        .resume_metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.native_context.as_ref())
+                        .filter(|native| native.supported())
+                        .map(|native| WorldStateSnapshot::from(&native.world_state.state));
+                }
                 RolloutItem::WorldState(world_state) if world_state.full => {
                     world_state_baseline = Some(WorldStateSnapshot::from(&world_state.state));
                 }

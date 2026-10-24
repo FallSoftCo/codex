@@ -34,7 +34,6 @@ use super::is_thread_sampled;
 use super::measure_and_filter_rollout_items;
 use super::update_turn_measurements;
 use crate::ResponseItemEnvelope;
-use crate::RolloutItem;
 use crate::policy::PERSISTED_COMMAND_OUTPUT_MAX_BYTES;
 
 fn retained_message(text: &str) -> RolloutItem {

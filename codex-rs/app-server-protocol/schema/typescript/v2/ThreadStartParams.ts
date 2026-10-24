@@ -5,11 +5,25 @@ import type { Personality } from "../Personality";
 import type { JsonValue } from "../serde_json/JsonValue";
 import type { ApprovalsReviewer } from "./ApprovalsReviewer";
 import type { AskForApproval } from "./AskForApproval";
+import type { AutomaticContextRefillPolicy } from "./AutomaticContextRefillPolicy";
+import type { InferenceCompletionPolicy } from "./InferenceCompletionPolicy";
+import type { PrimaryContextInputPolicy } from "./PrimaryContextInputPolicy";
 import type { SandboxMode } from "./SandboxMode";
 import type { ThreadSource } from "./ThreadSource";
 import type { ThreadStartSource } from "./ThreadStartSource";
 
-export type ThreadStartParams = {model?: string | null, modelProvider?: string | null, serviceTier?: string | null | null, cwd?: string | null, approvalPolicy?: AskForApproval | null, /**
+export type ThreadStartParams = {/**
+ * Per-owner lifecycle, supplied again on cold resume. Omission uses model
+ * completion; this grants no execution permissions.
+ */
+inferenceCompletion?: InferenceCompletionPolicy | null, /**
+ * Per-owner runtime opt-in. Never restored from persisted history.
+ * Absent/null/disabled keeps the ordinary automatic compaction path.
+ */
+automaticContextRefill?: AutomaticContextRefillPolicy | null, /**
+ * Explicit first-sample canonical admission; never restored from history.
+ */
+primaryContextInput?: PrimaryContextInputPolicy | null, model?: string | null, modelProvider?: string | null, serviceTier?: string | null | null, cwd?: string | null, approvalPolicy?: AskForApproval | null, /**
  * Override where approval requests are routed for review on this thread
  * and subsequent turns.
  */

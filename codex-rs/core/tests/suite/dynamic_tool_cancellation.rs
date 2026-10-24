@@ -127,6 +127,7 @@ async fn interrupt_completes_cancelled_dynamic_call(hook: Option<HookEventName>)
             .submit(Op::DynamicToolResponse {
                 id: "gate-call".to_string(),
                 response: DynamicToolResponse {
+                    turn_control: None,
                     code_mode_text: None,
                     context_fragments: Vec::new(),
                     content_items: Vec::new(),
@@ -268,6 +269,7 @@ async fn terminated_cell_persists_failure_and_excludes_late_reply_from_context()
     )
     .await;
     let barrier_reply = DynamicToolResponse {
+        turn_control: None,
         code_mode_text: None,
         context_fragments: Vec::new(),
         content_items: Vec::new(),
@@ -309,6 +311,7 @@ async fn terminated_cell_persists_failure_and_excludes_late_reply_from_context()
         .submit(Op::DynamicToolResponse {
             id: original.clone(),
             response: DynamicToolResponse {
+                turn_control: None,
                 code_mode_text: None,
                 context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {

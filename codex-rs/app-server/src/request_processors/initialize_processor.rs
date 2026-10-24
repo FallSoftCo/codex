@@ -209,11 +209,20 @@ impl InitializeRequestProcessor {
             }
         }
 
+        self.outgoing.enable_refill_connection(connection_id).await;
         let user_agent = get_codex_user_agent();
         let response = InitializeResponse {
             lax_capabilities: vec![
                 "dynamic_tool_context_fragments/v1".to_string(),
+                "dynamic_tool_turn_control/v1".to_string(),
+                "host_tool_inference_completion/v1".to_string(),
+                "host_tool_inference_auto_transport/v1".to_string(),
+                "harness_owned_context_guidance/v1".to_string(),
+                "primary_context_input/v1".to_string(),
                 "dynamic_tool_code_mode_text/v1".to_string(),
+                "canonical_context_window_refill/v1".to_string(),
+                "canonical_context_window_recovery/v1".to_string(),
+                "canonical_retained_writer_context/v1".to_string(),
             ],
             user_agent,
             codex_home,

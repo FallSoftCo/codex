@@ -152,6 +152,42 @@ pub(super) async fn append_items(
     .await
 }
 
+/// Serialize with all existing appends, but never enter ordinary recovery.
+pub(super) async fn install_context_refill(
+    store: &LocalThreadStore,
+    thread_id: ThreadId,
+    intent: codex_protocol::context_refill::ContextWindowRefillIntentEvent,
+    checkpoint: codex_rollout::CompactedItem,
+) -> ThreadStoreResult<codex_protocol::context_refill::ContextWindowInstalledParams> {
+    if intent.thread_id != thread_id.to_string() {
+        return Err(ThreadStoreError::InvalidRequest {
+            message: "refill intent names another local thread".into(),
+        });
+    }
+    let _guard = store.live_writer_locks.lock(thread_id).await;
+    let (recorder, rollout_id, mode) = live_writer_parts(store, thread_id).await?;
+    let receipt = recorder
+        .install_context_refill(intent, checkpoint)
+        .await
+        .map_err(|err| ThreadStoreError::OutcomeUnknown {
+            message: err.to_string(),
+        })?;
+    if matches!(mode, ThreadHistoryMode::Paginated) {
+        // Projection cannot precede JSONL. A projection error holds the operation;
+        // it must never trigger a second checkpoint append or false host success.
+        super::thread_history_materialization::materialize_to_sqlite(
+            store,
+            rollout_id,
+            recorder.rollout_path(),
+        )
+        .await
+        .map_err(|err| ThreadStoreError::OutcomeUnknown {
+            message: format!("durable refill receipt exists but projection failed: {err}"),
+        })?;
+    }
+    Ok(receipt)
+}
+
 pub(super) async fn persist_thread(
     store: &LocalThreadStore,
     thread_id: ThreadId,

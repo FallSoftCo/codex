@@ -209,6 +209,21 @@ pub trait ThreadStore: Any + Send + Sync {
     /// replay history and before updating any implementation-owned projections.
     fn append_items(&self, params: AppendThreadItemsParams) -> ThreadStoreFuture<'_, ()>;
 
+    /// Strict materialized same-turn canonical checkpoint. No append/flush fallback.
+    /// Nonlocal/ephemeral stores must explicitly support its durability contract.
+    fn install_context_refill(
+        &self,
+        _thread_id: ThreadId,
+        _intent: codex_protocol::context_refill::ContextWindowRefillIntentEvent,
+        _checkpoint: codex_rollout::CompactedItem,
+    ) -> ThreadStoreFuture<'_, codex_protocol::context_refill::ContextWindowInstalledParams> {
+        Box::pin(async {
+            Err(ThreadStoreError::Unsupported {
+                operation: "install_context_refill",
+            })
+        })
+    }
+
     /// Records metadata derived from rollout items.
     /// Unlike [`Self::update_thread_metadata`], this allows the write to be deferred.
     ///

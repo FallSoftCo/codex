@@ -100,6 +100,8 @@ pub(crate) struct SessionState {
     pub(crate) reasoning_effort_pin: ReasoningEffortPin,
     /// Set under the state lock before shutdown takes the last warmup handle.
     pub(crate) shutting_down: bool,
+    /// Original native refill remains held on any incomplete acknowledgement.
+    pub(crate) canonical_refill: Option<crate::session::context_refill::RefillGate>,
     /// Background model warmup scheduled at startup or while resuming an idle thread.
     pub(crate) startup_prewarm: Option<SessionStartupPrewarmHandle>,
     /// Retained after completion so later turns do not repeat speculative captures.
@@ -156,6 +158,7 @@ impl SessionState {
             async_compaction: crate::session::async_compaction::AsyncCompactionState::default(),
             reasoning_effort_pin: ReasoningEffortPin::Unset,
             shutting_down: false,
+            canonical_refill: None,
             startup_prewarm: None,
             shell_snapshot_prewarm: None,
             agent_task: None,

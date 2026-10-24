@@ -69,6 +69,7 @@ pub use collaborative_edit::CollaborativeEditPlanHandler;
 pub use coordination::CoordinationHandler;
 pub use current_time::CurrentTimeHandler;
 pub use dynamic::DynamicToolHandler;
+pub(crate) use dynamic::DynamicToolTurnCompletion;
 pub use get_context_remaining::GetContextRemainingHandler;
 pub use hollywood::HollywoodReadHandler;
 pub use hollywood::HollywoodSendHandler;

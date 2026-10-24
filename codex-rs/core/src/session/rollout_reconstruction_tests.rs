@@ -86,7 +86,8 @@ async fn recorded_questions_share_queued_input_order_across_resume() {
             })
             .collect::<Vec<_>>()
     };
-    let original_sources = sources(session.clone_history().await.annotated_items());
+    let original_items = session.clone_history().await.into_annotated_items();
+    let original_sources = sources(&original_items);
     assert!(original_sources.iter().any(Option::is_some));
     let saved = session
         .clone_history()
@@ -105,7 +106,21 @@ async fn recorded_questions_share_queued_input_order_across_resume() {
         }))
         .await;
     let history = session.clone_history().await;
-    assert_eq!(sources(history.annotated_items()), original_sources);
+    // The second send has no recorded result. Existing cold-resume recovery must
+    // add one explicit unknown notice, not treat the send as delivered or retry it.
+    let mut restored = history.annotated_items().to_vec();
+    assert_eq!(restored.len(), original_items.len() + 1);
+    let notice = restored.remove(2);
+    assert!(notice.metadata.is_none());
+    let notice = serde_json::to_value(RolloutItem::ResponseItem(notice)).unwrap();
+    assert_eq!(notice["payload"]["type"], "function_call_output");
+    assert_eq!(notice["payload"]["call_id"], "second");
+    let output = notice["payload"]["output"].as_str().unwrap();
+    assert!(output.starts_with("Tool outcome unknown:"));
+    assert!(output.contains("not a tool result"));
+    assert!(output.contains("do not repeat the operation solely because its output is missing"));
+    // Every original item and all attribution/order metadata are unchanged.
+    assert_eq!(restored, original_items);
     assert_eq!(
         history
             .annotated_items()
@@ -116,7 +131,7 @@ async fn recorded_questions_share_queued_input_order_across_resume() {
                     .and_then(|metadata| metadata.user_input_order)
             })
             .collect::<Vec<_>>(),
-        vec![Some(0), Some(2), Some(1), None]
+        vec![Some(0), Some(2), None, Some(1), None]
     );
     assert_eq!(session.reserve_user_input_order().await, 3);
 }
@@ -1624,6 +1639,7 @@ async fn bounded_replay_matches_full_replay_after_empty_turn_compactions(
                     compaction_response_id: None,
                     latest_token_usage_record: None,
                     resume_metadata: current.then(|| codex_history::CompactionResumeMetadata {
+                        native_context: None,
                         multi_agent_version: None,
                         last_started_turn_id: Some(format!("wake-{window_number}")),
                         turn_attribution: None,

@@ -933,6 +933,25 @@
       ],
       "type": "object"
     },
+    "InferenceCompletionPolicy": {
+      "description": "Supplied again on cold resume; never inferred from saved room/history data.",
+      "oneOf": [
+        {
+          "description": "Ordinary caller: a model final may end an inference.",
+          "enum": [
+            "model"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Only authenticated host settlement may successfully end the inference after admitted tools drain. Provider tool selection is independent.",
+          "enum": [
+            "hostTool"
+          ],
+          "type": "string"
+        }
+      ]
+    },
     "LegacyAppPathString": {
       "type": "string"
     },
@@ -3325,6 +3344,17 @@
         "type": "string"
       },
       "type": "array"
+    },
+    "inferenceCompletion": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/InferenceCompletionPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Effective lifecycle for this loaded owner. Older servers omit this."
     },
     "instructionSources": {
       "default": [],

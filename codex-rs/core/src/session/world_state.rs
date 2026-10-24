@@ -199,12 +199,21 @@ impl Session {
                 window_ids.window_id,
             ));
         }
-        let guidance = step_context
-            .token_budget
-            .as_ref()
-            .and_then(|config| config.guidance_message.as_deref())
+        let contract =
+            super::lax_context_contract::LaxContextContract::for_step(self, step_context);
+        let guidance = contract
+            .guidance
+            .as_deref()
+            .or_else(|| {
+                step_context
+                    .token_budget
+                    .as_ref()
+                    .and_then(|config| config.guidance_message.as_deref())
+            })
             .filter(|_| token_budget_enabled);
         world_state.add_section(ContextWindowGuidanceState::new(guidance));
+        // Reminders and fallback use this same step-owned executable contract.
+        turn_context.extension_data.insert(contract);
         let realtime = &step_context.realtime;
         world_state.add_section(RealtimeState::new(
             realtime.active,

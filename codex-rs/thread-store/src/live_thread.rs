@@ -280,6 +280,22 @@ impl LiveThread {
         Ok(items)
     }
 
+    /// Dedicated fallible install; intentionally never calls ordinary persist/flush.
+    pub async fn install_context_refill(
+        &self,
+        intent: codex_protocol::context_refill::ContextWindowRefillIntentEvent,
+        checkpoint: codex_rollout::CompactedItem,
+    ) -> ThreadStoreResult<codex_protocol::context_refill::ContextWindowInstalledParams> {
+        if intent.thread_id != self.thread_id.to_string() {
+            return Err(crate::ThreadStoreError::InvalidRequest {
+                message: "refill intent names another live thread".into(),
+            });
+        }
+        self.thread_store
+            .install_context_refill(self.thread_id, intent, checkpoint)
+            .await
+    }
+
     pub async fn persist(&self, context: PersistContext) -> ThreadStoreResult<()> {
         if context.allows_background_persistence() {
             let update = self

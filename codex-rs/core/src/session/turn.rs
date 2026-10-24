@@ -176,11 +176,13 @@ pub(crate) async fn run_turn(
         .thread_extension_data
         .get::<AutoCompactionDisabled>()
         .is_none();
-    let auto_summarization_enabled =
-        auto_compaction_enabled && !turn_context.config.features.enabled(Feature::TokenBudget);
+    let auto_summarization_enabled = auto_compaction_enabled
+        && (!turn_context.config.features.enabled(Feature::TokenBudget)
+            || super::context_refill::configured(&sess));
     if crate::guardian::is_basic_session_source(&turn_context.session_source) {
         crate::guardian::check_pending_guardian_input(&sess, &turn_context).await?;
     }
+    super::primary_context_input::admit(&sess, &turn_context, &input, &cancellation_token).await?;
     // Record results from hooks that finished after the previous turn before this turn's user prompt.
     drain_async_hook_results(&sess, &turn_context, /*before_user_prompt*/ true).await;
 
@@ -363,6 +365,7 @@ pub(crate) async fn run_turn(
             CompactionReason::ContextLimit,
             CompactionPhase::PreTurn,
             /*candidate*/ None,
+            &cancellation_token,
         )
         .await?;
         world_state = sess
@@ -579,6 +582,16 @@ pub(crate) async fn run_turn(
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
                 } = sampling_request_output;
+                // Sampling and all its tool futures have drained and recorded above.
+                // A host settlement ends this inference before mailbox adoption,
+                // compaction or another model request. Other inputs stay queued.
+                if let Some(completion) = turn_context
+                    .extension_data
+                    .get::<crate::tools::handlers::DynamicToolTurnCompletion>(
+                ) {
+                    trace!(call_id = %completion.call_id, "native tool-owner turn completion");
+                    return Ok(None);
+                }
                 if model_needs_follow_up {
                     sess.input_queue
                         .accept_mailbox_delivery_for_current_turn(
@@ -683,6 +696,7 @@ pub(crate) async fn run_turn(
                         CompactionReason::ContextLimit,
                         CompactionPhase::MidTurn,
                         candidate,
+                        &cancellation_token,
                     )
                     .await;
                     match compacted {
@@ -701,7 +715,9 @@ pub(crate) async fn run_turn(
                         }
                         Ok(false) => {}
                         Err(err) => {
-                            if matches!(err.details(), CodexErrorDetails::TurnAborted) {
+                            if matches!(err.details(), CodexErrorDetails::TurnAborted)
+                                || super::context_refill::configured(&sess)
+                            {
                                 return Err(err);
                             }
                             let error = err.to_codex_protocol_error();
@@ -801,6 +817,7 @@ pub(crate) async fn run_turn(
                                 CompactionReason::ContextLimit,
                                 CompactionPhase::PostTurn,
                                 candidate,
+                                &cancellation_token,
                             )
                             .await
                         {
@@ -853,6 +870,7 @@ pub(crate) async fn run_turn(
                     CompactionReason::ContextLimit,
                     CompactionPhase::MidTurn,
                     /*candidate*/ None,
+                    &cancellation_token,
                 )
                 .await?;
                 can_drain_pending_input = false;
@@ -1398,6 +1416,7 @@ async fn run_pre_sampling_compact(
             CompactionReason::ContextLimit,
             CompactionPhase::PreTurn,
             candidate,
+            cancellation_token,
         )
         .await?;
     }
@@ -1495,6 +1514,7 @@ async fn maybe_run_previous_model_inline_compact(
         reason,
         CompactionPhase::PreTurn,
         /*candidate*/ None,
+        cancellation_token,
     )
     .await?;
     Ok(())
@@ -1515,7 +1535,24 @@ async fn run_auto_compact(
     reason: CompactionReason,
     phase: CompactionPhase,
     candidate: Option<Box<BackgroundCompactionCandidate>>,
+    cancellation_token: &CancellationToken,
 ) -> CodexResult<bool> {
+    // Recovered native UNKNOWN is a safety hold even without runtime opt-in.
+    // Do not route an old unacknowledged checkpoint through vanilla summary.
+    super::context_refill::check_sampling(sess, cancellation_token).await?;
+    // All callers are foreground drained boundaries. Never launch a summarizer,
+    // token-budget replacement or adopt a background candidate for opted-in threads.
+    if super::context_refill::configured(sess) {
+        return super::context_refill::run(
+            sess,
+            &replacement_step_context,
+            client_session,
+            reason,
+            phase,
+            cancellation_token,
+        )
+        .await;
+    }
     let turn_context = &step_context.turn;
     if matches!(phase, CompactionPhase::PreTurn)
         && crate::guardian::is_basic_session_source(&turn_context.session_source)
@@ -1744,6 +1781,7 @@ async fn run_sampling_request(
     let mut original_input = None;
     let mut executed_tool_calls_by_output = HashMap::new();
     loop {
+        super::context_refill::check_sampling(&sess, &cancellation_token).await?;
         // Running code-mode cells can request review while this response is in flight.
         // Keep the latest received ID until response.created replaces it.
         let prompt_input = if let Some(input) = initial_input.take() {
@@ -2221,6 +2259,8 @@ pub(super) fn realtime_text_for_event(msg: &EventMsg) -> Option<RealtimeEventTex
         | EventMsg::TurnModerationMetadata(_)
         | EventMsg::SafetyBuffering(_)
         | EventMsg::ContextCompacted(_)
+        | EventMsg::ContextWindowRefillIntent(_)
+        | EventMsg::ContextWindowRefillInstalled(_)
         | EventMsg::ThreadRolledBack(_)
         | EventMsg::TurnStarted(_)
         | EventMsg::ThreadSettingsApplied(_)
@@ -2672,7 +2712,10 @@ async fn try_run_sampling_request(
     let effort = sess
         .reasoning_effort_for_request(&step_context.settings, super::RequestEffortUsage::Sampling)
         .await;
-    let mut stream = client_session
+    // Capture after reasoning/prompt preparation; the preliminary check earlier
+    // in run_sampling cannot fence disconnects during those awaits.
+    let refill_fence = super::context_refill::sampling_fence(&sess, &cancellation_token).await?;
+    let stream_request = client_session
         .stream(
             prompt,
             &step_context.settings.model_info,
@@ -2683,9 +2726,12 @@ async fn try_run_sampling_request(
             responses_metadata,
             &inference_trace,
         )
-        .instrument(trace_span!("stream_request"))
-        .or_cancel(&cancellation_token)
-        .await??;
+        .instrument(trace_span!("stream_request"));
+    let mut stream = if let Some(fence) = &refill_fence {
+        fence.run(&cancellation_token, stream_request).await?
+    } else {
+        stream_request.or_cancel(&cancellation_token).await??
+    };
     if cancellation_token.is_cancelled() {
         return Err(CodexErr::TurnAborted);
     }
@@ -2734,12 +2780,22 @@ async fn try_run_sampling_request(
             codex.usage.total_tokens = field::Empty,
         );
 
-        let event = stream
+        let receive = stream
             .next()
             .instrument(trace_span!(parent: &handle_responses, "receiving"))
             .or_cancel(&preempt)
-            .or_cancel(&cancellation_token)
-            .await;
+            .or_cancel(&cancellation_token);
+        let event = if let Some(fence) = &refill_fence {
+            match fence
+                .run(&cancellation_token, async { Ok(receive.await) })
+                .await
+            {
+                Ok(event) => event,
+                Err(error) => break Err(error),
+            }
+        } else {
+            receive.await
+        };
         // Account for an already-received terminal error even if cancellation raced it.
         // Cancellation still stops ordinary stream events before they can run tools.
         let event = match event {
@@ -3118,6 +3174,17 @@ async fn try_run_sampling_request(
                 }
                 if let Some(false) = end_turn {
                     needs_follow_up = true;
+                }
+                // Provider response completion is not host-owned inference
+                // settlement. A nonfinal provider continuation still proceeds.
+                if !needs_follow_up
+                    && sess.services.thread_extension_data
+                        .get::<codex_protocol::inference_completion::InferenceCompletionPolicy>()
+                        .is_some_and(|policy| *policy == codex_protocol::inference_completion::InferenceCompletionPolicy::HostTool)
+                {
+                    break Err(CodexErr::InvalidRequest(
+                        "Host-tool inference ended without authenticated tool settlement; accepted Work remains unfinished.".to_string(),
+                    ));
                 }
                 break Ok(SamplingRequestResult {
                     needs_follow_up,

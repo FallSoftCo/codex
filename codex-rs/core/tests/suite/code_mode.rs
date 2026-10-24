@@ -8213,6 +8213,7 @@ text(JSON.stringify({
                 .submit(Op::DynamicToolResponse {
                     id: request.call_id,
                     response: DynamicToolResponse {
+                        turn_control: None,
                         code_mode_text: None,
                         context_fragments: Vec::new(),
                         content_items: vec![DynamicToolCallOutputContentItem::InputText {
@@ -8576,6 +8577,7 @@ text(
         .submit(Op::DynamicToolResponse {
             id: request.call_id,
             response: DynamicToolResponse {
+                turn_control: None,
                 code_mode_text: None,
                 context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {

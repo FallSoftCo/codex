@@ -1457,6 +1457,7 @@ async fn steers_during_tool_drain_preserve_tool_output_and_each_input() {
         .submit(Op::DynamicToolResponse {
             id: tool_request.call_id,
             response: DynamicToolResponse {
+                turn_control: None,
                 code_mode_text: None,
                 context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {
@@ -1630,6 +1631,7 @@ async fn steers_yield_exec_and_wait_without_stopping_the_cell(instant_interrupt:
             .submit(Op::DynamicToolResponse {
                 id: tool_request.call_id,
                 response: DynamicToolResponse {
+                    turn_control: None,
                     code_mode_text: None,
                     context_fragments: Vec::new(),
                     content_items: vec![DynamicToolCallOutputContentItem::InputText {
@@ -1667,6 +1669,7 @@ async fn steers_yield_exec_and_wait_without_stopping_the_cell(instant_interrupt:
         .submit(Op::DynamicToolResponse {
             id: tool_request.call_id,
             response: DynamicToolResponse {
+                turn_control: None,
                 code_mode_text: None,
                 context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {
@@ -1910,6 +1913,7 @@ async fn input_preempts_response_and_yields_running_code_mode_call() {
         .submit(Op::DynamicToolResponse {
             id: held_tool.call_id,
             response: DynamicToolResponse {
+                turn_control: None,
                 code_mode_text: None,
                 context_fragments: Vec::new(),
                 content_items: vec![DynamicToolCallOutputContentItem::InputText {
