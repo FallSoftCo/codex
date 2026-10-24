@@ -337,7 +337,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_goal_state",
-            "Goal manager: change lifecycle with revision fencing. Acceptance requires reviewed work. Pause gates new admission. Request cancelled to durably stop all goal work; cancel_requested remains until original acknowledgements settle. Do not poll model turns for cancellation.",
+            "Goal manager: change lifecycle with revision fencing. Acceptance requires reviewed current work and reconciliation of the latest proposal: adopt it or explicitly reject/defer it with hollywood_goal_resolve_proposal. A pending proposal is not silently completed. Pause gates new admission. Request cancelled to durably stop all goal work; cancel_requested remains until original acknowledgements settle. Do not poll model turns for cancellation.",
             {
                 "goalId": text,
                 "revision": revision,

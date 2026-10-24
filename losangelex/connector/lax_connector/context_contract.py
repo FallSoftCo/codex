@@ -154,7 +154,7 @@ review or terminal Goal facts resume the SAME responsibility; other tasks may us
 this writer while it waits. Review current reports/evidence before yielding an
 already-actionable review frontier. Distinguish cancellation from success.
 Do not replace Goal acceptance with peer chat or recurring model status calls.
-Native Goals use a durable definition and strategy. Use hollywood_goal_define to
+Native Goals use a durable definition and strategy. Reject or defer an unadopted proposal with hollywood_goal_resolve_proposal and an attributable reason when warranted; preserve the current adopted contract and evidence. A pending proposal must be reconciled before Goal acceptance. Use hollywood_goal_define to
 develop acceptance with the human as needed; resolve open questions, then adopt
 the exact revision/digest with hollywood_goal_adopt. Record considered paths,
 selected strategy and current existing-Work frontier with hollywood_goal_plan.

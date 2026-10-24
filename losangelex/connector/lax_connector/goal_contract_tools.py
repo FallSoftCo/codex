@@ -1,7 +1,7 @@
 """Native tools for reviewed Goal definitions and durable strategy revisions."""
 from uuid import UUID
 
-NAMES={"hollywood_goal_define","hollywood_goal_adopt","hollywood_goal_plan"}
+NAMES={"hollywood_goal_define","hollywood_goal_adopt","hollywood_goal_resolve_proposal","hollywood_goal_plan"}
 
 def definitions(spec):
     text={"type":"string"};rev={"type":"integer","minimum":1}
@@ -30,6 +30,12 @@ def definitions(spec):
         "Accountable Goal manager: adopt the exact latest definition revision/digest after resolving its recorded questions. This records YOUR attributable review, never invents human approval. Read current Goal and any required real human answer first. Adoption fences older acceptance; existing unfinished effects require explicit reconciliation. No model/task starts.",
         {**common,"definitionRevision":rev,"definitionSha256":text},
         [*common,"definitionRevision","definitionSha256"]),
+      spec("hollywood_goal_resolve_proposal",
+        "Accountable Goal manager: explicitly reject or defer the exact latest unadopted proposal after considering its source and any required human clarification. Record a public source and concise reason. This is YOUR attributable planning decision, not human approval or completion. The currently adopted criteria, accepted Work and evidence remain unchanged; a later proposal requires a new decision. Read the current Goal and original decision receipts first.",
+        {**common,"definitionRevision":rev,"definitionSha256":text,
+         "disposition":{"type":"string","enum":["rejected","deferred"]},
+         "note":{"type":"string","minLength":1,"maxLength":1000}},
+        [*common,"definitionRevision","definitionSha256","disposition"]),
       spec("hollywood_goal_plan",
         "Record a durable strategy against the adopted Goal definition: alternatives considered, selected approach and rationale, current frontier of existing Work IDs and conditions for replanning. One alternative is sufficient when warranted; do not invent ceremony. Existing Work owns dependencies and execution. Read current Goal/Work first. For changed adopted criteria, obsolete unfinished Work must be explicitly cancelled/settled; create replacement Work bound to current criteria before selecting it. Completed rejected Work has a separate revision path. Retain retired paths/effects; never relabel old evidence. This records no execution.",
         {**common,"planRevision":{"type":"integer","minimum":0},"definitionRevision":rev,"strategy":strategy},
@@ -37,7 +43,7 @@ def definitions(spec):
     ]
 
 async def execute(c,name,args,operation):
-    action={"hollywood_goal_define":"definition","hollywood_goal_adopt":"adopt","hollywood_goal_plan":"strategy"}[name]
+    action={"hollywood_goal_define":"definition","hollywood_goal_adopt":"adopt","hollywood_goal_resolve_proposal":"resolve","hollywood_goal_plan":"strategy"}[name]
     goal=str(UUID(args["goalId"]))
     payload={key:value for key,value in args.items() if key!="goalId"}
     payload["operationId"]=operation
