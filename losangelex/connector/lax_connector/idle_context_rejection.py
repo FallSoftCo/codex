@@ -21,6 +21,9 @@ async def inspect_rejected(idle, path):
             "Pre-snapshot retry requires explicit --rebuild-context-only")
     original_bytes = path.read_bytes()
     operation = json.loads(original_bytes)
+    if "snapshot" in operation or "preflight" in operation:
+        from .idle_native_rejection import inspect_native_rejected
+        return await inspect_native_rejected(idle, path)
     require(idle.owned(operation) and operation.get("state") == "held"
             and not any(key in operation for key in (
                 "response", "snapshot", "preflight", "installed", "hostReceipt", "nativeResult")),

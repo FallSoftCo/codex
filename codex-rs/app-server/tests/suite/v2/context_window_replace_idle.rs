@@ -305,7 +305,7 @@ async fn cold_owner_reconciles_before_another_idle_rebuild_without_model_input()
     .await;
     let home = TempDir::new()?;
     MockResponsesConfig::new(&server.uri())
-        .with_provider_config("supports_websockets = false")
+        .with_provider_config("supports_websockets = true")
         .write(home.path())?;
     let mut rpc = TestAppServer::builder()
         .with_codex_home(home.path())

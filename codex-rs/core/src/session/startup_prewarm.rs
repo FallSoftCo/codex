@@ -207,6 +207,18 @@ impl SessionStartupPrewarmHandle {
 
 impl Session {
     pub(crate) async fn schedule_startup_prewarm(self: &Arc<Self>, input: PrewarmInput) {
+        // Hollywood-owned contexts admit provider activity through their
+        // original host turn. An eager upstream prewarm both bypasses that
+        // boundary and leaves a cold idle replacement fenced by its handle.
+        if super::context_refill::configured(self)
+            || self
+                .services
+                .thread_extension_data
+                .get::<crate::primary_context_input::PrimaryContextInput>()
+                .is_some()
+        {
+            return;
+        }
         let websocket_connect_timeout = self.provider().await.websocket_connect_timeout();
         let mut state = self.state.lock().await;
         if state.shutting_down {

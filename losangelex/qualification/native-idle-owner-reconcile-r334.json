@@ -33,5 +33,36 @@
     "No full workspace suite or broad semantic superiority claim.",
     "Original Global work and final NextComp release remain pending integration."
   ],
-  "operations": "Preserve original operation identities, previous journals, unknown outcomes, contexts, roles, stopped placements and active services. Do not start a dummy model turn to clear the fence."
+  "operations": "Preserve original operation identities, previous journals, unknown outcomes, contexts, roles, stopped placements and active services. Do not start a dummy model turn to clear the fence.",
+  "productionFollowup": {
+    "at": 1792928938.4851031,
+    "originalPairedDeployment": "SDK165/nativeR01 accepted608574aa, preserved identities/history and protected service PIDs. Explicit original CLI cleared old c7d cold receipt without inference; subsequent replaceIdle refused before any durable54e intent.",
+    "rootCause": "Upstream websocket startup prewarm leaves a stored handle on cold resume until a real turn. SSE-only fixture did not exercise it.",
+    "negativeControl": "context-native-ws-repro-r334-r01 exit100; observed exact live native JSON-RPC refusal, then test timed out. Retained unchanged behavioral assertions.",
+    "fix": "Hollywood-owned canonical/primary-input profiles skip eager provider prewarming; original host-admitted turn retains ordinary model transport. Active prewarm rejection guard remains intact. SDK166 explicit known-native-refusal recovery proves original snapshot/absence of durable target intent and never re-POSTs accepted snapshot.",
+    "nativeQualification": {
+      "result": "/var/lib/lax-idle-context-replacement-20261023-r316/native-component-checks/context-native-ws-fixed-r334-r01/result.json",
+      "sha256": "077e36c4bcbfd4ba372946e7c41d3dfbf27d0fad6b2f4e9c53da8187e40f3492",
+      "passed": 9,
+      "provider": "scripted fixture with websocket capability enabled; no semantic LLM proof"
+    },
+    "SDKQualification": {
+      "receipt": "/var/lib/lax-global-unified-catalog-20261025-r334/context-budget-recovery-r01/native-refusal-dispatch-qualification-r02.json",
+      "passed": 10,
+      "scope": "Actual SDK dispatcher, captured original history and fake RPC/HTTP. Explicit unknown/installed/native-intent/changed-snapshot controls."
+    },
+    "lint": {
+      "actualCommand": [
+        "just",
+        "fix",
+        "-p",
+        "codex-core",
+        "--lib"
+      ],
+      "exitCode": 0,
+      "functionalSourceChanged": false,
+      "clarification": "Old driver actualChecks wording says three crates; actual saved command scoped codex-core only."
+    },
+    "limits": "New paired166/prewarm-native not deployed at this source commit. Original Goal8586 and NextComp153 delivery still unfinished."
+  }
 }

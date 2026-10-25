@@ -833,6 +833,11 @@ state with `heldOperationId` cleared. Active work, another owner, a stale cut or
 an unproven original receipt is refused. A lost RPC reply requires observing the
 original state; it does not authorize repeating a replacement.
 
+Hollywood-owned canonical/primary-input contexts do not perform eager provider
+prewarming on start or resume. Their provider activity begins with the original
+host-admitted turn. The idle replacement guard still rejects any outstanding
+prewarm handle; no active task is cancelled to permit a replacement.
+
 This method advertises `native_idle_owner_reconciliation/v1`; the paired
 retained-context Writer SDK requires it rather than starting a dummy model turn
 to reach the pre-sampling acknowledgement fence. Native scripted-provider

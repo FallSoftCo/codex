@@ -108,6 +108,8 @@ class IdleContextRebuild:
             if prior is not None:
                 operation = prior["operation"]
                 operation["rejectedPreparationRecovery"] = prior["proof"]
+                operation.pop("nativeRejection", None)
+                operation.pop("holdReason", None)
             self.pending = operation
             self.epoch = connection(r)
             self.save(operation, "intent" if prior is None else "snapshot_retry_intent")
@@ -136,8 +138,11 @@ class IdleContextRebuild:
                           request=request, nativeState=cut)
             selected = (prior["selected"] if prior is not None else
                         [item["id"] for item in pending if not item["cancelled"]][:1])
-            snapshot = await r.request("rebuild_snapshot", {"materialIds": selected},
-                operation=operation["snapshotOperationId"], turn=request["turnId"])
+            if prior is not None and "snapshot" in prior:
+                snapshot = prior["snapshot"]  # Observe/reuse accepted original; no new POST.
+            else:
+                snapshot = await r.request("rebuild_snapshot", {"materialIds": selected},
+                    operation=operation["snapshotOperationId"], turn=request["turnId"])
             from .context_action_memory import index
             content = json.loads("".join(chunk["content"] for chunk in snapshot["chunks"]))
             actions = await asyncio.to_thread(index, r, content)
@@ -171,6 +176,12 @@ class IdleContextRebuild:
         except BaseException as error:
             async with r.effect_lock:
                 if self.pending is operation:
+                    from .rpc import RpcError
+                    from .idle_native_rejection import REFUSAL, LEGACY_REFUSAL
+                    if (isinstance(error, RpcError) and error.code == -32600
+                            and str(error) == LEGACY_REFUSAL
+                            and operation.get("state") == "native_dispatch_intent"):
+                        operation["nativeRejection"] = {"code": -32600, "message": REFUSAL}
                     self.hold(operation, error)
             raise
 
@@ -293,15 +304,7 @@ class IdleContextRebuild:
                 if not self.owned(value):
                     continue
                 if value.get("state") == "held" and not any(
-                    key in value
-                    for key in (
-                        "response",
-                        "snapshot",
-                        "preflight",
-                        "installed",
-                        "hostReceipt",
-                        "nativeResult",
-                    )
+                    key in value for key in ("installed", "hostReceipt", "nativeResult")
                 ):
                     deferred.append((path, value))
                     continue
