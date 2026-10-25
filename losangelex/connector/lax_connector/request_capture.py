@@ -122,7 +122,11 @@ def ensure(capture, base, snapshot, row, native, fact, policy, path, frame=None)
     )
     from .work_delivery import assignment
 
-    work = assignment(capture, snapshot, row, policy)
+    from .collaboration_cleanup import permitted as cleanup_permitted
+    arguments = frame.get("arguments") if frame else None
+    cleanup = bool(frame and isinstance(arguments, dict)
+                   and cleanup_permitted(frame.get("port"), arguments.get("command")))
+    work = assignment(capture, snapshot, row, policy, cleanup=cleanup)
     work_id = work["id"] if work else None
     # The published delivery protocol derives Work authority on the server.
     # Keep its explicit null; canonical native goal bindings remain unchanged.
@@ -130,7 +134,7 @@ def ensure(capture, base, snapshot, row, native, fact, policy, path, frame=None)
     roots = resources(capture, base, native)
     # Explicit native coordination/plan callbacks still establish their original
     # per-Work grants. Ordinary business edits never manufacture planned scope.
-    if work and frame and frame.get("port") in {"coordination", "edit-plans"}:
+    if work and frame and not cleanup and frame.get("port") in {"coordination", "edit-plans"}:
         from .collaboration_capture import administrative_put
 
         grants = capture.bridge.http(
@@ -200,16 +204,25 @@ def ensure(capture, base, snapshot, row, native, fact, policy, path, frame=None)
         "descriptorDigest": row["descriptor_digest"],
         "serviceBindingDigest": fact["evidence"]["serviceBindingDigest"],
         "bridgeRevision": policy["bridge"]["revision"],
-        "ports": sorted(IMPLEMENTED_PORTS),
+        "ports": sorted({"coordination", "edit-plans"} if cleanup else IMPLEMENTED_PORTS),
         "scope": "delivery",
         "work": work,
         "resources": roots,
     }
+    if cleanup:
+        record["cleanupOnly"] = True
     if path.exists():
-        require(
-            protected(path) == record,
-            "Original dynamic capture authority changed; no overwrite",
-        )
+        old = protected(path)
+        if cleanup:
+            # Reuse an exact existing channel for narrower cleanup; never
+            # overwrite its authority or upgrade a cleanup-only channel.
+            keys = ("schema", "sourceBase", "native", "executorId", "descriptorDigest",
+                    "serviceBindingDigest", "bridgeRevision", "scope", "resources")
+            require(all(old.get(key) == record.get(key) for key in keys),
+                    "Original cleanup process/source/resource binding changed")
+            return old
+        require(old == record and not old.get("cleanupOnly"),
+                "Original dynamic capture authority changed; no overwrite")
     else:
         if len(list((capture.state / "channels").glob("*.json"))) >= 128:
             capture.archive_closed()

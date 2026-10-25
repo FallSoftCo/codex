@@ -18,7 +18,7 @@ def capability(work, policy):
         )
 
 
-def assignment(capture, snapshot, row, policy):
+def assignment(capture, snapshot, row, policy, *, cleanup=False):
     event, delivery = snapshot["request"], snapshot["delivery"]
     data = event.get("data", {})
     work_id = data.get("workId")
@@ -34,9 +34,10 @@ def assignment(capture, snapshot, row, policy):
         and work["owner"] == row["agent"]
         and work["delivery"] == delivery["id"]
         and work["request_event"] == event["id"]
-        and work["state"] == "assigned"
+        and (cleanup or work["state"] == "assigned")
         and type(data.get("workRevision")) is int
-        and work["revision"] == data["workRevision"]
+        and (work["revision"] >= data["workRevision"] if cleanup
+             else work["revision"] == data["workRevision"])
         and str(work["goal"]) == data.get("goalId")
         and data.get("attemptId") == str(delivery["id"])
         and type(data.get("attemptNumber")) is int
@@ -46,7 +47,7 @@ def assignment(capture, snapshot, row, policy):
         "Current original owned Work assignment/attempt required",
     )
     goal = capture.admin_http("GET", "goals/" + str(UUID(work["goal"])))["goal"]
-    require(goal["state"] == "active", "Current original Work goal must be active")
+    require(cleanup or goal["state"] == "active", "Current original Work goal must be active")
     return {
         "id": work_id,
         "revision": work["revision"],

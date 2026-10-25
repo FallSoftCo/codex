@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import unittest
+from protected_fixture import disk_fixture_root
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -135,7 +136,7 @@ class CaptureFixture:
         self.capture.state = self.state
         self.capture.policy = self.policy
         self.capture.admin_http = self.http
-        self.capture.peer = lambda peer: (
+        self.capture.peer = lambda peer, frame=None: (
             copy.deepcopy(self.row),
             copy.deepcopy(self.native),
             copy.deepcopy(self.fact),
@@ -210,7 +211,7 @@ class AutomaticCaptureTests(unittest.TestCase):
             self.skipTest(
                 "root-owned fixture semantics require administrator test route"
             )
-        self.tmp = tempfile.TemporaryDirectory(prefix="lax-capture-unit-", dir="/run")
+        self.tmp = tempfile.TemporaryDirectory(prefix="lax-capture-unit-", dir=disk_fixture_root())
         self.addCleanup(self.tmp.cleanup)
         self.f = CaptureFixture(Path(self.tmp.name))
 
@@ -442,7 +443,7 @@ class InstallerTests(unittest.TestCase):
             self.skipTest(
                 "root-owned fixture semantics require administrator test route"
             )
-        self.tmp = tempfile.TemporaryDirectory(prefix="lax-setup-unit-", dir="/run")
+        self.tmp = tempfile.TemporaryDirectory(prefix="lax-setup-unit-", dir=disk_fixture_root())
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.root.chmod(0o711)

@@ -80,6 +80,37 @@ class WorkCaptureTests(unittest.TestCase):
         self.assertFalse([c for c in self.f.calls if c[0] != "GET"])
 
 
+    def test_reported_cleanup_capture_has_no_new_work_grant_or_patch_port(self):
+        self.f.work_row.update(state="blocked", revision=5)
+        frame = {"threadId": "thread", "turnId": "turn", "port": "edit-plans",
+                 "arguments": {"command": {"action": "consent", "settlementDigest": "a" * 64}}}
+        record = self.f.capture.ensure((os.getpid(), os.geteuid(), 0), frame)
+        self.assertTrue(record["cleanupOnly"])
+        self.assertEqual(record["work"]["revision"], 5)
+        self.assertEqual(set(record["ports"]), {"coordination", "edit-plans"})
+        self.assertEqual(record["resources"][0]["workspaceId"], self.f.resource)
+        self.assertFalse([c for c in self.f.calls if c[0] != "GET"])
+        with self.assertRaises(Held):
+            self.f.ensure()
+        frame["arguments"]["command"]["settlementDigest"] = None
+        with self.assertRaises(Held):
+            self.f.capture.ensure((os.getpid(), os.geteuid(), 0), frame)
+
+    def test_existing_channel_is_not_overwritten_to_cleanup_or_reused_for_writes(self):
+        original = self.f.ensure()
+        path = next((self.f.state / "channels").glob("*.json"))
+        before = path.read_bytes()
+        self.f.work_row.update(state="blocked", revision=5)
+        frame = {"threadId": "thread", "turnId": "turn", "port": "edit-plans",
+                 "arguments": {"command": {"action": "reconcile"}}}
+        observed = self.f.capture.ensure((os.getpid(), os.geteuid(), 0), frame)
+        self.assertEqual(observed, original)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertFalse([c for c in self.f.calls if c[0] != "GET"])
+        with self.assertRaises(Held):
+            self.f.ensure()
+
+
 class WorkPatchTests(unittest.TestCase):
     invoke = delivery_fixtures.DeliveryPatchFixture.invoke
 
@@ -205,7 +236,7 @@ class WorkPatchTests(unittest.TestCase):
             return original(method, route, body)
 
         self.bridge.http = http
-        with self.assertRaises(urllib.error.HTTPError):
+        with self.assertRaisesRegex(Held, "rejected HTTP409"):
             self.invoke("patch-preflight")
         with self.assertRaises(Held):
             self.invoke("patch-preflight")

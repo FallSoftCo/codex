@@ -157,3 +157,63 @@ def verify_native_path(root, relative, pid):
     finally:
         os.close(host)
         os.close(native)
+
+
+def verify_native_write_access(native, root, files):
+    """Read-only kernel permission probe as the actual native process credentials.
+
+    Canonical grants do not override Unix access. Refuse obvious local denial
+    before creating/beginning a mutation permit. Access can still change later;
+    this check never turns a failed/uncertain mutation into a safe retry.
+    """
+    import json
+    import subprocess
+    import sys
+    from .service_observer import process
+
+    actual = process(native["pid"])
+    if (not actual or any(actual[k] != native[k] for k in ("pid", "start", "uid"))
+            or actual["uid"] == 0):
+        raise PermissionError("Original non-root native process incarnation required")
+    status = dict(line.split(":", 1) for line in
+                  Path("/proc", str(native["pid"]), "status").read_text().splitlines()
+                  if ":" in line)
+    uids = [int(v) for v in status["Uid"].split()]
+    gids = [int(v) for v in status["Gid"].split()]
+    groups = [int(v) for v in status["Groups"].split()]
+    if len(set(uids)) != 1 or uids[0] != actual["uid"] or len(set(gids)) != 1:
+        raise PermissionError("Native filesystem credentials changed")
+    if not 1 <= len(files) <= 128:
+        raise PermissionError("Bounded original native file set required")
+    payload = {"root": str(root), "files": files}
+    probe = r"""
+import json,os,sys
+from pathlib import Path
+p=json.load(sys.stdin);root=Path(p["root"])
+for f in p["files"]:
+    target=root/f["relativePath"]
+    if not target.is_relative_to(root) or ".." in target.parts:
+        raise PermissionError("Noncanonical native write target")
+    parent=target.parent
+    while not parent.exists() and parent != root:
+        parent=parent.parent
+    parent_mode=os.X_OK | (os.W_OK if not target.exists() or f["afterSha256"] == "absent" else 0)
+    if not os.access(parent,parent_mode,effective_ids=True):
+        print(json.dumps({"denied":f["relativePath"],"reason":"parent-access-denied"}));sys.exit(1)
+    if target.exists() and f["afterSha256"] != "absent" and not os.access(target,os.W_OK,effective_ids=True):
+        print(json.dumps({"denied":f["relativePath"],"reason":"file-not-writable"}));sys.exit(1)
+print(json.dumps({"checked":len(p["files"]),"writable":True}))
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", probe],
+        input=json.dumps(payload), capture_output=True, text=True, timeout=10,
+        user=uids[0], group=gids[0], extra_groups=groups, cwd="/", env={})
+    after = process(native["pid"])
+    if not after or any(after[k] != native[k] for k in ("pid", "start", "uid")):
+        raise PermissionError("Native process changed during access observation")
+    if result.returncode:
+        detail = result.stdout.strip()[:1400] or "Local native access probe failed"
+        raise PermissionError("Native target is not Unix-writable; no mutation admitted: " + detail)
+    value = json.loads(result.stdout)
+    if value != {"checked": len(files), "writable": True}:
+        raise PermissionError("Native access observation differs")
+    return value

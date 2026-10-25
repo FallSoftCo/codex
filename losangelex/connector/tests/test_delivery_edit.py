@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import unittest
+from protected_fixture import disk_fixture_root
 from pathlib import Path
 from unittest.mock import patch
 from uuid import UUID
@@ -21,7 +22,7 @@ def uid(n):
 class DeliveryPatchFixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(
-            prefix="lax-direct-unit-", dir="/run" if os.geteuid() == 0 else None
+            prefix="lax-direct-unit-", dir=disk_fixture_root() if os.geteuid() == 0 else None
         )
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)

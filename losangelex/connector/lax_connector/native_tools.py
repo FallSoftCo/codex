@@ -179,9 +179,8 @@ class NativeTools:
                 if name == "hollywood_publish":
                     self.publications.append(value["event"]["id"])
             elif name == "hollywood_mutation_read":
-                from .mutation_tools import view as mutation_view
-                value = mutation_view(await self.http(
-                    "GET", "collaboration/delivery-edits/" + str(UUID(arguments["permitId"]))))
+                from .mutation_tools import read as mutation_read
+                value = await mutation_read(self, arguments)
             elif name in READ_TOOLS | MUTATION_TOOLS:
                 value = await workflow_tool(self, name, arguments, operation)
             elif name in (

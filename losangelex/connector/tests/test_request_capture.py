@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from protected_fixture import disk_fixture_root
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,7 +18,7 @@ from test_collaboration_capture import CaptureFixture, uid
 class DynamicCaptureTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(
-            prefix="lax-request-capture-", dir="/run"
+            prefix="lax-request-capture-", dir=disk_fixture_root()
         )
         self.addCleanup(self.tmp.cleanup)
         self.f = CaptureFixture(Path(self.tmp.name))

@@ -398,6 +398,12 @@ class Bridge:
         record, source, policy = self.captured(peer, frame)
         port = frame["port"]
         require(port in record["ports"], "Native port is not enrolled")
+        if record.get("cleanupOnly"):
+            from .collaboration_cleanup import permitted
+            arguments = frame.get("arguments")
+            require(isinstance(arguments, dict)
+                    and permitted(port, arguments.get("command")),
+                    "Cleanup-only native channel admits no new edit or authority")
         if port in PATCH_PORTS:
             require(policy.get("patchPermits") is True and policy.get("physicalTargets") is True, "Canonical mutation permits unavailable")
             if record.get("scope") == "delivery":
@@ -407,6 +413,14 @@ class Bridge:
                         "Canonical delivery edit protocol unavailable; no legacy fallback")
                 from .work_delivery import capability
                 capability(record.get("work"), policy)
+            if port == "patch-preflight":
+                from .collaboration_resources import verify_native_write_access
+                root, _ = self.resource(record, frame["evidence"])
+                files = [{"relativePath": canonical_relative(
+                              local_uri(item["pathUri"]).relative_to(root["root"]).as_posix()),
+                          "afterSha256": item["afterSha256"]}
+                         for item in frame["evidence"]["files"]]
+                verify_native_write_access(record["native"], root["root"], files)
             result = self.patch(record, source, frame)
         else:
             arguments = frame["arguments"]

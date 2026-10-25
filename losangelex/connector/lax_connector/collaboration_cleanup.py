@@ -10,8 +10,16 @@ from .service_observer import protected
 
 
 def permitted(port, command):
+    if not isinstance(command, dict):
+        return False
+    recovery_consent = (command.get("action") == "consent"
+        and isinstance(command.get("settlementDigest"), str)
+        and len(command["settlementDigest"]) == 64
+        and all(c in "0123456789abcdef" for c in command["settlementDigest"]))
     return ((port == "coordination" and command.get("action") == "release")
-            or (port == "edit-plans" and command.get("action") in ("withdraw", "revoke")))
+            or (port == "edit-plans" and
+                (command.get("action") in ("withdraw", "revoke", "reconcile")
+                 or recovery_consent)))
 
 
 def root(bridge, record, port, command, environment):
@@ -25,9 +33,9 @@ def root(bridge, record, port, command, environment):
         original = snapshot["plan"]
         require(str(original["id"]) == str(UUID(command["planId"])),
                 "Original cleanup plan identity differs")
-        if command["action"] == "withdraw":
+        if command["action"] in ("withdraw", "reconcile"):
             require(str(original["integrator_work"]) == str(UUID(command["workId"])),
-                    "Only original integrator Work may withdraw its plan")
+                    "Only original integrator Work may withdraw or reconcile its plan")
             workspace, host = str(original["workspace_id"]), str(original["host"])
         else:
             consents = [vote for vote in snapshot["consents"]
