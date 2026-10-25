@@ -90,6 +90,26 @@ initiative with self-addressed chat requests, a perpetual setup request or an
 additional task ledger. Bounded qualification and release limitations are
 recorded separately from this target contract.
 
+## Required manual context windows
+
+LAX must offer “mark as you go” and “review before refresh”: durable user marks,
+an explicitly reviewed/editable next seed, and a fresh model window under the
+same durable agent identity. New facts and artifacts produced during the closing
+window can be selected alongside the original input. Roles, goals and plans are
+carried by their authorized canonical revisions and can be edited during review.
+Track seed size separately from subsequent growth, including estimates versus
+observed model-input usage. Whole-window carryover remains an explicit option
+when it fits; it must not be imposed on every refresh.
+
+The detailed requirement and acceptance boundary are in
+[manual-context-windows-20261025.json](requirements/manual-context-windows-20261025.json).
+Existing retained-input checkpoints are partial foundations; this requirement
+is not a claim that human review controls or all three purpose modes are already
+implemented. Rotation preserves pending work, input, permissions and uncertain
+receipts, and never replays external actions. Upstream imports must preserve this
+LAX-owned contract. Qualify an authorized-human API and actual-model continuation
+before enabling the mode for selected live agents.
+
 ## Upstream intake and release
 
 1. Fetch current upstream source separately and record the exact inspected
