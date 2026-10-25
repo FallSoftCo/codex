@@ -66,6 +66,17 @@ class IdleContextRebuild:
         self.save(operation, "held", holdReason=str(error)[:1000])
 
     async def rebuild(self, request_id, pending):
+        operation = await self._prepare(request_id, pending, reviewed=False)
+        return await self.apply_prepared(operation)
+
+    async def prepare_for_review(self, request_id, pending):
+        return await self._prepare(request_id, pending, reviewed=True)
+
+    async def cancel_prepared(self, operation):
+        from .idle_context_review import cancel
+        return await cancel(self, operation)
+
+    async def _prepare(self, request_id, pending, *, reviewed):
         r = self.runner
         require(enabled(r) and getattr(r, "retained_context_contract", False),
                 "Paired native idle Writer profile is not installed")
@@ -110,6 +121,8 @@ class IdleContextRebuild:
                 operation["rejectedPreparationRecovery"] = prior["proof"]
                 operation.pop("nativeRejection", None)
                 operation.pop("holdReason", None)
+            if reviewed:
+                operation["reviewMode"] = "manual"
             self.pending = operation
             self.epoch = connection(r)
             self.save(operation, "intent" if prior is None else "snapshot_retry_intent")
@@ -153,8 +166,48 @@ class IdleContextRebuild:
                     "Native preflight belongs to another original cut")
             async with r.effect_lock:
                 self.check(operation)
-                self.save(operation, "native_dispatch_intent", response=response,
+                self.save(operation, "snapshot_prepared", response=response,
                           preflight=preflight, retainedBudget=budget, snapshot=snapshot)
+                if reviewed:
+                    from .idle_context_review import seal
+                    seal(self, operation)
+            return operation
+        except BaseException as error:
+            async with r.effect_lock:
+                if self.pending is operation:
+                    self.hold(operation, error)
+            raise
+
+    async def apply_prepared(self, operation, *, approved_digest=None):
+        r = self.runner
+        async with r.effect_lock:
+            self.check(operation)
+            reviewed = operation.get("reviewMode") == "manual"
+            if reviewed:
+                from .idle_context_review import approve
+                approve(self, operation, approved_digest)
+            else:
+                require(approved_digest is None and operation["state"] == "snapshot_prepared",
+                        "Original immediate preparation changed")
+        # A human may take time. Reject stale approval/cut before any dispatch
+        # intent; this refusal leaves the prepared window available for review.
+        if reviewed:
+            state = (await r.rpc.call("thread/contextWindow/read", {"threadId": r.thread}))["state"]
+            require(state == operation["preflight"]["state"],
+                    "Prepared native cut changed; explicit new review required")
+            current = (await r.rpc.call("thread/contextWindow/preflight", {
+                "threadId": r.thread, "state": state, "packet": operation["response"]}))["preflight"]
+            require(current == operation["preflight"],
+                    "Prepared native packet changed; explicit new review required")
+        async with r.effect_lock:
+            self.check(operation)
+            if reviewed:
+                approve(self, operation, approved_digest)
+            self.save(operation, "native_dispatch_intent", nativeDispatchIntent=True)
+        try:
+            response = operation["response"]
+            preflight = operation["preflight"]
+            native_op = operation["operationId"]
             # No effect_lock across this wait. Unknown outcome keeps the original
             # journal/gate; caller must observe it, never send another replacement.
             result = await r.rpc.call("thread/contextWindow/replaceIdle", {
@@ -198,6 +251,8 @@ class IdleContextRebuild:
             require(all(params[key] == response[key] for key in IDENTITY | CUT)
                     and params["previousWindowId"] == operation["request"]["windowId"],
                     "Native idle installed receipt differs from original packet")
+            require(operation["state"] == "native_dispatch_intent",
+                    "Native installation was not explicitly dispatched")
             require("installRpcId" not in operation, "Original idle callback already observed")
             self.save(operation, "history_verifying", installed=params,
                       installRpcId=raw["_rpcRequestId"])
@@ -302,6 +357,16 @@ class IdleContextRebuild:
             for path in sorted(self.root.glob("*.json")):
                 value = json.loads(path.read_text())
                 if not self.owned(value):
+                    continue
+                if value.get("state") in ("review_prepared", "review_cancelled"):
+                    try:
+                        from .idle_context_review import restore, cancelled
+                        if value["state"] == "review_prepared":
+                            restore(self, value)
+                        else:
+                            cancelled(value)
+                    except Exception as error:
+                        unresolved.append({"operationId": value["operationId"], "reason": str(error)})
                     continue
                 if value.get("state") == "held" and not any(
                     key in value for key in ("installed", "hostReceipt", "nativeResult")

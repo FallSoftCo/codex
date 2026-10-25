@@ -1,0 +1,45 @@
+{
+  "state": "native_review_lifecycle_passed",
+  "checks": [
+    "Prepared real native packet waits without history change, replacement gate or provider request",
+    "Wrong approval, changed configuration and altered packet refuse before dispatch; owner remains usable",
+    "Explicit apply independently verifies original checkpoint; next provider input uses selected fact and omits old canary/cache",
+    "Known prepared-only cancellation preserves history and unblocks this owner",
+    "Original immediate rebuild still installs under its original receipt lifecycle",
+    "Cold owner restores pending review without inference; stale cut refuses before dispatch and can be explicitly cancelled"
+  ],
+  "actualNative": true,
+  "scriptedProviderRequests": 2,
+  "realModel": false,
+  "hollywoodAuthorizationProved": false,
+  "humanApprovalApiProved": false,
+  "productionChanged": false,
+  "nativeInstalls": 2,
+  "binarySha256": "da41ed3b84dc634ea777e587f6b36f6224c8641d087bdd45c940ab6170c3d36d",
+  "candidateSdk": "0.1.0.dev167",
+  "productionDeployed": false,
+  "sourceBaseline": "0ca4973c1b86b63594d6492775fe988387920125",
+  "evidence": "/var/lib/lax-global-unified-catalog-20261025-r334/native-review-r336-r01/native-r01",
+  "capturedResponseTypes": [
+    "response.create",
+    "response.create"
+  ],
+  "resourcePolicy": "Existing binary/Python deps; no Cargo build, real provider inference, worker resumption or live service change",
+  "remaining": [
+    "Authenticated Hollywood prepare/approve/cancel + purpose admission control",
+    "Real HTTP/native integration and actual model continuity",
+    "Full assembled seed metrics and all-purpose/manual policy/NextComp UI"
+  ],
+  "sourceSha256": {
+    "losangelex/connector/lax_connector/idle_context_rebuild.py": "a8961da4f3d2577e403c922267dc0dbbacd7ae55518ac6a892d245b5a33e8fb6",
+    "losangelex/connector/lax_connector/idle_context_review.py": "752db7ae79c9513c9df7520cdd6cfcb913b35d1bd4274549fa8dfb435ef7503b",
+    "losangelex/connector/tests/integration_native_review_lifecycle.py": "8f66a24b1015ebed9f05b0c118036986e6faea61e498deef60d80d9b3b1c3f0d"
+  },
+  "wheel": {
+    "wheel": "/var/lib/lax-global-unified-catalog-20261025-r334/native-review-r336-r01/wheels/lax_hollywood_connector-0.1.0.dev167-py3-none-any.whl",
+    "sha256": "670b1cc976f3c20317efe5ea0dfc9c3deb40fd57cc0d353914b8b9acbba1b4c8",
+    "moduleByteMatches": 110,
+    "nativeRebuild": false,
+    "deployed": false
+  }
+}
