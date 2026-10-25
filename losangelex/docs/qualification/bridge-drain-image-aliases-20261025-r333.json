@@ -1,0 +1,13 @@
+{
+  "at": 1792892984.6791797,
+  "change": "Offline bridge drain uses protected physical image identity for release aliases and bounds actual effect journals rather than unrelated activity files.",
+  "realFailure": "Three deployed paths resolve to one root-protected executable; one paused worker has4659 state entries but only98 effect journals.",
+  "actualFilesystemControlsPassed": 3,
+  "actualConsumersDrained": 12,
+  "source": "/var/lib/lax-production-global-cutover-20261024-r333/image-alias-fix-r01/actual-all12-drain-result-r03.json",
+  "unknownEffectAndExecutionGuardsUnchanged": true,
+  "workerConfigurationsChanged": false,
+  "modelsStarted": 0,
+  "liveGlobalNotYetStarted": true,
+  "initialFailingCandidateRetained": true
+}

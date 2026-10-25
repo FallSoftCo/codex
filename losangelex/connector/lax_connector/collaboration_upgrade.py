@@ -72,6 +72,43 @@ def file_sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _image_identity(value):
+    """Observe a protected executable or one protected symlink to a regular image."""
+    import stat
+    from .native_image_upgrade import _identity
+    from .service_restart import file_identity
+
+    path = Path(value)
+    fd = _open_directory(path.parent)
+    try:
+        before = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+        if stat.S_ISLNK(before.st_mode):
+            require(before.st_uid == 0, "Native image alias is not administrator owned")
+            target = Path(os.readlink(path.name, dir_fd=fd))
+            if not target.is_absolute():
+                target = path.parent / target
+            identity = file_identity(target)
+        else:
+            identity = file_identity(path)
+        require(_identity(os.stat(path.name, dir_fd=fd, follow_symlinks=False)) == _identity(before),
+                "Native image alias changed during observation")
+        return identity
+    finally:
+        os.close(fd)
+
+
+def same_installed_image(configured, approved):
+    """Offline observation only; never grant execution for another native image."""
+    if configured == approved:
+        return True
+    if not isinstance(configured, str) or not Path(configured).is_absolute():
+        return False
+    try:
+        return _image_identity(configured) == _image_identity(approved)
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
 def _clients(config, state, seeds):
     values = set(config["automaticCapture"].get("agents", {})) | set(seeds)
     for path in (state / "channels").glob("*.json"):
@@ -148,12 +185,13 @@ def _drain(config, state, agents, relay):
                 local["agentId"],
                 local["hostId"],
                 local["hollywoodUrl"],
-                local["binary"],
                 local["state"],
             )
-            == (agent, host, config["hollywoodUrl"], binary, str(home / "state")),
+            == (agent, host, config["hollywoodUrl"], str(home / "state")),
             "Consumer installed identity or paths changed",
         )
+        require(same_installed_image(local["binary"], binary),
+                "Consumer configured native image differs from approved image")
         pending = request(
             config["hollywoodUrl"],
             local["token"],
@@ -169,20 +207,21 @@ def _drain(config, state, agents, relay):
         try:
             from .native_image_upgrade import _json
 
-            names = os.listdir(fd)
-            require(len(names) <= 4096, "Bounded local effect inspection required")
-            for name in names:
-                if name.startswith("effects-") and name.endswith(".json"):
-                    effect = _json(fd, name, uid)
-                    require(
-                        all(
-                            step["state"] in {"confirmed", "rejected"}
-                            for step in effect["steps"]
-                        ),
-                        "Original consumer tool effect remains unconfirmed",
-                    )
+            names = []
+            with os.scandir(fd) as entries:
+                for entry in entries:
+                    if entry.name.startswith("effects-") and entry.name.endswith(".json"):
+                        require(len(names) < 4096, "Bounded local effect inspection required")
+                        names.append(entry.name)
+            for name in sorted(names):
+                effect = _json(fd, name, uid)
+                require(
+                    all(step["state"] in {"confirmed", "rejected"} for step in effect["steps"]),
+                    "Original consumer tool effect remains unconfirmed",
+                )
             snapshots[agent] = {
                 "unit": unit,
+                "approvedNativeImageIdentity": _image_identity(binary),
                 "definition": observer.unit_definition(unit),
                 "journals": _journal_snapshot(fd, uid, authority, host, agent),
             }
