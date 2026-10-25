@@ -1249,6 +1249,9 @@ class ContextAgent:
 
     async def serve(self, *, reconcile_only=False, rebuild_only=False,
                     resume_unsettled_turn=None, provider_rejection_acknowledgements=None):
+        # Only this explicit operator mode can resume a known pre-data idle
+        # snapshot rejection. Normal service starts remain observation-only.
+        self.rebuild_only = rebuild_only
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self.stop.set)

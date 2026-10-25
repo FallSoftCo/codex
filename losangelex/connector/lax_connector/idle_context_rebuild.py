@@ -7,6 +7,7 @@ an acknowledgement write as evidence that the native side received it.
 import asyncio
 import hashlib
 import json
+import os
 
 from .automatic_refill_data import CUT, IDENTITY, INSTALLED, parameters, require
 from .automatic_refill_history import capture, recovered_installed, verify
@@ -25,6 +26,7 @@ class IdleContextRebuild:
         self.pending = None
         self.epoch = None
         self.recovering = False
+        self.retryable = {}
         self.held = any(self.owned(value) and value.get("state") != "native_result_confirmed"
                         for path in self.root.glob("*.json")
                         for value in [json.loads(path.read_text())])
@@ -69,12 +71,33 @@ class IdleContextRebuild:
                 "Paired native idle Writer profile is not installed")
         key = hashlib.sha256((r.config["contextIds"][r.purpose] + ":" + request_id).encode()).hexdigest()
         native_op = "context-refill-native:" + key
+        prior = None
+        if self.path(native_op).exists():
+            from .idle_context_rejection import inspect_rejected
+            require(native_op in self.retryable,
+                    "Original rebuild exists; observe its receipt before explicit recovery")
+            prior = await inspect_rejected(self, self.path(native_op))
         async with r.effect_lock:
             require(not r.automatic.blocked and not r.active and not r.accepting
                     and not r.closing and not r.failed and not r.agent.stop.is_set(),
                     "Original context is not quiescent")
-            require(not self.path(native_op).exists(),
+            require(prior is not None or not self.path(native_op).exists(),
                     "Original rebuild exists; inspect its receipt, never repeat replacement")
+            if prior is not None:
+                require(connection(r) == prior["connection"]
+                        and self.path(native_op).read_bytes() == prior["originalBytes"],
+                        "Original pre-data recovery observation changed")
+                archive = self.root / "rejected-preparation"
+                archive.mkdir(mode=0o700, exist_ok=True)
+                original = archive / (prior["proof"]["originalJournalSha256"] + ".json")
+                if original.exists():
+                    require(original.read_bytes() == prior["originalBytes"],
+                            "Original rejected-preparation archive differs")
+                else:
+                    with original.open("xb") as stream:
+                        stream.write(prior["originalBytes"])
+                        stream.flush()
+                        os.fsync(stream.fileno())
             self.root.mkdir(mode=0o700, exist_ok=True)
             operation = {"schema": SCHEMA, "nativeContextMode": "idle_request",
                 "operationId": native_op, "requestOperationId": request_id,
@@ -82,15 +105,22 @@ class IdleContextRebuild:
                 "installedOperationId": "context-refill-installed:" + key,
                 "nativeThread": r.thread, "agentId": r.config["agentId"],
                 "contextId": r.config["contextIds"][r.purpose], "purpose": r.purpose}
+            if prior is not None:
+                operation = prior["operation"]
+                operation["rejectedPreparationRecovery"] = prior["proof"]
             self.pending = operation
             self.epoch = connection(r)
-            self.save(operation, "intent")
+            self.save(operation, "intent" if prior is None else "snapshot_retry_intent")
         try:
             # All serialized native observations precede the mutating RPC. Its
             # installed callback cannot reenter thread/read or contextWindow/read.
-            observed = await r.rpc.call("thread/read", {"threadId": r.thread, "includeTurns": False})
-            original = await asyncio.to_thread(capture, observed["thread"], r.thread)
-            cut = (await r.rpc.call("thread/contextWindow/read", {"threadId": r.thread}))["state"]
+            if prior is None:
+                observed = await r.rpc.call("thread/read", {"threadId": r.thread, "includeTurns": False})
+                original = await asyncio.to_thread(capture, observed["thread"], r.thread)
+                cut = (await r.rpc.call("thread/contextWindow/read", {"threadId": r.thread}))["state"]
+            else:
+                original = operation["originalHistory"]
+                cut = prior["nativeState"]
             require(cut["idle"] is True and cut["activeTurnId"] is None
                     and cut["heldOperationId"] is None and cut["lastStartedTurnId"]
                     and cut["threadId"] == r.thread
@@ -104,7 +134,8 @@ class IdleContextRebuild:
                 self.check(operation)
                 self.save(operation, "snapshot_intent", originalHistory=original,
                           request=request, nativeState=cut)
-            selected = [item["id"] for item in pending if not item["cancelled"]][:1]
+            selected = (prior["selected"] if prior is not None else
+                        [item["id"] for item in pending if not item["cancelled"]][:1])
             snapshot = await r.request("rebuild_snapshot", {"materialIds": selected},
                 operation=operation["snapshotOperationId"], turn=request["turnId"])
             from .context_action_memory import index
@@ -259,7 +290,16 @@ class IdleContextRebuild:
                 if not self.owned(value):
                     continue
                 try:
-                    await self.observe(path)
+                    if (getattr(self.runner.agent, "rebuild_only", False)
+                            and value.get("state") == "held"
+                            and not any(key in value for key in (
+                                "response", "snapshot", "preflight", "installed",
+                                "hostReceipt", "nativeResult"))):
+                        from .idle_context_rejection import inspect_rejected
+                        await inspect_rejected(self, path)
+                        self.retryable[value["operationId"]] = True
+                    else:
+                        await self.observe(path)
                 except Exception as error:
                     unresolved.append({"operationId": value["operationId"], "reason": str(error)})
             self.held = bool(unresolved)

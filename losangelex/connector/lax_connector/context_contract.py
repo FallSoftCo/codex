@@ -25,7 +25,11 @@ Use context_selection and retain_context_input to mark durable inputs worth
 retaining after a context rebuild. Marks follow current authorized revisions;
 they do not freeze old policy or confer authority. Canonical role, unfinished
 obligations and the next assigned material remain mandatory independently.
-When available, request_context_rebuild queues a fresh window after this inference settles;
+The paired Writer request_context_rebuild first checks retained-input size. If requested=false,
+this inference remains active: inspect the size breakdown, unpin optional historical inputs
+with retain_context_input keep=false, and request again. Mandatory role/current Work stay.
+This never deletes durable sources or authorizes skipping their evidence.
+When available, an accepted request_context_rebuild queues a fresh window after this inference settles;
 it does not complete work or start another model turn. Refill uses exact
 marked records and canonical state, without a model-written summary.
 After rebuilding, retrieve missing evidence through the same tools. The writer
@@ -229,7 +233,7 @@ def tools(purpose,enable_rebuild=False,*,native_action_retention=0):
         ["selectionRevision","reference","materialRevision","keep","reason"]),
     ]
     if enable_rebuild:
-        result += [spec("request_context_rebuild","Request deterministic context reset/refill from marked inputs plus mandatory current role/obligations after this inference settles. Preserves this native thread and original operations. Does not replay work, certify context sufficiency or automatically start a model.",{},[])]
+        result += [spec("request_context_rebuild","Preflight deterministic context reset/refill from retained inputs and mandatory current role/obligations. Paired Writer returns requested=false with a bounded size breakdown if oversized; keep this turn and unpin optional historical records with retain_context_input keep=false before requesting again. Only requested=true queues refill after this inference settles. Preserves thread and original operations; never deletes sources, replays work or certifies sufficiency.",{},[])]
     if purpose=="reader":
         result += [
           spec("hollywood_rooms","List authorized rooms with bounded purpose previews; discovery never assigns work.",
