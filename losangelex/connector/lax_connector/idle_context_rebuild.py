@@ -175,10 +175,13 @@ class IdleContextRebuild:
         except BaseException as error:
             async with r.effect_lock:
                 if self.pending is operation:
-                    self.hold(operation, error)
+                    if reviewed:
+                        self.save(operation, "review_refused", holdReason=str(error)[:1000])
+                    else:
+                        self.hold(operation, error)
             raise
 
-    async def apply_prepared(self, operation, *, approved_digest=None):
+    async def apply_prepared(self, operation, *, approved_digest=None, before_dispatch=None):
         r = self.runner
         async with r.effect_lock:
             self.check(operation)
@@ -199,6 +202,11 @@ class IdleContextRebuild:
                 "threadId": r.thread, "state": state, "packet": operation["response"]}))["preflight"]
             require(current == operation["preflight"],
                     "Prepared native packet changed; explicit new review required")
+        if reviewed and r.config.get("manualSeedControl", 0) == 1:
+            require(before_dispatch is not None, "Hollywood approval admission callback required")
+        if before_dispatch is not None:
+            require(reviewed, "External approval admission belongs to reviewed preparation")
+            await before_dispatch()
         async with r.effect_lock:
             self.check(operation)
             if reviewed:
@@ -358,10 +366,12 @@ class IdleContextRebuild:
                 value = json.loads(path.read_text())
                 if not self.owned(value):
                     continue
-                if value.get("state") in ("review_prepared", "review_cancelled"):
+                if value.get("reviewMode") == "manual" and value.get("state") in (
+                    "intent", "snapshot_intent", "snapshot_prepared", "review_refused",
+                    "review_prepared", "review_cancelled"):
                     try:
                         from .idle_context_review import restore, cancelled
-                        if value["state"] == "review_prepared":
+                        if value["state"] != "review_cancelled":
                             restore(self, value)
                         else:
                             cancelled(value)

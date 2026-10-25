@@ -150,6 +150,13 @@ def context_settings(spec):
                 or settings.get("automaticContextRefill") != {"type":"canonical"}):
             raise ValueError("Retained-native Writer requires explicit rebuild and canonical refill")
         settings["nativeActionRetention"] = version
+    if "manualSeedControl" in spec:
+        version = spec["manualSeedControl"]
+        if type(version) is not int or version not in (0, 1):
+            raise ValueError("Explicit manual seed control version0/1 required")
+        if version and settings.get("nativeActionRetention") != 1:
+            raise ValueError("Manual seed control requires explicitly paired retained Writer policy")
+        settings["manualSeedControl"] = version
     return settings
 
 

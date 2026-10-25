@@ -54,6 +54,8 @@ class ContextRunner:
         self.activity = PurposeActivity(self) if purpose == "writer" else None
         self.automatic = AutomaticContextRefill(self)
         self.retained_context_contract = False
+        from .reviewed_context_control import ReviewedContextControl
+        self.review_control = ReviewedContextControl(self)
         self.primary_packet = None
         self.declarations = tools(
             purpose, self.config.get("contextRebuildEnabled", False),
@@ -400,10 +402,19 @@ class ContextRunner:
         retained = retained_enabled(self)
         if retained:
             bind_contract.extend([CAPABILITY, "native-idle-context-replacement/v1"])
+        manual = self.purpose == "writer" and self.config.get("manualSeedControl", 0) == 1
+        if manual:
+            if not retained:
+                raise RuntimeError("Manual review requires paired retained Writer")
+            bind_contract.append("human-reviewed-native-seed/v1")
+        elif self.purpose == "writer" and self.config.get("manualSeedControl") == 0:
+            bind_contract.append("human-reviewed-native-seed/explicit-disabled-v1")
         binding = await self.request(
             "bind",
             {"runtimeProtocol": "lax-purpose-runtime/v3", "workScheduling": 2, "toolCompletion": 1,
-             **({"nativeActionRetention": 1} if retained else {})},
+             **({"nativeActionRetention": 1} if retained else {}),
+             **({"manualSeedControl": self.config["manualSeedControl"]}
+                if self.purpose == "writer" and "manualSeedControl" in self.config else {})},
             operation="bind:"
             + hashlib.sha256(
                 json.dumps(bind_contract, separators=(",", ":")).encode()
@@ -415,6 +426,8 @@ class ContextRunner:
                     or binding.get("nativeIdleContextReplacement") != 1):
                 raise RuntimeError("Paired Hollywood whole-native idle contract unavailable")
             self.retained_context_contract = True
+        if manual and binding.get("manualSeedControl") != 1:
+            raise RuntimeError("Paired Hollywood manual review unavailable")
         if binding.get("providerRejectionRecovery") != 1:
             raise RuntimeError("Paired original provider rejection recovery unavailable")
         if binding.get("failedPreModelRefillRecovery") != 1:
@@ -1326,6 +1339,20 @@ class ContextAgent:
                             requested = observed.get("contextRebuild", {}).get(
                                 "requestedOperationId"
                             )
+                            manual_review = observed.get("contextRebuild", {}).get("manualReview")
+                            if manual_review:
+                                runner.review_control.tick(manual_review)
+                                status[purpose] = {
+                                    "active": runner.active, "held": runner.failed, "pending": pending,
+                                    "nativeThread": runner.thread, "nativeTurn": runner.turn,
+                                    "heldReason": runner.review_control.error}
+                                continue
+                            if runner.review_control.tick():
+                                status[purpose] = {
+                                    "active": runner.active, "held": runner.failed, "pending": pending,
+                                    "nativeThread": runner.thread, "nativeTurn": runner.turn,
+                                    "heldReason": runner.review_control.error}
+                                continue
                             if requested and not runner.active and not runner.failed:
                                 from .context_rebuild_runtime import rebuild
 
@@ -1505,6 +1532,7 @@ class ContextAgent:
                     return_exceptions=True,
                 )
                 for runner in self.runners.values():
+                    await runner.review_control.close()
                     if runner.activity:
                         try:
                             await runner.activity.flush(timeout=10)

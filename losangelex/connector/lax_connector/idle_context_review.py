@@ -71,8 +71,22 @@ def approve(owner, operation, approved_digest):
             "Native configuration changed since review")
 
 
+def undispatched(owner, operation):
+    r = owner.runner
+    require(operation.get("reviewMode") == "manual"
+            and operation.get("state") in ("intent", "snapshot_intent", "snapshot_prepared",
+                                           "review_refused", "review_prepared")
+            and not any(key in operation for key in OUTCOMES)
+            and all(operation[key] == value for key, value in (
+                ("agentId", r.config["agentId"]), ("contextId", r.config["contextIds"][r.purpose]),
+                ("purpose", r.purpose), ("nativeThread", r.thread))),
+            "Original review is not a known undispatched preparation")
+    if operation["state"] == "review_prepared":
+        check_seal(owner, operation)
+
+
 def restore(owner, operation):
-    check_seal(owner, operation)
+    undispatched(owner, operation)
     require(owner.pending is None, "Multiple native reviews cannot own one purpose")
     owner.pending = operation
     owner.epoch = connection(owner.runner)
@@ -81,7 +95,7 @@ def restore(owner, operation):
 async def cancel(owner, operation):
     async with owner.runner.effect_lock:
         owner.check(operation)
-        check_seal(owner, operation)
+        undispatched(owner, operation)
         owner.save(operation, "review_cancelled")
         owner.pending = None
         owner.epoch = None
@@ -93,5 +107,6 @@ def cancelled(operation):
     require(operation.get("reviewMode") == "manual"
             and operation.get("state") == "review_cancelled"
             and not any(key in operation for key in OUTCOMES)
-            and digest(manifest(operation)) == operation.get("approvalDigest"),
+            and ("approvalDigest" not in operation or
+                 digest(manifest(operation)) == operation["approvalDigest"]),
             "Cancelled native review has dispatched or changed provenance")

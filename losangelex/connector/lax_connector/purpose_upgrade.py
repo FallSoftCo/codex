@@ -95,7 +95,7 @@ def upgrade(spec):
     if set(spec) - {"schema", "operationId", "authorityId", "agentId",
                     "expectedInstallationSha256", "interpreter", "pythonRoot", "toolProfileFile",
                     "binary", "expectedBinarySha256", "contextRebuildEnabled", "automaticContextRefill",
-                    "nativeActionRetention", "resourceReadinessVersion"}:
+                    "nativeActionRetention", "manualSeedControl", "resourceReadinessVersion"}:
         raise ValueError("Unsupported purpose upgrade field")
     if spec["schema"] != SCHEMA:
         raise ValueError("Explicit purpose upgrade required")
