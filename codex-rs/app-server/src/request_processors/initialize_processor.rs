@@ -223,6 +223,7 @@ impl InitializeRequestProcessor {
                 "canonical_context_window_refill/v1".to_string(),
                 "canonical_context_window_recovery/v1".to_string(),
                 "canonical_retained_writer_context/v1".to_string(),
+                "native_idle_owner_reconciliation/v1".to_string(),
             ],
             user_agent,
             codex_home,

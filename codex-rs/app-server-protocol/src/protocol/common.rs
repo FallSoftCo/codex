@@ -952,6 +952,12 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadContextWindowReadResponse,
     },
+    #[experimental("thread/contextWindow/reconcileIdle")]
+    ThreadContextWindowReconcileIdle => "thread/contextWindow/reconcileIdle" {
+        params: v2::ThreadContextWindowReconcileIdleParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextWindowReconcileIdleResponse,
+    },
     #[experimental("thread/contextWindow/preflight")]
     ThreadContextWindowPreflight => "thread/contextWindow/preflight" {
         params: v2::ThreadContextWindowPreflightParams,

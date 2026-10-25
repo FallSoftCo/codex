@@ -117,8 +117,14 @@ def verify(original, request, response, installed, *, native_mode=None):
                 "Original rollout file identity changed")
         require(_prefix(stream, original["beforeBytes"]) == original["beforeSha256"],
                 "Original history prefix changed")
-        require(original["beforeBytes"] < installed["nativeHistoryBytes"] <= info.st_size
-                and info.st_size - original["beforeBytes"] <= 16 * 1024**2,
+        # A known installed receipt bounds its original installation span.
+        # Later legitimate turns must not invalidate that immutable checkpoint.
+        # Whole-file scanning stays bounded independently; unknown-receipt
+        # discovery retains its stricter recovery scan cap below.
+        require(original["beforeBytes"] < installed["nativeHistoryBytes"]
+                <= info.st_size <= 256 * 1024**2
+                and installed["nativeHistoryBytes"] - original["beforeBytes"]
+                    <= 16 * 1024**2,
                 "Native receipt prefix/scan bounds differ")
         require(_prefix(stream, installed["nativeHistoryBytes"]) ==
                 installed["nativeHistorySha256"], "Native history prefix digest differs")

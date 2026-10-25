@@ -248,6 +248,7 @@ pub(crate) mod async_compaction;
 mod code_mode_warning;
 mod config_refresh;
 pub(crate) mod context_idle;
+pub(crate) mod context_idle_reconcile;
 pub(crate) mod context_prefix;
 pub(crate) mod context_refill;
 pub(crate) mod context_window;

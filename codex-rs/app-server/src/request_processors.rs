@@ -211,6 +211,8 @@ use codex_app_server_protocol::ThreadContextWindowPreflightParams;
 use codex_app_server_protocol::ThreadContextWindowPreflightResponse;
 use codex_app_server_protocol::ThreadContextWindowReadParams;
 use codex_app_server_protocol::ThreadContextWindowReadResponse;
+use codex_app_server_protocol::ThreadContextWindowReconcileIdleParams;
+use codex_app_server_protocol::ThreadContextWindowReconcileIdleResponse;
 use codex_app_server_protocol::ThreadContextWindowReplaceIdleParams;
 use codex_app_server_protocol::ThreadContextWindowReplaceIdleResponse;
 use codex_app_server_protocol::ThreadDecrementElicitationParams;

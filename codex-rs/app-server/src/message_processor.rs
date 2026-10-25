@@ -1734,6 +1734,11 @@ impl MessageProcessor {
                     .thread_context_window_read(&request_id, params)
                     .await
             }
+            ClientRequest::ThreadContextWindowReconcileIdle { params, .. } => {
+                self.turn_processor
+                    .thread_context_window_reconcile_idle(&request_id, params)
+                    .await
+            }
             ClientRequest::ThreadContextWindowPreflight { params, .. } => {
                 self.turn_processor
                     .thread_context_window_preflight(&request_id, params)

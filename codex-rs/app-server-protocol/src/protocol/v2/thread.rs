@@ -2319,6 +2319,23 @@ pub struct ThreadContextWindowReadResponse {
     pub state: ContextWindowState,
 }
 
+/// Observe the previous installed receipt through its fresh owner while idle.
+/// This never replaces context, starts a model turn or admits execution.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReconcileIdleParams {
+    pub thread_id: String,
+    pub state: ContextWindowState,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReconcileIdleResponse {
+    pub state: ContextWindowState,
+}
+
 /// Read-only native packet validation under the expected exact owned context cut.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

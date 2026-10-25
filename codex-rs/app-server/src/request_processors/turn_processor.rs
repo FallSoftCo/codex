@@ -210,6 +210,25 @@ impl TurnRequestProcessor {
         Ok(Some(ThreadContextWindowReadResponse { state }.into()))
     }
 
+    /// Complete only the original cold-owner receipt handshake, without a turn.
+    pub(crate) async fn thread_context_window_reconcile_idle(
+        &self,
+        request_id: &ConnectionRequestId,
+        params: ThreadContextWindowReconcileIdleParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (_, thread) = self.load_thread(&params.thread_id).await?;
+        let epoch =
+            crate::context_refill::request_owner_epoch(&self.outgoing, request_id.connection_id)
+                .await?;
+        let state = thread
+            .reconcile_idle_canonical_context_window(epoch, params.state)
+            .await
+            .map_err(|err| invalid_request(format!("native idle reconciliation refused: {err}")))?;
+        Ok(Some(
+            ThreadContextWindowReconcileIdleResponse { state }.into(),
+        ))
+    }
+
     /// Validation reads the original owned native cut and never admits execution.
     pub(crate) async fn thread_context_window_preflight(
         &self,

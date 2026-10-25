@@ -283,31 +283,106 @@ class IdleContextRebuild:
 
     async def startup(self):
         unresolved = []
+        deferred = []
+        verified = set()
+        reconciled = None
         self.recovering = True
         try:
             for path in sorted(self.root.glob("*.json")):
                 value = json.loads(path.read_text())
                 if not self.owned(value):
                     continue
+                if value.get("state") == "held" and not any(
+                    key in value
+                    for key in (
+                        "response",
+                        "snapshot",
+                        "preflight",
+                        "installed",
+                        "hostReceipt",
+                        "nativeResult",
+                    )
+                ):
+                    deferred.append((path, value))
+                    continue
                 try:
-                    if (getattr(self.runner.agent, "rebuild_only", False)
-                            and value.get("state") == "held"
-                            and not any(key in value for key in (
-                                "response", "snapshot", "preflight", "installed",
-                                "hostReceipt", "nativeResult"))):
+                    await self.observe(path)
+                    verified.add(value["operationId"])
+                except Exception as error:
+                    unresolved.append(
+                        {"operationId": value["operationId"], "reason": str(error)}
+                    )
+            # Cold native resume deliberately restores the previous installed
+            # gate as unacknowledged. Resolve only that original proven receipt
+            # before inspecting another idle replacement; never start a dummy
+            # model turn to reach its pre-sampling handshake.
+            if verified:
+                r = self.runner
+                cut = (
+                    await r.rpc.call(
+                        "thread/contextWindow/read", {"threadId": r.thread}
+                    )
+                )["state"]
+                original = cut.get("heldOperationId")
+                if original in verified:
+                    try:
+                        require(
+                            "native_idle_owner_reconciliation/v1"
+                            in r.rpc.lax_capabilities,
+                            "Paired native idle-owner reconciliation is unavailable",
+                        )
+                        result = await r.rpc.call(
+                            "thread/contextWindow/reconcileIdle",
+                            {"threadId": r.thread, "state": cut},
+                        )
+                        require(
+                            result["state"] == {**cut, "heldOperationId": None},
+                            "Original idle owner acknowledgement changed native context",
+                        )
+                        reconciled = {
+                            "originalOperationId": original,
+                            "before": cut,
+                            "after": result["state"],
+                        }
+                    except Exception as error:
+                        unresolved.append(
+                            {"operationId": original, "reason": str(error)}
+                        )
+                elif original is not None:
+                    unresolved.append(
+                        {
+                            "operationId": original,
+                            "reason": "Original native gate has no verified owned receipt",
+                        }
+                    )
+            for path, value in deferred:
+                try:
+                    if getattr(self.runner.agent, "rebuild_only", False):
                         from .idle_context_rejection import inspect_rejected
+
                         await inspect_rejected(self, path)
                         self.retryable[value["operationId"]] = True
                     else:
                         await self.observe(path)
                 except Exception as error:
-                    unresolved.append({"operationId": value["operationId"], "reason": str(error)})
+                    unresolved.append(
+                        {"operationId": value["operationId"], "reason": str(error)}
+                    )
             self.held = bool(unresolved)
             if unresolved:
                 self.runner.failed = True
-                self.runner.failure_reason = "Original native idle receipt unresolved: " + unresolved[0]["reason"]
+                self.runner.failure_reason = (
+                    "Original native idle receipt unresolved: "
+                    + unresolved[0]["reason"]
+                )
             if self.root.exists():
-                saved(self.runner.state / "native-idle-recovery.json", {
-                    "unresolved": unresolved, "originalJournalsRewritten": False})
+                saved(
+                    self.runner.state / "native-idle-recovery.json",
+                    {
+                        "unresolved": unresolved,
+                        "previousNativeOwnerReconciled": reconciled,
+                        "originalJournalsRewritten": False,
+                    },
+                )
         finally:
             self.recovering = False

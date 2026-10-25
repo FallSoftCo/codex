@@ -863,6 +863,20 @@ impl CodexThread {
         crate::session::context_refill::read_window_state(&self.session, expected_owner_epoch).await
     }
 
+    /// Reconcile the original installed idle-window receipt without inference.
+    pub async fn reconcile_idle_canonical_context_window(
+        &self,
+        expected_owner_epoch: u64,
+        state: codex_protocol::context_refill::ContextWindowState,
+    ) -> CodexResult<codex_protocol::context_refill::ContextWindowState> {
+        crate::session::context_idle_reconcile::reconcile(
+            &self.session,
+            expected_owner_epoch,
+            state,
+        )
+        .await
+    }
+
     /// Measure exact current native context and supplied canonical data without
     /// starting work or authorizing an installation.
     pub async fn preflight_canonical_context_window(

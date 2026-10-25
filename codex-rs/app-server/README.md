@@ -820,6 +820,25 @@ A lost/failed result remains held; inspect and cold-reconcile the same receipt
 using thread/contextWindow/reconcile, never repeat replacement or an external
 effect. Subsequent execution still captures current native permissions normally.
 
+### Experimental idle owner reconciliation
+
+After a cold resume, the previous installed checkpoint remains held until its
+fresh owner verifies the original native history and durable Hollywood receipt.
+The experimental `thread/contextWindow/reconcileIdle` method accepts `threadId`
+and the exact `state` returned by `thread/contextWindow/read`. The enrolled
+owner must handle the existing server request `thread/contextWindow/reconcile`.
+This performs that original receipt handshake without admitting a model turn,
+changing history, replacing a window, or accepting Work. It returns the same
+state with `heldOperationId` cleared. Active work, another owner, a stale cut or
+an unproven original receipt is refused. A lost RPC reply requires observing the
+original state; it does not authorize repeating a replacement.
+
+This method advertises `native_idle_owner_reconciliation/v1`; the paired
+retained-context Writer SDK requires it rather than starting a dummy model turn
+to reach the pre-sampling acknowledgement fence. Native scripted-provider
+coverage proves the no-additional-provider-request behavior; production recovery
+and semantic model behavior require their separate integration evidence.
+
 This is a new negotiated capability. Existing canonical profiles are unchanged.
 An old runtime/SDK cannot be assumed to understand new idle receipts or the
 explicit cause: qualify contract downgrade/reader compatibility before activation.

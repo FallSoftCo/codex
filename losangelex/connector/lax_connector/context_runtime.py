@@ -301,6 +301,9 @@ class ContextRunner:
             raise RuntimeError("Provider-compatible host completion unavailable; paired LAX image required")
         if "host_tool_inference_completion/v1" not in self.rpc.lax_capabilities:
             raise RuntimeError("Native host-tool inference lifecycle unavailable; paired LAX image required")
+        if (self.purpose == "writer" and self.config.get("nativeActionRetention", 0) == 1
+                and "native_idle_owner_reconciliation/v1" not in self.rpc.lax_capabilities):
+            raise RuntimeError("Native idle-owner reconciliation unavailable; upgrade the paired LAX image")
         record = self.state / "context.json"
         if record.exists():
             old = json.loads(record.read_text())

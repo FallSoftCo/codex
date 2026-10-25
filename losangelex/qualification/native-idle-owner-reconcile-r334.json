@@ -1,0 +1,37 @@
+{
+  "schema": "lax-native-idle-owner-reconciliation-qualification/v1",
+  "at": 1792927392.8474078,
+  "sourceParent": "e1daced8537038f721558d7e391676334cb5bdd2",
+  "behavior": "Explicit original idle-owner receipt reconciliation without admitting inference or replacing context; known installed receipt verification survives later bounded history growth.",
+  "qualification": {
+    "context-native-app-r334-r02": {
+      "receipt": "/var/lib/lax-idle-context-replacement-20261023-r316/native-component-checks/context-native-app-r334-r02/result.json",
+      "sha256": "ced53f3c668ca7605f7093bbe7e3d754069fdc46667ca93b1e50685a52928401",
+      "sourceUnchanged": true
+    },
+    "context-native-protocol-r334-r01": {
+      "receipt": "/var/lib/lax-idle-context-replacement-20261023-r316/native-component-checks/context-native-protocol-r334-r01/result.json",
+      "sha256": "d5d5b66624abbbb052596b2eaa62d51337b6b89ddc4a25def309f61736713918",
+      "sourceUnchanged": true
+    },
+    "context-schema-stable-r334-r01": {
+      "receipt": "/var/lib/lax-idle-context-replacement-20261023-r316/native-component-checks/context-schema-stable-r334-r01/result.json",
+      "sha256": "d65335a36e7a74885220fd934fd4f5357c798492981f21d4c1a9a7727f7fe009",
+      "sourceUnchanged": true
+    },
+    "context-schema-experimental-r334-r02": {
+      "receipt": "/var/lib/lax-idle-context-replacement-20261023-r316/native-component-checks/context-schema-experimental-r334-r02/result.json",
+      "sha256": "112281bc59d1a3f914b3fd2d6359dc4f05759b0a42672dec683609f73553e3e8",
+      "sourceUnchanged": false
+    }
+  },
+  "actualNativeIntegration": "9 passed, including cold resume original receipt handshake, no extra provider request and subsequent explicit idle replacement. Scripted provider fixture, not semantic LLM proof.",
+  "protocolIntegration": "319 passed, 1 skipped; stable/experimental schemas generated.",
+  "capturedOriginalHistory": "SDK164 verified4/refused4; candidate165 verified8/refused0 same checkpoints. Read-only verification, no historical agents resumed.",
+  "limits": [
+    "Not yet deployed with paired native image at commit time.",
+    "No full workspace suite or broad semantic superiority claim.",
+    "Original Global work and final NextComp release remain pending integration."
+  ],
+  "operations": "Preserve original operation identities, previous journals, unknown outcomes, contexts, roles, stopped placements and active services. Do not start a dummy model turn to clear the fence."
+}
