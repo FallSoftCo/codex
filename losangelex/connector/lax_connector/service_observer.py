@@ -41,14 +41,14 @@ def process(pid):
         return None
 
 
-def properties(unit):
+def properties(unit, *, timeout=15):
     result = subprocess.run(
         ["systemctl", "show", unit, "--no-pager",
          "-p", "Id", "-p", "ActiveState", "-p", "MainPID", "-p", "InvocationID",
          "-p", "ControlGroup", "-p", "User", "-p", "KillMode", "-p", "FragmentPath",
          "-p", "MemoryMax", "-p", "MemoryCurrent", "-p", "MemoryPeak",
          "-p", "NeedDaemonReload"],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, timeout=timeout,
     )
     return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
 

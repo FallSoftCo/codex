@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import subprocess
 import time
 from pathlib import Path
 from uuid import UUID, uuid5
@@ -18,6 +19,18 @@ def digest(value):
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+class ServiceInspectionUnavailable(RuntimeError):
+    """A read-only check failed before any resident-capture mutation."""
+
+    def __init__(self, unit, error):
+        self.details = {
+            "unit": unit, "errorType": type(error).__name__,
+            "returnCode": getattr(error, "returncode", None),
+            "diagnostic": str(getattr(error, "stderr", "") or "")[:1500],
+        }
+        super().__init__("Resident service inspection unavailable: " + unit)
 
 
 class ExecutionLifecycle:
@@ -134,7 +147,13 @@ class ExecutionLifecycle:
         own=process(os.getpid())
         child=process(rpc.process.pid)
         unit=own["controlGroup"].rsplit("/",1)[-1] if own else ""
-        info=properties(unit) if unit.startswith("lax-") and unit.endswith(".service") else {}
+        try:
+            info=properties(unit) if unit.startswith("lax-") and unit.endswith(".service") else {}
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            # This exact boundary precedes descriptors, journals, capture POSTs
+            # and inference permits. Unknown capture/submission outcomes below
+            # remain fenced by the existing lifecycle.
+            raise ServiceInspectionUnavailable(unit, error) from error
         if (not own or not child or own["uid"]!=os.geteuid() or child["uid"]!=own["uid"]
                 or int(info.get("MainPID",0))!=own["pid"] or info.get("ActiveState")!="active"
                 or child["controlGroup"]!=own["controlGroup"]

@@ -22,6 +22,7 @@ from .native_goals import external_admission
 from .native_policy import verify
 from .rpc import AppServer
 from .automatic_context_refill import AutomaticContextRefill, METHODS as REFILL_METHODS
+from .admission_observation import AdmissionObservationWait
 
 
 class ContextRunner:
@@ -40,6 +41,7 @@ class ContextRunner:
         self.effect_lock = asyncio.Lock()
         self.task = None
         self.failed = False
+        self.admission_observation = AdmissionObservationWait(self.state)
         self.execution_scope = None
         self.material_ids = []
         from .reader_inbox import ReaderInbox
@@ -917,7 +919,7 @@ class ContextRunner:
                 return
             saved(self.state / "work-admission.json", accepted)
             if self.config.get("installedPurposeRuntime"):
-                from .execution_lifecycle import ExecutionLifecycle
+                from .execution_lifecycle import ExecutionLifecycle, ServiceInspectionUnavailable
 
                 self.executor = ExecutionLifecycle(
                     accepted,
@@ -929,10 +931,17 @@ class ContextRunner:
                 )
                 try:
                     await self.executor.capture_resident(self.rpc)
+                except ServiceInspectionUnavailable as error:
+                    self.active = False
+                    self.executor = None  # The read failed before resident capture.
+                    observation = self.admission_observation.defer(error)
+                    self.trace("resident_inspection_unavailable", observation)
+                    return
                 except BaseException:
                     self.failed = True
                     self.active = False
                     raise
+                self.admission_observation.recovered()
         material_ids = [r["id"] for r in pending]
         try:
             # Queue identity belongs to an inference attempt, not a mutable
@@ -1457,6 +1466,7 @@ class ContextAgent:
                             not was_active
                             and not runner.active
                             and not runner.failed
+                            and runner.admission_observation.eligible()
                             and pending
                             and old.get("fingerprint") != fingerprint
                         ):
@@ -1493,6 +1503,7 @@ class ContextAgent:
                             "nativeThread": runner.thread,
                             "nativeTurn": runner.turn,
                             "heldReason": getattr(runner, "failure_reason", None),
+                            "admissionObservation": runner.admission_observation.current,
                         }
                     saved(
                         self.status_path,
