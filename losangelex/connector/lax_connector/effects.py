@@ -286,7 +286,7 @@ class Effects:
             if path.name != "tool-" + key + ".json" or fingerprint != tool["digest"]:
                 raise RuntimeError("Original tool journal identity changed")
             from .workflow import READ_TOOLS
-            read_only = tool["tool"] in READ_TOOLS | {"hollywood_context", "hollywood_rooms", "hollywood_read_room", "hollywood_room_info", "hollywood_agent_info"}
+            read_only = tool["tool"] in READ_TOOLS | {"hollywood_context", "hollywood_rooms", "hollywood_read_room", "hollywood_room_info", "hollywood_agent_info", "hollywood_agents"}
             group = self.group(key)
             # Reporting prepares/hash-reads evidence before its sole mutating
             # HTTP call. before() durably journals that call BEFORE transport.

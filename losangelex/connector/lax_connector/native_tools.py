@@ -4,6 +4,7 @@ Both native communication modes must use this implementation. The participant
 provides captured execution ownership and transport; this module does not select
 work, launch models or publish model final text.
 """
+from urllib.parse import urlencode
 import hashlib
 import json
 from uuid import UUID
@@ -91,6 +92,7 @@ class NativeTools:
             "hollywood_read_room",
             "hollywood_room_info",
             "hollywood_agent_info",
+            "hollywood_agents",
         )
         control = params["tool"] in ("hollywood_execution_cancel", "hollywood_work_cancel")
         if params["tool"] == "hollywood_goal_state":
@@ -151,6 +153,14 @@ class NativeTools:
                 value = await self.http(
                     "GET", "rooms/" + str(UUID(arguments["roomId"]))
                 )
+            elif name == "hollywood_agents":
+                limit = arguments.get("limit", 50)
+                if type(limit) is not int or not 1 <= limit <= 100:
+                    raise ValueError("Agent directory page must contain 1..100 entries")
+                query = {"limit": limit}
+                if arguments.get("after") is not None:
+                    query["after"] = str(UUID(arguments["after"]))
+                value = await self.http("GET", "agents?" + urlencode(query))
             elif name == "hollywood_agent_info":
                 value = await self.http(
                     "GET", "agents/" + str(UUID(arguments["agentId"])) + "/role"

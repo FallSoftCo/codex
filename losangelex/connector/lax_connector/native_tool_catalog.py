@@ -52,6 +52,12 @@ TOOLS = [
         ["roomId"],
     ),
     spec(
+        "hollywood_agents",
+        "Administrator: list all agent identities in this authority, including agents without rooms. Follow nextAfter for complete pages. Enrollment active is not placement or execution status. Contains no credentials; reading grants no execution.",
+        {"after": STRING, "limit": {"type": "integer", "minimum": 1, "maximum": 100}},
+        [],
+    ),
+    spec(
         "hollywood_agent_info",
         "Inspect an authorized agent's current primary role, home room and revision before updating its role.",
         {"agentId": STRING},
@@ -120,7 +126,7 @@ TOOLS += [
         ["agentId","deliveryIds"]),
     spec(
         "lax_provision_worker",
-        "Verified Global administrator: provision and start a scoped Linux worker on this enrolled host. Credentials remain private; no model runs until a request is addressed to it.",
+        "Verified Global administrator: provision and start a full native peer on this enrolled host using the configured approved developer model account, intentionally inheriting that account when configured. The installer creates private per-purpose auth profiles; this is approved enrollment, not manual copying of unrelated profiles or use of application credentials. Application backend/account isolation remains unchanged. No model runs until addressed work.",
         {"agentId": STRING, "serviceMemoryMaxBytes": {"type":"integer", "minimum":268435456, "maximum":1099511627776},
          "toolProfileFile": {"type":"string","description":"Optional administrator-protected native writer tool/provider declaration on this execution host. Do not copy another agent or human configuration."}},
         ["agentId"],

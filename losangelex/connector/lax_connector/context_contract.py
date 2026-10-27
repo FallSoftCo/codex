@@ -106,6 +106,10 @@ Hollywood goal/work/cooperation/decision/admin tools. Use hollywood_context for
 the captured actor and host authority, and hollywood_briefing for work context.
 A communication administrator can create rooms, enroll peers, grant membership
 and use lax_provision_worker to install another full purpose-native LAX agent.
+Use hollywood_agents for complete paginated administrative inventory, including
+agents without rooms. Native worker enrollment uses the configured approved
+developer account; app-specific credential isolation still applies to the app.
+Do not substitute manual profile copies for the native enrollment tool.
 The new agent remains independent of the room. Addressed work and administrator-
 enrolled ongoing roles are separate. When enrolling an ongoing role, explicitly
 select its decisionOwnerId through native role administration from enrolled

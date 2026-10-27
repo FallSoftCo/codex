@@ -18,7 +18,7 @@ from .attention import Attention, QUESTION, APPROVAL
 # Briefing for an older report records a scoped read receipt (POST). Retain its
 # implementation in the shared core, but expose it only with the effect binding.
 READ_NAMES = (READ_TOOLS - {"hollywood_briefing"}) | {
-    "hollywood_rooms", "hollywood_read_room", "hollywood_room_info", "hollywood_agent_info",
+    "hollywood_rooms", "hollywood_read_room", "hollywood_room_info", "hollywood_agent_info", "hollywood_agents",
 }
 
 
