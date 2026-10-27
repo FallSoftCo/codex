@@ -7,6 +7,7 @@ views and edit admission are still checked by the native operation itself.
 import argparse
 import json
 import os
+import pwd
 import subprocess
 
 from .collaboration_bridge import digest, require
@@ -137,12 +138,17 @@ def verify(value, config, http, policy):
         type(value["uid"]) is int and value["uid"] != 0,
         "Installed non-root Unix identity required",
     )
+    # NSS group resolution can exceed the bounded filesystem probe itself.
+    # Resolve the current identity first, then let Popen drop all credentials
+    # before exec. Never probe as root or reuse the installer's group set.
+    account = pwd.getpwnam(value["linuxUser"])
+    require(
+        (account.pw_uid, account.pw_gid) == (value["uid"], value["gid"]),
+        "Installed Unix account incarnation differs",
+    )
+    groups = os.getgrouplist(account.pw_name, account.pw_gid)
     probe = subprocess.run(
         [
-            "runuser",
-            "-u",
-            value["linuxUser"],
-            "--",
             value["interpreter"],
             "-I",
             "-B",
@@ -156,6 +162,9 @@ def verify(value, config, http, policy):
         capture_output=True,
         text=True,
         timeout=15,
+        user=account.pw_uid,
+        group=account.pw_gid,
+        extra_groups=groups,
     )
     if probe.returncode:
         raise PermissionError(
