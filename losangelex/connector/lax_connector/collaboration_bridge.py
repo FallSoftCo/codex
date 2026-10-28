@@ -277,6 +277,8 @@ class Bridge:
                 return {"receipt": result, "admission": None, "replayed": True}
             require(old["state"] == "completed", "Original native operation is held/rejected")
             return {"receipt": old["result"].get("receipt", old["result"]), "admission": None, "replayed": True}
+        from .callback_executor_observation import refresh
+        refresh(self, record, source, operation)
         saved(path, {"state": "pending", "fingerprint": fingerprint, "wire": body})
         try:
             result = self.http("POST", route, body)
