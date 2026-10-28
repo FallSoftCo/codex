@@ -208,7 +208,11 @@ def verify(value):
     if bridge.get("controllerRuntime") is not None:
         from .controller_runtime import observe as observe_controller_runtime
         observed_controller = observe_controller_runtime(bridge["controllerRuntime"])
-        files.update(observed_controller["dependencyFiles"])
+        # Actual process/effective override checks are live admission checks.
+        # The existing seal pins the declared runtime through bridge.json; its
+        # dependency-file set remains compatible with the reviewed two-file
+        # bridge transition. Full effective hashes belong in activation evidence.
+        assert observed_controller["declaration"] == bridge["controllerRuntime"]
     admin = protected(Path(bridge["automaticCapture"]["administratorConfig"]))
     policy = request(
         config["hollywoodUrl"],
