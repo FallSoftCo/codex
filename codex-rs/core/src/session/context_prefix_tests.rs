@@ -290,3 +290,83 @@ async fn real_managed_tool_declarations_survive_prefix_record_and_reopen() {
     ));
     assert!(read(&reopened, &thread, "context-original").is_err());
 }
+
+#[tokio::test]
+async fn native_tool_update_chain_uses_its_own_aggregate_budget_without_history_writes() {
+    let tools: ResponseItem = serde_json::from_str(include_str!(
+        "../../assets/lax-native-tools-retention-r320.json"
+    ))
+    .unwrap();
+    let (session, _) = super::super::tests::make_session_and_context().await;
+    enable(&session);
+    let items = stamp(
+        &session,
+        NativeContextKind::Prefix,
+        vec![ResponseItemEnvelope::new(tools); 6],
+    );
+    let bytes: usize = items
+        .iter()
+        .map(|item| serde_json::to_vec(&item.item).unwrap().len())
+        .sum();
+    assert!(bytes > crate::context_refill::MAX_REFILL_DATA);
+    assert!(bytes <= crate::context_refill::MAX_NATIVE_PREFIX_DATA);
+    let mut history = ContextManager::new();
+    history.replace_annotated(items.clone());
+    let before = persisted_bytes(&history);
+    assert_eq!(
+        read(&history, &session.thread_id.to_string(), "context-original").unwrap(),
+        items
+    );
+    assert_eq!(persisted_bytes(&history), before);
+
+    let oversized = stamp(
+        &session,
+        NativeContextKind::Prefix,
+        (0..18)
+            .map(|_| message(&"x".repeat(31_000)).into())
+            .collect(),
+    );
+    history.replace_annotated(oversized);
+    let before = persisted_bytes(&history);
+    assert!(read(&history, &session.thread_id.to_string(), "context-original").is_err());
+    assert_eq!(persisted_bytes(&history), before);
+}
+
+#[test]
+#[ignore = "requires a protected production-derived native prefix fixture"]
+fn protected_production_prefix_replays_byte_exactly_without_mutating_history() {
+    let path = std::env::var("LAX_NATIVE_PREFIX_FIXTURE").expect("explicit private fixture");
+    let fixture: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let prefix: Vec<ResponseItemEnvelope> = fixture["prefix"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| ResponseItemEnvelope {
+            item: serde_json::from_value(value["item"].clone()).unwrap(),
+            metadata: serde_json::from_value(value["metadata"].clone()).unwrap(),
+        })
+        .collect();
+    assert_eq!(
+        prefix.len() as u64,
+        fixture["expectedItemCount"].as_u64().unwrap()
+    );
+    let bytes: usize = prefix
+        .iter()
+        .map(|item| serde_json::to_vec(&item.item).unwrap().len())
+        .sum();
+    assert!(bytes > crate::context_refill::MAX_REFILL_DATA);
+    assert!(bytes <= crate::context_refill::MAX_NATIVE_PREFIX_DATA);
+    let mut history = ContextManager::new();
+    history.replace_annotated(prefix.clone());
+    let before = persisted_bytes(&history);
+    assert_eq!(
+        read(
+            &history,
+            fixture["threadId"].as_str().unwrap(),
+            fixture["contextId"].as_str().unwrap(),
+        )
+        .unwrap(),
+        prefix
+    );
+    assert_eq!(persisted_bytes(&history), before);
+}

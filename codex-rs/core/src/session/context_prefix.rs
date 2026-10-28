@@ -169,10 +169,11 @@ pub(crate) fn read(
                 "native core prefix item exceeds its typed byte bound",
             ));
         }
-        if bytes > crate::context_refill::MAX_REFILL_DATA || result.len() >= 256 {
-            return Err(io::Error::other(
-                "native core prefix exceeds its aggregate bound",
-            ));
+        if bytes > crate::context_refill::MAX_NATIVE_PREFIX_DATA || result.len() >= 256 {
+            return Err(io::Error::other(format!(
+                "native core prefix exceeds its aggregate bound: {bytes} bytes, {} items",
+                result.len() + 1
+            )));
         }
         metadata_bytes += crate::context_refill::encoded_size(
             &item.metadata,

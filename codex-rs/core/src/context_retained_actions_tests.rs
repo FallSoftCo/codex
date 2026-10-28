@@ -218,28 +218,16 @@ fn core_prefix_and_retained_fragments_share_the_total_item_limit() {
 }
 
 #[test]
-fn core_prefix_consumes_the_same_decoded_budget_as_selected_evidence() {
+fn core_prefix_and_selected_evidence_have_independent_bounded_allowances() {
+    // Intentional R346 budget-contract change: preserve valid native vocabulary
+    // beyond the old shared 256KiB threshold, without enlarging host evidence.
     let (request, response) = fixture(512);
-    let data_bytes: usize = response
-        .items
-        .iter()
-        .map(|item| {
-            let fragment: Value = serde_json::from_str(item["output"].as_str().unwrap()).unwrap();
-            fragment["content"].as_str().unwrap().len()
-        })
-        .sum();
-    let prefix_bytes = 262144 - data_bytes;
-    let mut prefix = Vec::new();
-    let mut remaining = prefix_bytes;
-    while remaining > 32768 {
-        prefix.push(prefix_item(/*serialized_bytes*/ 32768));
-        remaining -= 32768;
-    }
-    prefix.push(prefix_item(remaining));
+    let prefix = vec![prefix_item(/*serialized_bytes*/ 32768); 16];
     let exact = validate(&request, &response, &prefix).unwrap();
     assert_eq!(&exact[..prefix.len()], prefix.as_slice());
-    *prefix.last_mut().unwrap() = prefix_item(remaining + 1);
-    assert!(validate(&request, &response, &prefix).is_err());
+    let mut oversized = prefix;
+    oversized.push(prefix_item(/*serialized_bytes*/ 128));
+    assert!(validate(&request, &response, &oversized).is_err());
 }
 
 #[test]

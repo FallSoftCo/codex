@@ -324,14 +324,17 @@ pub(crate) fn validate(
             }
         }
     }
-    // Count the exact core-owned prefix together with the decoded canonical
-    // snapshot, descriptor and evidence bundle. The host cannot budget or
-    // supply this prefix. This remains pure preparation: no history/receipt
+    // Independently admit the exact core-owned vocabulary and host-selected
+    // snapshot, descriptor and evidence. The host cannot supply native prefix
+    // provenance or borrow its allowance. This remains pure preparation: no history/receipt
     // write, task admission, cancellation or provider request occurs here.
     let prefix_bytes = prefix.iter().try_fold(0usize, |bytes, item| {
         Ok::<_, io::Error>(bytes + serde_json::to_vec(&item.item)?.len())
     })?;
-    require(canonical.len() + descriptor_bytes + data.len() + prefix_bytes <= 262144)?;
+    let data_bytes = canonical.len() + descriptor_bytes + data.len();
+    require(data_bytes <= crate::context_refill::MAX_REFILL_DATA)?;
+    require(prefix_bytes <= crate::context_refill::MAX_NATIVE_PREFIX_DATA)?;
+    require(data_bytes + prefix_bytes <= crate::context_refill::MAX_REFILL_DECODED_DATA)?;
     for item in prefix {
         require(
             serde_json::to_vec(&item.item)?.len()

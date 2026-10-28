@@ -397,7 +397,15 @@ pub(super) async fn run(
     // harness metadata separately through CompactedItem serialization.
     let wire_items: Vec<_> = replacement.iter().map(|entry| &entry.item).collect();
     let encoded = serde_json::to_vec(&wire_items).map_err(|_| held())?;
+    let prefix_bytes = wire_items
+        .iter()
+        .take(prefix_item_count)
+        .try_fold(0usize, |bytes, item| {
+            Ok::<_, serde_json::Error>(bytes + serde_json::to_vec(item)?.len())
+        })
+        .map_err(|_| held())?;
     if encoded.len() > 1024 * 1024
+        || prefix_bytes > crate::context_refill::MAX_NATIVE_PREFIX_DATA
         || replacement.iter().take(prefix_item_count).any(|item| {
             serde_json::to_vec(&item.item).map_or(true, |bytes| {
                 bytes.len() > crate::context_refill::native_prefix_item_byte_limit(&item.item)

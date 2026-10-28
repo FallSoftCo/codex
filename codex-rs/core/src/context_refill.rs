@@ -116,7 +116,12 @@ pub(crate) fn encoded_size(value: &impl serde::Serialize, limit: usize) -> io::R
     Ok(counter.written)
 }
 
+// Host-selected canonical evidence and core-produced vocabulary have separate
+// admission budgets. A tool-update history must not consume the host's data
+// allowance, nor let a host use the native vocabulary's larger typed allowance.
 pub(crate) const MAX_REFILL_DATA: usize = 256 * 1024;
+pub(crate) const MAX_NATIVE_PREFIX_DATA: usize = 512 * 1024;
+pub(crate) const MAX_REFILL_DECODED_DATA: usize = MAX_REFILL_DATA + MAX_NATIVE_PREFIX_DATA;
 pub(crate) const MAX_REFILL_ITEM_BYTES: usize = 32 * 1024;
 
 /// Bound a core-produced or provenance-verified native prefix item.
