@@ -570,6 +570,9 @@ class ContextRunner:
             from .provider_rejection_recovery import original_resolution
 
             resolved = await original_resolution(self, old)
+            if not resolved and not self.failed and self.purpose in ("reader", "responder"):
+                from .automatic_refill_failed_resolution import original_resolution as refill_resolution
+                resolved = await refill_resolution(self, old)
             if not resolved and not self.failed and self.purpose == "writer":
                 from .writer_outcomes import record
                 resolved = await record(self, old["turn"])
