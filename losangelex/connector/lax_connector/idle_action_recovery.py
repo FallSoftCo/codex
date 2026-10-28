@@ -69,7 +69,12 @@ async def inspect_actions_settled(idle, path):
     turn = await original_turn(r, request["turnId"])
     require(turn["status"] in TERMINAL, "Original inference is not terminal")
     cut = (await r.rpc.call("thread/contextWindow/read", {"threadId": r.thread}))["state"]
-    require(cut == op["nativeState"] and cut["idle"] is True
+    # historyVersion is process-local and is reconstructed on cold resume.
+    # Bind the durable window/last-turn plus the independent rollout proof,
+    # then use this observed current counter for native preflight.
+    require({k: v for k, v in cut.items() if k != "historyVersion"} ==
+            {k: v for k, v in op["nativeState"].items() if k != "historyVersion"}
+            and cut["idle"] is True
             and cut["activeTurnId"] is None and cut["heldOperationId"] is None
             and cut["lastStartedTurnId"] == request["turnId"],
             "Original native idle cut changed")

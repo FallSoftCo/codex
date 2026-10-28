@@ -88,6 +88,7 @@ async def main(source, output):
 
         await case("actual_original_history_and_actions", succeeds=True)
         await case("new_snapshot_accepted_journal", lambda o,l,x:o.update(snapshot=l["receipt"]), succeeds=True)
+        await case("cold_resume_reconstructed_history_counter", lambda o,l,x:x["cut"].update(historyVersion=1), succeeds=True)
         await case("normal_service_cannot_retry", lambda o,l,x:x.update(explicit=False))
         await case("unknown_failure_is_not_action_deferral", lambda o,l,x:o.update(holdReason="RPC timeout"))
         await case("native_dispatch_intent_blocks", lambda o,l,x:o.update(nativeDispatchIntent=True))
@@ -96,6 +97,7 @@ async def main(source, output):
         await case("receipt_read_unavailable", lambda o,l,x:x.update(unknown=True))
         await case("native_inference_not_terminal", lambda o,l,x:x.update(status="inProgress"))
         await case("native_window_changed", lambda o,l,x:x["cut"].update(windowId="changed"))
+        await case("newer_native_inference", lambda o,l,x:x["cut"].update(lastStartedTurnId="later-turn"))
         await case("local_accepted_snapshot_differs", lambda o,l,x:o.update(snapshot={"different":True}))
         await case("snapshot_digest_changed", lambda o,l,x:l["receipt"].update(sha256="0"*64))
         # A real started item without its eventual terminal notification must hold.
