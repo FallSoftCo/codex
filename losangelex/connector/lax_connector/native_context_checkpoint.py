@@ -115,7 +115,10 @@ def verify_checkpoint(raw_line, body, base, request, response, mode):
         fragment = json.loads(item["output"])
         require(isinstance(fragment.get("content"), str), "Canonical fragment missing")
         decoded_data += len(fragment["content"].encode("utf-8"))
-    require(sum(map(len, raw_items[:len(base)])) + decoded_data <= 262144,
+    prefix_bytes = sum(map(len, raw_items[:len(base)]))
+    require(prefix_bytes <= 524288, "Native prefix exceeds its aggregate cap")
+    require(decoded_data <= 262144, "Selected data exceed their decoded cap")
+    require(prefix_bytes + decoded_data <= 786432,
             "Native prefix and selected data exceed combined decoded cap")
     group = None
     group_items = []
