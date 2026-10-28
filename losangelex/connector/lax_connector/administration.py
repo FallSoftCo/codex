@@ -235,13 +235,15 @@ async def _administer(connector, name, arguments, operation):
         # checked by Hollywood when work is addressed; it is not runtime identity.
         await connector.http("GET", "agents/" + agent + "/role")
         host = connector.config["hostId"]
+        from .host_enrollment import fingerprint as enrolled_fingerprint
+        fingerprint = await enrolled_fingerprint(connector)
         await connector.http(
             "POST",
             "placements",
             {"operationId": operation + ":admin:placement", **({
                 "hostId": host,
                 "name": "Enrolled LAX host",
-                "identityFingerprint": machine_identity(),
+                "identityFingerprint": fingerprint,
                 "capabilities": {"localProvisioning": True},
                 "agentId": agent,
             })},

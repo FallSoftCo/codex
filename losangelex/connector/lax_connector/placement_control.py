@@ -30,6 +30,11 @@ def view(value, authority, agent, host=None):
         "Placement inspection scope or non-admission evidence differs",
     )
     row = value["placement"]
+    if value.get("state") == "not_enrolled":
+        require(row is None and value.get("hostId") is None,
+                "Unenrolled placement must have no host or revision")
+        return value
+    require(isinstance(row, dict), "Enrolled placement row required")
     require(
         str(row["authority"]) == authority
         and str(row["agent"]) == agent
