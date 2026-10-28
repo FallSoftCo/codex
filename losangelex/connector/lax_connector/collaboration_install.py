@@ -252,6 +252,9 @@ def prepare(spec, destination):
             and not any(part in (".", "..") for part in path.parts),
             "Literal service argument paths required",
         )
+    if spec.get("controllerUnit") is not None:
+        from .controller_runtime import declaration
+        bridge["controllerRuntime"] = declaration(interpreter, controller_path, spec["controllerUnit"])
     config_path = state / "bridge.json"
     unit = (
         "[Unit]\nDescription=Protected LAX native collaboration\nAfter=network-online.target\n"

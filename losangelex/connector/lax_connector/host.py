@@ -391,6 +391,9 @@ def main():
     args = parser.parse_args()
     path = args.enroll or args.serve or args.once
     config = json.loads(path.read_text())
+    if args.serve:
+        from .controller_runtime import validate_self
+        validate_self(config, path, Path(__file__))
     result = enroll(config) if args.enroll else supervise(config, once=bool(args.once))
     if result is not None:
         print(json.dumps(result))

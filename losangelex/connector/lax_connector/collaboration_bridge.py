@@ -529,9 +529,15 @@ class Bridge:
                         if self.config.get("automaticCapture"):
                             from .collaboration_capture import AutomaticCapture
                             capture = AutomaticCapture(self)
-                            try:
+                            from .collaboration_capture import installed_native_owner
+                            _, binary = installed_native_owner(self.config["authorityId"], peer[1])
+                            image = Path(binary).resolve(strict=True).stat()
+                            if (actual["executableDevice"], actual["executableInode"]) == (
+                                    image.st_dev, image.st_ino):
+                                # An unhealthy native observation is never retried
+                                # as a different caller class or masked by its error.
                                 capture.peer(peer, authentication_only=True)
-                            except Exception:
+                            else:
                                 from .owner_briefing import guardian_peer
                                 owner = guardian_peer(capture, peer)
                         channels = list((self.state / "channels").glob("*.json"))

@@ -40,6 +40,14 @@ def register(value,purpose):
     if os.geteuid()!=0:raise PermissionError("Root observer required")
     validate(value)
     unit=value["units"][purpose]
+    # No running invocation means nothing to register. Avoid one manager IPC
+    # request per deliberately stopped purpose on every observation pass.
+    runtime_root = Path("/run/systemd/units")
+    if runtime_root.exists():
+        from .kernel_incarnation import protected_directory
+        protected_directory(runtime_root)
+        if not (runtime_root / ("invocation:" + unit)).is_symlink():
+            return {"state":"stopped","purpose":purpose,"servicesStarted":0}
     info=observer.properties(unit)
     if info["ActiveState"]!="active" or int(info["MainPID"])<2:
         return {"state":"stopped","purpose":purpose,"servicesStarted":0}
@@ -105,4 +113,4 @@ def observe(config,row):
     validate(value)
     if row["descriptor"]["serviceUnit"] not in value["units"].values():
         raise ValueError("Executor is not an installed purpose service")
-    return observer.observe(config,row,registry=directory(config["authorityId"],row["agent"])/"incarnations")
+    return observer.observe(config,row,registry=directory(config["authorityId"],row["agent"])/"incarnations", purpose_installation=value)

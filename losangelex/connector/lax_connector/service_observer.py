@@ -276,7 +276,7 @@ def members(group):
     return result
 
 
-def observe(config, row, *, registry=None):
+def observe(config, row, *, registry=None, purpose_installation=None):
     """Return a conclusive signed-in-controller fact or explicit unknown."""
     if os.geteuid() != 0 or machine_identity() != config["machineIdentity"]:
         raise PermissionError("Protected local host controller required")
@@ -321,6 +321,38 @@ def observe(config, row, *, registry=None):
         }
     native = process(d["nativePid"]) if d["nativePid"] is not None else None
     native_original = native is not None and native["start"] == d["nativeStart"]
+    if purpose_installation is not None and native_original and row.get("launch_phase") == "attached":
+        from .kernel_incarnation import Unavailable, guardian as kernel_guardian
+        try:
+            guardian = kernel_guardian(purpose_installation, binding)
+        except Unavailable:
+            pass  # Preserve the existing stopped/orphan/control-plane observer.
+        else:
+            current = members(binding["controlGroup"])
+            if (native["uid"] == binding["uid"]
+                    and native["controlGroup"] == binding["controlGroup"]
+                    and native["executableDevice"] == binding["binaryDevice"]
+                    and native["executableInode"] == binding["binaryInode"]
+                    and native["pid"] in current and guardian["pid"] in current
+                    and process(native["pid"]) == native):
+                return {"state": "live",
+                        "evidence": {**evidence, "reason": "matched-live-incarnation"}}
+            raise PermissionError("Native process differs from current kernel service binding")
+    if (purpose_installation is not None and not native_original
+            and row.get("launch_phase") == "attached"):
+        from .kernel_incarnation import Unavailable, invocation
+        try:
+            current_invocation = invocation(binding["unit"])
+        except Unavailable:
+            current_invocation = None
+        old_guardian = process(d["guardianPid"])
+        guardian_original = old_guardian is not None and old_guardian["start"] == d["guardianStart"]
+        if (current_invocation != binding["serviceInvocation"] and not guardian_original
+                and not members(binding["controlGroup"])
+                and not (process(d["nativePid"]) or {}).get("start") == d["nativeStart"]):
+            return {"state": "stopped",
+                    "evidence": {**evidence, "reason": "registered-invocation-settled",
+                                 "currentServiceInvocation": current_invocation}}
     info = properties(binding["unit"])
     if info["InvocationID"] != binding["serviceInvocation"] or info["ActiveState"] in (
         "inactive",

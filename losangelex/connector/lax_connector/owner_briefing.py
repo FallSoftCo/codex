@@ -42,17 +42,29 @@ def guardian_peer(capture, peer):
     purpose = installation(authority, agent)
     if purpose is not None:
         validate(purpose)
-        info = observer.properties(purpose["units"]["writer"])
-        require(info["ActiveState"]=="active" and int(info["MainPID"])==peer[0]
-                and actual["controlGroup"]==info["ControlGroup"] and uid==peer[1],
-                "Briefing source is not the installed writer guardian")
-        invocation = UUID(info["InvocationID"]).hex
-        binding = observer.protected(Path(purpose["config"]).parent.parent / "incarnations" / (invocation+".json"))
-        require(binding["purpose"]=="writer" and binding["guardianPid"]==actual["pid"]
-                and binding["guardianStart"]==actual["start"]
-                and binding["unit"]==info["Id"] and binding["controlGroup"]==actual["controlGroup"]
-                and binding["unitDefinitionDigest"]==observer.unit_definition(info),
-                "Protected writer incarnation differs")
+        from .kernel_incarnation import Unavailable, guardian as kernel_guardian, invocation
+        try:
+            current = invocation(purpose["units"]["writer"])
+            binding = observer.protected(Path(purpose["config"]).parent.parent /
+                                         "incarnations" / (current + ".json"))
+            guardian = kernel_guardian(purpose, binding)
+        except Unavailable:
+            # Older/transitioning systemd profiles keep the existing full guard.
+            info = observer.properties(purpose["units"]["writer"])
+            require(info["ActiveState"] == "active" and int(info["MainPID"]) == peer[0]
+                    and actual["controlGroup"] == info["ControlGroup"] and uid == peer[1],
+                    "Briefing source is not the installed writer guardian")
+            current = UUID(info["InvocationID"]).hex
+            binding = observer.protected(Path(purpose["config"]).parent.parent /
+                                         "incarnations" / (current + ".json"))
+            require(binding["purpose"] == "writer" and binding["guardianPid"] == actual["pid"]
+                    and binding["guardianStart"] == actual["start"]
+                    and binding["unit"] == info["Id"] and binding["controlGroup"] == actual["controlGroup"]
+                    and binding["unitDefinitionDigest"] == observer.unit_definition(info),
+                    "Protected writer incarnation differs")
+        else:
+            require(guardian == actual and actual["pid"] == peer[0] and uid == peer[1],
+                    "Briefing source is not the installed writer guardian")
         return {"agentId":agent,"actual":actual,"bindingDigest":digest(binding)}
     info = observer.properties(observer.installed_unit(authority, agent))
     require(

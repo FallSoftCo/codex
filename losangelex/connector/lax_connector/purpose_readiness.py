@@ -205,6 +205,10 @@ def verify(value):
     bridge = protected(bridge_path)
     if any(bridge[k] != config[k] for k in ("authorityId", "hostId", "hollywoodUrl")):
         raise ValueError("Installed native bridge route differs")
+    if bridge.get("controllerRuntime") is not None:
+        from .controller_runtime import observe as observe_controller_runtime
+        observed_controller = observe_controller_runtime(bridge["controllerRuntime"])
+        files.update(observed_controller["dependencyFiles"])
     admin = protected(Path(bridge["automaticCapture"]["administratorConfig"]))
     policy = request(
         config["hollywoodUrl"],
