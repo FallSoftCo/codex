@@ -156,6 +156,11 @@ class IdleContextRebuild:
             else:
                 snapshot = await r.request("rebuild_snapshot", {"materialIds": selected},
                     operation=operation["snapshotOperationId"], turn=request["turnId"])
+            # Persist the accepted original before a local action scan can defer
+            # preparation. Recovery must reuse it, never resubmit a snapshot.
+            async with r.effect_lock:
+                self.check(operation)
+                self.save(operation, "snapshot_accepted", snapshot=snapshot)
             from .context_action_memory import index
             content = json.loads("".join(chunk["content"] for chunk in snapshot["chunks"]))
             actions = await asyncio.to_thread(index, r, content)

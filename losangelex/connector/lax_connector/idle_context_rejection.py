@@ -24,6 +24,9 @@ async def inspect_rejected(idle, path):
     from .idle_prefix_rejection import PREFIX_REFUSAL, inspect_prefix_rejected
     if operation.get("holdReason") == PREFIX_REFUSAL:
         return await inspect_prefix_rejected(idle, path)
+    from .idle_action_recovery import ACTION_PENDING, inspect_actions_settled
+    if operation.get("holdReason") == ACTION_PENDING:
+        return await inspect_actions_settled(idle, path)
     if "snapshot" in operation or "preflight" in operation:
         from .idle_native_rejection import inspect_native_rejected
         return await inspect_native_rejected(idle, path)
