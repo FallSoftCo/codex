@@ -1277,6 +1277,7 @@ class ContextAgent:
         # Only this explicit operator mode can resume a known pre-data idle
         # snapshot rejection. Normal service starts remain observation-only.
         self.rebuild_only = rebuild_only
+        self.reconcile_only = reconcile_only
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self.stop.set)

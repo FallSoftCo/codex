@@ -164,7 +164,20 @@ def verify(original, request, response, installed, *, native_mode=None):
                 base = history[:-count]
                 require(len(base) <= 256, "Native base prefix exceeds item cap")
                 if native_mode is None:
-                    for item in base:
+                    for index, item in enumerate(base):
+                        if isinstance(item, dict) and item.get("type") == "additional_tools":
+                            # core::build_initial_context emits this typed tool
+                            # vocabulary before message context. It is not a
+                            # model call/result or retained client data.
+                            require(index == 0
+                                    and set(item) <= {"type", "role", "tools", "id"}
+                                    and item.get("id") is None
+                                    and item.get("role") == "developer"
+                                    and isinstance(item.get("tools"), list)
+                                    and all(isinstance(tool, dict) for tool in item["tools"])
+                                    and len(json.dumps(item, ensure_ascii=False).encode()) <= 262144,
+                                    "Invalid native base tool vocabulary")
+                            continue
                         require(isinstance(item, dict)
                                 and {"type", "role", "content"} <= set(item)
                                 and set(item) <= {"type", "role", "content", "id",

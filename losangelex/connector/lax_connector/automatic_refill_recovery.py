@@ -38,8 +38,19 @@ async def observe(automatic, operation_id, native=None):
     await asyncio.to_thread(verify, original["originalHistory"], original["request"],
                             original["response"], installed, **native)
     op = "active-installed:" + hashlib.sha256(operation_id.encode()).hexdigest()
-    receipt = await r.agent.http(r.purpose, "GET",
-        f"agents/{r.config['agentId']}/contexts/{r.purpose}/operations/{op}")
+    try:
+        receipt = await r.agent.http(r.purpose, "GET",
+            f"agents/{r.config['agentId']}/contexts/{r.purpose}/operations/{op}")
+    except Exception as error:
+        from .errors import HttpFailure
+        if not (isinstance(error, HttpFailure) and error.status == 404
+                and error.code == "CONTEXT_OPERATION_NOT_FOUND"
+                and getattr(r.agent, "reconcile_only", False)):
+            raise
+        # Explicit operator reconciliation only. Never install another window,
+        # restart the terminal inference or rewrite the original held journal.
+        from .automatic_refill_installed_recovery import acknowledge
+        receipt = await acknowledge(automatic, original, installed, op)
     binding = receipt["binding"]
     require(receipt.get("schema") == "lax-active-context-installed/v1"
             and receipt.get("status") == "recorded"
