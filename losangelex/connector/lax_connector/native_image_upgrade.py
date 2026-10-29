@@ -211,10 +211,20 @@ def require_settled_transition(fd, *, check_image=True):
         try:
             info = os.fstat(handle)
             _owned(info, 0)
-            if list(_identity(info)) != current["imageIdentity"]:
-                raise ValueError(
-                    "Accepted native image changed; explicit transition required"
-                )
+            observed = list(_identity(info))
+            expected = current["imageIdentity"]
+            if observed != expected:
+                if observed[:4] + observed[5:] != expected[:4] + expected[5:]:
+                    raise ValueError("Accepted native image changed; explicit transition required")
+                # Link-count changes alter ctime. Validate the actual opened
+                # original inode against the approved image hash, not a path
+                # reread or a metadata waiver.
+                checksum = hashlib.sha256()
+                while block := os.read(handle, 1024 * 1024):
+                    checksum.update(block)
+                if (checksum.hexdigest() != current.get("approvedImageSha256")
+                        or list(_identity(os.fstat(handle))) != observed):
+                    raise ValueError("Accepted native image content changed; explicit transition required")
         finally:
             os.close(handle)
     finally:
