@@ -1294,6 +1294,11 @@ class Connector(NativeTools):
                                 settled = await self.http(
                                     "GET", "deliveries/" + previous["delivery"]["id"]
                                 )
+                            if settled.get("preNativeRecovery") is not None:
+                                from .pre_native_recovery import settle as settle_pre_native_recovery
+                                recovered = settle_pre_native_recovery(self.journal, previous, settled, self.config)
+                                if recovered is not None:
+                                    continue
                             if settled["delivery"]["state"] not in (
                                 "completed",
                                 "failed",

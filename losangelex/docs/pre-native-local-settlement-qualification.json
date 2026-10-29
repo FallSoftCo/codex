@@ -5,6 +5,8 @@
   "wrongClaimAndLocalBirthEvidenceRejected": true,
   "originalObservationPreserved": true,
   "oldAttemptIndexClosedWithoutChangingCanonicalRequest": true,
+  "residentClaimRetiredWithOriginalPreserved": true,
+  "localSettlementIdempotent": true,
   "actualWorkerJournalUnmodifiedByTest": true,
   "modelsOrProcessesStarted": 0
 }

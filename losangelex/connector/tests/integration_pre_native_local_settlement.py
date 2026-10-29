@@ -37,11 +37,14 @@ with psycopg.connect(**json.loads((r/'database.json').read_text()),row_factory=d
   except RuntimeError:pass
   else:raise AssertionError('Local native process evidence ignored')
   birth.unlink()
+  (fixture/'resident-claim.json').write_text(json.dumps({'operationId':record['delivery']['claim_id'],'pending':delivery}))
   value=settle(journal,record,captured,config);assert value['modelsStarted']==0 and value['originalRequestState']=='pending'
   assert json.loads((journal.directory/'execution.before-pre-native-recovery.json').read_text())==record
   assert json.loads(journal.read_text())['state']=='failed' and not list(journals.open_index.iterdir())
+  assert not (fixture/'resident-claim.json').exists() and (journal.directory/'resident-claim.before-pre-native-recovery.json').exists()
+  assert settle(journal,json.loads(journal.read_text()),captured,config)['nativeReplay'] is False
   assert json.loads(original.read_text())==record
-  return {'passed':True,'realCanonicalHTTPRead':True,'acceptedOriginalRecoveryRequired':True,'wrongClaimAndLocalBirthEvidenceRejected':True,'originalObservationPreserved':True,'oldAttemptIndexClosedWithoutChangingCanonicalRequest':True,'actualWorkerJournalUnmodifiedByTest':True,'modelsOrProcessesStarted':0}
+  return {'passed':True,'realCanonicalHTTPRead':True,'acceptedOriginalRecoveryRequired':True,'wrongClaimAndLocalBirthEvidenceRejected':True,'originalObservationPreserved':True,'oldAttemptIndexClosedWithoutChangingCanonicalRequest':True,'residentClaimRetiredWithOriginalPreserved':True,'localSettlementIdempotent':True,'actualWorkerJournalUnmodifiedByTest':True,'modelsOrProcessesStarted':0}
  try:result=asyncio.run(run())
  finally:c.rollback();shutil.rmtree(fixture)
 (r/'pre-native-local-settlement-qualification.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))

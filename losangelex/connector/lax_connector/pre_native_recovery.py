@@ -5,6 +5,7 @@ canonical request. Preserve the original local observation before closing its
 old attempt index, so normal new-generation claim admission can proceed.
 """
 import json
+import os
 from .journal import saved
 from .collaboration_bridge import require
 
@@ -33,11 +34,32 @@ def settle(journal, record, captured, config):
          'native-attachment-intent.json','native-admission-attestation.json')),
         'Local launch/admission evidence requires separate reconciliation')
     original=journal.directory/'execution.before-pre-native-recovery.json'
+    settled={**record,'state':'failed','modelsStarted':0,'preNativeRecovery':proof,'reconciled':True}
     if original.exists():
-        require(json.loads(original.read_text())==record,'Original prelaunch observation differs')
+        before=json.loads(original.read_text())
+        require(before==record or {**before,'state':'failed','modelsStarted':0,
+                'preNativeRecovery':proof,'reconciled':True}==record,
+                'Original prelaunch observation differs')
     else:saved(original,record)
-    saved(journal,{**record,'state':'failed','modelsStarted':0,
-                   'preNativeRecovery':proof,'reconciled':True})
+    saved(journal,settled)
+    retired=retire_claim(journal,old['claim_id'])
     return {'state':'failed','originalRequestState':'pending','nativeReplay':False,
             'modelsStarted':0,'source':'Accepted canonical pre-native recovery',
-            'originalLocalObservationPreserved':True}
+            'originalLocalObservationPreserved':True,'residentClaimRetired':retired}
+
+
+def retire_claim(journal, claim_id):
+    path=journal.store.state/'resident-claim.json'
+    if not path.exists():return False
+    intent=json.loads(path.read_text())
+    if intent.get('operationId')!=claim_id:return False
+    original=journal.directory/'resident-claim.before-pre-native-recovery.json'
+    if original.exists():
+        require(json.loads(original.read_text())==intent,'Original resident claim differs')
+    else:saved(original,intent)
+    require(json.loads(path.read_text())==intent,'Resident claim changed during settlement')
+    path.unlink()
+    fd=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY)
+    try:os.fsync(fd)
+    finally:os.close(fd)
+    return True
