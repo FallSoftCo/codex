@@ -16,6 +16,7 @@ from . import service_observer as observer
 from .collaboration_bridge import digest, protected_directory, require, receive
 from .collaboration_capture import installed_native_owner
 from .journal import saved
+from .host_capture_reads import guardian_scope
 
 PORT = "owner-briefing/v1"
 FIELDS = {
@@ -151,6 +152,11 @@ def carry(capture, peer, frame, owner):
         and brief["asOfSequence"] >= 0,
         "Exact authenticated owner briefing scope required",
     )
+    with guardian_scope(capture, owner, brief["deliveryId"]):
+        return _carry_bound(capture, frame, owner, brief)
+
+
+def _carry_bound(capture, frame, owner, brief):
     snapshot = capture.admin_http("GET", "deliveries/" + str(UUID(brief["deliveryId"])))
     delivery, event = snapshot["delivery"], snapshot["request"]
     scope = snapshot.get("purposeExecutionScope")

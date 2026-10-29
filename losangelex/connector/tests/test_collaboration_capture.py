@@ -131,6 +131,7 @@ class CaptureFixture:
             config=self.config, state=self.state, http=self.http
         )
         self.capture = object.__new__(AutomaticCapture)
+        self.capture.host_reads = None
         self.capture.bridge = self.bridge
         self.capture.config = self.config
         self.capture.state = self.state
@@ -305,6 +306,7 @@ class AutomaticCaptureTests(unittest.TestCase):
     def intent_fixture(self):
         record = self.f.ensure()
         bridge = object.__new__(Bridge)
+        bridge.config = {}
         bridge.state = self.f.state
         bridge.captured = lambda *args: (
             record,
@@ -473,12 +475,19 @@ class InstallerTests(unittest.TestCase):
         )
         self.admin.chmod(0o600)
         (self.root / "units").mkdir()
+        # Only the socket lifetime uses /run; fixture source/state stay on disk.
+        self.socket_tmp = tempfile.TemporaryDirectory(prefix="lax-capture-socket-", dir="/run")
+        self.addCleanup(self.socket_tmp.cleanup)
+        Path(self.socket_tmp.name).chmod(0o755)
+        self.public_tmp = tempfile.TemporaryDirectory(prefix="lax-capture-public-", dir="/var/lib")
+        self.addCleanup(self.public_tmp.cleanup)
+        Path(self.public_tmp.name).chmod(0o755)
         self.spec = {
             "schema": "lax-collaboration-install/v1",
             "controllerConfig": str(self.controller),
             "administratorConfig": str(self.admin),
-            "runtimeDirectory": str(self.root / "public"),
-            "socketDirectory": str(self.root / "socket"),
+            "runtimeDirectory": str(Path(self.public_tmp.name) / "public"),
+            "socketDirectory": str(Path(self.socket_tmp.name) / "socket"),
             "stateDirectory": str(self.root / "private"),
             "unitDirectory": str(self.root / "units"),
             "interpreter": "/usr/bin/python3",
@@ -505,6 +514,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(first["modelsStarted"], 0)
 
     def test_private_ancestor_cannot_publish_an_unusable_native_descriptor(self):
+        self.spec["runtimeDirectory"] = str(self.root / "public")
         self.root.chmod(0o700)
         with patch(
             "lax_connector.collaboration_install.expected_owner",

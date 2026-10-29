@@ -144,35 +144,53 @@ def installed_native_owner(authority, uid):
     return agent, binary
 
 
+from .capture_protocol import DELIVERY_CAPTURE, HOST_SCOPED_CAPTURE, SUPPORTED_CAPTURE
+
+
 class AutomaticCapture:
     def __init__(self, bridge):
         self.bridge = bridge
         self.config, self.state = bridge.config, bridge.state
         self.policy = self.config["automaticCapture"]
         require(
-            self.policy["schema"] in {"lax-automatic-native-capture/v1", "lax-automatic-native-capture/v2"},
+            self.policy["schema"] in SUPPORTED_CAPTURE,
             "Protected automatic capture policy required",
         )
         require(
-            (self.policy["schema"] == "lax-automatic-native-capture/v2" or 1 <= len(self.policy["agents"]) <= 32)
+            (self.policy["schema"] in DELIVERY_CAPTURE or 1 <= len(self.policy["agents"]) <= 32)
             and 1 <= len(self.policy["resources"]) <= 8,
             "Bounded installed capture policy required",
         )
-        path = Path(self.policy["administratorConfig"])
-        protected_directory(path.parent)
-        admin = protected(path)
-        require(
-            (admin["authorityId"], admin["hostId"], admin["hollywoodUrl"])
-            == (
-                self.config["authorityId"],
-                self.config["hostId"],
-                self.config["hollywoodUrl"],
-            ),
-            "Administrative capture configuration differs from enrolled host",
-        )
-        self.admin_http = lambda method, route, payload=None: request(
-            admin["hollywoodUrl"], admin["token"], method, route, payload
-        )
+        self.host_reads = None
+        if self.policy["schema"] == HOST_SCOPED_CAPTURE:
+            from .host_capture_reads import HostCaptureReads
+            require("administratorConfig" not in self.policy,
+                    "Host-scoped capture must not load an administrator credential")
+            self.host_reads = HostCaptureReads(self.bridge.http, host_id=self.config["hostId"],
+                                               authority_id=self.config["authorityId"])
+            self.admin_http = self.host_reads.request
+            capability = self.bridge.http(
+                "GET", "hosts/" + self.config["hostId"] + "/collaboration-bridge")
+            require(capability.get("hostExecutionCapture") is True
+                    and capability.get("hostScopedWorkGrants") is True
+                    and capability.get("hostScopedWorkGrantContext") == "persistent-agent-context/v1",
+                    "Canonical host-scoped capture capability unavailable; no administrator fallback")
+        else:
+            path = Path(self.policy["administratorConfig"])
+            protected_directory(path.parent)
+            admin = protected(path)
+            require(
+                (admin["authorityId"], admin["hostId"], admin["hollywoodUrl"])
+                == (
+                    self.config["authorityId"],
+                    self.config["hostId"],
+                    self.config["hollywoodUrl"],
+                ),
+                "Administrative capture configuration differs from enrolled host",
+            )
+            self.admin_http = lambda method, route, payload=None: request(
+                admin["hollywoodUrl"], admin["token"], method, route, payload
+            )
         protected_directory(self.state / "administration")
 
     def peer(self, peer, frame=None, *, authentication_only=False):
@@ -205,7 +223,8 @@ class AutomaticCapture:
         if frame is not None:
             current = []
             for row in rows:
-                snapshot = self.admin_http("GET", "deliveries/" + str(UUID(row["delivery"])))
+                snapshot = (self.host_reads.fetch(row)["snapshot"] if self.host_reads else
+                            self.admin_http("GET", "deliveries/" + str(UUID(row["delivery"]))))
                 delivery = snapshot["delivery"]
                 if (delivery["state"] == "running" and not delivery["cancellation_requested"]
                         and (delivery["native_thread"],delivery["native_turn"])
@@ -244,6 +263,12 @@ class AutomaticCapture:
     def ensure(self, peer, frame=None):
         """Capture exact current turn, then grant only its already admitted work."""
         row, native, fact = self.peer(peer, frame)
+        if self.host_reads:
+            with self.host_reads.bind(row):
+                return self._ensure_owned(row, native, fact, frame)
+        return self._ensure_owned(row, native, fact, frame)
+
+    def _ensure_owned(self, row, native, fact, frame):
         lock_path = self.state / "capture.lock"
         fd = os.open(
             lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600
@@ -346,7 +371,7 @@ class AutomaticCapture:
                 and policy["bridge"]["protocol"] == "canonical-edit-plans/v2",
                 "Current protected physical collaboration enrollment required",
             )
-            if self.policy["schema"] == "lax-automatic-native-capture/v2":
+            if self.policy["schema"] in DELIVERY_CAPTURE:
                 from .request_capture import ensure
                 return ensure(self, base, snapshot, row, native, fact, policy, path, frame)
             work_id = event.get("data", {}).get("workId")

@@ -11,6 +11,9 @@ class HostCaptureReadTests(unittest.IsolatedAsyncioTestCase):
                  for offset, key in enumerate(('id','agent','host','delivery'), 1)}
                 | {'generation': 1, 'claim_id': 'original-'+str(index)}
                 for index in (1, 2)]
+        for row in rows:
+            row['host'] = str(UUID(int=999))
+            row['authority'] = str(UUID(int=888))
         by_id = {row['id']: row for row in rows}
         def transport(method, path):
             row = by_id[path.split('/')[1].split('?')[0]]
@@ -18,7 +21,7 @@ class HostCaptureReadTests(unittest.IsolatedAsyncioTestCase):
                 'schema': 'hollywood-host-execution-capture/v1', 'admitsExecution': False,
                 'snapshot': {'delivery': {'id': row['delivery']}},
                 'role': {'principal': row['agent']}, 'work': None, 'goal': None}}
-        reader = HostCaptureReads(transport)
+        reader = HostCaptureReads(transport, host_id=rows[0]["host"], authority_id=rows[0]["authority"])
         entered = [asyncio.Event(), asyncio.Event()]
         async def callback(index):
             row = rows[index]

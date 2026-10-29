@@ -6,6 +6,7 @@ facts. Model arguments contain intent only. All responses/replays remain receipt
 only an original successful begin response can carry a one-shot mutation grant.
 """
 import argparse
+from .capture_protocol import DELIVERY_CAPTURE
 import hashlib
 import json
 import os
@@ -327,7 +328,7 @@ class Bridge:
         return result
 
     def briefing_sequence(self, record):
-        if self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2":
+        if self.config.get("automaticCapture", {}).get("schema") in DELIVERY_CAPTURE:
             from .owner_briefing import sequence
             return sequence(self, record)
         from .delivery_edit import briefing_sequence
@@ -432,7 +433,7 @@ class Bridge:
         if port in PATCH_PORTS:
             require(policy.get("patchPermits") is True and policy.get("physicalTargets") is True, "Canonical mutation permits unavailable")
             if record.get("scope") == "delivery":
-                require(self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2"
+                require(self.config.get("automaticCapture", {}).get("schema") in DELIVERY_CAPTURE
                         and policy.get("deliveryEdits") is True
                         and policy.get("deliveryEditSchema") == "canonical-delivery-edits/v1",
                         "Canonical delivery edit protocol unavailable; no legacy fallback")
@@ -466,7 +467,7 @@ class Bridge:
                     "Planned native intent requires captured admitted work; ordinary patches use delivery scope")
             if cleanup:
                 root = cleanup_root(self, record, port, command, frame["evidence"]["environmentId"])
-            elif self.config.get("automaticCapture", {}).get("schema") == "lax-automatic-native-capture/v2":
+            elif self.config.get("automaticCapture", {}).get("schema") in DELIVERY_CAPTURE:
                 from .resource_routing import intent_root
                 root = intent_root(self, record, policy, frame["evidence"]["environmentId"])
             else:

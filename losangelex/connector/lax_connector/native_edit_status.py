@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import UUID
 from .collaboration_bridge import protected_directory,require,receive,PLAN_ACTIONS
 from .owner_briefing import guardian_peer
+from .host_capture_reads import guardian_scope
 from .service_observer import protected
 
 CLAIM_ACTIONS={"acquire","renew","release","handoff","accept","inspect"}
@@ -16,6 +17,11 @@ def carry(capture,peer,frame,owner):
     require(set(frame)==FIELDS,"Exact native edit-status request required")
     current=guardian_peer(capture,peer)
     require(current==owner and frame["agentId"]==owner["agentId"],"Original installed guardian changed")
+    with guardian_scope(capture,owner,frame["deliveryId"]):
+        return _carry_bound(capture,frame)
+
+
+def _carry_bound(capture,frame):
     snapshot=capture.admin_http("GET","deliveries/"+str(UUID(frame["deliveryId"])))
     d,scope=snapshot["delivery"],snapshot.get("purposeExecutionScope")
     require(scope is not None and d["state"]=="running" and not d["cancellation_requested"],

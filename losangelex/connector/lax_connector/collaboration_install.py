@@ -216,11 +216,15 @@ def prepare(spec, destination):
             "workspaceIds": [named[name] for name in names],
             "defaultWorkspaceId": named[default],
         }
-    automatic = {
-        "schema": "lax-automatic-native-capture/v2",
-        "administratorConfig": str(admin_path),
-        "resources": resources,
-    }
+    from .capture_protocol import DELIVERY_CAPTURE, HOST_SCOPED_CAPTURE
+    capture_protocol = spec.get("captureProtocol", "lax-automatic-native-capture/v2")
+    require(capture_protocol in DELIVERY_CAPTURE, "Unsupported installed capture protocol")
+    automatic = {"schema": capture_protocol, "resources": resources}
+    if capture_protocol != HOST_SCOPED_CAPTURE:
+        automatic["administratorConfig"] = str(admin_path)
+    # The administrator is used only by this explicit bootstrap transaction.
+    # Host-scoped runtime configuration carries no administrator credential path.
+
     bridge = {
         k: controller[k]
         for k in ("authorityId", "hostId", "machineIdentity", "hollywoodUrl", "token")
