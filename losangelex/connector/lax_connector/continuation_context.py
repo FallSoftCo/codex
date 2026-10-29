@@ -103,8 +103,11 @@ def receipt(value):
             type(d.get("cancellation_requested")) is bool and d.get("state") in
             ("pending", "claimed", "running", "completed", "failed", "cancelled",
              "cancel_requested", "unknown"), "MALFORMED_RECEIPT")
+    typed_completion = (r["kind"] in ("result", "message")
+                        and r["data"].get("type") == "peerCompletion"
+                        and pointer(r) is not None)
     require(d["event"] == r["id"] and d["authority"] == r["authority"] and
-            r["kind"] == "request", "DELIVERY_REQUEST_MISMATCH")
+            (r["kind"] == "request" or typed_completion), "DELIVERY_REQUEST_MISMATCH")
     return d, r
 
 

@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "actualAuthenticatedHTTPAndCanonicalNativeDelegationReads": true,
+  "typedResultCompletionAcceptedWithoutRewritingKind": true,
+  "originalParentAndChildReceiptsVerified": true,
+  "actualGPUResultInReadOnlyContext": true,
+  "ordinaryResultStillRejected": true,
+  "modelsOrNativeProcessesStarted": 0,
+  "canonicalMessagesOrDeliveriesChanged": false
+}
