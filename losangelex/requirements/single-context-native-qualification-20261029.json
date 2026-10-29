@@ -1,0 +1,21 @@
+{
+  "schema": "single-context-native-journey/v1",
+  "passed": true,
+  "actualProviderNativeTurn": true,
+  "originalHumanRequestCount": 1,
+  "originalDeliveryGeneration": 1,
+  "persistentAgentContext": true,
+  "agentAuthoredHollywoodResult": true,
+  "executionActivitySeparateFromConversation": true,
+  "observedHostname": "ozzz-aosp",
+  "unsettledExecutorsAfterCompletion": 0,
+  "newNativeGoalObserved": false,
+  "timingsSeconds": {
+    "receivedToAdmitted": 0.271491,
+    "admittedToRunning": 18.860476,
+    "runningToTerminal": 13.743325
+  },
+  "scope": "One CPU host and isolated canonical authority; not GPU peer, phone, or production release proof",
+  "laxCommit": "9a2834fb2ee5832aad5c4e2c4d0d9b484faf82dd",
+  "hollywoodCommit": "edc4dc66e8f1a9339a5a46be8f271b85d3736594"
+}
