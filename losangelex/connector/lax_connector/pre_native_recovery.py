@@ -63,3 +63,28 @@ def retire_claim(journal, claim_id):
     try:os.fsync(fd)
     finally:os.close(fd)
     return True
+
+
+def main():
+    """Offline journal reconciliation only; this entrypoint cannot start a model."""
+    import argparse,fcntl
+    from pathlib import Path
+    from .host import request
+    from .journal import ExecutionJournals
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--config',type=Path,required=True)
+    parser.add_argument('--delivery',required=True)
+    parser.add_argument('--generation',type=int,required=True)
+    args=parser.parse_args();config=json.loads(args.config.read_text())
+    with (Path(config['state'])/'connector.lock').open('r+') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        journals=ExecutionJournals(config['state'],agent=config['agentId'],host=config['hostId'])
+        journal=journals.open(args.delivery,args.generation)
+        captured=request(config['hollywoodUrl'],config['token'],'GET','deliveries/'+args.delivery)
+        result=settle(journal,json.loads(journal.read_text()),captured,config)
+        require(result is not None,'No accepted canonical pre-native recovery; original attempt remains held')
+        print(json.dumps(result))
+
+
+if __name__=='__main__':
+    main()
