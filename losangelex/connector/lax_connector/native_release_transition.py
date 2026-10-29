@@ -190,9 +190,21 @@ def _closure_identity(plan):
         os.close(handle)
     if sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) != sorted(software["identities"]):
         raise ValueError("Reviewed release entry set changed")
+    files = {row["path"]: row for row in software["entries"] if row["kind"] == "file"}
     for relative, identity in software["identities"].items():
-        if list(image._identity((root / relative).lstat())) != identity:
-            raise ValueError("Reviewed release asset identity changed")
+        path = root / relative
+        observed = list(image._identity(path.lstat()))
+        if observed != identity:
+            # Creating/removing a hard link changes ctime without changing this
+            # reviewed path, inode, permissions or bytes. Never waive the guard:
+            # prove the original complete file hash and a stable read instead.
+            # All other identity changes (including inode, mtime and owner) fail.
+            row = files.get(relative)
+            if (row is None or observed[:4] + observed[5:] != identity[:4] + identity[5:]):
+                raise ValueError("Reviewed release asset identity changed")
+            checksum, hashed_identity = file_hash(path, 0)
+            if checksum != row["sha256"] or hashed_identity != observed:
+                raise ValueError("Reviewed release asset content changed")
     for row in software["entries"]:
         if row["kind"] == "file-link" and file_identity(Path(row["resolved"])) != row["identity"]:
             raise ValueError("Reviewed external interpreter dependency changed")
