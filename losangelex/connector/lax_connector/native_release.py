@@ -31,7 +31,8 @@ def active_spec(spec, authority, host, agent):
             or value["scope"] != [authority, host, agent]
             or value["originalSpecDigest"] != observer.digest(spec)):
         raise ValueError("Accepted software release differs from original provisioning")
-    return {**spec, "binary": value["newBinary"], "interpreter": value["newInterpreter"]}
+    return {**spec, "binary": value["newBinary"], "interpreter": value["newInterpreter"],
+            **({"hollywoodUrl": value["newHollywoodUrl"]} if "newHollywoodUrl" in value else {})}
 
 
 def runtime_spec(authority, agent):
@@ -195,7 +196,30 @@ def prepare(authority, host, agent, request, output):
             raise ValueError("Release changed during actual service-UID startup")
         if config_path.read_bytes() != config_bytes or unit_path.read_bytes() != before_unit:
             raise ValueError("Original configuration/unit changed during review")
-        new_config = (json.dumps({**config, "binary": str(new_binary)}, indent=2) + "\n").encode()
+        new_values = {**config, "binary": str(new_binary)}
+        route_probe = None
+        if 'newHollywoodUrl' in request or 'expectedHollywoodUrl' in request:
+            from urllib.parse import urlsplit
+            from urllib.request import Request, urlopen
+            new_url = request['newHollywoodUrl']
+            target = urlsplit(new_url)
+            if (config['hollywoodUrl'] != request['expectedHollywoodUrl']
+                    or target.scheme != 'http' or target.hostname not in {'127.0.0.1','::1'}
+                    or target.username is not None or target.password is not None
+                    or target.path or target.query or target.fragment
+                    or target.port is None or not 1 <= target.port <= 65535):
+                raise ValueError('Reviewed host-local Hollywood route differs')
+            # Metadata-only existing agent read; no model, claim or new input.
+            headers = {'Authorization':'Bearer '+config['token'],
+                'X-Hollywood-Authority':authority,'X-Hollywood-Agent':agent}
+            with urlopen(Request(new_url+'/hollywood/v3/rooms',headers=headers),timeout=5) as response:
+                catalog=json.load(response)
+            if catalog.get('authorityId') != authority or not isinstance(catalog.get('rooms'),list):
+                raise ValueError('Host-local route did not return original canonical authority')
+            route_probe={'url':new_url,'authorityId':authority,'modelsStarted':0,
+                'authenticatedOriginalAgentRead':True}
+            new_values['hollywoodUrl']=new_url
+        new_config = (json.dumps(new_values, indent=2) + "\n").encode()
         new_unit = "\n".join(after_exec if line == before_exec else line
                              for line in before_unit.decode().split("\n")).encode()
         image_info = new_binary.stat()
@@ -219,6 +243,8 @@ def prepare(authority, host, agent, request, output):
                     "oldRootIdentity": list(image._identity(old_root.stat())),
                     "oldBinary": str(old_binary), "newBinary": str(new_binary),
                     "oldInterpreter": str(old_python), "newInterpreter": str(new_python),
+                    **({"oldHollywoodUrl":config['hollywoodUrl'],"newHollywoodUrl":new_values['hollywoodUrl'],
+                        "routeProbe":route_probe} if route_probe is not None else {}),
                     "oldImageSha256": file_hash(old_binary, 0)[0],
                     "oldInterpreterIdentity": file_identity(old_python.resolve()),
                     "closure": software, "probes": probes, "targets": targets,
@@ -238,5 +264,7 @@ def prepare(authority, host, agent, request, output):
                 "preparationDigest": observer.digest(prepared), "scope": scope,
                 "closureDigest": observer.digest(software),
                 "newConfigurationSha256": hashlib.sha256(new_config).hexdigest(),
+                **({"oldHollywoodUrl":config['hollywoodUrl'],"newHollywoodUrl":new_values['hollywoodUrl'],
+                    "routeProbe":route_probe} if route_probe is not None else {}),
                 "newDefinitionSha256": hashlib.sha256(new_unit).hexdigest(),
                 "probes": probes, "modelsStarted": 0, "servicesStarted": 0}

@@ -113,6 +113,12 @@ class Connector(NativeTools):
 
     async def _http(self, method, path, payload=None):
         headers = {"Authorization": "Bearer " + self.config["token"]}
+        # A host-local Hollywood may serve another original authority over
+        # NATS. These are routing identities, never sender/permission overrides;
+        # the owning authority verifies the current credential and host binding.
+        if self.config.get("authorityId"):
+            headers["X-Hollywood-Authority"] = self.config["authorityId"]
+            headers["X-Hollywood-Agent"] = self.config["agentId"]
         context = self.effects.current.get()
         if context and method in ("POST", "PUT", "PATCH", "DELETE"):
             scope = context["scope"]

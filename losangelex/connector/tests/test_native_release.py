@@ -406,6 +406,53 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result["state"], "accepted")
         self.assertFalse((self.registry / release.CURRENT).exists())
 
+    def test_local_route_review_uses_original_agent_and_preserves_other_configuration(self):
+        import base64
+        import threading
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        seen=[]
+        authority,agent=self.authority,self.agent
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(inner):
+                seen.append((inner.path,dict(inner.headers)))
+                body=json.dumps({'authorityId':authority,'rooms':[]}).encode()
+                inner.send_response(200);inner.send_header('Content-Length',str(len(body)))
+                inner.end_headers();inner.wfile.write(body)
+            def log_message(*args):pass
+        server=HTTPServer(('127.0.0.1',0),Handler)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        try:
+            self.config.update(hollywoodUrl='https://original.invalid',token='synthetic-route-only')
+            fixtures.write(self.home/'connector.json',self.config)
+            before=(self.home/'connector.json').read_bytes()
+            self.request_spec['expectedConfigurationSha256']=hashlib.sha256(before).hexdigest()
+            new_url='http://127.0.0.1:'+str(server.server_port)
+            self.request_spec.update(expectedHollywoodUrl=self.config['hollywoodUrl'],newHollywoodUrl=new_url)
+            self.prepare()
+            plan=json.loads((self.prepared/'release-plan.json').read_text())
+            after=json.loads(base64.b64decode(plan['targets'][0]['after']))
+            self.assertEqual(after,{**self.config,'binary':str(self.new_binary),'hollywoodUrl':new_url})
+            self.assertEqual((self.home/'connector.json').read_bytes(),before)
+            self.assertEqual(plan['newHollywoodUrl'],new_url)
+            self.assertEqual(len(seen),1)
+            self.assertEqual(seen[0][0],'/hollywood/v3/rooms')
+            self.assertEqual(seen[0][1]['X-Hollywood-Authority'],authority)
+            self.assertEqual(seen[0][1]['X-Hollywood-Agent'],agent)
+        finally:
+            server.shutdown();server.server_close();thread.join(timeout=2)
+
+    def test_route_review_cannot_send_original_credential_to_external_host(self):
+        self.config.update(hollywoodUrl='https://original.invalid',token='synthetic-route-only')
+        fixtures.write(self.home/'connector.json',self.config)
+        before=(self.home/'connector.json').read_bytes()
+        self.request_spec['expectedConfigurationSha256']=hashlib.sha256(before).hexdigest()
+        self.request_spec.update(expectedHollywoodUrl=self.config['hollywoodUrl'],
+            newHollywoodUrl='http://external.invalid:19431')
+        with self.assertRaisesRegex(ValueError,'host-local Hollywood route'):
+            self.prepare()
+        self.assertEqual((self.home/'connector.json').read_bytes(),before)
+
+
 class ReleaseCommandTests(unittest.TestCase):
     def test_exact_cli_prepare_approve_status_and_reconcile_routes(self):
         import contextlib
