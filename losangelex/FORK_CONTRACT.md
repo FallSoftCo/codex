@@ -51,6 +51,22 @@ already implements or has qualified every requirement.
 - User stops, cancellations, permissions, existing pairings, drafts and queued
   work survive upgrades. An upstream import must not activate paused work.
 
+## Primary single-context runtime — 2026-10-29 user direction
+
+New cross-host room work uses the standalone `lax-connect` / `lax_connector.connector`
+path with `runtimeMode: "single-context"`. One persistent native agent context is
+independent of room membership. Native human and peer admission, Hollywood tools,
+execution receipts, cancellation and protected executor registration remain intact.
+This is Codex-compatible execution with native Hollywood communication; it does
+not claim byte-identical upstream model instructions or upstream child-agent semantics.
+
+The three-context direction below is deferred. Its source and existing histories
+remain available through their original explicit runtime, without implicit conversion,
+resumption or deletion. Single-context provisioning rejects purpose-separated
+configuration before creating state or starting a service. Existing standalone
+configuration without runtimeMode remains compatible. Old context adoption still
+requires the original explicit adoption and unsettled-execution checks.
+
 ## Purpose-separated agent contexts
 
 One durable agent may use independent reader, writer and responder histories.

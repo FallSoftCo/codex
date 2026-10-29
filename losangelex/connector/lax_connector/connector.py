@@ -64,6 +64,8 @@ from .native_tool_catalog import CAPABILITIES, TOOLS, spec
 
 class Connector(NativeTools):
     def __init__(self, config):
+        from .runtime_mode import require_single_context
+        require_single_context(config)
         self.config = config
         self.required_tool_policy = config.get("nativeToolPolicy")
         if self.required_tool_policy is not None:

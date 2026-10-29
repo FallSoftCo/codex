@@ -24,8 +24,11 @@ def execution_profile(spec, override=None):
 
 
 def expected_configuration(spec, authority, agent, home, profile=None):
+    from .runtime_mode import require_single_context
+    require_single_context(spec)
     profile = execution_profile(spec, profile)
     return {
+        **({"runtimeMode": spec["runtimeMode"]} if "runtimeMode" in spec else {}),
         "hollywoodUrl": spec["hollywoodUrl"],
         "token": spec["credential"],
         "agentId": agent,
@@ -166,6 +169,8 @@ def inspect_completed(spec):
     }
 
 def provision(spec):
+    from .runtime_mode import require_single_context
+    require_single_context(spec)
     if os.geteuid() != 0:
         raise PermissionError("Worker provisioning requires a verified administrator")
     authority, agent = str(UUID(spec["authorityId"])), str(UUID(spec["agentId"]))
