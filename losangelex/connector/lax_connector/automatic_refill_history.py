@@ -102,7 +102,7 @@ def native_base_metadata(value, count, turn):
                         "Invalid native tool namespace")
 
 
-def verify(original, request, response, installed, *, native_mode=None):
+def verify(original, request, response, installed, *, native_mode=None, native_preflight=None):
     """Accept one exact intent/checkpoint/receipt, never recursive membership."""
     expected = {k: response[k] for k in IDENTITY | CUT}
     require(all(installed[k] == v for k, v in expected.items())
@@ -195,7 +195,8 @@ def verify(original, request, response, installed, *, native_mode=None):
                                                  len(item["content"]), request["turnId"])
                 else:
                     from .native_context_checkpoint import verify_checkpoint
-                    verify_checkpoint(checkpoint_raw, body, base, request, response, native_mode)
+                    verify_checkpoint(checkpoint_raw, body, base, request, response, native_mode,
+                                      preflight=native_preflight)
                 require(row["payload"] == {"type": "context_window_refill_installed", **installed},
                         "Original native installed receipt differs")
                 matches += 1

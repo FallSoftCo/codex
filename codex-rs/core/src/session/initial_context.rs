@@ -12,6 +12,7 @@ use codex_protocol::AgentPath;
 #[derive(Clone)]
 pub(super) struct InitialContextMaterial {
     developer_sections: Vec<RenderedFragment>,
+    turn_sections: Vec<RenderedFragment>,
     context_window_hints: Vec<AnnotatedContent>,
     token_budget_path: Option<AgentPath>,
     recommended_plugins: Option<RenderedFragment>,
@@ -27,7 +28,7 @@ pub(super) struct InitialContextMaterial {
 pub(super) struct InitialContextTemplate {
     prefix: Vec<ResponseItem>,
     items: Vec<ResponseItem>,
-    snapshot: WorldStateSnapshot,
+    pub(super) snapshot: WorldStateSnapshot,
     window: Option<CapturedWindowContext>,
 }
 
@@ -112,6 +113,7 @@ impl Session {
                 }
             }
         }
+        let mut turn_sections = Vec::new();
         for contributor in &context_contributors {
             for fragment in contributor
                 .contribute_turn_context(TurnContextContributionInput {
@@ -124,7 +126,7 @@ impl Session {
                 })
                 .await
             {
-                developer_sections.push(fragment.into());
+                turn_sections.push(fragment.into());
             }
         }
         // This is full-context metadata. Steady-state context diffs should not re-emit it.
@@ -199,6 +201,7 @@ impl Session {
         };
         InitialContextMaterial {
             developer_sections,
+            turn_sections,
             context_window_hints,
             token_budget_path,
             recommended_plugins: recommended_plugin_candidates
@@ -211,10 +214,19 @@ impl Session {
 }
 
 impl InitialContextMaterial {
+    /// Reuse the same typed acquisition for steady-state emission and the
+    /// complete producer. Stateful contributors must not be sampled twice.
+    pub(super) fn turn_items(&self) -> Vec<ResponseItem> {
+        crate::context_manager::updates::build_rendered_message(self.turn_sections.clone())
+            .into_iter()
+            .collect()
+    }
+
     /// Execute all world/fragment callbacks during authorized acquisition, not
     /// during preview. Even an already-built WorldState can own live closures.
     pub(super) fn capture(&self, world_state: &WorldState) -> InitialContextTemplate {
         let mut developer_sections = self.developer_sections.clone();
+        developer_sections.extend(self.turn_sections.clone());
         let mut contextual_user_sections = Vec::<RenderedFragment>::with_capacity(2);
         let mut separate_developer_messages = Vec::new();
         let mut window = None;

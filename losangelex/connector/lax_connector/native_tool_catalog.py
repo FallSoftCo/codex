@@ -81,7 +81,7 @@ TOOLS = [
 ROLE = {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
 TOOLS += [
     spec("lax_native_edit_status",
-        "Read protected original path-claim, plan, consent and mutation receipts for this current work, including rejected coordination calls. Claim receipts are historical; coordination_act inspect reads the current claim without requiring its exact revision, while mutations retain exact revision CAS. Distinguishes a confirmed preflight rejection (no mutation admission) from pending/unknown or begun effects. Inspection grants no mutation and no automatic retry; missing records prove nothing.",
+        "Read protected original path-claim, plan, consent and mutation receipts for this current work, including rejected coordination calls. Claim receipts are historical; coordination_act inspect reads current ownership without requiring its exact revision, including an authorized collaborator in the same Goal/room and physical resource; reading grants no lease. Mutations retain exact owner and revision CAS. Authority-recorded rejected calls expose rejectionCode/rejectionEventId; select that original event with hollywood_execution_evidence for peer review. Older host-only rejections remain explicitly unshared. Distinguishes a confirmed preflight rejection (no mutation admission) from pending/unknown or begun effects. Inspection grants no mutation and no automatic retry; missing records prove nothing.",
         {"after":{"type":"string","pattern":"^[a-f0-9]{64}$"}},[]),
     spec("hollywood_withdraw_question",
         "Withdraw your own unanswered nonblocking question when verified facts make it obsolete. Retains the original question and an attributed reason; never supplies a human answer or accepts an approval.",
@@ -126,9 +126,9 @@ TOOLS += [
         ["agentId","deliveryIds"]),
     spec(
         "lax_provision_worker",
-        "Verified Global administrator: provision and start a full native peer on this enrolled host using the configured approved developer model account, intentionally inheriting that account when configured. The installer creates private per-purpose auth profiles; this is approved enrollment, not manual copying of unrelated profiles or use of application credentials. Application backend/account isolation remains unchanged. No model runs until addressed work.",
+        "Verified Global administrator: provision and start a full native peer on this enrolled host using the configured approved developer model account, intentionally inheriting that account when configured. The installer creates private per-purpose auth profiles; this is approved enrollment, not manual copying of unrelated profiles or use of application credentials. Application backend/account isolation remains unchanged. New native peers also inherit the current approved writer tool declaration unless an explicit approved override is supplied; identities, roles and credentials remain separate. Native C2 collaboration tools are independent of this optional provider declaration. Room observations may be assessed by the Reader; membership alone does not assign Writer work.",
         {"agentId": STRING, "serviceMemoryMaxBytes": {"type":"integer", "minimum":268435456, "maximum":1099511627776},
-         "toolProfileFile": {"type":"string","description":"Optional administrator-protected native writer tool/provider declaration on this execution host. Do not copy another agent or human configuration."}},
+         "toolProfileFile": {"type":"string","description":"Explicit override for the inherited approved writer tool/provider declaration on this execution host. Supply only an administrator-protected declaration; never copy another agent or human auth/configuration directory."}},
         ["agentId"],
     ),
     spec(

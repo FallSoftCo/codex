@@ -39,12 +39,14 @@ class AutomaticContextRefill:
             if json.loads(path.read_text())["state"] != "ack_written":
                 self.held = True
         self.idle = IdleContextRebuild(runner)
+        from .native_context_acquisition import NativeContextAcquisition
+        self.acquisition = NativeContextAcquisition(runner)
         # Startup observes the original receipt before attributing this hold.
         # It never clears independent reader/tool/effect failure causes.
 
     @property
     def blocked(self):
-        return self.held or self.recovering or self.pending is not None or self.idle.blocked
+        return self.held or self.recovering or self.pending is not None or self.idle.blocked or self.acquisition.blocked
 
     def policy(self):
         from .retained_context_packet import enabled, CAPABILITY

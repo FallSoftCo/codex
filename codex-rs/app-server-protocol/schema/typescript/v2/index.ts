@@ -124,6 +124,7 @@ export type { ContextCompactedNotification } from "./ContextCompactedNotificatio
 export type { ContextInputParams } from "./ContextInputParams";
 export type { ContextInputResponse } from "./ContextInputResponse";
 export type { ContextRefillPurpose } from "./ContextRefillPurpose";
+export type { ContextWindowAcquisitionReceipt } from "./ContextWindowAcquisitionReceipt";
 export type { ContextWindowInstalledParams } from "./ContextWindowInstalledParams";
 export type { ContextWindowInstalledResponse } from "./ContextWindowInstalledResponse";
 export type { ContextWindowInstalledStatus } from "./ContextWindowInstalledStatus";

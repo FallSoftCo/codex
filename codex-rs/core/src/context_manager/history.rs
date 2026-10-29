@@ -124,6 +124,8 @@ pub(crate) struct ContextManager {
     /// World-state comparison checkpoint. After compaction this may contain only
     /// extension metadata, with model-visible context still awaiting reinjection.
     world_state_baseline: Option<WorldStateSnapshot>,
+    /// Complete owned producer admitted at a native acquisition boundary.
+    native_context_producer: Option<serde_json::Value>,
 }
 
 struct SharedConversationHistory {
@@ -249,6 +251,7 @@ impl ContextManager {
             ),
             reference_context_item: None,
             world_state_baseline: None,
+            native_context_producer: None,
         }
     }
 
@@ -441,6 +444,9 @@ impl ContextManager {
     }
 
     pub(crate) fn set_reference_context_item(&mut self, item: Option<TurnContextItem>) {
+        if self.reference_context_item != item {
+            self.native_context_producer = None;
+        }
         self.reference_context_item = item;
     }
 
@@ -459,7 +465,7 @@ impl ContextManager {
         let (snapshot, fragments) =
             world_state.render_history_diff(self.world_state_baseline.as_ref(), self.raw_items());
         let rollout_item = self.world_state_item(&snapshot);
-        self.world_state_baseline = Some(snapshot);
+        self.set_world_state_baseline(snapshot);
         (fragments, rollout_item)
     }
 
@@ -489,7 +495,16 @@ impl ContextManager {
     }
 
     pub(crate) fn set_world_state_baseline(&mut self, snapshot: WorldStateSnapshot) {
+        self.native_context_producer = None;
         self.world_state_baseline = Some(snapshot);
+    }
+
+    pub(crate) fn native_context_producer(&self) -> Option<&serde_json::Value> {
+        self.native_context_producer.as_ref()
+    }
+
+    pub(crate) fn set_native_context_producer(&mut self, producer: Option<serde_json::Value>) {
+        self.native_context_producer = producer;
     }
 
     /// Borrow reconstruction data so maintenance can admit its size before copying.
@@ -498,9 +513,11 @@ impl ContextManager {
     }
 
     pub(crate) fn world_state_checkpoint(&self) -> Option<WorldStateItem> {
-        self.world_state_baseline
-            .clone()
-            .map(|snapshot| WorldStateItem::full(snapshot.into_object()))
+        self.world_state_baseline.clone().map(|snapshot| {
+            let mut item = WorldStateItem::full(snapshot.into_object());
+            item.native_context_producer = self.native_context_producer.clone();
+            item
+        })
     }
 
     pub(crate) fn set_token_usage_full(&mut self, context_window: i64) {
@@ -702,6 +719,7 @@ impl ContextManager {
             // running a full normalization pass.
             normalize::remove_corresponding_for(items, &removed.item);
             self.world_state_baseline = None;
+            self.native_context_producer = None;
         }
     }
 
@@ -724,6 +742,7 @@ impl ContextManager {
         self.history_version = self.history_version.saturating_add(1);
         self.reset_version = self.history_version;
         self.world_state_baseline = None;
+        self.native_context_producer = None;
     }
 
     /// Returns whether compaction changed Guardian's evidence policy, invalidating older reviews.
@@ -764,6 +783,7 @@ impl ContextManager {
             self.reset_version = self.history_version;
         }
         self.world_state_baseline = None;
+        self.native_context_producer = None;
         promoted
     }
 

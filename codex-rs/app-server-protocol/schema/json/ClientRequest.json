@@ -851,6 +851,10 @@
       "additionalProperties": false,
       "description": "Read-only measurement of the exact native context and selected data. This neither installs history nor grants permission for any execution.",
       "properties": {
+        "nextWindowId": {
+          "description": "Deterministic proposed target, rendered before review and reused by install.",
+          "type": "string"
+        },
         "operationId": {
           "type": "string"
         },
@@ -861,6 +865,10 @@
           "format": "uint64",
           "minimum": 0.0,
           "type": "integer"
+        },
+        "producerSha256": {
+          "description": "Exact complete producer binding, distinct from the selected-input packet.",
+          "type": "string"
         },
         "replacementItemCount": {
           "format": "uint64",
@@ -880,9 +888,11 @@
         }
       },
       "required": [
+        "nextWindowId",
         "operationId",
         "packetSha256",
         "prefixItemCount",
+        "producerSha256",
         "replacementItemCount",
         "replacementSha256",
         "replacementWireBytes",
@@ -990,6 +1000,14 @@
           "type": "boolean"
         },
         "lastStartedTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "producerSha256": {
+          "default": null,
+          "description": "Validated complete native material at this cut. Legacy or invalid producers yield None; history_version remains the rewrite generation.",
           "type": [
             "string",
             "null"

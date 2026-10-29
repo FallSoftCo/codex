@@ -124,7 +124,7 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
         **{k: profile[k] for k in ("binary", "interpreter", "pythonRoot", "model", "effort", "approvedModelAuthFile")},
         "nativeCollaborationChannel": str(channel)}
     for optional in ("environmentProfileFile", "serviceMemoryMaxBytes", "toolProfileFile",
-                     "contextRebuildEnabled", "automaticContextRefill", "nativeActionRetention", "manualSeedControl"):
+                     "contextRebuildEnabled", "automaticContextRefill", "nativeActionRetention", "manualSeedControl", "nativeRolloutTrace"):
         if optional in profile:
             spec[optional] = profile[optional]
     original(spec_path, spec)

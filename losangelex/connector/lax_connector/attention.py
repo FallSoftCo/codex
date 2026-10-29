@@ -155,7 +155,7 @@ class Attention:
             "responseMode": "same-agent-context-input",
             **({"responsePublication": receipt["attention"]["request"]["responsePublication"]}
                if "responsePublication" in receipt["attention"]["request"] else {}),
-            "instruction": "The question is durable and awaiting an authenticated human answer. Keep the unfinished outcome pending. You may finish this inference slice and handle other obligations; the answer becomes a new input in your existing context. Do not poll models or repeat the question.",
+            "instruction": "The question is durable and awaiting an authenticated human answer. Keep the unfinished outcome pending. If this Work must wait for this answer, save progress, read the current Work and use await_human_answers with this attentionId; a plain final message does not establish a durable wait. Other obligations may execute. The answer becomes a new input in your existing context. Do not poll models or repeat the question.",
         }
 
     async def wait(self, method, params, *, slot):

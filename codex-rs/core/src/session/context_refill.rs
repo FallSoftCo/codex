@@ -13,13 +13,11 @@ use crate::context_refill::ContextRefillHost;
 use crate::context_refill::validate_response;
 use crate::session::session::Session;
 use crate::session::step_context::StepContext;
-use crate::state::AutoCompactWindowIds;
 use crate::state::ReasoningEffortPin;
 use codex_analytics::CompactionPhase;
 use codex_analytics::CompactionReason;
 use codex_history::CompactedItem;
 use codex_history::CompactionResumeMetadata;
-use codex_history::ResponseItemEnvelope;
 use codex_history::RolloutItem;
 use codex_protocol::context_refill::*;
 use codex_protocol::error::CodexErr;
@@ -134,6 +132,13 @@ pub(crate) async fn read_window_state(
         window_id: state.auto_compact_window_ids().window_id.to_string(),
         history_version: state.history.history_version(),
         last_started_turn_id: state.last_started_turn_id.clone(),
+        producer_sha256: super::initial_context_producer::source_digest(
+            &state.history,
+            &sess.thread_id.to_string(),
+            &policy.context_id,
+            state.auto_compact_window_ids(),
+        )
+        .ok(),
         active_turn_id: active
             .as_ref()
             .and_then(|turn| turn.task.as_ref())
@@ -367,19 +372,43 @@ pub(super) async fn run(
     };
     let response = host_call(policy.host.refill(epoch, request.clone()), cancel).await?;
     live(policy.host.as_ref(), epoch, cancel)?;
+    let ids = super::initial_context_producer::target_ids(
+        sess.state.lock().await.auto_compact_window_ids(),
+        &policy.context_id,
+        &request.operation_id,
+        request.history_version,
+    );
     let world = sess
         .build_world_state_for_step(step, /*new_window*/ true)
         .await?;
-    let (updates, baseline) = sess
-        .build_initial_context_with_world_state(step, &world)
-        .await;
-    let mut replacement: Vec<ResponseItemEnvelope> =
-        crate::context_manager::updates::merge_world_state_updates(updates)
-            .into_iter()
-            .map(ResponseItemEnvelope::new)
-            .collect();
-    replacement =
-        super::context_prefix::stamp(sess, codex_history::NativeContextKind::Prefix, replacement);
+    let template = sess.collect_initial_context(step).await.capture(&world);
+    let (updates, baseline) = template
+        .render(&step.turn.sub_id, ids)
+        .map_err(|_| held())?;
+    let producer = match policy.evidence {
+        crate::context_refill::RetainedContextEvidence::IndexOnly => None,
+        crate::context_refill::RetainedContextEvidence::WholeItemsV1 => Some(
+            super::initial_context_producer::seal(
+                sess.thread_id.to_string(),
+                policy.context_id.clone(),
+                step.to_turn_context_item(),
+                step.to_turn_context_item(),
+                template,
+                ids,
+            )
+            .map_err(|_| held())?,
+        ),
+    };
+    let items = crate::context_manager::updates::merge_world_state_updates(updates)
+        .into_iter()
+        .collect();
+    let mut replacement = super::context_prefix::stamp_complete(
+        &sess.thread_id.to_string(),
+        &policy.context_id,
+        ids.window_id,
+        items,
+    )
+    .map_err(|_| held())?;
     let prefix_item_count = replacement.len();
     match policy.evidence {
         crate::context_refill::RetainedContextEvidence::IndexOnly => {
@@ -437,12 +466,10 @@ pub(super) async fn run(
             return Err(held());
         }
         let old_ids = state.auto_compact_window_ids();
-        let next = Uuid::now_v7();
-        let ids = AutoCompactWindowIds {
-            first_window_id: old_ids.first_window_id,
-            previous_window_id: Some(old_ids.window_id),
-            window_id: next,
-        };
+        let next = ids.window_id;
+        let mut world_checkpoint =
+            codex_protocol::protocol::WorldStateItem::full(baseline.clone().into_object());
+        world_checkpoint.native_context_producer = producer.clone();
         let number = state.auto_compact_window_number().saturating_add(1);
         let checkpoint = CompactedItem {
             message: String::new(),
@@ -465,9 +492,7 @@ pub(super) async fn run(
                             thread_id: sess.thread_id.to_string(),
                             context_id: policy.context_id.clone(),
                             mode: codex_history::NativeContextCheckpointMode::StepBoundary,
-                            world_state: codex_protocol::protocol::WorldStateItem::full(
-                                baseline.clone().into_object(),
-                            ),
+                            world_state: world_checkpoint,
                             reference_context: Some(step.to_turn_context_item()),
                         })
                     }
@@ -512,6 +537,7 @@ pub(super) async fn run(
         );
         state.restore_auto_compact_window(number, ids);
         state.history.set_world_state_baseline(baseline);
+        state.history.set_native_context_producer(producer);
         state.reasoning_effort_pin = ReasoningEffortPin::Compacted;
         (receipt, state.history.history_version())
     };

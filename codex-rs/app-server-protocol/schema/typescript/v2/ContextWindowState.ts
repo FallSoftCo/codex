@@ -7,4 +7,9 @@ import type { ContextRefillPurpose } from "./ContextRefillPurpose";
  * Read-only native identity cut for a future CAS preflight/replacement. Reading
  * it neither starts/aborts a turn nor acknowledges an unsettled operation.
  */
-export type ContextWindowState = { threadId: string, contextId: string, purpose: ContextRefillPurpose, windowId: string, historyVersion: bigint, lastStartedTurnId: string | null, activeTurnId: string | null, idle: boolean, heldOperationId: string | null, };
+export type ContextWindowState = { threadId: string, contextId: string, purpose: ContextRefillPurpose, windowId: string, historyVersion: bigint, lastStartedTurnId: string | null,
+/**
+ * Validated complete native material at this cut. Legacy or invalid
+ * producers yield None; history_version remains the rewrite generation.
+ */
+producerSha256: string | null, activeTurnId: string | null, idle: boolean, heldOperationId: string | null, };

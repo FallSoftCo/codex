@@ -88,6 +88,8 @@ class ContextRunner:
             if purpose == "writer"
             else None,
             isolated_process_group=True,
+            rollout_trace_root=self.state / "native-traces"
+            if self.config.get("nativeRolloutTrace", False) else None,
         )
 
     def trace(self, event, value):
@@ -163,8 +165,9 @@ class ContextRunner:
             return result
         accepted = {"request": payload, "state": "accepted", "receipt": result}
         current = json.loads(journal.read_text())
-        if "bindRecovery" in current:
-            accepted["bindRecovery"] = current["bindRecovery"]
+        for recovery in ("bindRecovery", "terminalRecovery"):
+            if recovery in current:
+                accepted[recovery] = current[recovery]
         saved(journal, accepted)
         return result
 
@@ -361,8 +364,6 @@ class ContextRunner:
         from .automatic_refill_recovery import startup as reconcile_refill
 
         await reconcile_refill(self.automatic)
-        if self.inbox:
-            await self.inbox.recover()
         if result.get("inferenceCompletion") != "hostTool":
             raise RuntimeError("Native host-tool inference lifecycle was not installed")
         verify(settings["toolPolicy"], result)
@@ -411,6 +412,8 @@ class ContextRunner:
             bind_contract.append("human-reviewed-native-seed/v1")
         elif self.purpose == "writer" and self.config.get("manualSeedControl") == 0:
             bind_contract.append("human-reviewed-native-seed/explicit-disabled-v1")
+        if self.purpose == "reader":
+            bind_contract.append("explicit-reader-failure-review/v1")
         binding = await self.request(
             "bind",
             {"runtimeProtocol": "lax-purpose-runtime/v3", "workScheduling": 2, "toolCompletion": 1,
@@ -423,6 +426,7 @@ class ContextRunner:
             ).hexdigest(),
             turn="bootstrap",
         )
+        self.reader_failure_review = binding.get("readerFailureReview", 0)
         if retained:
             if (binding.get("nativeActionRetention") != 1
                     or binding.get("nativeIdleContextReplacement") != 1):
@@ -569,7 +573,12 @@ class ContextRunner:
                 and old.get("nativeTurn") not in recovered_preturn):
             from .provider_rejection_recovery import original_resolution
 
-            resolved = await original_resolution(self, old)
+            resolved = False
+            if self.purpose == "reader":
+                from .reader_failure_recovery import original_resolution as reviewed_reader_resolution
+                resolved = await reviewed_reader_resolution(self, old)
+            if not resolved:
+                resolved = await original_resolution(self, old)
             if not resolved and not self.failed and self.purpose in ("reader", "responder"):
                 from .automatic_refill_failed_resolution import original_resolution as refill_resolution
                 resolved = await refill_resolution(self, old)
@@ -614,6 +623,11 @@ class ContextRunner:
                     "modelsStarted": 0,
                 },
             )
+
+        # Settle the original native lifetime before deciding whether an old
+        # input view has an unresolved adoption or a closed pre-admission fence.
+        if self.inbox:
+            await self.inbox.recover()
 
     async def submitted(self, method, params, success):
         await self.automatic.submitted(method, params, success)
@@ -798,9 +812,9 @@ class ContextRunner:
                     response["turnControl"] = "complete"
                 return response
             except Exception as error:
-                from .errors import ToolValidationError
+                from .errors import ToolValidationError, HttpFailure
                 local_validation = isinstance(error, ToolValidationError)
-                details = error.public_details() if local_validation else {}
+                details = error.public_details() if isinstance(error, (ToolValidationError, HttpFailure)) else {}
                 self.trace("tool_error", {"tool": name, "error": str(error), **details})
                 return {
                     "success": False,
@@ -814,7 +828,8 @@ class ContextRunner:
                                     "instruction": "Correct the rejected input; nothing was dispatched."
                                         if local_validation else
                                         "Inspect current material; uncertain operations require original receipt reconciliation.",
-                                    **({"dispatched": False, **details} if local_validation else {}),
+                                    **({"dispatched": False} if local_validation else {}),
+                                    **details,
                                 }
                             ),
                         }
@@ -1275,11 +1290,16 @@ class ContextAgent:
                 )
             return await r.json()
 
-    async def serve(self, *, reconcile_only=False, rebuild_only=False,
-                    resume_unsettled_turn=None, provider_rejection_acknowledgements=None):
+    async def serve(self, *, reconcile_only=False, rebuild_only=False, acquire_context_operation=None,
+                    resume_unsettled_turn=None, provider_rejection_acknowledgements=None,
+                    resume_failed_reader_turn=None):
         # Only this explicit operator mode can resume a known pre-data idle
         # snapshot rejection. Normal service starts remain observation-only.
         self.rebuild_only = rebuild_only
+        self.acquire_context_operation = acquire_context_operation
+        if acquire_context_operation:
+            if set(self.runners) != {"writer"} or not (self.runners["writer"].state / "context.json").exists():
+                raise RuntimeError("Native acquisition requires an existing, explicitly selected Writer")
         self.reconcile_only = reconcile_only
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -1288,6 +1308,9 @@ class ContextAgent:
             try:
                 for runner in self.runners.values():
                     await runner.start()
+                if acquire_context_operation:
+                    await self.runners["writer"].automatic.acquisition.run(acquire_context_operation)
+                    return
                 if rebuild_only:
                     if any(r.failed for r in self.runners.values()):
                         raise RuntimeError(
@@ -1316,6 +1339,9 @@ class ContextAgent:
                     )
                     return
                 if reconcile_only:
+                    if resume_failed_reader_turn:
+                        from .reader_failure_recovery import acknowledge as acknowledge_reader_failure
+                        await acknowledge_reader_failure(self.runners["reader"], resume_failed_reader_turn)
                     if provider_rejection_acknowledgements:
                         from .provider_rejection_recovery import acknowledge
                         for purpose, identity in provider_rejection_acknowledgements.items():
@@ -1575,13 +1601,23 @@ def main():
     operation = parser.add_mutually_exclusive_group()
     operation.add_argument("--reconcile-only", action="store_true")
     operation.add_argument("--rebuild-context-only", action="store_true")
+    operation.add_argument("--acquire-native-context-only", metavar="OPERATION",
+                           help="Explicit one-use idle collection; repeat identity inspects only, never recollects")
     parser.add_argument("--purpose", choices=sorted(ROLES))
     parser.add_argument("--resume-unsettled-native-turn",
                         help="Explicit same-Work recovery; requires --reconcile-only and writer scope")
+    parser.add_argument("--resume-failed-reader-turn",
+                        help="Explicit reviewed interpretation recovery; requires --reconcile-only and --purpose reader")
     parser.add_argument("--acknowledge-provider-rejection", action="append", default=[],
                         metavar="PURPOSE:NATIVE_TURN",
                         help="Explicit metadata-only acknowledgement of known pre-inference provider rejection")
     args = parser.parse_args()
+    if args.resume_failed_reader_turn and (
+            not args.reconcile_only or args.purpose != "reader"
+            or args.resume_unsettled_native_turn or args.acknowledge_provider_rejection):
+        parser.error("--resume-failed-reader-turn requires only --reconcile-only and --purpose reader")
+    if args.acquire_native_context_only and args.purpose != "writer":
+        parser.error("--acquire-native-context-only requires --purpose writer")
     acknowledgements = {}
     for entry in args.acknowledge_provider_rejection:
         purpose, separator, identity = entry.partition(":")
@@ -1597,8 +1633,10 @@ def main():
     asyncio.run(
         ContextAgent(json.loads(args.config.read_text()), purpose=args.purpose).serve(
             reconcile_only=args.reconcile_only, rebuild_only=args.rebuild_context_only,
+            acquire_context_operation=args.acquire_native_context_only,
             resume_unsettled_turn=args.resume_unsettled_native_turn,
-            provider_rejection_acknowledgements=acknowledgements
+            provider_rejection_acknowledgements=acknowledgements,
+            resume_failed_reader_turn=args.resume_failed_reader_turn
         )
     )
 

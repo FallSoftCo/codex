@@ -20,6 +20,7 @@ pub(crate) struct RolloutReconstruction {
     pub(super) reference_context_item: Option<TurnContextItem>,
     pub(super) turn_attribution: Option<TurnAttribution>,
     pub(super) world_state_baseline: Option<WorldStateSnapshot>,
+    pub(super) native_context_producer: Option<serde_json::Value>,
     pub(super) window_number: u64,
     pub(super) first_window_id: Option<Uuid>,
     pub(super) previous_window_id: Option<Uuid>,
@@ -605,9 +606,19 @@ impl ContextManager {
             .and_then(|metadata| metadata.native_context.as_ref())
             .filter(|native| native.supported())
             .map(|native| WorldStateSnapshot::from(&native.world_state.state));
+        let mut native_context_producer = resume_metadata
+            .and_then(|metadata| metadata.native_context.as_ref())
+            .filter(|native| native.supported())
+            .and_then(|native| native.world_state.native_context_producer.clone());
         for item in world_state_replay {
             match item {
                 RolloutItem::Compacted(checkpoint) => {
+                    native_context_producer = checkpoint
+                        .resume_metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.native_context.as_ref())
+                        .filter(|native| native.supported())
+                        .and_then(|native| native.world_state.native_context_producer.clone());
                     world_state_baseline = checkpoint
                         .resume_metadata
                         .as_ref()
@@ -616,9 +627,11 @@ impl ContextManager {
                         .map(|native| WorldStateSnapshot::from(&native.world_state.state));
                 }
                 RolloutItem::WorldState(world_state) if world_state.full => {
+                    native_context_producer = world_state.native_context_producer.clone();
                     world_state_baseline = Some(WorldStateSnapshot::from(&world_state.state));
                 }
                 RolloutItem::WorldState(world_state) => {
+                    native_context_producer = world_state.native_context_producer.clone();
                     let Some(baseline) = world_state_baseline.as_mut() else {
                         tracing::warn!("ignored world-state patch without a full snapshot");
                         continue;
@@ -656,6 +669,7 @@ impl ContextManager {
             reference_context_item,
             turn_attribution,
             world_state_baseline,
+            native_context_producer,
             window_number: window.number,
             first_window_id: window.first_id,
             previous_window_id: window.previous_id,

@@ -1185,6 +1185,13 @@ class ContextWindowState(BaseModel):
     history_version: Annotated[int, Field(alias="historyVersion", ge=0)]
     idle: bool
     last_started_turn_id: Annotated[str | None, Field(alias="lastStartedTurnId")] = None
+    producer_sha256: Annotated[
+        str | None,
+        Field(
+            alias="producerSha256",
+            description="Validated complete native material at this cut. Legacy or invalid producers yield None; history_version remains the rewrite generation.",
+        ),
+    ] = None
     purpose: ContextRefillPurpose
     thread_id: Annotated[str, Field(alias="threadId")]
     window_id: Annotated[str, Field(alias="windowId")]
@@ -8267,14 +8274,38 @@ class ContentItem(
     )
 
 
-class ContextWindowPreflight(BaseModel):
+class ContextWindowAcquisitionReceipt(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
     )
     operation_id: Annotated[str, Field(alias="operationId")]
+    producer_sha256: Annotated[str, Field(alias="producerSha256")]
+    source_state: Annotated[ContextWindowState, Field(alias="sourceState")]
+
+
+class ContextWindowPreflight(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
+    next_window_id: Annotated[
+        str,
+        Field(
+            alias="nextWindowId",
+            description="Deterministic proposed target, rendered before review and reused by install.",
+        ),
+    ]
+    operation_id: Annotated[str, Field(alias="operationId")]
     packet_sha256: Annotated[str, Field(alias="packetSha256")]
     prefix_item_count: Annotated[int, Field(alias="prefixItemCount", ge=0)]
+    producer_sha256: Annotated[
+        str,
+        Field(
+            alias="producerSha256",
+            description="Exact complete producer binding, distinct from the selected-input packet.",
+        ),
+    ]
     replacement_item_count: Annotated[int, Field(alias="replacementItemCount", ge=0)]
     replacement_sha256: Annotated[str, Field(alias="replacementSha256")]
     replacement_wire_bytes: Annotated[int, Field(alias="replacementWireBytes", ge=0)]

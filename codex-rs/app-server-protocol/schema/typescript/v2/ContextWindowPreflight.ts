@@ -7,4 +7,12 @@ import type { ContextWindowState } from "./ContextWindowState";
  * Read-only measurement of the exact native context and selected data. This
  * neither installs history nor grants permission for any execution.
  */
-export type ContextWindowPreflight = { state: ContextWindowState, operationId: string, packetSha256: string, replacementSha256: string, prefixItemCount: bigint, replacementItemCount: bigint, replacementWireBytes: bigint, };
+export type ContextWindowPreflight = { state: ContextWindowState, operationId: string,
+/**
+ * Deterministic proposed target, rendered before review and reused by install.
+ */
+nextWindowId: string,
+/**
+ * Exact complete producer binding, distinct from the selected-input packet.
+ */
+producerSha256: string, packetSha256: string, replacementSha256: string, prefixItemCount: bigint, replacementItemCount: bigint, replacementWireBytes: bigint, };

@@ -1,3 +1,41 @@
+# Native Writer context preflight
+
+`thread/contextWindow/read` includes nullable `state.producerSha256`, emitted
+only after full native producer/source/reference/world/template validation.
+Missing on an old receipt means absent, not an authorization upgrade. Together
+with the native identity and rewrite `historyVersion`, it binds the inspected
+material. Explicit acquisition appends, without advancing the rewrite generation;
+its absent-to-validated producer transition invalidates the pre-acquisition cut,
+including on cold reopen. Preflight binds the same producer digest and refuses
+old/missing/foreign material without collecting. No additional counter or ledger
+is introduced.
+
+Native Writer context-window preflight uses a complete owned producer captured
+at authorized step boundaries, not a concatenation of incremental declarations.
+`thread/contextWindow/preflight` returns `nextWindowId` and `producerSha256` along
+with packet/replacement hashes and model-visible wire byte counts. The proposed
+target is deterministic for that exact cut; `replaceIdle` revalidates and installs
+it without collector or provider calls. Legacy rollouts without a valid complete
+producer require an authorized acquisition before preflight. The explicit
+experimental `thread/contextWindow/acquireIdle` takes `{threadId,state,operationId}` and
+returns `{state}`. Unlike preflight it can discover tools/call context collectors
+(including configured legacy Notes hints) and append native context/checkpoints.
+The enrolled owner must journal this distinct mutating request before dispatch,
+and admit it only for an idle original turn with no held operation. It never
+submits a human/model turn, samples a provider, accepts Work or replaces a window.
+It refuses an already-valid producer before collection. Read the returned fresh
+cut, prepare a NEW packet and preflight/review it before `replaceIdle`. A queued
+refresh must not silently collect during preflight or invent a priming turn.
+An unknown acquisition reply stays host-held. Pure `thread/contextWindow/readAcquisition`
+takes `{threadId,operationId}` and returns `{state,receipt}` only from a valid
+complete native checkpoint with that original operation. The receipt contains
+`operationId`, the exact `sourceState` and `producerSha256`; it survives cold
+rollout reconstruction. The owner must also independently verify the original
+append/identity. Missing/partial/stale/foreign data stays held, not hash-only
+released. Never automatically repeat collectors. These fields
+are native foundations, not human review UI, all-purpose support, token usage or
+permission to execute/replay work. Unknown installation receipts stay held.
+
 # Thread memory summary (experimental)
 
 `thread/memory/read` takes `{threadId}` for a loaded thread and returns

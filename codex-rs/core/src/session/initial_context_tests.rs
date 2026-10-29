@@ -132,7 +132,7 @@ async fn cold_initial_context_render_never_reinvokes_world_extension_callbacks()
         assert_eq!(wire(&cold, &turn_id, ids), expected);
         assert_eq!(calls.load(Ordering::SeqCst), after_broken_control);
     }
-    let mut forged = cold.clone();
+    let mut forged = cold;
     forged.window = Some(CapturedWindowContext {
         index: forged.items.len() + 1,
         agent_path: AgentPath::root(),

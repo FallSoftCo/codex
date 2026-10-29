@@ -59,10 +59,28 @@ pub(crate) async fn preflight(
         .ok_or_else(|| {
             CodexErr::InvalidRequest("native core context has no original turn".into())
         })?;
-    let prefix = super::context_prefix::read(
+    let producer_sha256 = super::initial_context_producer::source_digest(
         &state.history,
         &sess.thread_id.to_string(),
         &policy.context_id,
+        state.auto_compact_window_ids(),
+    )
+    .map_err(|error| CodexErr::InvalidRequest(format!("native prefix unavailable: {error}")))?;
+    if expected.producer_sha256.as_ref() != Some(&producer_sha256) {
+        return Err(changed());
+    }
+    let ids = super::initial_context_producer::target_ids(
+        state.auto_compact_window_ids(),
+        &policy.context_id,
+        &response.operation_id,
+        observed.history_version,
+    );
+    let prefix = super::initial_context_producer::prefix(
+        &state.history,
+        &sess.thread_id.to_string(),
+        &policy.context_id,
+        &turn_id,
+        ids,
     )
     .map_err(|error| CodexErr::InvalidRequest(format!("native prefix unavailable: {error}")))?;
     let request = ContextWindowRefillParams {
@@ -93,6 +111,8 @@ pub(crate) async fn preflight(
     let result = ContextWindowPreflight {
         state: observed,
         operation_id: response.operation_id.clone(),
+        next_window_id: ids.window_id.to_string(),
+        producer_sha256,
         packet_sha256: format!(
             "{:x}",
             Sha256::digest(serde_json::to_vec(&packet).map_err(|_| changed())?)
@@ -129,15 +149,12 @@ pub(crate) async fn replace_idle(
     use super::context_refill::live;
     use crate::context_manager::HistoryReplacement;
     use crate::context_refill::encoded_size;
-    use crate::state::AutoCompactWindowIds;
     use crate::state::ReasoningEffortPin;
     use codex_history::CompactedItem;
     use codex_history::CompactionResumeMetadata;
     use codex_history::NativeContextCheckpoint;
     use codex_history::NativeContextCheckpointMode;
-    use codex_protocol::protocol::WorldStateItem;
     use std::sync::Arc;
-    use uuid::Uuid;
 
     if !expected.state.idle
         || expected.state.active_turn_id.is_some()
@@ -184,10 +201,30 @@ pub(crate) async fn replace_idle(
             reason: ContextWindowRefillReason::ExplicitRequest,
             phase: ContextWindowRefillPhase::PostTurn,
         };
-        let prefix = super::context_prefix::read(
+        let ids = super::initial_context_producer::target_ids(
+            state.auto_compact_window_ids(),
+            &policy.context_id,
+            &response.operation_id,
+            cut.history_version,
+        );
+        if ids.window_id.to_string() != expected.next_window_id
+            || super::initial_context_producer::source_digest(
+                &state.history,
+                &sess.thread_id.to_string(),
+                &policy.context_id,
+                state.auto_compact_window_ids(),
+            )
+            .map_err(|_| changed())?
+                != expected.producer_sha256
+        {
+            return Err(changed());
+        }
+        let prefix = super::initial_context_producer::prefix(
             &state.history,
             &sess.thread_id.to_string(),
             &policy.context_id,
+            &request.turn_id,
+            ids,
         )
         .map_err(|_| changed())?;
         let replacement = crate::context_retained_actions::validate(&request, &response, &prefix)
@@ -205,12 +242,9 @@ pub(crate) async fn replace_idle(
             .ok_or_else(changed)?
             .clone();
         let old = state.auto_compact_window_ids();
-        let next = Uuid::now_v7();
-        let ids = AutoCompactWindowIds {
-            first_window_id: old.first_window_id,
-            previous_window_id: Some(old.window_id),
-            window_id: next,
-        };
+        let next = ids.window_id;
+        let world_checkpoint = state.history.world_state_checkpoint().ok_or_else(changed)?;
+        let producer = world_checkpoint.native_context_producer.clone();
         let number = state.auto_compact_window_number().saturating_add(1);
         let checkpoint = CompactedItem {
             message: String::new(),
@@ -230,7 +264,7 @@ pub(crate) async fn replace_idle(
                     thread_id: sess.thread_id.to_string(),
                     context_id: policy.context_id.clone(),
                     mode: NativeContextCheckpointMode::IdleRequest,
-                    world_state: WorldStateItem::full(baseline.clone().into_object()),
+                    world_state: world_checkpoint,
                     reference_context: Some(reference.clone()),
                 }),
                 multi_agent_version: sess.multi_agent_version(),
@@ -279,6 +313,7 @@ pub(crate) async fn replace_idle(
         );
         state.restore_auto_compact_window(number, ids);
         state.history.set_world_state_baseline(baseline);
+        state.history.set_native_context_producer(producer);
         state.reasoning_effort_pin = ReasoningEffortPin::Compacted;
         (receipt, state.history.history_version())
     };

@@ -17,11 +17,15 @@ from .errors import HttpFailure
 
 async def inspect_rejected(idle, path):
     r = idle.runner
-    require(getattr(r.agent, "rebuild_only", False),
+    require((getattr(r.agent, "rebuild_only", False)
+             or getattr(r.agent, "acquire_context_operation", None)),
             "Pre-snapshot retry requires explicit --rebuild-context-only")
     original_bytes = path.read_bytes()
     operation = json.loads(original_bytes)
     from .idle_prefix_rejection import PREFIX_REFUSAL, inspect_prefix_rejected
+    from .native_context_acquisition import PRODUCER_REFUSAL
+    if operation.get("holdReason") == PRODUCER_REFUSAL:
+        return await inspect_prefix_rejected(idle, path, refusal=PRODUCER_REFUSAL)
     if operation.get("holdReason") == PREFIX_REFUSAL:
         return await inspect_prefix_rejected(idle, path)
     from .idle_action_recovery import ACTION_PENDING, inspect_actions_settled

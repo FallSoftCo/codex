@@ -1,6 +1,15 @@
 """Stable purpose contracts for one agent's three native contexts."""
 
-COMMON = """Canonical assigned Work is a distinct execution responsibility. When a pending input
+COMMON = """An accept_work ID is an internal context responsibility, not a canonical
+Hollywood Goal Work ID. Its exact materialDomain is lax.context-responsibility/v1.
+Progress and complete_work settle that responsibility; they do not satisfy formal
+Goal criteria. A canonicalWorkReference links an assigned responsibility to its
+actual Hollywood Work. Native Goals require criterion-bound canonical Work and
+normal report/review acceptance even when one agent performs every step. Preserve
+the overall parent responsibility while its canonical steps execute; awaiting
+Goal results releases this Writer so those distinct assignments can run. Use
+simple direct responsibilities without an artificial Goal when none is required.
+Canonical assigned Work is a distinct execution responsibility. When a pending input
 contains canonicalAssignment, reader must accept_work for it; never fold it into
 a parent task or answer it as completed. This includes finite Work assigned to
 this same agent. Canonical finite Work scheduling is distinct from self-addressed
@@ -142,7 +151,12 @@ after correcting that rejection, a fresh native operation can be authorized.
 A rejected proposed permit ID is not an accepted permit. Missing records alone
 are not evidence of no effect. No inspection authorizes an automatic retry.
 A nonblocking human question is not an execution approval and does not by itself
-block otherwise authorized edits. Preserve genuinely unresolved human decisions.
+block otherwise authorized edits. When this Work must wait for its answer, save
+progress, read the current Work, then use await_human_answers with the original
+attentionId(s). A waiting receipt ends this inference cleanly and preserves this
+Work; other Work may execute. An ordinary final message is not a durable wait.
+The Reader interprets authenticated answers before this same Work may resume.
+Preserve genuinely unresolved human decisions.
 Distinguish pre-dispatch rejection from an uncertain dispatched mutation.
 In the current native implementation, the exact error "protected patch-preflight
 port unavailable" is raised before bridge dispatch, before a permit exists and
@@ -246,14 +260,14 @@ def tools(purpose,enable_rebuild=False,*,native_action_retention=0):
                {"roomId":ID,"after":{"type":"integer","minimum":0},
                 "before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":20},
                 "view":{"type":"string","enum":["conversation","activity","all"]}},["roomId"]),
-          spec("record_room_observation","Record a fully read passive observation's relevance without a reply. Optionally amend an exact unfinished responsibility after reading it; never replaces objective or steers the writer.",
+          spec("record_room_observation","Record a fully read passive observation's relevance without a reply. Omit workId/workRevision to retain the observation without changing Work. A private observation cannot be attached to a public or different private conversation's responsibility; preserve its source audience. An optional compatible Work update never replaces the objective or steers the Writer.",
                {"observationId":ID,"body":S,"workId":ID,"workRevision":{"type":"integer","minimum":1}},
                ["observationId","body"]),
           spec("initiate_role_work","Initiate bounded native work from a fully read ordinary room observation under the exact current administrator-enrolled ongoing role. A message grants no authority. Do not duplicate unfinished work or act on irrelevant/unchanged facts; private observations cannot use this path.",
                {"observationId":ID,"roleRevision":{"type":"integer","minimum":1},
                 "objective":S,"acceptance":S,"body":S},
                ["observationId","roleRevision","objective","acceptance","body"]),
-          spec("accept_work","Accept an input as continuing execution work; retain its final response pending evidence.",
+          spec("accept_work","Accept an input as an internal context responsibility, not a canonical Goal Work record; retain its final response pending evidence. Canonical assignments remain distinct and expose canonicalWorkReference.",
                {"inputId":ID,"objective":S,"acceptance":S},["inputId","objective","acceptance"]),
           spec("context_writer_evidence_read","Read this agent\'s original Writer native evidence after Hollywood authorization. Omit itemId for complete index pages; supply itemId for exact serialized item chunks. Follow nextRead; nonzero item offset requires prior sha256. Read only, no Writer/model startup or effect replay. Host ownership is verified; no cross-host filesystem access.",
                {"inputId":ID,"pageOffset":{"type":"integer","minimum":0},"itemId":{"type":"string","minLength":1,"maxLength":128},"offset":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}},["inputId"]),
@@ -300,6 +314,8 @@ def tools(purpose,enable_rebuild=False,*,native_action_retention=0):
                     "contextOperationIds":{"type":"array","items":{"type":"string","minLength":1,"maxLength":128},"maxItems":8}},
                     "required":["version","deliveryId","eventIds","contextOperationIds"],"additionalProperties":False}},
                ["workId","recipientId","body"]),
+          spec("await_human_answers","Suspend this Work on exact original nonblocking Hollywood questions. Save progress first and read current Work. A waiting receipt ends this inference; answers must be interpreted by the Reader before same-Work execution resumes. No model polling or approval inferred.",
+               {"workId":ID,"attentionIds":{"type":"array","items":ID,"minItems":1,"maxItems":8}},["workId","attentionIds"]),
           spec("await_goal_results","Wait for current actionable Goal review or terminal facts sourced from this original responsibility. New current reports/uncertainty or final Goal state resume the same work once per changed frontier. Already-actionable review cannot be yielded. Waiting never accepts, assigns or executes Goal work.",
                {"workId":ID,"goalIds":{"type":"array","items":ID,"minItems":1,"maxItems":8}},["workId","goalIds"]),
           spec("await_peer_results","Suspend the current work on outstanding peer prerequisites. If waiting, finish this inference; actual peer results resume the original work through the reader without model polling.",
@@ -332,6 +348,6 @@ def tools(purpose,enable_rebuild=False,*,native_action_retention=0):
 ACTIONS={"review_writer_outcome":"review_writer_outcome","context_selection":"selection","retain_context_input":"select","request_context_rebuild":"rebuild_request","context_read":"snapshot","context_material_read":"read","accept_work":"accept","prepare_response":"answer",
          "record_progress":"progress","complete_work":"complete",
          "propose_communication":"announce","publish_response":"publish",
-         "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers","await_goal_results":"wait_goals",
+         "suppress_optional":"suppress","request_peer":"peer_request","await_peer_results":"wait_peers","await_goal_results":"wait_goals","await_human_answers":"wait_human",
          "apply_peer_result":"peer_result","apply_work_update":"amend","room_directory":"directory","provide_response_material":"response_material",
          "record_room_observation":"observe","initiate_role_work":"initiative","hollywood_rooms":"room_list","hollywood_read_room":"room_history"}

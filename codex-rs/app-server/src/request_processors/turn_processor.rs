@@ -278,6 +278,48 @@ impl TurnRequestProcessor {
             .map(|response| Some(response.into()))
     }
 
+    pub(crate) async fn thread_context_window_acquire_idle(
+        &self,
+        request_id: &ConnectionRequestId,
+        params: ThreadContextWindowAcquireIdleParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (_, thread) = self.load_thread(&params.thread_id).await?;
+        let epoch =
+            crate::context_refill::request_owner_epoch(&self.outgoing, request_id.connection_id)
+                .await?;
+        let state = thread
+            .acquire_idle_canonical_context(epoch, params.state, params.operation_id)
+            .await
+            .map_err(|err| {
+                invalid_request(format!("native idle acquisition refused or held: {err}"))
+            })?;
+        Ok(Some(
+            ThreadContextWindowAcquireIdleResponse { state }.into(),
+        ))
+    }
+
+    pub(crate) async fn thread_context_window_read_acquisition(
+        &self,
+        request_id: &ConnectionRequestId,
+        params: ThreadContextWindowReadAcquisitionParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (_, thread) = self.load_thread(&params.thread_id).await?;
+        let epoch =
+            crate::context_refill::request_owner_epoch(&self.outgoing, request_id.connection_id)
+                .await?;
+        let (state, receipt) = thread
+            .read_canonical_context_acquisition(epoch, params.operation_id)
+            .await
+            .map_err(|err| {
+                invalid_request(format!(
+                    "native acquisition observation refused or held: {err}"
+                ))
+            })?;
+        Ok(Some(
+            ThreadContextWindowReadAcquisitionResponse { state, receipt }.into(),
+        ))
+    }
+
     pub(crate) async fn thread_settings_update(
         &self,
         request_id: &ConnectionRequestId,

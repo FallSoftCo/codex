@@ -1456,6 +1456,24 @@ impl Session {
         self.new_default_turn_for(TurnContextBuildMode::Full).await
     }
 
+    /// Explicit idle acquisition uses original attribution, not a fabricated turn.
+    pub(super) async fn initial_context_acquisition_context(
+        &self,
+        original_turn: String,
+    ) -> Arc<TurnContext> {
+        let configuration = self.default_turn_configuration().await;
+        let environments = self.services.turn_environments.snapshot().await;
+        Box::pin(self.new_turn_context_from_configuration(
+            original_turn,
+            configuration,
+            environments,
+            NewTurnContextOptions::default(),
+            TurnContextBuildMode::Full,
+            self.git_enrichment_policy,
+        ))
+        .await
+    }
+
     /// Captures current recording settings without discovering skills.
     /// This context must not be used to capture or execute a step.
     pub(crate) async fn new_inject_items_context(&self) -> Arc<TurnContext> {

@@ -3,6 +3,19 @@ use pretty_assertions::assert_eq;
 use serde_json::json;
 
 #[test]
+fn legacy_window_state_has_no_validated_producer_identity() {
+    let mut legacy = json!({
+        "threadId":"thread", "contextId":"context", "purpose":"writer",
+        "windowId":"window", "historyVersion":1, "lastStartedTurnId":"turn",
+        "activeTurnId":null, "idle":true, "heldOperationId":null
+    });
+    let decoded: ContextWindowState = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(decoded.producer_sha256, None);
+    legacy["producerSha256"] = json!(null);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+}
+
+#[test]
 fn policy_requires_explicit_binding_and_rejects_unknown_authority() {
     let policy = json!({"type":"canonical","contextId":"context","purpose":"writer"});
     assert_eq!(

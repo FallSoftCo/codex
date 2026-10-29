@@ -191,6 +191,8 @@ async fn actual_idle_preflight_is_repeatable_read_only_and_refuses_stale_or_inva
     assert!(first.preflight.prefix_item_count > 0);
     assert!(first.preflight.replacement_item_count > first.preflight.prefix_item_count);
     assert_eq!(first.preflight.packet_sha256.len(), 64);
+    assert_eq!(first.preflight.producer_sha256.len(), 64);
+    assert_ne!(first.preflight.next_window_id, original.window_id);
     let mut stale = original.clone();
     stale.history_version += 1;
     refuse(&mut rpc, &thread.id, &stale, &data).await?;

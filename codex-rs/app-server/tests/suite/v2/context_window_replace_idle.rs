@@ -93,6 +93,7 @@ fn check_transaction(bytes: &[u8], receipt: &ContextWindowInstalledParams) -> Re
             .is_some_and(|state| !state.is_empty())
     );
     assert!(native["reference_context"].is_object());
+    assert!(native["world_state"]["native_context_producer"].is_object());
     assert_eq!(
         records[index + 2]["payload"]["type"],
         "context_window_refill_installed"
@@ -118,6 +119,258 @@ fn check_transaction(bytes: &[u8], receipt: &ContextWindowInstalledParams) -> Re
     Ok(())
 }
 
+#[tokio::test]
+async fn legacy_idle_queued_refresh_explicitly_acquires_without_a_priming_turn() -> Result<()> {
+    let server = responses::start_mock_server().await;
+    let mock = responses::mount_sse_once(
+        &server,
+        responses::sse(vec![
+            responses::ev_assistant_message("original", "original task response"),
+            responses::ev_completed("one"),
+        ]),
+    )
+    .await;
+    let home = TempDir::new()?;
+    MockResponsesConfig::new(&server.uri())
+        .with_provider_config("supports_websockets = false")
+        .write(home.path())?;
+    let mut rpc = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized()
+        .await?;
+    // Produce an actual old-format native history: no complete-producer policy.
+    // That original user turn is not repeated or used to prime the new policy.
+    let started = rpc.start_thread(ThreadStartParams::default()).await?;
+    let thread = &started.thread.id;
+    begin(&mut rpc, thread).await?;
+    let completed: TurnCompletedNotification =
+        timeout(WAIT, rpc.read_notification("turn/completed")).await??;
+    assert_eq!(completed.turn.status, TurnStatus::Completed);
+    timeout(WAIT, rpc.shutdown_gracefully()).await??;
+    let path = started.thread.path.as_ref().unwrap();
+    let old = tokio::fs::read(path).await?;
+    assert!(!String::from_utf8_lossy(&old).contains("native_context_producer"));
+    let mut rpc = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized()
+        .await?;
+    let id = rpc
+        .send_thread_resume_request(ThreadResumeParams {
+            thread_id: thread.clone(),
+            automatic_context_refill: Some(policy()),
+            ..Default::default()
+        })
+        .await?;
+    let resumed: ThreadResumeResponse = timeout(WAIT, rpc.read_response(id)).await??;
+    assert_eq!(&resumed.thread.id, thread);
+    let original = state(&mut rpc, thread).await?;
+    assert_eq!(original.producer_sha256, None);
+    assert_eq!(
+        original.last_started_turn_id.as_deref(),
+        Some(completed.turn.id.as_str())
+    );
+    let queued = packet(&original);
+    // A queued rebuild must first refuse PURELY. No fake human input to escape it.
+    let before = tokio::fs::read(path).await?;
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/preflight",
+            Some(json!({
+                "threadId":thread,"state":original,"packet":queued
+            })),
+        )
+        .await?;
+    let error = timeout(
+        WAIT,
+        rpc.read_stream_until_error_message(RequestId::Integer(id)),
+    )
+    .await??;
+    assert!(error.error.message.contains("normal acquisition required"));
+    assert_eq!(tokio::fs::read(path).await?, before);
+    assert_eq!(mock.requests().len(), 1);
+    // Separately admitted collection, not a preflight fallback or model turn.
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/acquireIdle",
+            Some(json!({
+                "threadId":thread,"state":original,"operationId":"original-legacy-acquisition"
+            })),
+        )
+        .await?;
+    let mut acquired: ThreadContextWindowAcquireIdleResponse =
+        timeout(WAIT, rpc.read_response(id)).await??;
+    assert!(acquired.state.idle);
+    assert_eq!(
+        acquired.state.last_started_turn_id,
+        original.last_started_turn_id
+    );
+    assert_eq!(acquired.state.window_id, original.window_id);
+    assert_eq!(acquired.state.context_id, original.context_id);
+    // Collection appends; it is not a history rewrite. The validated producer
+    // identity, not a fabricated generation bump, binds the new native cut.
+    assert_eq!(acquired.state.history_version, original.history_version);
+    let producer_digest = acquired.state.producer_sha256.clone().unwrap();
+    assert_eq!(producer_digest.len(), 64);
+    assert!(
+        producer_digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    );
+    assert_eq!(mock.requests().len(), 1);
+    let acquired_bytes = tokio::fs::read(path).await?;
+    assert!(acquired_bytes.starts_with(&before));
+    // Appending acquired native material invalidates the original inspection
+    // cut without replacing the window or admitting a model turn.
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/preflight",
+            Some(json!({"threadId":thread,"state":original,"packet":queued})),
+        )
+        .await?;
+    let error = timeout(
+        WAIT,
+        rpc.read_stream_until_error_message(RequestId::Integer(id)),
+    )
+    .await??;
+    assert!(error.error.message.contains("native preflight refused"));
+    assert_eq!(tokio::fs::read(path).await?, acquired_bytes);
+    assert_eq!(mock.requests().len(), 1);
+    // Cold original-operation observation, not a second collector request.
+    timeout(WAIT, rpc.shutdown_gracefully()).await??;
+    let mut rpc = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized()
+        .await?;
+    let id = rpc
+        .send_thread_resume_request(ThreadResumeParams {
+            thread_id: thread.clone(),
+            automatic_context_refill: Some(policy()),
+            ..Default::default()
+        })
+        .await?;
+    let _: ThreadResumeResponse = timeout(WAIT, rpc.read_response(id)).await??;
+    let before_query = tokio::fs::read(path).await?;
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/readAcquisition",
+            Some(json!({
+                "threadId":thread,"operationId":"original-legacy-acquisition"
+            })),
+        )
+        .await?;
+    let readback: ThreadContextWindowReadAcquisitionResponse =
+        timeout(WAIT, rpc.read_response(id)).await??;
+    assert_eq!(readback.receipt.source_state, original);
+    assert_eq!(readback.receipt.operation_id, "original-legacy-acquisition");
+    assert_eq!(readback.receipt.producer_sha256.len(), 64);
+    assert_eq!(readback.receipt.producer_sha256, producer_digest);
+    assert_eq!(
+        readback.state.producer_sha256.as_ref(),
+        Some(&producer_digest)
+    );
+    assert_eq!(
+        readback.state.last_started_turn_id,
+        original.last_started_turn_id
+    );
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/readAcquisition",
+            Some(json!({
+                "threadId":thread,"operationId":"other-operation"
+            })),
+        )
+        .await?;
+    let error = timeout(
+        WAIT,
+        rpc.read_stream_until_error_message(RequestId::Integer(id)),
+    )
+    .await??;
+    assert!(error.error.message.contains("observation refused or held"));
+    assert_eq!(tokio::fs::read(path).await?, before_query);
+    assert_eq!(mock.requests().len(), 1);
+    // The original pre-acquisition state stays stale across cold reopen. Also
+    // isolate producer binding on the current process's rewrite generation.
+    let mut missing_producer = readback.state.clone();
+    missing_producer.producer_sha256 = None;
+    for stale in [original.clone(), missing_producer] {
+        let id = rpc
+            .send_raw_request(
+                "thread/contextWindow/preflight",
+                Some(json!({"threadId":thread,"state":stale,"packet":packet(&stale)})),
+            )
+            .await?;
+        let error = timeout(
+            WAIT,
+            rpc.read_stream_until_error_message(RequestId::Integer(id)),
+        )
+        .await??;
+        assert!(error.error.message.contains("native preflight refused"));
+        assert_eq!(tokio::fs::read(path).await?, before_query);
+        assert_eq!(mock.requests().len(), 1);
+    }
+    acquired.state = readback.state;
+    let acquired_bytes = before_query;
+    // The original queued packet is stale. Build/review a new exact packet.
+    let data = packet(&acquired.state);
+    let reviewed = inspect(&mut rpc, thread, &acquired.state, &data)
+        .await?
+        .preflight;
+    assert_eq!(reviewed.producer_sha256, producer_digest);
+    assert_eq!(
+        reviewed,
+        inspect(&mut rpc, thread, &acquired.state, &data)
+            .await?
+            .preflight
+    );
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/acquireIdle",
+            Some(json!({
+                "threadId":thread,"state":acquired.state,"operationId":"must-not-resample"
+            })),
+        )
+        .await?;
+    let error = timeout(
+        WAIT,
+        rpc.read_stream_until_error_message(RequestId::Integer(id)),
+    )
+    .await??;
+    assert!(error.error.message.contains("already prepared"));
+    assert_eq!(tokio::fs::read(path).await?, acquired_bytes);
+    let id = rpc
+        .send_raw_request(
+            "thread/contextWindow/replaceIdle",
+            Some(json!({
+                "threadId":thread,"preflight":reviewed,"packet":data
+            })),
+        )
+        .await?;
+    let ServerRequest::ContextWindowIdleInstalled {
+        request_id,
+        params: receipt,
+    } = timeout(WAIT, rpc.read_stream_until_request_message()).await??
+    else {
+        panic!("expected idle acknowledgement")
+    };
+    rpc.send_response(
+        request_id,
+        json!({"operationId":receipt.operation_id,"status":"recorded"}),
+    )
+    .await?;
+    let installed: ThreadContextWindowReplaceIdleResponse =
+        timeout(WAIT, rpc.read_response(id)).await??;
+    assert_eq!(installed.receipt, receipt);
+    assert_eq!(
+        state(&mut rpc, thread).await?.last_started_turn_id,
+        original.last_started_turn_id
+    );
+    assert_eq!(mock.requests().len(), 1);
+    let final_bytes = tokio::fs::read(path).await?;
+    assert!(final_bytes.starts_with(&old));
+    check_transaction(&final_bytes, &receipt)?;
+    Ok(())
+}
+
 async fn continue_input(rpc: &mut TestAppServer, thread: &str) -> Result<()> {
     let id = rpc
         .send_turn_start_request(TurnStartParams {
@@ -140,6 +393,7 @@ async fn idle_replacement_preserves_native_checkpoint_and_next_real_input() -> R
     let cut = state(&mut rpc, thread).await?;
     let data = packet(&cut);
     let measured = inspect(&mut rpc, thread, &cut, &data).await?.preflight;
+    let reviewed_target = measured.next_window_id.clone();
     let before = tokio::fs::read(started.thread.path.as_ref().unwrap()).await?;
     let mut changed = measured.clone();
     changed.packet_sha256 = "0".repeat(64);
@@ -191,6 +445,7 @@ async fn idle_replacement_preserves_native_checkpoint_and_next_real_input() -> R
     let installed: ThreadContextWindowReplaceIdleResponse =
         timeout(WAIT, rpc.read_response(id)).await??;
     assert_eq!(installed.receipt, receipt);
+    assert_eq!(receipt.window_id, reviewed_target);
     let current = state(&mut rpc, thread).await?;
     assert!(current.idle);
     assert_eq!(current.last_started_turn_id, cut.last_started_turn_id);

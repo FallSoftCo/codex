@@ -179,6 +179,10 @@ pub struct ContextWindowState {
     pub window_id: String,
     pub history_version: u64,
     pub last_started_turn_id: Option<String>,
+    /// Validated complete native material at this cut. Legacy or invalid
+    /// producers yield None; history_version remains the rewrite generation.
+    #[serde(default)]
+    pub producer_sha256: Option<String>,
     pub active_turn_id: Option<String>,
     pub idle: bool,
     pub held_operation_id: Option<String>,
@@ -192,9 +196,24 @@ pub struct ContextWindowState {
 pub struct ContextWindowPreflight {
     pub state: ContextWindowState,
     pub operation_id: String,
+    /// Deterministic proposed target, rendered before review and reused by install.
+    pub next_window_id: String,
+    /// Exact complete producer binding, distinct from the selected-input packet.
+    pub producer_sha256: String,
     pub packet_sha256: String,
     pub replacement_sha256: String,
     pub prefix_item_count: u64,
     pub replacement_item_count: u64,
     pub replacement_wire_bytes: u64,
+}
+
+/// Original explicit collection provenance from a complete native checkpoint.
+/// Reading it never repeats collection or acknowledges unknown external work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase", export_to = "v2/")]
+pub struct ContextWindowAcquisitionReceipt {
+    pub operation_id: String,
+    pub source_state: ContextWindowState,
+    pub producer_sha256: String,
 }

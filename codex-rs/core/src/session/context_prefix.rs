@@ -26,6 +26,44 @@ fn hash(items: &[ResponseItemEnvelope]) -> io::Result<String> {
     ))
 }
 
+/// Stamp an already acquired complete recipe without allocating random IDs or
+/// consulting Session. Repeated review of the same target is byte-identical.
+pub(super) fn stamp_complete(
+    thread_id: &str,
+    context_id: &str,
+    window_id: uuid::Uuid,
+    items: Vec<ResponseItem>,
+) -> io::Result<Vec<ResponseItemEnvelope>> {
+    let mut items: Vec<_> = items
+        .into_iter()
+        .enumerate()
+        .map(|(index, mut item)| {
+            if let Some(prefix) = item.id_prefix() {
+                item.set_id(Some(codex_protocol::ResponseItemId::with_suffix(
+                    prefix,
+                    format!("{window_id}-{index}"),
+                )));
+            }
+            ResponseItemEnvelope::new(item)
+        })
+        .collect();
+    let sha256 = hash(&items)?;
+    let count = items.len();
+    for (index, item) in items.iter_mut().enumerate() {
+        item.metadata.get_or_insert_default().native_context_origin = Some(NativeContextOrigin {
+            schema: "lax-native-core-context/v1".into(),
+            thread_id: thread_id.into(),
+            context_id: context_id.into(),
+            group_id: window_id.to_string(),
+            kind: NativeContextKind::Prefix,
+            index,
+            count,
+            sha256: sha256.clone(),
+        });
+    }
+    Ok(items)
+}
+
 /// Only native context producers call this. Client inputs and model/tool output
 /// use the ordinary recording path and cannot supply harness provenance.
 pub(crate) fn stamp(

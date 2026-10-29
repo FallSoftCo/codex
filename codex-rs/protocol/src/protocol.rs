@@ -3540,15 +3540,29 @@ pub struct WorldStateItem {
     /// Full snapshots establish a new baseline; patches update the current baseline.
     pub full: bool,
     pub state: Map<String, Value>,
+    /// Optional complete native producer. Opaque to comparison/merge-patch logic;
+    /// the owning core validates its version, bindings, bounds and content digest.
+    /// Absence invalidates any earlier producer, including on an empty patch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub native_context_producer: Option<Value>,
 }
 
 impl WorldStateItem {
     pub fn full(state: Map<String, Value>) -> Self {
-        Self { full: true, state }
+        Self {
+            full: true,
+            state,
+            native_context_producer: None,
+        }
     }
 
     pub fn patch(state: Map<String, Value>) -> Self {
-        Self { full: false, state }
+        Self {
+            full: false,
+            state,
+            native_context_producer: None,
+        }
     }
 }
 

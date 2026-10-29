@@ -78,6 +78,13 @@ async def original_resolution(runner, wake):
         return False
     require(wake.get("state")=="finished" and wake.get("turn",{}).get("status")=="failed"
             and wake.get("nativeThread")==runner.thread,"Exact finished failed native wake required")
+    # A successful pre-turn refill may exist on any later failed inference.
+    # Its presence does not make an unrelated native failure a refill hold.
+    # Leave other diagnoses to their own explicit recovery without weakening
+    # the native prefix/terminal proof for a genuine pre-model refill failure.
+    error=wake.get("turn",{}).get("error")
+    if not isinstance(error,dict) or "Original canonical refill is held" not in error.get("message",""):
+        return False
     matches=[]
     for path in runner.automatic.root.glob("*.json"):
         raw=path.read_bytes();j=json.loads(raw)

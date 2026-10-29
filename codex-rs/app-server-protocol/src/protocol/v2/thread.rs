@@ -31,6 +31,7 @@ pub use codex_protocol::context_input::ContextInputParams;
 pub use codex_protocol::context_input::ContextInputResponse;
 pub use codex_protocol::context_input::PrimaryContextInputPolicy;
 pub use codex_protocol::context_refill::AutomaticContextRefillPolicy;
+pub use codex_protocol::context_refill::ContextWindowAcquisitionReceipt;
 pub use codex_protocol::context_refill::ContextWindowInstalledParams;
 pub use codex_protocol::context_refill::ContextWindowInstalledResponse;
 pub use codex_protocol::context_refill::ContextWindowPreflight;
@@ -2351,6 +2352,42 @@ pub struct ThreadContextWindowPreflightParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadContextWindowPreflightResponse {
     pub preflight: ContextWindowPreflight,
+}
+
+/// Explicit authorized collection for a legacy idle rollout. This can call
+/// collectors and append native data; it is NOT a read-only preview. Journal
+/// before dispatch; observe an unknown original reply, never automatically retry.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowAcquireIdleParams {
+    pub thread_id: String,
+    pub state: ContextWindowState,
+    pub operation_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowAcquireIdleResponse {
+    pub state: ContextWindowState,
+}
+
+/// Pure query of the original complete acquisition checkpoint, not a retry.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReadAcquisitionParams {
+    pub thread_id: String,
+    pub operation_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct ThreadContextWindowReadAcquisitionResponse {
+    pub state: ContextWindowState,
+    pub receipt: ContextWindowAcquisitionReceipt,
 }
 
 /// Install the exact preflighted idle context. Unknown replies require inspecting

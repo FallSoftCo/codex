@@ -270,7 +270,7 @@ class IdleContextRebuild:
             self.save(operation, "history_verifying", installed=params,
                       installRpcId=raw["_rpcRequestId"])
         await asyncio.to_thread(verify, operation["originalHistory"], operation["request"],
-            response, params, native_mode="idle_request")
+            response, params, native_mode="idle_request", native_preflight=operation["preflight"])
         async with r.effect_lock:
             self.check(operation)
             self.save(operation, "host_ack_intent")
@@ -317,7 +317,8 @@ class IdleContextRebuild:
         parameters(installed, INSTALLED)
         require(native is None or native == installed, "Recovered native idle receipt differs")
         await asyncio.to_thread(verify, operation["originalHistory"], operation["request"],
-            operation["response"], installed, native_mode="idle_request")
+            operation["response"], installed, native_mode="idle_request",
+            native_preflight=operation["preflight"])
         try:
             receipt = await r.agent.http(r.purpose, "GET",
                 f"agents/{r.config['agentId']}/contexts/{r.purpose}/operations/" +
@@ -440,7 +441,12 @@ class IdleContextRebuild:
                     )
             for path, value in deferred:
                 try:
-                    if getattr(self.runner.agent, "rebuild_only", False):
+                    acquisition = getattr(self.runner.agent, "acquire_context_operation", None)
+                    if acquisition:
+                        from .native_context_acquisition import PRODUCER_REFUSAL
+                        require(value.get("holdReason") == PRODUCER_REFUSAL,
+                                "Acquisition cannot release another preparation failure")
+                    if getattr(self.runner.agent, "rebuild_only", False) or acquisition:
                         from .idle_context_rejection import inspect_rejected
 
                         await inspect_rejected(self, path)

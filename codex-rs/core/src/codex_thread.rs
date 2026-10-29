@@ -889,6 +889,35 @@ impl CodexThread {
             .await
     }
 
+    /// Collect/persist legacy native material as a separate mutating operation.
+    pub async fn acquire_idle_canonical_context(
+        &self,
+        expected_owner_epoch: u64,
+        state: codex_protocol::context_refill::ContextWindowState,
+        operation_id: String,
+    ) -> CodexResult<codex_protocol::context_refill::ContextWindowState> {
+        crate::session::context_acquisition::acquire(
+            &self.session,
+            expected_owner_epoch,
+            state,
+            operation_id,
+        )
+        .await
+    }
+
+    /// Observe original complete acquisition provenance; never repeat collectors.
+    pub async fn read_canonical_context_acquisition(
+        &self,
+        expected_owner_epoch: u64,
+        operation_id: String,
+    ) -> CodexResult<(
+        codex_protocol::context_refill::ContextWindowState,
+        codex_protocol::context_refill::ContextWindowAcquisitionReceipt,
+    )> {
+        crate::session::context_acquisition::read(&self.session, expected_owner_epoch, operation_id)
+            .await
+    }
+
     /// Replace one explicitly owned idle native cut using its exact preflight.
     pub async fn replace_idle_canonical_context_window(
         &self,

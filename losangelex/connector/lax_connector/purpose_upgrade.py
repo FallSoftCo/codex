@@ -95,7 +95,7 @@ def upgrade(spec):
     if set(spec) - {"schema", "operationId", "authorityId", "agentId",
                     "expectedInstallationSha256", "interpreter", "pythonRoot", "toolProfileFile",
                     "binary", "expectedBinarySha256", "contextRebuildEnabled", "automaticContextRefill",
-                    "nativeActionRetention", "manualSeedControl", "resourceReadinessVersion"}:
+                    "nativeActionRetention", "manualSeedControl", "nativeRolloutTrace", "resourceReadinessVersion"}:
         raise ValueError("Unsupported purpose upgrade field")
     if spec["schema"] != SCHEMA:
         raise ValueError("Explicit purpose upgrade required")
@@ -227,6 +227,60 @@ def upgrade(spec):
             os.close(lock)
 
 
+def reconcile(authority, agent, operation, expected_installation):
+    """Finalize one fully published upgrade without replaying its publication.
+
+    Partial/different files, changed work or a live process remain explicit
+    operator recovery cases. This only verifies and seals the original upgrade.
+    """
+    if os.geteuid() != 0:
+        raise PermissionError("Installation administrator required")
+    operation = str(UUID(operation))
+    record = install.directory(authority, agent)
+    with registry_lock(record):
+        path = record / ("upgrade-" + operation + ".json")
+        receipt = install.protected(path)
+        pointer = install.protected(record / "current-upgrade.json")
+        if (receipt["state"] != "intent" or pointer["operationId"] != operation
+                or pointer["state"] != "intent"):
+            raise ValueError("Inspect the original upgrade disposition; reconciliation requires its intent")
+        manifest = record / "installation.json"
+        if install.checksum(manifest) != expected_installation:
+            raise ValueError("Inspect the actual installation before reconciliation")
+        for item in receipt["after"]:
+            if encoded(item["path"]) != item:
+                raise ValueError("Original upgrade is partially published or changed; no publication replay")
+        value = install.protected(manifest)
+        config = install.protected(value["config"])
+        lock = os.open(Path(config["state"]) / "agent.lock", os.O_RDWR | os.O_NOFOLLOW)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if offline(value, config) != receipt["beforeOffline"]:
+                raise ValueError("Original upgrade work, history or placement changed")
+            from .purpose_readiness import verify
+            readiness = verify(value)
+            if offline(value, config) != receipt["beforeOffline"]:
+                raise ValueError("Original offline scope changed during verification")
+            for item in receipt["after"]:
+                if encoded(item["path"]) != item:
+                    raise ValueError("Original upgrade publication changed during verification")
+            saved(record / "readiness.json", readiness)
+            receipt = {**receipt, "state": "accepted",
+                       "acceptedInstallationSha256": expected_installation,
+                       "identityAndHistoryPreserved": True,
+                       "reconciledFullyPublished": True,
+                       "publicationReplayed": False}
+            saved(path, receipt)
+            saved(record / "current-upgrade.json", receipt)
+            return {"schema": SCHEMA, "operationId": operation, "state": "accepted",
+                    "installationSha256": expected_installation,
+                    "reconciledFullyPublished": True, "publicationReplayed": False,
+                    "servicesStarted": 0, "modelsStarted": 0,
+                    "identityAndHistoryPreserved": True}
+        finally:
+            os.close(lock)
+
+
 def rollback(authority, agent, operation, expected_installation):
     if os.geteuid() != 0:
         raise PermissionError("Installation administrator required")
@@ -272,12 +326,17 @@ def main():
     os.umask(0o077)
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--spec", required=True, type=Path)
-    p.add_argument("--rollback", action="store_true")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--rollback", action="store_true")
+    mode.add_argument("--reconcile", action="store_true")
     args = p.parse_args()
     spec = install.protected(args.spec)
     if args.rollback:
         result = rollback(spec["authorityId"], spec["agentId"], spec["operationId"],
                           spec["expectedInstallationSha256"])
+    elif args.reconcile:
+        result = reconcile(spec["authorityId"], spec["agentId"], spec["operationId"],
+                           spec["expectedInstallationSha256"])
     else:
         result = upgrade(spec)
     print(json.dumps(result))

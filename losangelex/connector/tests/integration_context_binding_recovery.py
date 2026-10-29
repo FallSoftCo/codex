@@ -255,6 +255,95 @@ async def run(args):
             checks["two_original_metadata_transactions_zero_work_or_inference"] = (
                 len(accepted) == 2 and permits == deliveries == 0
             )
+
+            # Explicit frozen native facts: real HTTP/PG terminal settlement,
+            # not model execution or inference-admission evidence.
+            async def terminal_case(context, label, fault):
+                native_turn = "scripted-terminal-" + label
+                permit_id = str(uuid4())
+                with store.pool.connection() as db:
+                    db.execute(
+                        """INSERT INTO hb_context_permit
+                        (id,agent,purpose,host,context_id,native_thread,native_turn,
+                         operation,fingerprint,material_ids,role_revision,queue_class,state)
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,'{}',1,'worker','running')""",
+                        (permit_id,agent,context.purpose,host,context_ids[context.purpose],
+                         context.thread,native_turn,"fixture-terminal:"+label,
+                         digest(["frozen-terminal",label])))
+                    db.execute("""UPDATE hb_purpose_context SET active_turn=%s,
+                        active_material='{}',accepting=false WHERE agent=%s AND purpose=%s""",
+                        (native_turn,agent,context.purpose))
+                wake = {"state":"unknown","nativeThread":context.thread,
+                        "nativeTurn":native_turn,"permitId":permit_id}
+                saved(context.state/"wake.json",wake)
+                observed = {"status":"interrupted"}
+                async def native_read(method, params, **kwargs):
+                    assert method == "thread/turns/list" and params["threadId"] == context.thread
+                    return {"data":[{"id":native_turn,"status":observed["status"]}],"nextCursor":None}
+                context.rpc = SimpleNamespace(call=native_read)
+                wire = context.agent.http
+                calls = {"posts":0,"forwarded":0}
+                async def boundary(p, method, route, payload=None):
+                    terminal_post = method == "POST" and payload.get("action") == "end"
+                    if terminal_post:
+                        calls["posts"] += 1
+                        if fault == "before_commit" and calls["posts"] == 1:
+                            raise TimeoutError("Injected terminal acknowledgement lost before commit")
+                        calls["forwarded"] += 1
+                    value = await wire(p,method,route,payload)
+                    if terminal_post and fault == "after_commit" and calls["posts"] == 1:
+                        raise TimeoutError("Injected terminal acknowledgement result lost after commit")
+                    return value
+                context.agent.http = boundary
+                op = "context-end:" + native_turn
+                value = {"status":"interrupted","permitId":permit_id}
+                if fault == "before_commit":
+                    try:
+                        await ContextRunner.request(context,"end",value,operation=op,turn=native_turn)
+                    except HttpFailure as error:
+                        assert error.status == 404 and error.code == "CONTEXT_OPERATION_NOT_FOUND"
+                    else:
+                        raise AssertionError("Original absent terminal metadata was not retained")
+                    import hashlib
+                    path = context.state/("operation-"+hashlib.sha256(op.encode()).hexdigest()+".json")
+                    original = json.loads(path.read_text())
+                    before = dict(calls)
+                    for bad in ("changed_permit","nonterminal_native","changed_terminal_status"):
+                        saved(context.state/"wake.json",{**wake,**({"permitId":str(uuid4())} if bad=="changed_permit" else {})})
+                        observed["status"] = "inProgress" if bad=="nonterminal_native" else "failed" if bad=="changed_terminal_status" else "interrupted"
+                        try:
+                            await original_receipt(context,original["request"],op,path,original)
+                        except RuntimeError:
+                            pass
+                        else:
+                            raise AssertionError("Unsafe terminal metadata recovery admitted: "+bad)
+                        assert calls == before and json.loads(path.read_text()) == original
+                    checks["terminal_identity_and_status_mismatches_hold_without_POST"] = True
+                    saved(context.state/"wake.json",wake);observed["status"]="interrupted"
+                result = await ContextRunner.request(context,"end",value,operation=op,turn=native_turn)
+                assert result["nativeTurn"] == native_turn and result["state"] == "interrupted"
+                expected_posts = 2 if fault=="before_commit" else 1
+                assert calls == {"posts":expected_posts,"forwarded":1}
+                # Local replay observes accepted receipt without another HTTP mutation.
+                replay = await ContextRunner.request(context,"end",value,operation=op,turn=native_turn)
+                assert replay == result and calls["posts"] == expected_posts
+                with store.pool.connection() as db:
+                    permit = db.execute("SELECT state,terminal_status FROM hb_context_permit WHERE id=%s",(permit_id,)).fetchone()
+                    binding = db.execute("SELECT active_turn FROM hb_purpose_context WHERE agent=%s AND purpose=%s",(agent,context.purpose)).fetchone()
+                    n = db.execute("SELECT count(*) AS n FROM hb_context_operation WHERE agent=%s AND purpose=%s AND operation=%s",(agent,context.purpose,op)).fetchone()["n"]
+                checks["terminal_"+fault+"_one_original_settlement_no_inference"] = (
+                    permit["state"]=="released" and permit["terminal_status"]=="interrupted"
+                    and binding["active_turn"] is None and n==1)
+                if fault=="before_commit":
+                    journal=json.loads(path.read_text())
+                    checks["accepted_terminal_journal_retains_original_verified_recovery"] = (
+                        journal["terminalRecovery"]["count"]==1
+                        and journal["terminalRecovery"]["executionEffectsReplayed"]==0
+                        and journal["request"]==original["request"])
+                context.agent.http = wire
+            await terminal_case(writer,"writer-before-commit","before_commit")
+            await terminal_case(reader,"reader-after-commit","after_commit")
+
             evidence = {
                 "at": time.time(),
                 "passed": all(checks.values()),

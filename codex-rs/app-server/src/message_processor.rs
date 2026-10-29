@@ -1749,6 +1749,16 @@ impl MessageProcessor {
                     .thread_context_window_replace_idle(&request_id, params)
                     .await
             }
+            ClientRequest::ThreadContextWindowAcquireIdle { params, .. } => {
+                self.turn_processor
+                    .thread_context_window_acquire_idle(&request_id, params)
+                    .await
+            }
+            ClientRequest::ThreadContextWindowReadAcquisition { params, .. } => {
+                self.turn_processor
+                    .thread_context_window_read_acquisition(&request_id, params)
+                    .await
+            }
             ClientRequest::ThreadInjectItems { params, .. } => {
                 self.turn_processor
                     .thread_inject_items(&request_id, params)

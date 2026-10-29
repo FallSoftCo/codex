@@ -48,6 +48,15 @@ def carry(capture,peer,frame,owner):
             else "inspect_original_claim" if old["state"]=="completed" and claim_metadata
             else "inspect_original_metadata" if old["state"]=="completed" and metadata
             else "inspect_original_permit" if old["state"]=="completed" else "original_effect_unsettled")
+        rejection = old.get("rejection")
+        try:
+            decoded_rejection = json.loads(rejection) if isinstance(rejection, str) else {}
+        except ValueError:
+            decoded_rejection = {}
+        canonical_rejection = (decoded_rejection.get("schema") == "hollywood-collaboration-rejection/v1"
+            and decoded_rejection.get("state") == "rejected"
+            and decoded_rejection.get("operationId") == wire["operationId"]
+            and decoded_rejection.get("source") == source)
         claim_snapshot=None
         if claim_metadata and old["state"]=="completed":
             result=old.get("result") or {}
@@ -62,7 +71,10 @@ def carry(capture,peer,frame,owner):
             "claimReceipt":claim_snapshot,"claimReceiptIsHistorical":claim_snapshot is not None,
             "confirmedPostRejected":rejected,"effectBoundary":boundary,
             "proposedPermitId":command.get("permitId"),"planId":command.get("planId"),
-            "rejection":old.get("rejection"),
+            "rejection":rejection,
+            "rejectionCode":decoded_rejection.get("code") if canonical_rejection else None,
+            "rejectionEventId":decoded_rejection.get("eventId") if canonical_rejection else None,
+            "rejectionAuthorityRecorded":canonical_rejection,
             "automaticRetryAuthorized":False})
         if len(rows)==17:
             break

@@ -201,7 +201,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_cooperation_set",
-            "Accountable goal planner: configure this goal's independent peers before any work admission. leader_award uses explicit assignments; kanban_pull allows only listed executors to claim open work. The designated verifier independently reviews and accepts; it cannot change the plan. Room defaults do not choose the planner. This does not start agents or authorize a model loop.",
+            "Configure this Goal's cooperation before work admission. leader_award uses explicit assignments; kanban_pull permits listed executors to claim open work. reviewerId=null retains planner-led review: the Goal owner can review a distinct executor's result. A non-null reviewer is a separate independent verifier and MUST differ from both the Goal owner/planner and every executor. Do not name the planner as its own independent verifier or create extra agents without authorization. Use the current Goal revision and cooperation.revision (0 if absent), not predicted revisions. Room defaults do not choose the planner. This does not start agents or authorize a model loop.",
             {
                 "goalId": text,
                 "revision": revision,
@@ -263,7 +263,7 @@ def definitions(spec):
         ),
         spec(
             "hollywood_work_create",
-            "Goal planner: add work without execution. Use null ownerId only for open Kanban work with an explicit executor set. Prerequisites must belong to this goal and require acceptance before admission.",
+            "Goal planner: create canonical criterion-bound Hollywood Work without execution. This ID is distinct from an accept_work internal responsibility. Formal Goal criteria require these Work reports and normal independent review, including single-agent workflows. Keep the original parent responsibility; assign this canonical step separately, then await Goal results. Use null ownerId only for open Kanban work with an explicit executor set. Prerequisites must belong to this goal and require acceptance before admission.",
             {
                 "goalId": text,
                 "revision": revision,

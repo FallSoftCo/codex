@@ -247,6 +247,7 @@ use codex_protocol::exec_output::StreamOutput;
 pub(crate) mod async_compaction;
 mod code_mode_warning;
 mod config_refresh;
+pub(crate) mod context_acquisition;
 pub(crate) mod context_idle;
 pub(crate) mod context_idle_reconcile;
 pub(crate) mod context_prefix;
@@ -259,6 +260,7 @@ pub(crate) mod extension_metrics;
 mod guardian_checkpoint;
 mod handlers;
 mod initial_context;
+mod initial_context_producer;
 mod inject;
 pub(crate) mod legacy_hollywood_idle;
 mod primary_context_input;
@@ -1963,6 +1965,7 @@ impl Session {
             reference_context_item,
             turn_attribution,
             world_state_baseline,
+            native_context_producer,
             window_number,
             first_window_id,
             previous_window_id,
@@ -2035,6 +2038,11 @@ impl Session {
             if let Some(world_state) = world_state_baseline {
                 state.history.set_world_state_baseline(world_state);
             }
+            // This is only an opaque replay candidate. Pure reads must validate
+            // its current thread/context/reference/world/content bindings.
+            state
+                .history
+                .set_native_context_producer(native_context_producer);
             let fallback_ids = state.auto_compact_window_ids();
             let window_id = window_id.unwrap_or(fallback_ids.window_id);
             state.restore_auto_compact_window(
@@ -3990,10 +3998,25 @@ impl Session {
         step_context: &step_context::StepContext,
     ) -> CodexResult<Arc<WorldState>> {
         let turn_context = step_context.turn.as_ref();
+        let capture_complete = self.complete_native_context_id().is_some();
+        self.state
+            .lock()
+            .await
+            .history
+            .set_native_context_producer(None);
         // Render model-visible state from the same step used to build and run tools.
         let world_state = self
             .build_world_state_for_step(step_context, /*new_window*/ false)
             .await?;
+        let template = if capture_complete {
+            Some(
+                self.collect_initial_context(step_context)
+                    .await
+                    .capture(&world_state),
+            )
+        } else {
+            None
+        };
         let (world_state_snapshot, fragments, world_state_item) = self
             .state
             .lock()
@@ -4021,6 +4044,8 @@ impl Session {
             self.persist_rollout_items(&[RolloutItem::WorldState(world_state_item)])
                 .await;
         }
+        self.persist_initial_context_producer(step_context, template)
+            .await;
         Ok(Arc::new(world_state))
     }
 
@@ -4900,6 +4925,12 @@ impl Session {
         step_context: &StepContext,
     ) -> CodexResult<Arc<WorldState>> {
         let turn_context = step_context.turn.as_ref();
+        let capture_complete = self.complete_native_context_id().is_some();
+        self.state
+            .lock()
+            .await
+            .history
+            .set_native_context_producer(None);
         let (reference_context_item, needs_native_base) = {
             let state = self.state.lock().await;
             (
@@ -4913,11 +4944,23 @@ impl Session {
         let world_state = self
             .build_world_state_for_step(step_context, should_inject_full_context)
             .await?;
+        let (template, captured_turn_items) = if should_inject_full_context || capture_complete {
+            let material = self.collect_initial_context(step_context).await;
+            (
+                Some(material.capture(&world_state)),
+                Some(material.turn_items()),
+            )
+        } else {
+            (None, None)
+        };
         // Full initial context resets the baseline; later turns persist only its changes.
         let (mut context_items, world_state_item) = if should_inject_full_context {
-            let (context_updates, snapshot) = self
-                .build_initial_context_with_world_state(step_context, &world_state)
-                .await;
+            let ids = self.state.lock().await.auto_compact_window_ids();
+            let (context_updates, snapshot) = template
+                .as_ref()
+                .expect("initial context was acquired")
+                .render(&turn_context.sub_id, ids)
+                .expect("fresh template is valid");
             let context_items =
                 crate::context_manager::updates::merge_world_state_updates(context_updates);
             self.state
@@ -4941,14 +4984,19 @@ impl Session {
             (world_state_items, world_state_item)
         };
         if !should_inject_full_context && turn_context_changed {
-            context_items.extend(
-                self.build_turn_context_contribution_items(step_context)
-                    .await,
-            );
+            context_items.extend(match captured_turn_items {
+                Some(items) => items,
+                None => {
+                    self.build_turn_context_contribution_items(step_context)
+                        .await
+                }
+            });
         }
         // A snapshot can change without producing model-visible or TurnContext updates.
         let only_world_state_changed = !turn_context_changed && context_items.is_empty();
         if only_world_state_changed && world_state_item.is_none() {
+            self.persist_initial_context_producer(step_context, template)
+                .await;
             return Ok(Arc::new(world_state));
         }
         if !context_items.is_empty() {
@@ -4971,6 +5019,8 @@ impl Session {
         }
         // A snapshot-only change does not require a duplicate TurnContext record.
         if only_world_state_changed {
+            self.persist_initial_context_producer(step_context, template)
+                .await;
             return Ok(Arc::new(world_state));
         }
         // Persist one `TurnContextItem` per real user turn so resume/lazy replay can recover the
@@ -4995,6 +5045,9 @@ impl Session {
         // context items.
         let mut state = self.state.lock().await;
         state.set_reference_context_item(Some(turn_context_item));
+        drop(state);
+        self.persist_initial_context_producer(step_context, template)
+            .await;
         Ok(Arc::new(world_state))
     }
 

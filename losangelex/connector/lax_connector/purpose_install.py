@@ -157,6 +157,11 @@ def context_settings(spec):
         if version and settings.get("nativeActionRetention") != 1:
             raise ValueError("Manual seed control requires explicitly paired retained Writer policy")
         settings["manualSeedControl"] = version
+    if "nativeRolloutTrace" in spec:
+        enabled = spec["nativeRolloutTrace"]
+        if type(enabled) is not bool:
+            raise ValueError("Explicit native rollout tracing opt-in must be boolean")
+        settings["nativeRolloutTrace"] = enabled
     return settings
 
 

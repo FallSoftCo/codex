@@ -21,17 +21,18 @@ PREFIX_REFUSAL = str({
 })
 
 
-async def inspect_prefix_rejected(idle, path):
+async def inspect_prefix_rejected(idle, path, *, refusal=PREFIX_REFUSAL):
     r = idle.runner
-    require(getattr(r.agent, "rebuild_only", False),
+    require((getattr(r.agent, "rebuild_only", False)
+             or getattr(r.agent, "acquire_context_operation", None)),
             "Prefix preparation recovery requires explicit --rebuild-context-only")
     original_bytes = path.read_bytes()
     operation = json.loads(original_bytes)
     require(idle.owned(operation) and operation.get("state") == "held"
-            and operation.get("holdReason") == PREFIX_REFUSAL
+            and operation.get("holdReason") == refusal
             and all(key in operation for key in ("request", "nativeState", "originalHistory"))
             and not any(key in operation for key in (
-                "response", "snapshot", "preflight", "installed", "hostReceipt", "nativeResult",
+                "response", "preflight", "nativeDispatchIntent", "installed", "hostReceipt", "nativeResult",
                 "nativeRejection")),
             "Original prefix preparation is not the exact pre-dispatch refusal")
     require(all(operation.get(key) == value for key, value in (
@@ -59,7 +60,9 @@ async def inspect_prefix_rejected(idle, path):
     captured = connection(r)
     prefix = f"agents/{r.config['agentId']}/contexts/{r.purpose}/operations/"
     snapshot = await r.agent.http(r.purpose, "GET", prefix + operation["snapshotOperationId"])
-    require(snapshot == local["receipt"], "Original accepted prefix snapshot receipt changed")
+    require(snapshot == local["receipt"]
+            and ("snapshot" not in operation or operation["snapshot"] == snapshot),
+            "Original accepted prefix snapshot receipt changed")
     try:
         await r.agent.http(r.purpose, "GET", prefix + operation["installedOperationId"])
     except HttpFailure as error:

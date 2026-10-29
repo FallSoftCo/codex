@@ -964,6 +964,18 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadContextWindowPreflightResponse,
     },
+    #[experimental("thread/contextWindow/readAcquisition")]
+    ThreadContextWindowReadAcquisition => "thread/contextWindow/readAcquisition" {
+        params: v2::ThreadContextWindowReadAcquisitionParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextWindowReadAcquisitionResponse,
+    },
+    #[experimental("thread/contextWindow/acquireIdle")]
+    ThreadContextWindowAcquireIdle => "thread/contextWindow/acquireIdle" {
+        params: v2::ThreadContextWindowAcquireIdleParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextWindowAcquireIdleResponse,
+    },
     #[experimental("thread/contextWindow/replaceIdle")]
     ThreadContextWindowReplaceIdle => "thread/contextWindow/replaceIdle" {
         params: v2::ThreadContextWindowReplaceIdleParams,

@@ -32,11 +32,24 @@ async def provision(c, arguments, operation, spec):
     spec.update(context_settings(c.config))
     if c.config.get("nativeCollaborationChannel"):
         spec["nativeCollaborationChannel"] = c.config["nativeCollaborationChannel"]
+    path = c.state / ("purpose-provision-" + spec["agentId"] + ".json")
+    old = json.loads(path.read_text()) if path.exists() else None
     if arguments.get("toolProfileFile"):
         spec["toolProfileFile"] = arguments["toolProfileFile"]
-    path = c.state / ("purpose-provision-" + spec["agentId"] + ".json")
-    if path.exists():
-        old = json.loads(path.read_text())
+    elif old is not None:
+        # An observed original intent keeps its original declared toolkit,
+        # including an intentional legacy omission. Never retrofit a replay.
+        if old.get("toolProfileFile"):
+            spec["toolProfileFile"] = old["toolProfileFile"]
+    elif c.config.get("toolProfileFile"):
+        # Copy the approved declaration through the installer, not the parent's
+        # credentials, context, workspace, role or agent configuration.
+        from .tool_profile import read as read_tool_profile
+        if not c.config.get("toolProfileSha256"):
+            raise ValueError("Current approved tool declaration digest is missing")
+        read_tool_profile(c.config["toolProfileFile"], c.config["toolProfileSha256"])
+        spec["toolProfileFile"] = c.config["toolProfileFile"]
+    if old is not None:
         expected = {
             k: v
             for k, v in old.items()

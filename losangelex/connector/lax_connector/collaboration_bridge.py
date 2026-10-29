@@ -274,6 +274,22 @@ class Bridge:
                 receipt = self.http("GET", "collaboration/commands/" + source["agentId"] + "/" + urllib.parse.quote(operation, safe=""))
                 result = receipt.get("acceptedResult") or receipt.get("accepted_result")
                 require(result is not None, "Original effect outcome still unknown; do not POST again")
+                if result.get("schema") == "hollywood-collaboration-rejection/v1":
+                    require(result.get("state") == "rejected"
+                            and result.get("operationId") == operation
+                            and result.get("source") == old["wire"]["source"]
+                            and result.get("httpStatus") == 409
+                            and result.get("requestRejected") is True
+                            and result.get("newExecutionAdmitted") is False
+                            and result.get("newMutationPermitIssued") is False,
+                            "Original rejected receipt scope differs; keep operation held")
+                    saved(path, {**old, "state": "rejected", "status": 409,
+                        "rejection": json.dumps(result), "phase": action,
+                        "originalPostConfirmedRejected": True,
+                        "canonicalRejectionEventId": result["eventId"]})
+                    raise Held("Original native request was rejected: " + result["code"] +
+                               "; authority event " + result["eventId"] +
+                               "; no publication or effect replay")
                 return {"receipt": result, "admission": None, "replayed": True}
             require(old["state"] == "completed", "Original native operation is held/rejected")
             return {"receipt": old["result"].get("receipt", old["result"]), "admission": None, "replayed": True}
@@ -288,8 +304,15 @@ class Bridge:
                 saved(path, {"state": "rejected", "fingerprint": fingerprint, "wire": body,
                     "status": error.code, "rejection":detail,
                     "phase":action,"originalPostConfirmedRejected":True})
+                try:
+                    rejected = json.loads(detail)
+                except ValueError:
+                    rejected = {}
+                diagnostic = (" " + rejected["code"] if isinstance(rejected.get("code"), str) else "")
+                evidence = (" authority event " + rejected["eventId"]
+                            if isinstance(rejected.get("eventId"), str) else "")
                 raise Held(
-                    f"Canonical {action} request rejected HTTP{error.code}; "
+                    f"Canonical {action} request rejected HTTP{error.code}{diagnostic}{evidence}; "
                     f"original operation {operation}. Inspect lax_native_edit_status "
                     "for its protected receipt; no automatic retry."
                 ) from None

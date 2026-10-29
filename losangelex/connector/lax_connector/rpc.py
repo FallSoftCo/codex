@@ -29,6 +29,7 @@ class AppServer:
         enterprise=False,
         collaboration_channel=None,
         isolated_process_group=False,
+        rollout_trace_root=None,
     ):
         self.binary, self.home, self.state = binary, home, state
         self.on_event, self.on_request = on_event, on_request
@@ -37,6 +38,7 @@ class AppServer:
         self.enterprise = enterprise
         self.collaboration_channel = collaboration_channel
         self.isolated_process_group = isolated_process_group
+        self.rollout_trace_root = rollout_trace_root
         self.pending = {}
         self.requests = set()
         self.sequence = 0
@@ -52,6 +54,8 @@ class AppServer:
         self.home.mkdir(parents=True, exist_ok=True)
         self.state.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, CODEX_HOME=str(self.home))
+        if self.rollout_trace_root is not None:
+            env["CODEX_ROLLOUT_TRACE_ROOT"] = str(self.rollout_trace_root)
         # A canonical worker never falls back to standalone shared SQLite or legacy ambient wakes.
         env.pop("LAX_CANONICAL_NATIVE_CHANNEL", None)
         env.pop("LAX_NATIVE_ENTERPRISE", None)

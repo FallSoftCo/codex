@@ -80,10 +80,48 @@ class ReaderInbox:
             if not automatic:
                 return observation
             observation["adoptionVerified"] = False
+            candidates = requests.get(old["operation"], [])
+            if not candidates:
+                from .reader_inbox_recovery import terminal_unadopted
+                try:
+                    # A prior verified closure binds a legacy view to its
+                    # original permit even after newer reservations exist. This
+                    # file is only an identity hint: recheck all live original
+                    # receipts and native terminality on every startup.
+                    closure_path = self.directory / "closed-views" / journal.name
+                    journal_sha256 = hashlib.sha256(journal.read_bytes()).hexdigest()
+                    hint = json.loads(closure_path.read_text()) if closure_path.exists() else None
+                    scoped = old
+                    if hint is not None:
+                        if (hint.get("schema") != "lax-reader-view-closure/v1"
+                                or hint.get("operation") != old["operation"]
+                                or hint.get("journalSha256") != journal_sha256
+                                or not hint.get("permitId")
+                                or (old.get("permitId") and old["permitId"] != hint["permitId"])):
+                            raise ValueError("Original Reader view identity hint differs")
+                        scoped = {**old, "permitId": hint["permitId"]}
+                    closed = await terminal_unadopted(self.runner, scoped)
+                    if closed.get("closedBeforeAdmissionVerified"):
+                        if (hint is not None and hint.get("reservationOperationId")
+                                != closed["originalReservationOperationId"]):
+                            raise ValueError("Original Reader reservation hint differs")
+                        closure_path.parent.mkdir(mode=0o700, exist_ok=True)
+                        saved(closure_path, {
+                            "schema": "lax-reader-view-closure/v1",
+                            "operation": old["operation"],
+                            "journalSha256": journal_sha256,
+                            "permitId": closed["originalPermitId"],
+                            "reservationOperationId": closed["originalReservationOperationId"],
+                            "state": "verified",
+                            "closure": closed,
+                        })
+                    observation.update(closed)
+                except Exception as error:
+                    observation["holdReason"] = "Original admission-fence observation failed: " + type(error).__name__
+                return observation
             if not observation["historyObserved"]:
                 observation["holdReason"] = "Original typed native input fragments unavailable"
                 return observation
-            candidates = requests.get(old["operation"], [])
             if len(candidates) != 1:
                 observation["holdReason"] = "Original adoption request identity unavailable or ambiguous"
                 return observation
@@ -122,7 +160,7 @@ class ReaderInbox:
             return observation
 
         observations = await asyncio.gather(*(observe(p, old) for p, old in journals))
-        unresolved = [o for o in observations if not o.get("adoptionVerified")] if automatic else []
+        unresolved = [o for o in observations if not (o.get("adoptionVerified") or o.get("closedBeforeAdmissionVerified"))] if automatic else []
         if automatic:
             self.uncertain = bool(unresolved)
             if unresolved:
@@ -141,6 +179,7 @@ class ReaderInbox:
             "batches": len(observations),
             "incompleteHistoryBatches": sum(not o["historyObserved"] for o in observations),
             "verifiedOriginalAdoptions": sum(o.get("adoptionVerified", False) for o in observations),
+            "closedUnadoptedViews": sum(o.get("closedBeforeAdmissionVerified", False) for o in observations),
             "unresolvedOriginalBatches": len(unresolved),
             "operationsReplayed": 0, "interpretationInferred": False})
 
@@ -161,7 +200,8 @@ class ReaderInbox:
                 "snapshotOperationId": operation, **chunk}, sort_keys=True)
             items.append({"type": "function_call_output", "namespace": "hollywood",
                           "name": "reader_input", "output": output})
-        intent = {"state": "intent", "operation": operation, "snapshot": snapshot, "items": items}
+        intent = {"state": "intent", "operation": operation, "snapshot": snapshot, "items": items,
+                  **({"permitId": runner.permit} if runner.permit else {})}
         saved(journal, intent)
         self.uncertain = True
         try:
