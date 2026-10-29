@@ -442,6 +442,10 @@ class Connector(NativeTools):
                 "GET", "deliveries/" + record["delivery"]["id"]
             )
             d = self.active["delivery"]
+            from .pre_native_recovery import settle as settle_pre_native_recovery
+            recovered = settle_pre_native_recovery(self.journal, record, self.active, self.config)
+            if recovered is not None:
+                return recovered
             if (
                 d["generation"] != record["delivery"]["generation"]
                 or d["claim_id"] != record["delivery"]["claim_id"]

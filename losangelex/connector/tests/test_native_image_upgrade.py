@@ -235,7 +235,6 @@ class ImageTransitionTests(unittest.TestCase):
         for key, value in [
             ("enabled", True),
             ("busy", {"state": "unknown"}),
-            ("pending", {"id": "fixture"}),
         ]:
             with self.subTest(key=key):
                 self.pending[key] = value

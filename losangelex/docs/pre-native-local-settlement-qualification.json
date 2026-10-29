@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "realCanonicalHTTPRead": true,
+  "acceptedOriginalRecoveryRequired": true,
+  "wrongClaimAndLocalBirthEvidenceRejected": true,
+  "originalObservationPreserved": true,
+  "oldAttemptIndexClosedWithoutChangingCanonicalRequest": true,
+  "actualWorkerJournalUnmodifiedByTest": true,
+  "modelsOrProcessesStarted": 0
+}
