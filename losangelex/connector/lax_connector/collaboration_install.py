@@ -90,18 +90,22 @@ def prepare(spec, destination):
         "Explicit installation schema required",
     )
     controller_path = Path(spec["controllerConfig"])
-    admin_path = Path(spec["administratorConfig"])
-    for path in (controller_path, admin_path):
+    preauthorized = spec.get("bootstrapMode") == "preauthorized"
+    require(spec.get("bootstrapMode") in (None, "preauthorized"), "Unknown bootstrap mode")
+    require(not preauthorized or "administratorConfig" not in spec, "Preauthorized preparation must not carry administrator credentials")
+    admin_path = None if preauthorized else Path(spec["administratorConfig"])
+    for path in (controller_path,) + (() if admin_path is None else (admin_path,)):
         protected_directory(path.parent)
-    controller, admin = protected(controller_path), protected(admin_path)
+    controller = protected(controller_path)
+    admin = None if admin_path is None else protected(admin_path)
     authority, host = [str(UUID(controller[k])) for k in ("authorityId", "hostId")]
     require(
-        (admin["authorityId"], admin["hostId"], admin["hollywoodUrl"])
+        admin is None or (admin["authorityId"], admin["hostId"], admin["hollywoodUrl"])
         == (authority, host, controller["hollywoodUrl"]),
         "Administrator and enrolled controller differ",
     )
     require(
-        controller["token"] != admin["token"],
+        admin is None or controller["token"] != admin["token"],
         "Separate enrolled-controller and administrative credentials required",
     )
     require(
@@ -142,7 +146,7 @@ def prepare(spec, destination):
     require(
         not any(
             path.is_relative_to(socket_directory)
-            for path in (state, runtime, admin_path, controller_path)
+            for path in (state, runtime, controller_path) + (() if admin_path is None else (admin_path,))
         ),
         "Persistent state, descriptor and credentials must remain outside the socket lifetime directory",
     )
@@ -219,6 +223,7 @@ def prepare(spec, destination):
     from .capture_protocol import DELIVERY_CAPTURE, HOST_SCOPED_CAPTURE
     capture_protocol = spec.get("captureProtocol", "lax-automatic-native-capture/v2")
     require(capture_protocol in DELIVERY_CAPTURE, "Unsupported installed capture protocol")
+    require(not preauthorized or capture_protocol == HOST_SCOPED_CAPTURE, "Preauthorized bootstrap requires host-scoped runtime capture")
     automatic = {"schema": capture_protocol, "resources": resources}
     if capture_protocol != HOST_SCOPED_CAPTURE:
         automatic["administratorConfig"] = str(admin_path)
@@ -280,7 +285,8 @@ def prepare(spec, destination):
         "authorityId": authority,
         "hostId": host,
         "controllerConfig": str(controller_path),
-        "administratorConfig": str(admin_path),
+        "administratorConfig": None if admin_path is None else str(admin_path),
+        "bootstrapMode": "preauthorized" if preauthorized else "administrator",
         "runtimeDirectory": str(runtime),
         "socketDirectory": str(socket_directory),
         "stateDirectory": str(state),
@@ -298,6 +304,17 @@ def prepare(spec, destination):
         "servicesStarted": 0,
         "activation": "Owner-controlled drained activation remains required; no per-turn work/plan seeding",
     }
+    proposal = {
+        "schema": "lax-collaboration-admission-proposal/v1",
+        "authorityId": authority, "hostId": host,
+        "machineIdentity": controller["machineIdentity"],
+        "hollywoodUrl": controller["hollywoodUrl"],
+        "adapterSha256": adapter,
+        "enrollmentSha256": result["enrollmentSha256"],
+        "resources": resources, "agents": agents,
+    }
+    result["admissionProposalSha256"] = digest(proposal)
+    write_original(out / "admission.prepared.json", proposal)
     for name, value in [
         ("bridge.prepared.json", bridge),
         ("channel.prepared.json", descriptor),
@@ -346,8 +363,8 @@ def apply(directory):
         ),
         "Public descriptor/socket path is not traversable by native owners",
     )
-    admin = protected(Path(manifest["administratorConfig"]))
-    administrative = lambda method, route, payload=None: request(
+    admin = None if manifest.get("bootstrapMode") == "preauthorized" else protected(Path(manifest["administratorConfig"]))
+    administrative = None if admin is None else lambda method, route, payload=None: request(
         admin["hollywoodUrl"], admin["token"], method, route, payload
     )
     relay = lambda method, route, payload=None: request(
@@ -363,80 +380,20 @@ def apply(directory):
     )
     host = manifest["hostId"]
     policy = relay("GET", "hosts/" + host + "/admission")["policy"]
-    resource_policy = administrative("GET", "hosts/" + host + "/collaboration-bridge")
-    from .resource_routing import capabilities
-    capabilities(resource_policy)
-    existing = resource_policy.get("bridge")
-    if existing:
-        require(
-            existing["state"] == "active"
-            and existing.get("features", []) == list(SUPPORTED_FEATURES)
-            and existing["protocol"] == "canonical-edit-plans/v2"
-            and str(existing["controller"]) == str(policy["controller"])
-            and existing["adapter_sha256"] == manifest["adapterSha256"]
-            and existing["enrollment_sha256"] == manifest["enrollmentSha256"],
-            "Existing bridge differs or was revoked; explicit drained upgrade required",
-        )
-    else:
-        payload = {
-            "operationId": "install-bridge:" + manifest["enrollmentSha256"],
-            "revision": 0,
-            "controllerId": str(policy["controller"]),
-            "state": "active",
-            "protocol": "canonical-edit-plans/v2",
-            "features": list(SUPPORTED_FEATURES),
-            "adapterSha256": manifest["adapterSha256"],
-            "enrollmentSha256": manifest["enrollmentSha256"],
-        }
-        administrative_put(
-            state, administrative, "hosts/" + host + "/collaboration-bridge", payload
-        )
-    resources = []
     for root in bridge["automaticCapture"]["resources"]:
         fd = open_root(root["root"])
         try:
             info = os.fstat(fd)
         finally:
             os.close(fd)
-        require(
-            (info.st_dev, info.st_ino) == (root["device"], root["inode"]),
-            "Reviewed resource inode changed before setup",
-        )
-        environment = digest({"hostId": host, "environmentId": root["environmentId"]})
-        payload = {
-            "operationId": "install-root:" + digest(root),
-            "revision": 0,
-            "state": "active",
-            "rootPath": root["root"],
-            "environmentSha256": environment,
-            "rootIdentitySha256": digest(
-                {
-                    "hostId": host,
-                    "environmentSha256": environment,
-                    "device": root["device"],
-                    "inode": root["inode"],
-                }
-            ),
-            "registrationSha256": digest(root),
-        }
-        result = administrative_put(
-            state,
-            administrative,
-            "hosts/" + host + "/physical-workspaces/" + root["workspaceId"],
-            payload,
-        )
-        resources.append({**root, "registryRevision": result["workspace"]["revision"]})
-    by_workspace = {root["workspaceId"]: root for root in resources}
-    for agent, policy in seeds.items():
-        for workspace in policy["workspaceIds"]:
-            root = by_workspace[workspace]
-            payload = {"operationId": "install-agent-access:" + digest([agent, workspace, root["registryRevision"]]),
-                       "revision": 0, "workspaceRevision": root["registryRevision"],
-                       "executionHost": host, "state": "active", "canRead": True, "canWrite": True}
-            administrative_put(state, administrative,
-                "physical-workspaces/" + workspace + "/agent-grants/" + str(UUID(agent)), payload)
-    from .resource_routing import seed_defaults
-    routing_defaults = seed_defaults(state, administrative, manifest["authorityId"], host, seeds, by_workspace)
+        require((info.st_dev, info.st_ino) == (root["device"], root["inode"]),
+                "Reviewed resource inode changed before setup")
+    from .collaboration_admission import register_resources, accepted_resources
+    if manifest.get("bootstrapMode") == "preauthorized":
+        resources, routing_defaults = accepted_resources(directory, manifest, bridge, seeds, relay, policy)
+    else:
+        resources, routing_defaults = register_resources(manifest, bridge["automaticCapture"], seeds,
+                                                          state, administrative, policy)
     bridge["automaticCapture"]["resources"] = resources
     write_original(Path(manifest["configPath"]), bridge)
     write_original(runtime / "channel.json", descriptor, 0o644)

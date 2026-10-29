@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "realPostgreSQLAndHTTP": true,
+  "ownerCredentialNeverSentToProposalURL": true,
+  "remoteRootNotOpenedByOwner": true,
+  "canonicalGrantAndDefaultAdmittedOnce": true,
+  "originalAcceptanceReconciles": true,
+  "changedReceiptRejected": true,
+  "revokedBridgeRejected": true,
+  "actualLocalPreparationOmitsAdministratorConfiguration": true,
+  "publicProposalContainsNoHostCredential": true,
+  "modelsOrServicesStarted": 0,
+  "databaseFixturesRolledBack": true
+}
