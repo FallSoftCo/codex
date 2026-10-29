@@ -79,7 +79,7 @@ def request(url, token, method, path, payload=None):
         return json.load(response)
 
 
-def enroll(spec):
+def enroll(spec, *, prepare_only=False):
     if os.geteuid() != 0:
         raise PermissionError("Host enrollment writes protected installation state")
     authority, host = str(UUID(spec["authorityId"])), str(UUID(spec["hostId"]))
@@ -117,44 +117,48 @@ def enroll(spec):
             "policyOperation": "host-policy:" + str(uuid4()),
         }
         saved(path, intent)
-    owner = spec["administratorCredential"]
+    # Host credentials never need to leave this machine. A remote human
+    # administrator can accept this public digest through the existing API.
+    from .collaboration_bridge import digest
+    if prepare_only:
+        return {
+            "schema": "lax-host-enrollment-proposal/v1",
+            "authorityId": authority, "hostId": host,
+            "machineIdentity": identity, "controllerId": intent["controllerId"],
+            "principal": {"id": intent["controllerId"],
+                          "name": "host-controller-" + host[:12], "kind": "service",
+                          "enrollmentCredentialDigest": digest(intent["token"])},
+            "policy": {**spec["policy"], "operationId": intent["policyOperation"],
+                       "revision": 0, "controllerId": intent["controllerId"],
+                       "machineIdentity": identity},
+            "modelsStarted": 0, "servicesStarted": 0,
+        }
+    preauthorized = spec.get("enrollmentMode") == "preauthorized"
+    if spec.get("enrollmentMode") not in (None, "preauthorized"):
+        raise ValueError("Unknown host enrollment mode")
+    if preauthorized and "administratorCredential" in spec:
+        raise ValueError("Preauthorized finalization must not carry administrator credentials")
+    credential = intent["token"] if preauthorized else spec["administratorCredential"]["token"]
     call = lambda method, route, body=None: request(
-        intent["hollywoodUrl"], owner["token"], method, route, body
+        intent["hollywoodUrl"], credential, method, route, body
     )
-    call(
-        "POST",
-        "principals",
-        {
-            "id": intent["controllerId"],
-            "name": "host-controller-" + host[:12],
-            "kind": "service",
-            "enrollmentCredential": intent["token"],
-        },
-    )
+    if not preauthorized:
+        call("POST", "principals", {
+            "id": intent["controllerId"], "name": "host-controller-" + host[:12],
+            "kind": "service", "enrollmentCredential": intent["token"],
+        })
     policy = call("GET", "hosts/" + host + "/admission")
-    if policy["policy"] is None:
-        call(
-            "PUT",
-            "hosts/" + host + "/admission",
-            {
-                **spec["policy"],
-                "operationId": intent["policyOperation"],
-                "revision": 0,
-                "controllerId": intent["controllerId"],
-                "machineIdentity": identity,
-            },
-        )
+    if policy["policy"] is None and not preauthorized:
+        call("PUT", "hosts/" + host + "/admission", {
+            **spec["policy"], "operationId": intent["policyOperation"],
+            "revision": 0, "controllerId": intent["controllerId"],
+            "machineIdentity": identity,
+        })
         policy = call("GET", "hosts/" + host + "/admission")
-    elif (
-        str(policy["policy"]["controller"]),
-        policy["policy"]["machine_identity"],
-    ) != (
-        intent["controllerId"],
-        identity,
-    ):
-        raise ValueError(
-            "Existing host admission has a different controller; no overwrite"
-        )
+    if not policy.get("policy") or (
+        str(policy["policy"]["controller"]), policy["policy"]["machine_identity"]
+    ) != (intent["controllerId"], identity):
+        raise ValueError("Host admission is absent or belongs to another controller/machine; no overwrite")
     config = {
         **{
             k: intent[k]
@@ -386,15 +390,17 @@ def main():
     parser = argparse.ArgumentParser()
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--enroll", type=Path)
+    actions.add_argument("--prepare-enrollment", type=Path)
     actions.add_argument("--serve", type=Path)
     actions.add_argument("--once", type=Path)
     args = parser.parse_args()
-    path = args.enroll or args.serve or args.once
+    path = args.enroll or args.prepare_enrollment or args.serve or args.once
     config = json.loads(path.read_text())
     if args.serve:
         from .controller_runtime import validate_self
         validate_self(config, path, Path(__file__))
-    result = enroll(config) if args.enroll else supervise(config, once=bool(args.once))
+    result = (enroll(config, prepare_only=bool(args.prepare_enrollment))
+              if args.enroll or args.prepare_enrollment else supervise(config, once=bool(args.once)))
     if result is not None:
         print(json.dumps(result))
 

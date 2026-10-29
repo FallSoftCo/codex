@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "realPostgreSQLAndHTTP": true,
+  "hostSecretGeneratedAndRetainedLocally": true,
+  "ownerCredentialAbsentOnHost": true,
+  "digestOnlyCanonicalAdmission": true,
+  "finalizationAuthenticatedAsOwnController": true,
+  "sameIntentReconcilesWithoutNewCredential": true,
+  "servicesOrModelsStarted": 0,
+  "databaseFixturesRolledBack": true
+}
