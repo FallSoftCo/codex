@@ -99,7 +99,18 @@ class RoleContext:
                 "observationId": request["data"].get("observationId"),
             }
         )
-        if not envelope.get("requiresResponse") or not (addressed or role_work):
+        peer_reply = (
+            request["kind"] in ("result", "message")
+            and request["data"].get("type") == "peerCompletion"
+            and request["data"].get("authorKind") == "agent"
+            and request.get("recipient") == config["agentId"]
+            and envelope.get("obligation") == "peer_reply"
+            and (envelope.get("executionOrigin") or {}).get("schema") == "lax-peer-completion/v1"
+            and envelope["executionOrigin"].get("replyToRequest") == request["data"].get("replyToRequest")
+            and envelope["executionOrigin"].get("replyToDelivery") == request["data"].get("replyToDelivery")
+            and envelope["executionOrigin"].get("resultEventId") == request.get("source")
+        )
+        if not envelope.get("requiresResponse") or not (addressed or role_work or peer_reply):
             raise ValueError("Observation cannot admit an agent turn")
         if envelope.get("senderKind") not in ("human", "agent"):
             raise ValueError("Unverified sender kind")

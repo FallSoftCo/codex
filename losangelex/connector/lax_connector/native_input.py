@@ -35,6 +35,14 @@ def submission(agent_id, active, thread_id, model, effort, additional_context):
         raise ValueError("Unsupported Hollywood author kind for conversational input")
     # The server rejects arbitrary self-requests, but admits bounded, sourced
     # work-review events for the owner. Preserve that canonical author too.
+    native_kind = request["kind"]
+    if native_kind == "result" and request["data"].get("type") == "peerCompletion":
+        # Native v1 classifies agent communication as message/request. Preserve
+        # the canonical result event, author, body, source and identity; project
+        # this protocol completion as an agent message, never human input.
+        native_kind = "message"
+    if native_kind not in ("message", "request"):
+        raise ValueError("Unsupported native agent communication kind")
     return "hollywood/agentMessage", {
         "threadId": thread_id,
         "authorityId": authority,
@@ -44,7 +52,7 @@ def submission(agent_id, active, thread_id, model, effort, additional_context):
         "recipientId": recipient,
         "body": request["body"],
         "audience": request["audience"],
-        "kind": request["kind"],
+        "kind": native_kind,
         "sourceEventId": str(UUID(request["source"])) if request.get("source") else None,
         "expectsReply": request["data"].get("expectsReply", False),
     }

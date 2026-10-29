@@ -21,6 +21,8 @@ CAPABILITIES += ['completed-work-report-reconciliation/v1', 'completed-report-sc
 PURPOSE_CAPABILITIES = [value for value in CAPABILITIES if value not in {
     "completed-work-report-reconciliation/v1", "completed-report-scope/v1"}]
 PURPOSE_CAPABILITIES += ["primary-inbox-reconciliation/v1", "canonical-work-resource-routing/v1"]
+# Opt-in only for the single-context queue, never a purpose-runtime conversion.
+CAPABILITIES += ["single-context-peer-completions/v1"]
 
 
 STRING = {"type": "string"}
