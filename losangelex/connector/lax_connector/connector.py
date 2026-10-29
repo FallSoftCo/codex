@@ -116,8 +116,9 @@ class Connector(NativeTools):
         # A host-local Hollywood may serve another original authority over
         # NATS. These are routing identities, never sender/permission overrides;
         # the owning authority verifies the current credential and host binding.
-        if self.config.get("authorityId"):
-            headers["X-Hollywood-Authority"] = self.config["authorityId"]
+        authority = self.config.get("federationAuthorityId", self.config.get("authorityId"))
+        if authority:
+            headers["X-Hollywood-Authority"] = authority
             headers["X-Hollywood-Agent"] = self.config["agentId"]
         context = self.effects.current.get()
         if context and method in ("POST", "PUT", "PATCH", "DELETE"):

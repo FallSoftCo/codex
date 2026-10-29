@@ -32,7 +32,7 @@ def active_spec(spec, authority, host, agent):
             or value["originalSpecDigest"] != observer.digest(spec)):
         raise ValueError("Accepted software release differs from original provisioning")
     return {**spec, "binary": value["newBinary"], "interpreter": value["newInterpreter"],
-            **({"hollywoodUrl": value["newHollywoodUrl"]} if "newHollywoodUrl" in value else {})}
+            **({"hollywoodUrl": value["newHollywoodUrl"], "federationAuthorityId": authority} if "newHollywoodUrl" in value else {})}
 
 
 def runtime_spec(authority, agent):
@@ -219,6 +219,7 @@ def prepare(authority, host, agent, request, output):
             route_probe={'url':new_url,'authorityId':authority,'modelsStarted':0,
                 'authenticatedOriginalAgentRead':True}
             new_values['hollywoodUrl']=new_url
+            new_values['federationAuthorityId']=authority
         new_config = (json.dumps(new_values, indent=2) + "\n").encode()
         new_unit = "\n".join(after_exec if line == before_exec else line
                              for line in before_unit.decode().split("\n")).encode()

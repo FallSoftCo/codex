@@ -431,7 +431,7 @@ class ReleaseTests(unittest.TestCase):
             self.prepare()
             plan=json.loads((self.prepared/'release-plan.json').read_text())
             after=json.loads(base64.b64decode(plan['targets'][0]['after']))
-            self.assertEqual(after,{**self.config,'binary':str(self.new_binary),'hollywoodUrl':new_url})
+            self.assertEqual(after,{**self.config,'binary':str(self.new_binary),'hollywoodUrl':new_url,'federationAuthorityId':authority})
             self.assertEqual((self.home/'connector.json').read_bytes(),before)
             self.assertEqual(plan['newHollywoodUrl'],new_url)
             self.assertEqual(len(seen),1)
