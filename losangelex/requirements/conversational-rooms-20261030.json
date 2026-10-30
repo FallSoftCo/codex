@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "status": "implementation-in-progress",
   "owner": "01a0f2bc-ff5a-70c2-b682-10f0987dab80",
   "authority": "Explicit human room-conversation direction, 2026-10-30",
@@ -28,12 +28,18 @@
     {
       "id": "persistent-runtime",
       "state": "pending",
-      "scope": "One existing native agent conversation; inbox survives restarts, sender lost ACK is reconciled; no per-message executor launch/claim."
+      "scope": "Run the already-proven conversation loop as a maintained long-lived native agent runtime, using existing identities/threads and full normal tools. Deliver new human input during real work without per-message process launches. Native crash durability is a separate hardening track, not the next product milestone.",
+      "nextProof": "A human gives actual bounded development work in a room, both native agents participate with normal tools, a later human turn reaches the same contexts, and one agent asks a question answered in that room."
     },
     {
       "id": "participation-context",
       "state": "pending",
-      "scope": "Coherent base instructions, native tools, roster/role/current-work context and explicit outward publication."
+      "scope": "Integrate full native tools, roster/roles, explicit publication, cooperation, question/answer and ordinary idle/busy behavior into the maintained runtime; preserve private and agent authorship."
+    },
+    {
+      "id": "federation",
+      "state": "pending",
+      "scope": "Extend proven local loop across existing NATS/member hosts without SSH-based agent work or central execution dependency."
     },
     {
       "id": "client-parity",
@@ -41,9 +47,10 @@
       "scope": "Android/web room input, live actions/messages, status, questions, scoped controls, voice and attention-based notifications."
     },
     {
-      "id": "federation",
-      "state": "pending",
-      "scope": "Extend proven local loop across existing NATS/member hosts without SSH-based agent work or central execution dependency."
+      "id": "durability-hardening",
+      "state": "partially-implemented-not-qualified-native",
+      "scope": "Close native pre-persistence acknowledgement gap and prove restart/lost-ACK/compaction handling before unattended migration. Retain original uncertain handoffs without resend meanwhile. This work does not gate isolated functional room development.",
+      "proof": "Publication lost-ACK real HTTP proof passed; connector journal survives reopen; native commitment barrier remains open."
     },
     {
       "id": "migration-release",
@@ -65,9 +72,18 @@
     "Prior executor timeout patch is not the target architecture."
   ],
   "qualification": {
-    "communicationPgHttp": "conversational-inbox-qa-r03",
+    "communicationPgHttp": "conversational-inbox-qa-r04",
     "nativeInput": "conversational-native-input-qa-r04",
     "naturalSharedRoom": "conversational-room-model-qa-r02",
     "productionDeployed": false
-  }
+  },
+  "executionOrder": [
+    "Next: maintained local room runtime with full native tools and ongoing real work, rather than another crash-recovery study.",
+    "Prove ordinary continued human conversation, agent cooperation, and an actionable question/answer in the same room.",
+    "Extend that working room across CPU and GPU through existing local Hollywood/NATS paths; each agent executes locally.",
+    "Integrate Android and web into that same canonical conversation/activity/state path, retaining voice and questions.",
+    "Complete durability/reconnect/cancellation hardening against the working runtime before unattended migration.",
+    "Move this development into the qualified room and demonstrate a compatible NextComp update produced across hosts and delivered through existing update distribution."
+  ],
+  "priorityCorrection": "2026-10-30: crash recovery was incorrectly treated as the immediate critical path. Build the usable maintained room next; durability remains a migration requirement, not a reason to defer functional milestones."
 }
