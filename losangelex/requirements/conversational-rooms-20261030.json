@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "status": "implementation-in-progress",
+  "owner": "01a0f2bc-ff5a-70c2-b682-10f0987dab80",
+  "authority": "Explicit human room-conversation direction, 2026-10-30",
+  "invariants": [
+    "Every new human room message reaches every agent member; direct messages retain their audience.",
+    "Idle agents take native Codex turns by default. Busy agents assess relevance inside the existing native loop; ordinary room input does not kill active work.",
+    "Hollywood owns authenticated messages, membership, ordering, fanout and communication receipts, not executor reservations or turn supervision.",
+    "LAX owns native input, durable per-agent reception, processes, turns, cancellation, recovery and tool execution.",
+    "No mandatory leader; every agent has persistent identity/context and knows relevant participants and responsibilities.",
+    "No blanket model polling, historical task replay, automatic agent creation, or acknowledgement cascades.",
+    "Accepted communication, native input consumed, outward reply and completed work remain distinct.",
+    "Unknown external effects retain exact original operation identities and require reconciliation."
+  ],
+  "milestones": [
+    {
+      "id": "communication-feed",
+      "state": "candidate-qualified-real-pg-http",
+      "proof": "Same canonical human event to two agent members; private isolation; cursor paging/reconnect; membership revocation; zero execution deliveries/executors/models."
+    },
+    {
+      "id": "native-input",
+      "state": "candidate-qualified-actual-native-model",
+      "scope": "Reuse Codex start-or-steer input and legacy idle/busy room admission behavior while preserving authenticated human/peer provenance and durable input identity. Queue peer observations without model wake loops.",
+      "proof": "Same human message to two independent native threads; relevant followup remains in same active turn; passive peer context starts zero model turns and is recalled by model; actual peer question/reply and deliberate public result with zero Hollywood execution deliveries/executors."
+    },
+    {
+      "id": "persistent-runtime",
+      "state": "pending",
+      "scope": "One existing native agent conversation; inbox survives restarts, sender lost ACK is reconciled; no per-message executor launch/claim."
+    },
+    {
+      "id": "participation-context",
+      "state": "pending",
+      "scope": "Coherent base instructions, native tools, roster/role/current-work context and explicit outward publication."
+    },
+    {
+      "id": "client-parity",
+      "state": "pending",
+      "scope": "Android/web room input, live actions/messages, status, questions, scoped controls, voice and attention-based notifications."
+    },
+    {
+      "id": "federation",
+      "state": "pending",
+      "scope": "Extend proven local loop across existing NATS/member hosts without SSH-based agent work or central execution dependency."
+    },
+    {
+      "id": "migration-release",
+      "state": "pending",
+      "scope": "Preserve original message IDs, active contexts, queues, pairings, drafts, receipts and deliberate stops; one reversible coordinated release."
+    }
+  ],
+  "acceptance": [
+    "Human plus multiple actual native agents, one public message received by all idle members.",
+    "Human update during useful work incorporated at native input boundaries without a second competing turn.",
+    "Peer contribution and handoff, no endless response loop or duplicate edits.",
+    "Question and human answer resume same context.",
+    "Transport outage, lost ACK and runtime restart preserve original input and avoid duplicate business actions.",
+    "Cross-host room agents deliver a compatible NextComp update through the existing immutable artifact distribution path."
+  ],
+  "nonClaims": [
+    "No production conversational migration yet.",
+    "Communication feed proof is not native model behavior proof.",
+    "Prior executor timeout patch is not the target architecture."
+  ],
+  "qualification": {
+    "communicationPgHttp": "conversational-inbox-qa-r03",
+    "nativeInput": "conversational-native-input-qa-r04",
+    "naturalSharedRoom": "conversational-room-model-qa-r02",
+    "productionDeployed": false
+  }
+}

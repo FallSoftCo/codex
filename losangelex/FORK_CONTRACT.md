@@ -51,6 +51,23 @@ already implements or has qualified every requirement.
 - User stops, cancellations, permissions, existing pairings, drafts and queued
   work survive upgrades. An upstream import must not activate paused work.
 
+## Human room conversation — 2026-10-30 user correction
+
+This section supersedes addressed-request-only participation and per-message
+Hollywood execution admission for the new conversational runtime. It records the
+implementation target, not a claim of current deployment.
+
+Every new public human message fans out to all current room agent members. Idle
+agents take normal native Codex turns by default; busy agents receive new input
+at native model-step boundaries and judge relevance without automatic interruption
+or concurrent turns. Peer authorship remains distinct; ordinary peer observations
+must not create perpetual reply/model-wake loops. Explicit stops use native controls.
+Hollywood owns communication, not execution. LAX owns the existing Codex agent
+lifecycle. A message receipt is not a claim, process reservation or work completion.
+
+The complete tracked scope, acceptance journeys and migration limits are in
+[conversational-rooms-20261030.json](requirements/conversational-rooms-20261030.json).
+
 ## Primary single-context runtime — 2026-10-29 user direction
 
 New cross-host room work uses the standalone `lax-connect` / `lax_connector.connector`
