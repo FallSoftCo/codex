@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import UUID, uuid4, uuid5
 
 from .journal import saved
+from .host_observation import current_node, receipt
 
 
 def machine_identity():
@@ -72,6 +73,7 @@ def request(url, token, method, path, payload=None):
         headers={
             "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
+            **({"X-Hollywood-Host-Node":current_node.get()} if current_node.get() else {}),
         },
         method=method,
     )
@@ -214,7 +216,7 @@ def observe_executors(config):
             route += "?after=" + after
         page = request(config["hollywoodUrl"], config["token"], "GET", route)
         for row in page["executors"]:
-            path = root / ("executor-observation-" + row["id"] + ".json")
+            path = receipt(config,"executor-observation-" + row["id"] + ".json")
             prior = json.loads(path.read_text()) if path.exists() else None
             if prior and prior["state"] == "pending":
                 payload = prior["payload"]
@@ -224,7 +226,7 @@ def observe_executors(config):
                     if fact is None:
                         fact = observe(config, row)
                 except Exception as error:
-                    saved(root / ("executor-sensor-gap-" + row["id"] + ".json"), {
+                    saved(receipt(config,"executor-sensor-gap-" + row["id"] + ".json"), {
                         "error": type(error).__name__, "detail": str(error)[:500],
                         "executorId": row["id"], "descriptorDigest": row["descriptor_digest"],
                         "selfStopAttested": False,
@@ -311,7 +313,7 @@ def observe_executors(config):
                     if native:
                         AutomaticCapture(Bridge(capture)).ensure((native_pid,native["uid"],0))
                 except Exception as error:
-                    saved(root / ("collaboration-capture-gap-"+row["id"]+".json"), {
+                    saved(receipt(config,"collaboration-capture-gap-"+row["id"]+".json"), {
                         "executorId":row["id"],"state":"held","reason":type(error).__name__,
                         "modelsStarted":0,"effectReplayed":False,
                     })
@@ -319,20 +321,23 @@ def observe_executors(config):
         if not after:
             break
     saved(
-        root / "executor-observation-summary.json",
+        receipt(config,"executor-observation-summary.json"),
         {"observed": observed, "unconfirmed": gaps},
     )
     return observed
 
 
 def supervise(config, once=False):
+    if "observationNodes" in config:
+        from .host_observation import serve
+        return serve(config,once=once)
     if machine_identity() != config["machineIdentity"]:
         raise PermissionError("Controller config belongs to another machine")
     root = Path(config["state"])
     root.mkdir(parents=True, mode=0o700, exist_ok=True)
-    lock = (root / "controller.lock").open("a")
+    lock = receipt(config,"controller.lock").open("a")
     fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    path = root / "sample-intent.json"
+    path = receipt(config,"sample-intent.json")
     while True:
         try:
             prior = json.loads(path.read_text()) if path.exists() else None
@@ -354,15 +359,15 @@ def supervise(config, once=False):
             )
             saved(path, {"state": "completed", "payload": payload, "receipt": result})
             from .purpose_observer import reconcile as reconcile_purposes
-            purpose_incarnations = reconcile_purposes(config)
+            purpose_incarnations = reconcile_purposes(config) if config.get('_observeServices',True) else {'held':0,'scope':'local-node-only'}
             executor_observations = observe_executors(config)
             from .service_restart import reconcile_services
-            service_incarnations = reconcile_services(config)
+            service_incarnations = reconcile_services(config) if config.get('_observeServices',True) else {'held':0,'scope':'local-node-only'}
             executor_gaps = json.loads(
-                (root / "executor-observation-summary.json").read_text()
+                (receipt(config,"executor-observation-summary.json")).read_text()
             )["unconfirmed"]
             saved(
-                root / "status.json",
+                receipt(config,"status.json"),
                 {
                     "state": "observation-gaps" if executor_gaps or service_incarnations["held"] or purpose_incarnations["held"] else "healthy",
                     "lastReceipt": result,
@@ -377,7 +382,7 @@ def supervise(config, once=False):
                 return result
         except Exception as error:
             saved(
-                root / "status.json",
+                receipt(config,"status.json"),
                 {"state": "held", "error": type(error).__name__, "modelsStarted": 0},
             )
             if once:

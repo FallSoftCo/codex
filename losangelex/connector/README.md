@@ -186,3 +186,22 @@ transport. Conflicting owners, organizations and participants fail before RPC.
 `tests/integration_work_transport.py` exercises interleaved scopes against a real
 HTTP listener without starting a model. This is transport qualification, not
 proof of host-independent runtime enrollment or offline execution.
+
+### Independent host observation lanes (SDK206 candidate)
+
+A protected controller may list `observationNodes`, with its local node first.
+These are separately accepted bindings for the SAME physical host/controller,
+not new workers or tokens. Each node gets an independent bounded I/O lane,
+capacity-intent journal, executor-observation receipts and failure backoff.
+An unavailable peer does not stall local samples. Local service registration
+runs only in the local lane. `status.json` preserves local health;
+`observation-sources.json` reports each node and overall degraded state honestly.
+
+The HTTP transport uses `X-Hollywood-Host-Node` only for host policy reads,
+capacity samples and executor observation. The gateway binds it to the installed
+host and current local controller; the receiving node rechecks its own binding.
+This grants no model execution, administrative or agent-message authority.
+
+This is observation federation. It does not turn independent room-store
+reservations into a single global host-capacity transaction. Concurrent
+multi-agent/multi-owner admission remains a separate requirement.
