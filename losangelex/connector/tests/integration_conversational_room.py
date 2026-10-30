@@ -22,10 +22,11 @@ async def main():
     actors={k:{'id':uid(),'token':secrets.token_urlsafe(40)} for k in ('A','B')}
     marker='VERIFY'+secrets.token_hex(3).upper()
     (root/'fixture.intent.private.json').write_text(json.dumps({'authority':authority,'room':room,'credentials':credentials,'actors':actors,'marker':marker}))
-    store=Store(database);store.bootstrap(authority,'SYNTHETIC native collaborative room',{'globalRoomId':room,'credentials':credentials})
+    store=Store(database);store.bootstrap(authority,'SYNTHETIC native collaborative room',{'globalRoomId':uid(),'credentials':credentials})
     owner=credentials['Owner']['principalId']
-    for name,a in actors.items():
-        store.principal(owner,a['id'],name,'agent',a['token']);store.membership(owner,room,a['id'],{'can_read':True,'can_post':True,'can_request':True},0)
+    for name,a in actors.items():store.principal(owner,a['id'],name,'agent',a['token'])
+    store.create_room(owner,room,'Conversation QA','Synthetic native room collaboration',actors['A']['id'])
+    store.membership(owner,room,actors['B']['id'],{'can_read':True,'can_post':True,'can_request':True},0)
     runner=web.AppRunner(application(store),access_log=None);await runner.setup();site=web.TCPSite(runner,'127.0.0.1',0);await site.start()
     base='http://127.0.0.1:'+str(site._server.sockets[0].getsockname()[1])+'/hollywood/v3/'
     with store.pool.connection() as c:head=c.execute('SELECT next_seq FROM hb_authority WHERE id=%s',(authority,)).fetchone()['next_seq']

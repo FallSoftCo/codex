@@ -21,10 +21,11 @@ async def main():
         'actors':{k:{'id':uid(),'token':secrets.token_urlsafe(40)} for k in ('A','B')}}
     (root/'fixture.intent.private.json').write_text(json.dumps(intent))
     owner=intent['credentials']['Owner']['principalId']
-    fixture_store.bootstrap(intent['authority'],'SYNTHETIC native conversational journey',{'globalRoomId':intent['room'],'credentials':intent['credentials']})
+    fixture_store.bootstrap(intent['authority'],'SYNTHETIC native conversational journey',{'globalRoomId':uid(),'credentials':intent['credentials']})
     for name,a in intent['actors'].items():
         fixture_store.principal(owner,a['id'],name,'agent',a['token'])
-        fixture_store.membership(owner,intent['room'],a['id'],{'can_read':True,'can_post':True,'can_request':True},0)
+    fixture_store.create_room(owner,intent['room'],'Native input QA','Synthetic input and peer retention',intent['actors']['A']['id'])
+    fixture_store.membership(owner,intent['room'],intent['actors']['B']['id'],{'can_read':True,'can_post':True,'can_request':True},0)
     receipt=fixture_store.post(owner,intent['room'],'initial-native-input',{'kind':'message','audience':'room','body':'Synthetic room input check: greet the other participant briefly. Do not call tools.'})
     event=receipt['event']
     for a in intent['actors'].values():
