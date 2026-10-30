@@ -85,5 +85,24 @@
     "Complete durability/reconnect/cancellation hardening against the working runtime before unattended migration.",
     "Move this development into the qualified room and demonstrate a compatible NextComp update produced across hosts and delivered through existing update distribution."
   ],
-  "priorityCorrection": "2026-10-30: crash recovery was incorrectly treated as the immediate critical path. Build the usable maintained room next; durability remains a migration requirement, not a reason to defer functional milestones."
+  "priorityCorrection": "2026-10-30: crash recovery was incorrectly treated as the immediate critical path. Build the usable maintained room next; durability remains a migration requirement, not a reason to defer functional milestones.",
+  "realAcceptanceCase": {
+    "authorityId": "c8a5f0a1-95ea-4c3e-b408-b5c445d8b133",
+    "roomId": "bfbd00a4-64c2-40f8-a7da-49c99a163645",
+    "humanProblemEvent": "4e08c1f1-7202-4c5b-b3d7-5d9369d788cc",
+    "humanDelegationEvent": "90664b94-92d1-4cd5-a042-8a25d07bc0ee",
+    "humanDelegationSeq": 947,
+    "request": "Allocate agents in this room to parallelize room UX, browser parity and readiness work.",
+    "alreadyObserved": "Global announced Android UX implementer and independent client QA allocation; source retains web and runtime/release ownership. Allocation and artifacts must be reconciled before further dispatch.",
+    "successCriteria": [
+      "Existing assignments, contexts and receipts are reconciled; no duplicate workers or human request replay.",
+      "Agents perform useful local implementation with full native tools, communicate directly with attributed room messages, and receive human follow-ups in ongoing contexts.",
+      "Android keyboard stays focused after send; routine executor lifecycle is activity rather than alarming room chat.",
+      "Browser exposes usable room conversation, activity, questions and source-bound controls alongside existing sessions.",
+      "CPU/GPU agents cooperate locally through Hollywood/NATS, without SSH-based agent work.",
+      "Actual integrated client journeys pass; compatible update is published through existing delivery paths with exact artifacts and honest physical-device limits.",
+      "Useful results and genuine blockers are reported in the original room; no model polling or acknowledgement cascades."
+    ],
+    "completionRule": "A successful synthetic conversation or allocation announcement alone does not fulfill this request or the whole vision."
+  }
 }
