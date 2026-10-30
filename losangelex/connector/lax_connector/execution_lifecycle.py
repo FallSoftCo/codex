@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from uuid import UUID, uuid5
 
+from aiohttp import ClientError
+
 from .errors import HttpFailure
 from .host import machine_identity
 from .journal import saved
@@ -190,9 +192,33 @@ class ExecutionLifecycle:
         )
 
     async def require_registered(self):
-        deadline = time.monotonic() + 45
+        """Wait on the original reservation; observation lag is not execution.
+
+        This method precedes process birth. Its reads may safely be repeated,
+        but it must never reserve another executor or start a model to recover.
+        The durable reservation remains the sole launch identity.
+        """
+        delay = 0.5
         while True:
-            result = await self.transport("GET", "executors/" + self.id)
+            try:
+                result = await self.transport("GET", "executors/" + self.id)
+            except (TimeoutError, OSError, ClientError) as error:
+                result = None
+                reason = type(error).__name__
+            except HttpFailure as error:
+                if error.status not in (408, 429, 500, 502, 503, 504):
+                    raise
+                result = None
+                reason = "host_metadata_unavailable"
+            if result is None:
+                saved(self.root / "launch-admission-status.json", {
+                    "state": "waiting_for_host_verification", "executorId": self.id,
+                    "reason": reason, "nativeProcessStarted": False,
+                    "nextCheckSeconds": delay,
+                })
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30.0)
+                continue
             row = self.validate(result)
             if result["deliveryState"] != "claimed" or row["state"] == "stopped":
                 raise RuntimeError("Original launch no longer admits process birth")
@@ -203,12 +229,20 @@ class ExecutionLifecycle:
                 and await self.current_controller(row)
             ):
                 saved(self.root / "guardian-registration-attestation.json", result)
+                saved(self.root / "launch-admission-status.json", {
+                    "state": "ready", "executorId": self.id,
+                    "nativeProcessStarted": False,
+                })
                 return
-            if time.monotonic() >= deadline:
-                raise RuntimeError(
-                    "Independent guardian registration unconfirmed; no native process created"
-                )
-            await asyncio.sleep(0.5)
+            # A sensor timeout cannot imply uncertain model/tool effects when
+            # this coroutine has not even returned permission to spawn.
+            saved(self.root / "launch-admission-status.json", {
+                "state": "waiting_for_host_verification", "executorId": self.id,
+                "reason": evidence.get("reason") or "guardian_observation_pending",
+                "nativeProcessStarted": False, "nextCheckSeconds": delay,
+            })
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30.0)
 
     async def attach(self, rpc):
         self.native = rpc.process
