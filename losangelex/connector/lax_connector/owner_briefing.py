@@ -67,6 +67,18 @@ def guardian_peer(capture, peer):
             require(guardian == actual and actual["pid"] == peer[0] and uid == peer[1],
                     "Briefing source is not the installed writer guardian")
         return {"agentId":agent,"actual":actual,"bindingDigest":digest(binding)}
+    from .kernel_incarnation import Unavailable, invocation as kernel_invocation, managed_guardian
+    baseline = observer.protected(observer.directory(authority, host, agent) / "enrollment.json")
+    try:
+        current = kernel_invocation(baseline["unit"])
+        binding = observer.protected(observer.directory(authority, host, agent) / (current + ".json"))
+        guardian = managed_guardian(binding)
+    except Unavailable:
+        pass  # Older kernel/systemd profiles retain the full lifecycle path.
+    else:
+        require(guardian == actual and actual["pid"] == peer[0] and uid == peer[1],
+                "Briefing source is not the installed managed guardian")
+        return {"agentId": agent, "actual": actual, "bindingDigest": digest(binding)}
     info = observer.properties(observer.installed_unit(authority, agent))
     require(
         info["ActiveState"] == "active"

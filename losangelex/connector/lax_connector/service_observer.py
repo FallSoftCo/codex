@@ -321,10 +321,11 @@ def observe(config, row, *, registry=None, purpose_installation=None):
         }
     native = process(d["nativePid"]) if d["nativePid"] is not None else None
     native_original = native is not None and native["start"] == d["nativeStart"]
-    if purpose_installation is not None and native_original and row.get("launch_phase") == "attached":
-        from .kernel_incarnation import Unavailable, guardian as kernel_guardian
+    if native_original and row.get("launch_phase") == "attached" and (purpose_installation is not None or registry is None):
+        from .kernel_incarnation import Unavailable, guardian as kernel_guardian, managed_guardian
         try:
-            guardian = kernel_guardian(purpose_installation, binding)
+            guardian = (kernel_guardian(purpose_installation, binding)
+                        if purpose_installation is not None else managed_guardian(binding))
         except Unavailable:
             pass  # Preserve the existing stopped/orphan/control-plane observer.
         else:

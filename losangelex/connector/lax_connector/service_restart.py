@@ -455,24 +455,7 @@ def inspection(authority, host, agent):
     policy = observer.protected(path)
     try:
         baseline, binding, _, guardian = actual(authority, host, agent)
-        approved_guardian = policy["guardianExecutable"]
-        if (
-            guardian["executable"] != approved_guardian["path"]
-            or file_identity(guardian["executable"]) != approved_guardian["identity"]
-        ):
-            raise ValueError("Changed guardian executable")
-        if (
-            observer.digest(baseline) != policy["enrollmentDigest"]
-            or observer.protected(root / "enrollment.json") != baseline
-        ):
-            raise ValueError("Changed service enrollment/definition")
-        if file_identity(baseline["binary"]) != policy["imageIdentity"]:
-            raise ValueError("Changed native image identity")
-        if (
-            file_hash(Path(baseline["home"]) / "connector.json", baseline["uid"])[0]
-            != policy["configurationSha256"]
-        ):
-            raise ValueError("Changed connector configuration")
+        validate_approval(authority, host, agent, baseline, guardian)
     except ServiceStopped:
         return {
             "enabled": False,
@@ -491,3 +474,27 @@ def inspection(authority, host, agent):
         "reason": "approved-same-image-registration",
         "policyDigest": observer.digest(policy),
     }
+
+
+def validate_approval(authority, host, agent, baseline, guardian):
+    """Validate the same protected pins for both kernel and manager observation."""
+    root = observer.directory(authority, host, agent)
+    policy = observer.protected(root / POLICY)
+    approved_guardian = policy["guardianExecutable"]
+    if (
+        guardian["executable"] != approved_guardian["path"]
+        or file_identity(guardian["executable"]) != approved_guardian["identity"]
+    ):
+        raise ValueError("Changed guardian executable")
+    if (
+        observer.digest(baseline) != policy["enrollmentDigest"]
+        or observer.protected(root / "enrollment.json") != baseline
+    ):
+        raise ValueError("Changed service enrollment/definition")
+    if file_identity(baseline["binary"]) != policy["imageIdentity"]:
+        raise ValueError("Changed native image identity")
+    if (
+        file_hash(Path(baseline["home"]) / "connector.json", baseline["uid"])[0]
+        != policy["configurationSha256"]
+    ):
+        raise ValueError("Changed connector configuration")

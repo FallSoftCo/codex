@@ -170,7 +170,9 @@ class GuardianIdentityTests(unittest.TestCase):
             saved(root / "enrollment.json", baseline)
             saved(root / (invocation + ".json"), binding)
             capture = SimpleNamespace(config={"authorityId": authority, "hostId": host})
+            from lax_connector.kernel_incarnation import Unavailable
             with (
+                patch("lax_connector.kernel_incarnation.invocation", side_effect=Unavailable("legacy fixture")),
                 patch.object(
                     owner, "installed_native_owner", return_value=(agent, str(binary))
                 ),

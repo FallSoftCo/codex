@@ -65,6 +65,39 @@ def guardian(value, binding):
     }
     if any(binding.get(key) != item for key, item in expected.items()):
         raise PermissionError("Registered kernel guardian identity differs")
+    return _guardian(value, binding, "mixed", [value["interpreter"], "-m",
+        "lax_connector.context_runtime", "--config", value["config"], "--purpose", purpose])
+
+
+def managed_guardian(binding):
+    """Verify a legacy connector against protected enrollment and restart approval."""
+    from .native_release import runtime_spec
+    from .service_restart import validate_approval
+    authority, host, agent = (binding[k] for k in ("authorityId", "hostId", "agentId"))
+    uid, home, binary = observer.expected_owner(authority, agent)
+    spec, receipt, global_agent = runtime_spec(authority, agent)
+    baseline = observer.protected(observer.directory(authority, host, agent) / "enrollment.json")
+    image = Path(binary).resolve(strict=True).stat()
+    expected = {
+        "schema": "lax-service-enrollment/v1", "authorityId": authority,
+        "hostId": host, "agentId": agent, "uid": uid, "home": str(home),
+        "unit": receipt["unit"], "unitDefinitionDigest": binding["unitDefinitionDigest"],
+        "binary": str(Path(binary).resolve()), "binaryDevice": image.st_dev,
+        "binaryInode": image.st_ino, "machineIdentity": observer.machine_identity(),
+        "killMode": "control-group",
+    }
+    if baseline != expected or any(binding.get(k) != v for k, v in baseline.items() if k != "schema"):
+        raise PermissionError("Registered managed enrollment differs")
+    if binding.get("bootId") != observer.boot_id():
+        raise Unavailable("Managed guardian belongs to another boot")
+    value = {"interpreter": spec["interpreter"]}
+    result = _guardian(value, binding, "control-group", [spec["interpreter"], "-m",
+        "lax_connector.connector", "--config", str(home / "connector.json"), "--serve"])
+    validate_approval(authority, host, agent, baseline, result)
+    return result
+
+
+def _guardian(value, binding, kill_mode, expected_args):
     current = invocation(binding["unit"])
     if current != binding["serviceInvocation"]:
         raise Unavailable("Registered invocation is no longer current")
@@ -79,8 +112,8 @@ def guardian(value, binding):
     unit.read_string(encoded.decode())
     if (unit.get("Service", "Type", fallback="simple") != "simple"
             or unit.get("Service", "PIDFile", fallback="")
-            or unit.get("Service", "KillMode", fallback="control-group") != "mixed"):
-        raise Unavailable("Kernel guardian path requires the enrolled simple-purpose lifecycle")
+            or unit.get("Service", "KillMode", fallback="control-group") != kill_mode):
+        raise Unavailable("Kernel guardian path requires the enrolled simple lifecycle")
     group_name = binding["controlGroup"]
     if (not isinstance(group_name, str) or not group_name.startswith("/")
             or ".." in group_name.split("/") or "\x00" in group_name):
@@ -105,9 +138,8 @@ def guardian(value, binding):
             raise Unavailable("Original purpose guardian is not live")
         root = Path("/proc") / str(actual["pid"])
         args = root.joinpath("cmdline").read_bytes().rstrip(b"\0").decode().split("\0")
-        if args != [value["interpreter"], "-m", "lax_connector.context_runtime",
-                    "--config", value["config"], "--purpose", purpose]:
-            raise PermissionError("Live purpose guardian launcher differs")
+        if args != expected_args:
+            raise PermissionError("Live guardian launcher differs")
         environment = dict(part.split(b"=", 1) for part in
                            root.joinpath("environ").read_bytes().split(b"\0")
                            if b"=" in part)
