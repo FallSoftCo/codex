@@ -172,3 +172,17 @@ inference may publish its final (or unphased) model reply; cancellation and
 failure publish the observed lifecycle outcome instead of an earlier model plan.
 This does not equate inference completion with Goal or Work acceptance. Metadata
 readback also keeps native mode enabled and never starts or resumes a model turn.
+
+### Federated work transport (SDK205)
+
+An agent's idle connection belongs to its local Hollywood node. Execution and
+journal reconciliation additionally carry the owner node captured in the
+canonical claim. Context-local routing follows asynchronous child operations
+and resets after success, failure or cancellation; it never changes the agent's
+home, account, native thread or model. Resource-specific room/delivery routing
+still takes precedence. Claims without federation metadata retain their existing
+transport. Conflicting owners, organizations and participants fail before RPC.
+
+`tests/integration_work_transport.py` exercises interleaved scopes against a real
+HTTP listener without starting a model. This is transport qualification, not
+proof of host-independent runtime enrollment or offline execution.

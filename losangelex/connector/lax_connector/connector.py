@@ -18,6 +18,7 @@ from aiohttp import ClientSession, ContentTypeError
 
 from .activity import Activity
 from .native_tools import NativeTools
+from . import work_transport
 from .tool_execution import capture
 from .agent_context import AgentContext
 from .passive_context import PassiveReceiver
@@ -120,6 +121,11 @@ class Connector(NativeTools):
         if authority:
             headers["X-Hollywood-Authority"] = authority
             headers["X-Hollywood-Agent"] = self.config["agentId"]
+        route=work_transport.current.get()
+        if route is not None:
+            headers["X-Hollywood-Authority"]=route.authority
+            headers["X-Hollywood-Agent"]=self.config["agentId"]
+            headers["X-Hollywood-Work-Node"]=route.node
         context = self.effects.current.get()
         if context and method in ("POST", "PUT", "PATCH", "DELETE"):
             scope = context["scope"]
@@ -441,6 +447,7 @@ class Connector(NativeTools):
             for name, value in previous.items():
                 setattr(self, name, value)
 
+    @work_transport.journaled
     async def reconcile(self):
         """Recover the original owner using metadata only; never resume/start a turn."""
         record = json.loads(self.journal.read_text())
@@ -782,475 +789,479 @@ class Connector(NativeTools):
                 return {"state": "idle", "modelsStarted": 0}
             if self.active["delivery"]["state"] != "claimed":
                 raise RuntimeError("Original claim no longer admits new execution")
-            request = self.active["request"]
-            captured = {
-                "state": "captured-before-native",
-                "delivery": self.active["delivery"],
-                "request": request,
-            }
-            self.journal = self.executions.begin(captured)
-            journal = self.journal
-            try:
-                envelope = await self.http(
-                    "GET",
-                    "connector/deliveries/"
-                    + self.active["delivery"]["id"]
-                    + "/context",
-                )
-                self.role_context = RoleContext.capture(
-                    envelope, self.config, self.active
-                )
-                self.work_briefing = None
-                briefing = await self.briefing()
-                # Only references enter privileged application context. Bodies
-                # arrive through a tool read or native agent-authored input.
-                self.role_context.value["workBriefing"] = {
-                    "schema": briefing["schema"],
-                    "asOfSequence": briefing["asOfSequence"],
-                    "decisions": [
-                        {
-                            k: d[k]
-                            for k in (
-                                "id",
-                                "revision",
-                                "state",
-                                "issuer",
-                                "issuer_kind",
-                                "source",
-                                "event",
-                                "sequence",
-                            )
-                        }
-                        for d in briefing["decisions"]
-                    ],
-                    "requiresDeeperRead": briefing["requiresDeeperRead"],
-                    "readWith": "hollywood_briefing",
-                    "instruction": "Read the current work briefing before implementing; inspect current sourced decisions and conflicts. Bodies retain their issuers' authority.",
-                }
-                if envelope["deliveryState"] != "claimed":
-                    raise RuntimeError(
-                        "Captured role context no longer admits execution"
-                    )
-                self.causal_task_context = await prepare_context(
-                    lambda path: self.http("GET", path), self.state, self.active,
-                )
-            except (ValueError, PermissionError) as error:
-                receipt = await self.transition(
-                    "failed",
-                    body="LAX rejected scope or capability before native execution: "
-                    + type(error).__name__,
-                )
-                saved(
-                    journal,
+            return await self._execute_claim()
+
+    @work_transport.claimed
+    async def _execute_claim(self):
+        request = self.active["request"]
+        captured = {
+            "state": "captured-before-native",
+            "delivery": self.active["delivery"],
+            "request": request,
+        }
+        self.journal = self.executions.begin(captured)
+        journal = self.journal
+        try:
+            envelope = await self.http(
+                "GET",
+                "connector/deliveries/"
+                + self.active["delivery"]["id"]
+                + "/context",
+            )
+            self.role_context = RoleContext.capture(
+                envelope, self.config, self.active
+            )
+            self.work_briefing = None
+            briefing = await self.briefing()
+            # Only references enter privileged application context. Bodies
+            # arrive through a tool read or native agent-authored input.
+            self.role_context.value["workBriefing"] = {
+                "schema": briefing["schema"],
+                "asOfSequence": briefing["asOfSequence"],
+                "decisions": [
                     {
-                        **captured,
-                        "state": "failed",
-                        "modelsStarted": 0,
-                        "receipt": receipt,
-                    },
+                        k: d[k]
+                        for k in (
+                            "id",
+                            "revision",
+                            "state",
+                            "issuer",
+                            "issuer_kind",
+                            "source",
+                            "event",
+                            "sequence",
+                        )
+                    }
+                    for d in briefing["decisions"]
+                ],
+                "requiresDeeperRead": briefing["requiresDeeperRead"],
+                "readWith": "hollywood_briefing",
+                "instruction": "Read the current work briefing before implementing; inspect current sourced decisions and conflicts. Bodies retain their issuers' authority.",
+            }
+            if envelope["deliveryState"] != "claimed":
+                raise RuntimeError(
+                    "Captured role context no longer admits execution"
                 )
-                return {
+            self.causal_task_context = await prepare_context(
+                lambda path: self.http("GET", path), self.state, self.active,
+            )
+        except (ValueError, PermissionError) as error:
+            receipt = await self.transition(
+                "failed",
+                body="LAX rejected scope or capability before native execution: "
+                + type(error).__name__,
+            )
+            saved(
+                journal,
+                {
+                    **captured,
                     "state": "failed",
                     "modelsStarted": 0,
-                    "reason": "Scope/capability rejected before native admission",
-                }
-            context_id, context_path = self.agent_context.select()
-            context = [request["authority"], self.config["agentId"]]
-            self.context_id = context_id
-            record = {
-                "state": "preparing",
-                "delivery": self.active["delivery"],
-                "request": request,
-                "contextId": context_id,
-            }
-            saved(journal, record)
-            saved(
-                self.state / ("role-" + request["id"] + ".json"),
-                self.role_context.value,
+                    "receipt": receipt,
+                },
             )
-            self.executor = ExecutionLifecycle(self.captured_execution(), config=self.config,
-                transport=self.http, journal_directory=self.journal.directory)
-            self.rpc = AppServer(
-                self.config["binary"],
-                Path(self.config["codexHome"]),
-                self.state / "native",
-                self.event,
-                self.tool,
-                self.attention.submitted,
-                on_spawn=self.executor.attach,
-                enterprise=True,
-                collaboration_channel=self.config.get("nativeCollaborationChannel") or (
-                    str(Path("/etc/harness") / request["authority"] / "collaboration" /
-                        self.config["hostId"] / "channel.json")
-                    if (Path("/etc/harness") / request["authority"] / "collaboration" /
-                        self.config["hostId"] / "channel.json").is_file() else None
-                ),
+            return {
+                "state": "failed",
+                "modelsStarted": 0,
+                "reason": "Scope/capability rejected before native admission",
+            }
+        context_id, context_path = self.agent_context.select()
+        context = [request["authority"], self.config["agentId"]]
+        self.context_id = context_id
+        record = {
+            "state": "preparing",
+            "delivery": self.active["delivery"],
+            "request": request,
+            "contextId": context_id,
+        }
+        saved(journal, record)
+        saved(
+            self.state / ("role-" + request["id"] + ".json"),
+            self.role_context.value,
+        )
+        self.executor = ExecutionLifecycle(self.captured_execution(), config=self.config,
+            transport=self.http, journal_directory=self.journal.directory)
+        self.rpc = AppServer(
+            self.config["binary"],
+            Path(self.config["codexHome"]),
+            self.state / "native",
+            self.event,
+            self.tool,
+            self.attention.submitted,
+            on_spawn=self.executor.attach,
+            enterprise=True,
+            collaboration_channel=self.config.get("nativeCollaborationChannel") or (
+                str(Path("/etc/harness") / request["authority"] / "collaboration" /
+                    self.config["hostId"] / "channel.json")
+                if (Path("/etc/harness") / request["authority"] / "collaboration" /
+                    self.config["hostId"] / "channel.json").is_file() else None
+            ),
+        )
+        try:
+            await self.executor.prepare()
+            record = {**record, "executorId": self.executor.id}
+            saved(journal, record)
+            await self.rpc.start()
+            external_lifecycle = False
+            await external_admission(self.rpc, external_lifecycle)
+            account = await self.rpc.call("account/read", {"refreshToken": False})
+            if account.get("requiresOpenaiAuth") and not account.get("account"):
+                raise RuntimeError("LAX account is not provisioned")
+            settings = {
+                "cwd": self.config["workspace"],
+                "sandbox": self.config.get("sandbox", "danger-full-access"),
+                "approvalPolicy": self.config.get("approvalPolicy", "never"),
+                "model": self.config["model"],
+                "baseInstructions": LAX_BASE_INSTRUCTIONS,
+                "developerInstructions": self.config["instructions"] + PARTICIPATION,
+                "config": {
+                    "features.goal_external_admission": True,
+                    "features.goal_external_lifecycle": external_lifecycle,
+                    "tools.update_plan.enabled": True,
+                    # Native peers use Hollywood tools, never the upstream
+                    # local parent/child backend, including on saved V2 history.
+                    "agents.enabled": False,
+                    "features.multi_agent": False,
+                    "features.multi_agent_v2": False,
+                    "model_reasoning_effort": self.config["effort"],
+                },
+            }
+            if self.required_tool_policy is not None:
+                settings["toolPolicy"] = self.required_tool_policy
+            self.passive_new_thread = not context_path.exists()
+            if context_path.exists():
+                self.thread = json.loads(context_path.read_text())["nativeThread"]
+                native_started = await self.rpc.call(
+                    "thread/resume",
+                    {
+                        "threadId": self.thread,
+                        "excludeTurns": True,
+                        "dynamicTools": TOOLS,
+                        **settings,
+                    },
+                )
+            else:
+                result = await self.rpc.call(
+                    "thread/start", {**settings, "dynamicTools": TOOLS}
+                )
+                native_started = result
+                self.thread = result["thread"]["id"]
+                saved(
+                    context_path,
+                    {
+                        "contextId": context_id,
+                        "scope": context,
+                        "nativeThread": self.thread,
+                    },
+                )
+            saved(
+                journal,
+                {
+                    **record,
+                    "state": "verifying-native-tool-policy",
+                    "nativeThread": self.thread,
+                    "requestedNativeToolPolicy": self.required_tool_policy,
+                },
+            )
+            effective_policy = verify_tool_policy(
+                self.required_tool_policy, native_started
+            )
+            self.role_context.value["nativeToolPolicy"] = effective_policy
+            saved(
+                self.state / ("native-policy-" + request["id"] + ".json"),
+                {
+                    "requested": self.required_tool_policy,
+                    "effective": effective_policy,
+                    "nativeThread": self.thread,
+                    "modelsStartedByVerification": 0,
+                },
+            )
+            await self.agent_context.bind()
+            self.owner_briefing_delivery = self.active["delivery"]["id"]
+            from .owner_briefing import publish as publish_owner_briefing
+            await publish_owner_briefing(self, self.work_briefing)
+            # Thread was normally loaded above; observation never starts it.
+            self.passive_receiver = None
+            self.passive_readback = None
+            self.passive_native_started = native_started
+            self.passive_epoch = self.active["delivery"]["id"] + ":" + str(self.rpc.process.pid)
+            try:
+                self.passive_receiver = PassiveReceiver(
+                    self.state / ("passive-" + self.context_id),
+                    authority_id=request["authority"], principal_id=self.config["agentId"],
+                    context_id=self.context_id, thread_id=self.thread,
+                )
+                await self.receive_passive_context()
+            except Exception as error:
+                # Optional observations cannot reject an ordinary admitted task.
+                saved(self.state / "passive-context-gap.json", {
+                    "error": type(error).__name__, "executionAdmitted": False,
+                    "nativeReplayAllowed": False,
+                })
+            saved(
+                journal,
+                {
+                    **record,
+                    "state": "native-submission-intent",
+                    "nativeThread": self.thread,
+                },
+            )
+            self.finished = asyncio.get_running_loop().create_future()
+            self.activity.start()
+            fresh = await self.http(
+                "GET", "deliveries/" + self.active["delivery"]["id"]
+            )
+            if fresh["delivery"]["state"] == "cancel_requested":
+                await settle_goal(self, "cancelled")
+                await self.transition(
+                    "cancelled",
+                    body="Cancelled before native turn submission; no execution admitted",
+                )
+                saved(
+                    journal,
+                    {
+                        **record,
+                        "state": "cancelled",
+                        "nativeThread": self.thread,
+                        "goalLifecyclePending": False,
+                    },
+                )
+                return {"state": "cancelled", "modelsStarted": 0}
+            if fresh["delivery"]["state"] != "claimed":
+                raise RuntimeError("Delivery state changed before native admission")
+            await self.executor.require_live()
+            from .native_input import submission
+
+            method, params = submission(
+                self.config["agentId"],
+                self.active,
+                self.thread,
+                self.config["model"],
+                self.config["effort"],
+                self.role_context.additional_context(),
+            )
+            result = await self.rpc.call(method, params)
+            turn_id = result["turn"]["id"]
+            saved(
+                journal,
+                {
+                    **record,
+                    "state": "running",
+                    "nativeThread": self.thread,
+                    "nativeTurn": turn_id,
+                },
+            )
+            self.interrupt_task = asyncio.create_task(
+                self.monitor_cancellation(turn_id)
             )
             try:
-                await self.executor.prepare()
-                record = {**record, "executorId": self.executor.id}
-                saved(journal, record)
-                await self.rpc.start()
-                external_lifecycle = False
-                await external_admission(self.rpc, external_lifecycle)
-                account = await self.rpc.call("account/read", {"refreshToken": False})
-                if account.get("requiresOpenaiAuth") and not account.get("account"):
-                    raise RuntimeError("LAX account is not provisioned")
-                settings = {
-                    "cwd": self.config["workspace"],
-                    "sandbox": self.config.get("sandbox", "danger-full-access"),
-                    "approvalPolicy": self.config.get("approvalPolicy", "never"),
-                    "model": self.config["model"],
-                    "baseInstructions": LAX_BASE_INSTRUCTIONS,
-                    "developerInstructions": self.config["instructions"] + PARTICIPATION,
-                    "config": {
-                        "features.goal_external_admission": True,
-                        "features.goal_external_lifecycle": external_lifecycle,
-                        "tools.update_plan.enabled": True,
-                        # Native peers use Hollywood tools, never the upstream
-                        # local parent/child backend, including on saved V2 history.
-                        "agents.enabled": False,
-                        "features.multi_agent": False,
-                        "features.multi_agent_v2": False,
-                        "model_reasoning_effort": self.config["effort"],
-                    },
-                }
-                if self.required_tool_policy is not None:
-                    settings["toolPolicy"] = self.required_tool_policy
-                self.passive_new_thread = not context_path.exists()
-                if context_path.exists():
-                    self.thread = json.loads(context_path.read_text())["nativeThread"]
-                    native_started = await self.rpc.call(
-                        "thread/resume",
-                        {
-                            "threadId": self.thread,
-                            "excludeTurns": True,
-                            "dynamicTools": TOOLS,
-                            **settings,
-                        },
-                    )
-                else:
-                    result = await self.rpc.call(
-                        "thread/start", {**settings, "dynamicTools": TOOLS}
-                    )
-                    native_started = result
-                    self.thread = result["thread"]["id"]
-                    saved(
-                        context_path,
-                        {
-                            "contextId": context_id,
-                            "scope": context,
-                            "nativeThread": self.thread,
-                        },
-                    )
-                saved(
-                    journal,
-                    {
-                        **record,
-                        "state": "verifying-native-tool-policy",
-                        "nativeThread": self.thread,
-                        "requestedNativeToolPolicy": self.required_tool_policy,
-                    },
+                await self.transition(
+                    "running", nativeThread=self.thread, nativeTurn=turn_id
                 )
-                effective_policy = verify_tool_policy(
-                    self.required_tool_policy, native_started
-                )
-                self.role_context.value["nativeToolPolicy"] = effective_policy
-                saved(
-                    self.state / ("native-policy-" + request["id"] + ".json"),
-                    {
-                        "requested": self.required_tool_policy,
-                        "effective": effective_policy,
-                        "nativeThread": self.thread,
-                        "modelsStartedByVerification": 0,
-                    },
-                )
-                await self.agent_context.bind()
-                self.owner_briefing_delivery = self.active["delivery"]["id"]
-                from .owner_briefing import publish as publish_owner_briefing
-                await publish_owner_briefing(self, self.work_briefing)
-                # Thread was normally loaded above; observation never starts it.
-                self.passive_receiver = None
-                self.passive_readback = None
-                self.passive_native_started = native_started
-                self.passive_epoch = self.active["delivery"]["id"] + ":" + str(self.rpc.process.pid)
-                try:
-                    self.passive_receiver = PassiveReceiver(
-                        self.state / ("passive-" + self.context_id),
-                        authority_id=request["authority"], principal_id=self.config["agentId"],
-                        context_id=self.context_id, thread_id=self.thread,
-                    )
-                    await self.receive_passive_context()
-                except Exception as error:
-                    # Optional observations cannot reject an ordinary admitted task.
-                    saved(self.state / "passive-context-gap.json", {
-                        "error": type(error).__name__, "executionAdmitted": False,
-                        "nativeReplayAllowed": False,
-                    })
-                saved(
-                    journal,
-                    {
-                        **record,
-                        "state": "native-submission-intent",
-                        "nativeThread": self.thread,
-                    },
-                )
-                self.finished = asyncio.get_running_loop().create_future()
-                self.activity.start()
-                fresh = await self.http(
-                    "GET", "deliveries/" + self.active["delivery"]["id"]
-                )
-                if fresh["delivery"]["state"] == "cancel_requested":
-                    await settle_goal(self, "cancelled")
-                    await self.transition(
-                        "cancelled",
-                        body="Cancelled before native turn submission; no execution admitted",
-                    )
-                    saved(
-                        journal,
-                        {
-                            **record,
-                            "state": "cancelled",
-                            "nativeThread": self.thread,
-                            "goalLifecyclePending": False,
-                        },
-                    )
-                    return {"state": "cancelled", "modelsStarted": 0}
-                if fresh["delivery"]["state"] != "claimed":
-                    raise RuntimeError("Delivery state changed before native admission")
-                await self.executor.require_live()
-                from .native_input import submission
-
-                method, params = submission(
-                    self.config["agentId"],
-                    self.active,
-                    self.thread,
-                    self.config["model"],
-                    self.config["effort"],
-                    self.role_context.additional_context(),
-                )
-                result = await self.rpc.call(method, params)
-                turn_id = result["turn"]["id"]
-                saved(
-                    journal,
-                    {
-                        **record,
-                        "state": "running",
-                        "nativeThread": self.thread,
-                        "nativeTurn": turn_id,
-                    },
-                )
-                self.interrupt_task = asyncio.create_task(
-                    self.monitor_cancellation(turn_id)
-                )
-                try:
-                    await self.transition(
-                        "running", nativeThread=self.thread, nativeTurn=turn_id
-                    )
-                except RuntimeError:
-                    current = await self.http(
-                        "GET", "deliveries/" + self.active["delivery"]["id"]
-                    )
-                    receipt = current["delivery"]
-                    if (
-                        receipt["state"] == "running"
-                        and receipt["native_turn"] == turn_id
-                        and receipt["native_thread"] == self.thread
-                    ):
-                        pass  # Original receipt committed before its reply was lost.
-                    elif receipt["state"] != "cancel_requested":
-                        raise
-                    # Cancellation may win between native acceptance and receipt
-                    # publication. Interrupt the same owner; never replace it.
+            except RuntimeError:
                 current = await self.http(
                     "GET", "deliveries/" + self.active["delivery"]["id"]
                 )
-                admitted = current["delivery"]
+                receipt = current["delivery"]
                 if (
-                    admitted["state"] == "running"
-                    and not admitted["cancellation_requested"]
-                    and admitted["native_thread"] == self.thread
-                    and admitted["native_turn"] == turn_id
-                    and admitted["generation"] == self.active["delivery"]["generation"]
-                    and admitted["claim_id"] == self.active["delivery"]["claim_id"]
+                    receipt["state"] == "running"
+                    and receipt["native_turn"] == turn_id
+                    and receipt["native_thread"] == self.thread
                 ):
-                    self.tool_admission.set()
-                else:
-                    raise RuntimeError("Native tool admission changed before callbacks")
-                self.control_task = asyncio.create_task(self.monitor_guidance(turn_id))
-                turn = await asyncio.wait_for(
-                    self.finished, self.config.get("turnDeadlineSeconds")
+                    pass  # Original receipt committed before its reply was lost.
+                elif receipt["state"] != "cancel_requested":
+                    raise
+                # Cancellation may win between native acceptance and receipt
+                # publication. Interrupt the same owner; never replace it.
+            current = await self.http(
+                "GET", "deliveries/" + self.active["delivery"]["id"]
+            )
+            admitted = current["delivery"]
+            if (
+                admitted["state"] == "running"
+                and not admitted["cancellation_requested"]
+                and admitted["native_thread"] == self.thread
+                and admitted["native_turn"] == turn_id
+                and admitted["generation"] == self.active["delivery"]["generation"]
+                and admitted["claim_id"] == self.active["delivery"]["claim_id"]
+            ):
+                self.tool_admission.set()
+            else:
+                raise RuntimeError("Native tool admission changed before callbacks")
+            self.control_task = asyncio.create_task(self.monitor_guidance(turn_id))
+            turn = await asyncio.wait_for(
+                self.finished, self.config.get("turnDeadlineSeconds")
+            )
+            if self.interrupt_task:
+                self.interrupt_task.cancel()
+                await asyncio.gather(self.interrupt_task, return_exceptions=True)
+                self.interrupt_task = None
+            if self.control_task:
+                self.control_task.cancel()
+                await asyncio.gather(self.control_task, return_exceptions=True)
+                self.control_task = None
+            await self.controls.tick(turn_id, terminal=True)
+            await self.activity.flush()
+            if self.uncertain_tools:
+                raise RuntimeError(
+                    "Native turn ended with an unconfirmed communication/administration effect; reconcile original tool receipts"
                 )
-                if self.interrupt_task:
-                    self.interrupt_task.cancel()
-                    await asyncio.gather(self.interrupt_task, return_exceptions=True)
-                    self.interrupt_task = None
-                if self.control_task:
-                    self.control_task.cancel()
-                    await asyncio.gather(self.control_task, return_exceptions=True)
-                    self.control_task = None
-                await self.controls.tick(turn_id, terminal=True)
+            status = (
+                "completed"
+                if turn["status"] == "completed"
+                else (
+                    "cancelled"
+                    if turn["status"] == "interrupted" and self.cancel_requested
+                    else "failed"
+                )
+            )
+            from .terminal_output import terminal_body
+            answer = terminal_body(status, self.native_items.values(), self.publications)
+            if len(answer.encode()) > 6000:
+                raise RuntimeError(
+                    "Native result exceeds communication limit; artifact publication required"
+                )
+            current = json.loads(journal.read_text())
+            saved(
+                journal,
+                {
+                    **current,
+                    "state": "native-terminal-observed",
+                    "observedTerminalState": status,
+                    "goalLifecyclePending": bool(self.goal_binding)
+                    and status in ("failed", "cancelled"),
+                },
+            )
+            if self.goal_binding:
+                self.goal_progress_closing = True
+                if self.goal_progress_task:
+                    await asyncio.gather(self.goal_progress_task)
+                await settle_goal(self, status)
+                native = await goal_progress(self)
+                self.activity.record(
+                    "hollywood/goalProgress",
+                    {"threadId": self.thread, "turnId": turn_id, "goal": native},
+                )
+                if self.goal_progress_task:
+                    await asyncio.gather(self.goal_progress_task)
                 await self.activity.flush()
-                if self.uncertain_tools:
-                    raise RuntimeError(
-                        "Native turn ended with an unconfirmed communication/administration effect; reconcile original tool receipts"
-                    )
-                status = (
-                    "completed"
-                    if turn["status"] == "completed"
-                    else (
-                        "cancelled"
-                        if turn["status"] == "interrupted" and self.cancel_requested
-                        else "failed"
-                    )
-                )
-                from .terminal_output import terminal_body
-                answer = terminal_body(status, self.native_items.values(), self.publications)
-                if len(answer.encode()) > 6000:
-                    raise RuntimeError(
-                        "Native result exceeds communication limit; artifact publication required"
-                    )
-                current = json.loads(journal.read_text())
-                saved(
-                    journal,
-                    {
-                        **current,
-                        "state": "native-terminal-observed",
-                        "observedTerminalState": status,
-                        "goalLifecyclePending": bool(self.goal_binding)
-                        and status in ("failed", "cancelled"),
-                    },
-                )
-                if self.goal_binding:
-                    self.goal_progress_closing = True
-                    if self.goal_progress_task:
-                        await asyncio.gather(self.goal_progress_task)
-                    await settle_goal(self, status)
-                    native = await goal_progress(self)
-                    self.activity.record(
-                        "hollywood/goalProgress",
-                        {"threadId": self.thread, "turnId": turn_id, "goal": native},
-                    )
-                    if self.goal_progress_task:
-                        await asyncio.gather(self.goal_progress_task)
-                    await self.activity.flush()
-                await self.transition(
-                    status, nativeThread=self.thread, nativeTurn=turn_id, body=answer
-                )
-                saved(
-                    journal,
-                    {
-                        **record,
-                        "state": status,
-                        "nativeThread": self.thread,
-                        "nativeTurn": turn_id,
-                        "answer": answer,
-                    },
-                )
-                return {
+            await self.transition(
+                status, nativeThread=self.thread, nativeTurn=turn_id, body=answer
+            )
+            saved(
+                journal,
+                {
+                    **record,
                     "state": status,
-                    "deliveryId": self.active["delivery"]["id"],
                     "nativeThread": self.thread,
                     "nativeTurn": turn_id,
                     "answer": answer,
-                }
-            except NativeGoalHeld as error:
-                current = json.loads(journal.read_text())
-                if current.get("nativeTurn"):
-                    saved(
-                        journal,
-                        {
-                            **current,
-                            "state": "goal-reconciliation-required",
-                            "goalLifecyclePending": True,
-                        },
-                    )
-                    await self.transition("unknown")
-                    raise
-                receipt = await self.transition(
-                    "failed",
-                    body="Native goal admission held before model execution: "
-                    + str(error),
-                )
-                saved(
-                    journal,
-                    {
-                        **record,
-                        "state": "failed",
-                        "modelsStarted": 0,
-                        "receipt": receipt,
-                    },
-                )
-                return {"state": "failed", "modelsStarted": 0, "reason": str(error)}
-            except NativeToolPolicyUnavailable as error:
-                current = json.loads(journal.read_text())
-                receipt = await self.transition(
-                    "failed",
-                    nativeThread=self.thread,
-                    body="Required native tool ceiling could not be verified; no model turn admitted.",
-                )
+                },
+            )
+            return {
+                "state": status,
+                "deliveryId": self.active["delivery"]["id"],
+                "nativeThread": self.thread,
+                "nativeTurn": turn_id,
+                "answer": answer,
+            }
+        except NativeGoalHeld as error:
+            current = json.loads(journal.read_text())
+            if current.get("nativeTurn"):
                 saved(
                     journal,
                     {
                         **current,
-                        "state": "failed",
-                        "modelsStarted": 0,
-                        "nativePolicyUnverified": True,
-                        "receipt": receipt,
+                        "state": "goal-reconciliation-required",
+                        "goalLifecyclePending": True,
                     },
                 )
-                return {"state": "failed", "modelsStarted": 0, "reason": str(error)}
-            except NativeAdmissionUnavailable:
-                receipt = await self.transition(
-                    "failed",
-                    body="Native runtime lacks external admission; no context or model turn loaded",
-                )
-                saved(
-                    journal,
-                    {
-                        **record,
-                        "state": "failed",
-                        "modelsStarted": 0,
-                        "receipt": receipt,
-                    },
-                )
-                return {
+                await self.transition("unknown")
+                raise
+            receipt = await self.transition(
+                "failed",
+                body="Native goal admission held before model execution: "
+                + str(error),
+            )
+            saved(
+                journal,
+                {
+                    **record,
                     "state": "failed",
                     "modelsStarted": 0,
-                    "reason": "Native admission capability unavailable",
-                }
-            except Exception as error:
-                current = json.loads(journal.read_text())
-                saved(journal.directory / "execution-error.json", {
-                    "phase": current["state"],
-                    "error": type(error).__name__,
-                    "detail": str(error)[:2000],
-                    "nativeThread": self.thread,
-                    "nativeTurn": current.get("nativeTurn"),
-                    "deliveryId": self.active["delivery"]["id"],
-                    "executionNotRepeated": True,
-                })
-                try:
-                    await self.transition("unknown")
-                except Exception:
-                    pass
-                # Durable native intent is left unsettled for operator/native readback.
-                raise
-            finally:
-                if self.control_task:
-                    self.control_task.cancel()
-                    await asyncio.gather(self.control_task, return_exceptions=True)
-                if self.interrupt_task:
-                    self.interrupt_task.cancel()
-                    await asyncio.gather(self.interrupt_task, return_exceptions=True)
-                self.goal_progress_closing = True
-                if self.goal_progress_task:
-                    await asyncio.gather(
-                        self.goal_progress_task, return_exceptions=True
-                    )
-                await self.activity.close()
-                await self.rpc.close()
-                await self.executor.observe_close()
+                    "receipt": receipt,
+                },
+            )
+            return {"state": "failed", "modelsStarted": 0, "reason": str(error)}
+        except NativeToolPolicyUnavailable as error:
+            current = json.loads(journal.read_text())
+            receipt = await self.transition(
+                "failed",
+                nativeThread=self.thread,
+                body="Required native tool ceiling could not be verified; no model turn admitted.",
+            )
+            saved(
+                journal,
+                {
+                    **current,
+                    "state": "failed",
+                    "modelsStarted": 0,
+                    "nativePolicyUnverified": True,
+                    "receipt": receipt,
+                },
+            )
+            return {"state": "failed", "modelsStarted": 0, "reason": str(error)}
+        except NativeAdmissionUnavailable:
+            receipt = await self.transition(
+                "failed",
+                body="Native runtime lacks external admission; no context or model turn loaded",
+            )
+            saved(
+                journal,
+                {
+                    **record,
+                    "state": "failed",
+                    "modelsStarted": 0,
+                    "receipt": receipt,
+                },
+            )
+            return {
+                "state": "failed",
+                "modelsStarted": 0,
+                "reason": "Native admission capability unavailable",
+            }
+        except Exception as error:
+            current = json.loads(journal.read_text())
+            saved(journal.directory / "execution-error.json", {
+                "phase": current["state"],
+                "error": type(error).__name__,
+                "detail": str(error)[:2000],
+                "nativeThread": self.thread,
+                "nativeTurn": current.get("nativeTurn"),
+                "deliveryId": self.active["delivery"]["id"],
+                "executionNotRepeated": True,
+            })
+            try:
+                await self.transition("unknown")
+            except Exception:
+                pass
+            # Durable native intent is left unsettled for operator/native readback.
+            raise
+        finally:
+            if self.control_task:
+                self.control_task.cancel()
+                await asyncio.gather(self.control_task, return_exceptions=True)
+            if self.interrupt_task:
+                self.interrupt_task.cancel()
+                await asyncio.gather(self.interrupt_task, return_exceptions=True)
+            self.goal_progress_closing = True
+            if self.goal_progress_task:
+                await asyncio.gather(
+                    self.goal_progress_task, return_exceptions=True
+                )
+            await self.activity.close()
+            await self.rpc.close()
+            await self.executor.observe_close()
 
     async def serve(self):
         """Deterministic queue observer. Idle/unknown states never wake a model."""
