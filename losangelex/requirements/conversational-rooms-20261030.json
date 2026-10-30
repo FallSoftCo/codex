@@ -27,9 +27,11 @@
     },
     {
       "id": "persistent-runtime",
-      "state": "pending",
+      "state": "candidate-entry-and-existing-thread-qualified",
       "scope": "Run the already-proven conversation loop as a maintained long-lived native agent runtime, using existing identities/threads and full normal tools. Deliver new human input during real work without per-message process launches. Native crash durability is a separate hardening track, not the next product milestone.",
-      "nextProof": "A human gives actual bounded development work in a room, both native agents participate with normal tools, a later human turn reaches the same contexts, and one agent asks a question answered in that room."
+      "nextProof": "A human gives actual bounded development work in a room, both native agents participate with normal tools, a later human turn reaches the same contexts, and one agent asks a question answered in that room.",
+      "proof": "Existing lax-connect entrypoint selects explicit conversational mode; actual prior native thread cold-resumed and authenticated stream connected with zero model turns or execution claims. Native tool collaboration separately passed. No live migration yet.",
+      "remaining": "Integrate question/approval and administrative callbacks without delivery-claim dependency; qualify continued human work through maintained entry, cross-host/client journeys."
     },
     {
       "id": "participation-context",
@@ -75,7 +77,9 @@
     "communicationPgHttp": "conversational-inbox-qa-r04",
     "nativeInput": "conversational-native-input-qa-r04",
     "naturalSharedRoom": "conversational-room-model-qa-r02",
-    "productionDeployed": false
+    "productionDeployed": false,
+    "maintainedEntry": "conversational-entry-qa-r01",
+    "nativeLocalTools": "conversational-runtime-tools-qa-r01"
   },
   "executionOrder": [
     "Next: maintained local room runtime with full native tools and ongoing real work, rather than another crash-recovery study.",

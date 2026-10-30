@@ -15,8 +15,11 @@ from .room_receive import RoomReceiveJournal, NativeReceiptUnresolved
 
 class RoomRuntime:
     def __init__(self, *, rpc, session, base_url, token, authority_id, agent_id,
-                 room_id, thread_id, state, initial_cursor, on_status=None):
+                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None):
         self.rpc, self.session = rpc, session
+        self.route_headers=dict(route_headers or {})
+        if set(self.route_headers)-{'X-Hollywood-Authority','X-Hollywood-Agent'}:
+            raise ValueError('Only explicit federation routing headers accepted')
         self.base_url, self.token = base_url.rstrip('/')+'/', token
         self.authority = str(UUID(authority_id))
         self.agent = str(UUID(agent_id))
@@ -86,7 +89,7 @@ class RoomRuntime:
             try:
                 url=self.base_url+'rooms/'+self.room+'/events'
                 async with self.session.get(url,params={'view':'conversation','batch':'1','after':str(self.cursor)},
-                        headers={'Authorization':'Bearer '+self.token}) as response:
+                        headers={**self.route_headers,'Authorization':'Bearer '+self.token}) as response:
                     if response.status in (401,403):
                         await self._status('blocked',reason='Room access denied',httpStatus=response.status)
                         return

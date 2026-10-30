@@ -1383,6 +1383,12 @@ def main():
     if bool(args.reconcile_delivery) != (args.generation is not None):
         parser.error("--reconcile-delivery requires --generation; neither starts a model")
     config = json.loads(args.config.read_text())
+    if config.get("runtimeMode") == "room-conversation":
+        if not args.serve:
+            parser.error("room-conversation uses --serve; legacy claim/reconcile actions remain on their original mode")
+        from .conversational_agent import ConversationalAgent
+        asyncio.run(ConversationalAgent(config).serve())
+        return
     package = None
     if args.serve or args.claim_id:
         from .native_package import inspect_package
