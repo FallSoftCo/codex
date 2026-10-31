@@ -33,6 +33,9 @@ async def provision(transport,arguments,operation):
     principal=await transport.http('GET','principals/'+agent)
     role=await transport.http('GET','agents/'+agent+'/role')
     detail=await transport.http('GET','rooms/'+room)
+    if (role.get('principal')!=agent or role.get('authority')!=owner.config['authorityId']
+            or detail.get('authorityId')!=owner.config['authorityId'] or detail.get('room',{}).get('id')!=room):
+        raise ValueError('Host provisioning metadata belongs to another agent or room')
     member=next((a for a in detail['actors'] if a['id']==agent),None)
     if (principal.get('kind')!='agent' or not principal.get('active')
             or principal.get('authority')!=owner.config['authorityId']
@@ -69,7 +72,7 @@ async def provision(transport,arguments,operation):
     directory=owner.state/('host-'+operation.removeprefix('native-admin:'));directory.mkdir(mode=0o700,exist_ok=True)
     file=directory/'spec.private.json';dispatch=directory/'dispatch.json'
     if file.exists() and json.loads(file.read_text())!=spec:
-        raise ValueError('Original host provisioning specification changed')
+        raise HostProvisionUnconfirmed('Original host provisioning specification changed; inspect it on its original host: '+operation)
     if not file.exists():saved(file,spec)
     command=['sudo','-n',spec['interpreter'],'-m','lax_connector.linux_worker','--spec',str(file)]
     prior=dispatch.exists()

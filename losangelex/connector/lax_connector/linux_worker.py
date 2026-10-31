@@ -62,6 +62,11 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
             "Do not send routine acknowledgements or poll models for progress. Preserve other agents' work, "
             "original operation receipts, uncertain effects and deliberate stops. Host access does not authorize unrelated business actions."
         )
+        result["instructions"] += (
+            " This installation authorizes full local execution and passwordless sudo when needed for assigned work."
+            if profile=="unrestricted" else
+            " This installation is restricted to its configured workspace; do not escalate host privileges."
+        )
         if native_context is not None:
             expected={"authorityId":authority,"agentId":agent,"codexHome":str(home/"codex-home"),"nativeState":str(home/"state/native")}
             if native_context.get("state")!="ready" or native_context.get("binding")!=expected or not native_context.get("nativeThreadId"):

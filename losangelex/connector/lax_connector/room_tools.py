@@ -3,7 +3,7 @@
 These are communication primitives for the conversational-runtime candidate.
 They deliberately do not expose the old execution-claim/admission workflow.
 """
-import asyncio,hashlib,json
+import asyncio,hashlib,json,socket
 from pathlib import Path
 from urllib.parse import urlencode
 from uuid import UUID,uuid5
@@ -63,7 +63,10 @@ class RoomTools:
             if value['authorityId']!=self.authority:raise ValueError('Room authority changed')
             result={'self':{'authorityId':self.authority,'agentId':self.agent,'nativeThread':self.thread},
                     'room':value['room'],'participants':value['actors'],
-                    'communicationIsNotExecution':True}
+                    'communicationIsNotExecution':True,
+                    'localHost':{'hostname':socket.gethostname(),
+                                 'hostId':self.administration.host_config.get('hostId'),
+                                 'workspace':self.administration.host_config.get('workspace')}}
         elif name=='hollywood_read_room':
             if 'after' in args and 'before' in args:raise ValueError('Choose one history direction')
             query={k:args[k] for k in ('after','before','limit','view') if k in args}

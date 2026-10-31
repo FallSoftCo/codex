@@ -43,11 +43,13 @@ async def main():
   store.role(parent,agent,'developer','Qualification only; wait for real human input',room,role['revision'])
   store.membership(parent,room,agent,{'can_read':True,'can_post':True,'can_request':True},0)
   session=ClientSession()
+  wrong_scope=False
   async def request(method,path,payload=None):
    async with session.request(method,origin+'/hollywood/v3/'+path,json=payload,
           headers={'Authorization':'Bearer '+credentials['Global']['token']}) as response:
     value=await response.json()
     if response.status!=200:raise HttpFailure(response.status,str(value.get('error')))
+    if wrong_scope and path=='rooms/'+room:value['authorityId']='00000000-0000-4000-8000-000000000001'
     return value
   host_config={'runtimeMode':'room-conversation','authorityId':authority,'agentId':parent,'hostId':host,
                'hollywoodUrl':origin,'codexHome':original['codexHome'],'binary':str(release/'native/bin/codex-app-server'),
@@ -63,6 +65,14 @@ async def main():
   rejected,error=await invoke('reject-invalid-enrollment')
   assert not rejected['success'] and not (base/'workers'/agent).exists()
   saved(credential_file,original_credential)
+  if os.environ.get('ROOM_HOST_GUARDS_ONLY')=='1':
+   wrong_scope=True
+   rejected,error=await invoke('reject-misrouted-room')
+   assert not rejected['success'] and 'another agent or room' in error['error'],error
+   assert not (base/'workers'/agent).exists()
+   saved(root/'result.json',{'passed':True,'invalidEnrollmentRejectedBeforeOsEffects':True,'misroutedRoomRejectedBeforeOsEffects':True,'osWorkersCreated':0,'modelTurns':0,'productionChanged':False})
+   print('PASS real HTTP host-tool guards: invalid credential and misrouted room rejected before OS effects')
+   return
   saved(announcement,{'owner':'01a0f2bc-ff5a-70c2-b682-10f0987dab80','purpose':'Finite synthetic room host-tool qualification, zero model requests','listener':origin,'unit':unit+'.service','credentialFiles':[str(root/'intent.private.json')],'productionChanged':False,'state':'qualifying'})
   value,result=await invoke('provision-existing-peer-original')
   assert value['success'],result
