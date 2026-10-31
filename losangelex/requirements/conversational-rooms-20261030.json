@@ -27,11 +27,11 @@
     },
     {
       "id": "persistent-runtime",
-      "state": "candidate-entry-and-existing-thread-qualified",
+      "state": "live-original-contexts-executing",
       "scope": "Run the already-proven conversation loop as a maintained long-lived native agent runtime, using existing identities/threads and full normal tools. Deliver new human input during real work without per-message process launches. Native crash durability is a separate hardening track, not the next product milestone.",
       "nextProof": "A human gives actual bounded development work in a room, both native agents participate with normal tools, a later human turn reaches the same contexts, and one agent asks a question answered in that room.",
-      "proof": "Existing lax-connect entrypoint selects explicit conversational mode; actual prior native thread cold-resumed and authenticated stream connected with zero model turns or execution claims. Native tool collaboration separately passed. No live migration yet.",
-      "remaining": "Integrate question/approval and administrative callbacks without delivery-claim dependency; qualify continued human work through maintained entry, cross-host/client journeys."
+      "proof": "Original Global thread01a186b0 and original allocated Android/QA identities run persistent app-servers on SDK214; agent-authored changed-dependency messages1087/1088 led to actual started/completed native actions1089-1100. No delivery claims or original human request replay.",
+      "remaining": "Complete current UI/web assignments and combined release; retain explicit limitations of actual microphone/push/phone proof."
     },
     {
       "id": "participation-context",
@@ -40,13 +40,17 @@
     },
     {
       "id": "federation",
-      "state": "pending",
-      "scope": "Extend proven local loop across existing NATS/member hosts without SSH-based agent work or central execution dependency."
+      "state": "live-two-node-native-adoption-awaiting-useful-peer-result",
+      "scope": "Extend proven local loop across existing NATS/member hosts without SSH-based agent work or central execution dependency.",
+      "proof": "Hollywood170 live on both nodes; actual packaged NATS question/answer/acknowledge test passed. Original GPU native thread01a187ff cold-resumed with all4 canonical memberships and full access, no model turns during adoption. CPU Global received GPU-ready event1165 for useful local delegation.",
+      "remaining": "Observe actual Global native delegation, GPU local tools, attributable response and continued Global work."
     },
     {
       "id": "client-parity",
-      "state": "pending",
-      "scope": "Android/web room input, live actions/messages, status, questions, scoped controls, voice and attention-based notifications."
+      "state": "android157-published-web-room-ui-in-progress",
+      "scope": "Android/web room input, live actions/messages, status, questions, scoped controls, voice and attention-based notifications.",
+      "proof": "Android157/alpha139 both compatible signers and10native cases passed; exact optimized APK accepted original room message and reopened same event without duplicate send, stock canonical history/question passed. Published CPU/system76; one FCM accepted announcement2694. Web room-model committedac8855b, UI mounting remains assigned to original QA peer.",
+      "remaining": "Current native footer improvement, full web room path and useful combined release. Physical phone157 installation/audio/push not independently proved."
     },
     {
       "id": "durability-hardening",
@@ -56,8 +60,10 @@
     },
     {
       "id": "migration-release",
-      "state": "pending",
-      "scope": "Preserve original message IDs, active contexts, queues, pairings, drafts, receipts and deliberate stops; one reversible coordinated release."
+      "state": "scoped-original-native-contexts-adopted",
+      "scope": "Preserve original message IDs, active contexts, queues, pairings, drafts, receipts and deliberate stops; one reversible coordinated release.",
+      "proof": "Original Global, Android, QA and GPU identities/context homes preserved; CPU SDK214 scoped unit switch and GPU SDK214 original-thread adoption. Hollywood/NATS/database/gateway bindings retained; historical unknown receipts unchanged.",
+      "remaining": "Finish user-visible room work and final native peer-driven update delivery; this session remains active coordinator until that proof."
     }
   ],
   "acceptance": [
@@ -69,15 +75,15 @@
     "Cross-host room agents deliver a compatible NextComp update through the existing immutable artifact distribution path."
   ],
   "nonClaims": [
-    "No production conversational migration yet.",
-    "Communication feed proof is not native model behavior proof.",
-    "Prior executor timeout patch is not the target architecture."
+    "Scoped conversational native adoption is live; this does not claim all product parity is complete.",
+    "Communication receipts are not execution or work-completion receipts.",
+    "Physical phone installation/voice/push and complete browser room UI remain separately evidenced."
   ],
   "qualification": {
     "communicationPgHttp": "conversational-inbox-qa-r05",
     "nativeInput": "conversational-native-input-qa-r04",
     "naturalSharedRoom": "conversational-room-model-qa-r02",
-    "productionDeployed": false,
+    "productionDeployed": "partial-scoped-native-and-android157",
     "maintainedEntry": "conversational-entry-qa-r01",
     "nativeLocalTools": "conversational-runtime-tools-qa-r01",
     "nativeQuestion": "conversational-native-question-qa-r08",
@@ -87,7 +93,11 @@
     "nativeQuestionAndAdministration": "conversational-native-question-qa-r09: actual native model asks human, same-turn answer, native file, one peer identity and one room via shared handlers, explicit voice answer; no host worker provisioning",
     "nativeAgentInitialization": "conversational-bootstrap-qa-r05: actual installer-generated config, repeated initialization returns original receipt, maintained resident cold-resumes same native ID/database and connects authenticated room; zero turns/dummy messages",
     "packagedNativeColdRoom": "conversational-bootstrap-packaged-qa-r01: installed SDK208/Hollywood164 complete native package, no source overlay; cold resident same context/authenticated room",
-    "actualOsWorker": "conversational-worker-service-qa-r02: actual new private systemd worker, native initialization, ready registry, authenticated room, repeat install preserves service/no restart; zero turns/deliveries/executors; own unit/account/auth copy retired"
+    "actualOsWorker": "conversational-worker-service-qa-r02: actual new private systemd worker, native initialization, ready registry, authenticated room, repeat install preserves service/no restart; zero turns/deliveries/executors; own unit/account/auth copy retired",
+    "nativeSettingsDurability": "fc07187e7c;13 public native API tests pass; packaged214 actual cold reopen, explicit later owner restriction and same-thread repair pass0model turns",
+    "nativeCpuLive": "/var/lib/hollywood-node-cpu-20261029-r01/worker-policy214-release-r01",
+    "nativeGpuLive": "/var/lib/hollywood-node-gpu-20261029-r01/native214-release-r01",
+    "android157": "/aosp/development/nextcomp-conversational-signed-157-20261031-r02/app-updates/optimized-review.json"
   },
   "executionOrder": [
     "Next: maintained local room runtime with full native tools and ongoing real work, rather than another crash-recovery study.",
