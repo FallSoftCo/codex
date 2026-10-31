@@ -19,7 +19,8 @@ async def main():
  creator=AppServer(original['binary'],home,root/'native-create',ignore,unsupported,enterprise=True)
  await creator.start()
  try:
-  created=await creator.call('thread/start',{'cwd':str(root),'model':original['model'],'sandbox':'workspace-write','approvalPolicy':'never','dynamicTools':TOOLS,'baseInstructions':'You are a participant in a synthetic qualification room. Before choosing any label, use request_user_input to ask the human which label they want, with two choices. After the answer, write the chosen label to selected-label.txt using native execution and publish the exact chosen label in the room using hollywood_publish with responsePhase answer. Ordinary final text is private. Do not ask by plain chat, poll, provision agents or perform unrelated work. Room '+room+'.','config':{'model_reasoning_effort':original['effort'],'agents.enabled':False,'features.multi_agent':False,'features.multi_agent_v2':False}})
+  extra=(' After the human answer, also use hollywood_create_agent to create exactly one developer peer named Synthetic label implementer, then hollywood_create_room to create exactly one synthetic label review room owned by that new peer. Do not provision or start any worker. Include the label in the final room publication.' if os.environ.get('ROOM_NATIVE_QUESTION_ADMIN')=='1' else '')
+  created=await creator.call('thread/start',{'cwd':str(root),'model':original['model'],'sandbox':'workspace-write','approvalPolicy':'never','dynamicTools':TOOLS,'baseInstructions':'You are a participant in a synthetic qualification room. Before choosing any label, use request_user_input to ask the human which label they want, with two choices. After the answer, write the chosen label to selected-label.txt using native execution and publish the exact chosen label in the room using hollywood_publish with responsePhase answer. Ordinary final text is private. Do not ask by plain chat, poll, provision agents or perform unrelated work. Room '+room+'.'+extra,'config':{'model_reasoning_effort':original['effort'],'agents.enabled':False,'features.multi_agent':False,'features.multi_agent_v2':False}})
   thread=created['thread']['id'];(root/'thread.private.json').write_text(json.dumps(created))
 
  except BaseException:
@@ -58,6 +59,8 @@ async def main():
    async with session.get(origin+'/hollywood/v3/commands/'+submitted['operation'],headers={'Authorization':'Bearer '+fixture['credentials']['Owner']['token']}) as response:
     human=await response.json();assert response.status==200
   assert human['deliveries']==[]
+  with store.pool.connection() as c:
+   before_counts={table:c.execute('SELECT count(*) AS n FROM '+table+' WHERE authority=%s',(authority,)).fetchone()['n'] for table in ('hb_principal','hb_room','hb_delivery','hb_executor')}
   (root/'human.accepted.json').write_text(json.dumps(human))
   async def asked():
    while not agent.attention.pending or 'scope' not in next(iter(agent.attention.pending.values())):
@@ -74,9 +77,17 @@ async def main():
   started=[n for n in notes if n['method']=='turn/started'];assert len(started)==1,'Answer started another turn'
   assert any(c['method']=='item/tool/requestUserInput' for c in callbacks)
   posts=[c for c in callbacks if c['method']=='item/tool/call' and c['params'].get('tool')=='hollywood_publish'];assert posts
+  if os.environ.get('ROOM_NATIVE_QUESTION_ADMIN')=='1':
+   names=[c['params'].get('tool') for c in callbacks if c['method']=='item/tool/call']
+   assert names.count('hollywood_create_agent')==1 and names.count('hollywood_create_room')==1,names
+   with store.pool.connection() as c:
+    after_counts={table:c.execute('SELECT count(*) AS n FROM '+table+' WHERE authority=%s',(authority,)).fetchone()['n'] for table in before_counts}
+   assert after_counts['hb_principal']==before_counts['hb_principal']+1
+   assert after_counts['hb_room']==before_counts['hb_room']+1
+   assert after_counts['hb_delivery']==before_counts['hb_delivery'] and after_counts['hb_executor']==before_counts['hb_executor']
   voice_result=await voice('read');assert voice_result['state']=='completed'
   current=store.attention_read(actor,identity);assert current['attention']['state']=='closed'
-  result={'passed':True,'actualNativeQuestion':True,'realVoiceRequestAndExplicitAnswer':True,'executionClaimsRequired':False,'sameNativeTurnAfterHumanAnswer':True,'nativeLocalArtifact':'ORCHID','deliberateRoomPublication':True,'closedOriginalCallback':True,'model':original['model'],'effort':original['effort'],'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
+  result={'passed':True,'actualNativeQuestion':True,'realVoiceRequestAndExplicitAnswer':True,'executionClaimsRequired':False,'sameNativeTurnAfterHumanAnswer':True,'nativeLocalArtifact':'ORCHID','deliberateRoomPublication':True,'closedOriginalCallback':True,'model':original['model'],'effort':original['effort'],'productionChanged':False,'nativeCommunicationAdministration':os.environ.get('ROOM_NATIVE_QUESTION_ADMIN')=='1'};(root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
  finally:
   task.cancel();await asyncio.gather(task,return_exceptions=True);await runner.cleanup();store.close();(root/'notifications.private.json').write_text(json.dumps(notes));(root/'callbacks.private.json').write_text(json.dumps(callbacks))
 asyncio.run(main())

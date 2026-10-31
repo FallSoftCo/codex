@@ -21,19 +21,30 @@ TOOLS=[
     definition('hollywood_publish','Publish in your own agent identity. A public message is shared context; recipientId explicitly addresses a peer. Direct audience is private. Accepted means stored, not answered. Use responsePhase answer for a deliberate answer to the human, update for progress, blocked for a blocker, and message for other conversation. An answer makes a response available; it does not assert all work is complete. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':STRING,'responsePhase':{'type':'string','enum':['message','update','answer','blocked']},'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience','responsePhase']),
 ]
 
+from .native_tool_catalog import TOOLS as NATIVE_TOOLS
+from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES
+TOOLS += [tool for tool in NATIVE_TOOLS if tool['name'] in ADMIN_NAMES]
+TOOLS += [definition('hollywood_admin_reconcile',
+    'Inspect and continue the exact original administrative workflow after an unknown result. Never creates a replacement operation or repeats an uncertain write. Requires current administrator authority.',
+    {'operationId':STRING},['operationId'])]
+
+
 class RoomTools:
     def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
         self.source_for_turn=source_for_turn
         self.publish_lock=asyncio.Lock()
+        self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration')
 
     async def call(self,method,params):
         try:
             return await self._call(method,params)
         except HttpFailure as error:
             return {"success":False,"contentItems":[{"type":"inputText","text":json.dumps(error.public_details())}]}
-        except ValueError as error:
+        except AdministrationUnconfirmed as error:
+            return {"success":False,"contentItems":[{"type":"inputText","text":json.dumps({"error":str(error),"next":"Use hollywood_admin_reconcile with the original operationId. Do not create a replacement administrative call."})}]}
+        except (ValueError, PermissionError) as error:
             return {"success":False,"contentItems":[{"type":"inputText","text":json.dumps({"error":str(error),"next":"Correct the validated input; do not repeat an uncertain publication."})}]}
 
     async def _call(self,method,params):
@@ -42,6 +53,9 @@ class RoomTools:
         name=params['tool'];args=params['arguments']
         if isinstance(args,str):args=json.loads(args)
         if not isinstance(args,dict):raise ValueError('Tool arguments must be an object')
+        if name in ADMIN_NAMES or name=='hollywood_admin_reconcile':
+            result=await self.administration.call(name,args,params['callId'])
+            return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         room=str(UUID(args['roomId']))
         if name=='hollywood_context':
             value=await self.request('GET','rooms/'+room)

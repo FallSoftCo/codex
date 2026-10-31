@@ -100,11 +100,22 @@ async def administer(connector, name, arguments, operation):
         ) from error
 
 
-async def _administer(connector, name, arguments, operation):
+async def _administer(connector, name, arguments, operation, *, conversation_actor=None):
     from .journal import saved
 
-    if not connector.role_context.value["communicationAdministrator"]:
-        raise PermissionError("Communication administrator required")
+    if conversation_actor is None:
+        if not connector.role_context.value["communicationAdministrator"]:
+            raise PermissionError("Communication administrator required")
+        authority = participation(connector)["request"]["authority"]
+    else:
+        if (conversation_actor.get("id") != connector.config["agentId"]
+                or conversation_actor.get("authority") != connector.config["authorityId"]
+                or conversation_actor.get("kind") != "agent"
+                or not conversation_actor.get("administrator")):
+            raise PermissionError("Authenticated communication administrator required")
+        authority = conversation_actor["authority"]
+    if name == "hollywood_create_agent" and arguments["primary"] == "global":
+        raise ValueError("Creating an agent role cannot grant Global authority")
     if name in ("hollywood_mutation_observe", "hollywood_mutation_reconcile"):
         from .mutation_tools import administer
         return await administer(connector, name, arguments, operation)
@@ -130,7 +141,7 @@ async def _administer(connector, name, arguments, operation):
                 credential,
                 {
                     "agentId": identity,
-                    "authorityId": participation(connector)["request"]["authority"],
+                    "authorityId": authority,
                     "token": secrets.token_urlsafe(40),
                 },
             )
@@ -228,7 +239,6 @@ async def _administer(connector, name, arguments, operation):
         credential = json.loads(
             (connector.state / ("agent-credential-" + agent + ".json")).read_text()
         )
-        authority = participation(connector)["request"]["authority"]
         if credential["authorityId"] != authority:
             raise PermissionError("Credential belongs to another enterprise")
         # An agent may be provisioned before joining any room. Membership is

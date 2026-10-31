@@ -82,7 +82,9 @@
     "nativeLocalTools": "conversational-runtime-tools-qa-r01",
     "nativeQuestion": "conversational-native-question-qa-r08",
     "nativeQuestionProof": "Actual native question, real HTTP human answer, same turn continued, native artifact written, deliberate room publication and original attention closed. Candidate only.",
-    "voiceTextDispatch": "Real HollywoodVoice + authenticated HTTP + native model question, same-turn human answer, native local artifact and explicit answer: passed. Microphone/TTS/phone unqualified."
+    "voiceTextDispatch": "Real HollywoodVoice + authenticated HTTP + native model question, same-turn human answer, native local artifact and explicit answer: passed. Microphone/TTS/phone unqualified.",
+    "communicationAdministration": "conversational-administration-qa-r05: real PG/HTTP, existing shared handlers, lost ACK, restored partial workflow without duplicate enrollment, zero deliveries/executors",
+    "nativeQuestionAndAdministration": "conversational-native-question-qa-r09: actual native model asks human, same-turn answer, native file, one peer identity and one room via shared handlers, explicit voice answer; no host worker provisioning"
   },
   "executionOrder": [
     "Next: maintained local room runtime with full native tools and ongoing real work, rather than another crash-recovery study.",
@@ -113,7 +115,7 @@
     "completionRule": "A successful synthetic conversation or allocation announcement alone does not fulfill this request or the whole vision."
   },
   "implementationGaps": {
-    "administration": "Existing administration.py uses participation(connector) and delivery-bound Effects. Reuse durable operation workflows and role checks, but separate their native conversation provenance from execution delivery before exposing agent creation/provisioning. Do not fake an execution claim to satisfy the old adapter.",
+    "administration": "Communication administration is integrated without delivery claims using the shared domain workflows and current authenticated role checks. Remaining: host-local worker provisioning into the maintained single-context room runtime, without old execution-reservation enrollment or duplicate identities.",
     "membership": "Current candidate maintains configured room subscriptions; membership discovery/update must follow authenticated room/inbox events without model polling or historical human input replay.",
     "clients": "Core callback/receipt compile tests passed. Real rendered pending-send keyboard journey running in owned isolated AVD; full web/native questions/voice and rollout remain pending."
   }
