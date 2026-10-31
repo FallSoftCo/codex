@@ -15,6 +15,7 @@ from .rpc import AppServer
 from .room_runtime import RoomRuntime
 from .room_tools import RoomTools, TOOLS
 from .errors import HttpFailure
+from .room_permissions import observed
 
 
 class ConversationalAgent:
@@ -133,6 +134,7 @@ class ConversationalAgent:
                 result=await self.rpc.call('thread/resume',{'threadId':self.thread,'excludeTurns':True,
                               'dynamicTools':self.config['conversationDynamicTools'],
                               'config':{'features.default_mode_request_user_input':True},**self.resume_instructions})
+                effective_permissions=observed(result)
                 self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)
                 if result['thread']['id']!=self.thread:
                     raise ValueError('Native resume selected a different conversation')
@@ -142,6 +144,7 @@ class ConversationalAgent:
                 if self.thread not in loaded['data']:
                     raise ValueError('Selected conversation is not on the original transport')
             saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start,
+                'effectivePermissions':effective_permissions if cold_start else None,
                 'instructionOverridesSha256':hashlib.sha256(json.dumps(self.resume_instructions,sort_keys=True).encode()).hexdigest() if self.resume_instructions else None})
             self.activity.start()
             self.native_state.start()

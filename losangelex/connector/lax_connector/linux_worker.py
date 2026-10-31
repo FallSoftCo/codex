@@ -52,7 +52,7 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
 
     if mode=="room-conversation":
         from .room_tools import TOOLS
-        result.update(authorityId=authority,nativeName=spec["nativeName"],rooms=spec["rooms"],conversationDynamicTools=TOOLS)
+        result.update(authorityId=authority,nativeName=spec["nativeName"],rooms=spec["rooms"],conversationDynamicTools=TOOLS,approvalPolicy="never" if profile=="unrestricted" else "on-request")
         result["instructions"]=(
             "You are "+spec["nativeName"]+", a persistent native agent. Your responsibility is: "+spec["purpose"]+
             ". Work on this local host; coordinate cross-host work through Hollywood peers rather than SSH. "

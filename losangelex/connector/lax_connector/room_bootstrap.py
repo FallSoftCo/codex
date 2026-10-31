@@ -14,6 +14,7 @@ from uuid import UUID
 from .journal import saved
 from .rpc import AppServer
 from .room_tools import TOOLS
+from .room_permissions import persist_new_thread, requested
 
 
 async def initialize(config):
@@ -27,8 +28,7 @@ async def initialize(config):
     name=config['nativeName'].strip()
     if not name:raise ValueError('Meaningful native agent name required')
     binding={'authorityId':authority,'agentId':agent,'codexHome':str(home),'nativeState':str(state/'native')}
-    request={'cwd':str(workspace),'model':config['model'],'sandbox':config['sandbox'],
-             'approvalPolicy':config.get('approvalPolicy','never'),'dynamicTools':TOOLS,
+    request={'cwd':str(workspace),'model':config['model'],**requested(config),'dynamicTools':TOOLS,
              'baseInstructions':config['instructions'],
              'config':{'model_reasoning_effort':config['effort'],'features.default_mode_request_user_input':True}}
     fingerprint=hashlib.sha256(json.dumps({'binding':binding,'name':name,'request':request},sort_keys=True,separators=(',',':')).encode()).hexdigest()
@@ -54,12 +54,13 @@ async def initialize(config):
             await rpc.start()
             created=await rpc.call('thread/start',request)
             thread=created['thread']['id']
+            effective=await persist_new_thread(rpc,thread,created,config)
             record.update(state='naming',nativeThreadId=thread);saved(file,record)
             # This is the real display name, not a dummy history item or a
             # settings toggle. Native naming persists an empty paginated context.
             await rpc.call('thread/name/set',{'threadId':thread,'name':name})
             if turns:raise RuntimeError('Unexpected native turn during initialization')
-            record.update(state='ready',nativeName=name,modelTurnsRequested=0);saved(file,record)
+            record.update(state='ready',nativeName=name,modelTurnsRequested=0,nativePermissionsPersisted=True,effectivePermissions=effective);saved(file,record)
             return record
         finally:await rpc.close()
 

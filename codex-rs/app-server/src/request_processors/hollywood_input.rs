@@ -59,9 +59,8 @@ fn model_input(
         .as_deref()
         .map(|value| identity(value, "sourceEventId"))
         .transpose()?;
-    // Hollywood owns execution admission. Its bounded work-review policy may
-    // address the owner with an event carrying that same authenticated author.
-    // This private input transport must preserve, not reinterpret, that identity.
+    // Hollywood authenticates communication; the native engine owns execution
+    // and relevance. Preserve the authenticated author on this private input.
     let content = serde_json::json!({
         "authorityId": authority,
         "roomId": room,

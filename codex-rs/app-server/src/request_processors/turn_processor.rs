@@ -1098,18 +1098,33 @@ impl TurnRequestProcessor {
             .await?;
 
         if thread_settings != codex_protocol::protocol::ThreadSettingsOverrides::default() {
+            let (reply, outcome) = oneshot::channel();
             self.submit_core_op(
                 request_id,
                 thread.as_ref(),
                 Op::ThreadSettings {
                     thread_settings,
-                    reply: None,
+                    reply: Some(reply),
                 },
             )
             .await
             .map_err(|err| internal_error(format!("failed to update thread settings: {err}")))?;
+            outcome
+                .await
+                .map_err(|err| {
+                    internal_error(format!("thread settings acknowledgement lost: {err}"))
+                })?
+                .map_err(|err| {
+                    internal_error(format!("failed to update thread settings: {err}"))
+                })?;
         }
 
+        // Successful acknowledgement is also a cold-resume durability boundary,
+        // including explicit updates that match an empty thread's current settings.
+        thread
+            .checkpoint_thread_settings()
+            .await
+            .map_err(|err| internal_error(format!("failed to persist thread settings: {err}")))?;
         Ok(ThreadSettingsUpdateResponse {})
     }
 

@@ -448,6 +448,10 @@ while preserving their installation state.
 Remote `plugin/install` still installs a policy-disabled package, but skips MCP and
 Apps authentication setup without writing an `enabled` override.
 
+`thread/settings/update` acknowledges success only after Core accepts the settings
+and checkpoints them for cold resume, including an explicit unchanged update.
+Rejected or unpersisted settings return an error rather than a successful receipt.
+
 `thread/settings/update` and `turn/start` accept `disabledPluginIds`, a list of
 `PluginSummary.id` values from `plugin/list`, in the
 `<plugin-name>@<marketplace-name>` format. A supplied list replaces the selection;
