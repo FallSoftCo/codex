@@ -15,7 +15,7 @@ from .room_receive import RoomReceiveJournal, NativeReceiptUnresolved
 
 class RoomRuntime:
     def __init__(self, *, rpc, session, base_url, token, authority_id, agent_id,
-                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None):
+                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None, on_room_event=None, before_native_input=None):
         self.rpc, self.session = rpc, session
         self.route_headers=dict(route_headers or {})
         if set(self.route_headers)-{'X-Hollywood-Authority','X-Hollywood-Agent'}:
@@ -40,6 +40,8 @@ class RoomRuntime:
         else:
             self.cursor=initial_cursor
             self._save_cursor()
+        self.on_room_event=on_room_event
+        self.before_native_input=before_native_input
         self.on_status=on_status
         self.ready=asyncio.Event()
 
@@ -60,6 +62,7 @@ class RoomRuntime:
         if not isinstance(seq,int) or isinstance(seq,bool) or seq<0:
             raise ValueError('Canonical sequence required')
         if seq<=self.cursor:return
+        if self.on_room_event:await self.on_room_event(event)
         data=event.get('data',{})
         if self.agent in data.get('conversationRecipients',[]):
             args=dict(authority_id=self.authority,agent_id=self.agent,thread_id=self.thread)
@@ -75,6 +78,7 @@ class RoomRuntime:
             if row['acknowledgement'] is None:
                 if not self.journal.begin_handoff(self.authority,self.agent,event['id']):
                     raise NativeReceiptUnresolved('Original room input needs reconciliation: '+event['id'])
+                if self.before_native_input:await self.before_native_input(event)
                 if method=='hollywood/agentMessage':
                     reply=await submit_peer(self.rpc,event,**args)
                 else:

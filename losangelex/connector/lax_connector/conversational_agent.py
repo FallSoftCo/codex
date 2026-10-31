@@ -34,8 +34,11 @@ class ConversationalAgent:
         self.lock=(self.state/'connector.lock').open('a')
         fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
         self.session=None;self.tools=None;self.listeners=[]
+        self.current_input=None;self.turn_sources={};self.native_items={};self.finished_turns=set()
+        from .room_attention import RoomAttention
+        self.attention=RoomAttention(self)
         self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
-                           self.event,self.tool,enterprise=True)
+                           self.event,self.tool,on_submission=self.attention.submitted,enterprise=True)
 
     async def http(self,method,path,payload=None):
         c=self.config
@@ -51,8 +54,20 @@ class ConversationalAgent:
     async def status(self,value):
         saved(self.state/('room-'+value['roomId']+'-status.json'),value)
 
+    async def before_native_input(self,event):
+        if event.get('data',{}).get('authorKind') in ('human','agent'):self.current_input=event
+
     async def event(self,method,params):
         if params.get('threadId')!=self.thread:return
+        if method=='turn/started' and self.current_input:
+            self.turn_sources.setdefault(params['turn']['id'],self.current_input)
+        if method=='item/started':self.native_items[params['item']['id']]=params['item']
+        if method=='item/completed':self.native_items.pop(params['item']['id'],None)
+        if method=='turn/completed':
+            turn=params['turn']['id'];self.finished_turns.add(turn)
+            await self.attention.finish(turn)
+            self.turn_sources.pop(turn,None)
+            if len(self.finished_turns)>1024:self.finished_turns={turn}
         # Actual native state, independent of room-message/delivery state. Full
         # activity/attention projection is integrated separately, not chat spam.
         if method in ('turn/started','turn/completed','error'):
@@ -61,6 +76,8 @@ class ConversationalAgent:
     async def tool(self,method,params):
         if method=='item/tool/call' and params.get('tool') in {t['name'] for t in TOOLS}:
             return await self.tools.call(method,params)
+        from .room_attention import QUESTION, APPROVAL
+        if method in QUESTION|APPROVAL:return await self.attention.wait(method,params)
         # Never fabricate a question answer or execution approval. Preserve the
         # exact callback as an explicit integration blocker until it is wired.
         saved(self.state/'unsupported-native-callback.json',{'method':method,'params':params})
@@ -84,7 +101,7 @@ class ConversationalAgent:
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
                     token=self.config['token'],authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                     room_id=room['roomId'],thread_id=self.thread,state=self.state/'rooms'/room['roomId'],
-                    initial_cursor=room['after'],on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']})
+                    initial_cursor=room['after'],on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input)
                 self.listeners.append(listener);tasks.append(asyncio.create_task(listener.run()))
             done,_=await asyncio.wait(tasks,return_when=asyncio.FIRST_COMPLETED)
             for task in done:task.result()
