@@ -22,20 +22,21 @@ TOOLS=[
 ]
 
 from .native_tool_catalog import TOOLS as NATIVE_TOOLS
-from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES
+from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES, HOST_TOOL
 TOOLS += [tool for tool in NATIVE_TOOLS if tool['name'] in ADMIN_NAMES]
+TOOLS += [definition(HOST_TOOL,'Provision an already enrolled and joined agent on this configured local host. Requires current communication administrator and verified local sudo; does not create a replacement identity, send instructions or claim task completion.',{'agentId':STRING,'roomId':STRING},['agentId','roomId'])]
 TOOLS += [definition('hollywood_admin_reconcile',
     'Inspect and continue the exact original administrative workflow after an unknown result. Never creates a replacement operation or repeats an uncertain write. Requires current administrator authority.',
     {'operationId':STRING},['operationId'])]
 
 
 class RoomTools:
-    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None):
+    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
         self.source_for_turn=source_for_turn
         self.publish_lock=asyncio.Lock()
-        self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration')
+        self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration',host_config=host_config)
 
     async def call(self,method,params):
         try:
@@ -53,7 +54,7 @@ class RoomTools:
         name=params['tool'];args=params['arguments']
         if isinstance(args,str):args=json.loads(args)
         if not isinstance(args,dict):raise ValueError('Tool arguments must be an object')
-        if name in ADMIN_NAMES or name=='hollywood_admin_reconcile':
+        if name in ADMIN_NAMES|{HOST_TOOL} or name=='hollywood_admin_reconcile':
             result=await self.administration.call(name,args,params['callId'])
             return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         room=str(UUID(args['roomId']))

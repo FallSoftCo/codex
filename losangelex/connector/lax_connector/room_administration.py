@@ -13,6 +13,7 @@ from .administration import _administer
 from .errors import HttpFailure
 from .journal import saved
 
+HOST_TOOL='lax_provision_room_agent'
 NAMES={'hollywood_create_agent','hollywood_create_room','hollywood_set_role','hollywood_grant_room'}
 
 
@@ -25,8 +26,9 @@ class AdministrationUnconfirmed(RuntimeError):
 
 
 class RoomAdministration:
-    def __init__(self, *, authority, agent, thread, request, state):
+    def __init__(self, *, authority, agent, thread, request, state, host_config=None):
         self.config={'authorityId':authority,'agentId':agent}
+        self.host_config=dict(host_config or {})
         self.thread=thread;self.request=request;self.state=Path(state)
         self.binding={'authority':authority,'agent':agent,'thread':thread}
         self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -47,7 +49,7 @@ class RoomAdministration:
                 record=json.loads(path.read_text())
                 if record['operationId']!=operation:raise ValueError('Original administrative operation differs')
             else:
-                if name not in NAMES:raise ValueError('Unsupported communication administration tool')
+                if name not in NAMES|{HOST_TOOL}:raise ValueError('Unsupported communication administration tool')
                 key=digest([self.thread,call_id]);identity=str(uuid5(UUID(self.config['agentId']),key))
                 path=self.state/('workflow-'+identity+'.json');operation='native-admin:'+identity
                 record={'operationId':operation,'tool':name,'arguments':args,'state':'intent','binding':self.binding}
@@ -73,7 +75,11 @@ class RoomAdministration:
             saved(pending,{'operationId':record['operationId'],'binding':self.binding})
             transport=AdministrationSteps(self,record['operationId'])
             try:
-                result=await _administer(transport,record['tool'],record['arguments'],record['operationId'],conversation_actor=actor)
+                if record['tool']==HOST_TOOL:
+                    from .room_host_provision import provision
+                    result=await provision(transport,record['arguments'],record['operationId'])
+                else:
+                    result=await _administer(transport,record['tool'],record['arguments'],record['operationId'],conversation_actor=actor)
             except Exception as error:
                 definite=isinstance(error,(ValueError,PermissionError)) or isinstance(error,HttpFailure) and error.status in (400,403,409,422)
                 # A multi-step workflow may already have accepted a principal
