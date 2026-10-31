@@ -23,11 +23,11 @@ def execution_profile(spec, override=None):
     return profile
 
 
-def expected_configuration(spec, authority, agent, home, profile=None):
-    from .runtime_mode import require_single_context
-    require_single_context(spec)
+def expected_configuration(spec, authority, agent, home, profile=None, *, native_context=None):
+    from .runtime_mode import require_worker_context
+    mode=require_worker_context(spec)
     profile = execution_profile(spec, profile)
-    return {
+    result = {
         **({"runtimeMode": spec["runtimeMode"]} if "runtimeMode" in spec else {}),
         "hollywoodUrl": spec["hollywoodUrl"],
         "token": spec["credential"],
@@ -49,6 +49,26 @@ def expected_configuration(spec, authority, agent, home, profile=None):
             "You are a scoped enterprise worker. Your primary responsibility and room are captured in the authoritative LAX role context. Execute only explicitly addressed work within that scope. Observe other room communication without initiating work. Communicate through Hollywood and publish attributable evidence. Do not escalate host privileges, inspect another agent's private state, create workers or resume historical work. Complete each admitted request and wait."
         ),
     }
+
+    if mode=="room-conversation":
+        from .room_tools import TOOLS
+        result.update(authorityId=authority,nativeName=spec["nativeName"],rooms=spec["rooms"],conversationDynamicTools=TOOLS)
+        result["instructions"]=(
+            "You are "+spec["nativeName"]+", a persistent native agent. Your responsibility is: "+spec["purpose"]+
+            ". Work on this local host; coordinate cross-host work through Hollywood peers rather than SSH. "
+            "Public human room input is delivered to all agent members; do not assume exclusive ownership. "
+            "While busy, judge relevance at the native input boundary. Ordinary final text stays private; "
+            "use hollywood_publish for deliberate public updates/answers and explicit recipients for peer requests. "
+            "Do not send routine acknowledgements or poll models for progress. Preserve other agents' work, "
+            "original operation receipts, uncertain effects and deliberate stops. Host access does not authorize unrelated business actions."
+        )
+        if native_context is not None:
+            expected={"authorityId":authority,"agentId":agent,"codexHome":str(home/"codex-home"),"nativeState":str(home/"state/native")}
+            if native_context.get("state")!="ready" or native_context.get("binding")!=expected or not native_context.get("nativeThreadId"):
+                raise ValueError("Original named native context receipt differs")
+            result["nativeThreadId"]=native_context["nativeThreadId"]
+    return result
+
 
 def expected_unit(spec, agent, user, home, profile=None):
     profile = execution_profile(spec, profile)
@@ -130,7 +150,8 @@ def inspect_completed(spec):
     if policy and policy.get("originalSpecDigest") != fingerprint:
         raise ValueError("Execution policy upgrade belongs to another provisioning")
     profile = (policy or receipt).get("executionProfile", "restricted")
-    expected = expected_configuration(spec, authority, agent, home, profile)
+    native_context=protected(record/"native-context-receipt.json") if spec.get("runtimeMode")=="room-conversation" else None
+    expected = expected_configuration(spec, authority, agent, home, profile,native_context=native_context)
     config = json.loads(config_file.read_text())
     from .native_release import runtime_spec, CURRENT
     from .service_observer import directory
@@ -169,8 +190,8 @@ def inspect_completed(spec):
     }
 
 def provision(spec):
-    from .runtime_mode import require_single_context
-    require_single_context(spec)
+    from .runtime_mode import require_worker_context
+    mode=require_worker_context(spec)
     if os.geteuid() != 0:
         raise PermissionError("Worker provisioning requires a verified administrator")
     authority, agent = str(UUID(spec["authorityId"])), str(UUID(spec["agentId"]))
@@ -255,12 +276,16 @@ def provision(spec):
         os.chown(path, account.pw_uid, account.pw_gid)
     config = expected_configuration(spec, authority, agent, home)
     config_file = home / "connector.json"
-    if config_file.exists() and json.loads(config_file.read_text()) != config:
+    existing_config=json.loads(config_file.read_text()) if config_file.exists() else None
+    if mode=="room-conversation" and existing_config is not None and (record/"native-context-receipt.json").exists():
+        config=expected_configuration(spec,authority,agent,home,native_context=protected(record/"native-context-receipt.json"))
+    if existing_config is not None and existing_config != config:
         raise ValueError(
             "Existing connector configuration changed; explicit upgrade required"
         )
-    saved(config_file, config)
-    os.chown(config_file, account.pw_uid, account.pw_gid)
+    if mode!="room-conversation":
+        saved(config_file, config)
+        os.chown(config_file, account.pw_uid, account.pw_gid)
     source_auth = Path(spec["approvedModelAuthFile"])
     auth = home / "codex-home/auth.json"
     if auth.exists() and auth.read_bytes() != source_auth.read_bytes():
@@ -279,6 +304,15 @@ def provision(spec):
         "-c",
         "import lax_connector.connector",
     )
+    if mode=="room-conversation":
+        bootstrap_file=home/"native-bootstrap.json"
+        saved(bootstrap_file,config);os.chown(bootstrap_file,account.pw_uid,account.pw_gid)
+        initialized=run("runuser","-u",user,"--",spec["interpreter"],"-m","lax_connector.room_bootstrap","--config",str(bootstrap_file))
+        native_context=json.loads(initialized.stdout)
+        config=expected_configuration(spec,authority,agent,home,native_context=native_context)
+        if "nativeThreadId" not in config:raise ValueError("Named native context unavailable")
+        saved(record/"native-context-receipt.json",native_context)
+        saved(config_file,config);os.chown(config_file,account.pw_uid,account.pw_gid)
     profile = execution_profile(spec)
     if profile == "unrestricted":
         sudo_file = Path("/etc/sudoers.d") / ("harness-worker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12])

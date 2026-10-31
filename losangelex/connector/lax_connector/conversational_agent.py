@@ -95,6 +95,9 @@ class ConversationalAgent:
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                                  thread_id=self.thread,request=self.http,state=self.state/'publications',
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'))
+            if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()
+                    or self.rpc.state.resolve()!=(self.state/'native').resolve()):
+                raise ValueError('Native transport must retain the original agent profile and database')
             cold_start=self.rpc.process is None
             if cold_start:
                 await self.rpc.start()

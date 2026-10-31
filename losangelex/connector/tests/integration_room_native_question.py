@@ -16,7 +16,7 @@ async def main():
  home=root/'codex-home';home.mkdir(mode=0o700);(home/'auth.json').symlink_to(Path(original['codexHome'])/'auth.json');(home/'config.toml').write_text('[features]\ndefault_mode_request_user_input = true\n')
  async def ignore(*args):pass
  async def unsupported(*args):raise AssertionError('No callback expected before human input')
- creator=AppServer(original['binary'],home,root/'native-create',ignore,unsupported,enterprise=True)
+ creator=AppServer(original['binary'],home,root/'agent/native',ignore,unsupported,enterprise=True)
  await creator.start()
  try:
   extra=(' After the human answer, also use hollywood_create_agent to create exactly one developer peer named Synthetic label implementer, then hollywood_create_room to create exactly one synthetic label review room owned by that new peer. Do not provision or start any worker. Include the label in the final room publication.' if os.environ.get('ROOM_NATIVE_QUESTION_ADMIN')=='1' else '')

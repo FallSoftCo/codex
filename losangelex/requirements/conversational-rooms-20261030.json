@@ -85,7 +85,7 @@
     "voiceTextDispatch": "Real HollywoodVoice + authenticated HTTP + native model question, same-turn human answer, native local artifact and explicit answer: passed. Microphone/TTS/phone unqualified.",
     "communicationAdministration": "conversational-administration-qa-r05: real PG/HTTP, existing shared handlers, lost ACK, restored partial workflow without duplicate enrollment, zero deliveries/executors",
     "nativeQuestionAndAdministration": "conversational-native-question-qa-r09: actual native model asks human, same-turn answer, native file, one peer identity and one room via shared handlers, explicit voice answer; no host worker provisioning",
-    "nativeAgentInitialization": "conversational-bootstrap-qa-r03: one named empty native context, repeated initialization returns original receipt, cold resume same ID/native database; zero model turns/dummy messages"
+    "nativeAgentInitialization": "conversational-bootstrap-qa-r05: actual installer-generated config, repeated initialization returns original receipt, maintained resident cold-resumes same native ID/database and connects authenticated room; zero turns/dummy messages"
   },
   "executionOrder": [
     "Next: maintained local room runtime with full native tools and ongoing real work, rather than another crash-recovery study.",
@@ -116,7 +116,7 @@
     "completionRule": "A successful synthetic conversation or allocation announcement alone does not fulfill this request or the whole vision."
   },
   "implementationGaps": {
-    "administration": "Communication administration is integrated without delivery claims using the shared domain workflows and current authenticated role checks. Remaining: host-local worker provisioning into the maintained single-context room runtime, without old execution-reservation enrollment or duplicate identities.",
+    "administration": "Communication administration and installer configuration/native initialization are integrated without delivery claims. Remaining: packaged OS-service qualification and host-local native provisioning tool; do not claim metadata enrollment is a running worker.",
     "membership": "Current candidate maintains configured room subscriptions; membership discovery/update must follow authenticated room/inbox events without model polling or historical human input replay.",
     "clients": "Core callback/receipt compile tests passed. Real rendered pending-send keyboard journey running in owned isolated AVD; full web/native questions/voice and rollout remain pending."
   }
