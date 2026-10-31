@@ -1,9 +1,9 @@
 """Native named empty agent context -> close -> same-context cold resume; no model."""
-import asyncio,json,os
+import asyncio,json,os,uuid
 from pathlib import Path
 from lax_connector.rpc import AppServer
 from lax_connector.room_tools import TOOLS
-from aiohttp import web
+from aiohttp import web,ClientSession
 from hollywood_backbone.store import Store
 from hollywood_backbone.server import application
 from lax_connector.conversational_agent import ConversationalAgent
@@ -31,7 +31,11 @@ async def main():
  completed_config=expected_configuration(spec,authority,agent,worker_home,native_context=record)
  assert completed_config['nativeThreadId']==thread and completed_config['sandbox']=='workspace-write'
  assert await initialize(config)==record
- resident=ConversationalAgent(completed_config);task=asyncio.create_task(resident.serve())
+ class Observed(ConversationalAgent):
+  async def event(self,method,params):
+   notes.append({'method':method,'params':params});await super().event(method,params)
+ completed_config['conversationResumeInstructions']={'baseInstructions':completed_config['instructions']+'\nSynthetic explicit cold-resume instruction adoption.'}
+ resident=Observed(completed_config);task=asyncio.create_task(resident.serve())
  try:
   async def ready():
    while not resident.listeners:
@@ -49,6 +53,41 @@ async def main():
   room=next(r for r in store.catalog(fixture['credentials']['Owner']['principalId'])['rooms'] if r['id']==fixture['room'])
   state=next(a for a in room['nativeState']['agents'] if a['agentId']==agent and a['nativeThread']==thread)
   assert state['status']['type']=='idle',state
+  # Administrator visibility is not membership. Joining a new room attaches
+  # another authenticated SSE listener to this SAME native process/context.
+  owner=fixture['credentials']['Owner']['principalId'];peer=fixture['actors']['A']
+  foreign=str(uuid.uuid4());joined=str(uuid.uuid4())
+  store.create_room(owner,foreign,'Synthetic unjoined '+root.name,'Not a member',peer['id'])
+  store.create_room(owner,joined,'Synthetic joined '+root.name,'Native membership journey',peer['id'])
+  await resident.subscriptions.refresh()
+  assert foreign not in resident.subscriptions.live and joined not in resident.subscriptions.live
+  store.membership(owner,joined,agent,{'can_read':True,'can_post':True,'can_request':True},0)
+  pid=resident.rpc.process.pid
+  await resident.subscriptions.refresh();listener=resident.subscriptions.live[joined][0]
+  await asyncio.wait_for(listener.ready.wait(),10)
+  async with ClientSession() as session:
+   async with session.post(origin+'/hollywood/v3/rooms/'+joined+'/messages',json={
+     'operationId':'passive-native-membership-context:'+root.name,'kind':'message','audience':'room',
+     'body':'Synthetic passive shared context only. No task or response requested.'},
+     headers={'Authorization':'Bearer '+peer['token']}) as response:
+    published=await response.json();assert response.status==200,published
+  async def received():
+   while listener.cursor<published['event']['seq']:
+    if task.done():task.result()
+    await asyncio.sleep(.05)
+  await asyncio.wait_for(received(),10)
+  assert resident.thread==thread and resident.rpc.process.pid==pid
+  with store.pool.connection() as c:revision=c.execute('SELECT revision FROM hb_membership WHERE room=%s AND principal=%s',(joined,agent)).fetchone()['revision']
+  store.membership(owner,joined,agent,{'can_read':False,'can_post':False,'can_request':False},revision)
+  await resident.subscriptions.refresh()
+  assert joined not in resident.subscriptions.live and fixture['room'] in resident.subscriptions.live
+  assert not task.done() and resident.rpc.process.pid==pid
+  with store.pool.connection() as c:revision=c.execute('SELECT revision FROM hb_membership WHERE room=%s AND principal=%s',(joined,agent)).fetchone()['revision']
+  store.membership(owner,joined,agent,{'can_read':True,'can_post':True,'can_request':True},revision)
+  await resident.subscriptions.refresh();rejoined=resident.subscriptions.live[joined][0]
+  await asyncio.wait_for(rejoined.ready.wait(),10)
+  assert rejoined.cursor>=published['event']['seq'] and resident.rpc.process.pid==pid
+
 
  finally:
   task.cancel();await asyncio.gather(task,return_exceptions=True)
@@ -58,7 +97,7 @@ async def main():
   response=await resumed.call('thread/resume',{'threadId':thread,'excludeTurns':True,'dynamicTools':TOOLS})
   assert response['thread']['id']==thread and response['thread']['name']=='Synthetic resident agent'
   assert not any(n['method']=='turn/started' for n in notes)
-  result={'passed':True,'sameOriginalEmptyContextResumed':True,'supportedNativeNameApi':True,'originalRuntimeStatePreserved':True,'repeatInitializationReturnsOriginalReceipt':True,'actualWorkerConfigurationUsesOriginalContext':True,'maintainedResidentColdResumeAndAuthenticatedRoom':True,'actualNativeIdleStatusInCanonicalCatalog':True,'dummyMessagesInjected':0,'modelTurns':0,'productionChanged':False}
+  result={'passed':True,'sameOriginalEmptyContextResumed':True,'supportedNativeNameApi':True,'originalRuntimeStatePreserved':True,'repeatInitializationReturnsOriginalReceipt':True,'actualWorkerConfigurationUsesOriginalContext':True,'maintainedResidentColdResumeAndAuthenticatedRoom':True,'actualNativeIdleStatusInCanonicalCatalog':True,'dynamicJoinPassiveNativeInputRevokeAndRejoin':True,'administratorVisibilityNotMembership':True,'sameNativeProcessAcrossMembershipChanges':True,'explicitSupportedColdResumeInstructionAdoption':True,'dummyMessagesInjected':0,'modelTurns':0,'productionChanged':False}
   (root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
  finally:
   await resumed.close();await runner.cleanup();store.close();(root/'notifications.private.json').write_text(json.dumps(notes))

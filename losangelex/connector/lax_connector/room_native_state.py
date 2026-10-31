@@ -7,7 +7,7 @@ from .errors import HttpFailure
 class RoomNativeState:
     def __init__(self,*,state,thread,agent,rooms,send):
         self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
-        self.thread,self.agent,self.rooms,self.send=thread,agent,rooms,send
+        self.thread,self.agent,self.rooms,self.send=thread,agent,[dict(r) for r in rooms],send
         self.status={'type':'unavailable','activeFlags':[]};self.source=None
         self.wake=asyncio.Event();self.task=None;self.blocked=set()
 

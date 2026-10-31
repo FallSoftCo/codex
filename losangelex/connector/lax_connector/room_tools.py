@@ -31,10 +31,11 @@ TOOLS += [definition('hollywood_admin_reconcile',
 
 
 class RoomTools:
-    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None):
+    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
         self.source_for_turn=source_for_turn
+        self.on_membership=on_membership
         self.publish_lock=asyncio.Lock()
         self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration',host_config=host_config)
 
@@ -56,6 +57,7 @@ class RoomTools:
         if not isinstance(args,dict):raise ValueError('Tool arguments must be an object')
         if name in ADMIN_NAMES|{HOST_TOOL} or name=='hollywood_admin_reconcile':
             result=await self.administration.call(name,args,params['callId'])
+            if self.on_membership:self.on_membership()
             return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         room=str(UUID(args['roomId']))
         if name=='hollywood_context':

@@ -222,3 +222,21 @@ model or native thread history. Revisions are persisted before submission and a
 lost acknowledgement reconciles the exact pending revision before newer state.
 Authentication/access/conflict failures stop that room's observation retries.
 Unattributable active work is unavailable in other rooms, not spuriously idle.
+
+`RoomSubscriptions` reconciles canonical catalog membership into per-room SSE
+listeners on the same native process. Administrator visibility alone never joins
+a room. Local completed administration wakes discovery immediately; otherwise a
+25-second deterministic membership check catches remote invitations. No model or
+history hydration is used for discovery. Newly joined rooms start at cursor zero
+but only immutable send-time conversationRecipients become input; old configured
+receive boundaries and durable per-room cursors remain. Revocation removes only
+that room listener, not the agent process. Outage/partial catalog absence does
+not revoke listeners; unresolved native input receipts are not resubmitted on a
+membership change. Subscriptions persist their authority/agent/thread binding.
+
+Explicit adoption of an existing context can supply reviewed
+`conversationResumeInstructions` with supported native baseInstructions and/or
+developerInstructions. Omission preserves saved instructions. Overrides are sent
+only through supported cold thread/resume, never injected into a running thread;
+the resume receipt retains their hash. Adopting an existing context must preserve
+its CODEX_HOME, native SQLite directory, identity and independently drained owner.

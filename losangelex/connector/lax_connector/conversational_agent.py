@@ -6,6 +6,7 @@ Existing claimed-delivery installations remain on their original mode.
 """
 import asyncio
 import fcntl
+import hashlib
 import json
 from pathlib import Path
 from aiohttp import ClientSession, ClientTimeout
@@ -24,6 +25,11 @@ class ConversationalAgent:
             raise ValueError('Purpose-separated contexts require explicit adoption')
         self.config=config
         self.thread=config['nativeThreadId']
+        self.resume_instructions=config.get('conversationResumeInstructions',{})
+        if (not isinstance(self.resume_instructions,dict)
+                or set(self.resume_instructions)-{'baseInstructions','developerInstructions'}
+                or any(not isinstance(value,str) or not value.strip() for value in self.resume_instructions.values())):
+            raise ValueError('Explicit native instruction overrides must use supported nonempty fields')
         if not self.thread or not config.get('rooms'):
             raise ValueError('Existing native thread and explicit room boundaries required')
         # Never erase saved client tools implicitly. The initial conversational
@@ -33,7 +39,7 @@ class ConversationalAgent:
         self.state=Path(config['state']);self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.lock=(self.state/'connector.lock').open('a')
         fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
-        self.session=None;self.tools=None;self.listeners=[]
+        self.session=None;self.tools=None;self.subscriptions=None
         self.current_input=None;self.native_active_turn=None;self.source_events={};self.turn_sources={};self.native_items={};self.finished_turns=set()
         from .room_attention import RoomAttention
         self.attention=RoomAttention(self)
@@ -43,6 +49,10 @@ class ConversationalAgent:
         self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http)
         self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
                            self.event,self.tool,on_submission=self.attention.submitted,enterprise=True)
+
+    @property
+    def listeners(self):
+        return [value[0] for value in self.subscriptions.live.values()] if self.subscriptions else []
 
     async def http(self,method,path,payload=None):
         c=self.config
@@ -56,6 +66,7 @@ class ConversationalAgent:
             return value
 
     async def status(self,value):
+        if self.subscriptions:self.subscriptions.note(value)
         saved(self.state/('room-'+value['roomId']+'-status.json'),value)
 
     async def before_native_input(self,event):
@@ -107,7 +118,8 @@ class ConversationalAgent:
         try:
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                                  thread_id=self.thread,request=self.http,state=self.state/'publications',
-                                 source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config)
+                                 source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
+                                 on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None)
             if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()
                     or self.rpc.state.resolve()!=(self.state/'native').resolve()):
                 raise ValueError('Native transport must retain the original agent profile and database')
@@ -120,31 +132,39 @@ class ConversationalAgent:
             if cold_start:
                 result=await self.rpc.call('thread/resume',{'threadId':self.thread,'excludeTurns':True,
                               'dynamicTools':self.config['conversationDynamicTools'],
-                              'config':{'features.default_mode_request_user_input':True}})
+                              'config':{'features.default_mode_request_user_input':True},**self.resume_instructions})
                 self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)
                 if result['thread']['id']!=self.thread:
                     raise ValueError('Native resume selected a different conversation')
             else:
+                if self.resume_instructions:raise ValueError('Instruction adoption requires a cold resume, never active-thread injection')
                 loaded=await self.rpc.call('thread/loaded/list',{'limit':100})
                 if self.thread not in loaded['data']:
                     raise ValueError('Selected conversation is not on the original transport')
-            saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start})
+            saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start,
+                'instructionOverridesSha256':hashlib.sha256(json.dumps(self.resume_instructions,sort_keys=True).encode()).hexdigest() if self.resume_instructions else None})
             self.activity.start()
             self.native_state.start()
-            for room in self.config['rooms']:
-                listener=RoomRuntime(rpc=self.rpc,session=self.session,
+            def create(room,after):
+                self.native_state.blocked.discard(room)
+                return RoomRuntime(rpc=self.rpc,session=self.session,
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
                     token=self.config['token'],authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
-                    room_id=room['roomId'],thread_id=self.thread,state=self.state/'rooms'/room['roomId'],
-                    initial_cursor=room['after'],on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input)
-                self.listeners.append(listener);tasks.append(asyncio.create_task(listener.run()))
+                    room_id=room,thread_id=self.thread,state=self.state/'rooms'/room,
+                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input)
+            def room_set(rooms):self.native_state.rooms[:]=rooms
+            from .room_subscriptions import RoomSubscriptions
+            self.subscriptions=RoomSubscriptions(state=self.state/'subscriptions',authority=self.config['authorityId'],
+                agent=self.config['agentId'],thread=self.thread,rooms=self.config['rooms'],request=self.http,create=create,on_rooms=room_set)
+            tasks.append(asyncio.create_task(self.subscriptions.run()))
+            tasks.append(asyncio.create_task(self.rpc.process.wait()))
             done,_=await asyncio.wait(tasks,return_when=asyncio.FIRST_COMPLETED)
             for task in done:task.result()
-            raise RuntimeError('Room input stopped; inspect room status before continuation')
+            raise RuntimeError('Native process or room subscription owner stopped; inspect original state')
         finally:
             for task in tasks:task.cancel()
             await asyncio.gather(*tasks,return_exceptions=True)
-            for listener in self.listeners:listener.close()
+            if self.subscriptions:await self.subscriptions.close()
             await self.native_state.close()
             await self.activity.close()
             await self.rpc.close();await self.session.close()

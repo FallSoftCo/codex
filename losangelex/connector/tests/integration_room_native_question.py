@@ -74,6 +74,15 @@ async def main():
     value=await response.json();assert response.status==200,(response.status,value);(root/'answer.accepted.json').write_text(json.dumps(value))
   await asyncio.wait_for(complete.wait(),150)
   assert (root/'selected-label.txt').read_text().strip()=='ORCHID'
+  async def observations_settled():
+   while agent.activity.pending or agent.native_state.status['type']!='idle':
+    if task.done():task.result()
+    await asyncio.sleep(.05)
+  await asyncio.wait_for(observations_settled(),15)
+  native_actions=store.history(owner,room,0,100,None,'activity')['events']
+  assert any(e['data'].get('nativeType')=='commandExecution' for e in native_actions)
+  assert all(e['source']==human['event']['id'] for e in native_actions if e['data'].get('conversationVersion')==1)
+
   started=[n for n in notes if n['method']=='turn/started'];assert len(started)==1,'Answer started another turn'
   assert any(c['method']=='item/tool/requestUserInput' for c in callbacks)
   posts=[c for c in callbacks if c['method']=='item/tool/call' and c['params'].get('tool')=='hollywood_publish'];assert posts
@@ -87,7 +96,7 @@ async def main():
    assert after_counts['hb_delivery']==before_counts['hb_delivery'] and after_counts['hb_executor']==before_counts['hb_executor']
   voice_result=await voice('read');assert voice_result['state']=='completed'
   current=store.attention_read(actor,identity);assert current['attention']['state']=='closed'
-  result={'passed':True,'actualNativeQuestion':True,'realVoiceRequestAndExplicitAnswer':True,'executionClaimsRequired':False,'sameNativeTurnAfterHumanAnswer':True,'nativeLocalArtifact':'ORCHID','deliberateRoomPublication':True,'closedOriginalCallback':True,'model':original['model'],'effort':original['effort'],'productionChanged':False,'nativeCommunicationAdministration':os.environ.get('ROOM_NATIVE_QUESTION_ADMIN')=='1'};(root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
+  result={'passed':True,'actualNativeQuestion':True,'realVoiceRequestAndExplicitAnswer':True,'executionClaimsRequired':False,'sameNativeTurnAfterHumanAnswer':True,'nativeLocalArtifact':'ORCHID','deliberateRoomPublication':True,'actualNativeCommandActivitySeparateFromChat':True,'actualNativeReturnedIdle':True,'closedOriginalCallback':True,'model':original['model'],'effort':original['effort'],'productionChanged':False,'nativeCommunicationAdministration':os.environ.get('ROOM_NATIVE_QUESTION_ADMIN')=='1'};(root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
  finally:
   task.cancel();await asyncio.gather(task,return_exceptions=True);await runner.cleanup();store.close();(root/'notifications.private.json').write_text(json.dumps(notes));(root/'callbacks.private.json').write_text(json.dumps(callbacks))
 asyncio.run(main())
