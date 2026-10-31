@@ -10,6 +10,12 @@ pub const REQUEST_USER_INPUT_TOOL_NAME: &str = "request_user_input";
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub(crate) struct RequestUserInputToolArgs {
+    #[serde(
+        rename = "sourceEventId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_event_id: Option<String>,
     pub questions: Vec<RequestUserInputQuestion>,
 }
 
@@ -72,7 +78,9 @@ pub fn create_request_user_input_tool(description: String) -> ToolSpec {
         Some("Questions to show the user. Prefer 1 and do not exceed 3".to_string()),
     );
 
-    let properties = BTreeMap::from([("questions".to_string(), questions_schema)]);
+    let properties = BTreeMap::from([("questions".to_string(), questions_schema),
+        ("sourceEventId".to_string(), JsonSchema::string(Some("For Hollywood room questions, the original human eventId whose room must receive this question. Required when multiple rooms contributed to the turn; never guess from the latest room.".to_string()))),
+    ]);
 
     ToolSpec::Function(ResponsesApiTool {
         name: REQUEST_USER_INPUT_TOOL_NAME.to_string(),

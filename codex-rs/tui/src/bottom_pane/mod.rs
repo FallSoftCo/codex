@@ -2768,6 +2768,7 @@ mod tests {
         }
         assert!(pane.composer.is_in_paste_burst());
         let request = ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread".into(),
             turn_id: "turn".into(),
             item_id: "call".into(),

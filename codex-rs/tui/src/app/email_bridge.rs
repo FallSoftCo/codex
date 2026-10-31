@@ -1121,6 +1121,7 @@ mod tests {
     #[test]
     fn request_user_input_prompt_formats_questions_and_options() {
         let params = ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
             item_id: "item-1".to_string(),

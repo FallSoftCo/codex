@@ -79,6 +79,7 @@ impl RequestUserInputHandler {
         let args = normalize_request_user_input_tool_args(args)
             .map_err(FunctionCallError::RespondToModel)?;
         let args = RequestUserInputArgs {
+            source_event_id: args.source_event_id,
             questions: args.questions,
             is_blocking: mode == ModeKind::Plan,
             auto_resolution_ms: None,

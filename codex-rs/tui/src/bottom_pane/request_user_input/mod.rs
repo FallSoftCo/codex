@@ -1722,6 +1722,7 @@ mod tests {
         questions: Vec<ToolRequestUserInputQuestion>,
     ) -> ToolRequestUserInputParams {
         ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "00000000-0000-0000-0000-000000000001".to_string(),
             item_id: "call-1".to_string(),
             turn_id: turn_id.to_string(),
@@ -1813,6 +1814,7 @@ mod tests {
             /*disable_paste_burst*/ false,
         );
         overlay.try_consume_user_input_request(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             item_id: "call-2".to_string(),
             turn_id: "turn-2".to_string(),
@@ -1821,6 +1823,7 @@ mod tests {
             auto_resolution_ms: None,
         });
         overlay.try_consume_user_input_request(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             item_id: "call-3".to_string(),
             turn_id: "turn-3".to_string(),
@@ -2111,6 +2114,7 @@ mod tests {
         let (tx, mut rx) = test_sender();
         let mut overlay = RequestUserInputOverlay::new(
             ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: "thread-1".to_string(),
                 item_id: "call-1".to_string(),
                 turn_id: "turn-1".to_string(),
@@ -2141,6 +2145,7 @@ mod tests {
         let (tx, mut rx) = test_sender();
         let mut overlay = RequestUserInputOverlay::new(
             ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: "thread-1".to_string(),
                 item_id: "call-1".to_string(),
                 turn_id: "turn-1".to_string(),
@@ -2154,6 +2159,7 @@ mod tests {
             /*disable_paste_burst*/ false,
         );
         overlay.try_consume_user_input_request(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             item_id: "call-2".to_string(),
             turn_id: "turn-1".to_string(),
@@ -2183,6 +2189,7 @@ mod tests {
         let (tx, mut rx) = test_sender();
         let mut overlay = RequestUserInputOverlay::new(
             ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: "00000000-0000-0000-0000-000000000001".to_string(),
                 item_id: "call-1".to_string(),
                 turn_id: "turn-1".to_string(),
@@ -2196,6 +2203,7 @@ mod tests {
             /*disable_paste_burst*/ false,
         );
         overlay.try_consume_user_input_request(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             item_id: "call-2".to_string(),
             turn_id: "turn-1".to_string(),
@@ -2204,6 +2212,7 @@ mod tests {
             auto_resolution_ms: None,
         });
         overlay.try_consume_user_input_request(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             item_id: "call-3".to_string(),
             turn_id: "turn-1".to_string(),

@@ -875,6 +875,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 })
                 .collect();
             let params = ToolRequestUserInputParams {
+                source_event_id: request.source_event_id,
                 thread_id: conversation_id.to_string(),
                 turn_id: request.turn_id,
                 item_id: request.call_id,

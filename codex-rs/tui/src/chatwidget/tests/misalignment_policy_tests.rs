@@ -113,6 +113,7 @@ async fn misalignment_policy_failure_stops_the_thread_and_renders_once() {
         ServerRequest::ToolRequestUserInput {
             request_id: AppServerRequestId::Integer(1),
             params: ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: thread_id.to_string(),
                 turn_id: "turn-1".to_string(),
                 item_id: "input-1".to_string(),

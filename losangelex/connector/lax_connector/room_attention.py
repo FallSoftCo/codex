@@ -21,8 +21,8 @@ class RoomAttention:
         c=self.agent;turn=params['turnId'];slot=str(params.get('itemId',params['_rpcRequestId']))
         if params.get('threadId')!=c.thread or method not in QUESTION|APPROVAL:
             raise ValueError('Original native callback required')
-        source=c.turn_sources.get(turn)
-        if source is None:raise ValueError('Native callback has no original human room input')
+        from .room_callback_scope import resolve
+        source=resolve(c,params)
         identity=str(uuid5(UUID(c.config['agentId']),json.dumps([c.thread,turn,slot,method])))
         if method in QUESTION:
             request={'questions':params['questions'],'isBlocking':True}

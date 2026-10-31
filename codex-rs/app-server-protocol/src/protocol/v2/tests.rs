@@ -5450,6 +5450,7 @@ fn tool_request_user_input_params_default_legacy_missing_is_blocking_to_true() {
     assert_eq!(
         params,
         ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
             item_id: "call-1".to_string(),

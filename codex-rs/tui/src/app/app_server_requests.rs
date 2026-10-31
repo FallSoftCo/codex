@@ -848,6 +848,7 @@ mod tests {
             pending.note_server_request(&ServerRequest::ToolRequestUserInput {
                 request_id: AppServerRequestId::Integer(8),
                 params: ToolRequestUserInputParams {
+                    source_event_id: None,
                     thread_id: "thread-1".to_string(),
                     turn_id: "turn-2".to_string(),
                     item_id: "tool-1".to_string(),
@@ -1140,6 +1141,7 @@ mod tests {
         pending.note_server_request(&ServerRequest::ToolRequestUserInput {
             request_id: AppServerRequestId::Integer(8),
             params: ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: "thread-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 item_id: "tool-1".to_string(),
@@ -1167,6 +1169,7 @@ mod tests {
             pending.note_server_request(&ServerRequest::ToolRequestUserInput {
                 request_id: AppServerRequestId::Integer(request_id),
                 params: ToolRequestUserInputParams {
+                    source_event_id: None,
                     thread_id: "thread-1".to_string(),
                     turn_id: "turn-1".to_string(),
                     item_id: item_id.to_string(),

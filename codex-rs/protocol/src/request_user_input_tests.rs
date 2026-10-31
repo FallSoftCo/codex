@@ -24,6 +24,7 @@ fn request_user_input_event_defaults_legacy_missing_is_blocking_to_true() {
     assert_eq!(
         event,
         RequestUserInputEvent {
+            source_event_id: None,
             call_id: "call-1".to_string(),
             turn_id: "turn-1".to_string(),
             questions: vec![RequestUserInputQuestion {

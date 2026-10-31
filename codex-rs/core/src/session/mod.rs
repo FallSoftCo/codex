@@ -3474,6 +3474,7 @@ impl Session {
         }
 
         let event = EventMsg::RequestUserInput(RequestUserInputEvent {
+            source_event_id: args.source_event_id,
             call_id,
             turn_id: turn_context.sub_id.clone(),
             questions: args.questions,

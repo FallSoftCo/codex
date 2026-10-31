@@ -735,6 +735,7 @@ async fn physical_chords_route_list_and_mixed_request_input_modals() -> Result<(
 
     app.chat_widget
         .handle_request_user_input_now(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
             item_id: "call-1".to_string(),

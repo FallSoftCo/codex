@@ -1921,6 +1921,7 @@ mod tests {
                 method: "item/tool/requestUserInput".to_string(),
                 params: Some(
                     serde_json::to_value(ToolRequestUserInputParams {
+                        source_event_id: None,
                         thread_id: "thread-1".to_string(),
                         turn_id: "turn-1".to_string(),
                         item_id: "call-1".to_string(),
@@ -1984,6 +1985,7 @@ mod tests {
                     method: "item/tool/requestUserInput".to_string(),
                     params: Some(
                         serde_json::to_value(ToolRequestUserInputParams {
+                            source_event_id: None,
                             thread_id: "thread-1".to_string(),
                             turn_id: "turn-1".to_string(),
                             item_id: "call-1".to_string(),

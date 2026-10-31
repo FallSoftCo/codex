@@ -13,6 +13,7 @@ use super::prompt_for_answers_with;
 #[test]
 fn collects_option_and_free_form_answers() {
     let params = ToolRequestUserInputParams {
+        source_event_id: None,
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
         item_id: "item-1".to_string(),
@@ -89,6 +90,7 @@ fn collects_option_and_free_form_answers() {
 #[test]
 fn retries_invalid_selection_and_collects_other_answer() {
     let params = ToolRequestUserInputParams {
+        source_event_id: None,
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
         item_id: "item-1".to_string(),

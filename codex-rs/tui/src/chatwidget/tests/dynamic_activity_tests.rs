@@ -115,6 +115,7 @@ async fn turn_finalization_drains_lifecycle_queue_before_interrupting_remaining_
     let (mut chat, mut events, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
     drain_insert_history(&mut events);
     chat.interrupts.push_user_input(ToolRequestUserInputParams {
+        source_event_id: None,
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
         item_id: "question-1".to_string(),

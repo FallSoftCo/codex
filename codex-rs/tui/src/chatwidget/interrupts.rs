@@ -182,6 +182,7 @@ mod tests {
 
     fn user_input(call_id: &str, turn_id: &str) -> ToolRequestUserInputParams {
         ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             item_id: call_id.to_string(),
             turn_id: turn_id.to_string(),

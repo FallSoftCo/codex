@@ -29,6 +29,7 @@ fn request_user_input_tool_includes_questions_schema() {
             strict: false,
             defer_loading: None,
             parameters: JsonSchema::object(BTreeMap::from([
+                ("sourceEventId".to_string(), JsonSchema::string(Some("For Hollywood room questions, the original human eventId whose room must receive this question. Required when multiple rooms contributed to the turn; never guess from the latest room.".to_string()))),
                 (
                     "questions".to_string(),
                     JsonSchema::array(
@@ -111,6 +112,7 @@ fn request_user_input_tool_includes_questions_schema() {
 #[test]
 fn normalize_request_user_input_tool_args_sets_other_on_every_question() {
     let args = RequestUserInputToolArgs {
+        source_event_id: None,
         questions: vec![RequestUserInputQuestion {
             id: "confirm".to_string(),
             header: "Confirm".to_string(),
@@ -127,6 +129,7 @@ fn normalize_request_user_input_tool_args_sets_other_on_every_question() {
     assert_eq!(
         normalize_request_user_input_tool_args(args.clone()),
         Ok(RequestUserInputToolArgs {
+            source_event_id: None,
             questions: vec![RequestUserInputQuestion {
                 is_other: true,
                 ..args.questions[0].clone()
@@ -138,6 +141,7 @@ fn normalize_request_user_input_tool_args_sets_other_on_every_question() {
 #[test]
 fn normalize_request_user_input_tool_args_rejects_missing_options() {
     let args = RequestUserInputToolArgs {
+        source_event_id: None,
         questions: vec![RequestUserInputQuestion {
             id: "confirm".to_string(),
             header: "Confirm".to_string(),

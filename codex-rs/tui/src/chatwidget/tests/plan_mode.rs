@@ -574,6 +574,7 @@ async fn request_user_input_notification_overrides_pending_agent_turn_complete_n
         response: "done".to_string(),
     });
     chat.handle_request_user_input_now(ToolRequestUserInputParams {
+        source_event_id: None,
         thread_id: "thread-1".to_string(),
         item_id: "call-1".to_string(),
         turn_id: "turn-1".to_string(),
@@ -605,6 +606,7 @@ async fn handle_request_user_input_sets_pending_notification() {
         Notifications::Custom(vec!["plan-mode-prompt".to_string()]);
 
     chat.handle_request_user_input_now(ToolRequestUserInputParams {
+        source_event_id: None,
         thread_id: "thread-1".to_string(),
         item_id: "call-1".to_string(),
         turn_id: "turn-1".to_string(),

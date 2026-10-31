@@ -613,6 +613,7 @@ fn buffered_replay_preserves_text_before_interactive_requests() {
         codex_app_server_protocol::ServerRequest::ToolRequestUserInput {
             request_id: codex_app_server_protocol::RequestId::Integer(1),
             params: codex_app_server_protocol::ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: "thread".into(),
                 turn_id: "turn".into(),
                 item_id: "tool".into(),

@@ -43,7 +43,7 @@ class ConversationalAgent:
         self.lock=(self.state/'connector.lock').open('a')
         fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
         self.session=None;self.tools=None;self.subscriptions=None
-        self.current_input=None;self.native_active_turn=None;self.source_events={};self.turn_sources={};self.native_items={};self.finished_turns=set()
+        self.current_input=None;self.native_active_turn=None;self.source_events={};self.turn_sources={};self.turn_input_rooms={};self.native_items={};self.finished_turns=set()
         from .room_attention import RoomAttention
         self.attention=RoomAttention(self)
         from .room_activity import RoomActivity
@@ -72,6 +72,8 @@ class ConversationalAgent:
         saved(self.state/('room-'+value['roomId']+'-status.json'),value)
 
     async def before_native_input(self,event):
+        if self.native_active_turn and event.get('data',{}).get('authorKind') in ('human','agent'):
+            self.turn_input_rooms.setdefault(self.native_active_turn,set()).add(event['room'])
         if event.get('data',{}).get('authorKind') in ('human','agent'):self.current_input=event
         if event.get('data',{}).get('authorKind')=='human':self.source_events[event['id']]=event
 
@@ -84,6 +86,7 @@ class ConversationalAgent:
         if method=='turn/started' and self.current_input:
             self.native_active_turn=params['turn']['id']
             self.turn_sources.setdefault(self.native_active_turn,self.current_input)
+            self.turn_input_rooms.setdefault(self.native_active_turn,set()).add(self.current_input['room'])
             if self.current_input.get('data',{}).get('authorKind')=='agent':self.native_state.update(self.native_state.status,self.current_input)
         self.activity.record(method,params,self.turn_sources.get(params.get('turnId')))
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
@@ -93,11 +96,13 @@ class ConversationalAgent:
                 source=self.source_events.pop(item.get('clientId'),None)
                 if source:
                     self.turn_sources[params['turnId']]=source
+                    self.turn_input_rooms.setdefault(params['turnId'],set()).add(source['room'])
                     if self.native_active_turn==params['turnId']:self.native_state.update(self.native_state.status,source)
         if method=='turn/completed':
             turn=params['turn']['id'];self.finished_turns.add(turn)
             await self.attention.finish(turn)
             self.turn_sources.pop(turn,None)
+            self.turn_input_rooms.pop(turn,None)
             if self.native_active_turn==turn:
                 self.native_active_turn=None
                 if self.native_state.status['type']=='idle':self.native_state.update(self.native_state.status,None)

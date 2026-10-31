@@ -284,6 +284,7 @@ async fn should_install_mcp_dependencies(
         ]),
     };
     let args = RequestUserInputArgs {
+        source_event_id: None,
         questions: vec![question],
         is_blocking: true,
         auto_resolution_ms: None,

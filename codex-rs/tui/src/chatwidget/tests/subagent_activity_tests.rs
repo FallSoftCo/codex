@@ -167,6 +167,7 @@ async fn terminal_turn_drains_subagents_without_opening_queued_questions() {
         handle_agent_message_delta(&mut chat, PREFIX);
         chat.run_commit_tick();
         chat.on_request_user_input(ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
             item_id: "question-1".to_string(),

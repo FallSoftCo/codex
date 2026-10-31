@@ -18,7 +18,7 @@ def run(*args):
     # intent for reconciliation; it never creates a new daemon or retries start.
     return subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, text=True, check=True,
-                          timeout=120 if args[:2] == ('systemctl', 'daemon-reload') else 30)
+                          timeout=120 if args[:2] == ('systemctl', 'enable') else 30)
 
 
 def location(authority, host):
@@ -117,7 +117,8 @@ def ensure(spec, account, home):
     if target.exists():raise ValueError('Existing native unit requires original-owner inspection')
     target.write_text(content);target.chmod(0o644)
     saved(directory/'installation-intent.json',{'manifest':value,'unitSha256':hashlib.sha256(content.encode()).hexdigest(),'state':'prepared'})
-    run('systemctl','daemon-reload')
+    # enable reloads newly written units itself. Do not run a second host-wide
+    # reload and repeat filesystem-generator work.
     run('systemctl','enable','--now',value['unit'])
     ready=run('systemctl','show',value['unit'],'-p','ActiveState','--value').stdout.strip()
     result={'schema':'lax-native-host-installation/v1','manifest':value,'unitSha256':hashlib.sha256(content.encode()).hexdigest(),'serviceActiveState':ready,'serviceStarted':True,'modelTurnsRequested':0}

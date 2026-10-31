@@ -7621,6 +7621,7 @@ fn request_user_input_request(thread_id: ThreadId, turn_id: &str, item_id: &str)
     ServerRequest::ToolRequestUserInput {
         request_id: AppServerRequestId::Integer(2),
         params: ToolRequestUserInputParams {
+            source_event_id: None,
             thread_id: thread_id.to_string(),
             turn_id: turn_id.to_string(),
             item_id: item_id.to_string(),

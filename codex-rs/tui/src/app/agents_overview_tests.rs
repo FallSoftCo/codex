@@ -825,6 +825,7 @@ async fn agents_overview_details_show_available_attention_without_expanding_rows
         vec![ServerRequest::ToolRequestUserInput {
             request_id: RequestId::Integer(42),
             params: ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: child.to_string(),
                 turn_id: "turn".into(),
                 item_id: "question".into(),
@@ -2631,6 +2632,7 @@ async fn command_center_attach_conflict_opens_read_only_and_retries() -> Result<
         vec![ServerRequest::ToolRequestUserInput {
             request_id: RequestId::Integer(42),
             params: ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: thread_id.to_string(),
                 turn_id: "turn".into(),
                 item_id: "question".into(),

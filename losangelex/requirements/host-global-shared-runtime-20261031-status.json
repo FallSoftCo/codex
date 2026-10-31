@@ -1,10 +1,35 @@
 {
   "status": "implemented-candidate-not-deployed",
   "nativeSharing": "One native Unix WebSocket app-server per host/account; one reusable Global agent per environment, ordinary room memberships, no per-room model process",
-  "passed": ["Real native two threads and three connections", "Concurrent scoped tool callbacks; interrupt/disconnect one client preserves other thread", "Real PG and HTTP default membership before first human fanout", "Explicit room revocation, disabled policy, stale revision and original receipt preserved", "Generated systemd unit validated"],
+  "passed": [
+    "Real native two threads and three connections",
+    "Concurrent scoped tool callbacks; interrupt/disconnect one client preserves other thread",
+    "Real PG and HTTP default membership before first human fanout",
+    "Explicit room revocation, disabled policy, stale revision and original receipt preserved",
+    "Generated systemd unit validated",
+    "Real native request_user_input preserves explicit original human event ID",
+    "Cross-room source resolution through actual receive journals survives reopening and rejects unknown source",
+    "Legacy native question deserialization compatibility checks",
+    "Actual systemd native service installation and Unix initialize; repeated installation retains PID; stopped service not resurrected; owned cleanup complete"
+  ],
   "evidenceRoot": "/aosp/development/lax-host-shared-qa-20261031-r01",
-  "activationBlockers": ["Cross-room built-in human question callbacks need explicit source identity; latest-input attribution is insufficient", "Isolated service installation reached daemon-reload stall; bounded status read also timed out; fstab generator observed waiting in request_wait_answer"],
+  "activationBlockers": [
+    "Package the coherent native/connector candidate, qualify existing GPU Global enrollment and host identity references, then migrate CPU Global only after its current work boundary"
+  ],
   "testReconciliation": "No owned native/test process remained; unique test unit removed from disk; no enable/start reached; no shared service restarted",
-  "preserved": ["Current CPU Global and release159", "Current CPU host-management audit", "Existing GPU QA identity and native thread", "GPU Global existing identity 6d92b00b-a083-4e1a-a57f-bd51f4e1d44e; not duplicated or activated"],
-  "realProviderCallsForSharingQualification": 0
+  "preserved": [
+    "Current CPU Global and release159",
+    "Current CPU host-management audit",
+    "Existing GPU QA identity and native thread",
+    "GPU Global existing identity 6d92b00b-a083-4e1a-a57f-bd51f4e1d44e; not duplicated or activated"
+  ],
+  "realProviderCallsForSharingQualification": 0,
+  "filesystemInvestigation": {
+    "fstabEntries": 935,
+    "bindEntries": 930,
+    "fuseMountEntries": 6363,
+    "distinctFuseDevices": 15,
+    "exactSlowPathNotIdentified": true,
+    "mountsChanged": false
+  }
 }

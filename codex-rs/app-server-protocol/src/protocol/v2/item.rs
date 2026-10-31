@@ -1768,6 +1768,12 @@ pub struct ToolRequestUserInputQuestion {
 #[ts(export_to = "v2/")]
 /// EXPERIMENTAL. Params sent with a request_user_input event.
 pub struct ToolRequestUserInputParams {
+    #[serde(
+        rename = "sourceEventId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_event_id: Option<String>,
     pub thread_id: String,
     pub turn_id: String,
     pub item_id: String,
@@ -1787,6 +1793,8 @@ impl<'de> Deserialize<'de> for ToolRequestUserInputParams {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct WireToolRequestUserInputParams {
+            #[serde(rename = "sourceEventId", default)]
+            source_event_id: Option<String>,
             thread_id: String,
             turn_id: String,
             item_id: String,
@@ -1797,6 +1805,7 @@ impl<'de> Deserialize<'de> for ToolRequestUserInputParams {
 
         let wire = WireToolRequestUserInputParams::deserialize(deserializer)?;
         Ok(Self {
+            source_event_id: wire.source_event_id,
             thread_id: wire.thread_id,
             turn_id: wire.turn_id,
             item_id: wire.item_id,

@@ -597,6 +597,7 @@ mod tests {
         ServerRequest::ToolRequestUserInput {
             request_id: AppServerRequestId::Integer(1),
             params: ToolRequestUserInputParams {
+                source_event_id: None,
                 thread_id: "thread-1".to_string(),
                 turn_id: turn_id.to_string(),
                 item_id: call_id.to_string(),

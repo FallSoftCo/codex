@@ -324,6 +324,7 @@ async fn permission_discovery_discards_stale_results_and_preserves_covering_moda
     chat.open_permissions_popup();
     let request_id = chat.permission_popup_request_id.unwrap();
     chat.on_request_user_input(ToolRequestUserInputParams {
+        source_event_id: None,
         thread_id: "thread-1".into(),
         turn_id: "turn-1".into(),
         item_id: "question".into(),

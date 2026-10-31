@@ -1232,6 +1232,7 @@ mod thread_processor_behavior_tests {
         let (request_id, client_request_rx) = thread_outgoing
             .send_request(ServerRequestPayload::ToolRequestUserInput(
                 ToolRequestUserInputParams {
+                    source_event_id: None,
                     thread_id: thread_id.to_string(),
                     turn_id: "turn-1".to_string(),
                     item_id: "call-1".to_string(),

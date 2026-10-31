@@ -1753,6 +1753,7 @@ pub(crate) async fn request_mcp_tool_user_approval(
             };
         }
         let args = RequestUserInputArgs {
+            source_event_id: None,
             questions: vec![question],
             is_blocking: true,
             auto_resolution_ms: None,

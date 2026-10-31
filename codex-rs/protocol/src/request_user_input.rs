@@ -30,6 +30,12 @@ pub struct RequestUserInputQuestion {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 pub struct RequestUserInputArgs {
+    #[serde(
+        rename = "sourceEventId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_event_id: Option<String>,
     pub questions: Vec<RequestUserInputQuestion>,
     #[serde(rename = "isBlocking")]
     #[schemars(rename = "isBlocking")]
@@ -53,6 +59,12 @@ pub struct RequestUserInputResponse {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, JsonSchema, TS)]
 pub struct RequestUserInputEvent {
+    #[serde(
+        rename = "sourceEventId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_event_id: Option<String>,
     /// Responses API call id for the associated tool call, if available.
     pub call_id: String,
     /// Turn ID that this request belongs to.
@@ -77,6 +89,8 @@ impl<'de> Deserialize<'de> for RequestUserInputEvent {
     {
         #[derive(Deserialize)]
         struct WireRequestUserInputEvent {
+            #[serde(rename = "sourceEventId", default)]
+            source_event_id: Option<String>,
             call_id: String,
             #[serde(default)]
             turn_id: String,
@@ -89,6 +103,7 @@ impl<'de> Deserialize<'de> for RequestUserInputEvent {
 
         let wire = WireRequestUserInputEvent::deserialize(deserializer)?;
         Ok(Self {
+            source_event_id: wire.source_event_id,
             call_id: wire.call_id,
             turn_id: wire.turn_id,
             questions: wire.questions,
