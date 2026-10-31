@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from aiohttp import ClientSession, ClientTimeout
 from .journal import saved
-from .rpc import AppServer
+from .rpc_shared import native_client
 from .room_runtime import RoomRuntime
 from .room_tools import RoomTools, TOOLS
 from .errors import HttpFailure
@@ -35,7 +35,9 @@ class ConversationalAgent:
             raise ValueError('Existing native thread and explicit room boundaries required')
         # Never erase saved client tools implicitly. The initial conversational
         # owner must attest to the declarations being installed at cold resume.
-        if config.get('conversationDynamicTools')!=TOOLS:
+        from .room_inspect import READ_NAMES
+        legacy_tools=[tool for tool in TOOLS if tool['name'] not in READ_NAMES]
+        if config.get('conversationDynamicTools') not in (TOOLS,legacy_tools):
             raise ValueError('Explicit reviewed conversational tool declarations required')
         self.state=Path(config['state']);self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.lock=(self.state/'connector.lock').open('a')
@@ -48,8 +50,7 @@ class ConversationalAgent:
         self.activity=RoomActivity(state=self.state/'room-activity',thread=self.thread,agent=config['agentId'],send=self.http)
         from .room_native_state import RoomNativeState
         self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http)
-        self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
-                           self.event,self.tool,on_submission=self.attention.submitted,enterprise=True,runtime_mode="room-conversation")
+        self.rpc=native_client(config,self.event,self.tool,on_submission=self.attention.submitted)
 
     @property
     def listeners(self):
@@ -76,6 +77,9 @@ class ConversationalAgent:
 
     async def event(self,method,params):
         if params.get('threadId')!=self.thread:return
+        if method=='hollywood/runtimeLost':
+            self.native_state.update({'type':'unavailable','activeFlags':[]},self.turn_sources.get(self.native_active_turn))
+            return
         if method=='thread/status/changed':self.native_state.update(params['status'],self.turn_sources.get(self.native_active_turn))
         if method=='turn/started' and self.current_input:
             self.native_active_turn=params['turn']['id']
@@ -104,7 +108,7 @@ class ConversationalAgent:
             saved(self.state/'conversation-native-status.json',{'method':method,'params':params})
 
     async def tool(self,method,params):
-        if method=='item/tool/call' and params.get('tool') in {t['name'] for t in TOOLS}:
+        if method=='item/tool/call' and params.get('tool') in {t['name'] for t in self.config['conversationDynamicTools']}:
             return await self.tools.call(method,params)
         from .room_attention import QUESTION, APPROVAL
         if method in QUESTION|APPROVAL:return await self.attention.wait(method,params)
@@ -122,12 +126,12 @@ class ConversationalAgent:
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
                                  on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None)
             if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()
-                    or self.rpc.state.resolve()!=(self.state/'native').resolve()):
+                    or not self.rpc.shared and self.rpc.state.resolve()!=(self.state/'native').resolve()):
                 raise ValueError('Native transport must retain the original agent profile and database')
-            cold_start=self.rpc.process is None
+            cold_start=not self.rpc.has_started
             if cold_start:
                 await self.rpc.start()
-            elif self.rpc.process.returncode is not None:
+            elif not self.rpc.is_connected:
                 raise RuntimeError('Original native transport stopped; no implicit replacement')
             # No thread/start, sampling, model/permission override or history copy.
             if cold_start:
@@ -160,7 +164,7 @@ class ConversationalAgent:
             self.subscriptions=RoomSubscriptions(state=self.state/'subscriptions',authority=self.config['authorityId'],
                 agent=self.config['agentId'],thread=self.thread,rooms=self.config['rooms'],request=self.http,create=create,on_rooms=room_set)
             tasks.append(asyncio.create_task(self.subscriptions.run()))
-            tasks.append(asyncio.create_task(self.rpc.process.wait()))
+            tasks.append(asyncio.create_task(self.rpc.wait_closed()))
             done,_=await asyncio.wait(tasks,return_when=asyncio.FIRST_COMPLETED)
             for task in done:task.result()
             raise RuntimeError('Native process or room subscription owner stopped; inspect original state')

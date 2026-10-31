@@ -51,6 +51,20 @@ class AppServer:
         self.process = None
         self.reader = None
 
+    shared = False
+
+    @property
+    def has_started(self):
+        return self.process is not None
+
+    @property
+    def is_connected(self):
+        return self.process is not None and self.process.returncode is None
+
+    async def wait_closed(self):
+        if self.process:
+            return await self.process.wait()
+
     async def start(self):
         if self.enterprise:
             from .native_package import inspect_package

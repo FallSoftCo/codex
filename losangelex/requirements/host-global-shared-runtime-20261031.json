@@ -1,0 +1,37 @@
+{
+  "schema": "lax-host-global-shared-runtime/v1",
+  "userDirection": "One reusable general agent per environment participates across rooms; reuse native multi-thread app-server instead of one full server per agent/room.",
+  "status": "implementation and isolated native qualification",
+  "phases": [
+    {
+      "id": "native-multiplex-proof",
+      "state": "passed-no-model",
+      "evidence": "/aosp/development/lax-host-shared-qa-20261031-r01/result.json"
+    },
+    {
+      "id": "shared-local-client-and-host-runtime",
+      "state": "in-progress"
+    },
+    {
+      "id": "explicit-host-agent-and-automatic-room-membership",
+      "state": "pending"
+    },
+    {
+      "id": "qualified-CPU-GPU-adoption-preserving-original-work",
+      "state": "pending"
+    },
+    {
+      "id": "remaining-environment-enrollment",
+      "state": "pending-host-runtime-qualification"
+    }
+  ],
+  "constraints": [
+    "No new message relay or model polling; reuse native WebSocket-over-private-Unix transport and canonical Hollywood membership.",
+    "Keep agent/thread identity and callback ownership distinct; do not merge unrelated contexts or silently change profiles/models/permissions.",
+    "One approved host profile per shared server; do not merge separate accounts or protected legacy Work channels.",
+    "Shared-client disconnect/cancel cannot terminate host server or another thread; no private-process fallback on connection failure.",
+    "Current215 workers,159 release and active audits preserved until exact qualified migration with original transcripts/receipts.",
+    "Host room participation is explicit permission policy, not a role-name side effect; grant before first human input fanout and respect later revocation.",
+    "Initial native deployment scope is enrolled CPU and GPU; do not claim system76/Mac/BLD enrollment without actual local evidence."
+  ]
+}

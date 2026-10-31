@@ -1,0 +1,10 @@
+{
+  "status": "implemented-candidate-not-deployed",
+  "nativeSharing": "One native Unix WebSocket app-server per host/account; one reusable Global agent per environment, ordinary room memberships, no per-room model process",
+  "passed": ["Real native two threads and three connections", "Concurrent scoped tool callbacks; interrupt/disconnect one client preserves other thread", "Real PG and HTTP default membership before first human fanout", "Explicit room revocation, disabled policy, stale revision and original receipt preserved", "Generated systemd unit validated"],
+  "evidenceRoot": "/aosp/development/lax-host-shared-qa-20261031-r01",
+  "activationBlockers": ["Cross-room built-in human question callbacks need explicit source identity; latest-input attribution is insufficient", "Isolated service installation reached daemon-reload stall; bounded status read also timed out; fstab generator observed waiting in request_wait_answer"],
+  "testReconciliation": "No owned native/test process remained; unique test unit removed from disk; no enable/start reached; no shared service restarted",
+  "preserved": ["Current CPU Global and release159", "Current CPU host-management audit", "Existing GPU QA identity and native thread", "GPU Global existing identity 6d92b00b-a083-4e1a-a57f-bd51f4e1d44e; not duplicated or activated"],
+  "realProviderCallsForSharingQualification": 0
+}

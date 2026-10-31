@@ -67,8 +67,12 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
             if profile=="unrestricted" else
             " This installation is restricted to its configured workspace; do not escalate host privileges."
         )
+        from .host_native import selection, profile_state
+        shared=selection(spec,home)
+        if shared is not None:
+            result["nativeServer"]=shared
         if native_context is not None:
-            expected={"authorityId":authority,"agentId":agent,"codexHome":str(home/"codex-home"),"nativeState":str(home/"state/native")}
+            expected={"authorityId":authority,"agentId":agent,"codexHome":str(home/"codex-home"),"nativeState":str(profile_state(spec,home))}
             if native_context.get("state")!="ready" or native_context.get("binding")!=expected or not native_context.get("nativeThreadId"):
                 raise ValueError("Original named native context receipt differs")
             result["nativeThreadId"]=native_context["nativeThreadId"]
@@ -78,9 +82,12 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
 def expected_unit(spec, agent, user, home, profile=None):
     profile = execution_profile(spec, profile)
     config_file = home / "connector.json"
+    from .host_native import selection, unit_name
+    native_unit=unit_name(spec['authorityId'],spec['hostId']) if selection(spec,home) else None
+    native_dependencies=("\nWants="+native_unit+"\nAfter="+native_unit) if native_unit else ""
     return f"""[Unit]
 Description=LAX Hollywood worker {agent}
-After=network-online.target
+After=network-online.target{native_dependencies}
 StartLimitIntervalSec=60
 StartLimitBurst=3
 [Service]
@@ -310,6 +317,11 @@ def provision(spec):
         "import lax_connector.connector",
     )
     if mode=="room-conversation":
+        if spec.get('nativeHostServer') is True:
+            from .host_native import ensure
+            host_runtime=ensure(spec,account,home)
+            if host_runtime['serviceActiveState']!='active':
+                raise RuntimeError('Shared native host is deliberately stopped or unavailable')
         bootstrap_file=home/"native-bootstrap.json"
         saved(bootstrap_file,config);os.chown(bootstrap_file,account.pw_uid,account.pw_gid)
         initialized=run("runuser","-u",user,"--",spec["interpreter"],"-m","lax_connector.room_bootstrap","--config",str(bootstrap_file))

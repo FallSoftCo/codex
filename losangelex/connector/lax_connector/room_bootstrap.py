@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from uuid import UUID
 from .journal import saved
-from .rpc import AppServer
+from .rpc_shared import native_client, host_manifest
 from .room_tools import TOOLS
 from .room_permissions import persist_new_thread, requested
 
@@ -27,7 +27,8 @@ async def initialize(config):
         raise ValueError('No implicit purpose-context adoption')
     name=config['nativeName'].strip()
     if not name:raise ValueError('Meaningful native agent name required')
-    binding={'authorityId':authority,'agentId':agent,'codexHome':str(home),'nativeState':str(state/'native')}
+    native_state=Path(host_manifest(config)['state']) if config.get('nativeServer') is not None else state/'native'
+    binding={'authorityId':authority,'agentId':agent,'codexHome':str(home),'nativeState':str(native_state)}
     request={'cwd':str(workspace),'model':config['model'],**requested(config),'dynamicTools':TOOLS,
              'baseInstructions':config['instructions'],
              'config':{'model_reasoning_effort':config['effort'],'features.default_mode_request_user_input':True}}
@@ -49,7 +50,7 @@ async def initialize(config):
         async def event(method,params):
             if method=='turn/started':turns.append(params)
         async def unsupported(*args):raise RuntimeError('No native execution expected during provisioning')
-        rpc=AppServer(config['binary'],home,state/'native',event,unsupported,enterprise=True,runtime_mode="room-conversation")
+        rpc=native_client(config,event,unsupported)
         try:
             await rpc.start()
             created=await rpc.call('thread/start',request)
