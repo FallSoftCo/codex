@@ -63,7 +63,13 @@ at native model-step boundaries and judge relevance without automatic interrupti
 or concurrent turns. Peer authorship remains distinct; ordinary peer observations
 must not create perpetual reply/model-wake loops. Explicit stops use native controls.
 Hollywood owns communication, not execution. LAX owns the existing Codex agent
-lifecycle. A message receipt is not a claim, process reservation or work completion.
+lifecycle.
+The maintained room process selects `LAX_NATIVE_RUNTIME_MODE=room-conversation`.
+This retains native sandbox/approval and patch source verification, while editing
+does not depend on a Hollywood delivery claim or protected Work permit. Existing
+protected Work channels retain their mutation contract even if a room-mode hint
+is present; a missing protected channel is never a legacy fallback.
+ A message receipt is not a claim, process reservation or work completion.
 
 The complete tracked scope, acceptance journeys and migration limits are in
 [conversational-rooms-20261030.json](requirements/conversational-rooms-20261030.json).

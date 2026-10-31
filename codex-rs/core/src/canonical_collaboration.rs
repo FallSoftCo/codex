@@ -43,9 +43,35 @@ pub(crate) struct Reply {
     pub hold_reason: Option<String>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeRuntimeMode {
+    Standalone,
+    CanonicalWork,
+    RoomConversation,
+}
+
+fn runtime_mode() -> NativeRuntimeMode {
+    // An explicitly installed protected channel always retains its mutation
+    // contract. A room-mode hint cannot downgrade an enrolled work runtime.
+    if std::env::var_os(CHANNEL_ENV).is_some() {
+        return NativeRuntimeMode::CanonicalWork;
+    }
+    if std::env::var("LAX_NATIVE_RUNTIME_MODE").is_ok_and(|mode| mode == "room-conversation") {
+        return NativeRuntimeMode::RoomConversation;
+    }
+    if std::env::var("LAX_NATIVE_ENTERPRISE").is_ok_and(|value| value == "1") {
+        NativeRuntimeMode::CanonicalWork
+    } else {
+        NativeRuntimeMode::Standalone
+    }
+}
+
 pub(crate) fn enterprise() -> bool {
-    std::env::var_os(CHANNEL_ENV).is_some()
-        || std::env::var("LAX_NATIVE_ENTERPRISE").is_ok_and(|value| value == "1")
+    runtime_mode() != NativeRuntimeMode::Standalone
+}
+
+pub(crate) fn protected_mutations() -> bool {
+    runtime_mode() == NativeRuntimeMode::CanonicalWork
 }
 
 fn held(message: impl std::fmt::Display) -> FunctionCallError {

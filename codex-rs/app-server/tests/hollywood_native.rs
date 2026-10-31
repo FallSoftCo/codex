@@ -200,12 +200,13 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
             "send_message",
             "wait_agent",
             "close_agent",
-            "request_user_input",
             "request_user_input_async",
             "send_message_to_user_async",
         ] {
             assert!(!tool_specs.contains(&format!("\"name\":\"{upstream_tool}\"")));
         }
+        // Synchronous native questions are routed by the host into room attention.
+        assert!(tool_specs.contains("\"name\":\"request_user_input\""));
         let input = request_body["input"].as_array().unwrap().clone();
         // The current provider client serializes the owned base as a dedicated
         // developer prefix item, rather than the top-level instructions field.
@@ -252,5 +253,97 @@ async fn hollywood_agent_message_starts_without_human_input_and_survives_next_tu
             .iter()
             .any(|request| request.url.path().starts_with("/legacy-hollywood"))
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn room_conversation_patch_uses_native_permissions_without_delivery_admission() -> Result<()>
+{
+    for (mode, channel, should_write) in [
+        (Some("room-conversation"), None, true),
+        (None, None, false),
+        (
+            Some("room-conversation"),
+            Some("/missing/protected-channel.json"),
+            false,
+        ),
+    ] {
+        let server = responses::start_mock_server().await;
+        let patch =
+            "*** Begin Patch\n*** Add File: room-native.txt\n+native room edit\n*** End Patch\n";
+        let observed = responses::mount_sse_sequence(
+            &server,
+            vec![
+                responses::sse(vec![
+                    responses::ev_response_created("patch"),
+                    responses::ev_apply_patch_custom_tool_call("room-patch", patch),
+                    responses::ev_completed("patch"),
+                ]),
+                responses::sse(vec![
+                    responses::ev_response_created("done"),
+                    responses::ev_assistant_message("result", "Inspected the native patch result."),
+                    responses::ev_completed("done"),
+                ]),
+            ],
+        )
+        .await;
+        let home = TempDir::new()?;
+        let work = TempDir::new()?;
+        let config = core_test_support::load_default_config_for_test(&home).await;
+        let mut model =
+            codex_core::test_support::construct_model_info_offline("mock-model", &config);
+        model.apply_patch_tool_type =
+            Some(codex_protocol::openai_models::ApplyPatchToolType::Freeform);
+        let catalog = home.path().join("models.json");
+        std::fs::write(&catalog, serde_json::to_vec(&json!({"models": [model]}))?)?;
+        MockResponsesConfig::new(&server.uri())
+            .with_root_config(&format!(
+                "model_catalog_json = {}",
+                serde_json::to_string(&catalog)?
+            ))
+            .write(home.path())?;
+        let mut app = TestAppServer::builder()
+            .with_codex_home(home.path())
+            .with_env_overrides(&[
+                ("LAX_NATIVE_ENTERPRISE", Some("1")),
+                ("LAX_NATIVE_RUNTIME_MODE", mode),
+                ("LAX_CANONICAL_NATIVE_CHANNEL", channel),
+            ])
+            .build_initialized()
+            .await?;
+        let started = app
+            .start_thread(ThreadStartParams {
+                cwd: Some(work.path().to_string_lossy().into_owned()),
+                approval_policy: Some(codex_app_server_protocol::AskForApproval::Never),
+                sandbox: Some(codex_app_server_protocol::SandboxMode::DangerFullAccess),
+                ..Default::default()
+            })
+            .await?;
+        let thread_value = serde_json::to_value(&started.thread)?;
+        let actual_work =
+            std::path::PathBuf::from(thread_value["environments"][0]["cwd"].as_str().unwrap());
+        app.start_turn_and_wait_for_completion(TurnStartParams {
+            thread_id: started.thread.id,
+            input: vec![UserInput::Text {
+                text: "Apply the local patch using the native tool.".to_string(),
+                text_elements: vec![],
+            }],
+            ..Default::default()
+        })
+        .await?;
+        assert_eq!(actual_work.join("room-native.txt").exists(), should_write);
+        let requests = observed.requests();
+        assert_eq!(requests.len(), 2);
+        let result = requests[1].body_json().to_string();
+        if should_write {
+            assert_eq!(
+                std::fs::read_to_string(actual_work.join("room-native.txt"))?,
+                "native room edit\n"
+            );
+            assert!(result.contains("Success. Updated the following files"));
+        } else {
+            assert!(result.contains("Canonical patch held"));
+        }
+    }
     Ok(())
 }

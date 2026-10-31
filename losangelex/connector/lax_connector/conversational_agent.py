@@ -49,7 +49,7 @@ class ConversationalAgent:
         from .room_native_state import RoomNativeState
         self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http)
         self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
-                           self.event,self.tool,on_submission=self.attention.submitted,enterprise=True)
+                           self.event,self.tool,on_submission=self.attention.submitted,enterprise=True,runtime_mode="room-conversation")
 
     @property
     def listeners(self):

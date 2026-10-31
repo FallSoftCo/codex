@@ -120,7 +120,7 @@ impl Sandboxable for ApplyPatchRuntime {
         SandboxablePreference::Auto
     }
     fn escalate_on_failure(&self) -> bool {
-        !crate::canonical_collaboration::enterprise()
+        !crate::canonical_collaboration::protected_mutations()
     }
 }
 

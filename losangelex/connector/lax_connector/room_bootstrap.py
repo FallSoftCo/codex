@@ -49,7 +49,7 @@ async def initialize(config):
         async def event(method,params):
             if method=='turn/started':turns.append(params)
         async def unsupported(*args):raise RuntimeError('No native execution expected during provisioning')
-        rpc=AppServer(config['binary'],home,state/'native',event,unsupported,enterprise=True)
+        rpc=AppServer(config['binary'],home,state/'native',event,unsupported,enterprise=True,runtime_mode="room-conversation")
         try:
             await rpc.start()
             created=await rpc.call('thread/start',request)

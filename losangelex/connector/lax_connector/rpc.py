@@ -27,6 +27,7 @@ class AppServer:
         on_submission=None,
         on_spawn=None,
         enterprise=False,
+        runtime_mode=None,
         collaboration_channel=None,
         isolated_process_group=False,
         rollout_trace_root=None,
@@ -36,6 +37,11 @@ class AppServer:
         self.on_submission = on_submission
         self.on_spawn = on_spawn
         self.enterprise = enterprise
+        if runtime_mode is not None and (
+            runtime_mode != "room-conversation" or not enterprise or collaboration_channel is not None
+        ):
+            raise ValueError("Room execution mode cannot borrow a protected Work channel")
+        self.runtime_mode = runtime_mode
         self.collaboration_channel = collaboration_channel
         self.isolated_process_group = isolated_process_group
         self.rollout_trace_root = rollout_trace_root
@@ -59,6 +65,9 @@ class AppServer:
         # A canonical worker never falls back to standalone shared SQLite or legacy ambient wakes.
         env.pop("LAX_CANONICAL_NATIVE_CHANNEL", None)
         env.pop("LAX_NATIVE_ENTERPRISE", None)
+        env.pop("LAX_NATIVE_RUNTIME_MODE", None)
+        if self.runtime_mode is not None:
+            env["LAX_NATIVE_RUNTIME_MODE"] = self.runtime_mode
         if self.enterprise:
             env["LAX_NATIVE_ENTERPRISE"] = "1"
             if self.collaboration_channel is not None:

@@ -40,7 +40,7 @@ impl PatchPermit {
         ctx: &ToolCtx,
         sandbox: Option<&FileSystemSandboxContext>,
     ) -> Result<Option<Self>, FunctionCallError> {
-        if !canonical_collaboration::enterprise() {
+        if !canonical_collaboration::protected_mutations() {
             return Ok(None);
         }
         if req.turn_environment.environment.is_remote() {
