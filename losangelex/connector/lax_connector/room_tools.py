@@ -23,7 +23,8 @@ TOOLS=[
 
 from .native_tool_catalog import TOOLS as NATIVE_TOOLS
 from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES, HOST_TOOL
-TOOLS += [tool for tool in NATIVE_TOOLS if tool['name'] in ADMIN_NAMES]
+from .room_inspect import READ_NAMES, inspect_metadata
+TOOLS += [tool for tool in NATIVE_TOOLS if tool['name'] in ADMIN_NAMES | READ_NAMES]
 TOOLS += [definition(HOST_TOOL,'Provision an already enrolled and joined agent on this configured local host. Requires current communication administrator and verified local sudo; does not create a replacement identity, send instructions or claim task completion.',{'agentId':STRING,'roomId':STRING},['agentId','roomId'])]
 TOOLS += [definition('hollywood_admin_reconcile',
     'Inspect and continue the exact original administrative workflow after an unknown result. Never creates a replacement operation or repeats an uncertain write. Requires current administrator authority.',
@@ -58,6 +59,9 @@ class RoomTools:
         if name in ADMIN_NAMES|{HOST_TOOL} or name=='hollywood_admin_reconcile':
             result=await self.administration.call(name,args,params['callId'])
             if self.on_membership:self.on_membership()
+            return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
+        if name in READ_NAMES:
+            result=await inspect_metadata(self.request,name,args)
             return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         room=str(UUID(args['roomId']))
         if name=='hollywood_context':

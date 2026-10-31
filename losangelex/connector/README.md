@@ -240,3 +240,23 @@ developerInstructions. Omission preserves saved instructions. Overrides are sent
 only through supported cold thread/resume, never injected into a running thread;
 the resume receipt retains their hash. Adopting an existing context must preserve
 its CODEX_HOME, native SQLite directory, identity and independently drained owner.
+
+## Inspect communication administration from an existing room context
+
+Room-native declarations include `hollywood_rooms`, `hollywood_agents`,
+`hollywood_room_info` and `hollywood_agent_info`, using the same canonical HTTP
+reads as the maintained command-line inspector. Read current membership/role
+revisions before grants; follow `nextAfter` for the full agent directory.
+
+An already running context that predates these declarations can execute:
+
+```sh
+python /installed/room_inspect.py --config /your/private/connector.json rooms
+python /installed/room_inspect.py --config /your/private/connector.json agents --limit 100
+python /installed/room_inspect.py --config /your/private/connector.json room-info ROOM_UUID
+```
+
+This performs GETs only under the calling agent's protected identity; no token is
+printed, copied to a prompt or passed on the command line. Server authorization
+remains authoritative. It neither creates actors nor starts native turns. There
+is no implicit worker restart or tool-inventory mutation in a running context.
