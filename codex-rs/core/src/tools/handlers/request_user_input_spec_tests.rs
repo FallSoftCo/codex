@@ -29,7 +29,7 @@ fn request_user_input_tool_includes_questions_schema() {
             strict: false,
             defer_loading: None,
             parameters: JsonSchema::object(BTreeMap::from([
-                ("sourceEventId".to_string(), JsonSchema::string(Some("For Hollywood room questions, the original human eventId whose room must receive this question. Required when multiple rooms contributed to the turn; never guess from the latest room.".to_string()))),
+                ("sourceEventId".to_string(), JsonSchema::string(Some("For Hollywood room questions, the original accepted room input eventId (human or delegated peer request). Hollywood resolves the attributable human. Required when multiple rooms contributed to the turn; never guess from the latest room.".to_string()))),
                 (
                     "questions".to_string(),
                     JsonSchema::array(

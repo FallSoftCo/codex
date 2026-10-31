@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 from lax_connector.room_receive import RoomReceiveJournal
-from lax_connector.room_input import human_input
+from lax_connector.room_input import human_input,peer_context
 from lax_connector.room_callback_scope import resolve
 root=Path(os.environ['ROOM_SCOPE_EVIDENCE']);root.mkdir(mode=0o700)
 authority,agent,author,rooma,roomb,eventa,eventb=[str(uuid4()) for _ in range(7)]
@@ -25,10 +25,16 @@ try:
  try:resolve(owner,{'turnId':'turn','sourceEventId':str(uuid4())})
  except ValueError:pass
  else:raise AssertionError('Unknown source accepted')
+ peer=str(uuid4());peer_author=str(uuid4())
+ value={'id':peer,'authority':authority,'room':roomb,'author':peer_author,'recipient':agent,'kind':'message','audience':'direct','source':eventa,'body':'Owned delegated question scope','data':{'authorKind':'agent','conversationVersion':1,'conversationRecipients':[agent]}}
+ params=peer_context(value,authority_id=authority,agent_id=agent,thread_id=thread)
+ listeners[1].journal.stage(authority=authority,agent=agent,event=peer,thread=thread,seq=2,payload={'method':'hollywood/agentMessage','params':params})
+ resolved=resolve(owner,{'turnId':'turn','sourceEventId':peer})
+ assert resolved['id']==peer and resolved['author']==peer_author and resolved['data']['authorKind']=='agent' and resolved['room']==roomb
  for listener in listeners:
   listener.journal.close();listener.journal=RoomReceiveJournal(root/(listener.room+'.sqlite'))
  assert resolve(owner,{'turnId':'turn','sourceEventId':eventa})['room']==rooma
- result={'state':'passed','latestRoomNotUsedForAmbiguousQuestion':True,'explicitOriginalSourceRoutesBothRooms':True,'unknownSourceRejected':True,'restartRetainsOriginalProvenance':True,'modelCalls':0,'productionChanged':False}
+ result={'state':'passed','latestRoomNotUsedForAmbiguousQuestion':True,'explicitOriginalSourceRoutesBothRooms':True,'unknownSourceRejected':True,'delegatedPeerAuthorshipPreserved':True,'restartRetainsOriginalProvenance':True,'modelCalls':0,'productionChanged':False}
  (root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
 finally:
  for listener in listeners:listener.journal.close()

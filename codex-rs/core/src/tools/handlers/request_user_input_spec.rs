@@ -79,7 +79,7 @@ pub fn create_request_user_input_tool(description: String) -> ToolSpec {
     );
 
     let properties = BTreeMap::from([("questions".to_string(), questions_schema),
-        ("sourceEventId".to_string(), JsonSchema::string(Some("For Hollywood room questions, the original human eventId whose room must receive this question. Required when multiple rooms contributed to the turn; never guess from the latest room.".to_string()))),
+        ("sourceEventId".to_string(), JsonSchema::string(Some("For Hollywood room questions, the original accepted room input eventId (human or delegated peer request). Hollywood resolves the attributable human. Required when multiple rooms contributed to the turn; never guess from the latest room.".to_string()))),
     ]);
 
     ToolSpec::Function(ResponsesApiTool {
