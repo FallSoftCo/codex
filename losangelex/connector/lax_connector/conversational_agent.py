@@ -89,13 +89,23 @@ class ConversationalAgent:
         try:
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                                  thread_id=self.thread,request=self.http,state=self.state/'publications')
-            await self.rpc.start()
+            cold_start=self.rpc.process is None
+            if cold_start:
+                await self.rpc.start()
+            elif self.rpc.process.returncode is not None:
+                raise RuntimeError('Original native transport stopped; no implicit replacement')
             # No thread/start, sampling, model/permission override or history copy.
-            result=await self.rpc.call('thread/resume',{'threadId':self.thread,'excludeTurns':True,
-                          'dynamicTools':self.config['conversationDynamicTools']})
-            if result['thread']['id']!=self.thread:
-                raise ValueError('Native resume selected a different conversation')
-            saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':True})
+            if cold_start:
+                result=await self.rpc.call('thread/resume',{'threadId':self.thread,'excludeTurns':True,
+                              'dynamicTools':self.config['conversationDynamicTools'],
+                              'config':{'features.default_mode_request_user_input':True}})
+                if result['thread']['id']!=self.thread:
+                    raise ValueError('Native resume selected a different conversation')
+            else:
+                loaded=await self.rpc.call('thread/loaded/list',{'limit':100})
+                if self.thread not in loaded['data']:
+                    raise ValueError('Selected conversation is not on the original transport')
+            saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start})
             for room in self.config['rooms']:
                 listener=RoomRuntime(rpc=self.rpc,session=self.session,
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',

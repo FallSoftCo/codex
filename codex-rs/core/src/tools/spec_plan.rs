@@ -1315,9 +1315,10 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, registry: &mut Tool
         );
     }
 
-    if turn_context.config.experimental_request_user_input_enabled
-        && !crate::enterprise_native_collaboration_enabled()
-    {
+    // Human questions use the native callback in both ordinary and enterprise
+    // conversations. The host routes that callback through authenticated room
+    // attention; removing the tool here prevents the agent from asking at all.
+    if turn_context.config.experimental_request_user_input_enabled {
         registry.add_with_exposure(
             RequestUserInputHandler {
                 available_modes: request_user_input_available_modes(features),
