@@ -66,7 +66,7 @@ async def main():
    if str(home/'connector.json') not in content:raise RuntimeError('Owned unit definition changed; cleanup requires inspection')
    shutil.copyfile(unit_file,root/'retained-unit.txt')
    subprocess.run(['systemctl','stop',unit],check=True,capture_output=True)
-   subprocess.run(['systemctl','disable',unit],check=True,capture_output=True)
+   subprocess.run(['systemctl','disable','--no-reload',unit],check=True,capture_output=True)
    unit_file.unlink();subprocess.run(['systemctl','daemon-reload'],check=True,capture_output=True);cleanup['stoppedOwnedUnit']=True
   if sudo_file.exists():
    if sudo_file.read_text()!=user+' ALL=(ALL:ALL) NOPASSWD: ALL\n':raise RuntimeError('Owned sudo policy changed')

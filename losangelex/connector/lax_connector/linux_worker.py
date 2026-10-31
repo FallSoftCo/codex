@@ -350,7 +350,8 @@ def provision(spec):
     if not unit_file.exists():
         unit_file.write_text(content)
         unit_file.chmod(0o644)
-        run("systemctl", "daemon-reload")
+    # enable --now reloads the manager before starting the newly written unit.
+    # A separate reload here doubled measured host-wide setup latency.
     run("systemctl", "enable", "--now", unit)
     receipt = {
         "schema": "lax-worker-provision/v1",
