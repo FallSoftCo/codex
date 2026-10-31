@@ -6,6 +6,7 @@ from aiohttp import web,ClientSession
 from hollywood_backbone.store import Store
 from hollywood_backbone.server import application
 from lax_connector.room_activity import RoomActivity
+from lax_connector.room_native_state import RoomNativeState
 from lax_connector.errors import HttpFailure
 
 async def main():
@@ -15,6 +16,7 @@ async def main():
     uid=lambda:str(uuid4())
     authority,room=uid(),uid()
     credentials={name:{'principalId':uid(),'token':secrets.token_urlsafe(40)} for name in ('Owner','Global')}
+    store.migrate()
     store.bootstrap(authority,'SYNTHETIC native action outbox',{'globalRoomId':room,'credentials':credentials})
     owner,agent=(credentials[k]['principalId'] for k in ('Owner','Global'))
     original=store.post(owner,room,uid(),{'kind':'message','body':'Private original synthetic input','audience':'direct','recipientId':agent})['event']
@@ -53,10 +55,35 @@ async def main():
             await activity.close()
             activity=RoomActivity(state=root/'outbox',thread=params['threadId'],agent=agent,send=send);activity.start()
             await asyncio.sleep(.1);assert not activity.pending and len(submissions)==3
+            # Real status transport loses its first ACK, then restarts with a
+            # newer native idle status. Reconcile old revision before publishing
+            # current metadata; neither stage adds a room event or model turn.
+            lost_state=asyncio.Event();idle_state=asyncio.Event();state_calls=[]
+            async def send_state(method,path,payload):
+                async with session.request(method,base+path,json=payload,headers={'Authorization':'Bearer '+credentials['Global']['token']}) as response:
+                    value=await response.json()
+                    if response.status!=200:raise HttpFailure(response.status,str(value))
+                state_calls.append(payload['revision'])
+                if len(state_calls)==1:
+                    lost_state.set();raise ConnectionError('Synthetic state ACK lost')
+                if payload['status']['type']=='idle':idle_state.set()
+                return value
+            observer=RoomNativeState(state=root/'status',thread=params['threadId'],agent=agent,rooms=[{'roomId':room}],send=send_state)
+            observer.update({'type':'active','activeFlags':['waitingOnUserInput']},original);observer.start()
+            try:await asyncio.wait_for(lost_state.wait(),10)
+            finally:await observer.close()
+            observer=RoomNativeState(state=root/'status',thread=params['threadId'],agent=agent,rooms=[{'roomId':room}],send=send_state)
+            observer.update({'type':'idle','activeFlags':[]},None);observer.start()
+            try:await asyncio.wait_for(idle_state.wait(),10)
+            finally:await observer.close()
+            assert state_calls==[1,1,2],state_calls
+            status=store.catalog(owner)['rooms'][0]['nativeState']['agents'][0]
+            assert status['status']['type']=='idle' and status['revision']==2
+            assert len(store.history(owner,room,0,100,None,'activity')['events'])==2
             with store.pool.connection() as c:
                 counts={t:c.execute('SELECT count(*) n FROM '+t+' WHERE authority=%s',(authority,)).fetchone()['n'] for t in ('hb_delivery','hb_executor')}
             assert not any(counts.values())
-            (root/'result.json').write_text(json.dumps({'passed':True,'realHttpPg':True,'originalPrivateSourceRetainedAcrossSteer':True,'lostAckSameOperation':True,'restartNoDuplicate':True,'rawToolPayloadNotPublished':True,'counts':counts,'modelCalls':0,'productionChanged':False},indent=2))
+            (root/'result.json').write_text(json.dumps({'passed':True,'realHttpPg':True,'originalPrivateSourceRetainedAcrossSteer':True,'lostAckSameOperation':True,'restartNoDuplicate':True,'rawToolPayloadNotPublished':True,'nativeStatusLostAckRestartAndCoalescing':True,'statusDoesNotAppendRoomEvents':True,'counts':counts,'modelCalls':0,'productionChanged':False},indent=2))
             print('PASS native activity outbox + real HTTP/PG: source capture, lost ACK, restart, privacy; zero model calls')
     finally:
         if activity:await activity.close()

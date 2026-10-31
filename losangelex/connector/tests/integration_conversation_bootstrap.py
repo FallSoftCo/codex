@@ -40,6 +40,16 @@ async def main():
    await resident.listeners[0].ready.wait()
   await asyncio.wait_for(ready(),45)
   assert resident.thread==thread
+  async def observed():
+   path=worker_home/'state/native-observations'/(fixture['room']+'.json')
+   while not path.exists() or 'accepted' not in json.loads(path.read_text()):
+    if task.done():task.result()
+    await asyncio.sleep(.05)
+  await asyncio.wait_for(observed(),15)
+  room=next(r for r in store.catalog(fixture['credentials']['Owner']['principalId'])['rooms'] if r['id']==fixture['room'])
+  state=next(a for a in room['nativeState']['agents'] if a['agentId']==agent and a['nativeThread']==thread)
+  assert state['status']['type']=='idle',state
+
  finally:
   task.cancel();await asyncio.gather(task,return_exceptions=True)
  resumed=AppServer(original['binary'],home,worker_home/'state/native',event,unsupported,enterprise=True)
@@ -48,7 +58,7 @@ async def main():
   response=await resumed.call('thread/resume',{'threadId':thread,'excludeTurns':True,'dynamicTools':TOOLS})
   assert response['thread']['id']==thread and response['thread']['name']=='Synthetic resident agent'
   assert not any(n['method']=='turn/started' for n in notes)
-  result={'passed':True,'sameOriginalEmptyContextResumed':True,'supportedNativeNameApi':True,'originalRuntimeStatePreserved':True,'repeatInitializationReturnsOriginalReceipt':True,'actualWorkerConfigurationUsesOriginalContext':True,'maintainedResidentColdResumeAndAuthenticatedRoom':True,'dummyMessagesInjected':0,'modelTurns':0,'productionChanged':False}
+  result={'passed':True,'sameOriginalEmptyContextResumed':True,'supportedNativeNameApi':True,'originalRuntimeStatePreserved':True,'repeatInitializationReturnsOriginalReceipt':True,'actualWorkerConfigurationUsesOriginalContext':True,'maintainedResidentColdResumeAndAuthenticatedRoom':True,'actualNativeIdleStatusInCanonicalCatalog':True,'dummyMessagesInjected':0,'modelTurns':0,'productionChanged':False}
   (root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
  finally:
   await resumed.close();await runner.cleanup();store.close();(root/'notifications.private.json').write_text(json.dumps(notes))

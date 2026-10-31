@@ -34,11 +34,13 @@ class ConversationalAgent:
         self.lock=(self.state/'connector.lock').open('a')
         fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
         self.session=None;self.tools=None;self.listeners=[]
-        self.current_input=None;self.source_events={};self.turn_sources={};self.native_items={};self.finished_turns=set()
+        self.current_input=None;self.native_active_turn=None;self.source_events={};self.turn_sources={};self.native_items={};self.finished_turns=set()
         from .room_attention import RoomAttention
         self.attention=RoomAttention(self)
         from .room_activity import RoomActivity
         self.activity=RoomActivity(state=self.state/'room-activity',thread=self.thread,agent=config['agentId'],send=self.http)
+        from .room_native_state import RoomNativeState
+        self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http)
         self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
                            self.event,self.tool,on_submission=self.attention.submitted,enterprise=True)
 
@@ -62,19 +64,27 @@ class ConversationalAgent:
 
     async def event(self,method,params):
         if params.get('threadId')!=self.thread:return
+        if method=='thread/status/changed':self.native_state.update(params['status'],self.turn_sources.get(self.native_active_turn))
         if method=='turn/started' and self.current_input:
-            self.turn_sources.setdefault(params['turn']['id'],self.current_input)
+            self.native_active_turn=params['turn']['id']
+            self.turn_sources.setdefault(self.native_active_turn,self.current_input)
+            if self.current_input.get('data',{}).get('authorKind')=='agent':self.native_state.update(self.native_state.status,self.current_input)
         self.activity.record(method,params,self.turn_sources.get(params.get('turnId')))
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
         if method=='item/completed':
             item=params['item'];self.native_items.pop(item['id'],None)
             if item.get('type')=='userMessage':
                 source=self.source_events.pop(item.get('clientId'),None)
-                if source:self.turn_sources[params['turnId']]=source
+                if source:
+                    self.turn_sources[params['turnId']]=source
+                    if self.native_active_turn==params['turnId']:self.native_state.update(self.native_state.status,source)
         if method=='turn/completed':
             turn=params['turn']['id'];self.finished_turns.add(turn)
             await self.attention.finish(turn)
             self.turn_sources.pop(turn,None)
+            if self.native_active_turn==turn:
+                self.native_active_turn=None
+                if self.native_state.status['type']=='idle':self.native_state.update(self.native_state.status,None)
             if len(self.finished_turns)>1024:self.finished_turns={turn}
         # Actual native state, independent of room-message/delivery state. Full
         # activity/attention projection is integrated separately, not chat spam.
@@ -111,6 +121,7 @@ class ConversationalAgent:
                 result=await self.rpc.call('thread/resume',{'threadId':self.thread,'excludeTurns':True,
                               'dynamicTools':self.config['conversationDynamicTools'],
                               'config':{'features.default_mode_request_user_input':True}})
+                self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)
                 if result['thread']['id']!=self.thread:
                     raise ValueError('Native resume selected a different conversation')
             else:
@@ -119,6 +130,7 @@ class ConversationalAgent:
                     raise ValueError('Selected conversation is not on the original transport')
             saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start})
             self.activity.start()
+            self.native_state.start()
             for room in self.config['rooms']:
                 listener=RoomRuntime(rpc=self.rpc,session=self.session,
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
@@ -133,6 +145,7 @@ class ConversationalAgent:
             for task in tasks:task.cancel()
             await asyncio.gather(*tasks,return_exceptions=True)
             for listener in self.listeners:listener.close()
+            await self.native_state.close()
             await self.activity.close()
             await self.rpc.close();await self.session.close()
             self.lock.close()
