@@ -37,6 +37,8 @@ class ConversationalAgent:
         self.current_input=None;self.source_events={};self.turn_sources={};self.native_items={};self.finished_turns=set()
         from .room_attention import RoomAttention
         self.attention=RoomAttention(self)
+        from .room_activity import RoomActivity
+        self.activity=RoomActivity(state=self.state/'room-activity',thread=self.thread,agent=config['agentId'],send=self.http)
         self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
                            self.event,self.tool,on_submission=self.attention.submitted,enterprise=True)
 
@@ -62,6 +64,7 @@ class ConversationalAgent:
         if params.get('threadId')!=self.thread:return
         if method=='turn/started' and self.current_input:
             self.turn_sources.setdefault(params['turn']['id'],self.current_input)
+        self.activity.record(method,params,self.turn_sources.get(params.get('turnId')))
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
         if method=='item/completed':
             item=params['item'];self.native_items.pop(item['id'],None)
@@ -115,6 +118,7 @@ class ConversationalAgent:
                 if self.thread not in loaded['data']:
                     raise ValueError('Selected conversation is not on the original transport')
             saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start})
+            self.activity.start()
             for room in self.config['rooms']:
                 listener=RoomRuntime(rpc=self.rpc,session=self.session,
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
@@ -129,5 +133,6 @@ class ConversationalAgent:
             for task in tasks:task.cancel()
             await asyncio.gather(*tasks,return_exceptions=True)
             for listener in self.listeners:listener.close()
+            await self.activity.close()
             await self.rpc.close();await self.session.close()
             self.lock.close()
