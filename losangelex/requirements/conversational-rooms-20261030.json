@@ -111,5 +111,10 @@
       "Useful results and genuine blockers are reported in the original room; no model polling or acknowledgement cascades."
     ],
     "completionRule": "A successful synthetic conversation or allocation announcement alone does not fulfill this request or the whole vision."
+  },
+  "implementationGaps": {
+    "administration": "Existing administration.py uses participation(connector) and delivery-bound Effects. Reuse durable operation workflows and role checks, but separate their native conversation provenance from execution delivery before exposing agent creation/provisioning. Do not fake an execution claim to satisfy the old adapter.",
+    "membership": "Current candidate maintains configured room subscriptions; membership discovery/update must follow authenticated room/inbox events without model polling or historical human input replay.",
+    "clients": "Core callback/receipt compile tests passed. Real rendered pending-send keyboard journey running in owned isolated AVD; full web/native questions/voice and rollout remain pending."
   }
 }
