@@ -31,7 +31,7 @@ class RoomAttention:
             item=c.native_items.get(params.get('itemId'),{})
             request={'command':params.get('command'),'cwd':params.get('cwd'),'reason':params.get('reason'),'changes':item.get('changes')}
             summary='Approval required: '+(params.get('command') or 'file changes')
-        payload={'id':identity,'conversationVersion':1,'sourceEventId':source['id'],
+        payload={'id':identity,'conversationVersion':1,'roomId':source['room'],'sourceEventId':source['id'],
             'nativeThread':c.thread,'nativeTurn':turn,'nativeSlot':slot,'method':method,'summary':summary,'request':request}
         path=c.state/('conversation-attention-'+identity+'.json')
         if path.exists():raise RuntimeError('Original callback exists; reconcile without replay')
@@ -42,16 +42,16 @@ class RoomAttention:
             receipt=await c.http('POST','attention',payload)
         except HttpFailure as error:
             if error.status in (400,403,409,422):raise
-            receipt=await c.http('GET','attention/'+identity)
+            receipt=await c.http('GET','attention/'+identity+'?roomId='+source['room'])
         except (OSError,asyncio.TimeoutError):
-            receipt=await c.http('GET','attention/'+identity)
+            receipt=await c.http('GET','attention/'+identity+'?roomId='+source['room'])
         if (receipt['scope'].get('conversationVersion')!=1 or receipt['scope']['nativeThread']!=c.thread
             or receipt['scope']['nativeTurn']!=turn or receipt['scope']['sourceEventId']!=source['id']):
             raise ValueError('Attention receipt differs from original callback')
         entry['scope']=receipt['scope'];saved(path,{'state':'waiting','payload':payload,'receipt':receipt})
         while True:
             entry['changed'].clear()
-            current=await c.http('GET','attention/'+identity)
+            current=await c.http('GET','attention/'+identity+'?roomId='+source['room'])
             if current['scope']!=entry['scope']:raise ValueError('Original callback scope changed')
             if turn in c.finished_turns:
                 raise RuntimeError('Native turn ended before callback response')
@@ -83,7 +83,7 @@ class RoomAttention:
             entry['changed'].set()
             if entry.get('response_ready'):await entry['submission_done'].wait()
             if 'scope' not in entry:continue
-            current=await self.agent.http('GET','attention/'+identity)
+            current=await self.agent.http('GET','attention/'+identity+'?roomId='+entry['scope']['roomId'])
             state=current['attention']['state']
             target='closed' if state=='native_submitted' else 'expired'
             if state in ('pending','response_submitted','native_submitted'):

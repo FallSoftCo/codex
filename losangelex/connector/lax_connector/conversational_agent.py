@@ -59,7 +59,7 @@ class ConversationalAgent:
         headers={'Authorization':'Bearer '+c['token'],'X-Hollywood-Authority':c['authorityId'],
                  'X-Hollywood-Agent':c['agentId']}
         async with self.session.request(method,c['hollywoodUrl'].rstrip('/')+'/hollywood/v3/'+path,
-                                        json=payload,headers=headers) as response:
+                                        json=payload,headers=headers,timeout=ClientTimeout(total=30,sock_connect=10,sock_read=25)) as response:
             value=await response.json()
             if response.status!=200:
                 raise HttpFailure(response.status,str(value.get('error','Request rejected')))
