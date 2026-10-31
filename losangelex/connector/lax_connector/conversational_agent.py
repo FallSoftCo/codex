@@ -140,9 +140,12 @@ class ConversationalAgent:
                 raise RuntimeError('Original native transport stopped; no implicit replacement')
             # No thread/start, sampling, model/permission override or history copy.
             if cold_start:
-                result=await self.rpc.call('thread/resume',{'threadId':self.thread,'excludeTurns':True,
-                              'dynamicTools':self.config['conversationDynamicTools'],
-                              'config':{'features.default_mode_request_user_input':True},**self.resume_instructions})
+                resume={'threadId':self.thread,'excludeTurns':True,
+                        'config':{'features.default_mode_request_user_input':True},**self.resume_instructions}
+                # A shared thread already owns its native declarations. Attachment
+                # is not permission to replace bindings, whether hot or cold.
+                if not self.rpc.shared:resume['dynamicTools']=self.config['conversationDynamicTools']
+                result=await self.rpc.call('thread/resume',resume)
                 effective_permissions=observed(result)
                 self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)
                 if result['thread']['id']!=self.thread:

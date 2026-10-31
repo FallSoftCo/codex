@@ -4,10 +4,11 @@ from pathlib import Path
 from uuid import uuid4
 from lax_connector.rpc_shared import SharedAppServer
 from lax_connector.room_bootstrap import initialize
+from lax_connector.host_native import native_command
 from lax_connector.room_bootstrap_recovery import SOURCE_KINDS,reconcile_empty
 async def main():
  os.umask(0o077);root=Path(os.environ['STARTUP_EVIDENCE']);root.mkdir();home=root/'profile';home.mkdir();socket=root/'native.sock';binary=os.environ['SHARED_NATIVE_BINARY'];authority,host=str(uuid4()),str(uuid4());agent=str(uuid4())
- value={'schema':'lax-native-host/v1','runtimeMode':'room-conversation','authorityId':authority,'hostId':host,'ownerAgentId':agent,'binary':binary,'codexHome':str(home),'state':str(root/'native'),'socket':str(socket)};(root/'host.json').write_text(json.dumps(value))
+ value={'schema':'lax-native-host/v1','runtimeMode':'room-conversation','authorityId':authority,'hostId':host,'ownerAgentId':agent,'binary':binary,'codexHome':str(home),'state':str(root/'native'),'socket':str(socket),'workspace':str(root/'work'),'serviceUser':'root'};(root/'host.json').write_text(json.dumps(value))
  async def observe(*args):pass
  client=SharedAppServer({'authorityId':authority,'hostId':host,'binary':binary,'codexHome':str(home),'state':str(root),'nativeServer':{'manifest':str(root/'host.json')}},observe,observe)
  (root/'work').mkdir()
@@ -23,7 +24,7 @@ async def main():
   nonlocal process
   await asyncio.sleep(.65)
   env=dict(os.environ,CODEX_HOME=str(home),LAX_NATIVE_ENTERPRISE='1',LAX_NATIVE_RUNTIME_MODE='room-conversation');env.pop('LAX_CANONICAL_NATIVE_CHANNEL',None)
-  with (root/'native.log').open('xb') as log:process=await asyncio.create_subprocess_exec(binary,'--listen','unix://'+str(socket),env=env,stdout=log,stderr=log,start_new_session=True)
+  with (root/'native.log').open('xb') as log:process=await asyncio.create_subprocess_exec(*native_command(value),env=env,stdout=log,stderr=log,start_new_session=True)
  task=asyncio.create_task(launch());start=time.monotonic()
  try:
   await client.start();elapsed=time.monotonic()-start;await task
@@ -48,7 +49,17 @@ async def main():
   except RuntimeError:pass
   else:raise AssertionError('Existing native context was not protected')
   assert json.loads(blocked.read_text())==prior
-  result={'state':'passed','realLegacyPreSocketFailureReconciled':True,'firstOriginalContextCreatedExactlyOnce':True,'readyReentryPreservesOriginalId':True,'existingContextBlocksReplacement':True,'nativeProcessesStarted':1,'modelCalls':0,'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
+  await client.close()
+  os.killpg(process.pid,signal.SIGTERM);await asyncio.wait_for(process.wait(),10)
+  env=dict(os.environ,CODEX_HOME=str(home),LAX_NATIVE_ENTERPRISE='1',LAX_NATIVE_RUNTIME_MODE='room-conversation');env.pop('LAX_CANONICAL_NATIVE_CHANNEL',None)
+  with (root/'native-cold.log').open('xb') as log:process=await asyncio.create_subprocess_exec(*native_command(value),env=env,stdout=log,stderr=log,start_new_session=True)
+  client=SharedAppServer({'authorityId':authority,'hostId':host,'binary':binary,'codexHome':str(home),'state':str(root),'nativeThreadId':recovered['nativeThreadId'],'nativeServer':{'manifest':str(root/'host.json')}},observe,observe)
+  await client.start();cold=await client.call('thread/resume',{'threadId':recovered['nativeThreadId'],'excludeTurns':True})
+  assert cold['thread']['id']==recovered['nativeThreadId']
+  (root/'cold-resume.json').write_text(json.dumps(cold,indent=2))
+  meta=next(json.loads(line)['payload'] for line in Path(cold['thread']['path']).read_text().splitlines() if json.loads(line).get('type')=='session_meta')
+  assert any(tool.get('name')=='hollywood_publish' for tool in meta.get('dynamic_tools',[]))
+  result={'state':'passed','realLegacyPreSocketFailureReconciled':True,'firstOriginalContextCreatedExactlyOnce':True,'readyReentryPreservesOriginalId':True,'existingContextBlocksReplacement':True,'sequentialNativeProcessesStarted':2,'coldResumeRetainsOriginalIdWithoutToolOverride':True,'savedRoomToolBindingsRetained':True,'modelCalls':0,'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
 
  finally:
   await task;await client.close()

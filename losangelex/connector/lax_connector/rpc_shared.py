@@ -34,7 +34,7 @@ def host_manifest(config):
     for key in ("binary", "codexHome", "state", "socket"):
         if not isinstance(value.get(key), str) or not Path(value[key]).is_absolute():
             raise ValueError("Native host paths must be absolute")
-    if (Path(value["binary"]).resolve() != Path(config["binary"]).resolve()
+    if (not os.path.samefile(value["binary"], config["binary"])
             or Path(value["codexHome"]).resolve() != Path(config["codexHome"]).resolve()):
         raise ValueError("Shared native profile/package adoption must be explicit")
     return value

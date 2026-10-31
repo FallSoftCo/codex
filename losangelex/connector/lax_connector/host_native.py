@@ -53,6 +53,12 @@ def manifest(spec, home, user):
             'unit': unit_name(spec['authorityId'],spec['hostId'])}
 
 
+def native_command(value):
+    return runtime_command(value['binary']) + ['--listen','unix://'+value['socket'],
+        '-c','sqlite_home='+json.dumps(value['state']+'/sqlite'),
+        '-c','log_dir='+json.dumps(value['state']+'/logs'),'-c','check_for_update_on_startup=false']
+
+
 def unit(value, memory_max=8*1024**3):
     if type(memory_max) is not int or memory_max < 256*1024**2:
         raise ValueError('Measured native host service memory bound required')
@@ -62,9 +68,7 @@ def unit(value, memory_max=8*1024**3):
     # Installed UUID paths have no control characters. Quote complete systemd argv
     # words rather than interpreting a shell command or an inherited launcher.
     quote=lambda v:json.dumps(str(v))
-    command=runtime_command(value['binary']) + ['--listen','unix://'+value['socket'],
-        '-c','sqlite_home='+json.dumps(value['state']+'/sqlite'),
-        '-c','log_dir='+json.dumps(value['state']+'/logs'),'-c','check_for_update_on_startup=false']
+    command=native_command(value)
     return '\n'.join(['[Unit]','Description=LAX shared native host '+value['hostId'],
         'After=network-online.target','StartLimitIntervalSec=120','StartLimitBurst=3',
         '[Service]','Type=simple','User='+value['serviceUser'],'WorkingDirectory='+workspace.replace('%','%%'),
