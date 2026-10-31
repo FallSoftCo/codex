@@ -1,5 +1,5 @@
 """Actual model/native request_user_input -> real human HTTP answer -> same turn."""
-import asyncio,json,os
+import asyncio,json,os,uuid
 from pathlib import Path
 from aiohttp import web,ClientSession
 from hollywood_backbone.store import Store
@@ -19,7 +19,7 @@ async def main():
  creator=AppServer(original['binary'],home,root/'native-create',ignore,unsupported,enterprise=True)
  await creator.start()
  try:
-  created=await creator.call('thread/start',{'cwd':str(root),'model':original['model'],'sandbox':'workspace-write','approvalPolicy':'never','dynamicTools':TOOLS,'baseInstructions':'You are a participant in a synthetic qualification room. Before choosing any label, use request_user_input to ask the human which label they want, with two choices. After the answer, write the chosen label to selected-label.txt using native execution and publish the exact chosen label in the room using hollywood_publish. Ordinary final text is private. Do not ask by plain chat, poll, provision agents or perform unrelated work. Room '+room+'.','config':{'model_reasoning_effort':original['effort'],'agents.enabled':False,'features.multi_agent':False,'features.multi_agent_v2':False}})
+  created=await creator.call('thread/start',{'cwd':str(root),'model':original['model'],'sandbox':'workspace-write','approvalPolicy':'never','dynamicTools':TOOLS,'baseInstructions':'You are a participant in a synthetic qualification room. Before choosing any label, use request_user_input to ask the human which label they want, with two choices. After the answer, write the chosen label to selected-label.txt using native execution and publish the exact chosen label in the room using hollywood_publish with responsePhase answer. Ordinary final text is private. Do not ask by plain chat, poll, provision agents or perform unrelated work. Room '+room+'.','config':{'model_reasoning_effort':original['effort'],'agents.enabled':False,'features.multi_agent':False,'features.multi_agent_v2':False}})
   thread=created['thread']['id'];(root/'thread.private.json').write_text(json.dumps(created))
 
  except BaseException:
@@ -45,7 +45,19 @@ async def main():
     await asyncio.sleep(.02)
    await agent.listeners[0].ready.wait()
   await asyncio.wait_for(ready(),30)
-  human=store.post(owner,room,'native-question-'+root.name,{'kind':'message','audience':'room','body':'Please create the label artifact. Ask me to choose the label before you write it, then report the result here.'})
+  voice_config={'binding':{'url':origin,'bindingId':str(uuid.uuid4()),'installationId':str(uuid.uuid4()),'authorityId':authority,'principalId':owner,'defaultRoomId':room,'token':fixture['credentials']['Owner']['token']},'database':str(root/'voice.sqlite'),'device':'qa-human-device','id':'native-question-'+root.name,'text':'Please create the label artifact. Ask me to choose the label before you write it, then report the result here.','destination':{'backend':'lax','authorityId':authority,'roomId':room,'recipientId':actor,'audience':'room'}}
+  voice_config['destination']['bindingId']=voice_config['binding']['bindingId']
+  voice_file=root/'voice-config.private.json';voice_file.write_text(json.dumps(voice_config))
+  async def voice(action):
+   process=await asyncio.create_subprocess_exec('node',os.environ['ROOM_VOICE_DRIVER'],str(voice_file),action,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+   out,err=await process.communicate();(root/('voice-'+action+'.stderr')).write_bytes(err)
+   assert process.returncode==0,err.decode();return json.loads(out)
+  submitted=await voice('submit')
+
+  async with ClientSession() as session:
+   async with session.get(origin+'/hollywood/v3/commands/'+submitted['operation'],headers={'Authorization':'Bearer '+fixture['credentials']['Owner']['token']}) as response:
+    human=await response.json();assert response.status==200
+  assert human['deliveries']==[]
   (root/'human.accepted.json').write_text(json.dumps(human))
   async def asked():
    while not agent.attention.pending or 'scope' not in next(iter(agent.attention.pending.values())):
@@ -62,8 +74,9 @@ async def main():
   started=[n for n in notes if n['method']=='turn/started'];assert len(started)==1,'Answer started another turn'
   assert any(c['method']=='item/tool/requestUserInput' for c in callbacks)
   posts=[c for c in callbacks if c['method']=='item/tool/call' and c['params'].get('tool')=='hollywood_publish'];assert posts
+  voice_result=await voice('read');assert voice_result['state']=='completed'
   current=store.attention_read(actor,identity);assert current['attention']['state']=='closed'
-  result={'passed':True,'actualNativeQuestion':True,'sameNativeTurnAfterHumanAnswer':True,'nativeLocalArtifact':'ORCHID','deliberateRoomPublication':True,'closedOriginalCallback':True,'model':original['model'],'effort':original['effort'],'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
+  result={'passed':True,'actualNativeQuestion':True,'realVoiceRequestAndExplicitAnswer':True,'executionClaimsRequired':False,'sameNativeTurnAfterHumanAnswer':True,'nativeLocalArtifact':'ORCHID','deliberateRoomPublication':True,'closedOriginalCallback':True,'model':original['model'],'effort':original['effort'],'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
  finally:
   task.cancel();await asyncio.gather(task,return_exceptions=True);await runner.cleanup();store.close();(root/'notifications.private.json').write_text(json.dumps(notes));(root/'callbacks.private.json').write_text(json.dumps(callbacks))
 asyncio.run(main())

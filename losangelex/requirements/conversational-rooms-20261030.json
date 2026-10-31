@@ -74,12 +74,15 @@
     "Prior executor timeout patch is not the target architecture."
   ],
   "qualification": {
-    "communicationPgHttp": "conversational-inbox-qa-r04",
+    "communicationPgHttp": "conversational-inbox-qa-r05",
     "nativeInput": "conversational-native-input-qa-r04",
     "naturalSharedRoom": "conversational-room-model-qa-r02",
     "productionDeployed": false,
     "maintainedEntry": "conversational-entry-qa-r01",
-    "nativeLocalTools": "conversational-runtime-tools-qa-r01"
+    "nativeLocalTools": "conversational-runtime-tools-qa-r01",
+    "nativeQuestion": "conversational-native-question-qa-r08",
+    "nativeQuestionProof": "Actual native question, real HTTP human answer, same turn continued, native artifact written, deliberate room publication and original attention closed. Candidate only.",
+    "voiceTextDispatch": "Real HollywoodVoice + authenticated HTTP + native model question, same-turn human answer, native local artifact and explicit answer: passed. Microphone/TTS/phone unqualified."
   },
   "executionOrder": [
     "Next: maintained local room runtime with full native tools and ongoing real work, rather than another crash-recovery study.",

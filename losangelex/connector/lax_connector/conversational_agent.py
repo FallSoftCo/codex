@@ -34,7 +34,7 @@ class ConversationalAgent:
         self.lock=(self.state/'connector.lock').open('a')
         fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
         self.session=None;self.tools=None;self.listeners=[]
-        self.current_input=None;self.turn_sources={};self.native_items={};self.finished_turns=set()
+        self.current_input=None;self.source_events={};self.turn_sources={};self.native_items={};self.finished_turns=set()
         from .room_attention import RoomAttention
         self.attention=RoomAttention(self)
         self.rpc=AppServer(config['binary'],Path(config['codexHome']),self.state/'native',
@@ -56,13 +56,18 @@ class ConversationalAgent:
 
     async def before_native_input(self,event):
         if event.get('data',{}).get('authorKind') in ('human','agent'):self.current_input=event
+        if event.get('data',{}).get('authorKind')=='human':self.source_events[event['id']]=event
 
     async def event(self,method,params):
         if params.get('threadId')!=self.thread:return
         if method=='turn/started' and self.current_input:
             self.turn_sources.setdefault(params['turn']['id'],self.current_input)
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
-        if method=='item/completed':self.native_items.pop(params['item']['id'],None)
+        if method=='item/completed':
+            item=params['item'];self.native_items.pop(item['id'],None)
+            if item.get('type')=='userMessage':
+                source=self.source_events.pop(item.get('clientId'),None)
+                if source:self.turn_sources[params['turnId']]=source
         if method=='turn/completed':
             turn=params['turn']['id'];self.finished_turns.add(turn)
             await self.attention.finish(turn)
@@ -88,7 +93,8 @@ class ConversationalAgent:
         tasks=[]
         try:
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
-                                 thread_id=self.thread,request=self.http,state=self.state/'publications')
+                                 thread_id=self.thread,request=self.http,state=self.state/'publications',
+                                 source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'))
             cold_start=self.rpc.process is None
             if cold_start:
                 await self.rpc.start()

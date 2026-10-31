@@ -18,13 +18,14 @@ STRING={'type':'string'}
 TOOLS=[
     definition('hollywood_context','Read your identity and the real participants of an authorized room. Room membership is communication, not task ownership.',{'roomId':STRING},['roomId']),
     definition('hollywood_read_room','Read canonical recent room conversation or explicitly requested execution activity.',{'roomId':STRING,'after':{'type':'integer','minimum':0},'before':{'type':'integer','minimum':1},'limit':{'type':'integer','minimum':1,'maximum':100},'view':{'type':'string','enum':['conversation','activity','all']}},['roomId']),
-    definition('hollywood_publish','Publish in your own agent identity. A public message is shared context; recipientId explicitly addresses a peer. Direct audience is private. Accepted means stored, not answered. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':STRING,'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience']),
+    definition('hollywood_publish','Publish in your own agent identity. A public message is shared context; recipientId explicitly addresses a peer. Direct audience is private. Accepted means stored, not answered. Use responsePhase answer for a deliberate answer to the human, update for progress, blocked for a blocker, and message for other conversation. An answer makes a response available; it does not assert all work is complete. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':STRING,'responsePhase':{'type':'string','enum':['message','update','answer','blocked']},'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience','responsePhase']),
 ]
 
 class RoomTools:
-    def __init__(self,*,authority_id,agent_id,thread_id,request,state):
+    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self.source_for_turn=source_for_turn
         self.publish_lock=asyncio.Lock()
 
     async def call(self,method,params):
@@ -58,21 +59,27 @@ class RoomTools:
         elif name=='hollywood_publish':
             call=params['callId'];key=hashlib.sha256((self.thread+'\0'+call).encode()).hexdigest()
             async with self.publish_lock:
-                result=await self.publish(room,args,key)
+                result=await self.publish(room,args,key,turn=params.get('turnId'))
         else:raise ValueError('Unknown conversational tool')
         return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
 
-    async def publish(self,room,args,key):
+    async def publish(self,room,args,key,*,turn=None):
         body=args.get('body')
         if not isinstance(body,str) or not body.strip() or len(body.encode())>6000:raise ValueError('Message must contain 1..6000 UTF-8 bytes')
         audience=args.get('audience')
         if audience not in ('room','direct'):raise ValueError('Explicit message audience required')
+        path=self.state/(key+'.json');prior=json.loads(path.read_text()) if path.exists() else None
         payload={'operationId':'native-room:'+str(uuid5(UUID(self.agent),key)),'kind':'message','body':body,'audience':audience}
         for field in ('recipientId','sourceEventId'):
             if args.get(field):payload[field]=str(UUID(args[field]))
+        if args.get('responsePhase') is not None:
+            if args['responsePhase'] not in ('message','update','answer','blocked'):raise ValueError('Unknown response phase')
+            payload['responsePhase']=args['responsePhase']
+        if not args.get('sourceEventId'):
+            source=(prior.get('payload',{}).get('sourceEventId') if prior else self.source_for_turn(turn) if self.source_for_turn else None)
+            if source:payload['sourceEventId']=str(UUID(source))
         if payload.get('recipientId')==self.agent:raise ValueError('Self-publication is not new input')
         if audience=='direct' and not payload.get('recipientId'):raise ValueError('Private message requires recipient')
-        path=self.state/(key+'.json');prior=json.loads(path.read_text()) if path.exists() else None
         fingerprint=hashlib.sha256(json.dumps({'room':room,'payload':payload},sort_keys=True).encode()).hexdigest()
         if prior and prior['fingerprint']!=fingerprint:raise ValueError('Original native call changed')
         if prior and prior['state']=='accepted':return prior['receipt']
@@ -92,7 +99,12 @@ class RoomTools:
                 result=await self.request('GET','commands/'+payload['operationId'])
         else:result=await self.request('GET','commands/'+payload['operationId'])
         event=result.get('event')
-        if not result.get('accepted') or not event or event['authority']!=self.authority or event['author']!=self.agent or event['room']!=room:
+        if (not result.get('accepted') or not event or event['authority']!=self.authority
+            or event['author']!=self.agent or event['room']!=room or event.get('kind')!='message'
+            or event.get('body')!=payload['body'] or event.get('audience')!=payload['audience']
+            or event.get('recipient')!=payload.get('recipientId') or event.get('source')!=payload.get('sourceEventId')
+            or result.get('deliveries')!=[]
+            or payload.get('responsePhase') is not None and event.get('data',{}).get('responsePhase')!=payload['responsePhase']):
             raise ValueError('Original publication acceptance unavailable or mismatched')
         saved(path,{'state':'accepted','fingerprint':fingerprint,'room':room,'payload':payload,'receipt':result})
         return result

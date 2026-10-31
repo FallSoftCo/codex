@@ -51,7 +51,7 @@ def peer_context(event, *, authority_id, agent_id, thread_id):
         raise ValueError('Authenticated peer input for this member required')
     if event.get('audience') not in ('room','direct') or event['audience']=='direct' and event.get('recipient')!=agent_id:
         raise ValueError('Peer message audience differs')
-    if event.get('kind') not in ('message','result','question') or data.get('expectsReply'):
+    if event.get('kind') not in ('message','request','result','question'):
         raise ValueError('Explicit peer requests need native start-or-steer admission')
     event_id=str(UUID(event['id']));author=str(UUID(event['author']));room=str(UUID(event['room']))
     if author==agent_id:raise ValueError('Own publications are not new input')
@@ -59,7 +59,7 @@ def peer_context(event, *, authority_id, agent_id, thread_id):
     if not isinstance(body,str) or not body.strip():raise ValueError('Message body required')
     content={'authorityId':authority_id,'roomId':room,'eventId':event_id,
              'sourceEventId':event.get('source'),'audience':event['audience'],
-             'kind':event['kind'],'expectsReply':False,'body':body}
+             'kind':event['kind'],'expectsReply':bool(data.get('expectsReply')),'body':body}
     return {'threadId':thread_id,'items':[{'type':'agent_message','id':'amsg_'+event_id,
             'author':author,'recipient':agent_id,'content':[{'type':'input_text','text':json.dumps(content,sort_keys=True)}]}]}
 
