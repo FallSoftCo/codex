@@ -17,7 +17,7 @@ from .room_tools import TOOLS
 from .room_permissions import persist_new_thread, requested
 
 
-async def initialize(config):
+async def initialize(config, *, recovery=None):
     if config.get('runtimeMode')!='room-conversation':raise ValueError('Explicit conversational provisioning required')
     authority=str(UUID(config['authorityId']));agent=str(UUID(config['agentId']))
     state=Path(config['state']);home=Path(config['codexHome']);workspace=Path(config['workspace'])
@@ -38,23 +38,42 @@ async def initialize(config):
         fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
         file=state/'native-context.json'
         prior=json.loads(file.read_text()) if file.exists() else None
+        recover_original=False
         if prior:
             if prior.get('binding')!=binding or prior.get('requestDigest')!=fingerprint:
                 raise ValueError('Original native initialization differs; explicit upgrade required')
-            if prior.get('state')!='ready':
-                raise RuntimeError('Original native initialization requires reconciliation; no replacement context created')
-            return prior
-        record={'schema':'lax-room-native-context/v1','state':'creating','binding':binding,'requestDigest':fingerprint}
-        saved(file,record)
+            if prior.get('state')=='ready':return prior
+            safe_transport_phase=(prior.get('state') in ('connecting','transport-unavailable')
+                                  and prior.get('threadStartAttempted') is False)
+            if not safe_transport_phase:
+                if recovery is None:
+                    raise RuntimeError('Original native initialization requires reconciliation; no replacement context created')
+                from .room_bootstrap_recovery import verify
+                verify(recovery,file,prior,binding,fingerprint)
+                recover_original=True
+        record={'schema':'lax-room-native-context/v1','state':'connecting',
+                'threadStartAttempted':False,'binding':binding,'requestDigest':fingerprint}
+        if not recover_original:saved(file,record)
         turns=[]
         async def event(method,params):
             if method=='turn/started':turns.append(params)
         async def unsupported(*args):raise RuntimeError('No native execution expected during provisioning')
         rpc=native_client(config,event,unsupported)
         try:
-            await rpc.start()
+            try:
+                await rpc.start()
+            except Exception as error:
+                if not recover_original:
+                    record.update(state='transport-unavailable',errorType=type(error).__name__)
+                    saved(file,record)
+                raise
+            if recover_original:
+                from .room_bootstrap_recovery import reconcile_empty
+                await reconcile_empty(rpc,recovery,file,prior,record)
+            record.update(state='creating',threadStartAttempted=True);saved(file,record)
             created=await rpc.call('thread/start',request)
             thread=created['thread']['id']
+            record.update(state='created',nativeThreadId=thread);saved(file,record)
             effective=await persist_new_thread(rpc,thread,created,config)
             record.update(state='naming',nativeThreadId=thread);saved(file,record)
             # This is the real display name, not a dummy history item or a
@@ -68,7 +87,8 @@ async def initialize(config):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--config',type=Path,required=True)
-    args=parser.parse_args();result=asyncio.run(initialize(json.loads(args.config.read_text())))
+    parser.add_argument('--recover-unstarted',type=Path)
+    args=parser.parse_args();result=asyncio.run(initialize(json.loads(args.config.read_text()),recovery=args.recover_unstarted))
     print(json.dumps(result))
 
 if __name__=='__main__':main()

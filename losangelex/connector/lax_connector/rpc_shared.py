@@ -5,12 +5,13 @@ client owns one agent/thread subscription and never launches or stops a server.
 All clients of a host profile are trusted local clients of the same account.
 """
 import asyncio
+import errno
 import json
 import os
 import stat
 from pathlib import Path
 from uuid import UUID
-from aiohttp import ClientSession, UnixConnector, WSMsgType
+from aiohttp import ClientSession, UnixConnector, WSMsgType, ClientConnectorError
 from .rpc import AppServer, RpcError
 
 
@@ -74,12 +75,30 @@ class SharedAppServer(AppServer):
     async def start(self):
         if self.has_started:
             raise RpcError("Original shared connection must be reconciled, not implicitly replaced")
-        info = self.socket_path.stat()
+        # Type=simple means exec has started, not that native has bound its IPC.
+        # Wait only for local transport readiness; never submit/retry a model turn.
+        deadline = asyncio.get_running_loop().time() + 5
+        while True:
+            try:
+                info = self.socket_path.stat()
+                break
+            except FileNotFoundError:
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise RpcError("Native host socket did not become ready", not_sent=True) from None
+                await asyncio.sleep(.05)
         if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
             raise PermissionError("Native host socket must be private to the enrolled service user")
         self.session = ClientSession(connector=UnixConnector(path=str(self.socket_path)))
         try:
-            self.websocket = await self.session.ws_connect("http://localhost/", max_msg_size=16 * 1024 * 1024)
+            while True:
+                try:
+                    self.websocket = await self.session.ws_connect("http://localhost/", max_msg_size=16 * 1024 * 1024)
+                    break
+                except ClientConnectorError as error:
+                    if error.os_error.errno not in (errno.ENOENT, errno.ECONNREFUSED):raise
+                    if asyncio.get_running_loop().time() >= deadline:
+                        raise RpcError("Native IPC listener did not become ready", not_sent=True) from error
+                    await asyncio.sleep(.05)
             self.reader = asyncio.create_task(self._read())
             initialized = await self.call("initialize", {
                 "clientInfo": {"name": "lax-host-agent", "version": "0.1.0"},

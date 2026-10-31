@@ -324,7 +324,14 @@ def provision(spec):
                 raise RuntimeError('Shared native host is deliberately stopped or unavailable')
         bootstrap_file=home/"native-bootstrap.json"
         saved(bootstrap_file,config);os.chown(bootstrap_file,account.pw_uid,account.pw_gid)
-        initialized=run("runuser","-u",user,"--",spec["interpreter"],"-m","lax_connector.room_bootstrap","--config",str(bootstrap_file))
+        initialized=subprocess.run(["runuser","-u",user,"--",spec["interpreter"],"-m",
+            "lax_connector.room_bootstrap","--config",str(bootstrap_file)],
+            stdin=subprocess.DEVNULL,capture_output=True,text=True,check=False)
+        saved(record/"native-bootstrap-process-result.json",{
+            "returncode":initialized.returncode,"stdout":initialized.stdout,
+            "stderr":initialized.stderr,"replayed":False})
+        if initialized.returncode:
+            raise RuntimeError("Original native bootstrap failed; inspect protected native-bootstrap-process-result.json and its original context before continuing")
         native_context=json.loads(initialized.stdout)
         config=expected_configuration(spec,authority,agent,home,native_context=native_context)
         if "nativeThreadId" not in config:raise ValueError("Named native context unavailable")
