@@ -1105,6 +1105,11 @@ impl CodexThread {
         self.session.thread_config_snapshot().await
     }
 
+    /// Captured declarations used to validate an idempotent client attachment.
+    pub async fn dynamic_tool_specs(&self) -> Vec<codex_protocol::dynamic_tools::DynamicToolSpec> {
+        self.session.dynamic_tools().await
+    }
+
     pub async fn resume_config_snapshot(&self) -> (ThreadConfigSnapshot, Option<String>) {
         self.session.resume_config_snapshot().await
     }

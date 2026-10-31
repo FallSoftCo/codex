@@ -5458,7 +5458,9 @@ impl ThreadRequestProcessor {
                     "cannot replace tool policy on loaded thread {existing_thread_id}; release it at an idle ownership boundary before cold resume"
                 )));
             }
-            if params.dynamic_tools.is_some() {
+            if let Some(requested_tools) = params.dynamic_tools.as_ref()
+                && *requested_tools != existing_thread.dynamic_tool_specs().await
+            {
                 return Err(invalid_request(format!(
                     "cannot replace dynamic tools on loaded thread {existing_thread_id}; release it at an idle ownership boundary before cold resume"
                 )));

@@ -68,10 +68,14 @@ async def main():
         await a.call('turn/interrupt',{'threadId':ta,'turnId':turna});done_a=await asyncio.wait_for(completed['A'].get(),30);assert done_a['turn']['status']=='interrupted',done_a
         release.set();await a.close();clients.remove(a);assert process.returncode is None
         again=await b.call('turn/start',{'threadId':tb,'input':[{'type':'text','text':'ROOM_B_AGAIN'}]});again_done=await asyncio.wait_for(completed['B'].get(),30);assert again_done['turn']['id']==again['turn']['id'] and again_done['turn']['status']=='completed'
-        c=client('A',ta);clients.append(c);await c.start();resumed=await c.call('thread/resume',{'threadId':ta,'excludeTurns':True});assert resumed['thread']['id']==ta
+        c=client('A',ta);clients.append(c);await c.start();resumed=await c.call('thread/resume',{'threadId':ta,'excludeTurns':True,'dynamicTools':[tool]});assert resumed['thread']['id']==ta
+        changed=dict(tool,description='Changed binding must be rejected')
+        try:await c.call('thread/resume',{'threadId':ta,'excludeTurns':True,'dynamicTools':[changed]})
+        except Exception as error:assert 'cannot replace dynamic tools' in str(error)
+        else:raise AssertionError('Loaded tool replacement was accepted')
         assert all(v['params'].get('threadId')==ta for v in callbacks['A']);assert all(v['params'].get('threadId')==tb for v in callbacks['B']);assert len(callbacks['A'])==1 and len(callbacks['B'])==1
         assert any('RESULT_ROOM_B' in json.dumps(v) for v in events['B'])
-        result={'state':'passed','nativeServerPid':process.pid,'separateThreads':[ta,tb],'callbackOwnersVerified':True,'heldAWhileBCompleted':True,'interruptAWithoutStoppingB':True,'disconnectAWithoutStoppingDaemon':True,'BNextTurnCompleted':True,'reconnectOriginalA':True,'crossThreadConnectorCallRejected':True,'localSyntheticProviderRequests':len(requests),'realProviderCalls':0,'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
+        result={'state':'passed','nativeServerPid':process.pid,'separateThreads':[ta,tb],'callbackOwnersVerified':True,'heldAWhileBCompleted':True,'interruptAWithoutStoppingB':True,'disconnectAWithoutStoppingDaemon':True,'BNextTurnCompleted':True,'reconnectOriginalA':True,'identicalLoadedToolAttachmentAccepted':True,'differentLoadedToolsRejected':True,'crossThreadConnectorCallRejected':True,'localSyntheticProviderRequests':len(requests),'realProviderCalls':0,'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
     finally:
         release.set()
         for c in clients:
