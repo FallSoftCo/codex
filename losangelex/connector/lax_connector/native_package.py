@@ -1,4 +1,4 @@
-"""Preflight the canonical Linux Codex package under its execution identity.
+"""Preflight the canonical Linux/macOS Codex package under its execution identity.
 
 Contract: scripts/codex_package/layout.py, layoutVersion1, codex CLI or headless app-server variant.
 This checks package files and bounded no-model startup commands. It does not
@@ -108,22 +108,25 @@ def inspect_package(binary, *, expected_uid=None):
     uid = os.geteuid()
     if expected_uid is not None and uid != expected_uid:
         raise PackageError("serviceIdentity", "execution UID differs")
-    if platform.system() != "Linux":
-        raise PackageError("target", "maintained service preflight requires Linux")
+    system = platform.system()
+    if system not in {"Linux", "Darwin"}:
+        raise PackageError("target", "maintained service preflight requires Linux or macOS")
     entrypoint, root, metadata, entrypoint_name = _layout(binary)
     machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(
         platform.machine().lower(), platform.machine().lower()
     )
-    if metadata.get("target") not in {
-        machine + "-unknown-linux-gnu",
-        machine + "-unknown-linux-musl",
-    }:
+    targets = ({machine + "-apple-darwin"} if system == "Darwin" else {
+        machine + "-unknown-linux-gnu", machine + "-unknown-linux-musl",
+    })
+    if metadata.get("target") not in targets:
         raise PackageError("target", "package does not match the service host")
     for name in ("bin", "codex-resources", "codex-path"):
         if not (root / name).is_dir():
             raise PackageError(name, "missing or inaccessible package directory")
     assets = {}
-    package_assets = {**ASSETS, "entrypoint": ("bin/" + entrypoint_name, ["--version"])}
+    required_assets = {key: value for key, value in ASSETS.items()
+                       if key != "bubblewrap" or system == "Linux"}
+    package_assets = {**required_assets, "entrypoint": ("bin/" + entrypoint_name, ["--version"])}
     # Validate the complete layout before executing even a version command.
     for label, (relative, _) in package_assets.items():
         path = root / relative

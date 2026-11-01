@@ -55,3 +55,9 @@ Room-default registration is explicit per authority/node and preserves existing
 membership revocations. Historical messages use their send-time recipients, so
 new membership does not replay old requests. Normal peer observations add context
 without inference; directly addressed peer requests retain agent authorship.
+
+## Darwin package and initial ownership handoff
+
+macOS uses the canonical package builder and its pinned Codex V8 artifact pair, retaining the V8 sandbox, code-mode host and ripgrep. The package is qualified as the actual service UID before execution. A shared transport handshake alone does not qualify tool execution.
+
+A new persistent Global is named through native `thread/name/set` before releasing its initialization connection. Native naming materializes the original empty context; a metadata-only `thread/resume` confirms handoff without a dummy model turn, replacement context or storage edits. Installation validates the typed room subscriptions before launching their owner. launchd owns the Mac services; systemd enrollment is not claimed for macOS.
