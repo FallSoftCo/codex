@@ -11,6 +11,12 @@ from pathlib import Path
 from uuid import UUID
 
 
+def reply_expected(event):
+    return (event.get('data', {}).get('authorKind') == 'human'
+            or event.get('kind') == 'request'
+            or bool(event.get('data', {}).get('expectsReply')))
+
+
 class ConversationIO:
     def __init__(self, path, *, authority, agent, thread):
         path = Path(path)
@@ -43,6 +49,60 @@ class ConversationIO:
             self.db.execute('INSERT INTO binding VALUES(1,?) ON CONFLICT(id) DO NOTHING', (encoded,))
             if self.db.execute('SELECT value FROM binding WHERE id=1').fetchone()['value'] != encoded:
                 raise ValueError('Conversation I/O belongs to another native owner')
+        self._migrate_reply_sources()
+
+    def _migrate_reply_sources(self):
+        # Additive, backward-readable adapter metadata. Bounded backfill avoids
+        # decoding an entire long-lived agent's input history into memory.
+        with self.db:
+            columns = {r['name'] for r in self.db.execute('PRAGMA table_info(input_source)')}
+            if 'reply_eligible' not in columns:
+                self.db.execute('ALTER TABLE input_source ADD COLUMN reply_eligible INTEGER')
+            self.db.execute('CREATE INDEX IF NOT EXISTS input_reply_turn ON input_source(turn,reply_eligible,room,ordinal)')
+            self.db.execute('CREATE INDEX IF NOT EXISTS input_source_unclassified ON input_source(ordinal) WHERE reply_eligible IS NULL')
+            self.db.execute('''CREATE TABLE IF NOT EXISTS delivery_repair(
+                item TEXT PRIMARY KEY, previous_state TEXT NOT NULL,
+                previous_reason TEXT NOT NULL, source TEXT NOT NULL,
+                repair_version INTEGER NOT NULL)''')
+        while True:
+            rows = self.db.execute('SELECT event,canonical FROM input_source WHERE reply_eligible IS NULL LIMIT 128').fetchall()
+            if not rows:
+                break
+            with self.db:
+                self.db.executemany('UPDATE input_source SET reply_eligible=? WHERE event=? AND reply_eligible IS NULL',
+                    [(int(reply_expected(json.loads(row['canonical']))), row['event']) for row in rows])
+
+    def recover_passive_suppression(self, item, expected_source):
+        """Audited repair of ONE known completed final; never sweep old history.
+
+        The caller supplies the original native item and canonical source. Normal
+        startup only migrates source metadata; it does not reopen terminal output.
+        The ordinary durable publisher reconciles any existing publication ledger.
+        """
+        expected_source = str(UUID(expected_source))
+        if not isinstance(item, str) or not 1 <= len(item) <= 256:
+            raise ValueError('Exact original native final item required')
+        with self.db:
+            row = self.db.execute("""SELECT o.item,o.turn,o.state,o.reason,n.phase AS native_phase
+                FROM output o JOIN native_end n ON n.turn=o.turn WHERE o.item=?""", (item,)).fetchone()
+            if row is None:
+                raise ValueError('Original completed native final unavailable')
+            source = self.source(row['turn'])
+            if not source or not reply_expected(source) or source['id'] != expected_source:
+                raise ValueError('Original reply-eligible canonical source differs or is ambiguous')
+            prior = self.db.execute('SELECT * FROM delivery_repair WHERE item=?', (item,)).fetchone()
+            if prior:
+                if prior['source'] != expected_source or prior['repair_version'] != 1:
+                    raise ValueError('Original final recovery belongs to another source')
+                return {'item': item, 'source': expected_source, 'state': row['state'], 'reconciled': True}
+            if (row['state'] != 'suppressed' or row['reason'] != 'Peer publication remains explicit'
+                    or row['native_phase'] != 'completed'):
+                raise ValueError('Only the known completed passive-source suppression is repairable')
+            self.db.execute('INSERT INTO delivery_repair VALUES(?,?,?,?,1)',
+                (item, row['state'], row['reason'], expected_source))
+            self.db.execute("""UPDATE output SET state='queued',reason='Recovered original request after passive input'
+                WHERE item=? AND state='suppressed' AND reason='Peer publication remains explicit' """, (item,))
+            return {'item': item, 'source': expected_source, 'state': 'queued', 'reconciled': False}
 
     def stage(self, event):
         if (event.get('authority') != self.binding['authority']
@@ -57,9 +117,9 @@ class ConversationIO:
             old = self.db.execute('SELECT canonical FROM input_source WHERE event=?', (identity,)).fetchone()
             if old and old['canonical'] != encoded:
                 raise ValueError('Original input scope changed')
-            self.db.execute('''INSERT INTO input_source(event,canonical,room,reply_scope)
-                VALUES(?,?,?,?) ON CONFLICT(event) DO NOTHING''',
-                            (identity, encoded, event['room'], scope))
+            self.db.execute('''INSERT INTO input_source(event,canonical,room,reply_scope,reply_eligible)
+                VALUES(?,?,?,?,?) ON CONFLICT(event) DO NOTHING''',
+                            (identity, encoded, event['room'], scope, int(reply_expected(event))))
 
     def bind(self, event, reply):
         turn = (reply.get('turn') or {}).get('id')
@@ -77,6 +137,10 @@ class ConversationIO:
         if room is not None:
             query += ' AND room=?'
             args.append(room)
+        # Context-only peer traffic cannot replace or make ambiguous an owed
+        # answer. Keep the passive-only fallback so ordinary chatter stays silent.
+        if self.db.execute('SELECT 1 FROM input_source WHERE ' + query + ' AND reply_eligible=1 LIMIT 1', args).fetchone():
+            query += ' AND reply_eligible=1'
         count = self.db.execute('SELECT count(DISTINCT reply_scope) AS n FROM input_source WHERE ' + query,
                                 args).fetchone()['n']
         if count != 1:

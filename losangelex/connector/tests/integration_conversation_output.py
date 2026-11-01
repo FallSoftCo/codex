@@ -67,8 +67,40 @@ async def main():
             assert sum(x['method']=='POST' for x in trace)==1
             assert any(x['path'].startswith('commands/') for x in trace)
             io.close();runtime.close()
+            # Production reproduction: an explicit peer request followed by a
+            # same-turn passive review used to select the review and suppress
+            # the already-completed answer. Restore only that original final.
+            peer,peer_token=uid(),secrets.token_urlsafe(40)
+            store.principal(owner,peer,'Synthetic passive reviewer','agent',peer_token)
+            with store.pool.connection() as c:
+                c.execute('INSERT INTO hb_membership(authority,room,principal,can_read,can_post,can_request) VALUES(%s,%s,%s,true,true,true)',(authority,room,peer))
+            owed=store.post(peer,room,'synthetic-explicit-peer-original',{'kind':'request','body':'Synthetic peer work request','audience':'room','recipientId':agent,'expectsReply':True})['event']
+            passive=store.post(peer,room,'synthetic-passive-review',{'kind':'message','body':'Synthetic passive review','audience':'room','recipientId':agent,'expectsReply':False})['event']
+            io=ConversationIO(root/'io.sqlite',authority=authority,agent=agent,thread='synthetic-native-thread')
+            for e in (owed,passive):io.stage(e);io.bind(e,{'turn':{'id':'completed-peer-turn'}})
+            io.final('completed-peer-turn','original-peer-final-item','Original peer result retained.')
+            io.ended('completed-peer-turn','completed')
+            io.finish('original-peer-final-item','suppressed','Peer publication remains explicit')
+            io.close();io=ConversationIO(root/'io.sqlite',authority=authority,agent=agent,thread='synthetic-native-thread')
+            assert io.pending()==[], 'Startup cannot sweep historical suppressed results'
+            recovery=io.recover_passive_suppression('original-peer-final-item',owed['id'])
+            assert recovery['state']=='queued' and not recovery['reconciled']
+            tools=RoomTools(authority_id=authority,agent_id=agent,thread_id='synthetic-native-thread',request=request,
+                state=root/'publications',conversation_io=io)
+            await RoomOutput(io,tools).deliver(io.pending()[0]);assert io.pending()==[]
+            assert io.recover_passive_suppression('original-peer-final-item',owed['id'])['state']=='accepted'
+            io.close();io=ConversationIO(root/'io.sqlite',authority=authority,agent=agent,thread='synthetic-native-thread')
+            assert io.pending()==[]
+            async with session.get(base+'rooms/'+room+'/history',params={'before':9007199254740991,'limit':100,'view':'conversation'},headers={'Authorization':'Bearer '+credentials['Owner']['token']}) as response:
+                recovered_history=await response.json();assert response.status==200,recovered_history
+            recovered=[e for e in recovered_history['events'] if e.get('author')==agent and e.get('source')==owed['id']]
+            assert len(recovered)==1 and recovered[0]['body']=='Original peer result retained.'
+            assert recovered[0]['audience']=='room' and recovered[0]['data']['responsePhase']=='answer'
+            assert sum(x['method']=='POST' for x in trace)==2
+            assert native==['turn/start'], 'Final recovery must not rerun work'
+            io.close()
             (root/'result.json').write_text(json.dumps({'passed':True,'authority':authority,'originalEvent':original['event']['id'],
-                'answerEvent':answer['id'],'nativeSubmissions':len(native),'postAttempts':1,'lostAckReconciled':True,
+                'answerEvent':answer['id'],'nativeSubmissions':len(native),'postAttempts':2,'lostAckReconciled':True,'passiveReviewPreservesOriginalReply':True,'knownSuppressedFinalRecoveredOnce':True,'recoveredAnswerEvent':recovered[0]['id'],'recoveryReranNativeInput':False,'startupDoesNotReplayHistory':True,
                 'durableReopen':True,'privateAudiencePreserved':True,'modelCalls':0,'productionMessages':0},indent=2))
             print((root/'result.json').read_text())
     finally:

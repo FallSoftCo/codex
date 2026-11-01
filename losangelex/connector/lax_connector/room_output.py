@@ -4,6 +4,7 @@ import hashlib
 import json
 import random
 from .errors import HttpFailure
+from .conversation_io import reply_expected
 
 
 class RoomOutput:
@@ -22,8 +23,7 @@ class RoomOutput:
             # A native turn may contain inputs from different rooms/audiences.
             # No guess or automatic audience widening is allowed.
             return False
-        if (source['data']['authorKind'] != 'human' and source.get('kind') != 'request'
-                and not source['data'].get('expectsReply')):
+        if not reply_expected(source):
             # Addressed peer answers must remain deliberate model publications.
             # Automatically answering an automatic peer answer causes wake loops.
             self.io.finish(row['item'], 'suppressed', 'Peer publication remains explicit')
