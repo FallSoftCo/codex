@@ -48,6 +48,17 @@ def register(value,purpose):
         protected_directory(runtime_root)
         if not (runtime_root / ("invocation:" + unit)).is_symlink():
             return {"state":"stopped","purpose":purpose,"servicesStarted":0}
+    from .kernel_incarnation import Unavailable, invocation, guardian
+    try:
+        current = invocation(unit)
+        target = directory(value["authorityId"],value["agentId"])/"incarnations"/(current+".json")
+        if target.exists():
+            guardian(value,protected(target))
+            return {"state":"registered","purpose":purpose,"changed":False,"unit":unit,
+                    "serviceInvocation":current,"servicesStarted":0,
+                    "observationSource":"kernel-incarnation","managerStateInspected":False}
+    except Unavailable:
+        pass  # New/unavailable incarnations retain explicit manager inspection.
     info=observer.properties(unit)
     if info["ActiveState"]!="active" or int(info["MainPID"])<2:
         return {"state":"stopped","purpose":purpose,"servicesStarted":0}

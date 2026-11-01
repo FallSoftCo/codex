@@ -283,17 +283,33 @@ def reconcile_one(config, agent, rows):
         require_settled_transition(fd)
         settled_definitions(root)
         policy = observer.protected(root / POLICY)
+        if (policy["authorityId"], policy["hostId"], policy["agentId"]) != (
+            authority, host, agent
+        ):
+            raise ValueError("Restart approval belongs to another service")
+        # Routine observation of an already registered incarnation needs no
+        # manager IPC. This proves only the same live guardian and approved
+        # pins, never NeedDaemonReload=no, execution readiness or completion.
+        from .kernel_incarnation import Unavailable, invocation, managed_guardian
+        try:
+            enrolled = observer.protected(root / "enrollment.json")
+            target = root / (invocation(enrolled["unit"]) + ".json")
+            if target.exists():
+                registered = observer.protected(target)
+                if (registered["authorityId"], registered["hostId"], registered["agentId"]) != (
+                    authority, host, agent
+                ):
+                    raise PermissionError("Registered incarnation belongs to another service")
+                managed_guardian(registered)
+                return {"state": "registered", "changed": False, "agentId": agent,
+                        "observationSource": "kernel-incarnation", "managerStateInspected": False}
+        except Unavailable:
+            pass  # Keep manager-based stopped/restart/orphan reconciliation.
         baseline, binding, info, guardian = actual(authority, host, agent)
         if observer.protected(root / "enrollment.json") != baseline or policy[
             "enrollmentDigest"
         ] != observer.digest(baseline):
             raise ValueError("Changed enrollment/definition requires explicit approval")
-        if (policy["authorityId"], policy["hostId"], policy["agentId"]) != (
-            authority,
-            host,
-            agent,
-        ):
-            raise ValueError("Restart approval belongs to another service")
         if (
             file_hash(Path(baseline["home"]) / "connector.json", baseline["uid"])[0]
             != policy["configurationSha256"]

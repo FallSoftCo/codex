@@ -123,6 +123,9 @@ class RestartRecoveryTests(unittest.TestCase):
             patch.object(observer, "machine_identity", return_value="machine")
         )
         self.enterContext(patch.object(observer, "boot_id", return_value=uid(9)))
+        # These are synthetic PIDs/images, not /proc service launchers. Runtime
+        # launcher verification has its own real-process integration journey.
+        self.enterContext(patch("lax_connector.service_runtime.require_configured_guardian"))
         observer._register(self.authority, self.host, self.agent, "lax-fixture.service")
         self.baseline = observer.protected(self.registry / "enrollment.json")
         self.enrollment = digest(self.baseline)
@@ -167,7 +170,7 @@ class RestartRecoveryTests(unittest.TestCase):
             patch.object(
                 memory,
                 "approved_spec",
-                return_value=({"interpreter": "/usr/bin/python3"}, {}, False),
+                return_value=({"interpreter": "/usr/bin/python3", "hostId": self.host}, {}, False),
             ),
             patch.object(
                 service_admin,

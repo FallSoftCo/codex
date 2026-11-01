@@ -39,3 +39,36 @@ ShellTool feature alone leaves apply_patch registered and is insufficient.
 Other execution environments need their own truthful supervisor/capability
 backend. This Linux implementation does not imply Android, macOS or Windows
 qualification. There is no exactly-once or shared-filesystem claim.
+
+## Registered guardian ticks without manager IPC
+
+Routine restart/purpose reconciliation first verifies an already registered
+current guardian with `kernel_incarnation`. This retains the protected
+enrollment/approval/config/image and unit hash checks, boot, invocation export,
+trusted cgroup invocation ID, PID birth, UID, executable, launch environment and
+membership fences. Managed-service transition locks and unsettled-definition /
+release checks still precede that shortcut. The result is unchanged registration
+metadata with `observationSource: kernel-incarnation` and
+`managerStateInspected: false`; it is **not** native idle, completion, execution
+readiness, or a claim that `NeedDaemonReload` is `no`.
+
+New registrations and incarnation changes retain manager-based inspection and
+the original registry writer. Incomplete kernel evidence retains ordinary
+stopped/orphan/restart reconciliation; an identity/approval violation holds
+instead of falling back to an older or weaker positive observation. Explicit
+enrollment, definition, image/release and administration checks still use the
+manager. Existing original receipts and deliberately stopped services are not
+restarted, rewritten or admitted by this optimization.
+
+Qualification: `test_registered_kernel_tick.py` covers selection, outage and
+fail-closed boundaries with synthetic facts and real private fixture files.
+`integration_managed_kernel_incarnation.py` additionally exercises the host-tick
+entry point against an existing protected registration and actual live process
+while manager failure is injected; it starts no native/model work or service.
+
+Owning activation requires reviewed immutable observer packaging, retention of
+the previous closure and receipts, and a quiet observer-only replacement boundary
+under its original service owner. Verify the actual loaded source and a single
+bounded observation afterwards, including held/unknown behavior and continued
+explicit manager checks. This candidate does not authorize that replacement,
+daemon-reload, native-client restart, unit/config change or mount/fstab edits.
