@@ -453,6 +453,44 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual((self.home/'connector.json').read_bytes(),before)
 
 
+    def test_paired_native_metadata_retains_exact_interrupted_prefix(self):
+        import base64
+        self.prepare()
+        path=self.prepared/'release-plan.json'
+        plan=json.loads(path.read_text())
+        extras=[]
+        for name in ('native-manifest.json','native-host.service'):
+            target=self.root/name;target.write_bytes(b'original native declaration')
+            target.chmod(0o600)
+            extras.append({'path':str(target),'uid':0,'mode':0o600,
+                'before':base64.b64encode(target.read_bytes()).decode(),
+                'after':base64.b64encode(b'new pinned native declaration').decode()})
+        plan['targets'].extend(extras)
+        plan['sharedNativeUpgrade']={'unit':'synthetic-native-host.service'}
+        fixtures.write(path,plan)
+        self.review['preparationDigest']=observer.digest(plan)
+        original=transition._write_target
+        def interrupted(target):
+            original(target)
+            if target['path']==extras[0]['path']:
+                raise OSError('retained interruption after native manifest publication')
+        from lax_connector import shared_native_release
+        with patch.object(shared_native_release,'offline') as offline:
+            with patch.object(transition,'_write_target',side_effect=interrupted):
+                with self.assertRaisesRegex(OSError,'retained interruption'):
+                    self.approve()
+            status=self.inspect()
+            self.assertEqual(status['state'],'pending')
+            self.assertEqual(status['metadataStages'],[1,1,1,0,0])
+            recovered=self.recover()
+            self.assertEqual(recovered['state'],'accepted')
+            self.assertEqual(recovered['metadataStages'],[1,1,1,1,1])
+            self.assertEqual(self.inspect()['operationId'],status['operationId'])
+            self.assertTrue(offline.called)
+        for target in extras:
+            self.assertEqual(Path(target['path']).read_bytes(),b'new pinned native declaration')
+
+
 class ReleaseCommandTests(unittest.TestCase):
     def test_exact_cli_prepare_approve_status_and_reconcile_routes(self):
         import contextlib

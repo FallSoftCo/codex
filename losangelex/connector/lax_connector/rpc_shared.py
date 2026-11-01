@@ -26,6 +26,11 @@ def host_manifest(config):
     if info.st_uid not in (0, os.geteuid()) or info.st_mode & 0o022:
         raise PermissionError("Native host manifest must be administrator or service protected")
     value = json.loads(file.read_text())
+    return validate_host_manifest(config,value)
+
+
+def validate_host_manifest(config,value):
+    """Validate a protected declaration or a derived, pinned release candidate."""
     if (value.get("schema") != "lax-native-host/v1"
             or value.get("runtimeMode") != "room-conversation"
             or value.get("authorityId") != str(UUID(config["authorityId"]))

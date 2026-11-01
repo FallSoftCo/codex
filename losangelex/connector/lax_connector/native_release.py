@@ -199,6 +199,17 @@ def prepare(authority, host, agent, request, output):
             raise ValueError("Original configuration/unit changed during review")
         new_values = {**config, "binary": str(new_binary)}
         transport_probe=None
+        shared_upgrade=None
+        shared_targets=[]
+        if 'sharedNativeUpgrade' in request:
+            expected=request['sharedNativeUpgrade']
+            if (not config.get('nativeServer') or 'newNativeServer' in request
+                    or not isinstance(expected,dict)
+                    or set(expected)!={'expectedManifestSha256','expectedDefinition'}):
+                raise ValueError('Exact existing shared engine upgrade pins required')
+            from .shared_native_release import prepare as prepare_shared
+            shared_upgrade,shared_targets=prepare_shared(config,new_values,
+                expected['expectedManifestSha256'],expected['expectedDefinition'])
         if 'newNativeServer' in request:
             if config.get('nativeServer') is not None:
                 raise ValueError('Existing transport changes require a separate original-owner migration')
@@ -226,7 +237,7 @@ def prepare(authority, host, agent, request, output):
                              'originalState':{'state':host_value['state'],'nativeThreadId':config['nativeThreadId'],'configurationSha256':config_hash}}
         elif config.get('nativeServer'):
             from .rpc_shared import host_manifest
-            selected=config['nativeServer'];host_value=host_manifest({**new_values,'nativeServer':selected})
+            selected=config['nativeServer'];host_value=host_manifest(config if shared_upgrade else {**new_values,'nativeServer':selected})
             if host_value.get('ownerAgentId')!=agent:
                 raise ValueError('Original host transport owner changed')
             transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'])
@@ -287,7 +298,8 @@ def prepare(authority, host, agent, request, output):
                             "mode": path.stat().st_mode & 0o777,
                             "before": base64.b64encode(before).decode(),
                             "after": base64.b64encode(after).decode()})
-        prepared = {"schema": SCHEMA, "scope": scope, "state": "prepared",
+        targets.extend(shared_targets)
+        prepared = {**({"sharedNativeUpgrade":shared_upgrade} if shared_upgrade else {}),"schema": SCHEMA, "scope": scope, "state": "prepared",
                     "originalSpecDigest": observer.digest(spec), "priorEnrollment": old,
                     "approvedEnrollment": upgraded, "physical": physical_paths,
                     "unit": info["Id"], "home": str(home), "uid": uid,
