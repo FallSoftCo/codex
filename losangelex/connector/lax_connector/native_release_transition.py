@@ -179,6 +179,33 @@ def _write_target(target):
         os.close(parent)
 
 
+def derived_python_caches(software, root):
+    """Accept only interpreter caches reproduced bytecode-for-bytecode from sealed source.
+
+    Importing an otherwise immutable Python release may add a cache. This never
+    accepts changed source, arbitrary generated files, replaced paths or code.
+    """
+    import importlib.util,marshal,sys,stat
+    expected=set(software['identities']);actual={p.relative_to(root).as_posix() for p in root.rglob('*')}
+    if expected-actual:raise ValueError('Reviewed release entry set changed')
+    files={r['path']:r for r in software['entries'] if r['kind']=='file'};directories=set()
+    for relative in actual-expected:
+        path=root/relative;info=path.lstat()
+        suffix='.'+sys.implementation.cache_tag+'.pyc'
+        if (path.parent.name!='__pycache__' or not path.name.endswith(suffix)
+                or not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or info.st_mode&0o022):
+            raise ValueError('Unreviewed release entry is not a derived Python cache')
+        source=path.parent.parent/(path.name[:-len(suffix)]+'.py');key=source.relative_to(root).as_posix();row=files.get(key)
+        if row is None or file_hash(source,0)[0]!=row['sha256']:
+            raise ValueError('Python cache source is not original sealed code')
+        data=path.read_bytes()
+        if (len(data)<16 or data[:4]!=importlib.util.MAGIC_NUMBER
+                or marshal.loads(data[16:])!=compile(source.read_bytes(),str(source),'exec',dont_inherit=True,optimize=0)):
+            raise ValueError('Python cache differs from original sealed code')
+        directories.add(path.parent.relative_to(root).as_posix())
+    return directories
+
+
 def _closure_identity(plan):
     software = plan["closure"]
     root = Path(software["root"])
@@ -188,13 +215,15 @@ def _closure_identity(plan):
             raise ValueError("Reviewed release directory changed")
     finally:
         os.close(handle)
-    if sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) != sorted(software["identities"]):
-        raise ValueError("Reviewed release entry set changed")
+    cache_directories=derived_python_caches(software,root)
     files = {row["path"]: row for row in software["entries"] if row["kind"] == "file"}
     for relative, identity in software["identities"].items():
         path = root / relative
         observed = list(image._identity(path.lstat()))
         if observed != identity:
+            if (relative in cache_directories
+                    and observed[:2]+observed[5:]==identity[:2]+identity[5:]):
+                continue  # Only directory size/timestamps from proved cache additions.
             # Creating/removing a hard link changes ctime without changing this
             # reviewed path, inode, permissions or bytes. Never waive the guard:
             # prove the original complete file hash and a stable read instead.
@@ -225,6 +254,14 @@ def finish(root, fd, intent):
     if release.probe(Path(intent["newBinary"]), Path(intent["newInterpreter"]), uid, home,
                      Path(intent["newReleaseRoot"])) != intent["probes"]:
         raise ValueError("Actual service-UID package/interpreter proof changed")
+    if intent.get('transportAdoption'):
+        original=image.json.loads(base64.b64decode(intent['targets'][0]['before']))
+        if original.get('runtimeMode')!='room-conversation':
+            raise ValueError('Historical journals cannot bypass active execution drainage')
+        read=release.transport_inspect(intent['newInterpreter'],uid,Path(intent['targets'][0]['path']),
+            intent['transportAdoption']['nativeServer']['manifest'])
+        if read['nativeThreadId']!=original['nativeThreadId']:
+            raise ValueError('Original native context changed')
     with contextlib.ExitStack() as stack:
         state_fd = image._open_directory(home / "state", uid)
         stack.callback(os.close, state_fd)
@@ -241,7 +278,7 @@ def finish(root, fd, intent):
             raise ValueError("Original controller route or physical machine differs")
         if observer.digest(controller) != intent["controllerDigest"]:
             raise ValueError("Reviewed controller configuration changed")
-        journals = image._journal_snapshot(state_fd, uid, authority, host, agent)
+        journals = image._journal_snapshot(state_fd, uid, authority, host, agent, preserve_historical=bool(intent.get("transportAdoption")))
         if observer.digest(journals) != intent["journalSnapshotDigest"]:
             raise ValueError("Original local execution journals changed")
         def drained():
@@ -257,7 +294,7 @@ def finish(root, fd, intent):
             image._offline(authority, host, agent, uid, home,
                            Path(intent["priorEnrollment"]["binary"]),
                            intent["priorEnrollment"], definition, fd)
-            image._canonical(config, controller, host, agent)
+            image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"))
             _closure_identity(intent)
             if release.physical(home, uid) != intent["physical"]:
                 raise ValueError("Original physical identities changed")
@@ -270,7 +307,7 @@ def finish(root, fd, intent):
                     raise ValueError("Original state directory replaced")
             finally:
                 os.close(fresh)
-            if image._journal_snapshot(state_fd, uid, authority, host, agent) != journals:
+            if image._journal_snapshot(state_fd, uid, authority, host, agent, preserve_historical=bool(intent.get("transportAdoption"))) != journals:
                 raise ValueError("Original local journals changed during transition")
             return stage
         for index, target in enumerate(intent["targets"]):
@@ -312,7 +349,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
         state_fd = image._open_directory(Path(plan["home"]) / "state", plan["uid"])
         controller_fd = image._open_directory(root.parent.parent)
         try:
-            journals = image._journal_snapshot(state_fd, plan["uid"], authority, host, agent)
+            journals = image._journal_snapshot(state_fd, plan["uid"], authority, host, agent, preserve_historical=bool(plan.get("transportAdoption")))
             controller = image._json(controller_fd, "controller.json")
         finally:
             os.close(state_fd)
@@ -330,7 +367,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
                        Path(old["binary"]), old,
                        hashlib.sha256(base64.b64decode(plan["targets"][1]["before"])).hexdigest(), fd)
         config = image.json.loads(base64.b64decode(plan["targets"][0]["before"]))
-        image._canonical(config, controller, host, agent)
+        image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"))
         image._write(fd, "image-" + operation + "-before.json", old)
         image._write(fd, "image-" + operation + "-intent.json", intent)
         image._write(fd, image.INDEX, intent, replace=True)

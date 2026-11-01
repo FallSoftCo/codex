@@ -35,20 +35,36 @@ def selection(spec, home):
 
 
 def profile_state(spec, home):
-    return location(spec['authorityId'], spec['hostId']) / 'state' if selection(spec, home) else home / 'state/native'
+    adoption=adopted_state(spec,home)
+    return Path(adoption['state']) if adoption else (location(spec['authorityId'], spec['hostId']) / 'state' if selection(spec, home) else home / 'state/native')
 
 
 def unit_name(authority, host):
     return 'lax-native-' + UUID(authority).hex[:8] + '-' + UUID(host).hex[:8] + '.service'
 
 
+def adopted_state(spec, home):
+    adoption=spec.get('nativeStateAdoption')
+    if adoption is None:return None
+    if (not isinstance(adoption,dict) or set(adoption)!={'state','nativeThreadId','configurationSha256'}
+            or adoption['state']!=str(home/'state/native')
+            or not isinstance(adoption['nativeThreadId'],str) or not adoption['nativeThreadId']
+            or not isinstance(adoption['configurationSha256'],str)
+            or len(adoption['configurationSha256'])!=64
+            or any(c not in '0123456789abcdef' for c in adoption['configurationSha256'])):
+        raise ValueError('Exact original native state, thread and configuration proof required')
+    return adoption
+
+
 def manifest(spec, home, user):
     directory = location(spec['authorityId'], spec['hostId'])
+    adoption=adopted_state(spec,home)
     return {'schema': 'lax-native-host/v1', 'runtimeMode': 'room-conversation',
             'authorityId': str(UUID(spec['authorityId'])), 'hostId': str(UUID(spec['hostId'])),
             'ownerAgentId': str(UUID(spec['agentId'])), 'serviceUser': user,
             'binary': spec['binary'], 'codexHome': str(home/'codex-home'), 'workspace': str(home/'work'),
-            'state': str(directory/'state'),
+            'state': adoption['state'] if adoption else str(directory/'state'),
+            **({'adoptedNativeThreadId':adoption['nativeThreadId'], 'adoptedConfigurationSha256':adoption['configurationSha256']} if adoption else {}),
             'socket': str(Path('/var/lib/lax-native-sockets') / hashlib.sha256((str(UUID(spec['authorityId']))+'/'+str(UUID(spec['hostId']))).encode()).hexdigest()[:24] / 'native.sock'),
             'unit': unit_name(spec['authorityId'],spec['hostId'])}
 
@@ -92,7 +108,10 @@ def ensure(spec, account, home):
             raise PermissionError('Host registry must retain administrator ownership')
     file=directory/'manifest.json';receipt=directory/'installation.json'
     if file.exists():
-        if file.is_symlink() or json.loads(file.read_text())!=value:
+        previous_manifest=json.loads(file.read_text())
+        if os.path.samefile(previous_manifest['binary'],value['binary']):
+            value['binary']=previous_manifest['binary']  # Same immutable image through an accepted hardlink alias.
+        if file.is_symlink() or previous_manifest!=value:
             raise ValueError('Existing host/profile ownership differs; explicit migration required')
         if not receipt.exists():
             raise RuntimeError('Original native host installation requires reconciliation')
@@ -100,6 +119,20 @@ def ensure(spec, account, home):
         # Never resurrect a deliberately stopped host daemon by running install.
         status=run('systemctl','show',value['unit'],'-p','ActiveState','--value').stdout.strip()
         return {**previous,'reconciled':True,'serviceActiveState':status,'serviceStarted':False}
+    adoption=adopted_state(spec,home)
+    if adoption:
+        config_path=home/'connector.json'
+        before=config_path.read_bytes();config=json.loads(before)
+        state=Path(adoption['state'])
+        if (hashlib.sha256(before).hexdigest()!=adoption['configurationSha256']
+                or config.get('nativeThreadId')!=adoption['nativeThreadId']
+                or config.get('nativeServer') is not None
+                or config.get('codexHome')!=value['codexHome']
+                or config.get('state')!=str(home/'state')
+                or state.is_symlink() or not state.is_dir()
+                or state.stat().st_uid!=account.pw_uid
+                or not (state/'sqlite').is_dir()):
+            raise ValueError('Original private native ownership changed; adoption refused')
     # Refuse an overlapping owner of the same native profile. No signal/restart.
     for process in Path('/proc').iterdir():
         if not process.name.isdigit():continue
@@ -113,8 +146,9 @@ def ensure(spec, account, home):
     socket_parent=Path(value['socket']).parent
     if not socket_parent.parent.exists():
         socket_parent.parent.mkdir(mode=0o711);socket_parent.parent.chmod(0o711)
-    for path in (directory/'state',socket_parent):
-        path.mkdir(mode=0o700);os.chown(path,account.pw_uid,account.pw_gid)
+    for path in (Path(value['state']),socket_parent):
+        if not path.exists():path.mkdir(mode=0o700)
+        os.chown(path,account.pw_uid,account.pw_gid)
     saved(file,value);file.chmod(0o644)
     content=unit(value,spec.get('nativeHostMemoryMaxBytes',8*1024**3))
     target=Path('/etc/systemd/system')/value['unit']

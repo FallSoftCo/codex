@@ -32,7 +32,8 @@ def active_spec(spec, authority, host, agent):
             or value["originalSpecDigest"] != observer.digest(spec)):
         raise ValueError("Accepted software release differs from original provisioning")
     return {**spec, "binary": value["newBinary"], "interpreter": value["newInterpreter"],
-            **({"hollywoodUrl": value["newHollywoodUrl"], "federationAuthorityId": authority} if "newHollywoodUrl" in value else {})}
+            **({"hollywoodUrl": value["newHollywoodUrl"], "federationAuthorityId": authority} if "newHollywoodUrl" in value else {}),
+            **({"authorityId":authority,"hostId":host,"agentId":agent,"runtimeMode":"room-conversation","nativeHostServer":True,"nativeStateAdoption":value["transportAdoption"]["originalState"]} if "transportAdoption" in value else {})}
 
 
 def runtime_spec(authority, agent):
@@ -197,6 +198,56 @@ def prepare(authority, host, agent, request, output):
         if config_path.read_bytes() != config_bytes or unit_path.read_bytes() != before_unit:
             raise ValueError("Original configuration/unit changed during review")
         new_values = {**config, "binary": str(new_binary)}
+        transport_probe=None
+        if 'newNativeServer' in request:
+            if config.get('nativeServer') is not None:
+                raise ValueError('Existing transport changes require a separate original-owner migration')
+            from .rpc_shared import host_manifest
+            selected=request['newNativeServer']
+            candidate={**new_values,'nativeServer':selected}
+            host_value=host_manifest(candidate)
+            if (host_value.get('ownerAgentId')!=agent
+                    or host_value.get('adoptedNativeThreadId')!=config.get('nativeThreadId')
+                    or host_value.get('adoptedConfigurationSha256')!=config_hash
+                    or host_value['state']!=str(home/'state/native')):
+                raise ValueError('Host daemon must adopt the exact original context and native storage')
+            if config.get('runtimeMode')!='room-conversation':
+                raise ValueError('Historical delivery journals can only remain observational in existing conversation mode')
+            transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'])
+            from .host import request as host_request
+            pending=host_request(config['hollywoodUrl'],config['token'],'GET','connector/pending?hostId='+host)
+            historical_unknown=pending.get('busy')
+            if historical_unknown is not None and (historical_unknown.get('state')!='unknown'
+                    or historical_unknown.get('native_thread')!=config['nativeThreadId']):
+                raise ValueError('Only an unchanged historical unknown on this original context may be preserved')
+            new_values['nativeServer']=selected
+            transport_probe={'historicalUnknown':historical_unknown,'nativeRead':transport_read,'nativeServer':selected,'nativeThreadId':config['nativeThreadId'],
+                             'nativeState':host_value['state'],'profileUnchanged':True,
+                             'originalState':{'state':host_value['state'],'nativeThreadId':config['nativeThreadId'],'configurationSha256':config_hash}}
+        elif config.get('nativeServer'):
+            from .rpc_shared import host_manifest
+            selected=config['nativeServer'];host_value=host_manifest({**new_values,'nativeServer':selected})
+            if host_value.get('ownerAgentId')!=agent:
+                raise ValueError('Original host transport owner changed')
+            transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'])
+            from .host import request as host_request
+            pending=host_request(config['hollywoodUrl'],config['token'],'GET','connector/pending?hostId='+host)
+            historical_unknown=pending.get('busy')
+            if historical_unknown is not None and (historical_unknown.get('state')!='unknown'
+                    or historical_unknown.get('native_thread')!=config['nativeThreadId']):
+                raise ValueError('Active original delivery must be drained before release')
+            original_state=({'state':host_value['state'],'nativeThreadId':host_value['adoptedNativeThreadId'],
+                             'configurationSha256':host_value['adoptedConfigurationSha256']}
+                            if 'adoptedNativeThreadId' in host_value else None)
+            transport_probe={'historicalUnknown':historical_unknown,'nativeRead':transport_read,
+                'nativeServer':selected,'nativeThreadId':config['nativeThreadId'],
+                'nativeState':host_value['state'],'profileUnchanged':True,'originalState':original_state}
+        if 'newConversationDynamicTools' in request:
+            from .room_tools import TOOLS
+            if (transport_probe is None or config.get('runtimeMode')!='room-conversation'
+                    or request['newConversationDynamicTools']!=TOOLS):
+                raise ValueError('Only the exact reviewed conversational tool declarations may be installed at an idle host boundary')
+            new_values['conversationDynamicTools']=TOOLS
         route_probe = None
         if 'newHollywoodUrl' in request or 'expectedHollywoodUrl' in request:
             from urllib.parse import urlsplit
@@ -249,6 +300,7 @@ def prepare(authority, host, agent, request, output):
                     "oldImageSha256": file_hash(old_binary, 0)[0],
                     "oldInterpreterIdentity": file_identity(old_python.resolve()),
                     "closure": software, "probes": probes, "targets": targets,
+                    **({"transportAdoption":transport_probe} if transport_probe else {}),
                     "imageIdentity": list(image._identity(image_info)),
                     "approvedImageSha256": probes["nativePackage"]["assets"]["entrypoint"]["sha256"],
                     "unitDefinitionDigest": upgraded["unitDefinitionDigest"],
@@ -269,3 +321,13 @@ def prepare(authority, host, agent, request, output):
                     "routeProbe":route_probe} if route_probe is not None else {}),
                 "newDefinitionSha256": hashlib.sha256(new_unit).hexdigest(),
                 "probes": probes, "modelsStarted": 0, "servicesStarted": 0}
+
+
+def transport_inspect(interpreter,uid,config_path,manifest):
+    account=pwd.getpwuid(uid)
+    result=subprocess.run(['runuser','-u',account.pw_name,'--',str(interpreter),'-I','-B',
+        '-m','lax_connector.transport_adoption',str(config_path),str(manifest)],
+        stdin=subprocess.DEVNULL,capture_output=True,timeout=15)
+    if result.returncode or len(result.stdout)>8192:
+        raise ValueError('Original native context read failed; retain transport migration held')
+    return json.loads(result.stdout)

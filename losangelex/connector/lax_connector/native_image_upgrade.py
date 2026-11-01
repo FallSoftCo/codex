@@ -231,7 +231,7 @@ def require_settled_transition(fd, *, check_image=True):
         os.close(parent)
 
 
-def _journal_snapshot(state_fd, uid, authority, host, agent):
+def _journal_snapshot(state_fd, uid, authority, host, agent, *, preserve_historical=False):
     """Inspect all canonical attempts and original indexes without recovery writes."""
     hashes, records = {}, {}
     budget = 0
@@ -253,7 +253,7 @@ def _journal_snapshot(state_fd, uid, authority, host, agent):
             agent,
         ):
             raise ValueError("Local execution belongs to another original owner")
-        if ExecutionJournals.is_unsettled(value):
+        if ExecutionJournals.is_unsettled(value) and not preserve_historical:
             raise ValueError("Original local execution remains unsettled")
 
     def child(fd, name):
@@ -359,7 +359,7 @@ def _journal_snapshot(state_fd, uid, authority, host, agent):
     return hashes
 
 
-def _canonical(config, controller, host, agent):
+def _canonical(config, controller, host, agent, *, preserved_unknown=None):
     pending = request(
         controller["hollywoodUrl"],
         config["token"],
@@ -368,7 +368,10 @@ def _canonical(config, controller, host, agent):
     )
     if (
         pending["enabled"] is not False
-        or pending["busy"] is not None
+        or (pending["busy"] is not None and not (
+            preserved_unknown is not None and pending['busy']==preserved_unknown
+            and preserved_unknown.get('state')=='unknown'
+            and preserved_unknown.get('native_thread')==config.get('nativeThreadId')))
     ):
         raise ValueError(
             "Canonical placement must stay disabled with no busy work; queued work is preserved"

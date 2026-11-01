@@ -142,9 +142,11 @@ class ConversationalAgent:
             if cold_start:
                 resume={'threadId':self.thread,'excludeTurns':True,
                         'config':{'features.default_mode_request_user_input':True},**self.resume_instructions}
-                # A shared thread already owns its native declarations. Attachment
-                # is not permission to replace bindings, whether hot or cold.
-                if not self.rpc.shared:resume['dynamicTools']=self.config['conversationDynamicTools']
+                # Bind this connector's reviewed tools on cold resume too: older
+                # contexts can retain creation-time legacy tools in storage. The
+                # qualified native runtime accepts identical loaded bindings and
+                # rejects attempts to change tools on a live loaded thread.
+                resume['dynamicTools']=self.config['conversationDynamicTools']
                 result=await self.rpc.call('thread/resume',resume)
                 effective_permissions=observed(result)
                 self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)
