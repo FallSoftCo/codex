@@ -15,7 +15,7 @@ from .room_receive import RoomReceiveJournal, NativeReceiptUnresolved
 
 class RoomRuntime:
     def __init__(self, *, rpc, session, base_url, token, authority_id, agent_id,
-                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None, on_room_event=None, before_native_input=None):
+                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None, on_room_event=None, before_native_input=None, on_native_receipt=None):
         self.rpc, self.session = rpc, session
         self.route_headers=dict(route_headers or {})
         if set(self.route_headers)-{'X-Hollywood-Authority','X-Hollywood-Agent'}:
@@ -42,6 +42,7 @@ class RoomRuntime:
             self._save_cursor()
         self.on_room_event=on_room_event
         self.before_native_input=before_native_input
+        self.on_native_receipt=on_native_receipt
         self.on_status=on_status
         self.ready=asyncio.Event()
 
@@ -75,15 +76,19 @@ class RoomRuntime:
                 raise ValueError('Unexpected canonical conversation author')
             row=self.journal.stage(authority=self.authority,agent=self.agent,event=event['id'],thread=self.thread,
                                    seq=seq,payload={'method':method,'params':payload})
+            inference = method != 'thread/inject_items'
             if row['acknowledgement'] is None:
+                if inference and self.before_native_input:await self.before_native_input(event)
                 if not self.journal.begin_handoff(self.authority,self.agent,event['id']):
                     raise NativeReceiptUnresolved('Original room input needs reconciliation: '+event['id'])
-                if self.before_native_input:await self.before_native_input(event)
                 if method=='hollywood/agentMessage':
                     reply=await submit_peer(self.rpc,event,**args)
                 else:
                     reply=await self.rpc.call(method,payload)
                 self.journal.acknowledge(self.authority,self.agent,event['id'],reply)
+            else:
+                reply=json.loads(row['acknowledgement'])
+            if inference and self.on_native_receipt:await self.on_native_receipt(event,reply)
         self.cursor=seq
         self._save_cursor()
 

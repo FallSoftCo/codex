@@ -32,9 +32,10 @@ TOOLS += [definition('hollywood_admin_reconcile',
 
 
 class RoomTools:
-    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None):
+    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None, conversation_io=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self.conversation_io=conversation_io
         self.source_for_turn=source_for_turn
         self.on_membership=on_membership
         self.publish_lock=asyncio.Lock()
@@ -100,7 +101,7 @@ class RoomTools:
             if args['responsePhase'] not in ('message','update','answer','blocked'):raise ValueError('Unknown response phase')
             payload['responsePhase']=args['responsePhase']
         if not args.get('sourceEventId'):
-            source=(prior.get('payload',{}).get('sourceEventId') if prior else self.source_for_turn(turn) if self.source_for_turn else None)
+            source=(prior.get('payload',{}).get('sourceEventId') if prior else ((self.conversation_io.source(turn,room) or {}).get('id') if self.conversation_io else self.source_for_turn(turn) if self.source_for_turn else None))
             if source:payload['sourceEventId']=str(UUID(source))
         if payload.get('recipientId')==self.agent:raise ValueError('Self-publication is not new input')
         if audience=='direct' and not payload.get('recipientId'):raise ValueError('Private message requires recipient')
@@ -108,6 +109,8 @@ class RoomTools:
         if prior and prior['fingerprint']!=fingerprint:raise ValueError('Original native call changed')
         if prior and prior['state']=='accepted':return prior['receipt']
         if prior and prior['state']=='rejected':raise HttpFailure(prior['error']['status'],prior['error']['message'])
+        track = self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked')
+        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'attempting')
         if not prior:
             saved(path,{'state':'sending','fingerprint':fingerprint,'room':room,'payload':payload})
             try:
@@ -115,6 +118,7 @@ class RoomTools:
             except HttpFailure as error:
                 if error.status in (400,403,409):
                     saved(path,{'state':'rejected','fingerprint':fingerprint,'room':room,'payload':payload,'error':error.public_details()})
+                    if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'rejected')
                     raise
                 result=await self.request('GET','commands/'+payload['operationId'])
             except Exception:
@@ -131,4 +135,5 @@ class RoomTools:
             or payload.get('responsePhase') is not None and event.get('data',{}).get('responsePhase')!=payload['responsePhase']):
             raise ValueError('Original publication acceptance unavailable or mismatched')
         saved(path,{'state':'accepted','fingerprint':fingerprint,'room':room,'payload':payload,'receipt':result})
+        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted')
         return result

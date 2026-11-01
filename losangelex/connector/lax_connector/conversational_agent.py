@@ -50,6 +50,9 @@ class ConversationalAgent:
         self.activity=RoomActivity(state=self.state/'room-activity',thread=self.thread,agent=config['agentId'],send=self.http)
         from .room_native_state import RoomNativeState
         self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http)
+        from .conversation_io import ConversationIO
+        self.conversation_io=ConversationIO(self.state/'conversation-io.sqlite',authority=config['authorityId'],agent=config['agentId'],thread=self.thread)
+        self.output=None
         self.rpc=native_client(config,self.event,self.tool,on_submission=self.attention.submitted)
 
     @property
@@ -72,10 +75,16 @@ class ConversationalAgent:
         saved(self.state/('room-'+value['roomId']+'-status.json'),value)
 
     async def before_native_input(self,event):
-        if self.native_active_turn and event.get('data',{}).get('authorKind') in ('human','agent'):
-            self.turn_input_rooms.setdefault(self.native_active_turn,set()).add(event['room'])
-        if event.get('data',{}).get('authorKind') in ('human','agent'):self.current_input=event
+        self.conversation_io.stage(event)
         if event.get('data',{}).get('authorKind')=='human':self.source_events[event['id']]=event
+
+    async def native_receipt(self,event,reply):
+        turn=self.conversation_io.bind(event,reply)
+        source=self.conversation_io.primary(turn)
+        self.turn_sources[turn]=source
+        self.turn_input_rooms[turn]=self.conversation_io.rooms(turn)
+        if self.native_active_turn==turn:self.native_state.update(self.native_state.status,source)
+        if self.output:self.output.wake.set()
 
     async def event(self,method,params):
         if params.get('threadId')!=self.thread:return
@@ -83,15 +92,15 @@ class ConversationalAgent:
             self.native_state.update({'type':'unavailable','activeFlags':[]},self.turn_sources.get(self.native_active_turn))
             return
         if method=='thread/status/changed':self.native_state.update(params['status'],self.turn_sources.get(self.native_active_turn))
-        if method=='turn/started' and self.current_input:
+        if method=='turn/started':
             self.native_active_turn=params['turn']['id']
-            self.turn_sources.setdefault(self.native_active_turn,self.current_input)
-            self.turn_input_rooms.setdefault(self.native_active_turn,set()).add(self.current_input['room'])
-            if self.current_input.get('data',{}).get('authorKind')=='agent':self.native_state.update(self.native_state.status,self.current_input)
         self.activity.record(method,params,self.turn_sources.get(params.get('turnId')))
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
         if method=='item/completed':
             item=params['item'];self.native_items.pop(item['id'],None)
+            if item.get('type')=='agentMessage' and item.get('phase') in (None,'final_answer'):
+                self.conversation_io.final(params['turnId'],item['id'],item.get('text',''))
+                if self.output:self.output.wake.set()
             if item.get('type')=='userMessage':
                 source=self.source_events.pop(item.get('clientId'),None)
                 if source:
@@ -100,6 +109,8 @@ class ConversationalAgent:
                     if self.native_active_turn==params['turnId']:self.native_state.update(self.native_state.status,source)
         if method=='turn/completed':
             turn=params['turn']['id'];self.finished_turns.add(turn)
+            self.conversation_io.ended(turn,params['turn'].get('status','completed'))
+            if self.output:self.output.wake.set()
             await self.attention.finish(turn)
             self.turn_sources.pop(turn,None)
             self.turn_input_rooms.pop(turn,None)
@@ -129,7 +140,9 @@ class ConversationalAgent:
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                                  thread_id=self.thread,request=self.http,state=self.state/'publications',
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
-                                 on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None)
+                                 on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None,conversation_io=self.conversation_io)
+            from .room_output import RoomOutput
+            self.output=RoomOutput(self.conversation_io,self.tools)
             if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()
                     or not self.rpc.shared and self.rpc.state.resolve()!=(self.state/'native').resolve()):
                 raise ValueError('Native transport must retain the original agent profile and database')
@@ -160,6 +173,18 @@ class ConversationalAgent:
             saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start,
                 'effectivePermissions':effective_permissions if cold_start else None,
                 'instructionOverridesSha256':hashlib.sha256(json.dumps(self.resume_instructions,sort_keys=True).encode()).hexdigest() if self.resume_instructions else None})
+            # Reconcile only finals already captured locally before a connection
+            # ended. This is one bounded metadata read, not model polling.
+            unfinished=set(self.conversation_io.unfinished())
+            if unfinished:
+                try:
+                    page=await self.rpc.call('thread/turns/list',{'threadId':self.thread,'limit':100,'sortDirection':'desc','itemsView':'summary'})
+                    for turn in page['data']:
+                        if turn['id'] in unfinished and turn['status'] in ('completed','failed','interrupted'):
+                            self.conversation_io.ended(turn['id'],turn['status'])
+                except Exception as error:
+                    saved(self.state/'output-reconciliation-unavailable.json',{'error':type(error).__name__,'turns':sorted(unfinished)})
+            self.output.start()
             self.activity.start()
             self.native_state.start()
             def create(room,after):
@@ -168,7 +193,7 @@ class ConversationalAgent:
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
                     token=self.config['token'],authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                     room_id=room,thread_id=self.thread,state=self.state/'rooms'/room,
-                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input)
+                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt)
             def room_set(rooms):self.native_state.rooms[:]=rooms
             from .room_subscriptions import RoomSubscriptions
             self.subscriptions=RoomSubscriptions(state=self.state/'subscriptions',authority=self.config['authorityId'],
@@ -184,5 +209,7 @@ class ConversationalAgent:
             if self.subscriptions:await self.subscriptions.close()
             await self.native_state.close()
             await self.activity.close()
+            if self.output:await self.output.close()
+            self.conversation_io.close()
             await self.rpc.close();await self.session.close()
             self.lock.close()
