@@ -1,4 +1,4 @@
-"""Preflight the canonical Linux/macOS Codex package under its execution identity.
+"""Preflight the canonical Linux/macOS/Windows Codex package under its execution identity.
 
 Contract: scripts/codex_package/layout.py, layoutVersion1, codex CLI or headless app-server variant.
 This checks package files and bounded no-model startup commands. It does not
@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import platform
-import pwd
 import stat
 import subprocess
 from pathlib import Path
@@ -105,19 +104,20 @@ def runtime_command(binary):
 
 def inspect_package(binary, *, expected_uid=None):
     """Run as the actual service UID, never infer access from root's mode bits."""
-    uid = os.geteuid()
+    system = platform.system()
+    uid = None if system == "Windows" else os.geteuid()
     if expected_uid is not None and uid != expected_uid:
         raise PackageError("serviceIdentity", "execution UID differs")
-    system = platform.system()
-    if system not in {"Linux", "Darwin"}:
-        raise PackageError("target", "maintained service preflight requires Linux or macOS")
+    if system not in {"Linux", "Darwin", "Windows"}:
+        raise PackageError("target", "maintained service preflight requires Linux, macOS or Windows")
     entrypoint, root, metadata, entrypoint_name = _layout(binary)
     machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(
         platform.machine().lower(), platform.machine().lower()
     )
-    targets = ({machine + "-apple-darwin"} if system == "Darwin" else {
-        machine + "-unknown-linux-gnu", machine + "-unknown-linux-musl",
-    })
+    targets = ({machine + "-apple-darwin"} if system == "Darwin" else
+               {machine + "-pc-windows-msvc"} if system == "Windows" else {
+                   machine + "-unknown-linux-gnu", machine + "-unknown-linux-musl",
+               })
     if metadata.get("target") not in targets:
         raise PackageError("target", "package does not match the service host")
     for name in ("bin", "codex-resources", "codex-path"):
@@ -126,6 +126,16 @@ def inspect_package(binary, *, expected_uid=None):
     assets = {}
     required_assets = {key: value for key, value in ASSETS.items()
                        if key != "bubblewrap" or system == "Linux"}
+    if system == "Windows":
+        required_assets = {key: (relative + ".exe", arguments)
+                           for key, (relative, arguments) in required_assets.items()
+                           if key != "entrypoint"}
+        # Validate these canonical resources, but never execute a sandbox setup
+        # program as a version probe: it can change host state.
+        required_assets.update({
+            "windowsCommandRunner": ("codex-resources/codex-command-runner.exe", None),
+            "windowsSandboxSetup": ("codex-resources/codex-windows-sandbox-setup.exe", None),
+        })
     package_assets = {**required_assets, "entrypoint": ("bin/" + entrypoint_name, ["--version"])}
     # Validate the complete layout before executing even a version command.
     for label, (relative, _) in package_assets.items():
@@ -136,7 +146,9 @@ def inspect_package(binary, *, expected_uid=None):
                 raise PackageError(
                     relative, "required asset is not a regular package file"
                 )
-            if not os.access(path, os.R_OK | os.X_OK, effective_ids=True):
+            accessible = (os.access(path, os.R_OK | os.X_OK) if system == "Windows"
+                          else os.access(path, os.R_OK | os.X_OK, effective_ids=True))
+            if not accessible:
                 raise PackageError(
                     relative, "required asset is not readable/executable by service UID"
                 )
@@ -153,6 +165,8 @@ def inspect_package(binary, *, expected_uid=None):
             ) from None
     probes = []
     for label, (_, arguments) in package_assets.items():
+        if arguments is None:
+            continue
         try:
             result = subprocess.run(
                 [assets[label]["path"], *arguments],
@@ -179,11 +193,18 @@ def inspect_package(binary, *, expected_uid=None):
                 ).hexdigest(),
             }
         )
+    service_identity = {}
+    if system == "Windows":
+        from .windows_ipc import current_sid
+        import win32security
+        service_identity = {"platform": "Windows", "userSidSha256": hashlib.sha256(
+            win32security.ConvertSidToStringSid(current_sid()).encode()).hexdigest()}
     return {
         "schema": SCHEMA,
         "ready": True,
         "uid": uid,
-        "gid": os.getegid(),
+        "gid": None if system == "Windows" else os.getegid(),
+        **({"serviceIdentity": service_identity} if service_identity else {}),
         "binary": str(entrypoint),
         "packageRoot": str(root),
         "metadata": metadata,
@@ -198,6 +219,7 @@ def inspect_package(binary, *, expected_uid=None):
 
 def preflight_as_owner(binary, interpreter, uid, home, *, workspace=None):
     """Administrator installer/readiness call; drop to the recorded service UID."""
+    import pwd
     account = pwd.getpwuid(uid)
     if Path(account.pw_dir) != Path(home):
         raise PackageError(

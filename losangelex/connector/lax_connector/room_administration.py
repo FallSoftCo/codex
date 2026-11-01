@@ -4,6 +4,7 @@ Uses the existing domain workflows. It does not fabricate participation or expos
 host provisioning as a room permission. Unknown writes are inspected, never sent
 again; completed read snapshots keep a resumed workflow's revisions unchanged.
 """
+from .runtime_files import state_directory
 import asyncio
 import hashlib
 import json
@@ -31,7 +32,7 @@ class RoomAdministration:
         self.host_config=dict(host_config or {})
         self.thread=thread;self.request=request;self.state=Path(state)
         self.binding={'authority':authority,'agent':agent,'thread':thread}
-        self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
+        state_directory(self.state, parents=True,exist_ok=True)
         self.lock=asyncio.Lock()
 
     async def call(self,name,args,call_id):
@@ -102,7 +103,7 @@ class AdministrationSteps:
 
     async def http(self,method,path,payload=None):
         index=self.position;self.position+=1
-        directory=self.state/digest(self.operation);directory.mkdir(mode=0o700,exist_ok=True)
+        directory=self.state/digest(self.operation);state_directory(directory, exist_ok=True)
         file=directory/(str(index)+'.json')
         wire={'method':method,'path':path,'body':payload};fingerprint=digest(wire)
         old=json.loads(file.read_text()) if file.exists() else None

@@ -56,12 +56,18 @@ def verified(response, request):
 
 async def persist_new_thread(rpc, thread, response, config):
     actual = verified(response, requested(config))
-    await rpc.call(
-        "thread/settings/update",
-        {
-            "threadId": thread,
-            "approvalPolicy": actual["approvalPolicy"],
-            "sandboxPolicy": actual["sandbox"],
-        },
-    )
+    settings = {
+        "threadId": thread,
+        "approvalPolicy": actual["approvalPolicy"],
+        "sandboxPolicy": actual["sandbox"],
+    }
+    # Creation-time config overrides are not durable thread preferences. Persist
+    # only explicit initial choices here; ordinary resumes must preserve later
+    # user changes instead of reasserting installation defaults.
+    for key in ("model", "effort"):
+        if key in config:
+            if not isinstance(config[key], str) or not config[key].strip():
+                raise ValueError("Explicit initial native model/effort must be nonempty")
+            settings[key] = config[key]
+    await rpc.call("thread/settings/update", settings)
     return actual

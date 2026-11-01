@@ -44,9 +44,13 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def inspect_local(config_path, name, arguments):
-    info = config_path.stat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
-        raise PermissionError("Use your own private connector configuration")
+    if os.name == "nt":
+        from lax_connector.windows_ipc import private_path
+        private_path(config_path)
+    else:
+        info = config_path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise PermissionError("Use your own private connector configuration")
     config = json.loads(config_path.read_text())
     authority = str(UUID(config["authorityId"]))
     agent = str(UUID(config["agentId"]))

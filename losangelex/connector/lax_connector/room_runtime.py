@@ -3,6 +3,7 @@
 The owner supplies the already-running RPC and its existing thread. This class
 never creates a model process, claims work, changes tools or samples on timers.
 """
+from .runtime_files import state_directory
 import asyncio
 import json
 import random
@@ -28,7 +29,7 @@ class RoomRuntime:
         if not thread_id or not isinstance(initial_cursor,int) or isinstance(initial_cursor,bool) or initial_cursor < 0:
             raise ValueError('Existing native thread and explicit receive boundary required')
         self.state = Path(state)
-        self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
+        state_directory(self.state, parents=True,exist_ok=True)
         self.journal = RoomReceiveJournal(self.state/'receive.sqlite')
         self.cursor_path = self.state/'cursor.json'
         self.binding = {'authority':self.authority,'agent':self.agent,'room':self.room,'thread':thread_id}

@@ -4,6 +4,7 @@ Catalog visibility is NOT membership (especially for administrators). Only
 explicit canonical membership can add a listening room. An outage or absent
 catalog row never revokes an existing listener.
 """
+from .runtime_files import state_directory
 import asyncio,json
 from pathlib import Path
 from uuid import UUID
@@ -11,7 +12,7 @@ from .journal import saved
 
 class RoomSubscriptions:
     def __init__(self,*,state,authority,agent,thread,rooms,request,create,on_rooms):
-        self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.binding={'authority':authority,'agent':agent,'thread':thread}
         self.authority,self.request,self.create,self.on_rooms=authority,request,create,on_rooms
         self.known={r['roomId']:{'after':r['after'],'revision':None,'member':True} for r in rooms}

@@ -1,4 +1,5 @@
 """Coalesced native status/liveness observations; never samples or wakes a model."""
+from .runtime_files import state_directory
 import asyncio,json
 from pathlib import Path
 from .journal import saved
@@ -6,7 +7,7 @@ from .errors import HttpFailure
 
 class RoomNativeState:
     def __init__(self,*,state,thread,agent,rooms,send):
-        self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.thread,self.agent,self.rooms,self.send=thread,agent,[dict(r) for r in rooms],send
         self.status={'type':'unavailable','activeFlags':[]};self.source=None
         self.wake=asyncio.Event();self.task=None;self.blocked=set()

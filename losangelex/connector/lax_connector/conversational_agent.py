@@ -4,8 +4,9 @@ One owned app-server and explicitly selected existing thread per agent. No room
 message creates an executor, claims a delivery or changes model permissions.
 Existing claimed-delivery installations remain on their original mode.
 """
+from .runtime_files import state_directory
 import asyncio
-import fcntl
+from .runtime_files import exclusive_lock
 import hashlib
 import json
 from pathlib import Path
@@ -39,9 +40,9 @@ class ConversationalAgent:
         legacy_tools=[tool for tool in TOOLS if tool['name'] not in READ_NAMES]
         if config.get('conversationDynamicTools') not in (TOOLS,legacy_tools):
             raise ValueError('Explicit reviewed conversational tool declarations required')
-        self.state=Path(config['state']);self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
+        self.state=Path(config['state']);state_directory(self.state, parents=True,exist_ok=True)
         self.lock=(self.state/'connector.lock').open('a')
-        fcntl.flock(self.lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        exclusive_lock(self.lock)
         self.session=None;self.tools=None;self.subscriptions=None
         self.current_input=None;self.native_active_turn=None;self.source_events={};self.turn_sources={};self.turn_input_rooms={};self.native_items={};self.finished_turns=set()
         from .room_attention import RoomAttention

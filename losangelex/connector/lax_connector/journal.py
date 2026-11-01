@@ -24,8 +24,8 @@ def _atomic_saved(path, value):
             json.dump(value, stream, indent=2)
             stream.flush()
             os.fsync(stream.fileno())
-        temporary.replace(path)
-        _sync(path.parent)
+        from .runtime_files import durable_replace
+        durable_replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
 

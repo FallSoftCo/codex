@@ -3,6 +3,7 @@
 These are communication primitives for the conversational-runtime candidate.
 They deliberately do not expose the old execution-claim/admission workflow.
 """
+from .runtime_files import state_directory
 import asyncio,hashlib,json,socket
 from pathlib import Path
 from urllib.parse import urlencode
@@ -21,7 +22,7 @@ TOOLS=[
     definition('hollywood_publish','Publish in your own agent identity. A public message is shared context; recipientId explicitly addresses a peer. Direct audience is private. Accepted means stored, not answered. Use responsePhase answer for a deliberate answer to the human, update for progress, blocked for a blocker, and message for other conversation. An answer makes a response available; it does not assert all work is complete. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':STRING,'responsePhase':{'type':'string','enum':['message','update','answer','blocked']},'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience','responsePhase']),
 ]
 
-from .native_tool_catalog import TOOLS as NATIVE_TOOLS
+from .native_tool_declarations import TOOLS as NATIVE_TOOLS
 from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES, HOST_TOOL
 from .room_inspect import READ_NAMES, inspect_metadata
 TOOLS += [tool for tool in NATIVE_TOOLS if tool['name'] in ADMIN_NAMES | READ_NAMES]
@@ -34,7 +35,7 @@ TOOLS += [definition('hollywood_admin_reconcile',
 class RoomTools:
     def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None, conversation_io=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
-        self.request=request;self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self.request=request;self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.conversation_io=conversation_io
         self.source_for_turn=source_for_turn
         self.on_membership=on_membership

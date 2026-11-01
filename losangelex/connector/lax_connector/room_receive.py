@@ -4,6 +4,7 @@ This is the communication receive journal, not proof of native commitment.
 A native RPC acknowledgement alone is insufficient to advance to committed.
 Unknown handoffs are reconciled by the original ID; they are never resubmitted.
 """
+from .runtime_files import state_directory
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ class ReceiveConflict(ValueError):
 class RoomReceiveJournal:
     def __init__(self, path):
         path = Path(path)
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        state_directory(path.parent, parents=True, exist_ok=True)
         fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
         os.close(fd)
         self.db = sqlite3.connect(path)

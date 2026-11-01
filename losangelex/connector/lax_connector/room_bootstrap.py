@@ -4,9 +4,10 @@ Identity, native database and original initialization receipt remain bound. This
 is provisioning, not per-message execution: no user input, model turn, room post,
 Hollywood executor or replacement context is created on an ordinary restart.
 """
+from .runtime_files import state_directory
 import argparse
 import asyncio
-import fcntl
+from .runtime_files import exclusive_lock
 import hashlib
 import json
 from pathlib import Path
@@ -33,9 +34,9 @@ async def initialize(config, *, recovery=None):
              'baseInstructions':config['instructions'],
              'config':{'model_reasoning_effort':config['effort'],'features.default_mode_request_user_input':True}}
     fingerprint=hashlib.sha256(json.dumps({'binding':binding,'name':name,'request':request},sort_keys=True,separators=(',',':')).encode()).hexdigest()
-    state.mkdir(parents=True,exist_ok=True,mode=0o700)
+    state_directory(state, parents=True,exist_ok=True)
     with (state/'connector.lock').open('a') as lock:
-        fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        exclusive_lock(lock)
         file=state/'native-context.json'
         prior=json.loads(file.read_text()) if file.exists() else None
         recover_original=False

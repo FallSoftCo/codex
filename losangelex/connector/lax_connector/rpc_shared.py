@@ -22,9 +22,8 @@ def host_manifest(config):
     file = Path(selection["manifest"])
     if not file.is_absolute():
         raise ValueError("Native host manifest must be absolute")
-    info = file.stat()
-    if info.st_uid not in (0, os.geteuid()) or info.st_mode & 0o022:
-        raise PermissionError("Native host manifest must be administrator or service protected")
+    from .runtime_files import private_file
+    private_file(file, administrator_allowed=True)
     value = json.loads(file.read_text())
     return validate_host_manifest(config,value)
 
@@ -91,9 +90,14 @@ class SharedAppServer(AppServer):
                 if asyncio.get_running_loop().time() >= deadline:
                     raise RpcError("Native host socket did not become ready", not_sent=True) from None
                 await asyncio.sleep(.05)
-        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
-            raise PermissionError("Native host socket must be private to the enrolled service user")
-        self.session = ClientSession(connector=UnixConnector(path=str(self.socket_path)))
+        if os.name == "nt":
+            from .windows_ipc import WindowsUnixConnector
+            connector = WindowsUnixConnector(self.socket_path, self.manifest["binary"])
+        else:
+            if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+                raise PermissionError("Native host socket must be private to the enrolled service user")
+            connector = UnixConnector(path=str(self.socket_path))
+        self.session = ClientSession(connector=connector)
         try:
             while True:
                 try:

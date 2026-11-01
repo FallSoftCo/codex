@@ -1,4 +1,5 @@
 """Durable native observations, separate from room conversation and model input."""
+from .runtime_files import state_directory
 import asyncio
 import hashlib
 import json
@@ -12,7 +13,7 @@ KINDS={'commandExecution':'Command','fileChange':'File changes','mcpToolCall':'M
 
 class RoomActivity:
     def __init__(self,*,state,thread,agent,send):
-        self.state=Path(state);self.state.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.thread,self.agent,self.send=thread,agent,send
         self.wake=asyncio.Event();self.task=None;self.pending=set()
 

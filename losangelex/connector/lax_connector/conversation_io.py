@@ -3,6 +3,7 @@
 Adapter I/O only: no task scheduler, inferred execution state or model polling.
 Hollywood remains the canonical room history and native Core owns its turns.
 """
+from .runtime_files import state_directory
 import json
 import os
 import sqlite3
@@ -13,7 +14,7 @@ from uuid import UUID
 class ConversationIO:
     def __init__(self, path, *, authority, agent, thread):
         path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        state_directory(path.parent, parents=True, exist_ok=True)
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
         os.close(fd)
         self.db = sqlite3.connect(path)

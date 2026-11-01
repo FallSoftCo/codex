@@ -4,6 +4,7 @@ Hollywood authorizes identity/membership only. The existing local LAX installer
 owns the OS service and native context. An uncertain installer dispatch is only
 inspected; it is never launched again by a retry or a new native tool call.
 """
+from .runtime_files import state_directory
 import asyncio
 import hashlib
 import json
@@ -69,7 +70,7 @@ async def provision(transport,arguments,operation):
           'approvedModelAuthFile':str(Path(config['codexHome'])/'auth.json'),
           'binary':config['binary'],'interpreter':config.get('provisionInterpreter',sys.executable),
           'model':config['model'],'effort':config['effort']}
-    directory=owner.state/('host-'+operation.removeprefix('native-admin:'));directory.mkdir(mode=0o700,exist_ok=True)
+    directory=owner.state/('host-'+operation.removeprefix('native-admin:'));state_directory(directory, exist_ok=True)
     file=directory/'spec.private.json';dispatch=directory/'dispatch.json'
     if file.exists() and json.loads(file.read_text())!=spec:
         raise HostProvisionUnconfirmed('Original host provisioning specification changed; inspect it on its original host: '+operation)

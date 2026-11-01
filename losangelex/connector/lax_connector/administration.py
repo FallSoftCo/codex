@@ -1,7 +1,7 @@
 """Native Hollywood administration tools; credentials never enter model output."""
 
 from .tool_execution import participation
-from .host import machine_identity
+from .runtime_files import machine_identity
 
 import asyncio
 import hashlib
