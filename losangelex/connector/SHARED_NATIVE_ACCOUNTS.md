@@ -138,3 +138,5 @@ service-manager and provider facts remain synthetic; live readiness correction,
 the original QA-agent request and cleanup remain the release owner's gates.
 
 SDK238 maintenance inspections take bounded shared registry snapshots using the operating-system flock wait. They do not fail immediately during an ordinary observer write, poll a model, remove a lock or acquire two registries together. The owner release is verified before and after the separate worker inspection; a changed or unsettled release still rejects the result. Existing mutation writers retain exclusive nonblocking locks.
+
+The actual installed Linux/native callback and command/reply journey is recorded in [qualification/shared-native-live-20261101.json](qualification/shared-native-live-20261101.json). Private operator receipts retain exact identities and original failures; this sanitized receipt states the exercised boundaries and remaining limits.

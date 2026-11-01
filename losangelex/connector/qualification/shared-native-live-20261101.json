@@ -1,0 +1,59 @@
+{
+  "schema": "lax-live-qualification/v1",
+  "date": "2026-11-01",
+  "sdk": "0.1.0.dev238",
+  "codeSourceCommit": "f7fa6cb8808958aabbc2d8593ac9677254b9cc54",
+  "scope": "Two logical agents on one existing authenticated Linux native app-server, under an explicitly approved same trusted unrestricted account.",
+  "liveEvidence": {
+    "originalFactoryWorkflowCompletedThroughNativeTool": true,
+    "originalInstallationSpecificationPreserved": true,
+    "installerReplayedByReconciliation": false,
+    "additionalAgentNativeThreads": 1,
+    "additionalAgentCommandTurns": 1,
+    "commandCalls": 1,
+    "commandExitCode": 0,
+    "canonicalAddressedRequests": 1,
+    "canonicalChildAnswers": 1,
+    "sourceRecipientAndAuthorshipVerified": true,
+    "distinctLogicalWorkspaceAndState": true,
+    "sameNssAccountAndOriginalModelProfile": true,
+    "newOsUsers": 0,
+    "newModelAuthProfiles": 0,
+    "newNativeDaemons": 0,
+    "originalNativeDaemonRestarted": false,
+    "modelsStartedByDeploymentOrMetadataInspection": 0,
+    "finalVisibleOnceThroughExistingPairedHumanGateway": true,
+    "testConnectorStoppedAndDisabledAfterCompletedIdleTurn": true,
+    "originalGlobalApiGatewayAndNatsPreserved": true
+  },
+  "qualificationBoundaries": {
+    "focusedControlFlowChecks": {
+      "cases": 16,
+      "osAndSystemdFactsIntercepted": true,
+      "realProviderModelCalls": 0
+    },
+    "kernelLockChecks": {
+      "actualLinuxFileLocks": true,
+      "boundedWriterWait": true,
+      "sharedReadersCoexist": true,
+      "exclusiveWritersRemainFenced": true,
+      "ownerAndWorkerRegistriesNotNested": true
+    },
+    "livePath": "Actual installed worker, protected original receipts, current accepted maintenance closure, native callback, authenticated Hollywood message history and local command execution."
+  },
+  "retainedEarlierFailures": [
+    "unchanged release target incorrectly broke transition prefix",
+    "new derived bytecode directory rejected despite proved source derivatives",
+    "logical agent home incorrectly used for native NSS/package preflight",
+    "nonblocking exclusive read inspection conflicted with normal observer ownership"
+  ],
+  "limits": [
+    "Same-account sharing is not malicious-agent OS isolation.",
+    "Additional-agent factory qualification here is Linux only.",
+    "Atomic engine upgrades with attached clients remain unqualified and fail closed.",
+    "Connector RSS is not a total per-agent native-context memory benchmark.",
+    "This does not qualify physical phone rendering, hardware voice, push delivery or database high availability."
+  ],
+  "privateOperatorReceiptsRetained": true,
+  "credentialsAccountIdsAndPrivateHostIdentifiersIncluded": false
+}
