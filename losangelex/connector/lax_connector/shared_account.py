@@ -206,6 +206,21 @@ def attached_agents(authority, host):
     return sorted(result)
 
 
+def package_context(spec, uid, home):
+    """Keep logical service paths separate from the protected NSS/profile owner.
+
+    preflight_as_owner still enforces NSS equality. Only an existing protected
+    attachment receipt may select a different HOME, never an arbitrary caller.
+    """
+    home = Path(home)
+    bound = attachment(spec, home, require_receipt=True)
+    if bound is None:
+        return home, {}
+    if bound['account'].pw_uid != uid:
+        raise PermissionError('Original shared package execution UID differs')
+    return Path(bound['account'].pw_dir), {'workspace': home / 'work'}
+
+
 if __name__=='__main__':
     import argparse
     parser=argparse.ArgumentParser(description='Approve one existing unrestricted account boundary; no service activation.')

@@ -97,3 +97,42 @@ no per-purpose environment identity is inferred or installed by this feature.
 
 Root owns integration/release. Do not apply this source to live instances, restart
 workers or replay accepted provisioning operations merely to run these checks.
+
+## Readiness and original factory recovery after an SDK update
+
+Observer/service registry paths remain the logical agent's home and state. Only
+the protected `shared-native-account.json` + original manifest/profile evidence
+may resolve package preflight to the original NSS service home. The package
+probe still enforces exact NSS equality and uses the logical agent's own `work`
+directory as cwd. Ordinary private-worker, Global and purpose installations keep
+their original NSS guards. Provisioning already made this distinction; service
+readiness and legacy image-approval preflight now make the same distinction. Release
+probes continue using their protected shared physical-identity binding.
+
+Factory recovery never regenerates or rewrites `spec.private.json` after an SDK,
+name, role or manifest change. Its original credential, interpreter, agent, room
+and host binding remain intact. Once dispatch might have occurred, subsequent
+calls may ONLY inspect that installation, never invoke its installer again.
+
+Cross-SDK inspection selects the CURRENT connector interpreter separately, records a
+private immutable `inspection-runtime-<digest>.json` selection, then invokes
+`linux_worker --inspect --inspection-owner OWNER --expected-spec-sha256 SHA`.
+The privileged helper requires that interpreter and maintenance module to belong
+to OWNER's accepted, settled, integrity-verified release on the same host. It
+holds that owner's release lock while reading the distinct worker's original
+protected receipts; original worker runtime/configuration are not upgraded.
+Missing acceptance, foreign scope, changed code or spec CAS fails closed. It
+does not accept arbitrary replacement Python paths or source overrides.
+
+Each new inspection attempt/receipt is retained separately, including failed
+attempts. A conclusive original accepted dispatch is returned without running
+either installer or inspector again. Unchanged same-interpreter recovery keeps
+its legacy `--inspect` contract; the new accepted-release gate is required when
+selecting a different maintenance interpreter. Legacy `--inspect` also remains
+available to the owning explicit operator; no tool declaration changes are needed.
+
+The focused fixtures qualify service-readiness control flow through the strict
+package/NSS probe, original admin reconciliation across SDK changes, protected
+maintenance-release validation and no duplicate installer dispatch. Process,
+service-manager and provider facts remain synthetic; live readiness correction,
+the original QA-agent request and cleanup remain the release owner's gates.

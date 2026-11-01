@@ -543,7 +543,10 @@ def approve_image_upgrade(
         from .native_release import active_spec
         initial_spec, _, _ = approved_spec(authority, agent)
         spec = active_spec(initial_spec, authority, host, agent)
-        package = preflight_as_owner(binary, spec["interpreter"], uid, home)
+        from .shared_account import package_context
+        service_home, package_args = package_context(spec, uid, home)
+        package = preflight_as_owner(binary, spec["interpreter"], uid, service_home,
+                                     **package_args)
         if package["assets"]["entrypoint"]["sha256"] != expected_image_sha256:
             raise ValueError("Service-identity package probe saw another native image")
         package_pins = []

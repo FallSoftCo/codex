@@ -10,7 +10,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 from aiohttp import ClientSession, ClientTimeout
 from .journal import saved
 from .roles import administrator_available
@@ -59,7 +59,26 @@ async def provision(transport,arguments,operation):
             if (authenticated.get('id')!=agent or authenticated.get('authority')!=owner.config['authorityId']
                     or authenticated.get('kind')!='agent' or not authenticated.get('active')):
                 raise PermissionError('Original enrollment credential identity differs')
-    spec={'runtimeMode':'room-conversation','authorityId':owner.config['authorityId'],'agentId':agent,
+    directory=owner.state/('host-'+str(UUID(operation.removeprefix('native-admin:'))))
+    state_directory(directory, exist_ok=True)
+    file=directory/'spec.private.json';dispatch=directory/'dispatch.json'
+    prior=(dispatch.exists() or (directory/'initial-result.json').exists()
+           or (directory/'inspect-result.json').exists() or any(directory.glob('inspection-*.json')))
+    if file.exists():
+        # Names, roles, SDK paths and the host manifest may legitimately advance.
+        # The protected installer receipt, not a newly generated spec, decides
+        # whether this exact original installation can be inspected.
+        spec=json.loads(file.read_text())
+        original={'runtimeMode':'room-conversation','authorityId':owner.config['authorityId'],
+                  'agentId':agent,'hostId':str(UUID(config['hostId'])),
+                  'rooms':[{'roomId':room,'after':0}],
+                  'machineIdentity':hashlib.sha256(Path('/etc/machine-id').read_bytes()).hexdigest()}
+        if any(spec.get(k)!=v for k,v in original.items()):
+            raise HostProvisionUnconfirmed('Original host provisioning scope changed: '+operation)
+    else:
+        if prior:
+            raise HostProvisionUnconfirmed('Original dispatched specification unavailable: '+operation)
+        spec={'runtimeMode':'room-conversation','authorityId':owner.config['authorityId'],'agentId':agent,
           'hostId':str(UUID(config['hostId'])),'credential':credential['token'],
           'hollywoodUrl':config['hollywoodUrl'],'nativeName':principal['name'],'purpose':role['purpose'],
           # Send-time recipient snapshots prevent old pre-membership messages
@@ -70,38 +89,72 @@ async def provision(transport,arguments,operation):
           'approvedModelAuthFile':str(Path(config['codexHome'])/'auth.json'),
           'binary':config['binary'],'interpreter':config.get('provisionInterpreter',sys.executable),
           'model':config['model'],'effort':config['effort']}
-    if config.get('nativeServer') is not None:
-        from .shared_account import request
-        spec.update(nativeHostServer=True,nativeHostAttachment=request(config),executionProfile='unrestricted')
-    directory=owner.state/('host-'+operation.removeprefix('native-admin:'));state_directory(directory, exist_ok=True)
-    file=directory/'spec.private.json';dispatch=directory/'dispatch.json'
-    if file.exists() and json.loads(file.read_text())!=spec:
-        raise HostProvisionUnconfirmed('Original host provisioning specification changed; inspect it on its original host: '+operation)
-    if not file.exists():saved(file,spec)
+        if config.get('nativeServer') is not None:
+            from .shared_account import request
+            spec.update(nativeHostServer=True,nativeHostAttachment=request(config),executionProfile='unrestricted')
+        saved(file,spec)
     command=['sudo','-n',spec['interpreter'],'-I','-B','-m','lax_connector.linux_worker','--spec',str(file)]
-    prior=dispatch.exists()
+    if dispatch.exists():
+        previous=json.loads(dispatch.read_text())
+        if (previous.get('agentId'),previous.get('operationId'))!=(agent,operation):
+            raise HostProvisionUnconfirmed('Original installer dispatch scope differs: '+operation)
+        if previous.get('state')=='accepted':
+            accepted=previous.get('receipt',{})
+            if (accepted.get('authorityId'),accepted.get('agentId'))!=(spec['authorityId'],agent):
+                raise HostProvisionUnconfirmed('Original installer acceptance scope differs: '+operation)
+            return outcome(spec,room,previous['receipt'])
     if not prior:saved(dispatch,{'state':'dispatching','agentId':agent,'operationId':operation})
     # A local installation may already have created its account/unit even if its
     # response was lost. The generic workflow must retain this as unresolved.
     transport.accepted_writes=True
     async def execute(inspect):
-        process=await asyncio.create_subprocess_exec(*command,*(['--inspect'] if inspect else []),
+        actual=command;pin=None;output=directory/'initial-result.json'
+        if inspect:
+            output=directory/('inspection-'+str(uuid4())+'.json')
+            saved(output,{'state':'dispatching','originalSpecSha256':hashlib.sha256(file.read_bytes()).hexdigest()})
+            actual=[*command,'--inspect']
+        if inspect and sys.executable!=spec['interpreter']:
+            # The current connector is only a selection, not root authority.
+            # The privileged inspector validates/pins its accepted release and
+            # NEVER uses it to run the original installer again.
+            pin={'schema':'lax-factory-inspection-runtime/v1','ownerAgentId':owner.config['agentId'],
+                 'authorityId':spec['authorityId'],'hostId':spec['hostId'],
+                 'interpreter':sys.executable,'originalSpecSha256':hashlib.sha256(file.read_bytes()).hexdigest()}
+            selected=directory/('inspection-runtime-'+hashlib.sha256(json.dumps(pin,sort_keys=True).encode()).hexdigest()+'.json')
+            if selected.exists() and json.loads(selected.read_text())!=pin:
+                raise HostProvisionUnconfirmed('Original maintenance selection differs: '+operation)
+            if not selected.exists():saved(selected,pin)
+            saved(output,{'state':'dispatching','runtime':pin})
+            actual=['sudo','-n',pin['interpreter'],'-I','-B','-m','lax_connector.linux_worker',
+                    '--spec',str(file),'--inspect','--inspection-owner',pin['ownerAgentId'],
+                    '--expected-spec-sha256',pin['originalSpecSha256']]
+        process=await asyncio.create_subprocess_exec(*actual,
             stdin=asyncio.subprocess.DEVNULL,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
         out,err=await process.communicate()
-        saved(directory/('inspect-result.json' if inspect else 'initial-result.json'),
-              {'returncode':process.returncode,'stderr':err.decode(errors='replace')[-4000:]})
+        saved(output,{'returncode':process.returncode,'stderr':err.decode(errors='replace')[-4000:],
+                      **({'runtime':pin} if pin else {})})
         if process.returncode:raise HostProvisionUnconfirmed('Original local provisioning requires inspection: '+operation)
         try:result=json.loads(out)
         except (ValueError,TypeError) as error:raise HostProvisionUnconfirmed('Original local provisioning reply unavailable: '+operation) from error
         if result.get('authorityId')!=spec['authorityId'] or result.get('agentId')!=agent:
             raise HostProvisionUnconfirmed('Original local provisioning identity mismatch: '+operation)
+        if pin:
+            accepted=result.get('maintenanceRuntime',{})
+            if (any(accepted.get(k)!=v for k,v in pin.items())
+                    or not accepted.get('acceptedReleaseOperation') or not accepted.get('acceptedReleaseDigest')):
+                raise HostProvisionUnconfirmed('Original maintenance acceptance differs: '+operation)
+            saved(output,{'state':'accepted','runtime':pin,'receipt':result})
         return result
     try:result=await execute(prior)
     except HostProvisionUnconfirmed:
         if prior:raise
         result=await execute(True)
     saved(dispatch,{'state':'accepted','agentId':agent,'operationId':operation,'receipt':result})
+    return outcome(spec,room,result)
+
+
+def outcome(spec,room,result):
     readiness=result.get('executionRegistration') or result.get('inspection',{}).get('executionRegistration',{})
-    return {'agentId':agent,'roomId':room,'hostId':spec['hostId'],'executionProvisioned':True,
+    return {'agentId':spec['agentId'],'roomId':room,'hostId':spec['hostId'],'executionProvisioned':True,
             'executionReady':readiness.get('ready') is True,
             'worker':result,'note':'Local native service provisioned; this is not completion of any room task.'}

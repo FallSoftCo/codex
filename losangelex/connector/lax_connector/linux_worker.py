@@ -437,7 +437,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--inspect", action="store_true")
+    parser.add_argument("--inspection-owner")
+    parser.add_argument("--expected-spec-sha256")
     args = parser.parse_args()
+    if args.inspection_owner or args.expected_spec_sha256:
+        if not args.inspect or not args.inspection_owner or not args.expected_spec_sha256:
+            parser.error("Maintenance inspection requires --inspect, owner and original spec SHA256")
+        from .room_host_inspection import inspect_original
+        print(json.dumps(inspect_original(args.spec, args.inspection_owner, args.expected_spec_sha256)))
+        return
     method = inspect_completed if args.inspect else provision
     print(json.dumps(method(json.loads(args.spec.read_text()))))
 

@@ -134,7 +134,10 @@ def inspect(authority, host, agent):
             "reason": "reviewed-restart-approval-required",
         }
     try:
-        package = preflight_as_owner(binary, spec["interpreter"], uid, home)
+        from .shared_account import package_context
+        service_home, package_args = package_context(spec, uid, home)
+        package = preflight_as_owner(binary, spec["interpreter"], uid, service_home,
+                                     **package_args)
     except PackageError as error:
         return {
             **result,
