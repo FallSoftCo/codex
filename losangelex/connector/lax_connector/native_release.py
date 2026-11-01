@@ -172,8 +172,21 @@ def prepare(authority, host, agent, request, output):
         old_root, new_root = [Path(request[k]) for k in ("oldReleaseRoot", "newReleaseRoot")]
         old_binary, new_binary = [Path(request[k]) for k in ("oldBinary", "newBinary")]
         old_python, new_python = [Path(request[k]) for k in ("oldInterpreter", "newInterpreter")]
-        for path, release in ((old_binary, old_root), (old_python, old_root),
-                              (new_binary, new_root), (new_python, new_root)):
+        retained_native = None
+        if 'retainNativeImage' in request:
+            if (request['retainNativeImage'] is not True or not config.get('nativeServer')
+                    or config.get('runtimeMode') != 'room-conversation' or old_binary != new_binary
+                    or any(k in request for k in ('sharedNativeUpgrade','newNativeServer'))
+                    or request.get('newConversationDynamicTools', config.get('conversationDynamicTools')) != config.get('conversationDynamicTools')):
+                raise ValueError('Connector-only native dependency must retain the exact shared image and bindings')
+            from .native_dependency import capture
+            retained_native = capture(config)
+        paths = [(old_python, old_root), (new_python, new_root)]
+        if retained_native is None:
+            paths += [(old_binary, old_root), (new_binary, new_root)]
+        elif any(not p.is_absolute() or '..' in p.parts or not re.fullmatch(r"/[A-Za-z0-9_./+-]+",str(p)) for p in (old_binary,new_binary)):
+            raise ValueError('Literal unchanged native image paths required')
+        for path, release in paths:
             if (not path.is_absolute() or ".." in path.parts or not path.is_relative_to(release)
                     or not re.fullmatch(r"/[A-Za-z0-9_./+-]+", str(path))):
                 raise ValueError("Exact old/new paths must belong to their reviewed release and be literal unit paths")
@@ -203,7 +216,13 @@ def prepare(authority, host, agent, request, output):
         software = closure(new_root)
         probes = probe(new_binary, new_python, uid, home, new_root,
                        **({'service_home':Path(shared['identity']['serviceHome'])} if shared else {}))
-        if not Path(probes["nativePackage"]["packageRoot"]).is_relative_to(new_root):
+        if retained_native is not None:
+            from .native_dependency import pin_package, verify
+            retained_native = pin_package(retained_native, probes['nativePackage'])
+            if probes['nativePackage']['assets']['entrypoint']['sha256'] != retained_native['imageSha256']:
+                raise ValueError('Accepted native image changed during connector qualification')
+            verify(retained_native, config)
+        elif not Path(probes["nativePackage"]["packageRoot"]).is_relative_to(new_root):
             raise ValueError("Native package escaped new release")
         if closure(new_root) != software:
             raise ValueError("Release changed during actual service-UID startup")
@@ -333,6 +352,7 @@ def prepare(authority, host, agent, request, output):
                     "unitDefinitionDigest": upgraded["unitDefinitionDigest"],
                     "modelsStarted": 0, "servicesStarted": 0, "executionReady": False}
         if shared:prepared['sharedAgentIdentity']=shared['identity']
+        if retained_native is not None:prepared['retainedNative']=retained_native
         if Path(output).is_relative_to(new_root) or Path(output).is_relative_to(home):
             raise ValueError("Review output cannot modify release or private state")
         target = protected_tree(output, 0o700)

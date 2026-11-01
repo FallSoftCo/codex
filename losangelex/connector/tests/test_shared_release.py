@@ -76,4 +76,40 @@ class AttachedReleaseTests(unittest.TestCase):
         self.assertFalse(self.prepared.exists())
 
 
+    def test_connector_only_closure_keeps_original_external_native_without_links(self):
+        import shutil
+        from lax_connector import native_dependency as dependency
+        from lax_connector.service_restart import file_identity
+        # Remove the copied native package entirely: the new SDK is independent.
+        python_bytes=self.new_python.read_bytes()
+        shutil.rmtree(self.new_root/'native')
+        self.new_python=self.new_root/'venv/bin/python'
+        self.new_python.parent.mkdir(parents=True)
+        self.new_python.write_bytes(python_bytes);self.new_python.chmod(0o755)
+        self.request_spec.update(retainNativeImage=True,newBinary=str(self.binary),newInterpreter=str(self.new_python))
+        before=file_identity(self.binary)
+        retained={'schema':'lax-retained-native/v1','binary':str(self.binary),
+                  'imageSha256':hashlib.sha256(self.binary.read_bytes()).hexdigest()}
+        self.enterContext(patch.object(dependency,'capture',return_value=retained))
+        self.enterContext(patch.object(dependency,'pin_package',side_effect=lambda r,p:r))
+        verify=self.enterContext(patch.object(dependency,'verify'))
+        self.prepare()
+        plan=json.loads((self.prepared/'release-plan.json').read_text())
+        self.assertEqual(plan['retainedNative'],retained)
+        self.assertEqual(plan['newBinary'],str(self.binary))
+        self.assertFalse((self.new_root/'native').exists())
+        self.assertFalse(any(x['path'].startswith('native/') for x in plan['closure']['entries']))
+        self.approve()
+        self.assertTrue(verify.called)
+        self.assertEqual(file_identity(self.binary),before)
+        self.assertEqual(json.loads((self.home/'connector.json').read_text())['binary'],str(self.binary))
+
+    def test_retained_dependency_rejects_even_a_same_inode_binary_alias(self):
+        self.request_spec['retainNativeImage']=True
+        self.assertTrue(os.path.samefile(self.binary,self.new_binary))
+        with self.assertRaisesRegex(ValueError,'retain the exact shared image'):
+            self.prepare()
+        self.assertFalse(self.prepared.exists())
+
+
 if __name__=='__main__':unittest.main()

@@ -211,6 +211,12 @@ def derived_python_caches(software, root):
 
 
 def _closure_identity(plan):
+    if plan.get('retainedNative') is not None:
+        from .native_dependency import verify
+        original = image.json.loads(base64.b64decode(plan['targets'][0]['before']))
+        if plan['newBinary'] != plan['oldBinary'] or plan.get('sharedNativeUpgrade'):
+            raise ValueError('Unchanged native dependency cannot perform an engine transition')
+        verify(plan['retainedNative'], original)
     software = plan["closure"]
     root = Path(software["root"])
     handle = image._open_directory(root)
