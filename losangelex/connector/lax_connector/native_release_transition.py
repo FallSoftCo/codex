@@ -199,7 +199,15 @@ def derived_python_caches(software, root):
     expected=set(software['identities']);actual={p.relative_to(root).as_posix() for p in root.rglob('*')}
     if expected-actual:raise ValueError('Reviewed release entry set changed')
     files={r['path']:r for r in software['entries'] if r['kind']=='file'};directories=set()
+    new_directories=set()
     for relative in actual-expected:
+        path=root/relative;info=path.lstat()
+        if stat.S_ISDIR(info.st_mode):
+            if (path.name!='__pycache__' or info.st_uid!=0 or info.st_mode&0o022
+                    or (path.parent!=root and path.parent.relative_to(root).as_posix() not in expected)):
+                raise ValueError('Unreviewed directory is not a protected Python cache')
+            new_directories.add(relative)
+    for relative in (actual-expected)-new_directories:
         path=root/relative;info=path.lstat()
         suffix='.'+sys.implementation.cache_tag+'.pyc'
         if (path.parent.name!='__pycache__' or not path.name.endswith(suffix)
@@ -213,6 +221,10 @@ def derived_python_caches(software, root):
                 or marshal.loads(data[16:])!=compile(source.read_bytes(),str(source),'exec',dont_inherit=True,optimize=0)):
             raise ValueError('Python cache differs from original sealed code')
         directories.add(path.parent.relative_to(root).as_posix())
+    if not new_directories <= directories:
+        raise ValueError('New Python cache directory has no proved derived contents')
+    # A new cache changes only its reviewed parent directory metadata.
+    directories.update((root/relative).parent.relative_to(root).as_posix() for relative in new_directories)
     return directories
 
 
@@ -225,13 +237,16 @@ def _closure_identity(plan):
         verify(plan['retainedNative'], original)
     software = plan["closure"]
     root = Path(software["root"])
+    cache_directories=derived_python_caches(software,root)
     handle = image._open_directory(root)
     try:
-        if list(image._identity(os.fstat(handle))) != software["rootIdentity"]:
+        observed_root=list(image._identity(os.fstat(handle)))
+        identity=software["rootIdentity"]
+        if (observed_root != identity
+                and not ("." in cache_directories and observed_root[:2]+observed_root[5:]==identity[:2]+identity[5:])):
             raise ValueError("Reviewed release directory changed")
     finally:
         os.close(handle)
-    cache_directories=derived_python_caches(software,root)
     files = {row["path"]: row for row in software["entries"] if row["kind"] == "file"}
     for relative, identity in software["identities"].items():
         path = root / relative

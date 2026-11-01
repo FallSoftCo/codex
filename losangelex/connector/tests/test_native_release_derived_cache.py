@@ -11,6 +11,19 @@ class DerivedCacheTest(unittest.TestCase):
    _closure_identity(plan)
    p.write_bytes(importlib.util.MAGIC_NUMBER+b'\0'*12+marshal.dumps(compile('value=99',str(source),'exec',dont_inherit=True)))
    with self.assertRaisesRegex(ValueError,'differs from original'):_closure_identity(plan)
+ def test_new_protected_cache_directory_and_parent_metadata(self):
+  for nested in (False,True):
+   with tempfile.TemporaryDirectory(dir='/var/lib') as tmp:
+    root=Path(tmp);package=root/'package' if nested else root;package.mkdir(exist_ok=True)
+    source=package/'module.py';source.write_text('value=42\n');plan={'closure':closure(root)}
+    cache=package/'__pycache__';cache.mkdir()
+    with self.assertRaisesRegex(ValueError,'no proved derived contents'):_closure_identity(plan)
+    p=cache/('module.'+__import__('sys').implementation.cache_tag+'.pyc');p.write_bytes(importlib.util.MAGIC_NUMBER+b'\0'*12+marshal.dumps(compile(source.read_bytes(),str(source),'exec',dont_inherit=True)))
+    _closure_identity(plan)
+    (cache/'unrelated').write_text('no')
+    with self.assertRaisesRegex(ValueError,'not a derived Python cache'):_closure_identity(plan)
+    (cache/'unrelated').unlink();cache.chmod(0o777)
+    with self.assertRaisesRegex(ValueError,'not a protected Python cache'):_closure_identity(plan)
  def test_arbitrary_additions_and_missing_source_are_rejected(self):
   with tempfile.TemporaryDirectory(dir='/var/lib') as tmp:
    root=Path(tmp);source=root/'module.py';source.write_text('value=42\n');plan={'closure':closure(root)};(root/'unknown.py').write_text('value=0\n')

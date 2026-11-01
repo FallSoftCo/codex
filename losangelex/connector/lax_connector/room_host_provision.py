@@ -78,7 +78,7 @@ async def provision(transport,arguments,operation):
     if file.exists() and json.loads(file.read_text())!=spec:
         raise HostProvisionUnconfirmed('Original host provisioning specification changed; inspect it on its original host: '+operation)
     if not file.exists():saved(file,spec)
-    command=['sudo','-n',spec['interpreter'],'-m','lax_connector.linux_worker','--spec',str(file)]
+    command=['sudo','-n',spec['interpreter'],'-I','-B','-m','lax_connector.linux_worker','--spec',str(file)]
     prior=dispatch.exists()
     if not prior:saved(dispatch,{'state':'dispatching','agentId':agent,'operationId':operation})
     # A local installation may already have created its account/unit even if its
