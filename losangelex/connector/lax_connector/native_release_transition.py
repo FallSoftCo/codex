@@ -55,14 +55,20 @@ def states(plan, root_fd):
                   for k in ("before", "after")]
         if checksum not in hashes:
             raise ValueError("Recorded configuration/unit bytes are uncertain")
-        result.append(hashes.index(checksum))
+        result.append(None if hashes[0] == hashes[1] else hashes.index(checksum))
     enrolled = image._json(root_fd, "enrollment.json")
     if enrolled not in (plan["priorEnrollment"], plan["approvedEnrollment"]):
         raise ValueError("Enrollment is neither original nor prepared")
-    result.append(int(enrolled == plan["approvedEnrollment"]))
-    if result != sorted(result, reverse=True):
+    result.append(None if plan["priorEnrollment"] == plan["approvedEnrollment"]
+                  else int(enrolled == plan["approvedEnrollment"]))
+    changed = [value for value in result if value is not None]
+    if changed != sorted(changed, reverse=True):
         raise ValueError("Recorded metadata stages are not an established prefix")
-    return result
+    # Byte-identical targets are neutral: they cannot invalidate a later
+    # established write, nor prove progress before any actual change.
+    last_applied = max((i for i, value in enumerate(result) if value == 1), default=-1)
+    return [int(i <= last_applied) if value is None else value
+            for i, value in enumerate(result)]
 
 
 def status_locked(fd, operation=None):
