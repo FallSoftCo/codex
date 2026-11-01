@@ -36,9 +36,12 @@ class FactoryMaintenanceTests(unittest.TestCase):
         sha = hashlib.sha256(raw).hexdigest()
         receipt = {'authorityId': self.authority, 'agentId': original['agentId'],
                    'inspection': {'setupRepeated': False, 'modelOrServiceRestarted': False}}
+        def inspect_without_owner_lock(spec):
+            with release_fixture.image.registry_lock(self.registry):
+                return receipt
         with patch.object(maintenance, '__file__', str(module)), \
              patch.object(maintenance, 'sys', SimpleNamespace(executable=str(self.new_python))), \
-             patch.object(linux_worker, 'inspect_completed', return_value=receipt) as inspect:
+             patch.object(linux_worker, 'inspect_completed', side_effect=inspect_without_owner_lock) as inspect:
             result = maintenance.inspect_original(file, self.agent, sha)
             inspect.assert_called_once_with(original)
             self.assertEqual(result['maintenanceRuntime']['interpreter'], str(self.new_python))

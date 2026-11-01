@@ -107,7 +107,7 @@ def inspect(authority, host, agent):
     binding = observer.protected(manifest_path)
     if binding != expected:
         raise PermissionError("Registered invocation differs from actual service")
-    from .native_image_upgrade import registry_lock, require_settled_transition
+    from .native_image_upgrade import registry_read_lock as registry_lock, require_settled_transition
 
     try:
         with registry_lock(root) as fd:

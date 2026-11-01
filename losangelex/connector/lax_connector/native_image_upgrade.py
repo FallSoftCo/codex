@@ -141,6 +141,45 @@ def registry_lock(root):
         os.close(fd)
 
 
+@contextlib.contextmanager
+def registry_read_lock(root, *, timeout=5):
+    """Bounded kernel wait for a read snapshot; mutation locks stay exclusive.
+
+    util-linux flock waits in its own process, avoiding process-global signal
+    handlers or polling. The inherited open-file description keeps the shared
+    lock held by this context after the helper exits.
+    """
+    import subprocess
+    if not isinstance(timeout, (int, float)) or not 0 < timeout <= 30:
+        raise ValueError('Bounded registry read-lock timeout required')
+    fd = _open_directory(root)
+    handle = None
+    try:
+        handle = os.open('registry.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+                         0o600, dir_fd=fd)
+        _owned(os.fstat(handle), 0)
+        executable = '/usr/bin/flock'
+        info = os.stat(executable, follow_symlinks=False)
+        _owned(info, 0)
+        if not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111:
+            raise PermissionError('Protected system flock executable required')
+        with subprocess.Popen([executable, '--shared', '--timeout', str(timeout), str(handle)],
+                pass_fds=(handle,), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LC_ALL':'C'}) as child:
+            try:
+                child.communicate(timeout=timeout+1)
+            except subprocess.TimeoutExpired:
+                child.kill();child.communicate()
+                raise BlockingIOError('Registry read lock exceeded its bounded wait') from None
+            if child.returncode:
+                raise BlockingIOError('Protected registry is busy after bounded read wait')
+        yield fd
+    finally:
+        if handle is not None:
+            os.close(handle)
+        os.close(fd)
+
+
 def require_settled_transition(fd, *, check_image=True):
     # The immutable intent can precede the mutable pointer at a crash boundary.
     intents = sorted(

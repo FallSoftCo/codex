@@ -26,9 +26,9 @@ def inspect_original(file, owner, expected_sha256):
     from . import native_image_upgrade as image, native_release as release
     from . import service_observer as observer
     from .linux_worker import inspect_completed
-    # Hold only the maintenance owner's registry. Inspection of the distinct
-    # worker obtains its own lock, without changing either release or daemon.
-    with image.registry_lock(observer.directory(authority, host, owner)) as fd:
+    # Snapshot the owner, inspect the worker, then validate the owner again.
+    # Never nest registries; release writers remain exclusively serialized.
+    with image.registry_read_lock(observer.directory(authority, host, owner)) as fd:
         image.require_settled_transition(fd)
         accepted = image._json(fd, release.CURRENT)
         runtime, _, _ = release.runtime_spec(authority, owner)
@@ -47,10 +47,11 @@ def inspect_original(file, owner, expected_sha256):
                'interpreter': sys.executable, 'originalSpecSha256': expected_sha256,
                'acceptedReleaseOperation': accepted['operationId'],
                'acceptedReleaseDigest': observer.digest(accepted)}
-        result = inspect_completed(spec)
-        if file.read_bytes() != raw:
-            raise ValueError('Original factory specification changed during inspection')
+    result = inspect_completed(spec)
+    if file.read_bytes() != raw:
+        raise ValueError('Original factory specification changed during inspection')
+    with image.registry_read_lock(observer.directory(authority, host, owner)) as fd:
         image.require_settled_transition(fd)
         if image._json(fd, release.CURRENT) != accepted:
             raise ValueError('Owning maintenance release changed during inspection')
-        return {**result, 'maintenanceRuntime': pin}
+    return {**result, 'maintenanceRuntime': pin}
