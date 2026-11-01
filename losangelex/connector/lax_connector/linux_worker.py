@@ -27,6 +27,10 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
     from .runtime_mode import require_worker_context
     mode=require_worker_context(spec)
     profile = execution_profile(spec, profile)
+    from .shared_account import attachment
+    account_binding=attachment(spec,home)
+    if account_binding and profile!='unrestricted':
+        raise PermissionError('Shared accounts cannot become restricted workers')
     result = {
         **({"runtimeMode": spec["runtimeMode"]} if "runtimeMode" in spec else {}),
         "hollywoodUrl": spec["hollywoodUrl"],
@@ -35,7 +39,7 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
         "hostId": spec["hostId"],
         "state": str(home / "state"),
         "binary": spec["binary"],
-        "codexHome": str(home / "codex-home"),
+        "codexHome": account_binding['manifest']['codexHome'] if account_binding else str(home / "codex-home"),
         "workspace": str(home / "work"),
         "model": spec["model"],
         "effort": spec["effort"],
@@ -75,7 +79,7 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
         if shared is not None:
             result["nativeServer"]=shared
         if native_context is not None:
-            expected={"authorityId":authority,"agentId":agent,"codexHome":str(home/"codex-home"),"nativeState":str(profile_state(spec,home))}
+            expected={"authorityId":authority,"agentId":agent,"codexHome":result['codexHome'],"nativeState":str(profile_state(spec,home))}
             if native_context.get("state")!="ready" or native_context.get("binding")!=expected or not native_context.get("nativeThreadId"):
                 raise ValueError("Original named native context receipt differs")
             result["nativeThreadId"]=native_context["nativeThreadId"]
@@ -88,6 +92,8 @@ def expected_unit(spec, agent, user, home, profile=None):
     from .host_native import selection, unit_name
     native_unit=unit_name(spec['authorityId'],spec['hostId']) if selection(spec,home) else None
     native_dependencies=("\nWants="+native_unit+"\nAfter="+native_unit) if native_unit else ""
+    if native_unit and spec.get('nativeHostAttachment'):
+        native_dependencies="\nAfter="+native_unit  # Never start a deliberately stopped owner's daemon.
     return f"""[Unit]
 Description=LAX Hollywood worker {agent}
 After=network-online.target{native_dependencies}
@@ -148,13 +154,16 @@ def inspect_completed(spec):
     user = "hworker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12]
     unit = "lax-worker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12]
     home = record / "home"
-    account = pwd.getpwnam(user)
+    from .shared_account import attachment
+    shared=attachment(spec,home,require_receipt=True)
+    account = shared['account'] if shared else pwd.getpwnam(user)
+    user=account.pw_name
     if (receipt["authorityId"], receipt["agentId"], receipt["linuxUser"], receipt["uid"],
         receipt["workspace"], receipt["unit"], account.pw_dir) != (
-        authority, agent, user, account.pw_uid, str(home / "work"), unit, str(home)
+        authority, agent, user, account.pw_uid, str(home / "work"), unit, shared['identity']['serviceHome'] if shared else str(home)
     ):
         raise ValueError("Original worker identity differs")
-    for path in (home, home / "work", home / "state", home / "codex-home"):
+    for path in (home, home / "work", home / "state", Path(shared['manifest']['codexHome']) if shared else home / "codex-home"):
         if path.is_symlink() or not path.is_dir() or path.stat().st_uid != account.pw_uid:
             raise ValueError("Original worker path ownership changed")
     config_file = home / "connector.json"
@@ -210,6 +219,8 @@ def provision(spec):
     if os.geteuid() != 0:
         raise PermissionError("Worker provisioning requires a verified administrator")
     authority, agent = str(UUID(spec["authorityId"])), str(UUID(spec["agentId"]))
+    from .shared_account import attachment, worker_home
+    shared=attachment(spec,worker_home(spec))  # Fail before any OS/account/intent effect.
     if spec.get("machineIdentity") and spec["machineIdentity"] != hashlib.sha256(Path("/etc/machine-id").read_bytes()).hexdigest():
         raise ValueError("Provisioning host identity differs")
     base = Path("/var/lib/harness") / authority
@@ -243,9 +254,11 @@ def provision(spec):
         raise ValueError("Worker home cannot be a symlink")
     prior_receipt = record / "provision-receipt.json"
     if prior_receipt.exists():
+        if shared:shared=attachment(spec,home,require_receipt=True)
         receipt = json.loads(prior_receipt.read_text())
         account = pwd.getpwnam(receipt["linuxUser"])
-        if account.pw_uid != receipt["uid"] or account.pw_dir != str(home):
+        if (account.pw_uid != receipt["uid"] or account.pw_dir != (shared['identity']['serviceHome'] if shared else str(home))
+                or shared and account.pw_name!=shared['account'].pw_name):
             raise ValueError("Existing worker ownership changed")
         # Re-running install must preserve a deliberately stopped worker. Never
         # overwrite files in its now-untrusted home or silently enable its unit.
@@ -264,28 +277,32 @@ def provision(spec):
             "serviceActiveState": state,
             "modelOrServiceRestarted": False,
         }
-    try:
-        account = pwd.getpwnam(user)
-        if account.pw_dir != str(home):
-            raise ValueError("Existing Linux identity belongs to another worker")
-    except KeyError:
-        run(
-            "useradd",
-            "--system",
-            "--user-group",
-            "--create-home",
-            "--home-dir",
-            str(home),
-            "--shell",
-            "/bin/bash",
-            user,
-        )
-        account = pwd.getpwnam(user)
+    if shared:
+        account=shared['account'];user=account.pw_name
+        if home.exists() and home.stat().st_uid!=account.pw_uid:
+            raise ValueError('Existing shared agent home requires original-owner reconciliation')
+        if (home/'codex-home').exists():
+            raise ValueError('Private per-agent profile cannot be implicitly merged')
+        if not (record/'shared-native-account.json').exists():
+            saved(record/'shared-native-account.json',shared['receipt'])
+        home.mkdir(mode=0o700,exist_ok=True)
+        os.chown(home,account.pw_uid,account.pw_gid)
+    else:
+        try:
+            account = pwd.getpwnam(user)
+            if account.pw_dir != str(home):
+                raise ValueError("Existing Linux identity belongs to another worker")
+        except KeyError:
+            run("useradd", "--system", "--user-group", "--create-home",
+                "--home-dir", str(home), "--shell", "/bin/bash", user)
+            account = pwd.getpwnam(user)
     home.chmod(0o700)
-    for name in ["work", "state", "codex-home"]:
+    for name in (["work", "state"] if shared else ["work", "state", "codex-home"]):
         path = home / name
         if path.is_symlink():
             raise ValueError("Worker private path cannot be a symlink")
+        if shared and path.exists() and path.stat().st_uid!=account.pw_uid:
+            raise ValueError('Shared agent path owner changed')
         path.mkdir(mode=0o700, exist_ok=True)
         path.chmod(0o700)
         os.chown(path, account.pw_uid, account.pw_gid)
@@ -303,13 +320,16 @@ def provision(spec):
         os.chown(config_file, account.pw_uid, account.pw_gid)
     source_auth = Path(spec["approvedModelAuthFile"])
     auth = home / "codex-home/auth.json"
-    if auth.exists() and auth.read_bytes() != source_auth.read_bytes():
+    if not shared and auth.exists() and auth.read_bytes() != source_auth.read_bytes():
         raise ValueError("Model credential rotation requires explicit reconciliation")
-    if not auth.exists():
+    if not shared and not auth.exists():
         shutil.copyfile(source_auth, auth)
-    auth.chmod(0o600)
-    os.chown(auth, account.pw_uid, account.pw_gid)
-    package = preflight_as_owner(spec["binary"], spec["interpreter"], account.pw_uid, home)
+    if not shared:
+        auth.chmod(0o600)
+        os.chown(auth, account.pw_uid, account.pw_gid)
+    service_home=Path(shared['identity']['serviceHome']) if shared else home
+    package = preflight_as_owner(spec["binary"], spec["interpreter"], account.pw_uid, service_home,
+                                 **({'workspace':home/'work'} if shared else {}))
     run(
         "runuser",
         "-u",
@@ -341,7 +361,7 @@ def provision(spec):
         saved(record/"native-context-receipt.json",native_context)
         saved(config_file,config);os.chown(config_file,account.pw_uid,account.pw_gid)
     profile = execution_profile(spec)
-    if profile == "unrestricted":
+    if profile == "unrestricted" and not shared:
         sudo_file = Path("/etc/sudoers.d") / ("harness-worker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12])
         expected_sudo = f"{user} ALL=(ALL:ALL) NOPASSWD: ALL\n"
         if sudo_file.exists() and sudo_file.read_text() != expected_sudo:
@@ -397,6 +417,7 @@ def provision(spec):
         "modelsStartedByProvisioning": 0,
         "modelAccountProved": False,
         "nativePackage": package,
+        **({'sharedNativeAccount':shared['identity'],'serviceHome':str(service_home),'home':str(home)} if shared else {}),
         "serviceMemoryMaxBytes": spec.get("serviceMemoryMaxBytes", 2 * 1024**3),
     }
     saved(record / "provision-receipt.json", receipt)

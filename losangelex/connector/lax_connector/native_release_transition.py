@@ -246,8 +246,9 @@ def _closure_identity(plan):
 def finish(root, fd, intent):
     authority, host, agent = intent["scope"]
     uid, home = intent["uid"], Path(intent["home"])
+    physical_args,probe_args=release.identity_arguments(intent)
     settled_definitions(root)
-    if release.physical(home, uid) != intent["physical"]:
+    if release.physical(home, uid,**physical_args) != intent["physical"]:
         raise ValueError("Original private physical paths changed")
     if release.closure(intent["newReleaseRoot"]) != intent["closure"]:
         raise ValueError("Reviewed complete software closure changed")
@@ -256,7 +257,7 @@ def finish(root, fd, intent):
             or list(image._identity(Path(intent["oldReleaseRoot"]).stat())) != intent["oldRootIdentity"]):
         raise ValueError("Original reviewed software paths changed")
     if release.probe(Path(intent["newBinary"]), Path(intent["newInterpreter"]), uid, home,
-                     Path(intent["newReleaseRoot"])) != intent["probes"]:
+                     Path(intent["newReleaseRoot"]),**probe_args) != intent["probes"]:
         raise ValueError("Actual service-UID package/interpreter proof changed")
     if intent.get('sharedNativeUpgrade'):
         from .shared_native_release import offline as shared_offline
@@ -266,7 +267,8 @@ def finish(root, fd, intent):
         if original.get('runtimeMode')!='room-conversation':
             raise ValueError('Historical journals cannot bypass active execution drainage')
         read=release.transport_inspect(intent['newInterpreter'],uid,Path(intent['targets'][0]['path']),
-            intent['transportAdoption']['nativeServer']['manifest'])
+            intent['transportAdoption']['nativeServer']['manifest'],
+            **({'shared_client':True} if intent.get('sharedAgentIdentity') else {}))
         if read['nativeThreadId']!=original['nativeThreadId']:
             raise ValueError('Original native context changed')
     with contextlib.ExitStack() as stack:
@@ -304,7 +306,7 @@ def finish(root, fd, intent):
                            intent["priorEnrollment"], definition, fd)
             image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"))
             _closure_identity(intent)
-            if release.physical(home, uid) != intent["physical"]:
+            if release.physical(home, uid,**physical_args) != intent["physical"]:
                 raise ValueError("Original physical identities changed")
             current_lock = os.stat("connector.lock", dir_fd=state_fd, follow_symlinks=False)
             if (current_lock.st_dev, current_lock.st_ino) != (os.fstat(lock).st_dev, os.fstat(lock).st_ino):

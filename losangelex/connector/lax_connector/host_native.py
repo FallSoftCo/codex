@@ -35,6 +35,9 @@ def selection(spec, home):
 
 
 def profile_state(spec, home):
+    from .shared_account import attachment
+    bound=attachment(spec,home)
+    if bound:return Path(bound['manifest']['state'])
     adoption=adopted_state(spec,home)
     return Path(adoption['state']) if adoption else (location(spec['authorityId'], spec['hostId']) / 'state' if selection(spec, home) else home / 'state/native')
 
@@ -99,6 +102,20 @@ def unit(value, memory_max=8*1024**3):
 def ensure(spec, account, home):
     if os.geteuid()!=0 or selection(spec,home) is None:
         raise PermissionError('Explicit administrator host installation required')
+    from .shared_account import attachment, declaration
+    bound=attachment(spec,home,require_receipt=True)
+    if bound:
+        if account.pw_uid!=bound['account'].pw_uid or account.pw_name!=bound['account'].pw_name:
+            raise PermissionError('Shared native service identity differs')
+        value=bound['manifest']
+        previous,_=declaration(location(spec['authorityId'],spec['hostId'])/'installation.json')
+        if (previous.get('schema')!='lax-native-host-installation/v1'
+                or any(previous['manifest'].get(k)!=value.get(k) for k in
+                       ('ownerAgentId','serviceUser','codexHome','state','socket','unit'))):
+            raise ValueError('Original native host installation differs')
+        status=run('systemctl','show',value['unit'],'-p','ActiveState','--value').stdout.strip()
+        return {**previous,'manifest':value,'attachedAgentId':spec['agentId'],
+                'reconciled':True,'serviceActiveState':status,'serviceStarted':False}
     value=manifest(spec,home,account.pw_name);directory=location(spec['authorityId'],spec['hostId'])
     for path in (directory.parent,directory):
         if not path.exists():

@@ -70,6 +70,9 @@ async def provision(transport,arguments,operation):
           'approvedModelAuthFile':str(Path(config['codexHome'])/'auth.json'),
           'binary':config['binary'],'interpreter':config.get('provisionInterpreter',sys.executable),
           'model':config['model'],'effort':config['effort']}
+    if config.get('nativeServer') is not None:
+        from .shared_account import request
+        spec.update(nativeHostServer=True,nativeHostAttachment=request(config),executionProfile='unrestricted')
     directory=owner.state/('host-'+operation.removeprefix('native-admin:'));state_directory(directory, exist_ok=True)
     file=directory/'spec.private.json';dispatch=directory/'dispatch.json'
     if file.exists() and json.loads(file.read_text())!=spec:

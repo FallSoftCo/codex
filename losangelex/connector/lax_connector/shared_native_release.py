@@ -15,6 +15,10 @@ from .rpc_shared import host_manifest,validate_host_manifest
 
 
 def prepare(config,new_config,expected_manifest,expected_definition):
+    from .shared_account import attached_agents
+    clients=attached_agents(config['authorityId'],config['hostId'])
+    if clients:
+        raise ValueError('Owner-only shared engine upgrade cannot strand attached agents; coordinated multi-client release required: '+','.join(clients))
     value=host_manifest(config)
     path=Path(config['nativeServer']['manifest'])
     expected=Path('/var/lib/harness')/config['authorityId']/'native-hosts'/config['hostId']/'manifest.json'

@@ -85,8 +85,10 @@ def closure(root):
             "entries": rows, "identities": identities, "bytes": total}
 
 
-def probe(binary, interpreter, uid, home, release):
-    package = preflight_as_owner(binary, interpreter, uid, home)
+def probe(binary, interpreter, uid, home, release, *, service_home=None):
+    owner_home=Path(service_home) if service_home is not None else home
+    package = preflight_as_owner(binary, interpreter, uid, owner_home,
+                                **({'workspace':home/'work'} if service_home is not None else {}))
     if set(package["assets"]) != {"entrypoint", "codeModeHost", "bubblewrap", "ripgrep"}:
         raise ValueError("Complete native package and helper proof required")
     account = pwd.getpwuid(uid)
@@ -95,8 +97,8 @@ def probe(binary, interpreter, uid, home, release):
               "'module':c.__file__,'prefix':sys.prefix}))")
     result = subprocess.run(
         ["runuser", "-u", account.pw_name, "--", str(interpreter), "-I", "-B", "-c", script],
-        env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": str(home),
-             "CODEX_HOME": str(home / "codex-home")},
+        env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": str(owner_home),
+             "CODEX_HOME": str(owner_home / "codex-home")},
         stdin=subprocess.DEVNULL, capture_output=True, timeout=10,
     )
     if result.returncode or len(result.stdout) > 65536:
@@ -111,11 +113,16 @@ def probe(binary, interpreter, uid, home, release):
             "modelsStarted": 0, "servicesStarted": 0}
 
 
-def physical(home, uid):
+def physical(home, uid, *, spec=None):
     result = {}
-    if Path(pwd.getpwuid(uid).pw_dir) != home:
+    from .shared_account import attachment
+    shared=attachment(spec,home,require_receipt=True) if spec else None
+    if shared and shared['account'].pw_uid!=uid:
+        raise ValueError('Original shared service UID differs')
+    if not shared and Path(pwd.getpwuid(uid).pw_dir) != home:
         raise ValueError("Original NSS home differs")
-    for path in (home, home / "work", home / "state", home / "codex-home"):
+    paths=(home,home/'work',home/'state',Path(shared['manifest']['codexHome']),Path(shared['manifest']['state'])) if shared else (home,home/'work',home/'state',home/'codex-home')
+    for path in paths:
         fd = image._open_directory(path, uid)
         try:
             info = os.fstat(fd)
@@ -141,6 +148,10 @@ def prepare(authority, host, agent, request, output):
         spec, _, _ = approved_spec(authority, agent)
         uid, home, _ = observer.expected_owner(authority, agent)
         home = Path(home)
+        from .shared_account import attachment
+        shared=attachment(spec,home,require_receipt=True)
+        if shared and 'sharedNativeUpgrade' in request:
+            raise PermissionError('Only the original host owner can coordinate a shared engine release')
         config_path = home / "connector.json"
         config_bytes = config_path.read_bytes()
         config_hash, _ = file_hash(config_path, uid)
@@ -185,12 +196,13 @@ def prepare(authority, host, agent, request, output):
                 or config["agentId"] != agent or config["hostId"] != host
                 or config["state"] != str(home / "state")
                 or config["workspace"] != str(home / "work")
-                or config["codexHome"] != str(home / "codex-home")
+                or config["codexHome"] != (shared['manifest']['codexHome'] if shared else str(home / "codex-home"))
                 or before_unit.decode().splitlines().count(before_exec) != 1
                 or len(re.findall(r"(?m)^ExecStart=", before_unit.decode())) != 1):
             raise ValueError("Reviewed original connector/ExecStart identity differs")
         software = closure(new_root)
-        probes = probe(new_binary, new_python, uid, home, new_root)
+        probes = probe(new_binary, new_python, uid, home, new_root,
+                       **({'service_home':Path(shared['identity']['serviceHome'])} if shared else {}))
         if not Path(probes["nativePackage"]["packageRoot"]).is_relative_to(new_root):
             raise ValueError("Native package escaped new release")
         if closure(new_root) != software:
@@ -198,6 +210,8 @@ def prepare(authority, host, agent, request, output):
         if config_path.read_bytes() != config_bytes or unit_path.read_bytes() != before_unit:
             raise ValueError("Original configuration/unit changed during review")
         new_values = {**config, "binary": str(new_binary)}
+        if shared and not os.path.samefile(new_binary,shared['manifest']['binary']):
+            raise ValueError('Attached connector release must retain the accepted shared native image; coordinated engine release required')
         transport_probe=None
         shared_upgrade=None
         shared_targets=[]
@@ -238,9 +252,10 @@ def prepare(authority, host, agent, request, output):
         elif config.get('nativeServer'):
             from .rpc_shared import host_manifest
             selected=config['nativeServer'];host_value=host_manifest(config if shared_upgrade else {**new_values,'nativeServer':selected})
-            if host_value.get('ownerAgentId')!=agent:
+            if host_value.get('ownerAgentId')!=(shared['identity']['ownerAgentId'] if shared else agent):
                 raise ValueError('Original host transport owner changed')
-            transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'])
+            transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'],
+                                             **({'shared_client':True} if shared else {}))
             from .host import request as host_request
             pending=host_request(config['hollywoodUrl'],config['token'],'GET','connector/pending?hostId='+host)
             historical_unknown=pending.get('busy')
@@ -249,7 +264,7 @@ def prepare(authority, host, agent, request, output):
                 raise ValueError('Active original delivery must be drained before release')
             original_state=({'state':host_value['state'],'nativeThreadId':host_value['adoptedNativeThreadId'],
                              'configurationSha256':host_value['adoptedConfigurationSha256']}
-                            if 'adoptedNativeThreadId' in host_value else None)
+                            if not shared and 'adoptedNativeThreadId' in host_value else None)
             transport_probe={'historicalUnknown':historical_unknown,'nativeRead':transport_read,
                 'nativeServer':selected,'nativeThreadId':config['nativeThreadId'],
                 'nativeState':host_value['state'],'profileUnchanged':True,'originalState':original_state}
@@ -289,7 +304,7 @@ def prepare(authority, host, agent, request, output):
         upgraded = {**old, "binary": str(new_binary),
                     "binaryDevice": image_info.st_dev, "binaryInode": image_info.st_ino,
                     "unitDefinitionDigest": hashlib.sha256(new_unit).hexdigest()}
-        physical_paths = physical(home, uid)
+        physical_paths = physical(home, uid,**({'spec':spec} if shared else {}))
         targets = []
         for path, before, after, owner in (
                 (config_path, config_bytes, new_config, uid),
@@ -317,6 +332,7 @@ def prepare(authority, host, agent, request, output):
                     "approvedImageSha256": probes["nativePackage"]["assets"]["entrypoint"]["sha256"],
                     "unitDefinitionDigest": upgraded["unitDefinitionDigest"],
                     "modelsStarted": 0, "servicesStarted": 0, "executionReady": False}
+        if shared:prepared['sharedAgentIdentity']=shared['identity']
         if Path(output).is_relative_to(new_root) or Path(output).is_relative_to(home):
             raise ValueError("Review output cannot modify release or private state")
         target = protected_tree(output, 0o700)
@@ -335,11 +351,24 @@ def prepare(authority, host, agent, request, output):
                 "probes": probes, "modelsStarted": 0, "servicesStarted": 0}
 
 
-def transport_inspect(interpreter,uid,config_path,manifest):
+def transport_inspect(interpreter,uid,config_path,manifest,*,shared_client=False):
     account=pwd.getpwuid(uid)
     result=subprocess.run(['runuser','-u',account.pw_name,'--',str(interpreter),'-I','-B',
-        '-m','lax_connector.transport_adoption',str(config_path),str(manifest)],
+        '-m','lax_connector.transport_adoption',str(config_path),str(manifest),*(['--existing-client'] if shared_client else [])],
         stdin=subprocess.DEVNULL,capture_output=True,timeout=15)
     if result.returncode or len(result.stdout)>8192:
         raise ValueError('Original native context read failed; retain transport migration held')
     return json.loads(result.stdout)
+
+
+def identity_arguments(plan):
+    """Revalidate new shared layouts; legacy accepted plans remain unchanged."""
+    if 'sharedAgentIdentity' not in plan:return {},{}
+    from .service_memory import approved_spec
+    from .shared_account import attachment
+    authority,host,agent=plan['scope'];spec,_,_=approved_spec(authority,agent)
+    shared=attachment(spec,Path(plan['home']),require_receipt=True)
+    if (observer.digest(spec)!=plan['originalSpecDigest'] or not shared
+            or shared['identity']!=plan['sharedAgentIdentity'] or shared['account'].pw_uid!=plan['uid']):
+        raise ValueError('Original shared release enrollment differs')
+    return {'spec':spec},{'service_home':Path(shared['identity']['serviceHome'])}

@@ -83,6 +83,15 @@ def expected_owner(authority, agent):
     record = base / "workers" / agent
     if (intent["authorityId"], intent["agentId"]) != (authority, agent):
         raise PermissionError("Worker provisioning owner differs")
+    from .shared_account import attachment, worker_home
+    shared_home=worker_home(intent) if intent.get('nativeHostAttachment') else record/'home'
+    shared=attachment(intent,shared_home,require_receipt=True)
+    if shared:
+        if (receipt['linuxUser'],receipt['uid'])!=(shared['account'].pw_name,shared['account'].pw_uid):
+            raise PermissionError('Original shared worker account receipt differs')
+        from .native_release import active_spec
+        software=active_spec(intent,authority,intent['hostId'],agent)
+        return shared['account'].pw_uid,shared_home,software['binary']
     user = "hworker-" + authority.replace("-", "")[:8] + "-" + agent.replace("-", "")[:12]
     account = pwd.getpwnam(user)
     home = record / "home"
