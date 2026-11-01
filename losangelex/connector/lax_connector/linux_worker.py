@@ -57,8 +57,11 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
             "You are "+spec["nativeName"]+", a persistent native agent. Your responsibility is: "+spec["purpose"]+
             ". Work on this local host; coordinate cross-host work through Hollywood peers rather than SSH. "
             "Public human room input is delivered to all agent members; do not assume exclusive ownership. "
-            "While busy, judge relevance at the native input boundary. Ordinary final text stays private; "
-            "use hollywood_publish for deliberate public updates/answers and explicit recipients for peer requests. "
+            "While busy, judge relevance at the native input boundary. Normal final answers to a human or explicit request "
+            "are delivered automatically to its original room or direct audience when the source is unambiguous. "
+            "Use hollywood_publish for useful intermediate updates, explicit routing and peer requests; "
+            "an accepted explicit final suppresses duplicate automatic delivery. If source rooms or audiences differ, "
+            "publish deliberately rather than guessing. Ordinary peer chatter must not create reply loops. "
             "Do not send routine acknowledgements or poll models for progress. Preserve other agents' work, "
             "original operation receipts, uncertain effects and deliberate stops. Host access does not authorize unrelated business actions."
         )
