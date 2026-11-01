@@ -42,9 +42,13 @@ def matches_prior(value, reference):
             and observer.digest(value) == reference["digest"])
 
 
+def stage_count(plan):
+    return len(plan["targets"])+len(plan.get("sharedNativeUpgrade",{}).get("targets",[]))+1
+
+
 def states(plan, root_fd):
     result = []
-    for target in plan["targets"]:
+    for target in plan["targets"]+plan.get("sharedNativeUpgrade",{}).get("targets",[]):
         path = Path(target["path"])
         checksum, _ = file_hash(path, target["uid"])
         hashes = [hashlib.sha256(base64.b64decode(target[k], validate=True)).hexdigest()
@@ -132,11 +136,11 @@ def status_locked(fd, operation=None):
             raise ValueError("Original image transition pointer is uncertain")
         if pointer != accepted and not matches_prior(pointer, intent["priorRelease"]):
             raise ValueError("Original accepted software pointer is uncertain")
-        if (accepted is not None and stages != [1] * (len(intent["targets"])+1)
+        if (accepted is not None and stages != [1] * stage_count(intent)
                 or pointer == accepted and accepted is not None and current != accepted
-                or matches_prior(current, intent["priorIndex"]) and stages != [0] * (len(intent["targets"])+1)):
+                or matches_prior(current, intent["priorIndex"]) and stages != [0] * stage_count(intent)):
             raise ValueError("Accepted/pointer stages disagree with original metadata prefix")
-        complete = stages == [1] * (len(intent["targets"])+1) and accepted and current == accepted and pointer == accepted
+        complete = stages == [1] * stage_count(intent) and accepted and current == accepted and pointer == accepted
         result.update(state="accepted" if complete else "pending", metadataStages=stages,
                       acceptedRecord=accepted is not None,
                       indexPublished=current == accepted and accepted is not None,
@@ -317,6 +321,9 @@ def finish(root, fd, intent):
         for index, target in enumerate(intent["targets"]):
             if not drained()[index]:
                 _write_target(target)
+        for index,target in enumerate(intent.get('sharedNativeUpgrade',{}).get('targets',[])):
+            if not drained()[len(intent['targets'])+index]:
+                _write_target(target)
         if not drained()[-1]:
             image._write(fd, "enrollment.json", intent["approvedEnrollment"], replace=True)
         drained()
@@ -345,7 +352,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
         plan = observer.protected(Path(prepared) / "release-plan.json")
         if observer.digest(plan) != expected_preparation or plan["scope"] != [authority, host, agent]:
             raise ValueError("Explicit reviewed preparation digest/scope required")
-        if states(plan, fd) != [0] * (len(plan["targets"])+1):
+        if states(plan, fd) != [0] * stage_count(plan):
             raise ValueError("Original metadata CAS changed; inspect without retry")
         from .service_memory import approved_spec
         if observer.digest(approved_spec(authority, agent)[0]) != plan["originalSpecDigest"]:
@@ -405,7 +412,7 @@ def reconcile(authority, host, agent, operation, expected_intent):
                     raise ValueError("Another original image/release transition remains unsettled")
         # An intent may be durable just before its pointer was published.
         if matches_prior(optional(fd, image.INDEX), intent["priorIndex"]):
-            if states(intent, fd) != [0] * (len(intent["targets"])+1):
+            if states(intent, fd) != [0] * stage_count(intent):
                 raise ValueError("Missing transition pointer with changed metadata is uncertain")
             image._write(fd, image.INDEX, intent, replace=True)
         return finish(root, fd, intent)

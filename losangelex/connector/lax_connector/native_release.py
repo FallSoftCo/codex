@@ -298,7 +298,7 @@ def prepare(authority, host, agent, request, output):
                             "mode": path.stat().st_mode & 0o777,
                             "before": base64.b64encode(before).decode(),
                             "after": base64.b64encode(after).decode()})
-        targets.extend(shared_targets)
+        if shared_upgrade:shared_upgrade["targets"]=shared_targets
         prepared = {**({"sharedNativeUpgrade":shared_upgrade} if shared_upgrade else {}),"schema": SCHEMA, "scope": scope, "state": "prepared",
                     "originalSpecDigest": observer.digest(spec), "priorEnrollment": old,
                     "approvedEnrollment": upgraded, "physical": physical_paths,

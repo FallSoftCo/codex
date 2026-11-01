@@ -74,7 +74,7 @@ def offline(plan):
     if state.is_symlink() or [info.st_dev,info.st_ino,info.st_uid]!=declaration['stateIdentity']:
         raise ValueError('Original native context storage was replaced')
     # Full target bytes are checked by the existing prefix-CAS state validator.
-    target=plan['targets'][3]
+    target=declaration['targets'][1]
     digest=observer.unit_definition(props)
     if digest not in {hashlib.sha256(base64.b64decode(target[k])).hexdigest() for k in ('before','after')}:
         raise ValueError('Native unit is outside its original paired release')

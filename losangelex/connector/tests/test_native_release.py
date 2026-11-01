@@ -465,8 +465,7 @@ class ReleaseTests(unittest.TestCase):
             extras.append({'path':str(target),'uid':0,'mode':0o600,
                 'before':base64.b64encode(target.read_bytes()).decode(),
                 'after':base64.b64encode(b'new pinned native declaration').decode()})
-        plan['targets'].extend(extras)
-        plan['sharedNativeUpgrade']={'unit':'synthetic-native-host.service'}
+        plan['sharedNativeUpgrade']={'unit':'synthetic-native-host.service','targets':extras}
         fixtures.write(path,plan)
         self.review['preparationDigest']=observer.digest(plan)
         original=transition._write_target
@@ -486,6 +485,11 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(recovered['state'],'accepted')
             self.assertEqual(recovered['metadataStages'],[1,1,1,1,1])
             self.assertEqual(self.inspect()['operationId'],status['operationId'])
+            # Existing deployed readers do not know this additive extension.
+            # They must still recognize the accepted original 2-target receipt.
+            legacy={k:v for k,v in plan.items() if k!='sharedNativeUpgrade'}
+            with image.registry_lock(self.registry) as fd:
+                self.assertEqual(transition.states(legacy,fd),[1,1,1])
             self.assertTrue(offline.called)
         for target in extras:
             self.assertEqual(Path(target['path']).read_bytes(),b'new pinned native declaration')
