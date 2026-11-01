@@ -107,6 +107,10 @@ async def main():
         await c.call('turn/start',{'threadId':ta,'input':[{'type':'text','text':'ROOM_A_RECONNECT'}]})
         reconnect_done=await asyncio.wait_for(completed['A'].get(),30)
         assert reconnect_done['turn']['status']=='completed'
+        owner_config=json.loads(config_file.read_text());owner_config.update(agentId=agents['A'],nativeThreadId=ta,state=str(root/'agent-A'))
+        owner_file=root/'inspect-owner.json';owner_file.write_text(json.dumps(owner_config))
+        owner_read=await inspect(str(owner_file),str(root/'host.json'),existing_client=True)
+        assert owner_read['nativeThreadId']==ta and owner_read['otherLoadedThreadsPreserved']==1
         changed=dict(tool,description='Changed binding must be rejected')
         try:await c.call('thread/resume',{'threadId':ta,'excludeTurns':True,'dynamicTools':[changed if x['name']==tool['name'] else x for x in TOOLS]})
         except Exception as error:assert 'cannot replace dynamic tools' in str(error)
@@ -119,7 +123,7 @@ async def main():
         current_image=Path('/proc',str(process.pid),'exe').stat()
         assert (current_image.st_dev,current_image.st_ino)==(native_image.st_dev,native_image.st_ino)
         assert any('RESULT_ROOM_B' in json.dumps(v) for v in events['B'])
-        result={'state':'passed','nativeServerPid':process.pid,'nativeStartTicks':startticks,'logicalAgents':agents,'separateThreads':[ta,tb],'separateWorkspaces':True,'loadedNativeToolCount':len(TOOLS),'nativeToolsSha256':hashlib.sha256(json.dumps(TOOLS,sort_keys=True,separators=(',',':')).encode()).hexdigest(),'callbackOwnersVerified':True,'actualRoomToolsPublicationReceipts':messages,'heldAWhileBCompleted':True,'interruptAWithoutStoppingB':True,'disconnectAWithoutStoppingDaemon':True,'BNextTurnCompleted':True,'reconnectOriginalA':True,'reconnectedAPublishedAsA':True,'existingClientInspectionPreservedOtherThread':read,'oldAdoptionDrainageGuardRetained':True,'identicalLoadedToolAttachmentAccepted':True,'differentLoadedToolsRejected':True,'crossThreadConnectorCallRejected':True,'localSyntheticProviderRequests':len(requests),'realProviderCalls':0,'syntheticHollywoodOnly':True,'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
+        result={'state':'passed','nativeServerPid':process.pid,'nativeStartTicks':startticks,'logicalAgents':agents,'separateThreads':[ta,tb],'separateWorkspaces':True,'loadedNativeToolCount':len(TOOLS),'nativeToolsSha256':hashlib.sha256(json.dumps(TOOLS,sort_keys=True,separators=(',',':')).encode()).hexdigest(),'callbackOwnersVerified':True,'actualRoomToolsPublicationReceipts':messages,'heldAWhileBCompleted':True,'interruptAWithoutStoppingB':True,'disconnectAWithoutStoppingDaemon':True,'BNextTurnCompleted':True,'reconnectOriginalA':True,'reconnectedAPublishedAsA':True,'existingClientInspectionPreservedOtherThread':read,'existingOwnerInspectionPreservedOtherThread':owner_read,'oldAdoptionDrainageGuardRetained':True,'identicalLoadedToolAttachmentAccepted':True,'differentLoadedToolsRejected':True,'crossThreadConnectorCallRejected':True,'localSyntheticProviderRequests':len(requests),'realProviderCalls':0,'syntheticHollywoodOnly':True,'productionChanged':False};(root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
     finally:
         release.set()
         for c in clients:

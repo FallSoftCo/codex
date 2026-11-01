@@ -56,6 +56,10 @@ class SharedAccountTests(unittest.TestCase):
         shared.authorize(self.authority,self.host,self.spec['nativeHostAttachment']['manifestSha256'])
         with self.assertRaisesRegex(ValueError,'CAS'):
             shared.authorize(self.authority,self.host,'0'*64)
+        pending=self.root/'pending-owner';pending.mkdir(mode=0o700)
+        saved(pending/'image-held-intent.json',{'schema':'lax-native-release-upgrade/v1','state':'intent'})
+        with patch.object(observer,'directory',return_value=pending),self.assertRaisesRegex(ValueError,'explicit reconciliation'):
+            shared.attachment(self.spec,shared.worker_home(self.spec))
         for change in ({'executionProfile':'restricted'},{'nativeHostServer':False},{'nativeHostAttachment':None}):
             with self.subTest(change=change),self.assertRaises((PermissionError,ValueError)):
                 shared.attachment({**self.spec,**change},shared.worker_home(self.spec))

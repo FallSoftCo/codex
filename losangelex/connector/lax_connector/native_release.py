@@ -255,7 +255,7 @@ def prepare(authority, host, agent, request, output):
             if host_value.get('ownerAgentId')!=(shared['identity']['ownerAgentId'] if shared else agent):
                 raise ValueError('Original host transport owner changed')
             transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'],
-                                             **({'shared_client':True} if shared else {}))
+                                             **({'shared_client':True} if not shared_upgrade else {}))
             from .host import request as host_request
             pending=host_request(config['hollywoodUrl'],config['token'],'GET','connector/pending?hostId='+host)
             historical_unknown=pending.get('busy')

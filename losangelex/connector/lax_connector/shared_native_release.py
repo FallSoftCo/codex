@@ -66,6 +66,9 @@ def prepare(config,new_config,expected_manifest,expected_definition):
 
 
 def offline(plan):
+    from .shared_account import attached_agents
+    if attached_agents(*plan['scope'][:2]):
+        raise ValueError('Owner-only engine transition cannot proceed after another client enrolled; coordinated release required')
     declaration=plan['sharedNativeUpgrade']
     props=observer.properties(declaration['unit'])
     if (props['ActiveState'] not in ('inactive','failed') or int(props['MainPID'])!=0

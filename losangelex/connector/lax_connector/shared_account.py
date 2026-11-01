@@ -179,6 +179,13 @@ def attachment(spec, home, *, require_receipt=False):
     else:
         if require_receipt:
             raise ValueError('Original shared account enrollment receipt unavailable')
+        from .service_observer import directory
+        from .native_image_upgrade import require_settled_transition
+        registry=directory(authority,host,owner)
+        if registry.exists():
+            fd=_open_directory(registry)
+            try:require_settled_transition(fd)
+            finally:os.close(fd)
         if digest != selected['manifestSha256'] or not os.path.samefile(value['binary'], spec['binary']):
             raise ValueError('Original shared host manifest/image CAS changed')
     return {'account': account, 'manifest': value, 'identity': identity, 'receipt': expected}

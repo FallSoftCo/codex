@@ -268,7 +268,7 @@ def finish(root, fd, intent):
             raise ValueError('Historical journals cannot bypass active execution drainage')
         read=release.transport_inspect(intent['newInterpreter'],uid,Path(intent['targets'][0]['path']),
             intent['transportAdoption']['nativeServer']['manifest'],
-            **({'shared_client':True} if intent.get('sharedAgentIdentity') else {}))
+            **({'shared_client':True} if original.get('nativeServer') is not None else {}))
         if read['nativeThreadId']!=original['nativeThreadId']:
             raise ValueError('Original native context changed')
     with contextlib.ExitStack() as stack:

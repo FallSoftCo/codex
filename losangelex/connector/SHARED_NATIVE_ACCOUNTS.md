@@ -64,8 +64,9 @@ separate explicit profile migration, not a policy flag on the trusted UID.
 
 Connector-only releases retain the exact accepted shared native image. Preparation
 and transition revalidate the protected binding and both logical/shared physical
-paths. Read-only inspection checks the existing agent's idle thread without
-draining other loaded agents; the original private-to-shared adoption path still
+paths. Connector-only read-only inspection, for owner and additional agents,
+checks that agent's idle thread without draining other loaded agents. The
+original private-to-shared adoption path still
 requires coordinated owner drainage. Reconciliation carries the same binding and
 does not replay input or restart the daemon.
 
@@ -73,7 +74,9 @@ does not replay input or restart the daemon.
 upgrader is not an atomic multi-client transaction. Once attachments exist, it
 fails closed with their IDs instead of stranding them. A future coordinated
 multi-client engine release/retirement workflow must be reviewed before changing
-that shared image. This candidate does not silently extend that authority.
+that shared image. The transition rechecks this inventory, and new enrollment
+refuses an unsettled owner image intent. This candidate does not silently extend
+that authority.
 
 ## Qualification and limits
 
