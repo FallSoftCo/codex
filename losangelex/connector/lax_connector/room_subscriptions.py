@@ -27,7 +27,8 @@ class RoomSubscriptions:
 
     def persist(self):
         saved(self.state/'memberships.json',{'binding':self.binding,'rooms':self.known})
-        self.on_rooms([{'roomId':room,'after':value['after']} for room,value in self.known.items() if value['member']])
+        self.on_rooms([{'roomId':room,'after':value['after'],'membershipRevision':value['revision']}
+                       for room,value in self.known.items() if value['member']])
 
     def start_room(self,room):
         prior=self.live.get(room)

@@ -50,7 +50,7 @@ class ConversationalAgent:
         from .room_activity import RoomActivity
         self.activity=RoomActivity(state=self.state/'room-activity',thread=self.thread,agent=config['agentId'],send=self.http)
         from .room_native_state import RoomNativeState
-        self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http)
+        self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http,authority=config['authorityId'])
         from .conversation_io import ConversationIO
         self.conversation_io=ConversationIO(self.state/'conversation-io.sqlite',authority=config['authorityId'],agent=config['agentId'],thread=self.thread)
         self.output=None
@@ -189,13 +189,12 @@ class ConversationalAgent:
             self.activity.start()
             self.native_state.start()
             def create(room,after):
-                self.native_state.blocked.discard(room)
                 return RoomRuntime(rpc=self.rpc,session=self.session,
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
                     token=self.config['token'],authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                     room_id=room,thread_id=self.thread,state=self.state/'rooms'/room,
                     initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt)
-            def room_set(rooms):self.native_state.rooms[:]=rooms
+            def room_set(rooms):self.native_state.set_rooms(rooms)
             from .room_subscriptions import RoomSubscriptions
             self.subscriptions=RoomSubscriptions(state=self.state/'subscriptions',authority=self.config['authorityId'],
                 agent=self.config['agentId'],thread=self.thread,rooms=self.config['rooms'],request=self.http,create=create,on_rooms=room_set)

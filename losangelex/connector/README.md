@@ -260,3 +260,27 @@ This performs GETs only under the calling agent's protected identity; no token i
 printed, copied to a prompt or passed on the command line. Server authorization
 remains authoritative. It neither creates actors nor starts native turns. There
 is no implicit worker restart or tool-inventory mutation in a running context.
+
+## Native observation recovery
+
+`RoomNativeState` preserves rejected observations and backs off metadata reads
+after HTTP 400/401/403/409. A current canonical membership revision can wake
+recovery even when the room listener is already running. Recovery requires the
+same authority, room, explicit readable/writable agent membership and native
+thread. It reconciles the canonical observation revision before publishing
+current native status; it does not repeat any room input, model turn or tool.
+Unchanged malformed payloads stay held. Real revocation stays held across
+connector restarts; missing or mismatched metadata cannot manufacture Idle.
+
+Qualification: `tests/integration_native_observation_recovery.py` uses disposable
+real PostgreSQL and authenticated HTTP, an injected backoff clock and no models.
+Run alongside `tests/integration_room_activity.py` to retain lost-ACK/outbox
+coverage. Set `ROOM_NATIVE_DATABASE` to an owned QA database configuration and
+`ROOM_RECOVERY_EVIDENCE`/`ROOM_ACTIVITY_EVIDENCE` to fresh disk-backed directories.
+Never point these fixture writers at a live authority/database.
+
+Deployment is a connector-only SDK transition after the original turn/output
+has drained, with canonical service registration and rollback retained. Native
+binaries, daemon PID, thread, profile, permissions and the 13 tool declarations
+do not change. A live heartbeat is only evidence after the real host transition;
+the HTTP/PG fixture alone is not live-room qualification.
