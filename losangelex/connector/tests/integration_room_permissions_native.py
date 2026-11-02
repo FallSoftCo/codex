@@ -110,8 +110,7 @@ async def main(binary, out):
         "nativeName": "Synthetic durable policy",
         "model": "gpt-6.1-sol",
         "effort": "xhigh",
-        "sandbox": "danger-full-access",
-        "approvalPolicy": "never",
+        # Omitted permission fields exercise the shared creation defaults.
         "instructions": "Synthetic metadata-only qualification.",
         "binary": binary,
     }

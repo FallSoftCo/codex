@@ -15,7 +15,7 @@ APPROVAL_POLICIES = {"never", "untrusted", "on-request", "on-failure"}
 
 
 def requested(config):
-    sandbox = config.get("sandbox")
+    sandbox = config.get("sandbox", "danger-full-access")
     approval = config.get("approvalPolicy", "never")
     if (
         sandbox not in SANDBOX_TYPES
