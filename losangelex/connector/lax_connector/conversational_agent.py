@@ -27,11 +27,8 @@ class ConversationalAgent:
             raise ValueError('Purpose-separated contexts require explicit adoption')
         self.config=config
         self.thread=config['nativeThreadId']
-        self.resume_instructions=config.get('conversationResumeInstructions',{})
-        if (not isinstance(self.resume_instructions,dict)
-                or set(self.resume_instructions)-{'baseInstructions','developerInstructions'}
-                or any(not isinstance(value,str) or not value.strip() for value in self.resume_instructions.values())):
-            raise ValueError('Explicit native instruction overrides must use supported nonempty fields')
+        from .room_participation import resume_overrides
+        self.resume_instructions, self.participation_adoption = resume_overrides(config)
         if not self.thread or not config.get('rooms'):
             raise ValueError('Existing native thread and explicit room boundaries required')
         # Never erase saved client tools implicitly. The initial conversational
@@ -153,9 +150,16 @@ class ConversationalAgent:
             elif not self.rpc.is_connected:
                 raise RuntimeError('Original native transport stopped; no implicit replacement')
             # No thread/start, sampling, model/permission override or history copy.
+            instruction_adoption = None
             if cold_start:
+                if self.participation_adoption:
+                    from .room_instruction_adoption import InstructionAdoption
+                    instruction_adoption = InstructionAdoption(self.config, self.rpc, self.resume_instructions)
+                    active_overrides = await instruction_adoption.begin()
+                else:
+                    active_overrides = self.resume_instructions
                 resume={'threadId':self.thread,'excludeTurns':True,
-                        'config':{'features.default_mode_request_user_input':True},**self.resume_instructions}
+                        'config':{'features.default_mode_request_user_input':True},**active_overrides}
                 # Bind this connector's reviewed tools on cold resume too: older
                 # contexts can retain creation-time legacy tools in storage. The
                 # qualified native runtime accepts identical loaded bindings and
@@ -171,9 +175,14 @@ class ConversationalAgent:
                 loaded=await self.rpc.call('thread/loaded/list',{'limit':100})
                 if self.thread not in loaded['data']:
                     raise ValueError('Selected conversation is not on the original transport')
-            saved(self.state/'conversation-resume.json',{'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start,
+            resume_receipt = {'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start,
                 'effectivePermissions':effective_permissions if cold_start else None,
-                'instructionOverridesSha256':hashlib.sha256(json.dumps(self.resume_instructions,sort_keys=True).encode()).hexdigest() if self.resume_instructions else None})
+                'instructionOverridesSha256':hashlib.sha256(json.dumps(self.resume_instructions,sort_keys=True,
+                    **({'separators':(',',':')} if instruction_adoption else {})).encode()).hexdigest() if self.resume_instructions else None,
+                'participationPolicy':self.participation_adoption,
+                **(instruction_adoption.receipt_fields() if instruction_adoption else {})}
+            saved(self.state/'conversation-resume.json',resume_receipt)
+            if instruction_adoption:instruction_adoption.complete(resume_receipt)
             # Reconcile only finals already captured locally before a connection
             # ended. This is one bounded metadata read, not model polling.
             unfinished=set(self.conversation_io.unfinished())

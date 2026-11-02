@@ -93,6 +93,59 @@ class ReleaseTests(unittest.TestCase):
                                       self.request_spec, self.prepared)
         return self.review
 
+    def configure_instruction_adoption(self):
+        from lax_connector.room_participation import VERSION, instructions_digest
+        self.config.update(runtimeMode='room-conversation', nativeThreadId='original-fixture-thread',
+            authorityId=self.authority, conversationResumeInstructions={
+                'baseInstructions': 'Original approved role', 'developerInstructions': 'Retain original restriction'})
+        manifest = self.root / 'fixture-host.json'
+        fixtures.write(manifest, {'schema': 'lax-native-host/v1', 'runtimeMode': 'room-conversation',
+            'authorityId': self.authority, 'hostId': self.host, 'ownerAgentId': self.agent,
+            'binary': str(self.binary), 'codexHome': str(self.home / 'codex-home'),
+            'state': str(self.home / 'state/native'), 'socket': str(self.root / 'unopened-fixture.socket')})
+        self.config['nativeServer'] = {'manifest': str(manifest)}
+        fixtures.write(self.home / 'connector.json', self.config)
+        self.request_spec.update(newBinary=str(self.binary), retainNativeImage=True,
+            expectedConfigurationSha256=hashlib.sha256((self.home / 'connector.json').read_bytes()).hexdigest(),
+            newConversationInstructionAdoption={'policy': VERSION,
+                'expectedResumeInstructionsSha256': instructions_digest(self.config['conversationResumeInstructions'])})
+        checksum = hashlib.sha256(self.binary.read_bytes()).hexdigest()
+        self.enterContext(patch('lax_connector.native_dependency.capture', return_value={'imageSha256': checksum}))
+        self.enterContext(patch('lax_connector.native_dependency.pin_package', side_effect=lambda value, package: value))
+        self.enterContext(patch('lax_connector.native_dependency.verify'))
+        self.enterContext(patch.object(release, 'transport_inspect', return_value={
+            'nativeThreadId': self.config['nativeThreadId'], 'status': 'idle', 'modelCalls': 0}))
+        self.enterContext(patch('lax_connector.host.request', return_value={'busy': None}))
+
+    def test_instruction_adoption_is_derived_and_pinned_in_actual_release_targets(self):
+        import base64
+        self.configure_instruction_adoption()
+        original = (self.home / 'connector.json').read_bytes()
+        review = self.prepare()
+        self.assertEqual((self.home / 'connector.json').read_bytes(), original)
+        plan = json.loads((self.prepared / 'release-plan.json').read_text())
+        after = json.loads(base64.b64decode(plan['targets'][0]['after']))
+        fields = {'conversationParticipationPolicy', 'conversationInstructionAdoptionId', 'conversationResumeInstructions'}
+        self.assertEqual({k: v for k, v in after.items() if k not in fields},
+                         {k: v for k, v in self.config.items() if k not in fields})
+        self.assertEqual(after['conversationResumeInstructions']['developerInstructions'], 'Retain original restriction')
+        self.assertEqual(review['instructionAdoption'], plan['instructionAdoption'])
+        self.assertEqual(after['conversationInstructionAdoptionId'], plan['instructionAdoption']['adoptionId'])
+        self.reload.assert_not_called()
+        accepted = self.approve()
+        self.assertEqual(accepted['state'], 'accepted')
+        self.assertEqual(json.loads((self.home / 'connector.json').read_text()), after)
+
+    def test_instruction_review_cas_failure_has_no_definition_or_config_effect(self):
+        self.configure_instruction_adoption()
+        original = (self.home / 'connector.json').read_bytes()
+        self.request_spec['newConversationInstructionAdoption']['expectedResumeInstructionsSha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'instruction CAS changed'):
+            self.prepare()
+        self.assertEqual((self.home / 'connector.json').read_bytes(), original)
+        self.assertFalse(self.prepared.exists())
+        self.reload.assert_not_called()
+
     def approve(self):
         return transition.approve(self.authority, self.host, self.agent, self.prepared,
                                   self.review["preparationDigest"])

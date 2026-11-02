@@ -16,6 +16,7 @@ from .journal import saved
 from .rpc_shared import native_client, host_manifest
 from .room_tools import TOOLS
 from .room_permissions import persist_new_thread, requested
+from .room_participation import with_policy
 
 
 async def initialize(config, *, recovery=None):
@@ -33,7 +34,10 @@ async def initialize(config, *, recovery=None):
     request={'cwd':str(workspace),'model':config['model'],**requested(config),'dynamicTools':TOOLS,
              'baseInstructions':config['instructions'],
              'config':{'model_reasoning_effort':config['effort'],'features.default_mode_request_user_input':True}}
+    legacy_request = request
+    request = {**request, 'baseInstructions': with_policy(request['baseInstructions'])}
     fingerprint=hashlib.sha256(json.dumps({'binding':binding,'name':name,'request':request},sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    legacy_fingerprint=hashlib.sha256(json.dumps({'binding':binding,'name':name,'request':legacy_request},sort_keys=True,separators=(',',':')).encode()).hexdigest()
     state_directory(state, parents=True,exist_ok=True)
     with (state/'connector.lock').open('a') as lock:
         exclusive_lock(lock)
@@ -41,6 +45,10 @@ async def initialize(config, *, recovery=None):
         prior=json.loads(file.read_text()) if file.exists() else None
         recover_original=False
         if prior:
+            # An old accepted or uncertain initialization is immutable. Do not
+            # change its request on restart just because defaults improved.
+            if prior.get('requestDigest') == legacy_fingerprint:
+                request, fingerprint = legacy_request, legacy_fingerprint
             if prior.get('binding')!=binding or prior.get('requestDigest')!=fingerprint:
                 raise ValueError('Original native initialization differs; explicit upgrade required')
             if prior.get('state')=='ready':return prior

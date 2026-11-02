@@ -293,6 +293,14 @@ def prepare(authority, host, agent, request, output):
                     or request['newConversationDynamicTools']!=TOOLS):
                 raise ValueError('Only the exact reviewed conversational tool declarations may be installed at an idle host boundary')
             new_values['conversationDynamicTools']=TOOLS
+        instruction_adoption = None
+        if 'newConversationInstructionAdoption' in request:
+            if transport_probe is None or shared_upgrade or 'newNativeServer' in request:
+                raise ValueError('Instruction adoption needs the unchanged original shared native transport')
+            from .room_participation import release_patch
+            patch, instruction_adoption = release_patch(config,
+                request['newConversationInstructionAdoption'], scope, config_hash)
+            new_values.update(patch)
         route_probe = None
         if 'newHollywoodUrl' in request or 'expectedHollywoodUrl' in request:
             from urllib.parse import urlsplit
@@ -347,6 +355,7 @@ def prepare(authority, host, agent, request, output):
                     "oldInterpreterIdentity": file_identity(old_python.resolve()),
                     "closure": software, "probes": probes, "targets": targets,
                     **({"transportAdoption":transport_probe} if transport_probe else {}),
+                    **({"instructionAdoption":instruction_adoption} if instruction_adoption else {}),
                     "imageIdentity": list(image._identity(image_info)),
                     "approvedImageSha256": probes["nativePackage"]["assets"]["entrypoint"]["sha256"],
                     "unitDefinitionDigest": upgraded["unitDefinitionDigest"],
@@ -365,6 +374,7 @@ def prepare(authority, host, agent, request, output):
                 "preparationDigest": observer.digest(prepared), "scope": scope,
                 "closureDigest": observer.digest(software),
                 "newConfigurationSha256": hashlib.sha256(new_config).hexdigest(),
+                **({"instructionAdoption":instruction_adoption} if instruction_adoption else {}),
                 **({"oldHollywoodUrl":config['hollywoodUrl'],"newHollywoodUrl":new_values['hollywoodUrl'],
                     "routeProbe":route_probe} if route_probe is not None else {}),
                 "newDefinitionSha256": hashlib.sha256(new_unit).hexdigest(),

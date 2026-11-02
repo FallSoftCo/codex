@@ -241,6 +241,80 @@ only through supported cold thread/resume, never injected into a running thread;
 the resume receipt retains their hash. Adopting an existing context must preserve
 its CODEX_HOME, native SQLite directory, identity and independently drained owner.
 
+### Direct room participation and instruction adoption
+
+`room_participation` is shared by the worker factory, new-context bootstrap and
+the original human-input envelope. Human fanout and native busy/start-or-steer
+admission are unchanged: no acknowledgement filter, keyword/length rule, hidden
+UI suppression, request reclassification or coordinator relay is introduced.
+The policy directs relevant local work from the original human input and permits
+new concrete assignments, ownership resolution, dependency requests and detailed
+handoffs. It preserves useful results, intermediate evidence, questions, explicit
+direct requests and requested summaries. Global remains a peer, not a mandatory
+dispatcher. New bootstrap also covers custom Global configurations; an accepted
+legacy initialization/provisioning receipt is not rewritten or rerun.
+
+The versioned policy also reconciles the exact known stale room bootstrap clause
+claiming all ordinary finals are private. Current room output automatically
+delivers human/reply-eligible request finals to their unambiguous original scope;
+an accepted explicit answer/blocked already supplies that final. Useful updates
+remain allowed; avoid following them with a duplicate recap. This is instruction
+guidance, not content comparison or a new output-admission heuristic.
+
+Existing loaded contexts do **not** adopt new text merely because a config field
+or SDK file changes. The native server can ignore resume overrides while another
+subscriber holds the loaded context. Use this owner-controlled procedure:
+
+1. Retain original config, role/instructions, initialization, release and pending
+   operation receipts. Select the **reviewed actual original baseInstructions**,
+   not an inferred factory default; keep any owner developer restrictions.
+2. Put only `baseInstructions` and optional `developerInstructions` into an
+   owner-private JSON. `python -m lax_connector.room_participation
+   --resume-instructions ABSOLUTE_FILE` emits a plan/config patch, never writes
+   live config or contacts native. Review its exact known legacy-clause correction
+   and appended policy. No auth/profile/config token belongs in this input.
+3. Put the emitted `releaseRequestField.newConversationInstructionAdoption` in
+   the protected existing `service_admin --prepare-release` request. It contains
+   only the policy revision and exact prior resume-instructions digest. Existing
+   `native_release.prepare` verifies the whole config/enrollment/unit CAS, derives
+   the rendered overrides itself, and pins them plus a scoped adoption ID in its
+   normal before/after config target and immutable plan. Arbitrary replacement
+   instructions are not accepted. The rendered `configPatch` is preview, not a
+   manual live-config updater. The old reviewed base must be available explicitly;
+   absent baseline evidence holds instead of guessing a factory default.
+   Drain original native input/output and unknown operations; preserve stops.
+   Stop/release only the owning connector at the accepted quiet boundary and
+   relinquish its thread subscription normally. **Do not restart shared native.**
+4. Hold exclusive connector/placement ownership while the original thread becomes
+   unloaded. The candidate checks bounded native loaded-thread metadata before
+   supported `thread/resume` with the same thread/tools/model/permissions. A new
+   client socket is not proof of a cold context; loaded/incomplete reads hold.
+   The check is not itself a distributed lock or permission to detach clients.
+5. Verify the original native identity, effective settings and resume receipt
+   (`participationPolicy`, cold-boundary flag, override hash). The connector's
+   original process lock protects a private journal bound to the release adoption
+   ID, agent/thread, rendered instructions and native socket/manifest incarnation.
+   The original native ACK is saved before acceptance. A crash after that ACK can
+   finish only the matching acceptance without another resume; an intent without
+   a matching ACK stays uncertain, never adopted merely because a thread is loaded.
+   Once accepted, a normal loaded reconnect reuses the same accepted policy and
+   omits instruction overrides, so it does not remain permanently blocked. A normal
+   cold resume carries the same rendered instructions. Keep the desired policy
+   fields; no manual remove-flag operation is required. A new native incarnation
+   or changed instructions cannot borrow the old acceptance. Retain a real
+   acceptance check; a receipt hash alone is not model-behavior evidence.
+
+Omission of the opt-in preserves existing instruction adoption behavior. Do not
+roll this into an active context, rewrite native history or re-enroll a host.
+The canonical prepare implementation here is the existing Linux release lane;
+launchd/Windows owners must pin the same reviewed config change through their
+accepted local update adapter, not overwrite sealed capsules or infer deployment
+from Linux fixture success.
+Mechanical request/receipt checks are separate from the bounded real-model
+traffic replay in `tests/eval_room_participation.py`; both retain unsuccessful
+attempts. A four-cell replay establishes only its actual scenarios, not fleet
+behavioral reliability or superiority over an already-correct baseline.
+
 ## Inspect communication administration from an existing room context
 
 Room-native declarations include `hollywood_rooms`, `hollywood_agents`,

@@ -23,7 +23,7 @@ def execution_profile(spec, override=None):
     return profile
 
 
-def expected_configuration(spec, authority, agent, home, profile=None, *, native_context=None):
+def expected_configuration(spec, authority, agent, home, profile=None, *, native_context=None, participation=True):
     from .runtime_mode import require_worker_context
     mode=require_worker_context(spec)
     profile = execution_profile(spec, profile)
@@ -74,6 +74,9 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
             if profile=="unrestricted" else
             " This installation is restricted to its configured workspace; do not escalate host privileges."
         )
+        if participation:
+            from .room_participation import with_policy
+            result['instructions'] = with_policy(result['instructions'])
         from .host_native import selection, profile_state
         shared=selection(spec,home)
         if shared is not None:
@@ -177,6 +180,13 @@ def inspect_completed(spec):
     native_context=protected(record/"native-context-receipt.json") if spec.get("runtimeMode")=="room-conversation" else None
     expected = expected_configuration(spec, authority, agent, home, profile,native_context=native_context)
     config = json.loads(config_file.read_text())
+    if not policy and config != expected:
+        # The original protected configuration digest remains authoritative.
+        # A new factory prompt must not invalidate an unchanged old install.
+        legacy_expected = expected_configuration(spec, authority, agent, home, profile,
+                                                native_context=native_context, participation=False)
+        if config == legacy_expected:
+            expected = legacy_expected
     from .native_release import runtime_spec, CURRENT
     from .service_observer import directory
     release_file = directory(authority, spec["hostId"], agent) / CURRENT

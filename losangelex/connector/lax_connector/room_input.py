@@ -6,6 +6,7 @@ models/settings, or convert agent content into human authority.
 """
 import json
 from uuid import UUID
+from .room_participation import input_guidance
 
 
 def human_input(event, *, authority_id, agent_id, thread_id):
@@ -27,7 +28,7 @@ def human_input(event, *, authority_id, agent_id, thread_id):
     metadata={'schema':'lax-room-message/v1','authorityId':authority_id,'roomId':room,
               'eventId':event_id,'authorId':author,'authorKind':'human','audience':event['audience'],
               'sourceEventId':event.get('source'),'sharedConversation':True,
-              'instruction':'This human message was delivered to all agent members of this room. If already working, assess relevance before changing course. Coordinate with peers; do not assume exclusive task ownership.'}
+              'instruction':input_guidance(event['audience'])}
     return {'threadId':thread_id,'clientUserMessageId':event_id,
             'input':[{'type':'text','text':body,'text_elements':[]}],
             'turnTrigger':'hollywood.human_room',
