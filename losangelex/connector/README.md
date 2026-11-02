@@ -272,12 +272,32 @@ current native status; it does not repeat any room input, model turn or tool.
 Unchanged malformed payloads stay held. Real revocation stays held across
 connector restarts; missing or mismatched metadata cannot manufacture Idle.
 
+The upgrade also recognizes the legacy disk shape (`pending` plus a separate
+error, no `rejected` field). It archives that exact observation and reconciles
+the canonical revision before publishing current status, never briefly sending
+an obsolete Active snapshot. This supersession is ONLY observation metadata;
+unknown command/turn journals retain their original replay rules. Healthy room
+heartbeats use independent bounded write admission while at most two quarantined
+room reads run; one slow room cannot hold the heartbeat scheduler for all rooms.
+
 Qualification: `tests/integration_native_observation_recovery.py` uses disposable
 real PostgreSQL and authenticated HTTP, an injected backoff clock and no models.
 Run alongside `tests/integration_room_activity.py` to retain lost-ACK/outbox
 coverage. Set `ROOM_NATIVE_DATABASE` to an owned QA database configuration and
 `ROOM_RECOVERY_EVIDENCE`/`ROOM_ACTIVITY_EVIDENCE` to fresh disk-backed directories.
 Never point these fixture writers at a live authority/database.
+
+The receive subscription has a separate recovery boundary. A completed listener
+denied with 401/403 revalidates exact canonical read membership with bounded
+metadata backoff, including when the membership revision has not changed. It
+then resumes the original persisted SSE cursor and receive journal, not a new
+request or native turn. Legacy room-status files are recognized on upgrade;
+saved revocations take precedence over configured membership. An unresolved
+native handoff or `needs_reconciliation` receipt never restarts through this
+path. `tests/integration_subscription_recovery.py` proves the same-revision
+repair with real HTTP/PostgreSQL/SSE and a recording native-admission stub;
+it also holds wrong-scope, revoked and unresolved-input cases. This does not
+replace live acceptance of the original waiting event after a quiet cutover.
 
 Deployment is a connector-only SDK transition after the original turn/output
 has drained, with canonical service registration and rollback retained. Native

@@ -87,6 +87,10 @@ class RoomReceiveJournal:
             WHERE authority=? AND agent=? AND state!='committed'
             ORDER BY seq,event LIMIT ?''',(authority,agent,limit))]
 
+    def has_unresolved(self,authority,agent):
+        return self.db.execute('''SELECT 1 FROM room_input WHERE authority=? AND agent=?
+            AND state='handoff' AND acknowledgement IS NULL LIMIT 1''',(authority,agent)).fetchone() is not None
+
 
 class NativeReceiptUnresolved(RuntimeError):
     """Original handoff needs native evidence; never a signal to resend."""

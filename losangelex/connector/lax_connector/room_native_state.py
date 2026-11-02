@@ -12,11 +12,21 @@ class RoomNativeState:
         self.status={'type':'unavailable','activeFlags':[]};self.source=None
         self.authority,self.now=authority,now
         self.wake=asyncio.Event();self.task=None
+        self.inflight={};self.posts=asyncio.Semaphore(4);self.reads=asyncio.Semaphore(2)
 
     def set_rooms(self,rooms):
         previous={r['roomId']:r.get('membershipRevision') for r in self.rooms}
         self.rooms[:]=[dict(r) for r in rooms]
+        joined={r['roomId'] for r in rooms}
+        for identity,task in list(self.inflight.items()):
+            if identity not in joined:task.cancel()
         if any(previous.get(r['roomId'])!=r.get('membershipRevision') for r in rooms):self.wake.set()
+
+    async def request(self,method,path,payload):
+        async with self.reads if method=='GET' else self.posts:
+            if method=='POST' and {k:payload[k] for k in ('sourceEventId','status')}!=self.desired(path.split('/')[1]):
+                self.wake.set();return None  # Reconcile/supersede next pass; never dispatch known obsolete metadata.
+            return await asyncio.wait_for(self.send(method,path,payload),10)
 
     async def recover(self,room,old,path):
         """Revalidate metadata authority, never re-admit an original native input."""
@@ -27,7 +37,7 @@ class RoomNativeState:
         if (rejected['status']==400 and not changed
                 and self.desired(identity)==rejected['desired']):return False
         try:
-            reply=await asyncio.wait_for(self.send('GET','rooms/'+identity,None),10)
+            reply=await self.request('GET','rooms/'+identity,None)
             if (not self.authority or reply.get('authorityId')!=self.authority
                     or reply.get('room',{}).get('id')!=identity
                     or reply['room'].get('authority')!=self.authority):
@@ -48,10 +58,9 @@ class RoomNativeState:
                 raise ValueError('Invalid canonical observation revision')
             # The rejected payload/error stays in its original rejection receipt.
             # Publish a NEW current observation, not an input/tool/turn replay.
-            saved(path,{'revision':max(old['revision'],revision),
+            saved(path,{'journalVersion':2,'revision':max(old['revision'],revision),
                         'recovery':{'canonicalRevision':revision,'membershipRevision':members[0]['revision'],
                                     'rejectedRevision':old['pending']['revision']}})
-            self.wake.set()
             return True
         except Exception as error:
             rejected.update(attempts=rejected['attempts']+1,
@@ -60,25 +69,40 @@ class RoomNativeState:
             saved(path,old)
             return False
 
-    async def flush(self):
-        for room in list(self.rooms):
+    async def flush_room(self,room):
             identity=room['roomId'];path=self.state/(identity+'.json')
             old=json.loads(path.read_text()) if path.exists() else {'revision':0}
+            pending=old.get('pending')
+            if pending and not old.get('rejected'):
+                desired={k:pending[k] for k in ('sourceEventId','status')}
+                error_path=self.state/(identity+'-error.json')
+                error=json.loads(error_path.read_text()) if error_path.exists() else {}
+                status=error.get('error',{}).get('status') if isinstance(error.get('error'),dict) else None
+                # Old SDKs persisted only pending + a separate error and kept
+                # blocking in memory. Also supersede an unknown ACK if its
+                # observation is now obsolete: it is metadata, not a command.
+                if desired!=self.desired(identity) or old.get('journalVersion')!=2 and status in (400,401,403,409):
+                    archive=self.state/(identity+'-legacy-pending-'+str(pending['revision'])+'.json')
+                    if not archive.exists():saved(archive,{'original':old,'error':error,'nativeWorkReplayed':False})
+                    old['rejected']={'status':status,'desired':desired,'membershipRevision':None,
+                                     'attempts':0,'nextCheckAt':self.now(),'legacy':True}
+                    saved(path,old)
             if old.get('rejected'):
-                if not await self.recover(room,old,path):continue
+                if not await self.recover(room,old,path):return
                 old=json.loads(path.read_text())
             pending=old.get('pending')
             if pending is None:
                 pending={'observationType':'nativeState','nativeThread':self.thread,'revision':old['revision']+1,
                          **self.desired(identity)}
-                saved(path,{'revision':pending['revision'],'pending':pending})
+                saved(path,{'journalVersion':2,'revision':pending['revision'],'pending':pending})
             try:
-                reply=await asyncio.wait_for(self.send('POST','rooms/'+identity+'/activity',pending),10)
+                reply=await self.request('POST','rooms/'+identity+'/activity',pending)
+                if reply is None:return
                 if (not reply.get('accepted') or reply.get('agentId')!=self.agent or reply.get('roomId')!=identity
                         or reply.get('nativeThread')!=self.thread or reply.get('revision')!=pending['revision']
                         or self.authority is not None and reply.get('authorityId')!=self.authority):
                     raise ValueError('Native status receipt changed scope')
-                saved(path,{'revision':pending['revision'],'accepted':reply})
+                saved(path,{'journalVersion':2,'revision':pending['revision'],'accepted':reply})
                 if any(pending[key]!=value for key,value in self.desired(identity).items()):self.wake.set()
             except HttpFailure as error:
                 details={'error':error.public_details(),'nativeWorkReplayed':False}
@@ -88,10 +112,24 @@ class RoomNativeState:
                               'nextCheckAt':self.now()+25}
                     receipt=self.state/(identity+'-rejected-'+str(pending['revision'])+'.json')
                     if not receipt.exists():saved(receipt,{'pending':pending,**details})
-                    saved(path,{'revision':pending['revision'],'pending':pending,'rejected':rejected})
+                    saved(path,{'journalVersion':2,'revision':pending['revision'],'pending':pending,'rejected':rejected})
                 saved(self.state/(identity+'-error.json'),details)
             except Exception as error:
                 saved(self.state/(identity+'-error.json'),{'error':type(error).__name__,'nativeWorkReplayed':False})
+
+    async def flush(self,*,wait=True):
+        scheduled=[]
+        for room in list(self.rooms):
+            identity=room['roomId'];task=self.inflight.get(identity)
+            if task is None or task.done():
+                task=asyncio.create_task(self.flush_room(room));self.inflight[identity]=task
+                def finished(done,identity=identity):
+                    if self.inflight.get(identity) is done:self.inflight.pop(identity,None)
+                    if not done.cancelled() and done.exception():
+                        saved(self.state/(identity+'-error.json'),{'error':type(done.exception()).__name__,'nativeWorkReplayed':False})
+                task.add_done_callback(finished)
+            scheduled.append(task)
+        if wait:await asyncio.gather(*scheduled)
 
     def update(self,status,source):
         # Preserve precisely the native status/flags; do not infer completion
@@ -113,8 +151,12 @@ class RoomNativeState:
             try:await asyncio.wait_for(self.wake.wait(),25)
             except asyncio.TimeoutError:pass  # A cheap transport heartbeat, not inference or native RPC polling.
             self.wake.clear()
-            await self.flush()
+            # Slow quarantined-room recovery cannot delay healthy heartbeats.
+            # One in-flight operation per room, <=2 reads and <=4 writes total.
+            await self.flush(wait=False)
 
     async def close(self):
         if self.task:
             self.task.cancel();await asyncio.gather(self.task,return_exceptions=True);self.task=None
+        for task in self.inflight.values():task.cancel()
+        await asyncio.gather(*self.inflight.values(),return_exceptions=True);self.inflight.clear()

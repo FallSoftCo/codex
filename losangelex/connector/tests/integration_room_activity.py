@@ -58,25 +58,27 @@ async def main():
             # Real status transport loses its first ACK, then restarts with a
             # newer native idle status. Reconcile old revision before publishing
             # current metadata; neither stage adds a room event or model turn.
-            lost_state=asyncio.Event();idle_state=asyncio.Event();state_calls=[]
+            lost_state=asyncio.Event();idle_state=asyncio.Event();state_calls=[];state_reads=[]
             async def send_state(method,path,payload):
                 async with session.request(method,base+path,json=payload,headers={'Authorization':'Bearer '+credentials['Global']['token']}) as response:
                     value=await response.json()
                     if response.status!=200:raise HttpFailure(response.status,str(value))
+                if method=='GET':
+                    state_reads.append(path);return value
                 state_calls.append(payload['revision'])
                 if len(state_calls)==1:
                     lost_state.set();raise ConnectionError('Synthetic state ACK lost')
                 if payload['status']['type']=='idle':idle_state.set()
                 return value
-            observer=RoomNativeState(state=root/'status',thread=params['threadId'],agent=agent,rooms=[{'roomId':room}],send=send_state)
+            observer=RoomNativeState(state=root/'status',thread=params['threadId'],agent=agent,authority=authority,rooms=[{'roomId':room}],send=send_state)
             observer.update({'type':'active','activeFlags':['waitingOnUserInput']},original);observer.start()
             try:await asyncio.wait_for(lost_state.wait(),10)
             finally:await observer.close()
-            observer=RoomNativeState(state=root/'status',thread=params['threadId'],agent=agent,rooms=[{'roomId':room}],send=send_state)
+            observer=RoomNativeState(state=root/'status',thread=params['threadId'],agent=agent,authority=authority,rooms=[{'roomId':room}],send=send_state)
             observer.update({'type':'idle','activeFlags':[]},None);observer.start()
             try:await asyncio.wait_for(idle_state.wait(),10)
             finally:await observer.close()
-            assert state_calls==[1,1,2],state_calls
+            assert state_calls==[1,2] and state_reads==['rooms/'+room],(state_calls,state_reads)
             status=store.catalog(owner)['rooms'][0]['nativeState']['agents'][0]
             assert status['status']['type']=='idle' and status['revision']==2
             assert len(store.history(owner,room,0,100,None,'activity')['events'])==2
