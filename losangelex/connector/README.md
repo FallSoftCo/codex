@@ -304,3 +304,26 @@ has drained, with canonical service registration and rollback retained. Native
 binaries, daemon PID, thread, profile, permissions and the 13 tool declarations
 do not change. A live heartbeat is only evidence after the real host transition;
 the HTTP/PG fixture alone is not live-room qualification.
+
+## Original rejected publication inspection
+
+`python -m lax_connector.room_publication_inspect --config ORIGINAL_PRIVATE_CONFIG
+--key ORIGINAL_64_HEX_CALL_KEY --turn ORIGINAL_NATIVE_TURN` reads one original
+outbox receipt and its bound conversation rows under the existing local account.
+It uses a read-only SQLite transaction, not the creating/migrating ConversationIO
+constructor. It prints identifiers, body/receipt hashes and allowlisted status,
+never the message body, config token or raw error text. A changed fingerprint,
+owner/thread/source mismatch or concurrent outbox replacement fails closed.
+
+This command does not establish canonical absence, repair permissions, resend a
+rejected POST, mark it accepted, unsuppress a final or replay a native turn. A
+403 followed by a successful current room GET is not proof of the original
+publication's outcome. Keep the rejected receipt and inspect the exact original
+operation at its authoritative home before any separately reviewed recovery.
+
+For a **new** tool call whose source is a retained private canonical input, the
+publisher rejects audience/recipient/room broadening before HTTP or outbox intent.
+It does not silently rewrite the requested audience. The model can correct this
+undispatched input in a new call. Existing rejected/sending/accepted operations
+retain their original immutable payload and reconciliation behavior. Canonical
+server authorization remains required, including sources not in local history.

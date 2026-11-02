@@ -154,6 +154,12 @@ class ConversationIO:
                               (turn,)).fetchone()
         return json.loads(row['canonical']) if row else None
 
+    def input_event(self, event):
+        """Read one retained canonical input, never infer or widen its audience."""
+        row = self.db.execute('SELECT canonical FROM input_source WHERE event=?',
+                              (str(UUID(event)),)).fetchone()
+        return json.loads(row['canonical']) if row else None
+
     def rooms(self, turn):
         return {x['room'] for x in self.db.execute('SELECT DISTINCT room FROM input_source WHERE turn=?', (turn,))}
 

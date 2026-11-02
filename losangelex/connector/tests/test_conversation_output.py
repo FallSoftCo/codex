@@ -17,7 +17,7 @@ class OutputIntegration(unittest.IsolatedAsyncioTestCase):
             binding=dict(authority=authority,agent=agent,thread='original-thread')
             path=Path(root)/'io.sqlite'
             io=ConversationIO(path,**binding)
-            event=dict(id=str(uuid4()),authority=authority,room=room,author=human,
+            event=dict(id=str(uuid4()),authority=authority,room=room,author=human,recipient=agent,
                        audience='direct',data={'authorKind':'human','conversationRecipients':[agent]})
             io.stage(event)
             io.final('turn-1','final-1','La risposta è pronta.')

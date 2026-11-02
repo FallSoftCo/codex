@@ -106,6 +106,15 @@ class RoomTools:
             if source:payload['sourceEventId']=str(UUID(source))
         if payload.get('recipientId')==self.agent:raise ValueError('Self-publication is not new input')
         if audience=='direct' and not payload.get('recipientId'):raise ValueError('Private message requires recipient')
+        if not prior and self.conversation_io and payload.get('sourceEventId'):
+            source = self.conversation_io.input_event(payload['sourceEventId'])
+            if source and source.get('audience') == 'direct':
+                original = {source.get('author'), source.get('recipient')}
+                if (None in original or room != source['room'] or audience != 'direct'
+                        or {self.agent, payload.get('recipientId')} != original):
+                    raise ValueError('Private source requires a direct reply to its original counterpart '
+                                     'in the original room. No HTTP publication was dispatched; '
+                                     'correct the audience/source in a new native tool call.')
         fingerprint=hashlib.sha256(json.dumps({'room':room,'payload':payload},sort_keys=True).encode()).hexdigest()
         if prior and prior['fingerprint']!=fingerprint:raise ValueError('Original native call changed')
         if prior and prior['state']=='accepted':return prior['receipt']
