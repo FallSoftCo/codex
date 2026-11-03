@@ -1,0 +1,22 @@
+{
+  "base": "07d1e3c7b421131e8f092c4cb65799af4fe2b0d0",
+  "candidateGitCommit": null,
+  "commonFilesChanged": 0,
+  "files": {
+    "room_factory_windows.py": {
+      "candidateSha256": "2bf93497b20ca6434367fcf1833e9824c8e2a3bb1819b2e857c83397b6bfe91d",
+      "originalSha256": "91f9e6dfd5895ed17eb9766c5d2360222df661b9468c17e1c5105e99ea3a20a5"
+    },
+    "room_factory_windows_state.py": {
+      "candidateSha256": "b848cdded1ceae776170f8cf7495c7af14b0cf52855bef9278d414c210dea1f9",
+      "originalSha256": "d34954c493f36ef82119ff550b9a30857dc319564cf992fedde99ce8c57abda9"
+    },
+    "test_windows_owner_reader.py": {
+      "candidateSha256": "230ec8005ad8d9f0fdae3838e03eaa1598691492f8e008ce9f50e894b5478a94",
+      "originalSha256": null
+    }
+  },
+  "readInterface": "read_parent_acceptance(policy, *, expected_policy_sha256)",
+  "reviewOnly": true,
+  "sourceEvent": "00b74d8a-773d-4410-b99c-5e6a091e229a"
+}

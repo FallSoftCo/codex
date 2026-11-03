@@ -1,0 +1,58 @@
+{
+  "baseCommit": "07d1e3c7b421131e8f092c4cb65799af4fe2b0d0",
+  "candidateGitCommit": null,
+  "commonProductionFilesChanged": 0,
+  "exclusions": [
+    "private fixtures",
+    "real config/auth/profile/state/databases",
+    "common reference variants",
+    "live runtime"
+  ],
+  "files": {
+    "QUALIFICATION-SUMMARY.json": {
+      "bytes": 835,
+      "sha256": "8d1f3fc784cd6e59ffc9f9938b99cd4d0d78c6fa455139b6ef40684598360b8f"
+    },
+    "SOURCE-PINS.json": {
+      "bytes": 931,
+      "sha256": "a2e675b29ae7f634f70aa273b448017bad46db6eedd9a7a4e75bf5ed623e01c4"
+    },
+    "WINDOWS_PARENT_ACCEPTANCE.md": {
+      "bytes": 6016,
+      "sha256": "16a57e1c809a37948ada994cd431741149279f4d5dd0fe914a5c4ce5e33f5132"
+    },
+    "room_factory_windows.py": {
+      "bytes": 12307,
+      "sha256": "2bf93497b20ca6434367fcf1833e9824c8e2a3bb1819b2e857c83397b6bfe91d"
+    },
+    "room_factory_windows_state.py": {
+      "bytes": 15631,
+      "sha256": "b848cdded1ceae776170f8cf7495c7af14b0cf52855bef9278d414c210dea1f9"
+    },
+    "test_windows_owner_reader.py": {
+      "bytes": 8623,
+      "sha256": "230ec8005ad8d9f0fdae3838e03eaa1598691492f8e008ce9f50e894b5478a94"
+    },
+    "windows-owner-reader.patch": {
+      "bytes": 5072,
+      "sha256": "f70ed01690377f9678a1e65332889054c3e6dc1ab33dbb10516756d6987d309f"
+    }
+  },
+  "interface": "read_parent_acceptance(policy, *, expected_policy_sha256)",
+  "originalPreflightEventId": "57f43da0-b279-4ab9-9750-7aa5425d29f7",
+  "ownedProductionFiles": [
+    "room_factory_windows.py",
+    "room_factory_windows_state.py"
+  ],
+  "qualification": {
+    "exitCode": 0,
+    "nativeRpcModelManagerLifecycleActions": 0,
+    "realWindowsPrivatePathChecks": true,
+    "resultSha256": "8d1f3fc784cd6e59ffc9f9938b99cd4d0d78c6fa455139b6ef40684598360b8f",
+    "syntheticIncarnations": true
+  },
+  "realParentApprovalIssued": false,
+  "reviewOnly": true,
+  "schema": "lax-windows-parent-acceptance-source/v1",
+  "sourceEventId": "00b74d8a-773d-4410-b99c-5e6a091e229a"
+}

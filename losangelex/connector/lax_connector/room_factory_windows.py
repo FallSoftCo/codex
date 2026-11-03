@@ -65,7 +65,7 @@ def _load(spec_path,expected):
     platform.require(parent['agentId']==proof['parentAgentId'] and parent['pid']==proof['parentRuntime']['pid'],
         'Original parent agent/runtime identity differs')
     platform.require(_runtime_pid()==proof['parentRuntime']['pid'],'Factory/bootstrap must run IN existing parent runtime, never a child process')
-    acceptance=platform.read(policy['parentAcceptancePath'],policy['parentAcceptanceSha256'])
+    acceptance=platform.read_parent_acceptance(policy,expected_policy_sha256=policy_ref['sha256'])
     platform.require(_own_argv_digest()==acceptance['parentArgvSha256'],'Original in-process runtime command differs')
     platform.require(policy['nativeHostManifestSha256']==spec['nativeHostManifestSha256'],'Original descriptor SHA differs')
     _native_matches(proof['sharedNative'],spec['nativeIdentity'])

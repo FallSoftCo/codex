@@ -72,7 +72,7 @@ def native_peer(manifest):
     finally:connection.close()
 def inspect_parent(policy_path: Path, *, expected_policy_sha256: str) -> dict:
     owner=current_owner();p=read(policy_path,expected_policy_sha256)
-    require(p['schema']=='lax-windows-room-parent-policy/v1','Owner host-account policy required')
+    require(p['schema'] in ('lax-windows-room-parent-policy/v1','lax-windows-room-parent-policy/v2'),'Owner host-account policy required')
     for key in ('authorityId','hostId','parentAgentId'):require(str(UUID(p[key]))==p[key],'Canonical host policy identity required')
     require(p['ownerSidSha256']==digest(owner.encode()),'Original enrolled Windows owner differs')
     root=Path(p['agentRoot']);require(root.is_absolute() and root.resolve()==root,'Exact host-owned agentRoot required');private_path(root,directory=True)
@@ -83,8 +83,8 @@ def inspect_parent(policy_path: Path, *, expected_policy_sha256: str) -> dict:
     require(all(not root.is_relative_to(Path(manifest[k])) for k in ('codexHome','state')) and root!=Path(manifest['workspace']),'Agent homes cannot reuse original profile/state/workspace')
     # OS manager checks/admission belong to the ONE existing host boundary.
     # Per-agent work reads its accepted startup descriptor and kernel facts only.
-    accepted=read(p['parentAcceptancePath'],p['parentAcceptanceSha256'])
-    require(accepted['schema']=='lax-windows-parent-runtime-acceptance/v1'
+    accepted=read_parent_acceptance(p,expected_policy_sha256=expected_policy_sha256)
+    require(accepted['schema']==('lax-windows-parent-runtime-acceptance/v2' if p['schema']=='lax-windows-room-parent-policy/v2' else 'lax-windows-parent-runtime-acceptance/v1')
         and accepted['state']=='running' and accepted['admissionAllowed'] is True,
         'Parent runtime is not accepting logical sessions; never start or unpause it')
     require(all(accepted[k]==p[k] for k in ('authorityId','hostId','parentAgentId','nativeHostManifestSha256','parentTaskName')),
@@ -168,3 +168,29 @@ def prepare_agent(policy_path: Path, config_path: Path, operation_dir: Path, *, 
             'parentEvidence':evidence,'preparationReceipt':str(acceptance),
             'nativeInitializationDispatched':False,'logicalSessionAttached':False,
             'servicesCreated':0,'newProcesses':0,'modelCalls':0}
+
+def read_parent_acceptance(policy,*,expected_policy_sha256):
+    """V1 retains its exact pin. V2 is explicit owner-incarnation indirection.
+
+    This only READS a separately owner-issued record. Startup evidence never
+    becomes acceptance; neither this function nor the parent can issue approval.
+    """
+    policy_sha256=expected_policy_sha256
+    if policy.get('schema')=='lax-windows-room-parent-policy/v1':
+        return read(policy['parentAcceptancePath'],policy['parentAcceptanceSha256'])
+    require(policy.get('schema')=='lax-windows-room-parent-policy/v2','Explicit parent policy version required')
+    require(not any(k in policy for k in ('parentAcceptancePath','parentAcceptanceSha256')),
+        'V2 locator cannot ambiguously retain V1 acceptance pins')
+    locator=policy.get('parentAcceptanceLocator')
+    require(isinstance(locator,dict) and set(locator)=={'path'},'Exact owner acceptance locator required')
+    path=Path(locator['path']);private_path(path.parent,directory=True)
+    require(path.parent==Path(policy['parentRuntimeMetadata']).parent,'Acceptance must remain in original parent record directory')
+    accepted=read(path)
+    require(accepted.get('schema')=='lax-windows-parent-runtime-acceptance/v2'
+        and accepted.get('policySha256')==policy_sha256,'Owner acceptance is not bound to selected immutable policy')
+    operation=accepted.get('ownerAcceptanceOperationId')
+    require(isinstance(operation,str) and 1<=len(operation)<=200,'Separate original owner acceptance operation required')
+    require(all(accepted.get(k)==policy[k] for k in ('authorityId','hostId','parentAgentId','nativeHostManifestSha256','parentTaskName')),
+        'Owner acceptance scope differs from immutable host policy')
+    return accepted
+
