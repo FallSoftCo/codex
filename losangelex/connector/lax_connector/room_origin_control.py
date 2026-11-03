@@ -81,7 +81,9 @@ class RoomOriginControl:
 
     def observe(self,catalog):
         if catalog.get('authorityId')!=self.config['authorityId']:raise ValueError('Room-origin desired metadata crossed authority')
-        if self.supervisor:self.supervisor.checkpoint()
+        if self.supervisor:
+            self.supervisor.reconcile_admission()
+            self.supervisor.checkpoint()
         node=self.config.get('nodeId',self.config['hostId'])
         for slot in catalog.get('roomAgentInitializations',[]):
             if slot['node']!=node or slot['state'] not in ('pending','enrolled','blocked','unknown') or slot.get('receipt'):continue

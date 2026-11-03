@@ -11,7 +11,7 @@ from .journal import saved
 def windows_startup(config):
     from . import room_factory_windows_state as platform
     selection=config['roomOriginPolicy'];policy=platform.read(selection['path'],selection['sha256'])
-    platform.require(policy['schema']=='lax-windows-room-parent-policy/v1','Actual Windows host policy required')
+    platform.require(policy['schema'] in ('lax-windows-room-parent-policy/v1','lax-windows-room-parent-policy/v2'),'Actual Windows host policy required')
     platform.require(all(policy[k]==config[k] for k in ('authorityId','hostId')) and policy['parentAgentId']==config['agentId'],
                      'Parent startup identity differs')
     parent=platform.read(policy['parentConfigPath'])

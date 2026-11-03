@@ -67,7 +67,7 @@ def validate_spec(spec_path,expected_spec_sha256):
     return spec
 
 
-def windows_host_policy(config):
+def windows_host_policy(config,*,resident=True):
     """Normalize the OS owner's actual parent/ACL/native policy, not Linux UID."""
     from . import room_factory_windows_state as platform
     import sys
@@ -76,9 +76,12 @@ def windows_host_policy(config):
         raise PermissionError('Protected Windows parent room-session policy is missing')
     raw=platform.read(selection['path'],selection['sha256'])
     proof=platform.inspect_parent(Path(selection['path']),expected_policy_sha256=selection['sha256'])
-    platform.require(proof['parentRuntime']['pid']==os.getpid(),'Factory must run inside accepted resident host runtime')
-    acceptance=platform.read(raw['parentAcceptancePath'],raw['parentAcceptanceSha256'])
-    platform.require(platform.argv_digest(sys.orig_argv)==acceptance['parentArgvSha256'],'Accepted resident parent argv differs')
+    if resident:platform.require(proof['parentRuntime']['pid']==os.getpid(),'Factory must run inside accepted resident host runtime')
+    acceptance=platform.read_parent_acceptance(raw,expected_policy_sha256=selection['sha256'])
+    platform.require(acceptance.get('state')=='running' and acceptance.get('admissionAllowed') is True
+        and acceptance['runtimeIdentity']==proof['parentRuntime'] and acceptance['nativeIdentity']==proof['sharedNative'],
+        'Owner parent acceptance closed or changed during inspection')
+    if resident:platform.require(platform.argv_digest(sys.orig_argv)==acceptance['parentArgvSha256'],'Accepted resident parent argv differs')
     platform.require(all(raw[k]==config[k] for k in ('authorityId','hostId')) and raw['parentAgentId']==config['agentId'],
                      'Original Windows parent authority/host/agent binding differs')
     platform.require(config['nativeServer']=={'manifest':raw['nativeHostManifest']},'Original Windows shared manifest required')
@@ -172,3 +175,32 @@ def approved_defaults(config,parent,policy):
             raise PermissionError('Approved parent '+key+' differs from current host configuration')
         result[key]=value
     return result
+
+
+def parent_admission_revision(config):
+    """Protected owner-record change marker, not admission or a process proof.
+
+    Only opt-in Windows v2 has a mutable acceptance locator. A missing/invalid
+    record has no valid revision; the bounded catalog-edge fallback may inspect
+    known never-attached registrations without any timer or native input replay.
+    """
+    if os.name!='nt':return None
+    try:
+        from . import room_factory_windows_state as platform
+        selection=config['roomOriginPolicy']
+        raw=platform.read(selection['path'],selection['sha256'])
+        if raw.get('schema')!='lax-windows-room-parent-policy/v2':return None
+        acceptance=platform.read_parent_acceptance(raw,expected_policy_sha256=selection['sha256'])
+        return hashlib.sha256(json.dumps(acceptance,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    except Exception:return None
+
+
+def inspection_policy(config):
+    """Read-only release CLI validates the ACTUAL owner-accepted parent.
+
+    The inspecting CLI is not the resident parent's PID/argv. Factory/session
+    admission still calls host_policy with its strict in-parent fence; this
+    helper admits no session and never changes parent acceptance.
+    """
+    if os.name=='nt':return windows_host_policy(config,resident=False)
+    return host_policy(config)

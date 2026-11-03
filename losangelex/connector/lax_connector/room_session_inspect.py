@@ -6,7 +6,7 @@ The parent native context is still checked by the existing transport probe.
 import json,sqlite3
 from pathlib import Path
 from .runtime_files import private_file,exclusive_lock
-from .room_session_files import host_policy,digest_file
+from .room_session_files import inspection_policy as host_policy,digest_file
 
 
 def journal_counts(config):

@@ -3,19 +3,21 @@
 No child processes, OS services or native daemons. Session/thread/config bindings
 are durable; ordinary parent restart resumes only registered original threads.
 """
-import asyncio,json,os
+import asyncio,json,os,time
 from pathlib import Path
 from .journal import saved
 from .runtime_files import state_directory,private_file
-from .room_session_files import digest_file,host_policy
+from .room_session_files import digest_file,host_policy,parent_admission_revision
 
 
 class RoomSessionSupervisor:
-    def __init__(self,parent,*,session_factory=None):
+    def __init__(self,parent,*,session_factory=None,now=time.monotonic):
         self.parent=parent;self.config=parent.config
         self.state=Path(self.config['state'])/'room-sessions';state_directory(self.state,parents=True,exist_ok=True)
         self.sessions={};self.tasks={};self.records={};self.closed=False
-        self.session_factory=session_factory
+        self.session_factory=session_factory;self.now=now
+        self.parent_deferred={};self.admission_revision=None
+        self.admission_next_check=0.;self.admission_checks=0
 
     def snapshot(self):
         rows=[]
@@ -39,31 +41,85 @@ class RoomSessionSupervisor:
 
     def checkpoint(self):saved(self.state/'status.private.json',self.snapshot())
 
+    def _load_record(self,file,expected=None):
+        agent=file.stem.removeprefix('session-')
+        if agent in self.tasks:return  # includes failed/stopped original clients
+        try:
+            private_file(file);record=json.loads(file.read_text())
+            if record['agentId']!=agent or expected is not None and record!=expected:
+                raise ValueError('Original deferred logical session registration changed')
+            if record.get('state') in ('blocked','stopped'):
+                self.records[agent]=record;return  # an explicit local stop is not parent deferral
+            self._attach(record)
+        except Exception as error:
+            self.records[agent]={'originRoomId':'unavailable','nativeThreadId':'unavailable',
+                                 'state':'blocked','errorType':type(error).__name__}
+            saved(self.state/('load-failure-'+agent+'.json'),self.records[agent])
+            return error
+
+    def _admission_failed(self,error):
+        saved(self.state/'admission-blocked.private.json',{'state':'blocked','parentRuntimePid':os.getpid(),
+            'errorType':type(error).__name__,'admissionAllowed':False})
+        self.admission_checks+=1
+        self.admission_next_check=self.now()+min(300,25*2**min(self.admission_checks-1,4))
+        self.admission_revision=parent_admission_revision(self.config)
+
     def load(self):
+        if self.closed:raise RuntimeError('Original host supervisor is closing')
         if not self.config.get('roomOriginPolicy'):
             if any(self.state.glob('session-*.json')):
                 raise PermissionError('Original resident session policy is missing; do not abandon registered actors')
             return
         try:host_policy(self.config)
         except Exception as error:
-            saved(self.state/'admission-blocked.private.json',{'state':'blocked','parentRuntimePid':os.getpid(),'errorType':type(error).__name__,'admissionAllowed':False})
-            # Preserve original registrations as visibly blocked; a missing new
-            # parent admission must not crash the independent Global context.
-            for file in self.state.glob('session-*.json'):
+            self._admission_failed(error)
+            # Only registrations which have NEVER attached in this parent can
+            # be deferred. A later closure never relabels running/failed siblings.
+            for file in sorted(self.state.glob('session-*.json')):
                 try:
                     private_file(file);record=json.loads(file.read_text());agent=record['agentId']
+                    if agent!=file.stem.removeprefix('session-') or agent in self.tasks:continue
+                    previous=self.records.get(agent,{})
+                    if (record.get('state') in ('blocked','stopped') or
+                        previous.get('state') in ('blocked','stopped') and
+                        previous.get('errorType')!='ParentAdmissionUnavailable'):continue
+                    self.parent_deferred[agent]=record
                     self.records[agent]={**record,'state':'blocked','errorType':'ParentAdmissionUnavailable'}
                 except Exception:continue
             self.checkpoint();return
-        for file in sorted(self.state.glob('session-*.json')):
-            try:
-                private_file(file);record=json.loads(file.read_text());self._attach(record)
-            except Exception as error:
-                agent=file.stem.removeprefix('session-')
-                self.records[agent]={'originRoomId':'unavailable','nativeThreadId':'unavailable',
-                                     'state':'blocked','errorType':type(error).__name__}
-                saved(self.state/('load-failure-'+agent+'.json'),self.records[agent])
-        self.checkpoint()
+        for file in sorted(self.state.glob('session-*.json')):self._load_record(file)
+        self.parent_deferred.clear();self.checkpoint()
+
+    def reconcile_admission(self):
+        """Existing catalog/reconnect edge, ONLY known parent-deferred records.
+
+        No native thread/start, model wake, timer or service control. A changed
+        protected owner record allows an immediate full revalidation; otherwise
+        bounded event-driven backoff covers repaired read-only prerequisites.
+        """
+        if self.closed or not self.parent_deferred:return False
+        revision=parent_admission_revision(self.config)
+        if revision==self.admission_revision and self.now()<self.admission_next_check:return False
+        try:host_policy(self.config)
+        except Exception as error:
+            self._admission_failed(error);self.checkpoint();return False
+        restored=[]
+        for agent,record in list(self.parent_deferred.items()):
+            error=self._load_record(self.state/('session-'+agent+'.json'),expected=record)
+            if error and agent not in self.tasks:
+                try:host_policy(self.config)
+                except Exception as parent_error:
+                    # Owner admission can close while the next registration is
+                    # validated. Preserve that never-attached original, not a
+                    # separately failed session and not a new native operation.
+                    self.records[agent]={**record,'state':'blocked','errorType':'ParentAdmissionUnavailable'}
+                    self._admission_failed(parent_error);self.checkpoint();return False
+            self.parent_deferred.pop(agent,None)
+            if agent in self.tasks:restored.append(agent)
+        saved(self.state/'admission-reconciled.private.json',{'state':'reconciled','parentRuntimePid':os.getpid(),
+            'restoredAgentIds':restored,'ownerRecordRevision':revision,
+            'meaning':'Original deferred registrations only; no new native threads or admission minted'})
+        self.checkpoint();return True
 
     def attach(self,result):
         if self.closed:raise RuntimeError('Original host supervisor is closing')
