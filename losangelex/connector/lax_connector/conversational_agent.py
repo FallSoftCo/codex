@@ -99,6 +99,9 @@ class ConversationalAgent:
         if method=='thread/status/changed':self.native_state.update(params['status'],self.turn_sources.get(self.native_active_turn))
         if method=='turn/started':
             self.native_active_turn=params['turn']['id']
+            # The input ACK may precede this notification. Bind the status
+            # source now too; keep the exact native status and active flags.
+            self.native_state.update(self.native_state.status,self.turn_sources.get(self.native_active_turn))
         self.activity.record(method,params,self.turn_sources.get(params.get('turnId')))
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
         if method=='item/completed':
