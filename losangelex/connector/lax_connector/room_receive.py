@@ -10,10 +10,42 @@ import json
 import os
 import sqlite3
 from pathlib import Path
+import copy
 
 
 class ReceiveConflict(ValueError):
     pass
+
+
+def encoded(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'))
+
+
+def digest(value):
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def legacy_content(payload):
+    """One reviewed renderer-only field, not a general payload filter.
+
+    Legacy rows have no canonical event copy. Prove equal original delivery
+    content/scope before appending a canonical identity; retain the original
+    payload/digest/ACK verbatim. All other fields, including author/source and
+    audience inside the context, remain exact. The explicit migration basis is
+    not a claim that legacy payloads recorded canonical-only fields they lacked.
+    """
+    value = copy.deepcopy(payload)
+    params = value.get('params') if isinstance(value, dict) and 'method' in value else value
+    if isinstance(params, dict):
+        context = params.get('additionalContext', {}).get('laxRoomMessage')
+        if isinstance(context, dict) and context.get('kind') == 'application':
+            metadata = json.loads(context['value'])
+            if (metadata.get('schema') == 'lax-room-message/v1'
+                    and metadata.get('authorKind') == 'human'
+                    and isinstance(metadata.get('instruction'), str)):
+                metadata.pop('instruction')
+                context['value'] = encoded(metadata)
+    return encoded(value)
 
 
 class RoomReceiveJournal:
@@ -34,24 +66,48 @@ class RoomReceiveJournal:
             PRIMARY KEY(authority,agent,event),
             CHECK(state IN ('received','handoff','acknowledged','committed'))
         )''')
+        self.db.execute('''CREATE TABLE IF NOT EXISTS room_input_identity (
+            authority TEXT NOT NULL, agent TEXT NOT NULL, event TEXT NOT NULL,
+            canonical TEXT NOT NULL, digest TEXT NOT NULL, basis TEXT NOT NULL,
+            PRIMARY KEY(authority,agent,event)
+        )''')
         self.db.commit()
 
     def close(self):
         self.db.close()
 
-    def stage(self, *, authority, agent, event, thread, seq, payload):
+    def stage(self, *, authority, agent, event, thread, seq, payload, canonical=None):
         if not isinstance(seq, int) or isinstance(seq, bool) or seq < 0:
             raise ValueError('Canonical nonnegative sequence required')
-        encoded = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-        fingerprint = hashlib.sha256(encoded.encode()).hexdigest()
+        rendered = encoded(payload)
+        fingerprint = digest(rendered)
+        if canonical is not None and (not isinstance(canonical, dict)
+                or (canonical.get('authority'), canonical.get('id'), canonical.get('seq')) != (authority, event, seq)):
+            raise ReceiveConflict('Canonical event binding differs')
         with self.db:
-            self.db.execute('''INSERT INTO room_input
+            inserted = self.db.execute('''INSERT INTO room_input
                 (authority,agent,event,thread,seq,digest,payload)
                 VALUES(?,?,?,?,?,?,?) ON CONFLICT(authority,agent,event) DO NOTHING''',
-                (authority,agent,event,thread,seq,fingerprint,encoded))
+                (authority,agent,event,thread,seq,fingerprint,rendered)).rowcount == 1
             row = self.read(authority, agent, event)
-            if (row['thread'],row['seq'],row['digest']) != (thread,seq,fingerprint):
+            if (row['thread'],row['seq']) != (thread,seq) or digest(row['payload']) != row['digest']:
                 raise ReceiveConflict('Original room input identity or contents changed')
+            identity = self.db.execute('''SELECT * FROM room_input_identity
+                WHERE authority=? AND agent=? AND event=?''', (authority,agent,event)).fetchone()
+            if canonical is None:
+                if identity is not None or row['digest'] != fingerprint:
+                    raise ReceiveConflict('Original canonical record or rendered input differs')
+            elif identity is not None:
+                if (digest(identity['canonical']) != identity['digest']
+                        or identity['canonical'] != encoded(canonical)):
+                    raise ReceiveConflict('Original canonical event identity or contents changed')
+            else:
+                if not inserted and legacy_content(json.loads(row['payload'])) != legacy_content(payload):
+                    raise ReceiveConflict('Original legacy delivery content or scope changed')
+                text = encoded(canonical)
+                self.db.execute('''INSERT INTO room_input_identity VALUES(?,?,?,?,?,?)''',
+                    (authority,agent,event,text,digest(text),
+                     'canonical-event-v1' if inserted else 'legacy-rendered-content-v1'))
         return row
 
     def read(self, authority, agent, event):
@@ -100,13 +156,13 @@ async def receive_human(journal, rpc, event, *, authority_id, agent_id, thread_i
     from .room_input import human_input
     payload = human_input(event,authority_id=authority_id,agent_id=agent_id,thread_id=thread_id)
     row = journal.stage(authority=authority_id,agent=agent_id,event=event['id'],
-                        thread=thread_id,seq=event['seq'],payload=payload)
+                        thread=thread_id,seq=event['seq'],payload=payload,canonical=event)
     if row['acknowledgement'] is not None:
         return json.loads(row['acknowledgement'])
     if not journal.begin_handoff(authority_id,agent_id,event['id']):
         raise NativeReceiptUnresolved('Reconcile original native room input '+event['id'])
     # Cancellation, process death and transport errors deliberately leave the
     # write-ahead handoff intact. They do not prove that native rejected input.
-    response = await rpc.call('turn/start',payload)
+    response = await rpc.call('turn/start',json.loads(row['payload']))
     journal.acknowledge(authority_id,agent_id,event['id'],response)
     return response

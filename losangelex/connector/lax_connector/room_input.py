@@ -77,9 +77,16 @@ async def submit_peer(rpc,event,*,authority_id,agent_id,thread_id):
         raise ValueError('Only explicitly addressed peer input starts a turn')
     # Validate the canonical actor/audience without converting to human input.
     context=peer_context(event,authority_id=authority_id,agent_id=agent_id,thread_id=thread_id)
+    return await rpc.call('hollywood/agentMessage',peer_request(context,agent_id=agent_id))
+
+
+def peer_request(context, *, agent_id):
+    """Convert the original staged peer context, not a newly rendered event."""
     item=context['items'][0];data=json.loads(item['content'][0]['text'])
-    return await rpc.call('hollywood/agentMessage',{
-        'threadId':thread_id,'authorityId':data['authorityId'],'roomId':data['roomId'],
+    if item['recipient'] != agent_id:
+        raise ValueError('Original staged peer recipient differs')
+    return {
+        'threadId':context['threadId'],'authorityId':data['authorityId'],'roomId':data['roomId'],
         'eventId':data['eventId'],'authorId':item['author'],'recipientId':agent_id,
         'body':data['body'],'audience':data['audience'],'kind':data['kind'],
-        'sourceEventId':data['sourceEventId'],'expectsReply':False})
+        'sourceEventId':data['sourceEventId'],'expectsReply':False}

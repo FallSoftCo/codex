@@ -10,7 +10,7 @@ import random
 from pathlib import Path
 from uuid import UUID
 
-from .room_input import human_input, peer_context, submit_peer
+from .room_input import human_input, peer_context, peer_request
 from .room_receive import RoomReceiveJournal, NativeReceiptUnresolved
 
 
@@ -76,14 +76,18 @@ class RoomRuntime:
             else:
                 raise ValueError('Unexpected canonical conversation author')
             row=self.journal.stage(authority=self.authority,agent=self.agent,event=event['id'],thread=self.thread,
-                                   seq=seq,payload={'method':method,'params':payload})
+                                   seq=seq,payload={'method':method,'params':payload},canonical=event)
+            original=json.loads(row['payload'])
+            method,payload=original['method'],original['params']
             inference = method != 'thread/inject_items'
             if row['acknowledgement'] is None:
+                if row['state'] != 'received':
+                    raise NativeReceiptUnresolved('Original room input needs reconciliation: '+event['id'])
                 if inference and self.before_native_input:await self.before_native_input(event)
                 if not self.journal.begin_handoff(self.authority,self.agent,event['id']):
                     raise NativeReceiptUnresolved('Original room input needs reconciliation: '+event['id'])
                 if method=='hollywood/agentMessage':
-                    reply=await submit_peer(self.rpc,event,**args)
+                    reply=await self.rpc.call(method,peer_request(payload,agent_id=self.agent))
                 else:
                     reply=await self.rpc.call(method,payload)
                 self.journal.acknowledge(self.authority,self.agent,event['id'],reply)
