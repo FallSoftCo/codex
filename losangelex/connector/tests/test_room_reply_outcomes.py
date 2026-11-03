@@ -59,6 +59,40 @@ class ReplyOutcomes(unittest.IsolatedAsyncioTestCase):
             (a['id'],'completed','native_ended_without_source_answer','not_inferred'))
         self.assertNotIn('PRIVATE CANARY',json.dumps(self.io.reply_status(self.a)))
 
+    async def test_legacy_scope_reclassification_never_releases_a_historical_final(self):
+        import sqlite3
+        request=self.source()
+        context=self.source(self.b,private=True)
+        context['data']['authorKind']='agent'
+        context['data']['responsePhase']='message'
+        self.io.db.execute('UPDATE input_source SET canonical=? WHERE event=?',
+                           (json.dumps(context,sort_keys=True),context['id']))
+        self.io.final('mixed','legacy-item','Historical mixed-audience output')
+        self.io.ended('mixed','completed')
+        original=dict(self.io.db.execute('SELECT * FROM output').fetchone())
+        self.io.db.commit();self.io.close()
+        # Exact pre-classification source schema used by the retained Mac runtime.
+        with sqlite3.connect(self.root/'io.sqlite') as old:
+            old.execute('DROP INDEX input_reply_turn')
+            old.execute('DROP INDEX input_source_unclassified')
+            old.execute('ALTER TABLE input_source DROP COLUMN reply_eligible')
+        self.io=ConversationIO(self.root/'io.sqlite',**self.binding)
+        self.tools.conversation_io=self.io;self.output=RoomOutput(self.io,self.tools)
+        self.assertEqual(self.io.source('mixed')['id'],request['id'])
+        self.assertEqual(self.io.pending(),[])
+        self.assertFalse(await self.output.deliver(original))
+        self.assertEqual(dict(self.io.db.execute('SELECT * FROM output').fetchone()),original)
+        self.assertEqual(self.posts,[])
+        # The migration fence is per historical item, not a ban on new replies.
+        self.source(turn='new')
+        self.io.final('new','new-item','New source-bound answer')
+        self.io.ended('new','completed')
+        self.assertTrue(await self.output.deliver(self.io.pending()[0]))
+        self.assertEqual(len(self.posts),1)
+        self.io.close();self.io=ConversationIO(self.root/'io.sqlite',**self.binding)
+        self.assertEqual(self.io.pending(),[])
+        self.assertEqual(dict(self.io.db.execute("SELECT * FROM output WHERE item='legacy-item'").fetchone()),original)
+
     async def test_explicit_public_private_outcomes_and_blocked_are_not_task_completion(self):
         a=self.source();b=self.source(self.b,private=True)
         self.io.final('mixed','unscoped','Cannot route');self.io.ended('mixed','completed')

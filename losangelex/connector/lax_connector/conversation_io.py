@@ -49,12 +49,12 @@ class ConversationIO:
             self.db.execute('INSERT INTO binding VALUES(1,?) ON CONFLICT(id) DO NOTHING', (encoded,))
             if self.db.execute('SELECT value FROM binding WHERE id=1').fetchone()['value'] != encoded:
                 raise ValueError('Conversation I/O belongs to another native owner')
-        self._migrate_reply_sources()
         from .room_reply_state import SCHEMA
         from .room_reply_receipts import SCHEMA as RECEIPT_SCHEMA
         with self.db:
             self.db.executescript(SCHEMA)
             self.db.executescript(RECEIPT_SCHEMA)
+        self._migrate_reply_sources()
 
     def _migrate_reply_sources(self):
         # Additive, backward-readable adapter metadata. Bounded backfill avoids
@@ -62,6 +62,21 @@ class ConversationIO:
         with self.db:
             columns = {r['name'] for r in self.db.execute('PRAGMA table_info(input_source)')}
             if 'reply_eligible' not in columns:
+                # Old routing considered every original reply scope. New passive-
+                # context classification must not silently release old mixed-
+                # audience output. Fence those items BEFORE reclassification;
+                # preserve every original row and diagnose in transport metadata.
+                from .room_reply_state import hold
+                while True:
+                    legacy = self.db.execute('''SELECT o.* FROM output o
+                        WHERE o.state='queued' AND NOT EXISTS(
+                            SELECT 1 FROM reply_delivery_hold h WHERE h.item=o.item)
+                        AND (SELECT count(DISTINCT i.reply_scope) FROM input_source i
+                             WHERE i.turn=o.turn)>1 ORDER BY o.rowid LIMIT 128''').fetchall()
+                    if not legacy:
+                        break
+                    for row in legacy:
+                        hold(self.db, row)
                 self.db.execute('ALTER TABLE input_source ADD COLUMN reply_eligible INTEGER')
             self.db.execute('CREATE INDEX IF NOT EXISTS input_reply_turn ON input_source(turn,reply_eligible,room,ordinal)')
             self.db.execute('CREATE INDEX IF NOT EXISTS input_source_unclassified ON input_source(ordinal) WHERE reply_eligible IS NULL')
@@ -218,6 +233,11 @@ class ConversationIO:
         return [dict(x) for x in self.db.execute("""SELECT o.* FROM output o
             LEFT JOIN reply_delivery_hold h ON h.item=o.item
             WHERE o.state='queued' AND (h.item IS NULL OR h.reason!=?) ORDER BY o.rowid LIMIT 32""", (AMBIGUOUS,))]
+
+    def is_output_held(self, item):
+        from .room_reply_state import AMBIGUOUS
+        return self.db.execute('SELECT 1 FROM reply_delivery_hold WHERE item=? AND reason=?',
+                               (item, AMBIGUOUS)).fetchone() is not None
 
     def hold_ambiguous_final(self, row):
         from .room_reply_state import hold

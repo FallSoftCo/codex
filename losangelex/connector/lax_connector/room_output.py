@@ -18,6 +18,8 @@ class RoomOutput:
         self.wake.set()
 
     async def deliver(self, row):
+        if self.io.is_output_held(row['item']):
+            return False  # A source-policy change never re-admits a retained final.
         source = self.io.source(row['turn'])
         if not source:
             # A native turn may contain inputs from different rooms/audiences.
