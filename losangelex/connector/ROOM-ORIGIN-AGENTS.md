@@ -67,3 +67,31 @@ helpers are owned by their existing platform agents, signature in common r03
 contract. Root owns one actual CPU native bootstrap/parent release and subsequent
 platform integration, Android signing/release and existing-room handoffs. All
 original Globals, Apple operation, native PIDs/threads/profiles and failures remain.
+
+## Windows source integration successor (after frozen CPU proof)
+
+Exact original BLD r03 source carrier is retained with its SOURCE-MANIFEST in
+platform_qualification/windows-resident-r03. Its actual external-parent rejection
+is qualified; its positive bootstrap was SYNTHETIC, not an actual new BLD thread.
+The common spec now uses parentRuntime {agentId,pid,roomOriginPolicy:{path,sha256}},
+retains original nativeIdentity, includes guide path AND raw hash in both initial
+and resume instructions, and derives Windows workspace as agentRoot/agent/home/work.
+The Windows platform policy is normalized through its OWN NTFS/account/kernel
+parent inspection, never Linux root UID or /proc. LOCAL config paths stay local.
+
+Parent startup emits separate lax-room-parent-startup/v1 EVIDENCE with actual
+current PID/creation/image/SID/session/argv and native peer. admissionAllowed=false
+is deliberate: this is NOT the protected owning lifecycle acceptance required by
+the BLD helper. The host owner's normal release/startup step must pin its actual
+parent acceptance/policy after manager approval; per-agent or model code cannot
+invent that approval. A missing/changed admission blocks logical sessions, while
+the independent Global context remains available. No production Windows policy,
+acceptance, manager, profile or session was changed by source integration.
+
+Current known host prerequisites are projected through negotiated own-host
+controlStatus metadata, independent of accepted bootstrap/native receipts. The
+control preserves every diagnostic intent; a lost-ACK acceptance is read back
+without repeating a native operation. Missing capability on an older backend
+keeps diagnostics local rather than inventing readiness or a new room message.
+The common factory now requires its original in-process supervisor BEFORE any
+enrollment/credential/bootstrap work, not only after a thread was created.

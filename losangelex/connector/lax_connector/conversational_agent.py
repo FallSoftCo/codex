@@ -152,6 +152,8 @@ class ConversationalAgent:
         tasks=[]
         try:
             if not self.config.get('originRoomId'):
+                from .room_parent_startup import emit
+                emit(self.config)
                 from .room_session_supervisor import RoomSessionSupervisor
                 self.session_supervisor=RoomSessionSupervisor(self)
                 self.session_supervisor.load()

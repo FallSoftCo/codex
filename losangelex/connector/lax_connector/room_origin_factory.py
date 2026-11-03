@@ -30,7 +30,7 @@ def origin_configuration(config, *, agent, name, room, credential, state, worksp
         'for assigned work, not unrelated business actions. Publish important progress, questions '
         'and answers in their original room/audience; only explicitly private coordination is private. '
         'Before host work read the approved host operating instructions: ' +
-        ', '.join(item['path'] for item in refs) + '. These are host guidance, not another agent\'s tasks/history or a business-action grant.')
+        ', '.join(item['path'] + ' SHA256 ' + item['sha256'] for item in refs) + '. These are host guidance, not another agent\'s tasks/history or a business-action grant.')
     value.update(agentId=agent, nativeName=name, token=credential, originRoomId=room,
                  rooms=[{'roomId': room, 'after': 0}], state=str(state), workspace=str(workspace),
                  instructions=instructions, conversationResumeInstructions={'baseInstructions': instructions},
@@ -54,6 +54,9 @@ async def provision(transport, arguments, operation):
 async def _provision_locked(transport, arguments, operation):
     owner = transport.owner
     config = owner.host_config
+    supervisor = getattr(owner, 'session_supervisor', None)
+    if supervisor is None or supervisor.config != config:
+        raise PermissionError('Initialize only in this original resident host supervisor; no external bootstrap/service')
     room = str(UUID(arguments['roomId']))
     node = str(UUID(config.get('nodeId', config['hostId'])))
     base = 'rooms/' + room + '/environment-agents'
@@ -100,14 +103,14 @@ async def _provision_locked(transport, arguments, operation):
     if spec is None:
         home = Path(policy['root']) / agent
         connector = origin_configuration(config, agent=agent, name=principal['name'], room=room,
-            credential=credential['token'], state=home/'state', workspace=home/'work', operating_instructions=operating)
+            credential=credential['token'], state=home/'state', workspace=home/policy.get('workspaceRelative','work'), operating_instructions=operating)
         spec = {'schema': 'lax-room-origin-local-spec/v1', 'operationId': fixed,
             'authorityId': config['authorityId'], 'originRoomId': room, 'agentId': agent,
             'hostId': config['hostId'], 'nodeId': node, 'connectorConfig': connector,
             'nativeHostManifestSha256': manifest_sha,
             'purpose': role['purpose'], 'nativeIdentity':policy['nativeIdentity'],
             'operatingInstructions': operating,
-            'parentRuntime':{'agentId':config['agentId'],'policy':config['roomOriginPolicy']}}
+            'parentRuntime':{'agentId':config['agentId'],'pid':__import__('os').getpid(),'roomOriginPolicy':config['roomOriginPolicy']}}
         saved(spec_file, spec)
     platform = {'linux': 'linux', 'darwin': 'macos', 'win32': 'windows'}.get(sys.platform)
     if not platform:
@@ -141,9 +144,6 @@ async def _provision_locked(transport, arguments, operation):
     slot = next(a for a in current['agents'] if a['node'] == node)
     receipt = None
     if result['state'] == 'ready':
-        supervisor = getattr(owner, 'session_supervisor', None)
-        if supervisor is None:
-            raise HostProvisionUnconfirmed('Original parent logical-session supervisor unavailable; do not create a service')
         supervisor.attach(result)
         receipt = {'nativeThreadId': result['nativeThreadId'], 'nativeHostId': node,
             'appServerManifestSha256': result['appServerManifestSha256'], 'sharedAppServer': True}

@@ -44,7 +44,17 @@ class RoomSessionSupervisor:
             if any(self.state.glob('session-*.json')):
                 raise PermissionError('Original resident session policy is missing; do not abandon registered actors')
             return
-        host_policy(self.config)
+        try:host_policy(self.config)
+        except Exception as error:
+            saved(self.state/'admission-blocked.private.json',{'state':'blocked','parentRuntimePid':os.getpid(),'errorType':type(error).__name__,'admissionAllowed':False})
+            # Preserve original registrations as visibly blocked; a missing new
+            # parent admission must not crash the independent Global context.
+            for file in self.state.glob('session-*.json'):
+                try:
+                    private_file(file);record=json.loads(file.read_text());agent=record['agentId']
+                    self.records[agent]={**record,'state':'blocked','errorType':'ParentAdmissionUnavailable'}
+                except Exception:continue
+            self.checkpoint();return
         for file in sorted(self.state.glob('session-*.json')):
             try:
                 private_file(file);record=json.loads(file.read_text());self._attach(record)
@@ -81,7 +91,7 @@ class RoomSessionSupervisor:
             config['authorityId']!=self.config['authorityId'] or config['hostId']!=self.config['hostId']):
             raise ValueError('Original parent/agent/room/native binding differs')
         for key in ('state','workspace'):
-            p=Path(config[key]);expected=Path(policy['root'])/config['agentId']/('state' if key=='state' else 'work')
+            p=Path(config[key]);expected=Path(policy['root'])/config['agentId']/('state' if key=='state' else policy.get('workspaceRelative','work'))
             if p!=expected or p.resolve()!=p:raise ValueError('Protected original room session path required')
         if any(r['nativeThreadId']==record['nativeThreadId'] and a!=record['agentId'] for a,r in self.records.items()):
             raise ValueError('Native context already belongs to another logical agent')

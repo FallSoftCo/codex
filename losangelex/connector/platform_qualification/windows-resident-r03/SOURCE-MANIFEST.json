@@ -1,0 +1,15 @@
+{
+  "candidateGitCommit": null,
+  "contractSha256": "dc525199f336aaabd604026251fec65caf9bfdbf984c1eaca8e9ce1b27db7a2e",
+  "files": {
+    "WINDOWS_RESIDENT_ROOM.md": "d3fbaa601b8b8f0c4942c2475ebca0da514f20bb65ac79150122ead943347d56",
+    "room_factory_windows.py": "91f9e6dfd5895ed17eb9766c5d2360222df661b9468c17e1c5105e99ea3a20a5",
+    "room_factory_windows_state.py": "d34954c493f36ef82119ff550b9a30857dc319564cf992fedde99ce8c57abda9",
+    "test_room_factory_windows_resident.py": "5d6a8a5fc09bdc4be3349311362f6181890a5ff031f993344d35a18860d6d5ea",
+    "windows-resident-room.patch": "4c696a8ea8788cd1cf245bf5c6f9c82c12864ae2fa3436d32c1b3e3691d90f26"
+  },
+  "originalTaskSource": "56611f4a-238d-430a-a8b7-ec852822bc93",
+  "schema": "lax-windows-resident-room-source/v1",
+  "sdkBase": "acc4e932c0fb988e47acfa566981a40da2a56247",
+  "sourceEvent": "51426829-b2fd-4b28-9009-6fe1b8417b2b"
+}

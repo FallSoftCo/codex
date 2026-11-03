@@ -106,3 +106,18 @@ class ResidentTests(unittest.IsolatedAsyncioTestCase):
     with self.assertRaisesRegex(ValueError,'unsettled I/O'):await inspect_sessions(config,rpc_factory=Rpc)
     self.assertEqual(io.db.execute('SELECT body,state FROM output').fetchone()['body'],'Original unresolved answer')
    io.close()
+
+ async def test_control_diagnostic_lost_ack_reconciles_without_second_post_or_native_work(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);authority,parent,node,room,agent=[str(uuid4()) for _ in range(5)]
+   slot={'room':room,'node':node,'agent':agent,'coordinator':parent,'control_revision':0,'control_status':None};posts=[]
+   async def request(method,path,payload=None):
+    if method=='GET':return {'capabilities':{'controlStatus':1},'agents':[slot]}
+    posts.append(payload);slot.update(control_revision=payload['revision'],control_status=payload)
+    raise ConnectionError('SYNTHETIC lost diagnostic ACK after canonical acceptance')
+   control=RoomOriginControl(config={'authorityId':authority,'agentId':parent,'hostId':node,'state':str(root/'parent')},request=request,thread='unchanged-global',state=root/'control')
+   await control.diagnose(slot,'fixture',1,'blocked','Known unstarted parent-policy prerequisite')
+   await control.diagnose(slot,'fixture',1,'blocked','Known unstarted parent-policy prerequisite')
+   self.assertEqual(len(posts),1);self.assertEqual(posts[0]['originalOperation'],'room-origin:fixture')
+   record=json.loads((root/'control/fixture-diagnostic-1-blocked.json').read_text());self.assertTrue(record['accepted']);self.assertTrue(record['reconciled']);self.assertEqual(control.active,{})
+   await control.close()

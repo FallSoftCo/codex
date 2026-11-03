@@ -10,6 +10,7 @@ def digest_file(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def host_policy(config):
+    if os.name=='nt':return windows_host_policy(config)
     selection=config.get('roomOriginPolicy')
     if not isinstance(selection,dict) or set(selection)!={'path','sha256'}:
         raise PermissionError('Parent host room-session policy is not installed; no per-agent service or private daemon fallback')
@@ -51,13 +52,41 @@ def validate_spec(spec_path,expected_spec_sha256):
     if digest_file(config['nativeServer']['manifest'])!=spec['nativeHostManifestSha256']:
         raise PermissionError('Original shared native manifest changed')
     policy,_=host_policy({**config,'agentId':spec['parentRuntime']['agentId'],
-                          'roomOriginPolicy':spec['parentRuntime']['policy']})
+                          'roomOriginPolicy':spec['parentRuntime'].get('roomOriginPolicy',spec['parentRuntime'].get('policy'))})
     if policy['nativeIdentity']!=spec['nativeIdentity'] or policy['operatingInstructions']!=spec['operatingInstructions']:
         raise PermissionError('Original parent native/host operating policy differs')
-    for key,child in [('state','state'),('workspace','work')]:
+    for key,child in [('state','state'),('workspace',policy.get('workspaceRelative','work'))]:
         p=Path(config[key]);expected=Path(policy['root'])/spec['agentId']/child
         if p!=expected or p.resolve()!=p:
             raise PermissionError('Original host-approved logical session path required')
     for guide in spec['operatingInstructions']:
         if digest_file(guide['path'])!=guide['sha256']:raise PermissionError('Host operating instructions changed')
     return spec
+
+
+def windows_host_policy(config):
+    """Normalize the OS owner's actual parent/ACL/native policy, not Linux UID."""
+    from . import room_factory_windows_state as platform
+    import sys
+    selection=config.get('roomOriginPolicy')
+    if not isinstance(selection,dict) or set(selection)!={'path','sha256'}:
+        raise PermissionError('Protected Windows parent room-session policy is missing')
+    raw=platform.read(selection['path'],selection['sha256'])
+    proof=platform.inspect_parent(Path(selection['path']),expected_policy_sha256=selection['sha256'])
+    platform.require(proof['parentRuntime']['pid']==os.getpid(),'Factory must run inside accepted resident host runtime')
+    acceptance=platform.read(raw['parentAcceptancePath'],raw['parentAcceptanceSha256'])
+    platform.require(platform.argv_digest(sys.orig_argv)==acceptance['parentArgvSha256'],'Accepted resident parent argv differs')
+    platform.require(all(raw[k]==config[k] for k in ('authorityId','hostId')) and raw['parentAgentId']==config['agentId'],
+                     'Original Windows parent authority/host/agent binding differs')
+    platform.require(config['nativeServer']=={'manifest':raw['nativeHostManifest']},'Original Windows shared manifest required')
+    guides=raw.get('operatingInstructions')
+    platform.require(isinstance(guides,list) and 1<=len(guides)<=16,'Host-approved operatingInstructions missing from parent policy')
+    for guide in guides:
+        path=Path(guide['path']);info=path.lstat()
+        platform.require(path.is_absolute() and path.resolve()==path and path.is_file()
+            and not info.st_file_attributes & 0x400 and digest_file(path)==guide['sha256'],'Original host operating guide differs')
+    policy={'schema':'lax-room-session-policy/v1','authorityId':raw['authorityId'],'hostId':raw['hostId'],
+            'parentAgentId':raw['parentAgentId'],'root':raw['agentRoot'],'workspaceRelative':'home/work',
+            'nativeIdentity':proof['sharedNative'],'operatingInstructions':guides,
+            'appServerManifestSha256':raw['nativeHostManifestSha256']}
+    return policy,host_manifest(config)
