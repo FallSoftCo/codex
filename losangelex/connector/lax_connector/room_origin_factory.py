@@ -93,6 +93,8 @@ async def _provision_locked(transport, arguments, operation):
         manifest_path = Path(config['nativeServer']['manifest'])
         manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
         operating = policy['operatingInstructions']
+        if any(not config.get(key) and not policy.get(key) for key in ('model','effort')):
+            raise PermissionError('Exact approved parent model/effort defaults are unavailable; no inferred replacement')
         if not credential_file.exists():
             saved(credential_file, {'authorityId': config['authorityId'], 'agentId': agent,
                                     'token': secrets.token_urlsafe(40)})
@@ -109,7 +111,8 @@ async def _provision_locked(transport, arguments, operation):
         raise PermissionError('Canonical immutable room-origin role required')
     if spec is None:
         home = Path(policy['root']) / agent
-        connector = origin_configuration(config, agent=agent, name=principal['name'], room=room,
+        initial={**config,**{k:policy[k] for k in ('model','effort') if not config.get(k) and policy.get(k)}}
+        connector = origin_configuration(initial, agent=agent, name=principal['name'], room=room,
             credential=credential['token'], state=home/'state', workspace=home/policy.get('workspaceRelative','work'), operating_instructions=operating)
         spec = {'schema': 'lax-room-origin-local-spec/v1', 'operationId': fixed,
             'authorityId': config['authorityId'], 'originRoomId': room, 'agentId': agent,

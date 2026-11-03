@@ -88,7 +88,9 @@ def windows_host_policy(config):
         path=Path(guide['path']);info=path.lstat()
         platform.require(path.is_absolute() and path.resolve()==path and path.is_file()
             and not info.st_file_attributes & 0x400 and digest_file(path)==guide['sha256'],'Original host operating guide differs')
-    policy={'schema':'lax-room-session-policy/v1','authorityId':raw['authorityId'],'hostId':raw['hostId'],
+    parent_config=platform.read(raw['parentConfigPath'])
+    defaults=approved_defaults(config,parent_config,raw)
+    policy={**defaults,'schema':'lax-room-session-policy/v1','authorityId':raw['authorityId'],'hostId':raw['hostId'],
             'parentAgentId':raw['parentAgentId'],'root':raw['agentRoot'],'workspaceRelative':'home/work',
             'nativeIdentity':proof['sharedNative'],'operatingInstructions':guides,
             'appServerManifestSha256':raw['nativeHostManifestSha256']}
@@ -152,7 +154,21 @@ def macos_host_policy(config):
     guides=raw.get('operatingInstructions')
     platform.require(isinstance(guides,list) and 1<=len(guides)<=16,'Approved macOS host guide list missing')
     for guide in guides:platform.read(guide['path'],sha=guide['sha256'])
-    return {'schema':'lax-room-session-policy/v1','authorityId':config['authorityId'],'hostId':config['hostId'],
+    defaults=approved_defaults(config,parent,raw)
+    return {**defaults,'schema':'lax-room-session-policy/v1','authorityId':config['authorityId'],'hostId':config['hostId'],
         'parentAgentId':config['agentId'],'root':str(root),'workspaceRelative':'work',
         'nativeIdentity':native_identity,'parentRuntimeIdentity':parent_identity,
         'operatingInstructions':guides,'appServerManifestSha256':raw['nativeManifest']['sha256']},manifest
+
+
+def approved_defaults(config,parent,policy):
+    """No model sampling/default guess when a legacy parent config omits it."""
+    result={}
+    for key in ('model','effort'):
+        value=config.get(key) or parent.get(key) or policy.get(key)
+        if not isinstance(value,str) or not value.strip():
+            raise PermissionError('Exact approved parent '+key+' default is missing from host policy')
+        if policy.get(key) and policy[key]!=value:
+            raise PermissionError('Approved parent '+key+' differs from current host configuration')
+        result[key]=value
+    return result

@@ -66,3 +66,10 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
     control.observe(value);self.assertEqual(len(calls),2)
     restarted=RoomOriginControl(config=config,request=None,thread='unchanged-global',state=Path(d)/'control');restarted.observe(value);self.assertEqual(len(restarted.active),0)
     await control.close();await restarted.close()
+
+class HostDefaultTests(unittest.TestCase):
+ def test_missing_legacy_parent_model_is_explicit_policy_not_guess(self):
+  from lax_connector.room_session_files import approved_defaults
+  self.assertEqual(approved_defaults({}, {}, {'model':'approved-parent-model','effort':'xhigh'}),{'model':'approved-parent-model','effort':'xhigh'})
+  with self.assertRaises(PermissionError):approved_defaults({}, {}, {})
+  with self.assertRaises(PermissionError):approved_defaults({'model':'current','effort':'high'}, {}, {'model':'different'})
