@@ -31,6 +31,10 @@ class RoomOutput:
             return True
         key = hashlib.sha256(('native-final\0'+row['item']).encode()).hexdigest()
         async with self.tools.publish_lock:
+            from .room_reply_receipts import receipts, local_visibility
+            if receipts(self.io, source, exclude_key=key):
+                self.io.finish(row['item'], 'suppressed', 'Source-addressed canonical final already accepted')
+                return True
             publications = self.io.publications(row['turn'], source['id'])
             for prior in publications:
                 if prior['key'] == key:
@@ -45,7 +49,7 @@ class RoomOutput:
                     # of the same command only; uncertain writes are not replayed.
                     await self.tools.publish(prior['room'], args, prior['key'], turn=row['turn'])
                     prior['state'] = 'accepted'
-                if prior['state'] == 'accepted':
+                if prior['state'] == 'accepted' and local_visibility(self.io,source,row['turn'],prior['key']) is not False:
                     self.io.finish(row['item'], 'suppressed', 'Explicit final already accepted')
                     return True
             chunks=[]

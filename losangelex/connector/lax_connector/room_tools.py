@@ -125,8 +125,10 @@ class RoomTools:
         fingerprint=hashlib.sha256(json.dumps({'room':room,'payload':payload},sort_keys=True).encode()).hexdigest()
         if prior and prior['fingerprint']!=fingerprint:raise ValueError('Original native call changed')
         if prior and prior['state']=='accepted':
+            event = prior['receipt']['event']
+            canonical = self.conversation_io and event.get('id') and self.conversation_io.observe_own_reply(event)
             if self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked'):
-                self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'])
+                self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'],event_id=event['id'] if canonical else None)
             return prior['receipt']
         if prior and prior['state']=='rejected':raise HttpFailure(prior['error']['status'],prior['error']['message'])
         track = self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked')
@@ -155,5 +157,6 @@ class RoomTools:
             or payload.get('responsePhase') is not None and event.get('data',{}).get('responsePhase')!=payload['responsePhase']):
             raise ValueError('Original publication acceptance unavailable or mismatched')
         saved(path,{'state':'accepted','fingerprint':fingerprint,'room':room,'payload':payload,'receipt':result})
-        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'])
+        canonical = self.conversation_io and event.get('id') and self.conversation_io.observe_own_reply(event)
+        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'],event_id=event['id'] if canonical else None)
         return result

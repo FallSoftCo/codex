@@ -1,0 +1,62 @@
+Canonical own-reply accounting (source candidate, based on SDK242)
+
+An authenticated room event is communication evidence even when no native tool
+callback supplied a turn ID. The existing RoomRuntime feed callback now observes
+own-author message/answer and message/blocked events before recipient filtering.
+Own-author events never enter native receive/handoff, even if a malformed feed
+lists self among recipients. No new endpoint, process, model turn or poll exists.
+
+The additive canonical_reply table stores event identity, exact source/room/
+author/audience/counterpart/phase/sequence and body SHA256, not message bodies.
+Repeated HTTP-tool/feed/restart receipts deduplicate by immutable event identity.
+Changed original proof holds. Updates and context-only peer events do not count
+as final replies. A late original input may bind to an already observed receipt;
+observation never invents an input or native turn. The reply_publication_event
+table links an accepted native tool key to that same event where full canonical
+proof is available. Legacy accepted receipts remain intact and explicitly lack
+new canonical scope proof; old read-only journals need no migration to inspect.
+
+Only replies visible to the original source count: same room, private source to
+its original direct counterpart only; public source to its public room or direct
+original author. A separate private handoff to another peer does not answer the
+human, even if the handoff itself used responsePhase answer. Scope is based on
+structured provenance, not wording/title/semantic guesses. Projections are owner-
+private and room filtered, bounded and indexed. They are not public activity or
+live process health. Task completion remains not_inferred.
+
+A canonical final can prevent a duplicate automatic recap for that exact source.
+It does NOT rewrite an attempting/unknown original command, repeat a POST, clear
+an input handoff, dispose of an ambiguous historical final or claim business work
+complete. An automatic final's own original key still reconciles its accepted
+tool receipt normally. Historical events already behind the saved stream cursor
+are NOT swept/replayed by startup; any historical disposition needs a separate
+explicit owner-reviewed exact-event reconciliation. No such live repair occurs
+in this source candidate. Rollout/version/activation remain owning release work.
+
+Qualification scope
+- test_canonical_reply_receipts: original stream callback, self exclusion,
+  cursor-lag/reopen, tool missing-turn accounting, feed/tool dedup, strict
+  private/public counterpart, immutable proof conflicts, unknown command
+  preservation, late input binding, original automatic-final reconciliation,
+  and old read-only schema compatibility. External/native effects are stubbed.
+- integration_canonical_replies: real isolated PostgreSQL, authenticated HTTP
+  and SSE using existing server; two original human inputs and one history-only
+  peer event to one FAKE native context; external HTTP answer, tool blocked reply,
+  original lost-command status retained, accepted-key/feed/reopen dedup,
+  private-public expansion denied403 and another reader cannot see private text.
+  No actual native/model calls; not native exactly-once or semantic DLP proof.
+- Existing reply-outcome/output/receive-upgrade regressions remain distinct.
+
+Actual diagnostic limitation: the reported production event8e187dda was an UPDATE
+in both its retained native tool receipt and exact authenticated canonical read,
+not an answer. Its absence from final-phase tracking was correct. A later actual
+answerce877046 did populate the original local final-phase ledger. Therefore this
+candidate qualifies the requested missing-callback/external-path hardening; it
+does not claim that the reported update proved a lost production final.
+
+All attempts are retained outside source. Initial integration setup used duplicate
+synthetic room names and failed before server/native intake. After scope checks
+were strengthened, an existing output regression exposed an incomplete legacy
+fixture receipt being linked without full canonical proof; product linking was
+corrected, the original assertion unchanged. Final results must be read from the
+specific final-source receipts, not represented as first-run green.

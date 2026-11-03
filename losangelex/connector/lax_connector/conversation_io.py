@@ -51,8 +51,10 @@ class ConversationIO:
                 raise ValueError('Conversation I/O belongs to another native owner')
         self._migrate_reply_sources()
         from .room_reply_state import SCHEMA
+        from .room_reply_receipts import SCHEMA as RECEIPT_SCHEMA
         with self.db:
             self.db.executescript(SCHEMA)
+            self.db.executescript(RECEIPT_SCHEMA)
 
     def _migrate_reply_sources(self):
         # Additive, backward-readable adapter metadata. Bounded backfill avoids
@@ -166,12 +168,21 @@ class ConversationIO:
     def rooms(self, turn):
         return {x['room'] for x in self.db.execute('SELECT DISTINCT room FROM input_source WHERE turn=?', (turn,))}
 
-    def publication(self, turn, source, key, room, state, *, phase=None):
+    def observe_own_reply(self, event):
+        from .room_reply_receipts import observe
+        return observe(self, event)
+
+    def publication(self, turn, source, key, room, state, *, phase=None, event_id=None):
         if state not in {'attempting', 'accepted', 'rejected'}:
             raise ValueError('Actual publication receipt state required')
         if phase not in (None, 'answer', 'blocked'):
             raise ValueError('Exact final response phase required')
         with self.db:
+            if event_id is not None:
+                old_event = self.db.execute('SELECT event FROM reply_publication_event WHERE turn=? AND key=?', (turn,key)).fetchone()
+                if old_event and old_event['event'] != event_id:
+                    raise ValueError('Original publication canonical event changed')
+                self.db.execute('INSERT INTO reply_publication_event VALUES(?,?,?) ON CONFLICT DO NOTHING', (turn,key,event_id))
             if phase is not None:
                 prior = self.db.execute('SELECT phase FROM reply_publication_phase WHERE turn=? AND key=?', (turn,key)).fetchone()
                 if prior and prior['phase'] != phase:

@@ -66,7 +66,7 @@ class RoomRuntime:
         if seq<=self.cursor:return
         if self.on_room_event:await self.on_room_event(event)
         data=event.get('data',{})
-        if self.agent in data.get('conversationRecipients',[]):
+        if event.get('author') != self.agent and self.agent in data.get('conversationRecipients',[]):
             args=dict(authority_id=self.authority,agent_id=self.agent,thread_id=self.thread)
             if data.get('authorKind')=='human':
                 method,payload='turn/start',human_input(event,**args)

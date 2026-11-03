@@ -58,20 +58,20 @@ def report(io, room, *, after=0, limit=100, recent=False):
     outcomes = []
     for row in rows[:limit]:
         source = json.loads(row['canonical'])
+        from .room_reply_receipts import receipts, accepted_local_phases
+        canonical = receipts(io, source)
         pubs = [dict(p) for p in io.db.execute('''SELECT p.key,p.state,d.phase FROM publication p
             LEFT JOIN reply_publication_phase d ON d.turn=p.turn AND d.key=p.key
             WHERE p.source=? AND p.room=? ORDER BY p.rowid DESC LIMIT 101''', (row['event'], room))]
-        accepted = [dict(p) for p in io.db.execute('''SELECT DISTINCT d.phase FROM publication p
-            LEFT JOIN reply_publication_phase d ON d.turn=p.turn AND d.key=p.key
-            WHERE p.source=? AND p.room=? AND p.state='accepted' ''', (row['event'],room))]
-        if accepted:
+        accepted = accepted_local_phases(io, source)
+        if canonical or accepted:
             # Do not invent a phase for old SDK receipts which did not store it.
-            state = ('answer_available' if any(p['phase']=='answer' for p in accepted)
-                     else 'blocked_reported' if any(p['phase']=='blocked' for p in accepted)
+            state = ('answer_available' if any(p['phase']=='answer' for p in canonical + accepted)
+                     else 'blocked_reported' if any(p['phase']=='blocked' for p in canonical + accepted)
                      else 'accepted_final_phase_unrecorded')
         elif io.db.execute("SELECT 1 FROM publication WHERE source=? AND room=? AND state='attempting' LIMIT 1", (row['event'],room)).fetchone():
             state = 'publication_unknown'
-        elif pubs:
+        elif any(p['state']=='rejected' for p in pubs):
             state = 'publication_rejected'
         elif row['turn'] is None:
             state = 'native_handoff_unbound'
@@ -85,6 +85,7 @@ def report(io, room, *, after=0, limit=100, recent=False):
             'roomId':room,'audience':source['audience'],'nativeTurn':row['turn'],
             'nativeEnd':row['native_phase'],'responseState':state,
             'publications':pubs[:100],'publicationsTruncated':len(pubs)>100,
+            'canonicalReplies':canonical[:100],'canonicalRepliesTruncated':len(canonical)>100,
             'heldFinals':holds[:100],'heldFinalsTruncated':len(holds)>100,'taskCompletion':'not_inferred'})
     return {'version':1,'agentId':io.binding['agent'],'nativeThread':io.binding['thread'],
             'roomId':room,'visibility':'owner-private','communicationIsNotTaskOwnership':True,

@@ -76,6 +76,13 @@ class ConversationalAgent:
         self.conversation_io.stage(event)
         if event.get('data',{}).get('authorKind')=='human':self.source_events[event['id']]=event
 
+    async def observe_room_event(self,event):
+        # Runs before conversationRecipients filtering. Own replies are visible
+        # on the canonical feed but must never become another native input.
+        if self.conversation_io.observe_own_reply(event) and self.output:
+            self.output.wake.set()  # transport only, never starts a model turn
+        await self.attention.observe(event)
+
     async def native_receipt(self,event,reply):
         turn=self.conversation_io.bind(event,reply)
         source=self.conversation_io.primary(turn)
@@ -203,7 +210,7 @@ class ConversationalAgent:
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
                     token=self.config['token'],authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                     room_id=room,thread_id=self.thread,state=self.state/'rooms'/room,
-                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.attention.observe,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt)
+                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.observe_room_event,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt)
             def room_set(rooms):self.native_state.set_rooms(rooms)
             from .room_subscriptions import RoomSubscriptions
             self.subscriptions=RoomSubscriptions(state=self.state/'subscriptions',authority=self.config['authorityId'],
