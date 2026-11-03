@@ -15,6 +15,7 @@ from .errors import HttpFailure
 from .journal import saved
 
 HOST_TOOL='lax_provision_room_agent'
+FACTORY_TOOL='lax_initialize_room_agent'
 NAMES={'hollywood_create_agent','hollywood_create_room','hollywood_set_role','hollywood_grant_room'}
 
 
@@ -27,9 +28,10 @@ class AdministrationUnconfirmed(RuntimeError):
 
 
 class RoomAdministration:
-    def __init__(self, *, authority, agent, thread, request, state, host_config=None):
+    def __init__(self, *, authority, agent, thread, request, state, host_config=None, session_supervisor=None):
         self.config={'authorityId':authority,'agentId':agent}
         self.host_config=dict(host_config or {})
+        self.session_supervisor=session_supervisor
         self.thread=thread;self.request=request;self.state=Path(state)
         self.binding={'authority':authority,'agent':agent,'thread':thread}
         state_directory(self.state, parents=True,exist_ok=True)
@@ -50,7 +52,7 @@ class RoomAdministration:
                 record=json.loads(path.read_text())
                 if record['operationId']!=operation:raise ValueError('Original administrative operation differs')
             else:
-                if name not in NAMES|{HOST_TOOL}:raise ValueError('Unsupported communication administration tool')
+                if name not in NAMES|{HOST_TOOL,FACTORY_TOOL}:raise ValueError('Unsupported communication administration tool')
                 key=digest([self.thread,call_id]);identity=str(uuid5(UUID(self.config['agentId']),key))
                 path=self.state/('workflow-'+identity+'.json');operation='native-admin:'+identity
                 record={'operationId':operation,'tool':name,'arguments':args,'state':'intent','binding':self.binding}
@@ -76,7 +78,10 @@ class RoomAdministration:
             saved(pending,{'operationId':record['operationId'],'binding':self.binding})
             transport=AdministrationSteps(self,record['operationId'])
             try:
-                if record['tool']==HOST_TOOL:
+                if record['tool']==FACTORY_TOOL:
+                    from .room_origin_factory import provision
+                    result=await provision(transport,record['arguments'],record['operationId'])
+                elif record['tool']==HOST_TOOL:
                     from .room_host_provision import provision
                     result=await provision(transport,record['arguments'],record['operationId'])
                 else:

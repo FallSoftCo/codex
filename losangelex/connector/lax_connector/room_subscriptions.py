@@ -11,10 +11,11 @@ from uuid import UUID
 from .journal import saved
 
 class RoomSubscriptions:
-    def __init__(self,*,state,authority,agent,thread,rooms,request,create,on_rooms,now=time.time):
+    def __init__(self,*,state,authority,agent,thread,rooms,request,create,on_rooms,now=time.time,on_catalog=None):
         self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.binding={'authority':authority,'agent':agent,'thread':thread}
         self.authority,self.request,self.create,self.on_rooms=authority,request,create,on_rooms
+        self.on_catalog=on_catalog
         self.known={r['roomId']:{'after':r['after'],'revision':None,'member':True} for r in rooms}
         path=self.state/'memberships.json'
         if path.exists():
@@ -99,6 +100,7 @@ class RoomSubscriptions:
         async with self.lock:
             result=await asyncio.wait_for(self.request('GET','rooms'),15)
             if result.get('authorityId')!=self.authority:raise ValueError('Room catalog authority changed')
+            if self.on_catalog:self.on_catalog(result)
             for row in result['rooms']:
                 if row.get('authority')!=self.authority:raise ValueError('Room membership crossed authority')
                 if row.get('membershipVersion')!=1:continue  # Compatibility: keep configured rooms, never guess membership.

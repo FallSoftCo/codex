@@ -51,6 +51,9 @@ class ConversationalAgent:
         from .conversation_io import ConversationIO
         self.conversation_io=ConversationIO(self.state/'conversation-io.sqlite',authority=config['authorityId'],agent=config['agentId'],thread=self.thread)
         self.output=None
+        self.origin_control=None
+        self.session_supervisor=None
+        self.host_supervisor=None
         self.rpc=native_client(config,self.event,self.tool,on_submission=self.attention.submitted)
 
     @property
@@ -69,6 +72,7 @@ class ConversationalAgent:
             return value
 
     async def status(self,value):
+        if self.session_supervisor:self.session_supervisor.checkpoint()
         if self.subscriptions:self.subscriptions.note(value)
         saved(self.state/('room-'+value['roomId']+'-status.json'),value)
 
@@ -131,6 +135,8 @@ class ConversationalAgent:
         if method in ('turn/started','turn/completed','error'):
             saved(self.state/'conversation-native-status.json',{'method':method,'params':params})
 
+        if self.host_supervisor:self.host_supervisor.checkpoint()
+
     async def tool(self,method,params):
         if method=='item/tool/call' and params.get('tool') in {t['name'] for t in self.config['conversationDynamicTools']}:
             return await self.tools.call(method,params)
@@ -145,11 +151,15 @@ class ConversationalAgent:
         self.session=ClientSession(timeout=ClientTimeout(total=None,sock_connect=15))
         tasks=[]
         try:
+            if not self.config.get('originRoomId'):
+                from .room_session_supervisor import RoomSessionSupervisor
+                self.session_supervisor=RoomSessionSupervisor(self)
+                self.session_supervisor.load()
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                                  thread_id=self.thread,request=self.http,state=self.state/'publications',
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
                                  on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None,
-                                 conversation_io=self.conversation_io,native_state_view=self.native_state.own_view)
+                                 conversation_io=self.conversation_io,native_state_view=self.native_state.own_view,session_supervisor=self.session_supervisor)
             from .room_output import RoomOutput
             self.output=RoomOutput(self.conversation_io,self.tools)
             if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()
@@ -216,8 +226,13 @@ class ConversationalAgent:
                     initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.observe_room_event,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt)
             def room_set(rooms):self.native_state.set_rooms(rooms)
             from .room_subscriptions import RoomSubscriptions
+            from .room_origin_control import RoomOriginControl
+            if self.session_supervisor:
+                self.origin_control=RoomOriginControl(config=self.config, request=self.http,
+                    thread=self.thread, state=self.state/'room-origin-control',session_supervisor=self.session_supervisor)
             self.subscriptions=RoomSubscriptions(state=self.state/'subscriptions',authority=self.config['authorityId'],
-                agent=self.config['agentId'],thread=self.thread,rooms=self.config['rooms'],request=self.http,create=create,on_rooms=room_set)
+                agent=self.config['agentId'],thread=self.thread,rooms=self.config['rooms'],request=self.http,create=create,on_rooms=room_set,
+                on_catalog=self.origin_control.observe if self.origin_control else None)
             tasks.append(asyncio.create_task(self.subscriptions.run()))
             tasks.append(asyncio.create_task(self.rpc.wait_closed()))
             done,_=await asyncio.wait(tasks,return_when=asyncio.FIRST_COMPLETED)
@@ -227,6 +242,8 @@ class ConversationalAgent:
             for task in tasks:task.cancel()
             await asyncio.gather(*tasks,return_exceptions=True)
             if self.subscriptions:await self.subscriptions.close()
+            if self.origin_control:await self.origin_control.close()
+            if self.session_supervisor:await self.session_supervisor.close()
             await self.native_state.close()
             await self.activity.close()
             if self.output:await self.output.close()

@@ -19,21 +19,22 @@ STRING={'type':'string'}
 TOOLS=[
     definition('hollywood_context','Read your identity and the real participants of an authorized room. Room membership is communication, not task ownership.',{'roomId':STRING},['roomId']),
     definition('hollywood_read_room','Read canonical recent room conversation or explicitly requested execution activity.',{'roomId':STRING,'after':{'type':'integer','minimum':0},'before':{'type':'integer','minimum':1},'limit':{'type':'integer','minimum':1,'maximum':100},'view':{'type':'string','enum':['conversation','activity','all']}},['roomId']),
-    definition('hollywood_publish','Publish in your own agent identity. A public message is shared context; recipientId explicitly addresses a peer. Direct audience is private. Accepted means stored, not answered. Use responsePhase answer for a deliberate answer to the human, update for progress, blocked for a blocker, and message for other conversation. An answer makes a response available; it does not assert all work is complete. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':STRING,'responsePhase':{'type':'string','enum':['message','update','answer','blocked']},'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience','responsePhase']),
+    definition('hollywood_publish','Publish in your own agent identity. Answers/progress preserve original room/source/audience. Explicit recipientId addresses a peer; direct is private. Omitted sourceEventId defaults to the unambiguous original source. For genuinely NEW semantic peer coordination only, sourceEventId:null with phase message deliberately creates no source reference; it is not permission to copy private input or mark an owed answer delivered. Accepted is stored, never task claimed/completed. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':{'type':['string','null']},'responsePhase':{'type':'string','enum':['message','update','answer','blocked']},'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience','responsePhase']),
 ]
 
 from .native_tool_declarations import TOOLS as NATIVE_TOOLS
-from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES, HOST_TOOL
+from .room_administration import RoomAdministration, AdministrationUnconfirmed, NAMES as ADMIN_NAMES, HOST_TOOL, FACTORY_TOOL
 from .room_inspect import READ_NAMES, inspect_metadata
 TOOLS += [tool for tool in NATIVE_TOOLS if tool['name'] in ADMIN_NAMES | READ_NAMES]
 TOOLS += [definition(HOST_TOOL,'Provision an already enrolled and joined agent on this configured local host. Requires current communication administrator and verified local sudo; does not create a replacement identity, send instructions or claim task completion.',{'agentId':STRING,'roomId':STRING},['agentId','roomId'])]
+TOOLS += [definition(FACTORY_TOOL,'Initialize or reconcile this enrolled environment\'s deterministic room-origin agent on the EXISTING shared native app-server. Original credentials/spec/thread are retained. Never replay old room inputs, create another daemon, or treat allocation as native readiness.',{'roomId':STRING},['roomId'])]
 TOOLS += [definition('hollywood_admin_reconcile',
     'Inspect and continue the exact original administrative workflow after an unknown result. Never creates a replacement operation or repeats an uncertain write. Requires current administrator authority.',
     {'operationId':STRING},['operationId'])]
 
 
 class RoomTools:
-    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None, conversation_io=None,native_state_view=None):
+    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None, conversation_io=None,native_state_view=None,session_supervisor=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.conversation_io=conversation_io
@@ -41,7 +42,7 @@ class RoomTools:
         self.source_for_turn=source_for_turn
         self.on_membership=on_membership
         self.publish_lock=asyncio.Lock()
-        self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration',host_config=host_config)
+        self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration',host_config=host_config,session_supervisor=session_supervisor)
 
     async def call(self,method,params):
         try:
@@ -59,7 +60,7 @@ class RoomTools:
         name=params['tool'];args=params['arguments']
         if isinstance(args,str):args=json.loads(args)
         if not isinstance(args,dict):raise ValueError('Tool arguments must be an object')
-        if name in ADMIN_NAMES|{HOST_TOOL} or name=='hollywood_admin_reconcile':
+        if name in ADMIN_NAMES|{HOST_TOOL,FACTORY_TOOL} or name=='hollywood_admin_reconcile':
             result=await self.administration.call(name,args,params['callId'])
             if self.on_membership:self.on_membership()
             return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
@@ -108,13 +109,18 @@ class RoomTools:
         if args.get('responsePhase') is not None:
             if args['responsePhase'] not in ('message','update','answer','blocked'):raise ValueError('Unknown response phase')
             payload['responsePhase']=args['responsePhase']
-        if not args.get('sourceEventId'):
+        semantic_new = 'sourceEventId' in args and args['sourceEventId'] is None
+        if semantic_new and args.get('responsePhase') != 'message':
+            raise ValueError('Explicit no-source is only new semantic conversation, not an answer/progress bypass')
+        if not args.get('sourceEventId') and not semantic_new:
             source=(prior.get('payload',{}).get('sourceEventId') if prior else ((self.conversation_io.source(turn,room) or {}).get('id') if self.conversation_io else self.source_for_turn(turn) if self.source_for_turn else None))
             if source:payload['sourceEventId']=str(UUID(source))
         if payload.get('recipientId')==self.agent:raise ValueError('Self-publication is not new input')
         if audience=='direct' and not payload.get('recipientId'):raise ValueError('Private message requires recipient')
         if not prior and self.conversation_io and payload.get('sourceEventId'):
             source = self.conversation_io.input_event(payload['sourceEventId'])
+            if source and args.get('responsePhase') in ('answer','update','blocked') and room != source['room']:
+                raise ValueError('Source-bound answer/progress belongs to its original room; no cross-room fallback')
             if source and source.get('audience') == 'direct':
                 original = {source.get('author'), source.get('recipient')}
                 if (None in original or room != source['room'] or audience != 'direct'

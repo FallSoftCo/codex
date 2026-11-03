@@ -19,7 +19,9 @@ async def inspect(config_path,manifest_path,*,existing_client=False):
   expected=c['nativeThreadId'] if existing_client and m.get('ownerAgentId')!=c['agentId'] else m.get('adoptedNativeThreadId',c['nativeThreadId'])
   if v['id']!=expected or v['status']['type'] not in ('idle','notLoaded'):
    raise ValueError('Original native context must be present and idle before transport migration')
-  return {'nativeThreadId':v['id'],'status':v['status']['type'],'nativeState':m['state'],'modelCalls':0,
+  from .room_session_inspect import inspect_sessions
+  logical=await inspect_sessions(c)
+  return {'logicalSessions':logical,'nativeThreadId':v['id'],'status':v['status']['type'],'nativeState':m['state'],'modelCalls':0,
           **({'otherLoadedThreadsPreserved':len(others)} if existing_client else {})}
  finally:await rpc.close()
 if __name__=='__main__':
