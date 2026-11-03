@@ -120,3 +120,11 @@ that same workflow. Its original conservative result is retained separately,
 not terminally completed. Missing evidence or attempted thread/start stays held.
 A focused real RoomAdministration/step-journal test verifies this same-call path
 reuses original enrollment acceptance and reports once, with stub native effects.
+
+
+SDK248 owning package: complete universal runtime, exact11402c7 runtime modules.
+Supersedes the immutable but uninstalled247 candidate. Windows stable owner acceptance
+and deferred registration restore are included. One shared host process/app-server,
+no per-agent OS service or separate daemon. Representation never revokes grants.
+Existing account, native thread IDs, original outputs/receipts and model settings
+survive owning quiet/lifecycle upgrade. Initialization performs no model turn.
