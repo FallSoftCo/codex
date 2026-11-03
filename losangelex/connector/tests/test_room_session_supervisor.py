@@ -17,11 +17,16 @@ class ResidentTests(unittest.IsolatedAsyncioTestCase):
    parent=SimpleNamespace(config=config,thread='ORIGINAL-GLOBAL-THREAD');started=[];events=[]
    class Session:
     def __init__(self,c):
-     self.config=c;self.native_state=SimpleNamespace(status={'type':'idle'});self.native_active_turn=None;self.conversation_io=SimpleNamespace(pending=lambda:[])
+     self.config=c;self.native_state=SimpleNamespace(status={'type':'idle'});self.native_active_turn=None;self.closed=False
+     def pending():
+      if self.closed:raise RuntimeError('Original SQLite journal is closed')
+      return []
+     self.conversation_io=SimpleNamespace(pending=pending)
     async def serve(self):
      started.append((self.config['agentId'],self.config['nativeThreadId'],os.getpid()))
      if self.config['nativeThreadId']=='NEW-2':raise RuntimeError('isolated transport loss')
-     await asyncio.Event().wait()
+     try:await asyncio.Event().wait()
+     finally:self.closed=True
    results=[]
    for i in [1,2]:
     agent=str(uuid4());home=root/'agents'/agent

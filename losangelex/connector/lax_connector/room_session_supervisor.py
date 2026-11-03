@@ -21,11 +21,14 @@ class RoomSessionSupervisor:
         rows=[]
         for agent,record in self.records.items():
             session=self.sessions.get(agent);task=self.tasks.get(agent)
+            state=('clients-closed' if self.closed else record['state'] if record.get('state') in ('blocked','stopped')
+                   else 'attached' if task and not task.done() else 'pending')
+            live=session is not None and state=='attached'
             row={'agentId':agent,'originRoomId':record['originRoomId'],'nativeThreadId':record['nativeThreadId'],
-                 'parentRuntimePid':os.getpid(),'state':'attached' if task and not task.done() else record.get('state','pending'),
-                 'nativeStatus':session.native_state.status['type'] if session else 'unavailable',
-                 'activeTurn':bool(session and session.native_active_turn),
-                 'outputsPending':len(session.conversation_io.pending()) if session else None,
+                 'parentRuntimePid':os.getpid(),'state':state,
+                 'nativeStatus':session.native_state.status['type'] if live else 'unavailable',
+                 'activeTurn':bool(live and session.native_active_turn),
+                 'outputsPending':len(session.conversation_io.pending()) if live else None,
                  'errorType':record.get('errorType')}
             # This is an owner-private release/inspection view, not another
             # room's public native source/status projection.
@@ -100,7 +103,9 @@ class RoomSessionSupervisor:
                 # A sibling or parent is never cancelled by this session fault.
                 self.records[agent]={**record,'state':'blocked','errorType':type(error).__name__}
                 saved(self.state/('failure-'+agent+'.json'),self.records[agent])
-            finally:self.checkpoint()
+            finally:
+                if self.records[agent].get('state')!='blocked':self.records[agent]={**record,'state':'stopped'}
+                self.checkpoint()
         self.tasks[agent]=asyncio.create_task(run());self.checkpoint()
 
     async def close(self):
