@@ -1,0 +1,334 @@
+[
+  {
+    "name": "hollywood_context",
+    "description": "Read your identity and the real participants of an authorized room. Room membership is communication, not task ownership.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "roomId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_read_room",
+    "description": "Read canonical recent room conversation or explicitly requested execution activity.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string"
+        },
+        "after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "before": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "conversation",
+            "activity",
+            "all"
+          ]
+        }
+      },
+      "required": [
+        "roomId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_publish",
+    "description": "Publish in your own agent identity. A public message is shared context; recipientId explicitly addresses a peer. Direct audience is private. Accepted means stored, not answered. Use responsePhase answer for a deliberate answer to the human, update for progress, blocked for a blocker, and message for other conversation. An answer makes a response available; it does not assert all work is complete. Do not publish routine acknowledgements.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "recipientId": {
+          "type": "string"
+        },
+        "sourceEventId": {
+          "type": "string"
+        },
+        "responsePhase": {
+          "type": "string",
+          "enum": [
+            "message",
+            "update",
+            "answer",
+            "blocked"
+          ]
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "room",
+            "direct"
+          ]
+        }
+      },
+      "required": [
+        "roomId",
+        "body",
+        "audience",
+        "responsePhase"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_rooms",
+    "description": "Discover only rooms this agent is authorized to read; observation never starts another agent context.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_room_info",
+    "description": "Inspect authorized room ownership, actors and current membership revisions before changing grants. Administrators can see all grants; others see their own.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "roomId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_agents",
+    "description": "Administrator: list all agent identities in this authority, including agents without rooms. Follow nextAfter for complete pages. Enrollment active is not placement or execution status. Contains no credentials; reading grants no execution.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "after": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_agent_info",
+    "description": "Inspect an authorized agent's current primary role, home room and revision before updating its role.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_create_agent",
+    "description": "Administrator: create a stable scoped agent and primary responsibility. Credential stays protected in LAX. This does not provision execution.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "primary": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "purpose": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "primary",
+        "purpose"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_create_room",
+    "description": "Administrator: create a Hollywood room with an accountable agent owner and clear purpose. The owner initially receives read/post/request membership; inspect hollywood_room_info for its current revision before changing grants.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "purpose",
+        "ownerId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_set_role",
+    "description": "Administrator: revise a primary role with revision compare-and-swap; role names do not grant authority.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string"
+        },
+        "primary": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "nativeGoalScope": {
+          "type": "string",
+          "enum": [
+            "role",
+            "work"
+          ],
+          "description": "Administrator selects ongoing role responsibility or separately addressed work. Does not grant room, host or resource permissions."
+        },
+        "decisionOwnerId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Explicit active human for role-origin questions/approvals. Omit to preserve; null withdraws routing. Does not confer room, host or resource rights."
+        },
+        "homeRoomId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "agentId",
+        "primary",
+        "purpose",
+        "homeRoomId",
+        "revision"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_grant_room",
+    "description": "Administrator: explicitly grant room observation, posting or execution-request rights; none grant host access. First inspect hollywood_room_info for the current membership revision; revision 0 means absent membership.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "can_read": {
+          "type": "boolean"
+        },
+        "can_post": {
+          "type": "boolean"
+        },
+        "can_request": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "roomId",
+        "principalId",
+        "can_read",
+        "can_post",
+        "can_request",
+        "revision"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "lax_provision_room_agent",
+    "description": "Provision an already enrolled and joined agent on this configured local host. Requires current communication administrator and verified local sudo; does not create a replacement identity, send instructions or claim task completion.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string"
+        },
+        "roomId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "roomId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "hollywood_admin_reconcile",
+    "description": "Inspect and continue the exact original administrative workflow after an unknown result. Never creates a replacement operation or repeats an uncertain write. Requires current administrator authority.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

@@ -35,7 +35,8 @@ class ConversationalAgent:
         # owner must attest to the declarations being installed at cold resume.
         from .room_inspect import READ_NAMES
         legacy_tools=[tool for tool in TOOLS if tool['name'] not in READ_NAMES]
-        if config.get('conversationDynamicTools') not in (TOOLS,legacy_tools):
+        from .room_resume import supported_declarations
+        if not supported_declarations(config.get('conversationDynamicTools'),TOOLS,legacy_tools):
             raise ValueError('Explicit reviewed conversational tool declarations required')
         self.state=Path(config['state']);state_directory(self.state, parents=True,exist_ok=True)
         self.lock=(self.state/'connector.lock').open('a')
@@ -183,11 +184,10 @@ class ConversationalAgent:
                     active_overrides = self.resume_instructions
                 resume={'threadId':self.thread,'excludeTurns':True,
                         'config':{'features.default_mode_request_user_input':True},**active_overrides}
-                # Bind this connector's reviewed tools on cold resume too: older
-                # contexts can retain creation-time legacy tools in storage. The
-                # qualified native runtime accepts identical loaded bindings and
-                # rejects attempts to change tools on a live loaded thread.
-                resume['dynamicTools']=self.config['conversationDynamicTools']
+                # Transport startup need not be a cold native context.
+                # Preserve installed tools on warm ownership handoff.
+                from .room_resume import configured_resume
+                resume=await configured_resume(self.rpc,resume,self.config['conversationDynamicTools'])
                 result=await self.rpc.call('thread/resume',resume)
                 effective_permissions=observed(result)
                 self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)

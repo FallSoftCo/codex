@@ -128,3 +128,14 @@ and deferred registration restore are included. One shared host process/app-serv
 no per-agent OS service or separate daemon. Representation never revokes grants.
 Existing account, native thread IDs, original outputs/receipts and model settings
 survive owning quiet/lifecycle upgrade. Initialization performs no model turn.
+
+SDK249 ownership handoff
+-----------------------
+A new connector connection is not a new native context. Read ONLY bound-thread
+metadata (includeTurns=false); warm resume preserves installed tool bindings.
+Only notLoaded contexts receive explicit declarations. Exact generic SDK244
+13-tool schema remains supported; new room agents start with current14.
+Preserve original Global declarations during runtime upgrade. Never archive/
+unarchive/fork or restart the shared native daemon to change tools.
+Root actual392451 warm metadata journey passed587.68ms/model0. Prior248
+constructor/loaded-replacement failures remain evidence, not qualification.
