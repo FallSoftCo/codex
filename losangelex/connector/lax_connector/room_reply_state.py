@@ -38,8 +38,6 @@ def hold(db, row):
             ON CONFLICT(item) DO UPDATE SET reason=excluded.reason''', (row['item'], reason,
             json.dumps({k: row[k] for k in ('turn','phase','state','reason')}, sort_keys=True),
             hashlib.sha256(row['body'].encode()).hexdigest()))
-        db.execute("UPDATE output SET reason=? WHERE item=? AND state='queued' AND (reason IS NULL OR reason=?)",
-                   (reason, row['item'], UNBOUND))
 
 
 def report(io, room, *, after=0, limit=100, recent=False):
