@@ -15,12 +15,12 @@ class RoomNativeState:
         self.inflight={};self.posts=asyncio.Semaphore(4);self.reads=asyncio.Semaphore(2)
 
     def set_rooms(self,rooms):
-        previous={r['roomId']:r.get('membershipRevision') for r in self.rooms}
+        previous={r['roomId']:(r.get('membershipRevision'),r.get('sharedThreadStatus')) for r in self.rooms}
         self.rooms[:]=[dict(r) for r in rooms]
         joined={r['roomId'] for r in rooms}
         for identity,task in list(self.inflight.items()):
             if identity not in joined:task.cancel()
-        if any(previous.get(r['roomId'])!=r.get('membershipRevision') for r in rooms):self.wake.set()
+        if any(previous.get(r['roomId'])!=(r.get('membershipRevision'),r.get('sharedThreadStatus')) for r in rooms):self.wake.set()
 
     async def request(self,method,path,payload):
         async with self.reads if method=='GET' else self.posts:
@@ -152,7 +152,8 @@ class RoomNativeState:
 
     def desired(self,room):
         source=self.source if self.source and self.source['room']==room else None
-        status=self.status if self.status['type']!='active' or source else {'type':'unavailable','activeFlags':[]}
+        shared=any(r['roomId']==room and r.get('sharedThreadStatus') is True for r in self.rooms)
+        status=self.status if self.status['type']!='active' or source else {'type':'activeElsewhere' if shared else 'unavailable','activeFlags':[]}
         return {'sourceEventId':source['id'] if source else None,'status':status}
 
     def start(self):

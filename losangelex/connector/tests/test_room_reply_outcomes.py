@@ -115,5 +115,23 @@ class ReplyOutcomes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(view['legacyRoomStatus']['type'],'unavailable')
         self.assertNotIn(source['id'],json.dumps(view));self.assertNotIn(self.b,json.dumps(view))
 
+    async def test_inspector_reads_original_private_binding_without_schema_write(self):
+        from lax_connector.inspect_reply_state import inspect
+        import hashlib
+        self.source()
+        config=self.root/'config.json'
+        config.write_text(json.dumps({'state':str(self.root),'authorityId':self.authority,
+            'agentId':self.agent,'nativeThreadId':'same-native-thread'}));config.chmod(0o600)
+        self.io.close()
+        before=hashlib.sha256((self.root/'io.sqlite').read_bytes()).hexdigest()
+        # Use the conventional exact original filename; this is owned QA only.
+        (self.root/'io.sqlite').rename(self.root/'conversation-io.sqlite')
+        result=inspect(config,self.a)
+        self.assertEqual(result['outcomes'][0]['responseState'],'awaiting_source_answer')
+        self.assertEqual(hashlib.sha256((self.root/'conversation-io.sqlite').read_bytes()).hexdigest(),before)
+        config.write_text(json.dumps({'state':str(self.root),'authorityId':self.authority,
+            'agentId':str(uuid4()),'nativeThreadId':'same-native-thread'}))
+        with self.assertRaises(ValueError):inspect(config,self.a)
+
 
 if __name__=='__main__':unittest.main()

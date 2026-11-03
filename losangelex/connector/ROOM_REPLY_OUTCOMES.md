@@ -50,10 +50,21 @@ There is intentionally no automatic source-selection or replay command.
 `ownNativeState` reports actual shared-thread status separately from room-source
 attribution, without exposing another room/source ID. The owner-private saved
 shared-status snapshot is event evidence, not a process health/currentness proof.
-The old v1 wire projection still maps active-elsewhere to unavailable: this
-candidate does not claim that legacy NextComp161 label is repaired by a new local
-field. A compatible server/client shared-context status contract must be staged
-and qualified before it is emitted; no unsupported fields go to Hollywood177.
+The old v1 wire projection maps active-elsewhere to unavailable. The companion
+Hollywood source advertises `nativeState.capabilities.sharedThreadStatus=1`;
+only a CURRENT authenticated catalog advertising that exact capability enables
+the source-less `activeElsewhere` status. Its flags are empty, and it identifies
+no other room, private source or work claim. Persisted capability is discarded
+on restart; an old API/rollback remains legacy-compatible. The companion client
+candidate labels it **Shared context busy**, neither Idle nor Running in this
+room nor an unavailable native process. The existing75-second expiry still
+overrides it. Deploy compatible client support before advertising the capability.
+
+Neither server capability nor client source is deployed by this qualification.
+Hollywood177 does not advertise it, and NextComp161 is not claimed repaired by a
+local field. Per-source outcomes remain owner-private inspection, not a fabricated
+business-completion projection. The HTTP/PG journey uses synthetic completed-turn
+evidence and real source/publication/status receipts, not a native/model execution.
 
 No live connector, API, phone app, native process, old output disposition or room
 grant is changed by source qualification. Release remains owner-coordinated.

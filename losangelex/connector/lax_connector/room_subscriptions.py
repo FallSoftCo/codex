@@ -21,6 +21,9 @@ class RoomSubscriptions:
             old=json.loads(path.read_text())
             if old['binding']!=self.binding:raise ValueError('Room subscriptions belong to another authority')
             for room,value in old['rooms'].items():self.known[room]=value
+        # Capability is an authenticated CURRENT catalog observation, not a
+        # durable grant across API rollback/reconnect. Start legacy-compatible.
+        for value in self.known.values():value.pop('sharedThreadStatus',None)
         self.live={};self.status={};self.lock=asyncio.Lock();self.wake=asyncio.Event()
         self.now=now;self.recovery={};self.recovering={};self.reads=asyncio.Semaphore(2)
         for room in self.known:
@@ -41,7 +44,8 @@ class RoomSubscriptions:
 
     def persist(self):
         saved(self.state/'memberships.json',{'binding':self.binding,'rooms':self.known})
-        self.on_rooms([{'roomId':room,'after':value['after'],'membershipRevision':value['revision']}
+        self.on_rooms([{'roomId':room,'after':value['after'],'membershipRevision':value['revision'],
+                        'sharedThreadStatus':value.get('sharedThreadStatus',False)}
                        for room,value in self.known.items() if value['member']])
 
     def start_room(self,room):
@@ -103,7 +107,9 @@ class RoomSubscriptions:
                 prior=self.known.get(room)
                 changed=not prior or prior['revision']!=revision or prior['member']!=member
                 if not prior and not member:continue
-                self.known[room]={'after':prior['after'] if prior else 0,'revision':revision,'member':member}
+                capability=row.get('nativeState',{}).get('capabilities',{}).get('sharedThreadStatus') if isinstance(row.get('nativeState'),dict) else None
+                self.known[room]={'after':prior['after'] if prior else 0,'revision':revision,'member':member,
+                                  'sharedThreadStatus':type(capability) is int and capability==1}
                 if not member:
                     old=self.live.pop(room,None)
                     if old:
