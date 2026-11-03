@@ -78,10 +78,16 @@ def managed_guardian(binding):
     spec, receipt, global_agent = runtime_spec(authority, agent)
     baseline = observer.protected(observer.directory(authority, host, agent) / "enrollment.json")
     image = Path(binary).resolve(strict=True).stat()
+    unit = receipt["unit"]
+    # The original Linux factory receipt omits systemd's default suffix, while
+    # enrollment pins the actual manager Id. Normalize ONLY that generated LAX
+    # short-name form, without a manager query/alias lookup or receipt rewrite.
+    if isinstance(unit, str) and re.fullmatch(r"lax-[A-Za-z0-9_@:-]+", unit):
+        unit += ".service"
     expected = {
         "schema": "lax-service-enrollment/v1", "authorityId": authority,
         "hostId": host, "agentId": agent, "uid": uid, "home": str(home),
-        "unit": receipt["unit"], "unitDefinitionDigest": binding["unitDefinitionDigest"],
+        "unit": unit, "unitDefinitionDigest": binding["unitDefinitionDigest"],
         "binary": str(Path(binary).resolve()), "binaryDevice": image.st_dev,
         "binaryInode": image.st_ino, "machineIdentity": observer.machine_identity(),
         "killMode": "control-group",

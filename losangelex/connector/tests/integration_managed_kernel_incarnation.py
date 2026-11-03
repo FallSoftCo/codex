@@ -15,7 +15,7 @@ from lax_connector import service_restart
 from lax_connector.kernel_incarnation import invocation, managed_guardian
 
 
-def main(authority, host, agent, unit, output):
+def main(authority, host, agent, unit, output, guardian_only=False):
     root = observer.directory(authority, host, agent)
     binding = observer.protected(root / (invocation(unit) + ".json"))
     started = time.monotonic()
@@ -31,14 +31,26 @@ def main(authority, host, agent, unit, output):
     assert (root / "registry.lock").is_file(), "Existing registry lock required"
     originals = {name: (root / name).read_bytes() for name in
                  ("enrollment.json", service_restart.POLICY, binding["serviceInvocation"] + ".json")}
-    started = time.monotonic()
-    with patch.object(observer, "properties", side_effect=subprocess.TimeoutExpired("systemctl", 15)) as unavailable:
-        tick = service_restart.reconcile_one({"authorityId": authority, "hostId": host,
-            "machineIdentity": observer.machine_identity()}, agent, [])
-        unavailable.assert_not_called()
-    tick_elapsed = time.monotonic() - started
-    assert tick == {"state": "registered", "changed": False, "agentId": agent,
-                   "observationSource": "kernel-incarnation", "managerStateInspected": False}
+    tick, tick_elapsed = None, None
+    if not guardian_only:
+        started = time.monotonic()
+        with patch.object(observer, "properties", side_effect=subprocess.TimeoutExpired("systemctl", 15)) as unavailable:
+            tick = service_restart.reconcile_one({"authorityId": authority, "hostId": host,
+                "machineIdentity": observer.machine_identity()}, agent, [])
+            unavailable.assert_not_called()
+        tick_elapsed = time.monotonic() - started
+        assert tick == {"state": "registered", "changed": False, "agentId": agent,
+                       "observationSource": "kernel-incarnation", "managerStateInspected": False}
+    from lax_connector import native_release
+    spec, receipt, global_agent = native_release.runtime_spec(authority, agent)
+    spellings = [unit, unit.removesuffix('.service')]
+    for spelling in spellings:
+        # In-memory spelling controls only. Protected original receipt and
+        # actual enrollment/unit/process/cgroup/restart approval stay unchanged.
+        with (patch.object(native_release, 'runtime_spec', return_value=(spec, {**receipt, 'unit': spelling}, global_agent)),
+              patch.object(observer, 'properties', side_effect=AssertionError('No manager query')) as manager):
+            assert managed_guardian(binding) == actual
+            manager.assert_not_called()
     assert all((root / name).read_bytes() == data for name, data in originals.items())
     rejected = []
     for key, value in (
@@ -58,9 +70,11 @@ def main(authority, host, agent, unit, output):
             raise AssertionError("Altered binding accepted: " + key)
     result = {"guardianPid": actual["pid"], "positiveSeconds": elapsed,
               "hostTickSeconds": tick_elapsed, "hostTick": tick,
+              "guardianOnly": guardian_only, "originalReceiptUnit": receipt['unit'],
+              "verifiedReceiptSpellings": spellings,
               "rejectedAlterations": rejected, "systemctlCalls": 0,
               "modelCalls": 0, "canonicalWrites": 0, "serviceMutations": 0,
-              "limitation": "Live guardian only; no running native child or effect admission claimed"}
+              "limitation": "Actual registered guardian/pins and in-memory spelling controls; no new registration, restart, native child or effect admission claimed. Guardian-only mode does not qualify post-release host-tick dependency probes."}
     with output.open("x") as file:
         json.dump(result, file, indent=2)
         file.write("\n")
@@ -72,5 +86,6 @@ if __name__ == "__main__":
     for name in ("authority", "host", "agent", "unit"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--guardian-only", action="store_true")
     args = parser.parse_args()
-    main(args.authority, args.host, args.agent, args.unit, args.output)
+    main(args.authority, args.host, args.agent, args.unit, args.output, args.guardian_only)
