@@ -21,6 +21,9 @@ def recovery(config,slot):
         except (KeyError,ValueError,OSError):return False,'unreadable-original-spec'
     if native and native.get('state')!='ready' and native.get('threadStartAttempted') is not False:
         return False,'original-native-delivery-unknown'
+    dispatch=directory/'dispatch.json'
+    if dispatch.exists() and json.loads(dispatch.read_text()).get('state')=='unknown' and not native:
+        return False,'original-platform-delivery-unknown-no-unstarted-proof'
     parts=[slot['revision']]
     # Public filesystem/protected policy identities only, never auth contents.
     paths=[Path(__file__).with_name('room_factory_'+{'linux':'linux','darwin':'macos','win32':'windows'}.get(__import__('sys').platform,'unsupported')+'.py')]
@@ -113,7 +116,9 @@ class RoomOriginControl:
                     safe,_=recovery(self.config,slot)
                     cause=error
                     while cause.__cause__ is not None:cause=cause.__cause__
-                    note=(str(cause) if isinstance(cause,PermissionError) else
+                    public_platform=(type(cause).__module__ in ('lax_connector.room_factory_macos','lax_connector.room_factory_windows_state')
+                                     and type(cause).__name__ in ('Hold','Held'))
+                    note=(str(cause) if isinstance(cause,PermissionError) or public_platform else
                           'Original initialization requires exact receipt inspection; retained '+type(cause).__name__)
                     await self.diagnose(slot,key,record['attempts'],'blocked' if safe else 'unknown',note)
                     saved(file,{**record,'state':'recoverable' if safe else 'held','reason':str(error)[:1000],

@@ -1,0 +1,35 @@
+{
+  "schema": "macos-resident-room-source/v1",
+  "baseCommit": "acc4e932c0fb988e47acfa566981a40da2a56247",
+  "contractEvent": "0773ea5f-18ee-4a8a-a4ae-32c0005b077e",
+  "contractDeclaredSha256": "dc525199f336aaabd604026251fec65caf9bfdbf984c1eaca8e9ce1b27db7a2e",
+  "files": {
+    "source/losangelex/connector/lax_connector/room_factory_macos.py": {
+      "sha256": "aeef4b5170312bf1e1f95a623664249c89f43261080db9f229c30565ce9c9f8b",
+      "bytes": 27926
+    },
+    "source/losangelex/connector/tests/test_room_factory_macos.py": {
+      "sha256": "3b76ead1a34907bfa0f8604f200f2faa3bb85de6f3e0c8c38b201117eaeda2c2",
+      "bytes": 19504
+    },
+    "qualify_actual_parent.py": {
+      "sha256": "7d97835796336337316668c8d1a7201cc3e541ca3f770f87c28c6cb3b0b45e07",
+      "bytes": 6544
+    },
+    "DELIVERY.txt": {
+      "sha256": "5ed497b1e622882f9f158207ceeee723229f128131080989bbbcd572b3b78639",
+      "bytes": 9843
+    },
+    "room-factory-macos-resident-r03.patch": {
+      "sha256": "c353c3d480a80560ab2b8617a3176aa920d0f5471cfe5e17d9c8cf8bc7fa5567",
+      "bytes": 48759
+    },
+    "replace-superseded-r01.patch": {
+      "sha256": "fb32e4244065b1e7ce828dd17d49abf99fa07c7c17ed15da2444d65826f050ac",
+      "bytes": 82818
+    }
+  },
+  "originalSourceFilesUnchanged": 385,
+  "previousR01ModuleSha256": "a5fd0474ddcc4bec045611ead517e5ea4fa7b570a2788796a1714f84be3eaee4",
+  "previousR01TestSha256": "3753e20a6d763f3003b2e190c7cbfb7f4f4bdf7afbbbcc03269b390a98da58e6"
+}

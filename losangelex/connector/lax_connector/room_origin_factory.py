@@ -12,6 +12,13 @@ from .runtime_files import exclusive_lock
 from .room_host_provision import HostProvisionUnconfirmed
 
 
+def proven_unstarted(spec):
+    file=Path(spec['connectorConfig']['state'])/'native-context.json'
+    if not file.exists():return False  # Absence alone is NOT non-dispatch proof.
+    prior=json.loads(file.read_text())
+    return prior.get('threadStartAttempted') is False and prior.get('state') in ('connecting','transport-unavailable')
+
+
 def origin_configuration(config, *, agent, name, room, credential, state, workspace, operating_instructions=None):
     """Fresh role/context contract, not a filtered clone of a Global agent."""
     from .room_tools import TOOLS
@@ -110,7 +117,8 @@ async def _provision_locked(transport, arguments, operation):
             'nativeHostManifestSha256': manifest_sha,
             'purpose': role['purpose'], 'nativeIdentity':policy['nativeIdentity'],
             'operatingInstructions': operating,
-            'parentRuntime':{'agentId':config['agentId'],'pid':__import__('os').getpid(),'roomOriginPolicy':config['roomOriginPolicy']}}
+            'parentRuntime':{'agentId':config['agentId'],'pid':__import__('os').getpid(),'roomOriginPolicy':config['roomOriginPolicy'],
+                **({'identity':policy['parentRuntimeIdentity']} if policy.get('parentRuntimeIdentity') else {})}}
         saved(spec_file, spec)
     platform = {'linux': 'linux', 'darwin': 'macos', 'win32': 'windows'}.get(sys.platform)
     if not platform:
@@ -127,7 +135,7 @@ async def _provision_locked(transport, arguments, operation):
         saved(dispatch, {'state': 'dispatching', 'operationId': fixed, 'specSha256': expected})
     transport.accepted_writes = True
     result_file = directory/('host-result-' + hashlib.sha256(operation.encode()).hexdigest() + '.json')
-    if result_file.exists():
+    if result_file.exists() and not proven_unstarted(spec):
         result = json.loads(result_file.read_text())
     else:
         try:
@@ -138,6 +146,19 @@ async def _provision_locked(transport, arguments, operation):
                 'state': 'unknown', 'reason': str(error)[:1000]}
         if any(result.get(k) != spec[k] for k in ('operationId', 'authorityId', 'originRoomId', 'agentId', 'hostId')):
             raise HostProvisionUnconfirmed('Original platform initialization receipt differs')
+        if result['state']!='ready' and proven_unstarted(spec):
+            # A platform may return unknown conservatively even though the
+            # original initializer positively proves no thread/start occurred.
+            # Retain that outcome without terminally completing the workflow.
+            key=hashlib.sha256(json.dumps(result,sort_keys=True).encode()).hexdigest()
+            held=directory/('host-unstarted-result-'+key+'.json')
+            if not held.exists():saved(held,result)
+            saved(dispatch,{'state':'unstarted','operationId':fixed,'specSha256':expected})
+            raise PermissionError('Original shared native transport is proven unstarted; resume SAME operation after repair')
+        if result_file.exists():
+            old=json.loads(result_file.read_text())
+            archive=directory/('host-prior-result-'+hashlib.sha256(result_file.read_bytes()).hexdigest()+'.json')
+            if not archive.exists():saved(archive,old)
         saved(result_file, result)
     saved(dispatch, {'state': result['state'], 'operationId': fixed, 'specSha256': expected})
     current = await transport.http('GET', base)

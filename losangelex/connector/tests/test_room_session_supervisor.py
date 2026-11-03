@@ -121,3 +121,47 @@ class ResidentTests(unittest.IsolatedAsyncioTestCase):
    self.assertEqual(len(posts),1);self.assertEqual(posts[0]['originalOperation'],'room-origin:fixture')
    record=json.loads((root/'control/fixture-diagnostic-1-blocked.json').read_text());self.assertTrue(record['accepted']);self.assertTrue(record['reconciled']);self.assertEqual(control.active,{})
    await control.close()
+
+ async def test_actual_admin_workflow_safe_transport_result_resumes_original_without_metadata_replay(self):
+  from lax_connector.room_administration import RoomAdministration,AdministrationUnconfirmed,FACTORY_TOOL
+  from uuid import UUID,uuid5
+  from lax_connector.room_session_files import digest_file
+  import importlib
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);authority,parent,node,room=[str(uuid4()) for _ in range(4)]
+   agent=str(uuid5(UUID(room),'room-agent:'+node));manifest=root/'manifest';saved(manifest,{'fixture':True});guide=root/'AGENTS.md';guide.write_text('Fixture guide')
+   config={'runtimeMode':'room-conversation','authorityId':authority,'agentId':parent,'hostId':node,
+           'nativeServer':{'manifest':str(manifest)},'state':str(root/'parent'),'binary':'/original/native',
+           'codexHome':str(root/'original-profile'),'model':'original-model','effort':'high','roomOriginPolicy':{'path':'/approved/policy','sha256':'1'*64}}
+   slot={'room':room,'node':node,'agent':agent,'coordinator':parent,'revision':1,'state':'pending','receipt':None};posts=[];adapter_calls=[];attachments=[]
+   async def request(method,path,payload=None):
+    if path=='principals/'+parent:return {'id':parent,'authority':authority,'kind':'agent','active':True,'administrator':True}
+    if method=='POST':posts.append((path,payload))
+    if path.endswith('/enroll'):return {'agentId':agent}
+    if path.endswith('/report'):return {'agents':[slot],'complete':False}
+    if path=='agents/'+agent+'/role':return {'home_room':room,'primary_role':'room-agent','purpose':'Local fixture origin'}
+    if path=='principals/'+agent:return {'name':'Fixture local contributor'}
+    return {'agents':[slot],'complete':False}
+   supervisor=SimpleNamespace(config=config,attach=lambda result:attachments.append(result))
+   async def adapter(spec_file,directory,*,inspect,expected_spec_sha256):
+    spec=json.loads(spec_file.read_text());adapter_calls.append(inspect);state=Path(spec['connectorConfig']['state']);state.mkdir(parents=True,mode=0o700,exist_ok=True)
+    base={k:spec[k] for k in ('operationId','authorityId','originRoomId','agentId','hostId')}
+    if len(adapter_calls)==1:
+     saved(state/'native-context.json',{'state':'transport-unavailable','threadStartAttempted':False})
+     return {**base,'state':'unknown','reason':'Conservative platform result, exact bootstrap proves unstarted'}
+    saved(state/'native-context.json',{'state':'ready','threadStartAttempted':True,'nativeThreadId':'NEW-EMPTY-FIXTURE'})
+    return {**base,'state':'ready','nativeThreadId':'NEW-EMPTY-FIXTURE','appServerManifestSha256':digest_file(manifest),'sharedAppServer':True}
+   original_import=importlib.import_module
+   def modules(name,*args,**kwargs):
+    if name=='.room_factory_linux':return SimpleNamespace(provision_local=adapter)
+    return original_import(name,*args,**kwargs)
+   policy={'root':str(root/'agents'),'nativeIdentity':{'fixture':True},'operatingInstructions':[{'path':str(guide),'sha256':digest_file(guide)}]}
+   with patch('lax_connector.room_session_files.host_policy',return_value=(policy,{})),patch('lax_connector.room_origin_factory.importlib.import_module',modules):
+    admin=RoomAdministration(authority=authority,agent=parent,thread='PARENT-NO-NEW-NATIVE-THREAD',request=request,state=root/'admin',host_config=config,session_supervisor=supervisor)
+    with self.assertRaises(AdministrationUnconfirmed):await admin.call(FACTORY_TOOL,{'roomId':room},'ORIGINAL-CONTROL-CALL')
+    result=await admin.call(FACTORY_TOOL,{'roomId':room},'ORIGINAL-CONTROL-CALL')
+   self.assertEqual(adapter_calls,[False,True]);self.assertEqual(len(attachments),1)
+   self.assertEqual(sum(path.endswith('/enroll') for path,_ in posts),1)
+   self.assertEqual(sum(path.endswith('/report') for path,_ in posts),1)
+   self.assertTrue(list((root/'parent/room-origin-factory'/('room-origin-'+agent)).glob('host-unstarted-result-*.json')))
+   self.assertEqual(result['complete'],False) # Not canonical native-ready/business complete.

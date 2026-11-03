@@ -95,3 +95,28 @@ without repeating a native operation. Missing capability on an older backend
 keeps diagnostics local rather than inventing readiness or a new room message.
 The common factory now requires its original in-process supervisor BEFORE any
 enrollment/credential/bootstrap work, not only after a thread was created.
+
+## macOS source integration successor
+
+The exact original r03 Mac module (aeef4b51...) is integrated unmodified, with its
+source pins/15-case fixture/actual-parent qualifier retained as provenance only.
+The common host-only mapper validates real account/enrollment/config, protected
+root/image/IPC/guide witnesses without manufacturing a fake child credential.
+Fresh per-operation parentRuntime.identity comes from process_identity(current
+PID), not a fixture. Native identity comes from a protected explicit PID-metadata
+locator in account policy (nativeRuntimeMetadata {path, optional sha256}), or its
+already-accepted nativeProcess fallback. Missing either is a precise prerequisite,
+never a process scan/new daemon. Locator/profile/program/root/IPC checks remain
+owner-bound. Existing uncertain operation pins are not replaced on restart.
+Root must supply approved operatingInstructions in both OS policies. Both use
+one shared native profile and no per-agent OS services. New Mac thread success
+and supervisor attachment were SYNTHETIC in original platform source tests;
+common mapping here is source/AST integration, not new native Mac qualification.
+
+Both platform adapters may conservatively return unknown on a transport failure.
+The common factory now checks the ORIGINAL persisted initializer receipt: only
+threadStartAttempted=false in connecting/transport-unavailable permits continuing
+that same workflow. Its original conservative result is retained separately,
+not terminally completed. Missing evidence or attempted thread/start stays held.
+A focused real RoomAdministration/step-journal test verifies this same-call path
+reuses original enrollment acceptance and reports once, with stub native effects.

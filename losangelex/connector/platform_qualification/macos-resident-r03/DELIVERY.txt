@@ -1,0 +1,126 @@
+macOS resident room-session platform adapter — common contract r03
+
+Architecture and source
+Implements exact async provision_local(spec_path: Path, operation_dir: Path, *, inspect: bool, expected_spec_sha256: str) -> dict from lax-room-origin-platform-adapter/v2, Root0773ea5f / declared contract rawSHA dc525199f336aaabd604026251fec65caf9bfdbf984c1eaca8e9ce1b27db7a2e. Base SDK246 acc4e932. Only new platform module and focused test differ; common modules, original source/tools/native policy are unchanged. Old per-room launchd candidate is superseded and must NOT be released. Its artifacts and settled/retired inert fixtures remain unchanged historical evidence.
+
+ONE existing resident host runtime and ONE original native app-server per host.
+Many logical agents have private state/workspace/config and separate original persistent threads. This adapter never creates an OS service/account, LaunchAgent, manager, daemon, profile or auth copy. No child process is started: parent/native process inspection uses macOS libproc IN PROCESS. There is no subprocess/launchctl/native-client implementation in this module. Existing room_bootstrap.initialize alone owns native thread/name/full initial policy persistence. Public bootstrap MUST execute inside the exact approved parent PID; a separate CLI/helper process cannot initialize a logical session. File-only parent validation can run separately for operator preparation/qualification.
+
+Input and parent policy mapping
+The protected common spec uses the supplied r03 fields. parentRuntime is:
+ {agentId: original host-owner agent UUID,
+  roomOriginPolicy: {path: protected approved host account policy, sha256: rawSHA},
+  identity: {pid,uid,birth,image} fresh existing parent-process identity}
+The inner macOS policy is schema lax-macos-room-account/v1; root/owner prepares it ONCE at deployment, not the adapter. Never synthesize this authority from an ordinary config flag. Fields:
+ uid,user,serviceHome — exact NSS/effective account; HOME/profile remain original.
+ authorityId,hostId,ownerAgentId — original enrolled native-host owner.
+ initialPermissions — explicit {sandbox:danger-full-access,approvalPolicy:never}.
+ nativeManifest,parentConfig,ownerReceipt — each exact protected {path,sha256}.
+ Parent config retains its original agentId/nativeThreadId/nativeServer/profile.
+ Enrollment binds agentId,nodeId,nativeThreadId,sharedNativeService. Neither
+ secret config contents nor profile/auth contents are returned or copied.
+ agentRoot — preexisting owner-private root, disjoint from original profile and
+ native/Global state/workspace. agentRootIdentity has device/inode/uid/mode/type.
+ Per-operation nativeIdentity and parentRuntime.identity — exact {pid,uid,birth,
+ image}. These are fresh process evidence, not permanent PIDs baked into the
+ account policy. birth is Darwin kernel seconds.microseconds (proc_bsdinfo);
+ image is proc_pidpath. Use module.process_identity(pid) IN PROCESS to construct
+ them. It double-checks PID/UID/kernel birth around image lookup and rejects
+ stopped/zombie processes. Existing accepted ps-date evidence was independently
+ mapped to the same kernel start during qualification. PID alone never suffices.
+ Optional nativeProcess/parentProcess policy fields are accepted as fallback
+ qualification witnesses; production can omit them and provide fresh operation
+ pins. A static account/root authorization need not be reissued on each reboot.
+ interpreter,binary — {path,sha256} original approved interpreter/native image.
+ nativeSocketPin — accepted lax-native-ipc-alias/v1 witness if original socket
+ is a symlink; only that exact alias/target/private parent under root-sticky
+ /private/tmp is admitted. All other private-path ancestry checks stay strict.
+
+Public nativeIdentity must match the original actual native for this operation,
+and nativeHostManifestSha256 must equal policy.nativeManifest.sha256. Fresh
+parent identity must be current PID and match UID/approved interpreter/account.
+New operations can use a freshly accepted parent incarnation with the unchanged
+account policy; existing claimed operation bytes/unknowns may not be replaced.
+Parent upgrade or policy/credential rotation still needs owning transition and
+ALL-session drain; this adapter does not provide a maintenance shortcut.
+
+Agent files and scope
+Logical home is agentRoot/<canonical reserved agent UUID>; state/work children
+and initial-config.private.json are owner-private. UUID reservation/enrollment
+is common-owner responsibility; this adapter never generates an agent ID.
+Initial config has only originRoomId/after0, fresh role/name/token/model/effort,
+original nativeServer/CODEX_HOME/binary and danger-full-access/never. It may not
+inherit an old nativeThreadId/history/adoption. Fresh initial AND explicit resume
+role/tool instructions are preserved. operatingInstructions is a nonempty list
+of {path,sha256} approved guides; actual bytes must match and BOTH instruction
+surfaces must mention each path/hash before initialization and at acceptance.
+
+Kernel flock + exclusive original claim under agentRoot bind raw common spec
+SHA, operation/directory, authority/origin/host/node/agent and original policy
+SHA. The same lock spans file checks, native bootstrap, original intents and
+session-config acceptance. Competing directories/origins cannot replace it.
+Exact initial private config is immutable; session-config.private.json adds only
+its original initialized nativeThreadId for in-process supervisor attachment.
+No old inputs, outboxes, auth or original parent config are cloned or rewritten.
+
+Unknown/recovery semantics
+Before initialization a durable native-initialization-intent is saved. Existing
+SDK246 room_bootstrap handles canonical binding/request digest/name/settings.
+Prior ready is read/reconciled without another native start. Only positively
+proven connecting/transport-unavailable with threadStartAttempted=false may
+resume the SAME operation through that initializer. Exact prior context bytes
+are retained as unstarted-before-SHA.json before doing so. Creating/created/
+naming or any uncertain thread/start remains unknown, unchanged and un-replayed.
+Absent evidence is not proof of non-dispatch. No recovery approval is invented.
+Initial full policy is verified from the accepted bootstrap receipt. Later owner
+restrictions are not reset by ordinary inspection or resume.
+
+Local output and canonical readiness
+Returns exact r03 result schema, same native identity and actual parent PID,
+original distinct nativeThreadId and sessionConfigPath/sessionConfigSha256.
+These are LOCAL attachment fields; common owner MUST remove private paths from
+public/canonical receipts. No config contents or credentials are returned.
+state ready here means ORIGINAL BOOTSTRAP + protected local config accepted.
+It explicitly sets sessionAttachmentRequired/canonicalObservationRequired.
+Parent RoomSessionSupervisor must register exact config/agent/thread and attach
+ConversationalAgent inside its EXISTING process, then wait for a fresh matching
+native observation before canonical room ready. No actual supervisor or fake
+session-ready claim is implemented here. Common owner also fences parent upgrade
+against ALL sessions/in-flight bootstrap/unknown queues, not just Global idle.
+
+Qualification
+15/15 focused tests pass: private idempotent preparation; original room/raw-spec
+claim and competing directory; root replacement; stopped/drifting parent; untouched
+unknown initialization/later restriction; no lifecycle surface; r03 ready/local
+config; lost start ACK held; proven unstarted transport resumes once with exact
+prior bytes; guide drift/missing resume role held; external process cannot start; static account policy accepts fresh per-operation parent evidence.
+Existing246 initializer/permission code runs with SYNTHETIC native RPC in these
+unit tests. No real native context/model/session or enrollment is created.
+One earlier fixture serialized its raw spec differently and correctly hit the
+claim fence; only fixture serialization fixed, original failure retained.
+
+Actual VM parent qualification reads real NSS account/original manifest/profile
+metadata/socket/native4450/parent53447 using libproc, prepares/inspects disposable
+QA-only file scope and retires exact owned QA files. Audit denies ALL subprocess,
+network/bind/native/process-dispatch operations; zero child processes, native RPC,
+model turns, canonical enrollments/session attaches or OS manager actions. The
+policy/UUIDs/root are explicitly QA-only, NOT production deployment approval.
+Original protected config/manifest/enrollment hashes and original kernel process/
+IPC incarnations remain unchanged. Actual-parent acceptance does NOT certify a
+new persisted native thread or multiplex supervisor. No additional launchd fixture
+was run after the architecture correction.
+
+Source and release handoff
+Source ZIP has only code/tests/this guide/source pins/patches/credential-free
+VM-only actual-parent qualifier; no live config/policy/auth/state/DB/reader keys.
+Additive patch targets exact246 where module is absent. Optional replacement
+patch targets ONLY previous r01 module/test exact hashes if already staged.
+Existing GitHub base fetch was not advertised; no local commit or invented
+history is claimed. Root/common owner integrates in the actual canonical repo.
+
+Remaining live gate: integrate common policy mapping and RoomSessionSupervisor,
+review one SDK release, create actual protected host policy/root, then authorize
+one exact reserved logical agent initialization/attach and fresh native observation.
+NativeMac production qualification belongs to its existing owner. No AppStore,
+Chrome, phone, Xcode, business messaging, production Global/native/API lifecycle,
+model/permissions/auth or original queued work changed in this source task.

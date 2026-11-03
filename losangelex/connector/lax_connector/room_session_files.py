@@ -11,6 +11,7 @@ def digest_file(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def host_policy(config):
     if os.name=='nt':return windows_host_policy(config)
+    if __import__('sys').platform=='darwin':return macos_host_policy(config)
     selection=config.get('roomOriginPolicy')
     if not isinstance(selection,dict) or set(selection)!={'path','sha256'}:
         raise PermissionError('Parent host room-session policy is not installed; no per-agent service or private daemon fallback')
@@ -51,6 +52,8 @@ def validate_spec(spec_path,expected_spec_sha256):
         raise ValueError('Distinct original room session config required')
     if digest_file(config['nativeServer']['manifest'])!=spec['nativeHostManifestSha256']:
         raise PermissionError('Original shared native manifest changed')
+    # Linux consumes this common spec validator; Windows/macOS own full native
+    # account/root/parent validation in their supplied platform adapters.
     policy,_=host_policy({**config,'agentId':spec['parentRuntime']['agentId'],
                           'roomOriginPolicy':spec['parentRuntime'].get('roomOriginPolicy',spec['parentRuntime'].get('policy'))})
     if policy['nativeIdentity']!=spec['nativeIdentity'] or policy['operatingInstructions']!=spec['operatingInstructions']:
@@ -90,3 +93,66 @@ def windows_host_policy(config):
             'nativeIdentity':proof['sharedNative'],'operatingInstructions':guides,
             'appServerManifestSha256':raw['nativeHostManifestSha256']}
     return policy,host_manifest(config)
+
+
+def macos_host_policy(config):
+    """Host-only counterpart of the supplied MacAgentFiles child validator.
+
+    No synthetic child/credential is manufactured just to inspect the parent.
+    All process IDs are read from this parent and protected original metadata.
+    """
+    from . import room_factory_macos as platform
+    selection=config.get('roomOriginPolicy')
+    if not isinstance(selection,dict) or set(selection)!={'path','sha256'}:
+        raise PermissionError('Protected macOS host account policy missing')
+    raw=platform.load(selection['path'],private=True,sha=selection['sha256'])
+    account=platform.pwd.getpwuid(os.geteuid())
+    platform.require(raw.get('schema')=='lax-macos-room-account/v1'
+        and (raw['uid'],raw['user'],raw['serviceHome'])==(os.geteuid(),account.pw_name,account.pw_dir),
+        'Original macOS host NSS/account policy differs')
+    platform.require(raw['initialPermissions']=={'sandbox':'danger-full-access','approvalPolicy':'never'},
+                     'Host policy must authorize explicit initial room permissions')
+    manifest=json.loads(platform.pin_file(raw['nativeManifest']))
+    parent=json.loads(platform.pin_file(raw['parentConfig']))
+    enrollment=json.loads(platform.pin_file(raw['ownerReceipt']))
+    platform.require((raw['authorityId'],raw['hostId'],raw['ownerAgentId'])==
+        (config['authorityId'],config['hostId'],config['agentId']) and
+        (manifest['authorityId'],manifest['hostId'],manifest['ownerAgentId'],manifest['serviceUser'])==
+        (raw['authorityId'],raw['hostId'],raw['ownerAgentId'],account.pw_name) and
+        manifest['schema']=='lax-native-host/v1' and manifest['platform']=='darwin'
+        and manifest['runtimeMode']=='room-conversation','Original macOS authority/host/parent differs')
+    platform.require(all(parent[k]==config[k] for k in ('authorityId','hostId','agentId','nativeThreadId','nativeServer','codexHome','binary'))
+        and config['nativeServer']=={'manifest':raw['nativeManifest']['path']}
+        and (enrollment['agentId'],enrollment['nodeId'],enrollment['nativeThreadId'],enrollment['sharedNativeService'])==
+        (config['agentId'],config['hostId'],config['nativeThreadId'],manifest['unit']),
+        'Original macOS parent config/enrollment/thread differs')
+    root=platform.trusted(raw['agentRoot'],private=True,directory=True)
+    platform.require(platform.identity(root)==raw['agentRootIdentity'],'Original host agent root incarnation changed')
+    for original in (manifest['codexHome'],manifest['state'],parent['state'],parent.get('workspace',manifest['workspace'])):
+        platform.require(not platform.overlap(root,original),'Agent root overlaps original native/profile/parent state')
+    parent_identity=platform.process_identity(os.getpid())
+    platform.require(platform.program(raw['interpreter'])==str(Path(parent_identity['image']).resolve()),
+                     'Current parent interpreter image differs')
+    locator=raw.get('nativeRuntimeMetadata')
+    if locator:
+        platform.require(set(locator) in ({'path'},{'path','sha256'}),'Exact protected native runtime locator required')
+        metadata=platform.load(locator['path'],private=True,sha=locator.get('sha256'))
+        native_identity=platform.process_identity(metadata['pid'])
+    elif raw.get('nativeProcess'):
+        native_identity=platform.process_identity(raw['nativeProcess']['pid'])
+        platform.require(native_identity==raw['nativeProcess'],'Original accepted native incarnation changed')
+    else:raise PermissionError('Original protected native PID metadata locator is required; no process scan/daemon fallback')
+    platform.require(parent_identity['uid']==native_identity['uid']==os.geteuid()
+        and Path(native_identity['image']).resolve()==Path(manifest['binary']).resolve()
+        and config['binary']==manifest['binary']==raw['binary']['path']
+        and config['codexHome']==manifest['codexHome'],'Original shared native image/profile differs')
+    platform.program(raw['binary']);platform.ipc(manifest,raw.get('nativeSocketPin'))
+    platform.trusted(manifest['codexHome'],private=True,directory=True)
+    platform.trusted(Path(manifest['codexHome'])/'auth.json',private=True) # metadata only
+    guides=raw.get('operatingInstructions')
+    platform.require(isinstance(guides,list) and 1<=len(guides)<=16,'Approved macOS host guide list missing')
+    for guide in guides:platform.read(guide['path'],sha=guide['sha256'])
+    return {'schema':'lax-room-session-policy/v1','authorityId':config['authorityId'],'hostId':config['hostId'],
+        'parentAgentId':config['agentId'],'root':str(root),'workspaceRelative':'work',
+        'nativeIdentity':native_identity,'parentRuntimeIdentity':parent_identity,
+        'operatingInstructions':guides,'appServerManifestSha256':raw['nativeManifest']['sha256']},manifest
