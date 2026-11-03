@@ -44,13 +44,17 @@ def with_policy(instructions):
 
 
 def input_guidance(audience):
+    reply_scope = (' If inputs from several rooms or audiences share this native turn, '
+                   'answer each relevant source explicitly with hollywood_publish and its '
+                   'original sourceEventId, room and audience. An unscoped final cannot be '
+                   'safely routed across those sources; native turn end is not work completion.')
     if audience == 'direct':
         return ('This is explicitly addressed private human input, not a room broadcast. '
-                'Preserve its source/audience and assess relevance at the native boundary.')
+                'Preserve its source/audience and assess relevance at the native boundary.' + reply_scope)
     return ('This original human input already reached all room agent members. Act on relevant '
             'local responsibility without a Global relay or acknowledgement-only repost. '
             'Delegate only an additional concrete assignment/dependency/ownership delta or '
-            'missing peer/host; preserve useful questions/results and busy-boundary relevance.')
+            'missing peer/host; preserve useful questions/results and busy-boundary relevance.' + reply_scope)
 
 
 def resume_overrides(config):

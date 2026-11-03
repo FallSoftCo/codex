@@ -136,6 +136,19 @@ class RoomNativeState:
         # from last message, silence, action captions or a delivered answer.
         if status!=self.status or source!=self.source:
             self.status=dict(status);self.source=source;self.wake.set()
+            # Owner-private truth, separate from the legacy room-scoped wire
+            # projection. No source identifiers enter another room's status.
+            saved(self.state/'shared-native-status.private.json',{'version':1,
+                'nativeThread':self.thread,'status':self.status,'source':
+                {'id':source['id'],'room':source['room']} if source else None,
+                'observedAt':self.now(),'taskCompletion':'not_inferred'})
+
+    def own_view(self,room):
+        mapped=bool(self.source and self.source['room']==room)
+        return {'visibility':'owner-private','nativeThread':self.thread,
+                'sharedThreadStatus':dict(self.status),
+                'roomAttribution':'source_in_room' if mapped else 'active_elsewhere_or_unattributed' if self.status['type']=='active' else 'no_active_room_source',
+                'legacyRoomStatus':self.desired(room)['status'],'taskCompletion':'not_inferred'}
 
     def desired(self,room):
         source=self.source if self.source and self.source['room']==room else None

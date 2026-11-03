@@ -22,6 +22,7 @@ class RoomOutput:
         if not source:
             # A native turn may contain inputs from different rooms/audiences.
             # No guess or automatic audience widening is allowed.
+            self.io.hold_ambiguous_final(row)
             return False
         if not reply_expected(source):
             # Addressed peer answers must remain deliberate model publications.

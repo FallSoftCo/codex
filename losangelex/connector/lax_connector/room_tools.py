@@ -33,10 +33,11 @@ TOOLS += [definition('hollywood_admin_reconcile',
 
 
 class RoomTools:
-    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None, conversation_io=None):
+    def __init__(self,*,authority_id,agent_id,thread_id,request,state,source_for_turn=None,host_config=None,on_membership=None, conversation_io=None,native_state_view=None):
         self.authority=str(UUID(authority_id));self.agent=str(UUID(agent_id));self.thread=thread_id
         self.request=request;self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.conversation_io=conversation_io
+        self.native_state_view=native_state_view
         self.source_for_turn=source_for_turn
         self.on_membership=on_membership
         self.publish_lock=asyncio.Lock()
@@ -64,6 +65,10 @@ class RoomTools:
             return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         if name in READ_NAMES:
             result=await inspect_metadata(self.request,name,args)
+            if name=='hollywood_room_info' and self.conversation_io:
+                result={**result,'ownReplyState':self.conversation_io.reply_status(args['roomId'])}
+            if name=='hollywood_room_info' and self.native_state_view:
+                result={**result,'ownNativeState':self.native_state_view(args['roomId'])}
             return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         room=str(UUID(args['roomId']))
         if name=='hollywood_context':
@@ -75,6 +80,8 @@ class RoomTools:
                     'localHost':{'hostname':socket.gethostname(),
                                  'hostId':self.administration.host_config.get('hostId'),
                                  'workspace':self.administration.host_config.get('workspace')}}
+            if self.conversation_io:result['ownReplyState']=self.conversation_io.reply_status(room)
+            if self.native_state_view:result['ownNativeState']=self.native_state_view(room)
         elif name=='hollywood_read_room':
             if 'after' in args and 'before' in args:raise ValueError('Choose one history direction')
             query={k:args[k] for k in ('after','before','limit','view') if k in args}
@@ -117,10 +124,13 @@ class RoomTools:
                                      'correct the audience/source in a new native tool call.')
         fingerprint=hashlib.sha256(json.dumps({'room':room,'payload':payload},sort_keys=True).encode()).hexdigest()
         if prior and prior['fingerprint']!=fingerprint:raise ValueError('Original native call changed')
-        if prior and prior['state']=='accepted':return prior['receipt']
+        if prior and prior['state']=='accepted':
+            if self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked'):
+                self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'])
+            return prior['receipt']
         if prior and prior['state']=='rejected':raise HttpFailure(prior['error']['status'],prior['error']['message'])
         track = self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked')
-        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'attempting')
+        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'attempting',phase=payload['responsePhase'])
         if not prior:
             saved(path,{'state':'sending','fingerprint':fingerprint,'room':room,'payload':payload})
             try:
@@ -128,7 +138,7 @@ class RoomTools:
             except HttpFailure as error:
                 if error.status in (400,403,409):
                     saved(path,{'state':'rejected','fingerprint':fingerprint,'room':room,'payload':payload,'error':error.public_details()})
-                    if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'rejected')
+                    if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'rejected',phase=payload['responsePhase'])
                     raise
                 result=await self.request('GET','commands/'+payload['operationId'])
             except Exception:
@@ -145,5 +155,5 @@ class RoomTools:
             or payload.get('responsePhase') is not None and event.get('data',{}).get('responsePhase')!=payload['responsePhase']):
             raise ValueError('Original publication acceptance unavailable or mismatched')
         saved(path,{'state':'accepted','fingerprint':fingerprint,'room':room,'payload':payload,'receipt':result})
-        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted')
+        if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'])
         return result

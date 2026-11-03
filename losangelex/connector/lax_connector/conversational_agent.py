@@ -138,7 +138,8 @@ class ConversationalAgent:
             self.tools=RoomTools(authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                                  thread_id=self.thread,request=self.http,state=self.state/'publications',
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
-                                 on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None,conversation_io=self.conversation_io)
+                                 on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None,
+                                 conversation_io=self.conversation_io,native_state_view=self.native_state.own_view)
             from .room_output import RoomOutput
             self.output=RoomOutput(self.conversation_io,self.tools)
             if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()

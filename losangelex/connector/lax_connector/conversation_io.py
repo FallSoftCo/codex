@@ -50,6 +50,9 @@ class ConversationIO:
             if self.db.execute('SELECT value FROM binding WHERE id=1').fetchone()['value'] != encoded:
                 raise ValueError('Conversation I/O belongs to another native owner')
         self._migrate_reply_sources()
+        from .room_reply_state import SCHEMA
+        with self.db:
+            self.db.executescript(SCHEMA)
 
     def _migrate_reply_sources(self):
         # Additive, backward-readable adapter metadata. Bounded backfill avoids
@@ -163,10 +166,17 @@ class ConversationIO:
     def rooms(self, turn):
         return {x['room'] for x in self.db.execute('SELECT DISTINCT room FROM input_source WHERE turn=?', (turn,))}
 
-    def publication(self, turn, source, key, room, state):
+    def publication(self, turn, source, key, room, state, *, phase=None):
         if state not in {'attempting', 'accepted', 'rejected'}:
             raise ValueError('Actual publication receipt state required')
+        if phase not in (None, 'answer', 'blocked'):
+            raise ValueError('Exact final response phase required')
         with self.db:
+            if phase is not None:
+                prior = self.db.execute('SELECT phase FROM reply_publication_phase WHERE turn=? AND key=?', (turn,key)).fetchone()
+                if prior and prior['phase'] != phase:
+                    raise ValueError('Original publication response phase changed')
+                self.db.execute('INSERT INTO reply_publication_phase VALUES(?,?,?) ON CONFLICT DO NOTHING', (turn,key,phase))
             old = self.db.execute('SELECT state FROM publication WHERE turn=? AND key=?', (turn, key)).fetchone()
             if old and old['state'] == 'accepted':
                 return
@@ -193,7 +203,18 @@ class ConversationIO:
             self.db.execute("UPDATE output SET state='queued' WHERE turn=? AND state='staged'", (turn,))
 
     def pending(self):
-        return [dict(x) for x in self.db.execute("SELECT * FROM output WHERE state='queued' ORDER BY rowid LIMIT 32")]
+        from .room_reply_state import AMBIGUOUS
+        return [dict(x) for x in self.db.execute("""SELECT o.* FROM output o
+            LEFT JOIN reply_delivery_hold h ON h.item=o.item
+            WHERE o.state='queued' AND (h.item IS NULL OR h.reason!=?) ORDER BY o.rowid LIMIT 32""", (AMBIGUOUS,))]
+
+    def hold_ambiguous_final(self, row):
+        from .room_reply_state import hold
+        hold(self.db, row)
+
+    def reply_status(self, room, *, after=0, limit=100, recent=True):
+        from .room_reply_state import report
+        return report(self, str(UUID(room)), after=after, limit=limit, recent=recent)
 
     def unfinished(self):
         return [x['turn'] for x in self.db.execute("SELECT DISTINCT turn FROM output WHERE state='staged' LIMIT 100")]
