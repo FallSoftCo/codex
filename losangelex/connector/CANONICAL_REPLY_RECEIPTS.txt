@@ -47,10 +47,10 @@ Qualification scope
   No actual native/model calls; not native exactly-once or semantic DLP proof.
 - Existing reply-outcome/output/receive-upgrade regressions remain distinct.
 
-Actual diagnostic limitation: the reported production event8e187dda was an UPDATE
+Actual diagnostic limitation: the reported production event was an UPDATE
 in both its retained native tool receipt and exact authenticated canonical read,
 not an answer. Its absence from final-phase tracking was correct. A later actual
-answerce877046 did populate the original local final-phase ledger. Therefore this
+answer did populate the original local final-phase ledger. Therefore this
 candidate qualifies the requested missing-callback/external-path hardening; it
 does not claim that the reported update proved a lost production final.
 
