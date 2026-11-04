@@ -155,7 +155,9 @@ class ResidentTests(unittest.IsolatedAsyncioTestCase):
    def modules(name,*args,**kwargs):
     if name=='.room_factory_linux':return SimpleNamespace(provision_local=adapter)
     return original_import(name,*args,**kwargs)
-   policy={'root':str(root/'agents'),'nativeIdentity':{'fixture':True},'operatingInstructions':[{'path':str(guide),'sha256':digest_file(guide)}]}
+   policy={'root':str(root/'agents'),'nativeIdentity':{'fixture':True},
+           'initialPermissions':{'sandbox':'danger-full-access','approvalPolicy':'never'},
+           'operatingInstructions':[{'path':str(guide),'sha256':digest_file(guide)}]}
    with patch('lax_connector.room_session_files.host_policy',return_value=(policy,{})),patch('lax_connector.room_origin_factory.importlib.import_module',modules):
     admin=RoomAdministration(authority=authority,agent=parent,thread='PARENT-NO-NEW-NATIVE-THREAD',request=request,state=root/'admin',host_config=config,session_supervisor=supervisor)
     with self.assertRaises(AdministrationUnconfirmed):await admin.call(FACTORY_TOOL,{'roomId':room},'ORIGINAL-CONTROL-CALL')

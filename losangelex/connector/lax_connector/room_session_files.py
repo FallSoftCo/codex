@@ -37,7 +37,7 @@ def host_policy(config):
         p=Path(guide['path'])
         if not p.is_absolute() or p.is_symlink() or not p.is_file() or digest_file(p)!=guide['sha256']:
             raise PermissionError('Approved host operating instruction pin changed')
-    return policy,manifest
+    return {**policy,'initialPermissions':approved_initial_permissions(config,{},policy)},manifest
 
 
 def validate_spec(spec_path,expected_spec_sha256):
@@ -93,7 +93,8 @@ def windows_host_policy(config,*,resident=True):
             and not info.st_file_attributes & 0x400 and digest_file(path)==guide['sha256'],'Original host operating guide differs')
     parent_config=platform.read(raw['parentConfigPath'])
     defaults=approved_defaults(config,parent_config,raw)
-    policy={**defaults,'schema':'lax-room-session-policy/v1','authorityId':raw['authorityId'],'hostId':raw['hostId'],
+    policy={**defaults,'initialPermissions':approved_initial_permissions(config,parent_config,raw),
+            'schema':'lax-room-session-policy/v1','authorityId':raw['authorityId'],'hostId':raw['hostId'],
             'parentAgentId':raw['parentAgentId'],'root':raw['agentRoot'],'workspaceRelative':'home/work',
             'nativeIdentity':proof['sharedNative'],'operatingInstructions':guides,
             'appServerManifestSha256':raw['nativeHostManifestSha256']}
@@ -158,7 +159,8 @@ def macos_host_policy(config):
     platform.require(isinstance(guides,list) and 1<=len(guides)<=16,'Approved macOS host guide list missing')
     for guide in guides:platform.read(guide['path'],sha=guide['sha256'])
     defaults=approved_defaults(config,parent,raw)
-    return {**defaults,'schema':'lax-room-session-policy/v1','authorityId':config['authorityId'],'hostId':config['hostId'],
+    return {**defaults,'initialPermissions':approved_initial_permissions(config,parent,raw),
+        'schema':'lax-room-session-policy/v1','authorityId':config['authorityId'],'hostId':config['hostId'],
         'parentAgentId':config['agentId'],'root':str(root),'workspaceRelative':'work',
         'nativeIdentity':native_identity,'parentRuntimeIdentity':parent_identity,
         'operatingInstructions':guides,'appServerManifestSha256':raw['nativeManifest']['sha256']},manifest
@@ -175,6 +177,19 @@ def approved_defaults(config,parent,policy):
             raise PermissionError('Approved parent '+key+' differs from current host configuration')
         result[key]=value
     return result
+
+
+def approved_initial_permissions(config,parent,policy):
+    """Fresh child defaults from reviewed policy/explicit parent, never warm inference."""
+    keys=('sandbox','approvalPolicy')
+    value=policy.get('initialPermissions')
+    if value is None:value={key:config.get(key) or parent.get(key) for key in keys}
+    if value!={'sandbox':'danger-full-access','approvalPolicy':'never'}:
+        raise PermissionError('Exact reviewed initial room permissions unavailable')
+    for source in (config,parent):
+        if any(source.get(key) is not None and source[key]!=value[key] for key in keys):
+            raise PermissionError('Current parent restriction differs from initial room policy; no widening')
+    return dict(value)
 
 
 def parent_admission_revision(config):

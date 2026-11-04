@@ -19,13 +19,18 @@ def proven_unstarted(spec):
     return prior.get('threadStartAttempted') is False and prior.get('state') in ('connecting','transport-unavailable')
 
 
-def origin_configuration(config, *, agent, name, room, credential, state, workspace, operating_instructions=None):
+def origin_configuration(config, *, agent, name, room, credential, state, workspace, operating_instructions=None,
+                         initial_permissions=None):
     """Fresh role/context contract, not a filtered clone of a Global agent."""
     from .room_tools import TOOLS
     from .room_participation import with_policy
     approved = ('runtimeMode','authorityId','hostId','hollywoodUrl','binary','codexHome',
                 'model','effort','sandbox','approvalPolicy','nativeServer','serviceMemoryMaxBytes')
     value = {key: config[key] for key in approved if key in config}
+    from .room_session_files import approved_initial_permissions
+    permissions=approved_initial_permissions(config,{},
+        {'initialPermissions':initial_permissions} if initial_permissions is not None else {})
+    value.update(permissions) # NEW child only; never mutate the accepted warm parent.
     refs = list(operating_instructions or [])
     instructions = with_policy('You are ' + name + ', a persistent room-owned local contributor. '
         'Your immutable room origin is ' + room + '. Own relevant local responsibilities there; '
@@ -113,7 +118,8 @@ async def _provision_locked(transport, arguments, operation):
         home = Path(policy['root']) / agent
         initial={**config,**{k:policy[k] for k in ('model','effort') if not config.get(k) and policy.get(k)}}
         connector = origin_configuration(initial, agent=agent, name=principal['name'], room=room,
-            credential=credential['token'], state=home/'state', workspace=home/policy.get('workspaceRelative','work'), operating_instructions=operating)
+            credential=credential['token'], state=home/'state', workspace=home/policy.get('workspaceRelative','work'),
+            operating_instructions=operating,initial_permissions=policy.get('initialPermissions'))
         spec = {'schema': 'lax-room-origin-local-spec/v1', 'operationId': fixed,
             'authorityId': config['authorityId'], 'originRoomId': room, 'agentId': agent,
             'hostId': config['hostId'], 'nodeId': node, 'connectorConfig': connector,

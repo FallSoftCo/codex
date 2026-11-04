@@ -66,11 +66,50 @@ new timer, model wake or permission flag. This metadata check is not a distribut
 lock: the server's actual authorization and original effect receipts still rule.
 Existing native/session/user-stop and platform owner-admission fences are intact.
 
-`tests/test_room_initialization_continuation.py` exercises real loopback HTTP and
-private journals with synthetic HOME/parent/native facts, including lost replies,
-scope/wire rejection and pause-enable/re-pause edges. It is not live rollout,
-PostgreSQL dispatch-CAS or model qualification. Preserve old13/current14 native
-declarations and all original platform/host operations during owner review.
+An earlier controller `reported` diagnostic is not acceptance of a still-sending
+enrollment. A stable canonical identity/origin/member/coordinator change can
+resume ONLY that same bound, unconfirmed step-2 workflow with its original pending
+pointer and credential, before any spec/platform dispatch. Slot revision may stay
+blocked while HOME attachment changes these canonical facts. Timestamps and
+diagnostic freshness are not recovery edges. Completed/rejected workflows,
+existing specs and unknown native operations do not qualify. Prior diagnostic
+observations are archived, not erased or converted into accepted effects.
+
+Fresh NEW child creation now receives explicit initial permissions from reviewed
+normalized Linux/Windows/macOS host policy (or an explicit matching accepted parent
+configuration). Missing defaults fail closed; a current explicit parent restriction
+is never widened. Warm parent/native settings and byte-exact tool declarations are
+not rewritten. This prevents invalid fresh Mac children when the warm parent's
+creation-only fields are absent. Existing immutable invalid specs are NOT silently
+replaced: a completed blocked workflow and its accepted report wire require separate
+explicit original-operation, positively-no-thread-start owner reconciliation.
+
+Qualification stages (none establishes affected-host/native/model readiness):
+
+* `tests/test_room_initialization_continuation.py`: real loopback HTTP/private
+  journals; synthetic HOME phases and parent facts; scope/wire/unknown/re-pause
+  rejection and narrow reported-observation recovery.
+* `tests/integration_initialization_continuation.py`: reuses the reviewed existing
+  API HOME fixture via `SDK250_HOME_FIXTURE`; isolated two PostgreSQL stores, two
+  authenticated loopback NATS nodes and actual HTTP/prepare/dispatch CAS. Interrupted
+  prepare, lost attach ACK, blocked-revision canonical change and real placement
+  pause/enable use the same original workflows/credentials. Native adapter/host
+  policy are synthetic. `ROOM_HOME_NATS_QA/database.json` must name ONLY disposable
+  owned databases; this fixture creates a second database and must never use live
+  configuration. Retire only its exact owned broker/container/volume after closure.
+* `tests/integration_initial_permissions.py`: full common factory to actual Mac
+  policy normalization, validator, private-file/IPC and platform-bootstrap boundary.
+  Only Darwin process/NSS and native RPC facts are synthetic on CPU. Omitted warm
+  creation overrides succeed for NEW child; old invalid child is rejected before
+  native; parent/auth bytes and restrictions survive. `SDK250_MAC_QA` must be a
+  short owner-private disk directory (UDS path limit); `SDK250_MAC_RESULT` names the
+  owned qualification result. No real Darwin native/model claim.
+
+Reviewable stages: original HOME continuation/parent-placement fix first; then
+canonical reported-enrollment recovery plus real HOME fixture; then initial-child
+permission normalization plus full platform boundary. Preserve old13/current14 and
+all original platform/host operations during independent release review. No live
+selection, API/product service change, signing or publication is performed by tests.
 
 tests/integration_native_administrative_recovery.py exercises actual Global/worker
 models and a real artifact. Its private proxy drops accepted principal, role,

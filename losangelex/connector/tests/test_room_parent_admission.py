@@ -110,7 +110,7 @@ class AdmissionTests(unittest.IsolatedAsyncioTestCase):
 
 class WindowsCommonTests(unittest.TestCase):
  def platform(self,root):
-  guide=root/'guide';guide.write_text('Owned guide');policy={'schema':'lax-windows-room-parent-policy/v2','authorityId':'a','hostId':'h','parentAgentId':'p','nativeHostManifest':'ORIGINAL','nativeHostManifestSha256':'m'*64,'parentConfigPath':'PROJECTION','agentRoot':'APPROVED','operatingInstructions':[{'path':str(guide),'sha256':digest_file(guide)}],'model':'approved','effort':'high','parentRuntimeMetadata':'RUNTIME','parentTaskName':'ORIGINAL'}
+  guide=root/'guide';guide.write_text('Owned guide');policy={'initialPermissions':{'sandbox':'danger-full-access','approvalPolicy':'never'},'schema':'lax-windows-room-parent-policy/v2','authorityId':'a','hostId':'h','parentAgentId':'p','nativeHostManifest':'ORIGINAL','nativeHostManifestSha256':'m'*64,'parentConfigPath':'PROJECTION','agentRoot':'APPROVED','operatingInstructions':[{'path':str(guide),'sha256':digest_file(guide)}],'model':'approved','effort':'high','parentRuntimeMetadata':'RUNTIME','parentTaskName':'ORIGINAL'}
   runtime={'pid':os.getpid(),'created':'SYNTHETIC-A'};native={'pid':123,'created':'SYNTHETIC-N'}
   accepted={'schema':'lax-windows-parent-runtime-acceptance/v2','state':'running','admissionAllowed':True,'runtimeIdentity':runtime,'nativeIdentity':native,'parentArgvSha256':'ARGV'}
   config={'authorityId':'a','hostId':'h','agentId':'p','state':str(root/'state'),'nativeThreadId':'GLOBAL','nativeServer':{'manifest':'ORIGINAL'},'roomOriginPolicy':{'path':'POLICY','sha256':'1'*64}}
@@ -125,7 +125,7 @@ class WindowsCommonTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);config,policy,accepted,platform=self.platform(root)
    with patch.dict('sys.modules',{'lax_connector.room_factory_windows_state':platform}),patch.object(Path,'lstat',return_value=SimpleNamespace(st_file_attributes=0)),patch.object(files,'host_manifest',return_value={'fixture':True}):
-    normalized,_=files.windows_host_policy(config);self.assertEqual(normalized['model'],'approved')
+    normalized,_=files.windows_host_policy(config);self.assertEqual(normalized['model'],'approved');self.assertEqual(normalized['initialPermissions'],policy['initialPermissions'])
     platform.read_parent_acceptance.assert_called_once_with(policy,expected_policy_sha256='1'*64)
     accepted['admissionAllowed']=False
     with self.assertRaisesRegex(PermissionError,'closed or changed'):files.windows_host_policy(config)
