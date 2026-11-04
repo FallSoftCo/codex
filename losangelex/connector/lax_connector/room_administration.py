@@ -61,6 +61,9 @@ class RoomAdministration:
                     if any(old[k]!=record[k] for k in ('operationId','tool','arguments','binding')):raise ValueError('Original administrative call changed')
                     record=old
             if record.get('binding')!=self.binding:raise ValueError('Original administration belongs to another native conversation')
+            if record['state']=='completed' and record['tool']==FACTORY_TOOL:
+                from .room_initial_configuration import select
+                path,record=select(self,path,record)
             if record['state']=='completed':return record['result']
             if record['state']=='rejected':raise ValueError('Original administrative operation was rejected')
             # At most one unresolved mutation workflow. This durable pointer
@@ -70,12 +73,16 @@ class RoomAdministration:
                 active=json.loads(pending.read_text())
                 if active['binding']!=self.binding:raise ValueError('Pending administration belongs to another native conversation')
                 active_path=self.state/('workflow-'+str(UUID(active['operationId'].removeprefix('native-admin:')))+'.json')
+                if active.get('configurationRecovery'):
+                    from .room_initial_configuration import journal_path
+                    active_path=journal_path(self.state,active['operationId'])
                 original=json.loads(active_path.read_text())
                 if original['state'] in ('completed','rejected'):pending.unlink()
                 elif active['operationId']!=record['operationId']:
                     raise AdministrationUnconfirmed('Inspect original administration before another mutation: '+active['operationId'])
             if not path.exists():saved(path,record)
-            saved(pending,{'operationId':record['operationId'],'binding':self.binding})
+            saved(pending,{'operationId':record['operationId'],'binding':self.binding,
+                **({'configurationRecovery':True} if record.get('configurationSuccessor') else {})})
             transport=AdministrationSteps(self,record['operationId'],workflow=record)
             try:
                 if record['tool']==FACTORY_TOOL:
@@ -106,10 +113,14 @@ class AdministrationSteps:
         self.owner=owner;self.config=owner.config;self.state=owner.state
         self.operation=operation;self.position=0;self.accepted_writes=False
         self.workflow=workflow
+        self.initial_configuration_successor=workflow.get('configurationSuccessor')
 
     async def http(self,method,path,payload=None):
         index=self.position;self.position+=1
         directory=self.state/digest(self.operation);state_directory(directory, exist_ok=True)
+        if self.initial_configuration_successor and index>=5:
+            directory=directory/('initial-configuration-'+self.initial_configuration_successor['spec']['sha256'])
+            state_directory(directory,exist_ok=True)
         file=directory/(str(index)+'.json')
         wire={'method':method,'path':path,'body':payload};fingerprint=digest(wire)
         old=json.loads(file.read_text()) if file.exists() else None

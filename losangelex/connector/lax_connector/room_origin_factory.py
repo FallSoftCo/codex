@@ -85,6 +85,16 @@ async def _provision_locked(transport, arguments, operation):
     state_directory(directory, parents=True, exist_ok=True)
     spec_file = directory / 'spec.private.json'
     dispatch = directory / 'dispatch.json'
+    successor=getattr(transport,'initial_configuration_successor',None)
+    suffix=''
+    if successor:
+        if successor['operationId']!=operation or successor['binding']!=owner.binding:
+            raise HostProvisionUnconfirmed('Original configuration successor scope differs')
+        suffix='-initial-successor-'+successor['spec']['sha256']
+        spec_file=Path(successor['spec']['path'])
+        if spec_file.parent!=directory or hashlib.sha256(spec_file.read_bytes()).hexdigest()!=successor['spec']['sha256']:
+            raise HostProvisionUnconfirmed('Original configuration successor specification changed')
+        dispatch=directory/('dispatch'+suffix+'.json')
     spec = json.loads(spec_file.read_text()) if spec_file.exists() else None
     credential_file = factory_state / ('agent-credential-' + agent + '.json')
     if spec:
@@ -143,7 +153,7 @@ async def _provision_locked(transport, arguments, operation):
     if not prior:
         saved(dispatch, {'state': 'dispatching', 'operationId': fixed, 'specSha256': expected})
     transport.accepted_writes = True
-    result_file = directory/('host-result-' + hashlib.sha256(operation.encode()).hexdigest() + '.json')
+    result_file = directory/('host-result-' + hashlib.sha256(operation.encode()).hexdigest() + suffix + '.json')
     if result_file.exists() and not proven_unstarted(spec):
         result = json.loads(result_file.read_text())
     else:
@@ -178,7 +188,7 @@ async def _provision_locked(transport, arguments, operation):
         receipt = {'nativeThreadId': result['nativeThreadId'], 'nativeHostId': node,
             'appServerManifestSha256': result['appServerManifestSha256'], 'sharedAppServer': True}
     await transport.http('POST', base + '/' + node + '/report',
-        {'operationId': operation + ':report', 'revision': slot['revision'],
+        {'operationId': operation + (':initial-config:'+successor['spec']['sha256'] if successor else '') + ':report', 'revision': slot['revision'],
          'state': 'provisioning' if receipt else result['state'],
          'note': result.get('reason') or 'Host accepted; awaiting fresh original native runtime observation',
          'receipt': receipt})

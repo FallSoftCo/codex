@@ -159,6 +159,10 @@ class RoomOriginControl:
             if not safe:continue  # Never infer absence from missing HTTP/native ACK.
             resume_reported=bool(old and old['state']=='reported'
                 and self.changed_reported_enrollment(key,slot,old,enrollment))
+            if old and old['state']=='reported' and not resume_reported:
+                from .room_initial_configuration import available
+                operation='native-admin:'+str(uuid5(UUID(self.config['agentId']),digest([self.thread,'room-origin:'+key])))
+                resume_reported=available(self.config,self.state/key,self.thread,operation)
             if old and old['state']=='reported' and not resume_reported:continue
             if (not self.supervisor and old and old.get('prerequisite')==fingerprint
                     and self.now()<old.get('nextCheckAt',0)):continue
@@ -175,7 +179,7 @@ class RoomOriginControl:
                     old=json.loads(file.read_text()) if file.exists() else None
                     safe,fingerprint=recovery(self.config,slot,current,enrollment)
                     if not safe or old and old['state']=='reported' and not resume_reported:return
-                    if old and old.get('prerequisite')==fingerprint and self.now()<old.get('nextCheckAt',0):return
+                    if old and not resume_reported and old.get('prerequisite')==fingerprint and self.now()<old.get('nextCheckAt',0):return
                     async with self.capacity:
                         # A queued sibling must not use an enabled snapshot
                         # captured before a real user/maintenance pause.
@@ -184,7 +188,10 @@ class RoomOriginControl:
                             if current is None:return
                         safe,fingerprint=recovery(self.config,slot,current,enrollment)
                         if not safe:return
-                        if resume_reported and not self.pending_enrollment(key,slot):return
+                        if resume_reported and not self.pending_enrollment(key,slot):
+                            from .room_initial_configuration import available
+                            operation='native-admin:'+str(uuid5(UUID(self.config['agentId']),digest([self.thread,'room-origin:'+key])))
+                            if not available(self.config,self.state/key,self.thread,operation):return
                         attempts=(old or {}).get('attempts',0)+1
                         record={'state':'accepted-control-intent','slot':slot,'modelCalls':0,'attempts':attempts,
                             'prerequisite':fingerprint,'canonicalEnrollment':enrollment,

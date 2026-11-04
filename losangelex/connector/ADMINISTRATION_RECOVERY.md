@@ -80,9 +80,47 @@ normalized Linux/Windows/macOS host policy (or an explicit matching accepted par
 configuration). Missing defaults fail closed; a current explicit parent restriction
 is never widened. Warm parent/native settings and byte-exact tool declarations are
 not rewritten. This prevents invalid fresh Mac children when the warm parent's
-creation-only fields are absent. Existing immutable invalid specs are NOT silently
-replaced: a completed blocked workflow and its accepted report wire require separate
-explicit original-operation, positively-no-thread-start owner reconciliation.
+creation-only fields are absent.
+
+### Source-bound failed PRELAUNCH configuration successor
+
+`room_initial_configuration.py` recognizes ONLY the reviewed Mac r03 validator
+source SHA256 `aeef4b5170312bf1e1f95a623664249c89f43261080db9f229c30565ce9c9f8b`.
+Its exact `Fresh declared initial room configuration required` Hold occurs through
+`verify_input` BEFORE component lock/materialization/native-intent/thread start.
+Its retained BLOCKED host result, exact original spec/dispatch binding and all
+eight accepted HTTP wire/result receipts are required, including the old blocked
+report's reconstructed wire. The old missing-permissions config must reproduce
+that SAME guard. A reason string or absent files alone is NOT sufficient evidence.
+Any existing claim/child home/platform/native intent or accepted/context evidence
+blocks initial selection; unknown results never qualify.
+
+The SAME original workflow can then record ONE explicit immutable successor spec
+and source-bound proof `initial-configuration-successor.json`. Only new-child
+creation permissions and independently approved current parent-incarnation/policy
+evidence change. Model/effort, tools, identity/origin, credential, paths, native
+server and original operation remain pinned. Full current protected host policy,
+Mac validator and guides are revalidated; a dead old parent PID is NOT copied or
+treated as present. No parent/native user restriction is rewritten.
+
+The old completed workflow/spec/blocked dispatch/host result/steps remain byte-exact.
+A distinct `configuration-recovery-<original-id>.json` journals the successor stage
+under the SAME actor/thread/operation, and the pending pointer identifies this
+journal rather than treating the old completed record as no outstanding work.
+Original accepted steps0..4 are read by reference, never resent/copied as new ACKs;
+fresh steps5..7 have their own successor directory. A new deterministic
+`<original-operation>:initial-config:<successor-sha>:report` metadata stage reports
+the actual new outcome without changing/reusing the accepted old `:report` wire.
+This is not a new child/native identity or replay of a completed business action.
+
+Catalog recovery recognizes only this positively eligible failed-prelaunch case;
+other completed workflows remain cached. `hollywood_admin_reconcile` on the SAME
+original operation can inspect/continue the same successor journal. Unknown native
+dispatch/lost replies retain intent and are NEVER started again. A completed
+unknown successor remains held; there is no repeated correction loop. A later
+parent/policy/receipt drift holds for owner review, not spec rewriting. Maintained
+owner selection/review of SDK250 supplies this bounded repair, not a new service,
+permission flag, model wake or user approval system.
 
 Qualification stages (none establishes affected-host/native/model readiness):
 
@@ -104,10 +142,20 @@ Qualification stages (none establishes affected-host/native/model readiness):
   native; parent/auth bytes and restrictions survive. `SDK250_MAC_QA` must be a
   short owner-private disk directory (UDS path limit); `SDK250_MAC_RESULT` names the
   owned qualification result. No real Darwin native/model claim.
+* `tests/integration_prelaunch_configuration.py`: actual common factory/unchanged
+  Mac guard first produces a COMPLETED blocked workflow/revision3 with the omitted
+  SDK249 creation-field shape. A maintained parent-incarnation change is modeled
+  through independently pinned current policy. The same original operation then
+  initializes once via the explicit successor, preserving all13 original proof
+  files. Lost successor report ACK resolves by original receipt GET; a separate
+  lost native thread/start reply remains unknown without second start. Unknown
+  intents, existing child state, accepted-wire drift and explicit restrictions
+  are rejected. Only catalog/process/NSS/native RPC facts are synthetic on CPU.
 
 Reviewable stages: original HOME continuation/parent-placement fix first; then
 canonical reported-enrollment recovery plus real HOME fixture; then initial-child
-permission normalization plus full platform boundary. Preserve old13/current14 and
+permission normalization plus full platform boundary; finally the source-bound
+prelaunch successor and original completed-workflow recovery. Preserve old13/current14 and
 all original platform/host operations during independent release review. No live
 selection, API/product service change, signing or publication is performed by tests.
 
