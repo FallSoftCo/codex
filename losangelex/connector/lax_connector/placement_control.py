@@ -4,7 +4,7 @@ from .tool_execution import participation
 
 from uuid import UUID
 from .collaboration_bridge import require
-from .resource_routing import connector_capabilities, bounded
+from .resource_routing import connector_capabilities
 
 READ_TOOL = "hollywood_placement_read"
 SET_TOOL = "hollywood_placement_set"
@@ -21,32 +21,12 @@ def capabilities(value):
 
 
 def view(value, authority, agent, host=None):
-    bounded(value)
-    require(
-        value.get("schema") == "hollywood-placement/v1"
-        and (value.get("authorityId"), value.get("agentId")) == (authority, agent)
-        and value.get("newExecutionAdmitted") is False
-        and value.get("drainVerified") is False,
-        "Placement inspection scope or non-admission evidence differs",
-    )
-    row = value["placement"]
-    if value.get("state") == "not_enrolled":
-        require(row is None and value.get("hostId") is None,
-                "Unenrolled placement must have no host or revision")
-        return value
-    require(isinstance(row, dict), "Enrolled placement row required")
-    require(
-        str(row["authority"]) == authority
-        and str(row["agent"]) == agent
-        and str(row["host"]) == value["hostId"]
-        and (host is None or value["hostId"] == host)
-        and type(row["revision"]) is int
-        and row["revision"] >= 1
-        and type(row["enabled"]) is bool
-        and value["state"] == ("enabled" if row["enabled"] else "paused"),
-        "Placement revision/host/state differs",
-    )
-    return value
+    # Preserve the existing public Held error contract for tool consumers.
+    from .placement_view import view as projection_view
+    try:
+        return projection_view(value, authority, agent, host)
+    except ValueError as error:
+        require(False, str(error))
 
 
 async def read(c, args):

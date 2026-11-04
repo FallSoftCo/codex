@@ -96,7 +96,7 @@ class RoomOriginControl:
 
     async def parent_placement(self):
         """Read the existing parent enrollment; pause/revocation never admits setup."""
-        from .placement_control import view
+        from .placement_view import view
         try:
             value=view(await self.request('GET','placements/'+self.config['agentId']),
                 self.config['authorityId'],self.config['agentId'],self.config['hostId'])
