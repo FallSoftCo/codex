@@ -133,6 +133,12 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
             or role['primary_role'].casefold()!='global' or role['home_room']!=room
             or (origin['agent'],origin['node'],origin['room'])!=(agent,host,room)):
         raise PermissionError('Authoritative original Global/host/room initialization differs')
+    # Service enrollment lives under the protected host registry even though
+    # conversational agents do not use the legacy task/controller scheduler.
+    registry=Path('/var/lib/harness')/authority/'hosts'/host
+    registry.mkdir(mode=0o700,parents=True,exist_ok=True)
+    if registry.is_symlink() or registry.stat().st_uid!=0 or registry.stat().st_mode&0o077:
+        raise PermissionError('Protected native host registry required')
     from .linux_worker import provision as install
     receipt=install(spec)
     from .host_native import location
