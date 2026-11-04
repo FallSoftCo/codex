@@ -17,7 +17,7 @@ from lax_connector.conversational_agent import ConversationalAgent
 from lax_connector.errors import HttpFailure
 from lax_connector.journal import saved
 from lax_connector.room_administration import RoomAdministration, AdministrationSteps, AdministrationUnconfirmed, FACTORY_TOOL, digest
-from lax_connector.room_origin_control import RoomOriginControl
+from lax_connector.room_origin_control import RoomOriginControl,enrollment_projection
 
 
 class ContinuationTests(unittest.IsolatedAsyncioTestCase):
@@ -122,6 +122,40 @@ class ContinuationTests(unittest.IsolatedAsyncioTestCase):
                          (503,'ORIGINAL_HOME_ATTACHMENT_NOT_DISPATCHED',False))
         self.assertIs(caught.exception.public_details()['mayApply'],False)
 
+    async def test_reported_only_reopens_original_sending_enrollment_on_canonical_edge(self):
+        key='f'*64
+        control=RoomOriginControl(config=self.config,request=self.request,thread='ORIGINAL-THREAD',state=self.root/'control')
+        self.addAsyncCleanup(control.close)
+        identity=str(uuid5(UUID(self.actor),digest(['ORIGINAL-THREAD','room-origin:'+key])))
+        operation='native-admin:'+identity
+        state=control.state/key;state.mkdir();directory=state/digest(operation);directory.mkdir()
+        workflow={'state':'unconfirmed','tool':FACTORY_TOOL,'arguments':{'roomId':self.room},
+            'binding':self.binding,'operationId':operation}
+        file=state/('workflow-'+identity+'.json');saved(file,workflow)
+        saved(state/'pending.json',{'operationId':operation,'binding':self.binding})
+        for i in (0,1):saved(directory/(str(i)+'.json'),{'state':'accepted'})
+        saved(directory/'2.json',{'state':'sending','operationId':self.payload['operationId']})
+        before={'identity_active':False,'origin_room':None,'origin_node':None,'member':False,
+            'coordinator_enabled':True,'current_coordinator':self.actor}
+        after={**before,'identity_active':True,'origin_room':self.room,'origin_node':self.node,'member':True}
+        old={'state':'reported','canonicalEnrollment':before,'attempts':8}
+        self.assertTrue(control.changed_reported_enrollment(key,self.slot,old,after))
+        self.assertFalse(control.changed_reported_enrollment(key,self.slot,old,before))
+        for field in ('origin_room','origin_node','current_coordinator','member','identity_active'):
+            changed={**after,field:False}
+            self.assertFalse(control.changed_reported_enrollment(key,self.slot,old,changed))
+        for status in ('completed','rejected'):
+            saved(file,{**workflow,'state':status})
+            self.assertFalse(control.changed_reported_enrollment(key,self.slot,old,after))
+        saved(file,workflow)
+        factory=Path(self.config['state'])/'room-origin-factory'/('room-origin-'+self.child)
+        factory.mkdir(parents=True);saved(factory/'spec.private.json',{'never':'absence-based native recovery'})
+        self.assertFalse(control.changed_reported_enrollment(key,self.slot,old,after))
+        # Diagnostic timestamps/freshness do not themselves create a wake edge.
+        setup={'roomId':self.room,'agents':[{**self.slot,**after,'updated_at':'ignored','control_revision':50}]}
+        self.assertEqual(enrollment_projection(self.config,self.slot,setup),after)
+        self.assertEqual(self.posts,[])
+
     async def test_same_original_preparing_step_continues_and_retains_facts(self):
         steps,directory=self.steps();prefix=[(directory/(str(i)+'.json')).read_bytes() for i in (0,1)]
         result=await steps.http('POST',self.path,self.payload)
@@ -163,9 +197,12 @@ class ContinuationTests(unittest.IsolatedAsyncioTestCase):
         attached=[];native=[]
         supervisor=SimpleNamespace(config=self.config,attach=lambda r:attached.append(r))
         policy={'root':str(self.root/'agents'),'nativeIdentity':{'fixture':True},
+            'initialPermissions':{'sandbox':'danger-full-access','approvalPolicy':'never'},
             'operatingInstructions':[{'path':str(guide),'sha256':hashlib.sha256(guide.read_bytes()).hexdigest()}]}
         async def adapter(file,directory,**kwargs):
             spec=json.loads(file.read_text());native.append(spec['operationId'])
+            self.assertEqual({k:spec['connectorConfig'][k] for k in ('sandbox','approvalPolicy')},
+                             policy['initialPermissions'])
             return {**{k:spec[k] for k in ('operationId','authorityId','originRoomId','agentId','hostId')},
                 'state':'ready','nativeThreadId':'SYNTHETIC-NO-REAL-THREAD','sharedAppServer':True,
                 'appServerManifestSha256':hashlib.sha256(manifest.read_bytes()).hexdigest()}
@@ -192,6 +229,7 @@ class ContinuationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(native),1);self.assertEqual(len(attached),1)
         self.assertEqual(len(list((self.root/'factory-admin').glob('workflow-*.json'))),1)
         self.assertFalse(result['complete']) # Synthetic ready is NOT canonical readiness.
+        self.assertNotIn('sandbox',self.config);self.assertNotIn('approvalPolicy',self.config)
 
     async def test_unknown_dispatch_absence_or_untyped_marker_never_reposts(self):
         cases=[(503,{'error':'ORIGINAL_HOME_ATTACHMENT_NOT_DISPATCHED','mayApply':True}),

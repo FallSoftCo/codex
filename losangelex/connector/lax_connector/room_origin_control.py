@@ -8,10 +8,10 @@ from pathlib import Path
 from uuid import UUID,uuid5
 from .journal import saved
 from .runtime_files import state_directory
-from .room_administration import RoomAdministration,FACTORY_TOOL
+from .room_administration import RoomAdministration,FACTORY_TOOL,digest
 
 
-def recovery(config,slot,placement=None):
+def recovery(config,slot,placement=None,enrollment=None):
     directory=Path(config['state'])/'room-origin-factory'/('room-origin-'+slot['agent'])
     spec=directory/'spec.private.json';native=None
     if spec.exists():
@@ -26,6 +26,7 @@ def recovery(config,slot,placement=None):
         return False,'original-platform-delivery-unknown-no-unstarted-proof'
     parts=[slot['revision']]
     if placement is not None:parts.append(placement)
+    if enrollment is not None:parts.append(enrollment)
     # Public filesystem/protected policy identities only, never auth contents.
     paths=[Path(__file__).with_name('room_factory_'+{'linux':'linux','darwin':'macos','win32':'windows'}.get(__import__('sys').platform,'unsupported')+'.py')]
     selection=config.get('roomOriginPolicy',{});paths.append(Path(selection.get('path','/nonexistent-room-policy')))
@@ -44,6 +45,16 @@ def recovery(config,slot,placement=None):
     return True,hashlib.sha256(json.dumps(parts,sort_keys=True).encode()).hexdigest()
 
 
+def enrollment_projection(config,slot,setup):
+    """Stable canonical attachment facts; diagnostics/freshness are not wake edges."""
+    if not isinstance(setup,dict) or setup.get('roomId')!=slot['room']:return None
+    rows=[r for r in setup.get('agents',[]) if r.get('node')==slot['node'] and r.get('agent')==slot['agent']]
+    if len(rows)!=1 or rows[0].get('coordinator')!=config['agentId']:return None
+    row=rows[0]
+    return {k:row.get(k) for k in ('identity_active','origin_room','origin_node','member',
+                                   'coordinator_enabled','current_coordinator')}
+
+
 class RoomOriginControl:
     def __init__(self,*,config,request,thread,state,session_supervisor=None,now=time.time):
         self.config,self.request,self.thread=config,request,thread
@@ -51,6 +62,34 @@ class RoomOriginControl:
         self.state=Path(state);state_directory(self.state,parents=True,exist_ok=True)
         self.active={};self.capacity=asyncio.Semaphore(1)
         self.metadata=set()
+
+    def pending_enrollment(self,key,slot):
+        """A reported observation is not acceptance of this retained sending step."""
+        identity=str(uuid5(UUID(self.config['agentId']),digest([self.thread,'room-origin:'+key])))
+        operation='native-admin:'+identity;binding={'authority':self.config['authorityId'],
+            'agent':self.config['agentId'],'thread':self.thread}
+        state=self.state/key;directory=state/digest(operation)
+        try:
+            workflow=json.loads((state/('workflow-'+identity+'.json')).read_text())
+            pending=json.loads((state/'pending.json').read_text())
+            step=json.loads((directory/'2.json').read_text())
+            if (workflow.get('state') not in ('intent','unconfirmed') or workflow.get('tool')!=FACTORY_TOOL
+                    or workflow.get('arguments')!={'roomId':slot['room']} or workflow.get('binding')!=binding
+                    or workflow.get('operationId')!=operation or pending!={'operationId':operation,'binding':binding}
+                    or step.get('state')!='sending'
+                    or step.get('operationId')!='room-origin:'+str(uuid5(UUID(slot['agent']),'host-initialization'))+':enroll'
+                    or any((directory/(str(i)+'.json')).exists() for i in range(3,8))):return False
+            if any(json.loads((directory/(str(i)+'.json')).read_text()).get('state')!='accepted' for i in (0,1)):return False
+            factory=Path(self.config['state'])/'room-origin-factory'/('room-origin-'+slot['agent'])
+            return not (factory/'spec.private.json').exists() and not (factory/'dispatch.json').exists()
+        except (OSError,KeyError,ValueError,TypeError):return False
+
+    def changed_reported_enrollment(self,key,slot,old,enrollment):
+        before=old.get('canonicalEnrollment') or enrollment_projection(self.config,slot,old.get('result'))
+        return bool(before is not None and enrollment is not None and before!=enrollment
+            and all(enrollment.get(k) is True for k in ('identity_active','member','coordinator_enabled'))
+            and enrollment.get('origin_room')==slot['room'] and enrollment.get('origin_node')==slot['node']
+            and enrollment.get('current_coordinator')==self.config['agentId'] and self.pending_enrollment(key,slot))
 
     async def parent_placement(self):
         """Read the existing parent enrollment; pause/revocation never admits setup."""
@@ -113,9 +152,14 @@ class RoomOriginControl:
             key=hashlib.sha256((slot['room']+'\0'+node+'\0'+slot['agent']).encode()).hexdigest();file=self.state/(key+'.json')
             if key in self.active:continue
             old=json.loads(file.read_text()) if file.exists() else None
+            room=next((r for r in catalog.get('rooms',[]) if r.get('id')==slot['room']
+                       and r.get('authority')==self.config['authorityId']),{})
+            enrollment=enrollment_projection(self.config,slot,room.get('roomAgents'))
             safe,fingerprint=recovery(self.config,slot)
             if not safe:continue  # Never infer absence from missing HTTP/native ACK.
-            if old and old['state']=='reported':continue
+            resume_reported=bool(old and old['state']=='reported'
+                and self.changed_reported_enrollment(key,slot,old,enrollment))
+            if old and old['state']=='reported' and not resume_reported:continue
             if (not self.supervisor and old and old.get('prerequisite')==fingerprint
                     and self.now()<old.get('nextCheckAt',0)):continue
             if self.supervisor and placement is None:
@@ -123,14 +167,14 @@ class RoomOriginControl:
                 # not one polling loop/read per pending room.
                 placement=asyncio.create_task(self.parent_placement())
                 self.metadata.add(placement);placement.add_done_callback(self.metadata.discard)
-            async def run(key=key,file=file,slot=slot,placement=placement):
+            async def run(key=key,file=file,slot=slot,placement=placement,enrollment=enrollment,resume_reported=resume_reported):
                 record=None
                 try:
                     current=await asyncio.shield(placement) if placement else None
                     if placement and current is None:return
                     old=json.loads(file.read_text()) if file.exists() else None
-                    safe,fingerprint=recovery(self.config,slot,current)
-                    if not safe or old and old['state']=='reported':return
+                    safe,fingerprint=recovery(self.config,slot,current,enrollment)
+                    if not safe or old and old['state']=='reported' and not resume_reported:return
                     if old and old.get('prerequisite')==fingerprint and self.now()<old.get('nextCheckAt',0):return
                     async with self.capacity:
                         # A queued sibling must not use an enabled snapshot
@@ -138,11 +182,13 @@ class RoomOriginControl:
                         if placement:
                             current=await self.parent_placement()
                             if current is None:return
-                        safe,fingerprint=recovery(self.config,slot,current)
+                        safe,fingerprint=recovery(self.config,slot,current,enrollment)
                         if not safe:return
+                        if resume_reported and not self.pending_enrollment(key,slot):return
                         attempts=(old or {}).get('attempts',0)+1
                         record={'state':'accepted-control-intent','slot':slot,'modelCalls':0,'attempts':attempts,
-                            'prerequisite':fingerprint,'nextCheckAt':self.now()+min(300,25*2**min(attempts-1,4))}
+                            'prerequisite':fingerprint,'canonicalEnrollment':enrollment,
+                            'nextCheckAt':self.now()+min(300,25*2**min(attempts-1,4))}
                         if old:
                             archive=self.state/(key+'-attempt-'+str(old.get('attempts',0))+'.json')
                             if not archive.exists():saved(archive,old)
