@@ -166,3 +166,64 @@ hides the actual completed provisioning reply once. The workflow recovers by
 reads, independently accepts the artifact and proves stopped-worker inspection,
 wrong host/spec rejection and the actual unprivileged CLI boundary. Fault
 injection does not replace the model provider.
+
+## SDK251: bounded report identity and report-only input successor
+
+SDK250's native-admin UUID plus full initial-config digest produced a136-character
+report key. Actual maintained API180 `server.RoomAgentReport` inherits a128-character
+operationId limit and validates BEFORE `invoke`, NATS/domain or administrative
+transaction admission. Source SHA256 is pinned in `room_initial_report.CONTRACT`.
+An absent/403 command read is NOT evidence of non-admission. This correction relies
+on the specific reconstructed invalid136 wire and independently qualified API180
+input contract, not a generic HTTP400/error-string/unknown-write retry rule.
+
+Existing report keys <=128 remain byte-exact. Oversized newly generated keys become
+`room-report:v1:<sha256(full-original-key)>` (79 characters), retaining full original
+stage identity without truncation/collision-prone suffix removal. All prior
+HOME-known-not-dispatched, initial-permission and prelaunch safeguards remain.
+
+For already initialized SDK250 children, a report-only successor validates the
+original actor/thread/operation/selected spec, frozen step5 plus sending step6 wire,
+ready dispatch/host result, matching native-intent/accepted/context/session config,
+and CURRENT protected parent/native policy. Ambiguous native state or any binding,
+wire or receipt drift holds. It never calls factory/bootstrap/native RPC/session
+attach. Old workflow, sending report (including its403 inspection), specs, positive
+prelaunch/native receipts and all original accepted reports stay immutable.
+
+`report-recovery-<original-id>.json` and `report-successor-v1/` retain a distinct
+bounded metadata stage. The pending pointer follows that journal; an unknown
+bounded send blocks other administration and is inspected, NEVER blindly resent.
+A FRESH matching canonical receipt can conclusively finish by READ even when the
+command receipt is unavailable; it does not forge an ACK for either old sending
+record. A different canonical receipt is never overwritten. Without a matching
+canonical receipt or exact bounded-command receipt, lost/uncertain sends remain
+held. Fresh report uses current canonical revision, then reports provisioning,
+not fabricated Ready. New child/thread identities are never allocated here.
+
+`tests/integration_initial_report.py` runs production native-admin UUID-shaped keys
+through actual API180 HTTP, two isolated PostgreSQL/HOME stores and authenticated
+NATS. It asserts invalid136/129 never reach invoke/NATS or command rows, valid128
+and bounded79 succeed; full actual Mac file/validator/bootstrap boundary produces
+the original initialized-but-unsent report. Darwin NSS/process/native RPC are
+synthetic on CPU, zero real native/model calls. Lost ACK plus403 receipt and an
+ambiguous pre-wire send prove no duplicate; positive canonical read settles only
+after actual metadata acceptance. Original blocked+ready proof files remain exact.
+
+### Minimal independent Root owner contract
+
+1. Keep actual reviewed API180 validation contract pinned during this repair;
+   source/fixture proof is not permission to assume a changed API's boundary.
+2. Select SDK251 through existing maintained owner transition after genuine
+   all-context/output quiet, preserving original native daemon, threads, tools,
+   permissions, credentials and queued work. Rebind CURRENT parent policy through
+   its existing protected owner mechanism, not a copied old PID or side daemon.
+3. Existing catalog/reconciliation edge resumes original work. For initialized Mac
+   originals inspect the new report-only journal: NO enrollment/native/factory call.
+   For never-initialized homes the retained prelaunch path creates once with bounded
+   new report key. Do not replay original apply/init operations or delete journals.
+4. Old SDK250 unconfirmed workflow/oversized sending row remains historical. Only
+   a completed report-successor binding their EXACT hashes plus positive canonical
+   receipt/command proof closes that specific metadata obligation for accounting;
+   never blanket-ignore unconfirmed/native unknown records. Verify actual distinct
+   original native/canonical freshness/Ready separately. Root owns all deployment,
+   publication and live acceptance; this source task performs none.

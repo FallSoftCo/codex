@@ -41,7 +41,7 @@ async def scenario(case,lose_native=False):
                 'actorId':case.owner,'operationId':body['operationId'],'method':method,'path':path,
                 'wireDigest':digest({'method':method,'path':path,'body':body}),
                 'acceptedResult':json.loads(json.dumps({'roomId':room,'agents':[slot],'complete':False,'capabilities':{}}))}
-            if ':initial-config:' in body['operationId'] and not lost_report[0]:
+            if body['operationId'].startswith('room-report:v1:') and not lost_report[0]:
                 lost_report[0]=True;raise ConnectionError('SYNTHETIC accepted successor report ACK lost')
         if path==base or path.endswith('/enroll') or path.endswith('/report'):
             return json.loads(json.dumps({'roomId':room,'agents':[slot],'complete':False,'capabilities':{}}))
@@ -102,7 +102,8 @@ async def scenario(case,lose_native=False):
         assert len([p for p,b in writes if p.endswith('/enroll')])==1 # Original prefix was not replayed.
         reports=[b for p,b in writes if p.endswith('/report')]
         assert len(reports)==2 and reports[0]['operationId']==operation+':report'
-        assert reports[1]['operationId'].startswith(operation+':initial-config:')
+        from lax_connector.room_initial_report import report_id
+        assert reports[1]['operationId']==report_id(operation+':initial-config:'+plan['spec']['sha256']+':report')
         before=list(case.rpc_calls);case.thread_lost=False
         again=await admin().call('hollywood_admin_reconcile',{'operationId':operation},'unused')
         assert again['operationId']==operation and case.rpc_calls==before and len(writes)==4

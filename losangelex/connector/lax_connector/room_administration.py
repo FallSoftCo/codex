@@ -64,6 +64,8 @@ class RoomAdministration:
             if record['state']=='completed' and record['tool']==FACTORY_TOOL:
                 from .room_initial_configuration import select
                 path,record=select(self,path,record)
+            from .room_initial_report import select as select_report
+            path,record=select_report(self,path,record)
             if record['state']=='completed':return record['result']
             if record['state']=='rejected':raise ValueError('Original administrative operation was rejected')
             # At most one unresolved mutation workflow. This durable pointer
@@ -76,16 +78,23 @@ class RoomAdministration:
                 if active.get('configurationRecovery'):
                     from .room_initial_configuration import journal_path
                     active_path=journal_path(self.state,active['operationId'])
+                if active.get('reportRecovery'):
+                    from .room_initial_report import journal_path
+                    active_path=journal_path(self.state,active['operationId'])
                 original=json.loads(active_path.read_text())
                 if original['state'] in ('completed','rejected'):pending.unlink()
                 elif active['operationId']!=record['operationId']:
                     raise AdministrationUnconfirmed('Inspect original administration before another mutation: '+active['operationId'])
             if not path.exists():saved(path,record)
             saved(pending,{'operationId':record['operationId'],'binding':self.binding,
-                **({'configurationRecovery':True} if record.get('configurationSuccessor') else {})})
+                **({'configurationRecovery':True} if record.get('configurationSuccessor') else {}),
+                **({'reportRecovery':True} if record.get('reportSuccessor') else {})})
             transport=AdministrationSteps(self,record['operationId'],workflow=record)
             try:
-                if record['tool']==FACTORY_TOOL:
+                if record.get('reportSuccessor'):
+                    from .room_initial_report import finish
+                    result=await finish(transport)
+                elif record['tool']==FACTORY_TOOL:
                     from .room_origin_factory import provision
                     result=await provision(transport,record['arguments'],record['operationId'])
                 elif record['tool']==HOST_TOOL:
@@ -120,6 +129,9 @@ class AdministrationSteps:
         directory=self.state/digest(self.operation);state_directory(directory, exist_ok=True)
         if self.initial_configuration_successor and index>=5:
             directory=directory/('initial-configuration-'+self.initial_configuration_successor['spec']['sha256'])
+            state_directory(directory,exist_ok=True)
+        if self.workflow.get('reportSuccessor'):
+            directory=self.state/digest(self.operation)/'report-successor-v1'
             state_directory(directory,exist_ok=True)
         file=directory/(str(index)+'.json')
         wire={'method':method,'path':path,'body':payload};fingerprint=digest(wire)

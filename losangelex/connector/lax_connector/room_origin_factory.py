@@ -187,8 +187,9 @@ async def _provision_locked(transport, arguments, operation):
         supervisor.attach(result)
         receipt = {'nativeThreadId': result['nativeThreadId'], 'nativeHostId': node,
             'appServerManifestSha256': result['appServerManifestSha256'], 'sharedAppServer': True}
+    from .room_initial_report import report_id
     await transport.http('POST', base + '/' + node + '/report',
-        {'operationId': operation + (':initial-config:'+successor['spec']['sha256'] if successor else '') + ':report', 'revision': slot['revision'],
+        {'operationId': report_id(operation + (':initial-config:'+successor['spec']['sha256'] if successor else '') + ':report'), 'revision': slot['revision'],
          'state': 'provisioning' if receipt else result['state'],
          'note': result.get('reason') or 'Host accepted; awaiting fresh original native runtime observation',
          'receipt': receipt})
