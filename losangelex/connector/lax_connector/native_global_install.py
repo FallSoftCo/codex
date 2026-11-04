@@ -86,6 +86,16 @@ def provision(profile, *, activate=False, startup_enabled=None, startup_dependen
         raise ValueError('Use prepare without activation for a stopped new installation')
     from .linux_worker import protected
     authority,agent,host=[str(UUID(profile[k])) for k in ('authorityId','agentId','hostId')]
+    # Establish traversable protected runtime ancestors before private intent
+    # directories. mkdir(parents=True) would inherit root's private umask and
+    # leave the native service UID unable to reach its own work directory.
+    for path in (Path('/var/lib/harness'),Path('/var/lib/harness')/authority):
+        if not path.exists():
+            path.mkdir(mode=0o711);path.chmod(0o711)
+        info=path.lstat()
+        if (path.is_symlink() or not path.is_dir() or info.st_uid!=0
+                or info.st_mode&0o022 or not info.st_mode&0o001):
+            raise PermissionError('Runtime ancestor requires original-owner directory reconciliation')
     root=Path('/var/lib/harness')/authority/'native-global-install'/host
     root.mkdir(mode=0o700,parents=True,exist_ok=True)
     if root.is_symlink() or root.stat().st_uid!=0 or root.stat().st_mode&0o077:
