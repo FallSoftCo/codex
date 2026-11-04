@@ -27,6 +27,8 @@ def recovery(config,slot,placement=None,enrollment=None):
     parts=[slot['revision']]
     if placement is not None:parts.append(placement)
     if enrollment is not None:parts.append(enrollment)
+    from .room_session_files import parent_admission_revision
+    parts.append(['parentAcceptance',parent_admission_revision(config)])
     # Public filesystem/protected policy identities only, never auth contents.
     paths=[Path(__file__).with_name('room_factory_'+{'linux':'linux','darwin':'macos','win32':'windows'}.get(__import__('sys').platform,'unsupported')+'.py'),
            Path(__file__).with_name('room_initial_report.py'),Path(__file__).with_name('room_windows_initial_configuration.py')]

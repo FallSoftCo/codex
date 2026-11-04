@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
@@ -25,3 +26,12 @@ class ReportIdentityTests(unittest.TestCase):
         from lax_connector import room_initial_configuration as mac
         with patch.object(mac,'sys',SimpleNamespace(platform='win32')):
             self.assertIsNone(mac.original(None,None,None))
+
+    def test_existing_v2_owner_revision_is_an_event_edge_not_admission_or_polling(self):
+        from lax_connector.room_origin_control import recovery
+        with tempfile.TemporaryDirectory() as state:
+            config={'state':state};slot={'agent':str(uuid4()),'revision':2}
+            with patch('lax_connector.room_session_files.parent_admission_revision',side_effect=['closed','accepted','accepted']):
+                first=recovery(config,slot);second=recovery(config,slot);third=recovery(config,slot)
+            self.assertTrue(all(r[0] for r in (first,second,third)))
+            self.assertNotEqual(first[1],second[1]);self.assertEqual(second[1],third[1])

@@ -261,3 +261,7 @@ qualification. The separately retained real BLD-owner six-original pure-guard/
 source/diagnostic packet supplies original-phase evidence, not child readiness.
 Root still owns actual Windows owner selection, separate fresh V2 acceptance,
 same-operation platform qualification and canonical freshness after true quiet.
+The existing protected V2 acceptance revision also participates in the catalog
+prerequisite fingerprint, including before any child session is registered. A
+genuine owner acceptance change can release known safe backoff on the NEXT existing
+metadata edge; it never grants admission itself or creates a timer/model poll.
