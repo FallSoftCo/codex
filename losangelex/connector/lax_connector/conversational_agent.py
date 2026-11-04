@@ -164,6 +164,13 @@ class ConversationalAgent:
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
                                  on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None,
                                  conversation_io=self.conversation_io,native_state_view=self.native_state.own_view,session_supervisor=self.session_supervisor)
+            from .room_reply_window import ReplyWindow
+            def reviewed(turn,source):
+                self.turn_sources.setdefault(turn,source)
+                self.turn_input_rooms.setdefault(turn,set()).add(source['room'])
+            self.tools.reply_window=ReplyWindow(self.conversation_io,self.rpc,
+                idle=lambda:self.native_active_turn is None,on_review=reviewed)
+            self.conversation_io.reply_window=self.tools.reply_window
             from .room_output import RoomOutput
             self.output=RoomOutput(self.conversation_io,self.tools)
             if (self.rpc.home.resolve()!=Path(self.config['codexHome']).resolve()

@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import random
 from .errors import HttpFailure
 from .conversation_io import reply_expected
@@ -18,6 +19,19 @@ class RoomOutput:
         self.wake.set()
 
     async def deliver(self, row):
+        from .room_reply_window import ReplyContextChanged
+        try:
+            return await self._deliver(row)
+        except ReplyContextChanged as error:
+            if not self.tools.reply_window:
+                raise
+            source=self.io.source(row['turn'])
+            if await self.tools.reply_window.review(row,source,error.snapshot):
+                self.io.finish(row['item'],'suppressed','Unpublished draft submitted for peer-response review')
+                return True
+            return False
+
+    async def _deliver(self, row):
         if self.io.is_output_held(row['item']):
             return False  # A source-policy change never re-admits a retained final.
         source = self.io.source(row['turn'])
@@ -30,6 +44,10 @@ class RoomOutput:
             # Addressed peer answers must remain deliberate model publications.
             # Automatically answering an automatic peer answer causes wake loops.
             self.io.finish(row['item'], 'suppressed', 'Peer publication remains explicit')
+            return True
+        window=getattr(self.tools,'reply_window',None)
+        if window and window.private_final(row['turn'],source):
+            self.io.finish(row['item'],'suppressed','Reply review final is private; additions are deliberate publications')
             return True
         key = hashlib.sha256(('native-final\0'+row['item']).encode()).hexdigest()
         async with self.tools.publish_lock:
@@ -69,7 +87,7 @@ class RoomOutput:
                 if source['audience'] == 'direct':
                     args['recipientId'] = source['author']
                 part_key=key if index==len(chunks)-1 else key+'-'+str(index)
-                await self.tools.publish(source['room'], args, part_key, turn=row['turn'])
+                await self.tools.publish(source['room'], args, part_key, turn=row['turn'], coordinate=index==0 and row['phase']=='answer')
             self.io.finish(row['item'], 'accepted')
             return True
 
@@ -88,9 +106,13 @@ class RoomOutput:
                     if error.status in (400,403,409):
                         self.io.finish(row['item'],'blocked',str(error))
                     else:retry=True
-                except Exception:
+                except Exception as error:
                     # Cheap transport reconciliation only, never model sampling
                     # or a replacement native input. The original output persists.
+                    logging.getLogger(__name__).exception('Original room output deferred: %s',row['item'])
+                    with self.io.db:
+                        self.io.db.execute("UPDATE output SET reason=? WHERE item=? AND state='queued'",
+                            ('Deferred publication: '+type(error).__name__+': '+str(error)[:240],row['item']))
                     retry = True
             if retry:
                 attempts += 1

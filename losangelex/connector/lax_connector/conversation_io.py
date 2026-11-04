@@ -163,6 +163,9 @@ class ConversationIO:
             query += ' AND reply_eligible=1'
         count = self.db.execute('SELECT count(DISTINCT reply_scope) AS n FROM input_source WHERE ' + query,
                                 args).fetchone()['n']
+        if count == 0 and getattr(self, 'reply_window', None):
+            reviewed=self.reply_window.source(turn)
+            return reviewed if reviewed and (room is None or reviewed['room']==room) else None
         if count != 1:
             return None
         row = self.db.execute('SELECT canonical FROM input_source WHERE ' + query +

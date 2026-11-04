@@ -44,7 +44,12 @@ def with_policy(instructions):
 
 
 def input_guidance(audience):
-    reply_scope = (' If inputs from several rooms or audiences share this native turn, '
+    reply_scope = (' For public human broadcasts, everyone may read and prepare independently. '
+                   'At answer readiness the publisher waits two seconds and checks actual peer replies. '
+                   'If a peer has answered, compare for useful new information; do not repeat an answer '
+                   'or post acknowledgement-only chat. Useful corrections, questions and additions remain welcome. '
+                   'A rejected conditional publication was NOT sent; reconsider from its peer feedback. '
+                   ' If inputs from several rooms or audiences share this native turn, '
                    'answer each relevant source explicitly with hollywood_publish and its '
                    'original sourceEventId, room and audience. An unscoped final cannot be '
                    'safely routed across those sources; native turn end is not work completion.')

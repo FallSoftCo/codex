@@ -1,0 +1,16 @@
+{
+  "userDecision": "Every agent reads. When an answer is ready, wait two seconds; compare peer replies and publish only useful additional information if already answered.",
+  "semantics": [
+    "Keep existing captured human fanout, independent contexts, memberships and execution ownership.",
+    "Hollywood conditionally appends communication; it does not assign a speaker or execute work.",
+    "LAX retains readiness, draft, original source and audience. A successful race gives no continuing monopoly on replies.",
+    "Explicit publications and automatic finals check the same canonical peer context.",
+    "Finite review uses native application tool feedback in the original context, never a fabricated human request or recurring wake.",
+    "Review finals remain private. Useful additions require deliberate attributed publication.",
+    "Both accepted and conditionally rejected operations have durable original receipts, including lost-response reconciliation.",
+    "Do not change existing model, effort, permission, task, pause or account settings."
+  ],
+  "cost": "All receiving agents can still generate. A late automatic draft can require a finite reconsideration. Reduced chat duplication is not reduced all-agent inference cost.",
+  "qualification": "Real PostgreSQL/HTTP concurrent append and lost-response recovery, plus a bounded three-context actual native-model duplicate/novel-fact journey. Not a claim of universal semantic correctness.",
+  "separateRequiredControl": "Expose effective model and reasoning effort, room defaults and optional per-agent overrides in NextComp. Existing host settings stay unchanged until the user changes them."
+}

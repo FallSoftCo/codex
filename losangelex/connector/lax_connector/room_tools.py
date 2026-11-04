@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from uuid import UUID,uuid5
 from .journal import saved
 from .errors import HttpFailure
+from .room_reply_window import ReplyContextChanged
 
 
 def definition(name,description,properties,required):
@@ -42,11 +43,19 @@ class RoomTools:
         self.source_for_turn=source_for_turn
         self.on_membership=on_membership
         self.publish_lock=asyncio.Lock()
+        self.reply_window=None
         self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration',host_config=host_config,session_supervisor=session_supervisor)
 
     async def call(self,method,params):
         try:
             return await self._call(method,params)
+        except ReplyContextChanged as error:
+            # This tool result is the model's actual opportunity to reconsider.
+            self.reply_window.seen(params.get('turnId'), error.snapshot)
+            return {'success':False,'contentItems':[{'type':'inputText','text':json.dumps({
+                **error.snapshot,'next':'Not posted. Compare your draft with these peer replies. '
+                'Publish only a useful addition with the original source, or finish without publishing. '
+                'No acknowledgement or duplicate recap is needed.'})}]}
         except HttpFailure as error:
             return {"success":False,"contentItems":[{"type":"inputText","text":json.dumps(error.public_details())}]}
         except AdministrationUnconfirmed as error:
@@ -97,7 +106,7 @@ class RoomTools:
         else:raise ValueError('Unknown conversational tool')
         return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
 
-    async def publish(self,room,args,key,*,turn=None):
+    async def publish(self,room,args,key,*,turn=None,coordinate=None):
         body=args.get('body')
         if not isinstance(body,str) or not body.strip() or len(body.encode())>6000:raise ValueError('Message must contain 1..6000 UTF-8 bytes')
         audience=args.get('audience')
@@ -128,6 +137,15 @@ class RoomTools:
                     raise ValueError('Private source requires a direct reply to its original counterpart '
                                      'in the original room. No HTTP publication was dispatched; '
                                      'correct the audience/source in a new native tool call.')
+        if prior and prior.get('payload',{}).get('replyCheck') is not None:
+            payload['replyCheck']=prior['payload']['replyCheck']
+        elif (not prior and self.reply_window and not payload.get('recipientId')
+                and (coordinate is True or coordinate is None and payload.get('responsePhase') in ('message','update','answer'))
+                and self.conversation_io and payload.get('sourceEventId')):
+            source=self.conversation_io.input_event(payload['sourceEventId'])
+            if source:
+                condition=await self.reply_window.condition(key,source,turn)
+                if condition is not None:payload['replyCheck']=condition
         fingerprint=hashlib.sha256(json.dumps({'room':room,'payload':payload},sort_keys=True).encode()).hexdigest()
         if prior and prior['fingerprint']!=fingerprint:raise ValueError('Original native call changed')
         if prior and prior['state']=='accepted':
@@ -136,6 +154,7 @@ class RoomTools:
             if self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked'):
                 self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'accepted',phase=payload['responsePhase'],event_id=event['id'] if canonical else None)
             return prior['receipt']
+        if prior and prior['state']=='reconsider':raise ReplyContextChanged(prior['snapshot'])
         if prior and prior['state']=='rejected':raise HttpFailure(prior['error']['status'],prior['error']['message'])
         track = self.conversation_io and turn and payload.get('responsePhase') in ('answer','blocked')
         if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'attempting',phase=payload['responsePhase'])
@@ -154,6 +173,16 @@ class RoomTools:
                 # lost ACK. A 404 here remains unconfirmed, not safe-to-repeat.
                 result=await self.request('GET','commands/'+payload['operationId'])
         else:result=await self.request('GET','commands/'+payload['operationId'])
+        if (result.get('accepted') is False and result.get('mayApply') is False
+                and result.get('code')=='REPLY_CONTEXT_CHANGED'):
+            if (result.get('roomId')!=room or result.get('sourceEventId')!=payload.get('sourceEventId')
+                    or not payload.get('replyCheck') or type(result.get('observedThrough')) is not int
+                    or result['observedThrough'] < payload['replyCheck']['observedThrough']
+                    or not isinstance(result.get('peerReplies'),list) or not 1<=len(result['peerReplies'])<=6):
+                raise ValueError('Conditional reply context scope changed')
+            saved(path,{'state':'reconsider','fingerprint':fingerprint,'room':room,'payload':payload,'snapshot':result})
+            if track:self.conversation_io.publication(turn,payload.get('sourceEventId'),key,room,'rejected',phase=payload['responsePhase'])
+            raise ReplyContextChanged(result)
         event=result.get('event')
         if (not result.get('accepted') or not event or event['authority']!=self.authority
             or event['author']!=self.agent or event['room']!=room or event.get('kind')!='message'
