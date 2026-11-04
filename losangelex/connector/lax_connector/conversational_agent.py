@@ -69,7 +69,8 @@ class ConversationalAgent:
                                         json=payload,headers=headers,timeout=ClientTimeout(total=30,sock_connect=10,sock_read=25)) as response:
             value=await response.json()
             if response.status!=200:
-                raise HttpFailure(response.status,str(value.get('error','Request rejected')))
+                raise HttpFailure(response.status,str(value.get('error','Request rejected')),
+                                  code=value.get('error'),may_apply=value.get('mayApply'))
             return value
 
     async def status(self,value):

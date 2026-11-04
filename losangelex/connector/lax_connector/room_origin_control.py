@@ -11,7 +11,7 @@ from .runtime_files import state_directory
 from .room_administration import RoomAdministration,FACTORY_TOOL
 
 
-def recovery(config,slot):
+def recovery(config,slot,placement=None):
     directory=Path(config['state'])/'room-origin-factory'/('room-origin-'+slot['agent'])
     spec=directory/'spec.private.json';native=None
     if spec.exists():
@@ -25,6 +25,7 @@ def recovery(config,slot):
     if dispatch.exists() and json.loads(dispatch.read_text()).get('state')=='unknown' and not native:
         return False,'original-platform-delivery-unknown-no-unstarted-proof'
     parts=[slot['revision']]
+    if placement is not None:parts.append(placement)
     # Public filesystem/protected policy identities only, never auth contents.
     paths=[Path(__file__).with_name('room_factory_'+{'linux':'linux','darwin':'macos','win32':'windows'}.get(__import__('sys').platform,'unsupported')+'.py')]
     selection=config.get('roomOriginPolicy',{});paths.append(Path(selection.get('path','/nonexistent-room-policy')))
@@ -49,6 +50,27 @@ class RoomOriginControl:
         self.supervisor=session_supervisor;self.now=now
         self.state=Path(state);state_directory(self.state,parents=True,exist_ok=True)
         self.active={};self.capacity=asyncio.Semaphore(1)
+        self.metadata=set()
+
+    async def parent_placement(self):
+        """Read the existing parent enrollment; pause/revocation never admits setup."""
+        from .placement_control import view
+        try:
+            value=view(await self.request('GET','placements/'+self.config['agentId']),
+                self.config['authorityId'],self.config['agentId'],self.config['hostId'])
+            row=value['placement']
+            receipt={'state':value['state'],'hostId':value['hostId'],
+                     'revision':row['revision'] if row else None,
+                     'generation':row.get('generation') if row else None}
+            file=self.state/'parent-placement.json'
+            if not file.exists() or json.loads(file.read_text())!=receipt:saved(file,receipt)
+            return receipt if value['state']=='enabled' else None
+        except asyncio.CancelledError:raise
+        except Exception as error:
+            saved(self.state/'parent-placement-error.json',{'errorType':type(error).__name__,
+                'status':getattr(error,'status',None),'code':getattr(error,'code',None),
+                'factoryStarted':False})
+            return None
 
     async def diagnose(self,slot,key,attempt,state,note):
         if self.request is None:return
@@ -85,6 +107,7 @@ class RoomOriginControl:
             self.supervisor.reconcile_admission()
             self.supervisor.checkpoint()
         node=self.config.get('nodeId',self.config['hostId'])
+        placement=None
         for slot in catalog.get('roomAgentInitializations',[]):
             if slot['node']!=node or slot['state'] not in ('pending','enrolled','blocked','unknown') or slot.get('receipt'):continue
             key=hashlib.sha256((slot['room']+'\0'+node+'\0'+slot['agent']).encode()).hexdigest();file=self.state/(key+'.json')
@@ -93,21 +116,42 @@ class RoomOriginControl:
             safe,fingerprint=recovery(self.config,slot)
             if not safe:continue  # Never infer absence from missing HTTP/native ACK.
             if old and old['state']=='reported':continue
-            if old and old.get('prerequisite')==fingerprint and self.now()<old.get('nextCheckAt',0):continue
-            attempts=(old or {}).get('attempts',0)+1
-            record={'state':'accepted-control-intent','slot':slot,'modelCalls':0,'attempts':attempts,
-                    'prerequisite':fingerprint,'nextCheckAt':self.now()+min(300,25*2**min(attempts-1,4))}
-            if old:
-                # Preserve every failed attempt before advancing this original
-                # component's current inspection cursor; no new operation ID.
-                archive=self.state/(key+'-attempt-'+str(old.get('attempts',0))+'.json')
-                if not archive.exists():saved(archive,old)
-            saved(file,record)
-            async def run(key=key,file=file,slot=slot,record=record):
+            if (not self.supervisor and old and old.get('prerequisite')==fingerprint
+                    and self.now()<old.get('nextCheckAt',0)):continue
+            if self.supervisor and placement is None:
+                # One bounded read on this existing catalog edge while paused,
+                # not one polling loop/read per pending room.
+                placement=asyncio.create_task(self.parent_placement())
+                self.metadata.add(placement);placement.add_done_callback(self.metadata.discard)
+            async def run(key=key,file=file,slot=slot,placement=placement):
+                record=None
                 try:
+                    current=await asyncio.shield(placement) if placement else None
+                    if placement and current is None:return
+                    old=json.loads(file.read_text()) if file.exists() else None
+                    safe,fingerprint=recovery(self.config,slot,current)
+                    if not safe or old and old['state']=='reported':return
+                    if old and old.get('prerequisite')==fingerprint and self.now()<old.get('nextCheckAt',0):return
                     async with self.capacity:
+                        # A queued sibling must not use an enabled snapshot
+                        # captured before a real user/maintenance pause.
+                        if placement:
+                            current=await self.parent_placement()
+                            if current is None:return
+                        safe,fingerprint=recovery(self.config,slot,current)
+                        if not safe:return
+                        attempts=(old or {}).get('attempts',0)+1
+                        record={'state':'accepted-control-intent','slot':slot,'modelCalls':0,'attempts':attempts,
+                            'prerequisite':fingerprint,'nextCheckAt':self.now()+min(300,25*2**min(attempts-1,4))}
+                        if old:
+                            archive=self.state/(key+'-attempt-'+str(old.get('attempts',0))+'.json')
+                            if not archive.exists():saved(archive,old)
+                        saved(file,record)
                         await self.diagnose(slot,key,record['attempts'],'preparing',
                             'Original home runtime is reconciling this logical agent; no native readiness inferred')
+                        if placement and await self.parent_placement() is None:
+                            saved(file,{**record,'state':'placement-deferred'})
+                            return  # A pause/revocation during diagnostic I/O is real.
                         admin=RoomAdministration(authority=self.config['authorityId'],agent=self.config['agentId'],
                             thread=self.thread,request=self.request,state=self.state/key,host_config=self.config,
                             session_supervisor=self.supervisor)
@@ -115,6 +159,10 @@ class RoomOriginControl:
                         saved(file,{**record,'state':'reported','result':result})
                 except asyncio.CancelledError:raise
                 except Exception as error:
+                    if record is None:
+                        saved(self.state/(key+'-inspection-error.json'),{'errorType':type(error).__name__,
+                            'factoryStarted':False})
+                        return
                     safe,_=recovery(self.config,slot)
                     cause=error
                     while cause.__cause__ is not None:cause=cause.__cause__
@@ -129,5 +177,6 @@ class RoomOriginControl:
             self.active[key]=asyncio.create_task(run())
 
     async def close(self):
+        for task in self.metadata:task.cancel()
         for task in self.active.values():task.cancel()
-        await asyncio.gather(*list(self.active.values()),return_exceptions=True)
+        await asyncio.gather(*list(self.active.values()),*list(self.metadata),return_exceptions=True)
