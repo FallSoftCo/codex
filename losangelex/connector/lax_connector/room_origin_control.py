@@ -29,7 +29,7 @@ def recovery(config,slot,placement=None,enrollment=None):
     if enrollment is not None:parts.append(enrollment)
     # Public filesystem/protected policy identities only, never auth contents.
     paths=[Path(__file__).with_name('room_factory_'+{'linux':'linux','darwin':'macos','win32':'windows'}.get(__import__('sys').platform,'unsupported')+'.py'),
-           Path(__file__).with_name('room_initial_report.py')]
+           Path(__file__).with_name('room_initial_report.py'),Path(__file__).with_name('room_windows_initial_configuration.py')]
     selection=config.get('roomOriginPolicy',{});paths.append(Path(selection.get('path','/nonexistent-room-policy')))
     manifest=config.get('nativeServer',{}).get('manifest')
     if manifest:paths.append(Path(manifest))

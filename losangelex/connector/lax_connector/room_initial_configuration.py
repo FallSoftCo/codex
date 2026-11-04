@@ -5,7 +5,7 @@ spec, blocked dispatch/result and accepted report wire immutable. Only this exac
 maintained validator's positive failure, before its lock/files/native boundary,
 can certify the original never-started operation. Missing files alone never can.
 """
-import copy,hashlib,json,os
+import copy,hashlib,json,os,sys
 from pathlib import Path
 from .runtime_files import private_file
 
@@ -29,6 +29,7 @@ def journal_path(state,operation):
 
 def original(owner,path,record):
     from .room_administration import FACTORY_TOOL,digest
+    if sys.platform=='win32':return None # Never import Darwin account helpers on Windows.
     from . import room_factory_macos as mac
     if (record.get('state')!='completed' or record.get('tool')!=FACTORY_TOOL
             or record.get('binding')!=owner.binding or sha(mac.__file__)!=VALIDATOR_SHA256):return None

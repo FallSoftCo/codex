@@ -227,3 +227,37 @@ after actual metadata acceptance. Original blocked+ready proof files remain exac
    never blanket-ignore unconfirmed/native unknown records. Verify actual distinct
    original native/canonical freshness/Ready separately. Root owns all deployment,
    publication and live acceptance; this source task performs none.
+
+### SDK251 Windows original five-step pre-resident successor
+
+`room_windows_initial_configuration.py` handles ONLY the source-pinned original
+Windows `_load`→`_scope` failure `Explicit NEW full native policy required`, before
+resident seal/file preparation/native intent. It requires five exact accepted
+HTTP steps, retained dispatching spec/credential/operation binding, and an ACCEPTED
+original blocked diagnostic with exact actor/control-operation/guard witness.
+The exact original pure `_scope` must reproduce that guard under protected current
+parent evidence; absent files or a generic Held/error string alone do not qualify.
+Any resident seal/state preparation/child root/native intent/host result holds.
+
+Only an independently REAL accepted V2 current parent can select the immutable
+Windows successor spec. Full maintained current `_load` validates that candidate
+before plan selection, preserving scope/tools/model/profile/credential and native
+incarnation; only missing initial permissions and CURRENT approved parent witness
+change. No old parent PID is spoofed/reused, no V2 acceptance is issued by the SDK,
+and a current explicit restriction is never widened. Original unconfirmed workflow,
+five HTTP records, spec, dispatch and credential remain byte-exact. The explicit
+`windows-configuration-recovery-<original-id>.json`/pending marker references those
+originals, reuses steps0..4, and allows exactly the SAME fixed native operation to
+enter the actual platform once. New reporting uses the bounded identity above.
+Ambiguous native receipts remain unknown and cannot cause another thread/start.
+
+`tests/integration_windows_prelaunch.py` executes the ACTUAL unchanged Windows
+validators and resident/file/bootstrap phase machines on CPU, replacing ONLY
+Windows kernel SID/ACL/process/pipe facts and native RPC with explicit shims.
+Ready/unknown-reply cases preserve ten original proof files, bind current parent102
+instead of101, reject unknown intent/missing positive diagnostic/closed V2/current
+restriction, and attempt one thread/start. This is NOT actual Win32 ACL/OS/native
+qualification. The separately retained real BLD-owner six-original pure-guard/
+source/diagnostic packet supplies original-phase evidence, not child readiness.
+Root still owns actual Windows owner selection, separate fresh V2 acceptance,
+same-operation platform qualification and canonical freshness after true quiet.

@@ -1,4 +1,6 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 from uuid import uuid4
 from lax_connector.room_initial_report import report_id
 
@@ -18,3 +20,8 @@ class ReportIdentityTests(unittest.TestCase):
         self.assertLessEqual(len(report_id('x'*129)),128)
         for invalid in (None,'',[],123):
             with self.assertRaises(ValueError):report_id(invalid)
+
+    def test_windows_completed_original_never_imports_darwin_account_helper(self):
+        from lax_connector import room_initial_configuration as mac
+        with patch.object(mac,'sys',SimpleNamespace(platform='win32')):
+            self.assertIsNone(mac.original(None,None,None))

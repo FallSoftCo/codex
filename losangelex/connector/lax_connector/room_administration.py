@@ -64,6 +64,8 @@ class RoomAdministration:
             if record['state']=='completed' and record['tool']==FACTORY_TOOL:
                 from .room_initial_configuration import select
                 path,record=select(self,path,record)
+            from .room_windows_initial_configuration import select as select_windows
+            path,record=select_windows(self,path,record)
             from .room_initial_report import select as select_report
             path,record=select_report(self,path,record)
             if record['state']=='completed':return record['result']
@@ -81,6 +83,9 @@ class RoomAdministration:
                 if active.get('reportRecovery'):
                     from .room_initial_report import journal_path
                     active_path=journal_path(self.state,active['operationId'])
+                if active.get('windowsConfigurationRecovery'):
+                    from .room_windows_initial_configuration import journal_path
+                    active_path=journal_path(self.state,active['operationId'])
                 original=json.loads(active_path.read_text())
                 if original['state'] in ('completed','rejected'):pending.unlink()
                 elif active['operationId']!=record['operationId']:
@@ -88,7 +93,8 @@ class RoomAdministration:
             if not path.exists():saved(path,record)
             saved(pending,{'operationId':record['operationId'],'binding':self.binding,
                 **({'configurationRecovery':True} if record.get('configurationSuccessor') else {}),
-                **({'reportRecovery':True} if record.get('reportSuccessor') else {})})
+                **({'reportRecovery':True} if record.get('reportSuccessor') else {}),
+                **({'windowsConfigurationRecovery':True} if record.get('windowsConfigurationRecovery') else {})})
             transport=AdministrationSteps(self,record['operationId'],workflow=record)
             try:
                 if record.get('reportSuccessor'):
