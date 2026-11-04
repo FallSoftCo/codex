@@ -77,6 +77,12 @@ def expected_configuration(spec, authority, agent, home, profile=None, *, native
         if participation:
             from .room_participation import with_policy
             result['instructions'] = with_policy(result['instructions'])
+        if spec.get('roomCoordinator'):
+            from .native_global_install import configuration_policy
+            policy=configuration_policy(spec,authority,agent,home)
+            if policy:result['roomOriginPolicy']=policy
+            guides=spec['roomCoordinator']['operatingInstructions']
+            result['instructions'] += ' Before host work, read the approved operating instructions: '+', '.join(g['path']+' SHA256 '+g['sha256'] for g in guides)+'.'
         from .host_native import selection, profile_state
         shared=selection(spec,home)
         if shared is not None:
@@ -355,6 +361,9 @@ def provision(spec):
             host_runtime=ensure(spec,account,home)
             if host_runtime['serviceActiveState']!='active':
                 raise RuntimeError('Shared native host is deliberately stopped or unavailable')
+        if spec.get('roomCoordinator'):
+            from .native_global_install import install_policy
+            install_policy(spec,config,account,home,host_runtime)
         bootstrap_file=home/"native-bootstrap.json"
         saved(bootstrap_file,config);os.chown(bootstrap_file,account.pw_uid,account.pw_gid)
         initialized=subprocess.run(["runuser","-u",user,"--",spec["interpreter"],"-m",

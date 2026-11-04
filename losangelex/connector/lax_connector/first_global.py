@@ -46,6 +46,10 @@ def start_once(root, unit):
 
 
 def provision(profile, *, activate=False, startup_enabled=None, startup_dependencies=None):
+    if profile.get('runtimeMode') == 'room-conversation':
+        from .native_global_install import provision as native_provision
+        return native_provision(profile,activate=activate,startup_enabled=startup_enabled,
+                                startup_dependencies=startup_dependencies)
     if os.geteuid() != 0:
         raise PermissionError("First Global installation requires the host administrator")
     if profile.get("schema") != SCHEMA:
