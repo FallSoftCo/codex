@@ -115,7 +115,7 @@ class ReleaseTests(unittest.TestCase):
         self.enterContext(patch('lax_connector.native_dependency.verify'))
         self.enterContext(patch.object(release, 'transport_inspect', return_value={
             'nativeThreadId': self.config['nativeThreadId'], 'status': 'idle', 'modelCalls': 0}))
-        self.enterContext(patch('lax_connector.host.request', return_value={'busy': None}))
+        self.enterContext(patch('lax_connector.host.request', return_value={'enabled': False, 'busy': None, 'pending': None}))
 
     def test_instruction_adoption_is_derived_and_pinned_in_actual_release_targets(self):
         import base64

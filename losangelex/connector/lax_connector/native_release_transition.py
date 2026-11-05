@@ -331,7 +331,7 @@ def finish(root, fd, intent):
             image._offline(authority, host, agent, uid, home,
                            Path(intent["priorEnrollment"]["binary"]),
                            intent["priorEnrollment"], definition, fd)
-            image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"))
+            image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"), **legacy_placement_parameters(intent, config))
             _closure_identity(intent)
             if release.physical(home, uid,**physical_args) != intent["physical"]:
                 raise ValueError("Original physical identities changed")
@@ -372,6 +372,18 @@ def finish(root, fd, intent):
         return status_locked(fd, intent["operationId"])
 
 
+def legacy_placement_parameters(intent, config):
+    """Only an unchanged native room client may preserve legacy queue admission."""
+    transport = intent.get('transportAdoption', {})
+    if 'legacyPlacementEnabled' not in transport:
+        return {}
+    if (not intent.get('retainedNative') or config.get('runtimeMode') != 'room-conversation'
+            or not config.get('nativeServer') or intent['oldBinary'] != intent['newBinary']
+            or type(transport['legacyPlacementEnabled']) is not bool):
+        raise ValueError('Legacy placement preservation requires an unchanged native room client')
+    return {'preserved_placement_enabled': transport['legacyPlacementEnabled']}
+
+
 def approve(authority, host, agent, prepared, expected_preparation):
     if os.geteuid() != 0:
         raise PermissionError("Verified release administrator required")
@@ -410,7 +422,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
                        Path(old["binary"]), old,
                        hashlib.sha256(base64.b64decode(plan["targets"][1]["before"])).hexdigest(), fd)
         config = image.json.loads(base64.b64decode(plan["targets"][0]["before"]))
-        image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"))
+        image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"), **legacy_placement_parameters(intent, config))
         image._write(fd, "image-" + operation + "-before.json", old)
         image._write(fd, "image-" + operation + "-intent.json", intent)
         image._write(fd, image.INDEX, intent, replace=True)

@@ -287,6 +287,13 @@ def prepare(authority, host, agent, request, output):
             transport_probe={'historicalUnknown':historical_unknown,'nativeRead':transport_read,
                 'nativeServer':selected,'nativeThreadId':config['nativeThreadId'],
                 'nativeState':host_value['state'],'profileUnchanged':True,'originalState':original_state}
+        if retained_native is not None:
+            # A room-conversation client never claims the legacy execution queue.
+            # Preserve that queue's exact state instead of toggling its admission
+            # as a side effect of an unchanged-engine connector software upgrade.
+            if type(pending['enabled']) is not bool:
+                raise ValueError('Exact original legacy placement projection required')
+            transport_probe['legacyPlacementEnabled'] = pending['enabled']
         if 'newConversationDynamicTools' in request:
             from .room_tools import TOOLS
             if (transport_probe is None or config.get('runtimeMode')!='room-conversation'

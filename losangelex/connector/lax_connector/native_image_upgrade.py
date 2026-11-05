@@ -401,15 +401,18 @@ def _journal_snapshot(state_fd, uid, authority, host, agent, *, preserve_histori
     return hashes
 
 
-def _canonical(config, controller, host, agent, *, preserved_unknown=None):
+def _canonical(config, controller, host, agent, *, preserved_unknown=None, preserved_placement_enabled=None):
     pending = request(
         controller["hollywoodUrl"],
         config["token"],
         "GET",
         "connector/pending?hostId=" + host,
     )
+    expected_enabled = False if preserved_placement_enabled is None else preserved_placement_enabled
+    if type(expected_enabled) is not bool:
+        raise ValueError("Exact retained legacy placement state required")
     if (
-        pending["enabled"] is not False
+        pending["enabled"] is not expected_enabled
         or (pending["busy"] is not None and not (
             preserved_unknown is not None and pending['busy']==preserved_unknown
             and preserved_unknown.get('state')=='unknown'
@@ -417,6 +420,8 @@ def _canonical(config, controller, host, agent, *, preserved_unknown=None):
     ):
         raise ValueError(
             "Canonical placement must stay disabled with no busy work; queued work is preserved"
+            if preserved_placement_enabled is None else
+            "Retained legacy placement state changed or unrelated busy work exists"
         )
     after, seen = None, set()
     for _ in range(16):
