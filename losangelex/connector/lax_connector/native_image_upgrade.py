@@ -239,7 +239,10 @@ def require_settled_transition(fd, *, check_image=True):
         if _json(fd, CURRENT) != current:
             raise ValueError("Accepted release software publication requires reconciliation")
         from .native_release_transition import _closure_identity
-        _closure_identity(current)
+        # Accepted software remains valid after a normal restart of the SAME
+        # approved native service/image/profile/state. Cutover preparation and
+        # acceptance still require the exact captured incarnation by default.
+        _closure_identity(current, require_original_incarnation=False)
     if not check_image:
         return
     parent = _open_directory(Path(approved["binary"]).parent)

@@ -3,7 +3,8 @@
 No image alias/hardlink, daemon restart, profile migration or native write. The
 existing native process/package stays in its accepted root while SDK code gets
 an independent immutable closure. Revalidate the dependency at every approval
-step, including its original process incarnation and package asset identities.
+step. Cutover requires the captured process incarnation; an already accepted
+software closure permits a normal restart of that same service and state.
 """
 import pwd
 from pathlib import Path
@@ -61,7 +62,7 @@ def pin_package(record, package):
     return {**record, 'packageRoot': str(root), 'assets': pins}
 
 
-def verify(record, config):
+def verify(record, config, *, require_original_incarnation=True):
     if record.get('schema') != 'lax-retained-native/v1' or config['binary'] != record['binary']:
         raise ValueError('Reviewed unchanged native dependency differs')
     value = host_manifest(config)
@@ -72,12 +73,20 @@ def verify(record, config):
     props = observer.properties(record['unit'])
     if (props['ActiveState'] != 'active' or props['User'] != value['serviceUser']
             or props['KillMode'] != 'control-group'
-            or int(props['MainPID']) != record['guardian']['pid']
+            or (require_original_incarnation and int(props['MainPID']) != record['guardian']['pid'])
             or observer.unit_definition(props) != record['definitionSha256']):
         raise ValueError('Original retained native service incarnation changed')
-    guardian = observer.process(record['guardian']['pid'])
-    if not guardian or any(guardian[k] != v for k, v in record['guardian'].items()):
+    guardian = observer.process(int(props['MainPID']))
+    keys = (record['guardian'].keys() if require_original_incarnation
+            else set(record['guardian']) - {'pid', 'start'})
+    if not guardian or any(guardian[k] != record['guardian'][k] for k in keys):
         raise ValueError('Original retained native process changed')
+    same = (guardian['pid'] == record['guardian']['pid']
+            and guardian['start'] == record['guardian']['start'])
+    if not same:
+        previous = observer.process(record['guardian']['pid'])
+        if previous and previous['start'] == record['guardian']['start']:
+            raise ValueError('Original native incarnation is still running; no overlapping successor allowed')
     if file_identity(Path(record['binary'])) != record['imageIdentity']:
         raise ValueError('Original retained native image changed')
     state = Path(record['state']); info = state.lstat()
@@ -93,3 +102,7 @@ def verify(record, config):
                 or list(_identity(path.lstat())) != asset['linkIdentity']
                 or file_identity(Path(asset['resolved'])) != asset['identity']):
             raise ValueError('Original retained native package asset changed')
+
+    return {'sameIncarnation': same, 'originalGuardian': record['guardian'],
+            'currentGuardian': {k: guardian[k] for k in record['guardian']},
+            'unchangedServiceSoftwareProfileAndState': True}
