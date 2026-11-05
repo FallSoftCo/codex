@@ -110,11 +110,27 @@ def role_receipt(record):
     if (value.get('schema')!='lax-project-role-adoption/v1' or value.get('state')!='accepted'
             or value['receipt']['newRecord']!=record):
         raise RoleHandoverPending('Original role handover acceptance is incomplete')
-    expected=reviewed_configuration(value['originalConfig'],value['policy'],value['originalConfigSha256'])
     file=Path(record['sessionConfigPath']);private_file(file)
+    current=json.loads(file.read_text());original=value['originalConfig'];policy=value['policy']
+    # The receipt binds the configuration reviewed THEN, not today's generated
+    # tool declarations/instructions. A later SDK must not invalidate an accepted
+    # immutable role merely because its own templates changed.
     if (hashlib.sha256(file.read_bytes()).hexdigest()!=record['sessionConfigSha256']
-            or json.loads(file.read_text())!=expected):
+            or value.get('reviewedConfig',current)!=current):
         raise ValueError('Accepted role configuration differs from its reviewed successor')
+    changed={'projectCommunication','conversationParticipationPolicy','conversationDynamicTools',
+        'conversationResumeInstructions','instructions','conversationInstructionAdoptionId'}
+    if {k:v for k,v in original.items()if k not in changed}!={k:v for k,v in current.items()if k not in changed}:
+        raise ValueError('Accepted role changed preserved identity, permissions, model or host configuration')
+    binding=dict(version=1,roomId=original['originRoomId'],leadAgentId=str(UUID(policy['leadAgentId'])),revision=policy['revision'])
+    before=original['conversationResumeInstructions'];after=current['conversationResumeInstructions']
+    if (current.get('projectCommunication')!=binding or current.get('conversationParticipationPolicy')!='lead-project-v1'
+            or not isinstance(after.get('baseInstructions'),str) or not after['baseInstructions'].strip()
+            or {k:v for k,v in before.items()if k!='baseInstructions'}!={k:v for k,v in after.items()if k!='baseInstructions'}):
+        raise ValueError('Accepted role lost its reviewed policy or original developer constraints')
+    identity=digest(dict(authority=original['authorityId'],agent=original['agentId'],thread=original['nativeThreadId'],
+        originalConfigurationSha256=value['originalConfigSha256'],project=binding,instructions=instructions_digest(after)))
+    if current.get('conversationInstructionAdoptionId')!=identity:raise ValueError('Original role adoption identity changed')
     return value
 
 
@@ -292,7 +308,7 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
         held_record={**new_record,'roleAdoptionIntent':str(journal)};held_record.pop('roleAdoptionReceipt',None)
         base=dict(schema='lax-project-role-adoption/v1',operation=operation,originalConfig=original,originalRecord=original_record,
             originalConfigSha256=expected_config_sha,originalRecordSha256=expected_record_sha,originalRecordDigest=digest(original_record),
-            policy=policy_ref,seed=seed,work=work,newRecord=new_record)
+            policy=policy_ref,seed=seed,work=work,reviewedConfig=updated,newRecord=new_record)
         if not prior:
             saved(journal,{**base,'state':'prepared'})
             saved(registry,held_record) # write-ahead hold before any native operation

@@ -58,6 +58,11 @@ class ProjectAdoptionTest(unittest.IsolatedAsyncioTestCase):
    third.attach({**self.oldrecord,'state':'ready','sharedAppServer':True})
    self.assertEqual(self.creations,[self.new]);self.assertEqual(self.oldfile.read_bytes(),self.oldbytes)
   finally:await third.close()
+ async def test_accepted_role_does_not_regenerate_from_later_sdk_templates(self):
+  self.accept()
+  with patch('lax_connector.project_adoption.reviewed_configuration',side_effect=AssertionError('Later templates must not reapprove a retained role')):
+   self.assertEqual(role_receipt(self.current)['state'],'accepted')
+   self.assertTrue(accepts_initialization(self.oldrecord,self.current))
  async def test_changed_successor_cannot_load_even_with_an_accepted_journal(self):
   self.accept();saved(self.newfile,{**self.new,'model':'unreviewed-model'});self.write(self.current)
   supervisor=self.supervisor();supervisor.load();self.assertEqual(self.creations,[])

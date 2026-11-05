@@ -76,3 +76,9 @@ input-to-turn binding and persisted native terminal event before a context
 handover. ACK alone is insufficient; old receipt rows are never rewritten to
 fabricate a committed state. Accepted context-only injection has no execution
 claim. Original uncertain explicit publications remain held for same-ID reads.
+
+Project worker room reads default to twelve internal coordination events, with
+explicit cursors for further evidence. Lead reads default to its human lane.
+Accepted role receipts pin the configuration originally reviewed; later SDK
+template/tool changes cannot regenerate or silently rewrite that acceptance.
+Exact previous tool-schema hashes remain supported for retained contexts.

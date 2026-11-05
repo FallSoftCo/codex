@@ -19,7 +19,7 @@ def definition(name,description,properties,required):
 STRING={'type':'string'}
 TOOLS=[
     definition('hollywood_context','Read your identity and the real participants of an authorized room. Room membership is communication, not task ownership.',{'roomId':STRING},['roomId']),
-    definition('hollywood_read_room','Read canonical recent room conversation or explicitly requested execution activity.',{'roomId':STRING,'after':{'type':'integer','minimum':0},'before':{'type':'integer','minimum':1},'limit':{'type':'integer','minimum':1,'maximum':100},'view':{'type':'string','enum':['conversation','activity','all']}},['roomId']),
+    definition('hollywood_read_room','Read canonical recent room conversation or explicitly requested execution activity.',{'roomId':STRING,'after':{'type':'integer','minimum':0},'before':{'type':'integer','minimum':1},'limit':{'type':'integer','minimum':1,'maximum':100},'view':{'type':'string','enum':['conversation','coordination','activity','all']}},['roomId']),
     definition('hollywood_publish','Publish in your own agent identity. Answers/progress preserve original room/source/audience. Explicit recipientId addresses a peer; direct is private. Omitted sourceEventId defaults to the unambiguous original source. For genuinely NEW semantic peer coordination only, sourceEventId:null with phase message deliberately creates no source reference; it is not permission to copy private input or mark an owed answer delivered. Accepted is stored, never task claimed/completed. Do not publish routine acknowledgements.',{'roomId':STRING,'body':STRING,'recipientId':STRING,'sourceEventId':{'type':['string','null']},'responsePhase':{'type':'string','enum':['message','update','answer','blocked']},'audience':{'type':'string','enum':['room','direct']}},['roomId','body','audience','responsePhase']),
 ]
 
@@ -101,7 +101,9 @@ class RoomTools:
         elif name=='hollywood_read_room':
             if 'after' in args and 'before' in args:raise ValueError('Choose one history direction')
             query={k:args[k] for k in ('after','before','limit','view') if k in args}
-            query.setdefault('limit',30);query.setdefault('view','conversation')
+            project=self.project and self.project.ledger.room==room
+            query.setdefault('limit',12 if project else 30)
+            query.setdefault('view','coordination' if project and not self.project.ledger.is_lead else 'conversation')
             if 'after' not in query:query.setdefault('before',9007199254740991)
             result=await self.request('GET','rooms/'+room+'/history?'+urlencode(query))
             if result['authorityId']!=self.authority or result['roomId']!=room:raise ValueError('Room history scope changed')
