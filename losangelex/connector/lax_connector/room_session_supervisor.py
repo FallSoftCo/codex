@@ -36,6 +36,7 @@ class RoomSessionSupervisor:
             # room's public native source/status projection.
             rows.append(row)
         return {'schema':'lax-host-logical-sessions/v1','parentRuntimePid':os.getpid(),'sessions':rows,
+                'runtimeCapabilities':['project-role-handover/v1'],
                 'quiet':all(r['state']=='attached' and r['nativeStatus']=='idle' and
                             not r['activeTurn'] and r['outputsPending']==0 for r in rows)}
 
@@ -129,7 +130,9 @@ class RoomSessionSupervisor:
         file=self.state/('session-'+record['agentId']+'.json')
         if file.exists():
             old=json.loads(file.read_text())
-            if any(old[k]!=v for k,v in record.items()):raise ValueError('Original resident agent binding changed')
+            from .project_adoption import accepts_initialization
+            if not accepts_initialization(record,old):raise ValueError('Original resident agent binding changed')
+            self._validate(old)
             record=old
         else:
             self._validate(record)
@@ -137,6 +140,8 @@ class RoomSessionSupervisor:
         self._attach(record)
 
     def _validate(self,record):
+        from .project_adoption import role_receipt
+        role_receipt(record)
         policy,_=host_policy(self.config);file=Path(record['sessionConfigPath']);private_file(file)
         if digest_file(file)!=record['sessionConfigSha256']:raise ValueError('Original logical session config changed')
         config=json.loads(file.read_text())

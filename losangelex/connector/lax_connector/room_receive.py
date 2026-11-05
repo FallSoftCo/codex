@@ -71,7 +71,22 @@ class RoomReceiveJournal:
             canonical TEXT NOT NULL, digest TEXT NOT NULL, basis TEXT NOT NULL,
             PRIMARY KEY(authority,agent,event)
         )''')
+        self.db.execute('''CREATE TABLE IF NOT EXISTS room_input_observation (
+            authority TEXT NOT NULL, agent TEXT NOT NULL, event TEXT NOT NULL,
+            reason TEXT NOT NULL, PRIMARY KEY(authority,agent,event))''')
         self.db.commit()
+
+    def observation(self, authority, agent, event):
+        return self.db.execute('SELECT reason FROM room_input_observation WHERE authority=? AND agent=? AND event=?',
+                               (authority,agent,event)).fetchone()
+
+    def observe_only(self, authority, agent, event, reason):
+        # Never turn an uncertain handoff into a convenient skip or a fake ACK.
+        row=self.read(authority,agent,event)
+        if not row or row['state']!='received' or row['acknowledgement'] is not None:
+            raise ReceiveConflict('Only a definitely unsubmitted input can be observation-only')
+        with self.db:self.db.execute('INSERT INTO room_input_observation VALUES(?,?,?,?) ON CONFLICT DO NOTHING',
+                                    (authority,agent,event,reason))
 
     def close(self):
         self.db.close()

@@ -35,6 +35,8 @@ class RoomOutput:
         if self.io.is_output_held(row['item']):
             return False  # A source-policy change never re-admits a retained final.
         source = self.io.source(row['turn'])
+        if self.tools.project:
+            return await self.tools.project.native_final(row,source)
         if not source:
             # A native turn may contain inputs from different rooms/audiences.
             # No guess or automatic audience widening is allowed.

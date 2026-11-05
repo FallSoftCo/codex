@@ -31,11 +31,17 @@ async def initialize(config, *, recovery=None):
     if not name:raise ValueError('Meaningful native agent name required')
     native_state=Path(host_manifest(config)['state']) if config.get('nativeServer') is not None else state/'native'
     binding={'authorityId':authority,'agentId':agent,'codexHome':str(home),'nativeState':str(native_state)}
-    request={'cwd':str(workspace),'model':config['model'],**requested(config),'dynamicTools':TOOLS,
+    request={'cwd':str(workspace),'model':config['model'],**requested(config),'dynamicTools':config.get('conversationDynamicTools',TOOLS) if config.get('projectCommunication') else TOOLS,
              'baseInstructions':config['instructions'],
              'config':{'model_reasoning_effort':config['effort'],'features.default_mode_request_user_input':True}}
     legacy_request = request
-    request = {**request, 'baseInstructions': with_policy(request['baseInstructions'])}
+    if config.get('projectCommunication'):
+        from .project_tools import PROJECT_TOOLS
+        from .room_participation import project_policy
+        if config.get('conversationDynamicTools')!=TOOLS+PROJECT_TOOLS:raise ValueError('Project bootstrap requires its exact executable tool declarations')
+        request={**request,'baseInstructions':project_policy(request['baseInstructions'],config)}
+    else:
+        request = {**request, 'baseInstructions': with_policy(request['baseInstructions'])}
     fingerprint=hashlib.sha256(json.dumps({'binding':binding,'name':name,'request':request},sort_keys=True,separators=(',',':')).encode()).hexdigest()
     legacy_fingerprint=hashlib.sha256(json.dumps({'binding':binding,'name':name,'request':legacy_request},sort_keys=True,separators=(',',':')).encode()).hexdigest()
     state_directory(state, parents=True,exist_ok=True)

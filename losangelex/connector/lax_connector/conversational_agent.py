@@ -36,7 +36,9 @@ class ConversationalAgent:
         from .room_inspect import READ_NAMES
         legacy_tools=[tool for tool in TOOLS if tool['name'] not in READ_NAMES]
         from .room_resume import supported_declarations
-        if not supported_declarations(config.get('conversationDynamicTools'),TOOLS,legacy_tools):
+        from .project_tools import PROJECT_TOOLS
+        selected_tools=TOOLS+PROJECT_TOOLS if config.get('projectCommunication') else TOOLS
+        if not supported_declarations(config.get('conversationDynamicTools'),selected_tools,legacy_tools if not config.get('projectCommunication') else selected_tools):
             raise ValueError('Explicit reviewed conversational tool declarations required')
         self.state=Path(config['state']);state_directory(self.state, parents=True,exist_ok=True)
         self.lock=(self.state/'connector.lock').open('a')
@@ -52,6 +54,8 @@ class ConversationalAgent:
         from .conversation_io import ConversationIO
         self.conversation_io=ConversationIO(self.state/'conversation-io.sqlite',authority=config['authorityId'],agent=config['agentId'],thread=self.thread)
         self.output=None
+        from .project_runtime import ProjectRuntime
+        self.project=ProjectRuntime(self,config['projectCommunication']) if config.get('projectCommunication') else None
         self.origin_control=None
         self.session_supervisor=None
         self.host_supervisor=None
@@ -91,7 +95,8 @@ class ConversationalAgent:
 
     async def native_receipt(self,event,reply):
         turn=self.conversation_io.bind(event,reply)
-        source=self.conversation_io.primary(turn)
+        if self.project:self.project.admitted(event,turn)
+        source=self.project.causal_source(event,turn) if self.project else self.conversation_io.primary(turn)
         self.turn_sources[turn]=source
         self.turn_input_rooms[turn]=self.conversation_io.rooms(turn)
         if self.native_active_turn==turn:self.native_state.update(self.native_state.status,source)
@@ -124,6 +129,7 @@ class ConversationalAgent:
         if method=='turn/completed':
             turn=params['turn']['id'];self.finished_turns.add(turn)
             self.conversation_io.ended(turn,params['turn'].get('status','completed'))
+            if self.project:self.project.ended(turn,params['turn'].get('status','completed'))
             if self.output:self.output.wake.set()
             await self.attention.finish(turn)
             self.turn_sources.pop(turn,None)
@@ -164,12 +170,16 @@ class ConversationalAgent:
                                  source_for_turn=lambda turn:self.turn_sources.get(turn,{}).get('id'),host_config=self.config,
                                  on_membership=lambda:self.subscriptions.wake.set() if self.subscriptions else None,
                                  conversation_io=self.conversation_io,native_state_view=self.native_state.own_view,session_supervisor=self.session_supervisor)
+            if self.project:
+                await self.project.verify()
+                self.tools.project=self.project
             from .room_reply_window import ReplyWindow
             def reviewed(turn,source):
                 self.turn_sources.setdefault(turn,source)
                 self.turn_input_rooms.setdefault(turn,set()).add(source['room'])
-            self.tools.reply_window=ReplyWindow(self.conversation_io,self.rpc,
-                idle=lambda:self.native_active_turn is None,on_review=reviewed)
+            if not self.project:
+                self.tools.reply_window=ReplyWindow(self.conversation_io,self.rpc,
+                    idle=lambda:self.native_active_turn is None,on_review=reviewed)
             self.conversation_io.reply_window=self.tools.reply_window
             from .room_output import RoomOutput
             self.output=RoomOutput(self.conversation_io,self.tools)
@@ -226,6 +236,9 @@ class ConversationalAgent:
                 except Exception as error:
                     saved(self.state/'output-reconciliation-unavailable.json',{'error':type(error).__name__,'turns':sorted(unfinished)})
             self.output.start()
+            if self.project:
+                self.project.start()
+                tasks.append(self.project.task)
             self.activity.start()
             self.native_state.start()
             def create(room,after):
@@ -233,7 +246,7 @@ class ConversationalAgent:
                     base_url=self.config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/',
                     token=self.config['token'],authority_id=self.config['authorityId'],agent_id=self.config['agentId'],
                     room_id=room,thread_id=self.thread,state=self.state/'rooms'/room,
-                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.observe_room_event,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt)
+                    initial_cursor=after,on_status=self.status,route_headers={'X-Hollywood-Authority':self.config['authorityId'],'X-Hollywood-Agent':self.config['agentId']},on_room_event=self.observe_room_event,before_native_input=self.before_native_input,on_native_receipt=self.native_receipt,project_mode=bool(self.project),on_input_candidate=self.project.candidate if self.project else None)
             def room_set(rooms):self.native_state.set_rooms(rooms)
             from .room_subscriptions import RoomSubscriptions
             from .room_origin_control import RoomOriginControl
@@ -257,6 +270,7 @@ class ConversationalAgent:
             await self.native_state.close()
             await self.activity.close()
             if self.output:await self.output.close()
+            if self.project:await self.project.close()
             self.conversation_io.close()
             await self.rpc.close();await self.session.close()
             self.lock.close()

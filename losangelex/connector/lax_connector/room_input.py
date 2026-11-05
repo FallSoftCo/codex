@@ -28,7 +28,7 @@ def human_input(event, *, authority_id, agent_id, thread_id):
     metadata={'schema':'lax-room-message/v1','authorityId':authority_id,'roomId':room,
               'eventId':event_id,'authorId':author,'authorKind':'human','audience':event['audience'],
               'sourceEventId':event.get('source'),'sharedConversation':True,
-              'instruction':input_guidance(event['audience'])}
+              'instruction':('You are the sole project lead. Own this original human intent; use lead_work, selected lead_assign and source-bound lead_reply. Do not broadcast/paraphrase the brief. Complete useful work or record its genuine dependency.' if event.get('data',{}).get('roomMode')=='lead' else input_guidance(event['audience']))}
     return {'threadId':thread_id,'clientUserMessageId':event_id,
             'input':[{'type':'text','text':body,'text_elements':[]}],
             'turnTrigger':'hollywood.human_room',
@@ -55,9 +55,12 @@ def peer_context(event, *, authority_id, agent_id, thread_id):
     if event.get('kind') not in ('message','request','result','question'):
         raise ValueError('Explicit peer requests need native start-or-steer admission')
     event_id=str(UUID(event['id']));author=str(UUID(event['author']));room=str(UUID(event['room']))
-    if author==agent_id:raise ValueError('Own publications are not new input')
+    if author==agent_id and not (data.get('roomMode')=='lead' and data.get('leadAgentId')==agent_id and data.get('coordination',{}).get('type')=='wake'):
+        raise ValueError('Own publications are not new input')
     body=event.get('body')
     if not isinstance(body,str) or not body.strip():raise ValueError('Message body required')
+    if data.get('roomMode')=='lead':
+        body=json.dumps({'schema':'lax-addressed-team/v1','authorRole':data['authorRole'],'leadAgentId':data['leadAgentId'],'coordination':data.get('coordination'),'attentionId':data.get('attentionId'),'body':body},sort_keys=True,separators=(',',':'),ensure_ascii=False)
     content={'authorityId':authority_id,'roomId':room,'eventId':event_id,
              'sourceEventId':event.get('source'),'audience':event['audience'],
              'kind':event['kind'],'expectsReply':bool(data.get('expectsReply')),'body':body}

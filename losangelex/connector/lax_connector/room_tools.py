@@ -44,6 +44,7 @@ class RoomTools:
         self.on_membership=on_membership
         self.publish_lock=asyncio.Lock()
         self.reply_window=None
+        self.project=None
         self.administration=RoomAdministration(authority=self.authority,agent=self.agent,thread=self.thread,request=request,state=self.state/'administration',host_config=host_config,session_supervisor=session_supervisor)
 
     async def call(self,method,params):
@@ -69,6 +70,11 @@ class RoomTools:
         name=params['tool'];args=params['arguments']
         if isinstance(args,str):args=json.loads(args)
         if not isinstance(args,dict):raise ValueError('Tool arguments must be an object')
+        from .project_tools import NAMES as PROJECT_NAMES
+        if name in PROJECT_NAMES:
+            if not self.project:raise ValueError('This native context has no reviewed project-lead binding')
+            result=await self.project.call(name,args,params['callId'],params.get('turnId'))
+            return {'success':True,'contentItems':[{'type':'inputText','text':json.dumps(result,default=str)}]}
         if name in ADMIN_NAMES|{HOST_TOOL,FACTORY_TOOL} or name=='hollywood_admin_reconcile':
             result=await self.administration.call(name,args,params['callId'])
             if self.on_membership:self.on_membership()
@@ -113,6 +119,7 @@ class RoomTools:
         if audience not in ('room','direct'):raise ValueError('Explicit message audience required')
         path=self.state/(key+'.json');prior=json.loads(path.read_text()) if path.exists() else None
         payload={'operationId':'native-room:'+str(uuid5(UUID(self.agent),key)),'kind':'message','body':body,'audience':audience}
+        if args.get('coordination') is not None:payload['coordination']={'outcome':None,'originEventId':None,'evidence':[],**args['coordination']}
         for field in ('recipientId','sourceEventId'):
             if args.get(field):payload[field]=str(UUID(args[field]))
         if args.get('responsePhase') is not None:
@@ -124,7 +131,7 @@ class RoomTools:
         if not args.get('sourceEventId') and not semantic_new:
             source=(prior.get('payload',{}).get('sourceEventId') if prior else ((self.conversation_io.source(turn,room) or {}).get('id') if self.conversation_io else self.source_for_turn(turn) if self.source_for_turn else None))
             if source:payload['sourceEventId']=str(UUID(source))
-        if payload.get('recipientId')==self.agent:raise ValueError('Self-publication is not new input')
+        if payload.get('recipientId')==self.agent and not (self.project and self.project.ledger.is_lead and payload.get('coordination',{}).get('type')=='wake'):raise ValueError('Self-publication is not new input')
         if audience=='direct' and not payload.get('recipientId'):raise ValueError('Private message requires recipient')
         if not prior and self.conversation_io and payload.get('sourceEventId'):
             source = self.conversation_io.input_event(payload['sourceEventId'])
@@ -188,6 +195,7 @@ class RoomTools:
             or event['author']!=self.agent or event['room']!=room or event.get('kind')!='message'
             or event.get('body')!=payload['body'] or event.get('audience')!=payload['audience']
             or event.get('recipient')!=payload.get('recipientId') or event.get('source')!=payload.get('sourceEventId')
+            or event.get('data',{}).get('coordination')!=payload.get('coordination')
             or result.get('deliveries')!=[]
             or payload.get('responsePhase') is not None and event.get('data',{}).get('responsePhase')!=payload['responsePhase']):
             raise ValueError('Original publication acceptance unavailable or mismatched')

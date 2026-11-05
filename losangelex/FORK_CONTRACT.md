@@ -51,28 +51,39 @@ already implements or has qualified every requirement.
 - User stops, cancellations, permissions, existing pairings, drafts and queued
   work survive upgrades. An upstream import must not activate paused work.
 
-## Human room conversation — 2026-10-30 user correction
+## Lead-owned projects — 2026-11-05 user correction
 
-This section supersedes addressed-request-only participation and per-message
-Hollywood execution admission for the new conversational runtime. It records the
-implementation target, not a claim of current deployment.
+This supersedes the October 30 human-to-every-agent fanout for adopted project
+rooms. Existing non-adopted rooms remain compatible; source implementation and
+isolated qualification do not establish live adoption.
 
-Every new public human message fans out to all current room agent members. Idle
-agents take normal native Codex turns by default; busy agents receive new input
-at native model-step boundaries and judge relevance without automatic interruption
-or concurrent turns. Peer authorship remains distinct; ordinary peer observations
-must not create perpetual reply/model-wake loops. Explicit stops use native controls.
-Hollywood owns communication, not execution. LAX owns the existing Codex agent
-lifecycle.
-The maintained room process selects `LAX_NATIVE_RUNTIME_MODE=room-conversation`.
-This retains native sandbox/approval and patch source verification, while editing
-does not depend on a Hollywood delivery claim or protected Work permit. Existing
-protected Work channels retain their mutation contract even if a room-mode hint
-is present; a missing protected channel is never a legacy fallback.
- A message receipt is not a claim, process reservation or work completion.
+A canonical room lead is the human point of contact. Human requests enter only
+that lead's native context. The lead owns the original work, acts locally where
+appropriate and assigns compact tasks to selected workers. Its instructions have
+delegated authority within the original human scope; workers do not require a
+second human relay. Ordinary peer notes are stored without model/context admission.
+Selected peer questions and answers retain their counterpart, task and audience.
 
-The complete tracked scope, acceptance journeys and migration limits are in
-[conversational-rooms-20261030.json](requirements/conversational-rooms-20261030.json).
+Hollywood owns identity, membership, role revisions and communication receipts.
+It does not schedule execution or decide work completion. LAX owns the durable
+work/dependency records and the existing native lifecycle. Material results resume
+only their original useful work; unchanged blockers and passive observations do
+not trigger inference. Explicit pauses/cancellations and unknown effects remain
+held. An ended model turn is not completion. Genuine user decisions and permission
+approvals retain their actual human requester; technical questions go to the lead.
+
+The shared app-server still serves many logical contexts per host. There is no
+per-room daemon or periodic model check-in. Existing accepted operations are never
+replayed by role adoption. Old histories remain inspectable as an archive; current
+human conversation and terse internal coordination have independent read cursors.
+Existing contexts require a reviewed idle handover and retained original receipts;
+a role label alone cannot remove old instructions or an already bloated context.
+
+The retained broadcast runtime is selected only for non-adopted configurations.
+`projectCommunication` binds adopted contexts to the canonical room/lead revision.
+Native full-access initialization, tools, captured scopes and protected owner
+registration remain in force. Neither membership nor a room role expands unrelated
+business-action authorization. Native three-context work remains deferred.
 
 ## Primary single-context runtime — 2026-10-29 user direction
 

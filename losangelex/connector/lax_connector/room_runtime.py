@@ -16,7 +16,7 @@ from .room_receive import RoomReceiveJournal, NativeReceiptUnresolved
 
 class RoomRuntime:
     def __init__(self, *, rpc, session, base_url, token, authority_id, agent_id,
-                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None, on_room_event=None, before_native_input=None, on_native_receipt=None):
+                 room_id, thread_id, state, initial_cursor, on_status=None, route_headers=None, on_room_event=None, before_native_input=None, on_native_receipt=None, project_mode=False, on_input_candidate=None):
         self.rpc, self.session = rpc, session
         self.route_headers=dict(route_headers or {})
         if set(self.route_headers)-{'X-Hollywood-Authority','X-Hollywood-Agent'}:
@@ -31,7 +31,9 @@ class RoomRuntime:
         self.state = Path(state)
         state_directory(self.state, parents=True,exist_ok=True)
         self.journal = RoomReceiveJournal(self.state/'receive.sqlite')
-        self.cursor_path = self.state/'cursor.json'
+        # Addressed inputs and human conversation are different filtered feeds.
+        # Retain the legacy cursor; it cannot cover messages excluded from it.
+        self.cursor_path = self.state/('inputs-cursor.json' if project_mode else 'cursor.json')
         self.binding = {'authority':self.authority,'agent':self.agent,'room':self.room,'thread':thread_id}
         if self.cursor_path.exists():
             saved=json.loads(self.cursor_path.read_text())
@@ -44,6 +46,8 @@ class RoomRuntime:
         self.on_room_event=on_room_event
         self.before_native_input=before_native_input
         self.on_native_receipt=on_native_receipt
+        self.project_mode=project_mode
+        self.on_input_candidate=on_input_candidate
         self.on_status=on_status
         self.ready=asyncio.Event()
 
@@ -66,11 +70,14 @@ class RoomRuntime:
         if seq<=self.cursor:return
         if self.on_room_event:await self.on_room_event(event)
         data=event.get('data',{})
-        if event.get('author') != self.agent and self.agent in data.get('conversationRecipients',[]):
+        own_wake=(self.project_mode and event.get('author')==self.agent and data.get('coordination',{}).get('type')=='wake' and data.get('leadAgentId')==self.agent)
+        if (event.get('author') != self.agent or own_wake) and self.agent in data.get('conversationRecipients',[]):
             args=dict(authority_id=self.authority,agent_id=self.agent,thread_id=self.thread)
             if data.get('authorKind')=='human':
                 method,payload='turn/start',human_input(event,**args)
             elif data.get('authorKind')=='agent':
+                if self.project_mode and event.get('recipient')!=self.agent:
+                    raise ValueError('Project team input must be explicitly addressed')
                 payload=peer_context(event,**args)
                 method='hollywood/agentMessage' if event.get('recipient')==self.agent else 'thread/inject_items'
             else:
@@ -80,9 +87,16 @@ class RoomRuntime:
             original=json.loads(row['payload'])
             method,payload=original['method'],original['params']
             inference = method != 'thread/inject_items'
+            if self.journal.observation(self.authority,self.agent,event['id']):
+                self.cursor=seq;self._save_cursor();return
             if row['acknowledgement'] is None:
                 if row['state'] != 'received':
                     raise NativeReceiptUnresolved('Original room input needs reconciliation: '+event['id'])
+                if inference and self.on_input_candidate:
+                    decision=await self.on_input_candidate(event)
+                    if decision.get('admit') is False:
+                        self.journal.observe_only(self.authority,self.agent,event['id'],decision['reason'])
+                        self.cursor=seq;self._save_cursor();return
                 if inference and self.before_native_input:await self.before_native_input(event)
                 if not self.journal.begin_handoff(self.authority,self.agent,event['id']):
                     raise NativeReceiptUnresolved('Original room input needs reconciliation: '+event['id'])
@@ -102,7 +116,7 @@ class RoomRuntime:
         while True:
             try:
                 url=self.base_url+'rooms/'+self.room+'/events'
-                async with self.session.get(url,params={'view':'conversation','batch':'1','after':str(self.cursor)},
+                async with self.session.get(url,params={'view':'inputs' if self.project_mode else 'conversation','batch':'1','after':str(self.cursor)},
                         headers={**self.route_headers,'Authorization':'Bearer '+self.token}) as response:
                     if response.status in (401,403):
                         await self._status('blocked',reason='Room access denied',httpStatus=response.status)

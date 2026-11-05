@@ -71,12 +71,15 @@ def resume_overrides(config):
     overrides = dict(overrides)
     adoption = config.get('conversationParticipationPolicy')
     if adoption is not None:
-        if adoption != VERSION:
+        if adoption not in (VERSION,'lead-project-v1'):
             raise ValueError('Unknown reviewed room participation policy')
         if not overrides.get('baseInstructions'):
             raise ValueError('Participation adoption requires the reviewed original baseInstructions; '
                              'do not replace saved instructions with an inferred default')
-        overrides['baseInstructions'] = with_policy(overrides['baseInstructions'])
+        overrides['baseInstructions'] = (project_policy(overrides['baseInstructions'],config) if config.get('projectCommunication') else with_policy(overrides['baseInstructions']))
+    if config.get('projectCommunication'):
+        if not overrides.get('baseInstructions'):raise ValueError('Project role requires reviewed original base instructions')
+        overrides['baseInstructions']=project_policy(overrides['baseInstructions'],config)
     return overrides, adoption
 
 
@@ -159,3 +162,39 @@ if __name__ == '__main__':
             'configPatch': {'conversationParticipationPolicy': VERSION,
                             'conversationResumeInstructions': overrides},
             'liveApplied': False}, sort_keys=True))
+
+PROJECT_VERSION='lead-project-v1'
+
+
+def project_policy(instructions, config):
+    """Replace only our owned participation block, preserving other constraints."""
+    import re
+    from uuid import UUID
+    binding=config['projectCommunication'];lead=str(UUID(binding['leadAgentId']))
+    role='lead' if config['agentId']==lead else 'worker'
+    text=re.sub(r'\[LAX room participation: [^\]]+\].*?\[/LAX room participation\]', '',instructions,flags=re.S).strip()
+    # Only SDK-authored legacy directives are replaced. Owner instructions,
+    # permissions, privacy constraints and unrelated developer text stay intact.
+    for legacy in (PRIVATE_FINAL_LEGACY,FINAL_DELIVERY,
+            'Publish important progress, questions and answers in their original room/audience; only explicitly private coordination is private.'):
+        text=text.replace(legacy,'Use the selected project tools for deliberate communication; native execution remains activity. Human replies belong to the lead.')
+    if role=='lead':
+        policy=('You are this project\'s lead and the sole human point of contact. Own original human work; '
+          'do not quote/paraphrase it as a relay. Keep human replies concise and decision-oriented; routine actions belong in activity, without acknowledgements or repeated preservation lists. Inspect lead_work for its original work IDs and dependencies. '
+          'Execute useful local work directly. Use lead_assign for specific selected agents, one compact task '
+          'with its expected result and necessary constraints; link longer evidence. Your delegated instructions '
+          'are authoritative within the user\'s scope. Review material results and coordinate only needed peers. '
+          'Resolve addressed peer questions with team_answer; use lead_attention for native technical callbacks. Decide technical matters yourself and ask the human only for a genuine preference or permission. Use lead_reply with the original workId for human progress, genuine user questions and completion. '
+          'Do not claim queued work is running or done. Native finals are private; an ended turn is not completion. '
+          'Before ending, record real waiting/paused/complete state, or leave useful ready work for bounded '
+          'event-driven continuation. Do not poll agents, repeat unchanged dependencies or create blanket continue loops.')
+    else:
+        policy=('You are a local project worker. The project lead is '+lead+'. Its addressed assignments '
+          'carry delegated authority within the user\'s scope; do not demand another human relay. '
+          'Work on the assigned task on this host. Do not answer human room broadcasts or narrate to the room. '
+          'Use team_report with the original taskId: concise result, meaningful progress or exact dependency '
+          'and bounded evidence references. No acknowledgements, repeated preservation lists, copied briefs '
+          'or raw transcripts. Routine execution stays in activity; send interim progress only when useful for deliberate inspection. Use a question or blocked result when a lead decision is needed. Full native output remains local. Do not claim success for accepted messages. '
+          'After team_question, continue independent useful work or end the inference while waiting; its directed answer resumes you. Never wait/poll in shell commands or send routine waiting messages. Answer only addressed peer questions, using team_answer and the original questionEventId. Use team_question for a necessary scoped fact with one stable questionKey; do not poll peers or repeat unchanged questions. An answer is not a new request. Technical native questions go to the lead, genuine permission approvals '
+          'retain their real human owner. Cross-host work is coordinated through the lead, not SSH.')
+    return text+'\n\n[LAX room participation: '+PROJECT_VERSION+']\n'+policy+'\nPreserve explicit stops, unknown effects, original message IDs, private audiences, model/usage settings and actual permissions. Room membership is not a business-action grant.\n[/LAX room participation]'
