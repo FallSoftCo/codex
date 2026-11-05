@@ -49,13 +49,35 @@ def reviewed_configuration(original, policy, original_sha):
 
 def require_settled(state):
     """Do not turn unknown input or publication into permission to drop it."""
-    receives=list(state.rglob('receive.sqlite'))
-    if len(receives)>64:raise ValueError('Incomplete original receive inventory')
-    for file in receives:
-        private_file(file)
-        with sqlite3.connect(file.as_uri()+'?mode=ro',uri=True) as db:
-            if db.execute("SELECT 1 FROM room_input WHERE state!='committed' LIMIT 1").fetchone():
-                raise ValueError('Original room input needs reconciliation before role handover')
+    # Legacy receive journals retain acknowledged rows; they never promoted
+    # them to committed. An ACK alone is not execution/terminal proof. Cross-
+    # check the independently retained input binding and native terminal event.
+    io_file=state/'conversation-io.sqlite';io=None
+    if io_file.exists():
+        private_file(io_file);io=sqlite3.connect(io_file.as_uri()+'?mode=ro',uri=True)
+    try:
+        receives=list(state.rglob('receive.sqlite'))
+        if len(receives)>64:raise ValueError('Incomplete original receive inventory')
+        for file in receives:
+            private_file(file)
+            with sqlite3.connect(file.as_uri()+'?mode=ro',uri=True) as db:
+                db.row_factory=sqlite3.Row
+                rows=db.execute("SELECT * FROM room_input WHERE state!='committed' ORDER BY seq")
+                for row in rows:
+                    if row['state']=='received' and row['acknowledgement']is None and db.execute(
+                            'SELECT 1 FROM room_input_observation WHERE authority=? AND agent=? AND event=?',
+                            (row['authority'],row['agent'],row['event'])).fetchone():continue
+                    if row['state']!='acknowledged' or row['acknowledgement']is None:
+                        raise ValueError('Original room input needs reconciliation before role handover')
+                    request=json.loads(row['payload']);ack=json.loads(row['acknowledgement'])
+                    if request.get('method')=='thread/inject_items':continue # accepted context only, no native execution
+                    turn=ack.get('turn',{}).get('id')
+                    if (not turn or not io or request.get('method')not in ('turn/start','hollywood/agentMessage')
+                            or not io.execute("SELECT 1 FROM input_source i JOIN native_end n ON n.turn=i.turn WHERE i.event=? AND i.turn=? AND n.phase IN ('completed','failed','interrupted')",
+                                (row['event'],turn)).fetchone()):
+                        raise ValueError('Original native input has no independently recorded terminal commitment')
+    finally:
+        if io:io.close()
     file=state/'conversation-io.sqlite'
     if file.exists():
         private_file(file)

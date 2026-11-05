@@ -70,3 +70,9 @@ request without resending it. Logical NATS-node qualification is distinct from
 physical multi-host activation. A root-approved QA host policy does not qualify
 production host enrollment upgrades. The release owner must verify those actual
 upgrades and each adopted room before reporting deployment.
+
+Legacy acknowledged receive rows are checked against their independent original
+input-to-turn binding and persisted native terminal event before a context
+handover. ACK alone is insufficient; old receipt rows are never rewritten to
+fabricate a committed state. Accepted context-only injection has no execution
+claim. Original uncertain explicit publications remain held for same-ID reads.
