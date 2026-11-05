@@ -274,7 +274,7 @@ def prepare(authority, host, agent, request, output):
             if host_value.get('ownerAgentId')!=(shared['identity']['ownerAgentId'] if shared else agent):
                 raise ValueError('Original host transport owner changed')
             transport_read=transport_inspect(new_python,uid,config_path,selected['manifest'],
-                                             **({'shared_client':True} if not shared_upgrade else {}))
+                                             **({'shared_client':True, **({'allow_terminal_failure':True} if retained_native is not None else {})} if not shared_upgrade else {}))
             from .host import request as host_request
             pending=host_request(config['hollywoodUrl'],config['token'],'GET','connector/pending?hostId='+host)
             historical_unknown=pending.get('busy')
@@ -381,10 +381,10 @@ def prepare(authority, host, agent, request, output):
                 "probes": probes, "modelsStarted": 0, "servicesStarted": 0}
 
 
-def transport_inspect(interpreter,uid,config_path,manifest,*,shared_client=False):
+def transport_inspect(interpreter,uid,config_path,manifest,*,shared_client=False,allow_terminal_failure=False):
     account=pwd.getpwuid(uid)
     result=subprocess.run(['runuser','-u',account.pw_name,'--',str(interpreter),'-I','-B',
-        '-m','lax_connector.transport_adoption',str(config_path),str(manifest),*(['--existing-client'] if shared_client else [])],
+        '-m','lax_connector.transport_adoption',str(config_path),str(manifest),*(['--existing-client'] if shared_client else []),*(['--allow-terminal-failure'] if allow_terminal_failure else [])],
         stdin=subprocess.DEVNULL,capture_output=True,timeout=15)
     if result.returncode or len(result.stdout)>8192:
         raise ValueError('Original native context read failed; retain transport migration held')
