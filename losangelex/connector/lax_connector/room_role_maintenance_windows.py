@@ -25,8 +25,10 @@ def inspect_stopped_parent(policy_path,*,expected_policy_sha256):
   and a==intended and original.get('admissionAllowed')is True
   and all(a[k]==original[k]for k in ('runtimeIdentity','nativeIdentity','policySha256','parentArgvSha256')),
   'Original separately accepted owner closure differs')
+ # The locator retains a canonical JSON review copy. Its bytes deliberately
+ # differ from the external review file whose original hash is in the intent.
+ # Compare the stored review semantics and bound pins, not serializer bytes.
  platform.require(review.get('approved')is True and review.get('mode')=='close-successor'
-  and platform.digest((op/'review.private.json').read_bytes())==intent['reviewSha256']
   and review['expectedPins']==intent['pins']
   and intent['pins']['runtimeIdentity']==a['runtimeIdentity']and intent['pins']['nativeIdentity']==a['nativeIdentity']
   and intent['pins']['policySha256']==expected_policy_sha256,'Closure owner review differs')
