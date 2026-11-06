@@ -61,6 +61,9 @@ class LeadWork:
             self.db.execute('INSERT INTO binding VALUES(1,?) ON CONFLICT DO NOTHING',(binding,))
             if self.db.execute('SELECT value FROM binding').fetchone()[0]!=binding:
                 raise ValueError('Project work ledger belongs to another room/role')
+        from .work_evidence import WorkEvidence
+        from .work_recovery import WorkRecovery
+        self.evidence=WorkEvidence(self);self.recovery=WorkRecovery(self)
 
     def close(self):self.db.close()
 
@@ -101,7 +104,7 @@ class LeadWork:
     def ready_event(self,work,revision):
         record=self.work(work)
         coord=dict(type='wake',taskId=work,revision=revision,originEventId=record['source'])
-        args=dict(body='Owned work is ready. Inspect lead_work; reconcile retained evidence and continue useful work or record its real dependency/completion.',audience='direct',recipientId=self.agent,sourceEventId=None,responsePhase='message',coordination=coord)
+        args=dict(body='Owned work is ready. Inspect lead_work acceptance, recovery diagnostics and original source. Reconcile retained evidence, then continue useful work or record a genuine dependency. Completion requires verified evidence for every acceptance criterion.',audience='direct',recipientId=self.agent,sourceEventId=None,responsePhase='message',coordination=coord)
         return self.queue('ready:'+work+':'+str(revision),args)
 
     def candidate(self, event):
@@ -222,6 +225,7 @@ class LeadWork:
         if outcome not in ('done','progress','blocked','waiting','failed','cancelled'):raise ValueError('Unknown task outcome')
         if not isinstance(summary,str) or not summary.strip() or len(summary.encode())>1024:raise ValueError('Use a concise result, at most1024UTF8 bytes')
         if len(evidence)>8 or any(not isinstance(r,str) or not 1<=len(r)<=256 for r in evidence):raise ValueError('Use bounded evidence references')
+        if outcome=='done' and not evidence:raise ValueError('A done report requires durable versioned evidence for lead review')
         source=json.loads(step['source'])
         args=dict(body=summary,audience=source['audience'],recipientId=source['author'],sourceEventId=source['id'],responsePhase='message',
             coordination=dict(type='result',taskId=step['id'],revision=step['revision'],outcome=outcome,evidence=list(evidence)))
@@ -323,12 +327,13 @@ class LeadWork:
         if record['state'] in ('complete','cancelled') and state!=record['state']:raise ValueError('Stopped work requires new human intent')
         if state=='waiting' and not any(self.dependencies(work).values()):raise ValueError('No accepted peer, original unsettled send or delivered human question exists to wait for. Continue useful work or report its actual dependency.')
         with self.db:
+            if state=='complete':self.evidence.seal(work)
             self.db.execute('UPDATE work SET state=?,reason=?,revision=revision+1 WHERE id=?',(state,reason,work))
             if state in ('cancelled','paused'):
                 for step in self.db.execute("SELECT * FROM assignment WHERE work=? AND state NOT IN ('done','cancelled','failed')",(work,)).fetchall():
                     self.request_cancellation(step)
 
-    def ended(self,turn,status):
+    def ended(self,turn,status,error=None):
         """One durable native-end decision. No periodic model polling."""
         with self.db:
             if not self.db.execute('INSERT INTO native_end VALUES(?,?) ON CONFLICT DO NOTHING',(turn,status)).rowcount:return
@@ -338,14 +343,16 @@ class LeadWork:
                 if status=='interrupted':
                     self.db.execute("UPDATE work SET state='paused',reason='Native turn interrupted; no automatic continuation' WHERE id=?",(row['id'],));continue
                 pending=self.dependencies(row['id'])
-                if any(pending.values()):
+                if any(pending[k] for k in ('assignments','questions','admitting')):
                     reason='Waiting for original communication delivery' if pending['admitting'] else 'Waiting for addressed worker results'
                     self.db.execute("UPDATE work SET state='waiting',reason=? WHERE id=?",(reason,row['id']));continue
                 if status!='completed':
-                    self.db.execute("UPDATE work SET state='fault',reason='Original native turn '+?+'; await scoped runtime recovery' WHERE id=?",(status,row['id']));continue
+                    from .work_recovery import category
+                    self.recovery.schedule(row['id'],turn,category(error),error);continue
                 attempts=0 if row['progress_revision']>row['started_progress'] else row['no_progress']+1
                 if attempts>1:
-                    self.db.execute("UPDATE work SET state='fault',no_progress=?,reason='Lead ended twice without material progress or an explicit disposition' WHERE id=?",(attempts,row['id']));continue
+                    self.db.execute('UPDATE work SET no_progress=? WHERE id=?',(attempts,row['id']))
+                    self.recovery.schedule(row['id'],turn,'stalled');continue
                 revision=row['revision']+1
                 self.db.execute("UPDATE work SET state='ready',revision=?,no_progress=? WHERE id=?",(revision,attempts,row['id']))
                 self.ready_event(row['id'],revision)
@@ -361,6 +368,8 @@ class LeadWork:
         if selected:
             result['originalWork']={**selected,'human':json.loads(selected['human'])}
             result['dependencies']=self.dependencies(selected['id'])
+            result['acceptance']=self.evidence.snapshot(selected['id'])
+            result['recovery']=self.recovery.snapshot(selected['id'])
             result['communicationBlocked']=[dict(r) for r in self.db.execute("SELECT o.id,o.reason FROM outbox o WHERE o.state='blocked' AND (EXISTS(SELECT 1 FROM team_question_intent i WHERE i.work=? AND i.key=o.id) OR EXISTS(SELECT 1 FROM assignment a WHERE a.work=? AND 'assign:'||a.id=o.id)) ORDER BY o.rowid DESC LIMIT 8",(selected['id'],selected['id']))]
             query="SELECT id,work,agent,revision,state,event FROM assignment WHERE work=? ORDER BY rowid LIMIT 51"
             steps=self.db.execute(query,(selected['id'],)).fetchall()

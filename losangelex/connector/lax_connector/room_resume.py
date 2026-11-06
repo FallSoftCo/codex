@@ -10,7 +10,7 @@ import hashlib,json
 
 # Exact generic SDK24413-tool schema, not account/host/runtime data.
 # Exact retained SDK254 room tools and the first255 project bindings.
-SUPPORTED_PREVIOUS_DECLARATIONS = frozenset({'85a9442bea5b7501d8100a700411fd7c554c739d880410e6b30bdbba005fd1a7','9c92b3c860bae8856ba44c8ef6e184d275550b0b08c9a94b8db961b5013a11db','642adab0db28a4fea73ce9ce26e90997c894a0ca2b1a6c90875f70812ac9c0a2'})
+SUPPORTED_PREVIOUS_DECLARATIONS = frozenset({'fc5a0b6288eff6e6b7cadd8798ff55b62df16f4f593011eb069208b53e28f103','85a9442bea5b7501d8100a700411fd7c554c739d880410e6b30bdbba005fd1a7','9c92b3c860bae8856ba44c8ef6e184d275550b0b08c9a94b8db961b5013a11db','642adab0db28a4fea73ce9ce26e90997c894a0ca2b1a6c90875f70812ac9c0a2'})
 
 def supported_declarations(value,current,legacy):
     if value==current or value==legacy:return True

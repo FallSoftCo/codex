@@ -31,10 +31,10 @@ async def main():
   duplicate={'key':'another-key','summary':'Rephrasing the same artifact is not work','evidence':['artifact:sha256:'+'3'*64]}
   assert (await runtime.call('lead_work',{'workId':work,'checkpoint':duplicate},'repeat','unchanged'))['alreadyRecorded'];assert ledger.work(work)['progress_revision']==revision
   ledger.ended('unchanged','completed');assert ledger.work(work)['no_progress']==1
-  admit_next('unchanged-again');ledger.ended('unchanged-again','completed');assert ledger.work(work)['state']=='fault'
+  admit_next('unchanged-again');ledger.ended('unchanged-again','completed');assert ledger.work(work)['state']=='recovering'
   # A scoped retry of the original checkpoint is still the same receipt after
   # later work faulted; it cannot revive or mutate that later state.
-  assert (await runtime.call('lead_work',{'workId':work,'checkpoint':first},'old-accepted','unknown'))['alreadyRecorded'];assert ledger.work(work)['state']=='fault'
+  assert (await runtime.call('lead_work',{'workId':work,'checkpoint':first},'old-accepted','unknown'))['alreadyRecorded'];assert ledger.work(work)['state']=='recovering'
   rejected=False
   try:await runtime.call('lead_work',{'workId':work,'checkpoint':{**first,'summary':'Changed original request'}},'changed','first')
   except ValueError:rejected=True

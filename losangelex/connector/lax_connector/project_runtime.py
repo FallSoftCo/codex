@@ -4,6 +4,7 @@ No additional Codex process, model timer, broadcast fanout or task scheduler in
 Hollywood. Native commitment and communication acceptance keep original IDs.
 """
 import asyncio
+import time
 import hashlib
 import json
 import logging
@@ -21,6 +22,8 @@ class ProjectRuntime:
         self.lead=str(UUID(policy['leadAgentId']));self.agent=owner.config['agentId']
         self.ledger=LeadWork(owner.state/'project-work.sqlite',authority=owner.config['authorityId'],room=self.room,agent=self.agent,lead=self.lead)
         with self.ledger.db:self.ledger.db.execute('CREATE TABLE IF NOT EXISTS native_end_notice(turn TEXT PRIMARY KEY,status TEXT NOT NULL)')
+        if 'error' not in {r['name'] for r in self.ledger.db.execute('PRAGMA table_info(native_end_notice)')}:
+            with self.ledger.db:self.ledger.db.execute('ALTER TABLE native_end_notice ADD COLUMN error TEXT')
         self.wake=asyncio.Event();self.task=None;self.lock=asyncio.Lock()
 
     async def verify(self):
@@ -68,8 +71,8 @@ class ProjectRuntime:
     def admitted(self,event,turn):
         self.ledger.admitted(event,turn);self.wake.set()
 
-    def ended(self,turn,status):
-        with self.ledger.db:self.ledger.db.execute("INSERT INTO native_end_notice VALUES(?,?) ON CONFLICT DO NOTHING",(turn,status))
+    def ended(self,turn,status,error=None):
+        with self.ledger.db:self.ledger.db.execute("INSERT INTO native_end_notice(turn,status,error) VALUES(?,?,?) ON CONFLICT DO NOTHING",(turn,status,json.dumps(error)))
         self.wake.set()
 
     async def settle_ends(self):
@@ -84,7 +87,7 @@ class ProjectRuntime:
             if not self.ledger.is_lead:
                 had_final=self.owner.conversation_io.db.execute("SELECT 1 FROM output WHERE turn=?",(row["turn"],)).fetchone()
                 if not had_final:await self.worker_missing_result(row["turn"],"empty-turn:"+row["turn"])
-            self.ledger.ended(row["turn"],row["status"])
+            self.ledger.ended(row["turn"],row["status"],json.loads(row["error"]) if row["error"] else None)
 
     def causal_source(self,event,turn):
         """Actions retain original work scope; a peer reply does not retarget them.
@@ -159,8 +162,12 @@ class ProjectRuntime:
     async def run(self):
         attempts=0
         while True:
-            await self.wake.wait();self.wake.clear();retry=False
+            due=self.ledger.recovery.next_due()
+            try:await asyncio.wait_for(self.wake.wait(),timeout=max(0,due-time.time()) if due is not None else None)
+            except asyncio.TimeoutError:pass
+            self.wake.clear();retry=False
             await self.settle_ends()
+            await self.ledger.recovery.inspect_due(self.owner)
             rows=self.ledger.db.execute("SELECT id FROM outbox WHERE state='ready' ORDER BY rowid").fetchall()
             for row in rows:
                 try:await self.send(row['id'])
@@ -186,6 +193,10 @@ class ProjectRuntime:
         if name not in NAMES:raise ValueError('Unknown project tool')
         if name=='lead_work':
             if not self.ledger.is_lead:raise PermissionError('Lead work belongs to the canonical lead')
+            mutations=[k for k in ('acceptance','verification','checkpoint','state') if k in args]
+            if len(mutations)>1:raise ValueError('Use one durable work mutation per call')
+            if 'acceptance' in args:return self.ledger.evidence.define(args['workId'],args['acceptance'],turn)
+            if 'verification' in args:return await self.ledger.evidence.verify(args['workId'],args['verification'],turn,self.owner.rpc,self.owner.thread)
             if 'checkpoint' in args:
                 if 'state' in args:raise ValueError('Record a milestone and change disposition in separate calls')
                 value=args['checkpoint']
@@ -261,9 +272,18 @@ class ProjectRuntime:
         payload=dict(body=args['body'],sourceEventId=human['id'],audience=human['audience'],responsePhase='answer' if disposition=='complete' else 'blocked' if disposition=='needs_input' else 'update')
         if human['audience']=='direct':payload['recipientId']=human['author']
         key='human:'+work['id']+':'+hashlib.sha256(json.dumps({'body':args['body'],'disposition':disposition},sort_keys=True).encode()).hexdigest()
-        with self.ledger.db:self.ledger.queue(key,payload)
+        previous=self.ledger.db.execute('SELECT state,receipt FROM outbox WHERE id=?',(key,)).fetchone()
+        if previous and previous['state']=='accepted' and work['state']=='complete':
+            return {'state':'delivered','eventId':json.loads(previous['receipt'])['event']['id'],'workState':'complete'}
+        if disposition=='complete':
+            self.ledger.evidence.completion(work['id'])
+            from .room_session_inspect import journal_counts
+            if any(journal_counts(self.owner.config).values()):raise ValueError('Unsettled native input/output prevents completion')
+        with self.ledger.db:
+            if disposition=='complete':self.ledger.evidence.seal(work['id'])
+            self.ledger.queue(key,payload)
         receipt=await self.send(key)
-        if disposition!='progress':self.ledger.disposition(work['id'],'complete' if disposition=='complete' else 'waiting','Human response '+disposition)
+        if disposition!='progress' and self.ledger.work(work['id'])['state'] not in ('paused','cancelled'):self.ledger.disposition(work['id'],'complete' if disposition=='complete' else 'waiting','Human response '+disposition)
         # Canonical receipt registration suppresses any normal native copy.
         return {'state':'delivered','eventId':receipt['event']['id'],'workState':self.ledger.work(work['id'])['state']}
 

@@ -117,6 +117,7 @@ class ConversationalAgent:
         if method=='item/started':self.native_items[params['item']['id']]=params['item']
         if method=='item/completed':
             item=params['item'];self.native_items.pop(item['id'],None)
+            if self.project:self.project.ledger.evidence.native_command(params['turnId'],item)
             if item.get('type')=='agentMessage' and item.get('phase') in (None,'final_answer'):
                 self.conversation_io.final(params['turnId'],item['id'],item.get('text',''))
                 if self.output:self.output.wake.set()
@@ -129,7 +130,7 @@ class ConversationalAgent:
         if method=='turn/completed':
             turn=params['turn']['id'];self.finished_turns.add(turn)
             self.conversation_io.ended(turn,params['turn'].get('status','completed'))
-            if self.project:self.project.ended(turn,params['turn'].get('status','completed'))
+            if self.project:self.project.ended(turn,params['turn'].get('status','completed'),params['turn'].get('error'))
             if self.output:self.output.wake.set()
             await self.attention.finish(turn)
             self.turn_sources.pop(turn,None)
@@ -227,12 +228,14 @@ class ConversationalAgent:
             # Reconcile only finals already captured locally before a connection
             # ended. This is one bounded metadata read, not model polling.
             unfinished=set(self.conversation_io.unfinished())
+            if self.project:unfinished.update(r['turn'] for r in self.project.ledger.db.execute("SELECT DISTINCT t.turn FROM turn_work t JOIN work w ON w.id=t.work WHERE w.state='working' AND NOT EXISTS(SELECT 1 FROM native_end n WHERE n.turn=t.turn)"))
             if unfinished:
                 try:
                     page=await self.rpc.call('thread/turns/list',{'threadId':self.thread,'limit':100,'sortDirection':'desc','itemsView':'summary'})
                     for turn in page['data']:
                         if turn['id'] in unfinished and turn['status'] in ('completed','failed','interrupted'):
                             self.conversation_io.ended(turn['id'],turn['status'])
+                            if self.project:self.project.ended(turn['id'],turn['status'],turn.get('error'))
                 except Exception as error:
                     saved(self.state/'output-reconciliation-unavailable.json',{'error':type(error).__name__,'turns':sorted(unfinished)})
             self.output.start()
