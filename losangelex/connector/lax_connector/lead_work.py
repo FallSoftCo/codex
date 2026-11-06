@@ -276,12 +276,45 @@ class LeadWork:
             if changed:self.db.execute('UPDATE work SET progress_revision=progress_revision+1,no_progress=0,reason=? WHERE id=?',(summary,work))
         return dict(workId=work,checkpointKey=key,material=material,alreadyRecorded=not changed)
 
+    def dependencies(self,work):
+        """Only accepted peers or unsettled original sends can hold work waiting."""
+        assignments=self.db.execute("SELECT count(*) FROM assignment WHERE work=? AND event IS NOT NULL AND state IN ('queued','ready','progress','waiting','question','cancel_requested')",(work,)).fetchone()[0]
+        questions=self.db.execute("SELECT count(*) FROM team_question WHERE work=? AND direction='out' AND state='pending'",(work,)).fetchone()[0]
+        admitting=self.db.execute("SELECT count(*) FROM outbox o WHERE o.state='ready' AND (EXISTS(SELECT 1 FROM assignment a WHERE a.work=? AND o.id='assign:'||a.id AND a.event IS NULL) OR EXISTS(SELECT 1 FROM team_question_intent i WHERE i.work=? AND i.key=o.id AND i.event IS NULL))",(work,work)).fetchone()[0]
+        source=self.work(work)['source']
+        human=self.db.execute("SELECT count(*) FROM outbox WHERE state='accepted' AND json_extract(payload,'$.sourceEventId')=? AND json_extract(payload,'$.responsePhase')='blocked'",(source,)).fetchone()[0]
+        return dict(assignments=assignments,questions=questions,admitting=admitting,human=human)
+
+    def rejected(self,key,reason):
+        """Record a proven non-admission, never an uncertain command read."""
+        with self.db:
+            self.db.execute("UPDATE outbox SET state='blocked',reason=? WHERE id=? AND state!='accepted'",(reason,key))
+            self.db.execute("UPDATE assignment SET state='rejected' WHERE event IS NULL AND 'assign:'||id=?",(key,))
+            self.reconcile_waiting()
+
+    def reconcile_waiting(self):
+        """Repair only the old automatic wait on a now-rejected peer send once.
+
+        Genuine human questions, accepted/uncertain sends, explicit stops and
+        unrelated historical work are preserved. This creates no model timer.
+        """
+        if not self.is_lead:return
+        with self.db:
+            rows=self.db.execute("SELECT * FROM work WHERE state='waiting' AND reason IN ('Waiting for addressed worker results','Waiting for original communication delivery')").fetchall()
+            for row in rows:
+                rejected=self.db.execute("SELECT o.reason FROM outbox o WHERE o.state='blocked' AND (EXISTS(SELECT 1 FROM team_question_intent i WHERE i.work=? AND i.key=o.id) OR EXISTS(SELECT 1 FROM assignment a WHERE a.work=? AND 'assign:'||a.id=o.id)) LIMIT 1",(row['id'],row['id'])).fetchone()
+                if not rejected or any(self.dependencies(row['id']).values()):continue
+                revision=row['revision']+1
+                self.db.execute("UPDATE work SET state='ready',revision=?,reason=? WHERE id=?",(revision,'Peer communication was not admitted: '+str(rejected[0])[:700],row['id']))
+                self.ready_event(row['id'],revision)
+
     def disposition(self,work,state,reason):
         if not self.is_lead or state not in ('ready','waiting','paused','cancelled','complete'):
             raise ValueError('Explicit lead disposition required')
         if not isinstance(reason,str) or not reason.strip() or len(reason)>1000:raise ValueError('A short meaningful disposition is required')
         record=self.work(work)
         if record['state'] in ('complete','cancelled') and state!=record['state']:raise ValueError('Stopped work requires new human intent')
+        if state=='waiting' and not any(self.dependencies(work).values()):raise ValueError('No accepted peer, original unsettled send or delivered human question exists to wait for. Continue useful work or report its actual dependency.')
         with self.db:
             self.db.execute('UPDATE work SET state=?,reason=?,revision=revision+1 WHERE id=?',(state,reason,work))
             if state in ('cancelled','paused'):
@@ -297,10 +330,10 @@ class LeadWork:
                 if row['state'] not in ('working','ready'):continue
                 if status=='interrupted':
                     self.db.execute("UPDATE work SET state='paused',reason='Native turn interrupted; no automatic continuation' WHERE id=?",(row['id'],));continue
-                pending=self.db.execute("SELECT count(*) FROM assignment WHERE work=? AND state IN ('prepared','queued','ready','progress','waiting','question','cancel_requested')",(row['id'],)).fetchone()[0]
-                pending+=self.db.execute("SELECT count(*) FROM team_question_intent i LEFT JOIN team_question q ON q.event=i.event WHERE i.work=? AND (i.event IS NULL OR q.state='pending')",(row['id'],)).fetchone()[0]
-                if pending:
-                    self.db.execute("UPDATE work SET state='waiting',reason='Waiting for addressed worker results' WHERE id=?",(row['id'],));continue
+                pending=self.dependencies(row['id'])
+                if any(pending.values()):
+                    reason='Waiting for original communication delivery' if pending['admitting'] else 'Waiting for addressed worker results'
+                    self.db.execute("UPDATE work SET state='waiting',reason=? WHERE id=?",(reason,row['id']));continue
                 if status!='completed':
                     self.db.execute("UPDATE work SET state='fault',reason='Original native turn '+?+'; await scoped runtime recovery' WHERE id=?",(status,row['id']));continue
                 attempts=0 if row['progress_revision']>row['started_progress'] else row['no_progress']+1
@@ -320,6 +353,8 @@ class LeadWork:
             outstandingCount=self.db.execute("SELECT count(*) FROM work WHERE state NOT IN ('complete','cancelled')").fetchone()[0])
         if selected:
             result['originalWork']={**selected,'human':json.loads(selected['human'])}
+            result['dependencies']=self.dependencies(selected['id'])
+            result['communicationBlocked']=[dict(r) for r in self.db.execute("SELECT o.id,o.reason FROM outbox o WHERE o.state='blocked' AND (EXISTS(SELECT 1 FROM team_question_intent i WHERE i.work=? AND i.key=o.id) OR EXISTS(SELECT 1 FROM assignment a WHERE a.work=? AND 'assign:'||a.id=o.id)) ORDER BY o.rowid DESC LIMIT 8",(selected['id'],selected['id']))]
             query="SELECT id,work,agent,revision,state,event FROM assignment WHERE work=? ORDER BY rowid LIMIT 51"
             steps=self.db.execute(query,(selected['id'],)).fetchall()
         else:

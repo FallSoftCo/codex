@@ -49,7 +49,7 @@ class ProjectRuntime:
         loaded=[row for row in observations if row.get('agentId')==agent
                 and row.get('status',{}).get('projectCommunication')==self.policy]
         if len(loaded)!=1:
-            raise ValueError('Selected worker has no current matching project-role observation; no task was sent. Select an attached worker or leave this dependency waiting.')
+            raise ValueError('Selected worker has no current matching project-role observation; no task was sent. Select an attached worker, continue independent work, or report the actual setup dependency. An unaccepted assignment is not a pending worker result.')
 
     async def candidate(self,event):
         data=event.get('data',{})
@@ -104,6 +104,7 @@ class ProjectRuntime:
         return next(iter(roots.values())) if len(roots)==1 else None
 
     def start(self):
+        self.ledger.reconcile_waiting()
         self.task=asyncio.create_task(self.run());self.wake.set()
 
     async def send(self,key):
@@ -144,7 +145,14 @@ class ProjectRuntime:
             # Existing publication ledger distinguishes first dispatch from
             # original-command GET reconciliation after any uncertain result.
             async with self.owner.tools.publish_lock:
-                receipt=await self.owner.tools.publish(self.room,args,hashlib.sha256(('project:'+key).encode()).hexdigest())
+                publication_key=hashlib.sha256(('project:'+key).encode()).hexdigest()
+                try:receipt=await self.owner.tools.publish(self.room,args,publication_key)
+                except HttpFailure as error:
+                    publication=self.owner.tools.state/(publication_key+'.json')
+                    # A denied original-command GET is NOT proof of non-admission.
+                    proof=json.loads(publication.read_text()) if publication.exists() else {}
+                    if proof.get('state')=='rejected':self.ledger.rejected(key,str(error))
+                    raise
             self.ledger.accepted(key,receipt)
             return receipt
 
@@ -158,7 +166,12 @@ class ProjectRuntime:
                 try:await self.send(row['id'])
                 except asyncio.CancelledError:raise
                 except HttpFailure as error:
-                    if error.status in (400,403,409):
+                    current=self.ledger.db.execute('SELECT state FROM outbox WHERE id=?',(row['id'],)).fetchone()
+                    # send() only blocks with original publication rejection proof.
+                    # Ambiguous command reads retain same-ID reconciliation/backoff.
+                    if current and current['state']=='blocked':continue
+                    payload=json.loads(self.ledger.db.execute('SELECT payload FROM outbox WHERE id=?',(row['id'],)).fetchone()[0])
+                    if '_attention' in payload and error.status in (400,403,409):
                         with self.ledger.db:self.ledger.db.execute("UPDATE outbox SET state='blocked',reason=? WHERE id=?",(str(error),row['id']))
                     else:retry=True
                 except Exception:

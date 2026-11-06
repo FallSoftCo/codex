@@ -128,3 +128,17 @@ controls and sources outside the room are not inherited by this public path.
 Original recipient snapshots and acceptance receipts remain unchanged. Only
 explicitly ready work emits one agent-authored continuation with its old source;
 no human input is submitted again. Unknown effects stay faulted for reconciliation.
+
+## Rejected communication and real dependencies
+
+A prepared question is not an accepted peer dependency. Work may wait for an
+accepted assignment/answer, original unsettled communication, or a delivered
+human question. A proven rejected publication is retained as rejected and shown
+by `lead_work`; it cannot strand the lead waiting for a reply that cannot arrive.
+A denied original-command read after an uncertain POST is still uncertain: only
+the original command is reconciled, never resent.
+
+On loading an older ledger, an automatic wait on a proven rejected send receives
+one durable work-ready revision, retaining its original human source. Reopening
+the connector cannot repeat that repair. Genuine questions, accepted/uncertain
+deliveries, pauses, cancellations and completed work remain unchanged.
