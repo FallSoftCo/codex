@@ -82,3 +82,16 @@ explicit cursors for further evidence. Lead reads default to its human lane.
 Accepted role receipts pin the configuration originally reviewed; later SDK
 template/tool changes cannot regenerate or silently rewrite that acceptance.
 Exact previous tool-schema hashes remain supported for retained contexts.
+
+## Local lead progress
+
+Delegation is optional. A lead doing local work records a material milestone with
+`lead_work(workId, checkpoint={key, summary, evidence})`. The exact current native
+work must be bound to that turn. Stable keys preserve retries; the same versioned
+evidence cannot add progress again under another key or reworded summary. These
+are attributable lead assertions, not independent artifact verification. Tool
+counts, elapsed time, unchanged checks and status paraphrases are not milestones.
+The journal survives connector restart; a material milestone permits continued
+useful work after native turn end without a new user command. The existing
+no-progress bound, original-output settlement, stops and unknown-action guards
+remain in force. A checkpoint never creates a human message or model timer.

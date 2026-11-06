@@ -44,6 +44,10 @@ class LeadWork:
           CREATE TABLE IF NOT EXISTS outbox(id TEXT PRIMARY KEY,payload TEXT NOT NULL,
             state TEXT NOT NULL DEFAULT 'ready',receipt TEXT,reason TEXT);
           CREATE INDEX IF NOT EXISTS outbox_pending ON outbox(state,id);
+          CREATE TABLE IF NOT EXISTS local_checkpoint(work TEXT NOT NULL,key TEXT NOT NULL,
+            material TEXT NOT NULL,summary TEXT NOT NULL,evidence TEXT NOT NULL,turn TEXT NOT NULL,
+            PRIMARY KEY(work,key));
+          CREATE INDEX IF NOT EXISTS checkpoint_material ON local_checkpoint(work,material);
           CREATE TABLE IF NOT EXISTS native_end(turn TEXT PRIMARY KEY,status TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS turn_work(turn TEXT NOT NULL,work TEXT NOT NULL,
             progress_revision INTEGER NOT NULL,PRIMARY KEY(turn,work));
@@ -245,6 +249,32 @@ class LeadWork:
             audience='room',recipientId=step['agent'],sourceEventId=step['event'],responsePhase='message',coordination=coord)
         self.queue('cancel:'+step['id']+':'+str(step['revision']),args)
         self.db.execute("UPDATE assignment SET state='cancel_requested' WHERE id=?",(step['id'],))
+
+    def checkpoint(self,work,key,summary,evidence,turn):
+        """Record a claimed material milestone, not tool traffic or elapsed time.
+
+        Evidence references identify the actual revision/result (for example a
+        commit, file digest or retained job receipt). Rewording the same evidence
+        or retrying another key cannot count it as additional useful progress.
+        This journal is the lead's assertion; it is not independent artifact QA.
+        """
+        if not self.is_lead:raise PermissionError('Only the lead records local work progress')
+        record=self.work(work)
+        if not isinstance(key,str) or not 1<=len(key)<=80 or not all(c.isascii() and (c.isalnum() or c in '_-') for c in key):raise ValueError('Use one stable bounded checkpoint key')
+        if not isinstance(summary,str) or not summary.strip() or len(summary.encode())>1024:raise ValueError('Use one concise material milestone')
+        if not isinstance(evidence,list) or not 1<=len(evidence)<=8 or any(not isinstance(v,str) or not v.strip() or len(v.encode())>256 for v in evidence):raise ValueError('Reference one to eight actual versioned results, not generic activity')
+        evidence=sorted(set(v.strip() for v in evidence));material=sha(evidence)
+        prior=self.db.execute('SELECT * FROM local_checkpoint WHERE work=? AND key=?',(work,key)).fetchone()
+        if prior:
+            if prior['summary']!=summary or prior['evidence']!=encoded(evidence):raise ValueError('Original checkpoint intent changed')
+            return dict(workId=work,checkpointKey=key,material=material,alreadyRecorded=True)
+        if record['state'] not in ('ready','working'):raise ValueError('Original work is not runnable')
+        if not self.db.execute('SELECT 1 FROM turn_work WHERE work=? AND turn=?',(work,turn)).fetchone():raise ValueError('Checkpoint must belong to work admitted in this native turn')
+        with self.db:
+            changed=not self.db.execute('SELECT 1 FROM local_checkpoint WHERE work=? AND material=?',(work,material)).fetchone()
+            self.db.execute('INSERT INTO local_checkpoint VALUES(?,?,?,?,?,?)',(work,key,material,summary,encoded(evidence),turn))
+            if changed:self.db.execute('UPDATE work SET progress_revision=progress_revision+1,no_progress=0,reason=? WHERE id=?',(summary,work))
+        return dict(workId=work,checkpointKey=key,material=material,alreadyRecorded=not changed)
 
     def disposition(self,work,state,reason):
         if not self.is_lead or state not in ('ready','waiting','paused','cancelled','complete'):

@@ -2,8 +2,8 @@
 from .room_tools import definition, STRING
 
 PROJECT_TOOLS=[
- definition('lead_work','Read durable original human work and selected assignments. With workId retrieve its exact original human input; after pages outstanding work. Set a real dependency, pause, cancellation or completion explicitly; an ended turn is not work completion.',
-   {'workId':STRING,'after':{'type':'integer','minimum':0},'state':{'type':'string','enum':['ready','waiting','paused','cancelled','complete']},'reason':STRING},[]),
+ definition('lead_work','Read durable original human work and selected assignments. With workId retrieve its exact original human input; after pages outstanding work. Set a real dependency, pause, cancellation or completion explicitly; an ended turn is not work completion. For useful local work, checkpoint its material milestone with a stable key and actual versioned evidence before ending the turn. This records your assertion, not independent qualification. Repeated tool calls, waiting and paraphrases are not progress.',
+   {'workId':STRING,'after':{'type':'integer','minimum':0},'state':{'type':'string','enum':['ready','waiting','paused','cancelled','complete']},'reason':STRING,'checkpoint':{'type':'object','properties':{'key':STRING,'summary':STRING,'evidence':{'type':'array','items':STRING,'minItems':1,'maxItems':8}},'required':['key','summary','evidence'],'additionalProperties':False}},[]),
  definition('lead_assign','Assign one compact, actionable task to a selected room agent. You are its lead, not a relay of human quotations. Include expected result and only necessary constraints; link larger evidence. Accepted means queued, never running/done.',
    {'workId':STRING,'agentId':STRING,'taskKey':{'type':'string','pattern':'^[a-zA-Z0-9_-]{1,80}$'},'brief':STRING,'evidence':{'type':'array','items':STRING,'maxItems':8}},['workId','agentId','taskKey','brief']),
  definition('lead_reply','Reply to the original human work, retaining its audience even when this native turn came from a worker result. Use meaningful progress, a genuine user question or completion; do not relay internal chatter.',

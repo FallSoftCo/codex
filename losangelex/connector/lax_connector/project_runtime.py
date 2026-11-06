@@ -152,6 +152,11 @@ class ProjectRuntime:
         if name not in NAMES:raise ValueError('Unknown project tool')
         if name=='lead_work':
             if not self.ledger.is_lead:raise PermissionError('Lead work belongs to the canonical lead')
+            if 'checkpoint' in args:
+                if 'state' in args:raise ValueError('Record a milestone and change disposition in separate calls')
+                value=args['checkpoint']
+                if not isinstance(value,dict) or set(value)!={'key','summary','evidence'}:raise ValueError('Explicit checkpoint key, summary and evidence required')
+                return self.ledger.checkpoint(args['workId'],value['key'],value['summary'],value['evidence'],turn)
             if 'state'in args:
                 self.ledger.disposition(args['workId'],args['state'],args.get('reason'));self.wake.set()
             return self.ledger.snapshot(work_id=args.get('workId'),after=args.get('after',0))

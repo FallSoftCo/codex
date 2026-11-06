@@ -53,7 +53,12 @@ async def main(file):
             await asyncio.sleep(.2)
         started=[e for e in events if e['method']=='turn/started']
         counts={a.config['agentId']:sum(e['agentId']==a.config['agentId']for e in started)for a in agents}
-        assert counts[agents[0].config['agentId']]>0 and counts[agents[1].config['agentId']]>0
+        if plan.get('localProgress'):
+            assert counts[agents[0].config['agentId']]==3 and all(counts[a.config['agentId']]==0 for a in agents[1:])
+            checkpoints={r[0] for r in agents[0].project.ledger.db.execute('SELECT key FROM local_checkpoint')}
+            assert {'local-phase-1','local-phase-2'}<=checkpoints
+        else:
+            assert counts[agents[0].config['agentId']]>0 and counts[agents[1].config['agentId']]>0
         if plan.get('peerDialogue'):assert counts[agents[2].config['agentId']]>0
         assert counts[agents[-1].config['agentId']]==0
         snapshots=[a.project.ledger.snapshot()for a in agents]

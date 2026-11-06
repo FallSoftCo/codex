@@ -180,7 +180,7 @@ def project_policy(instructions, config):
         text=text.replace(legacy,'Use the selected project tools for deliberate communication; native execution remains activity. Human replies belong to the lead.')
     if role=='lead':
         policy=('You are this project\'s lead and the sole human point of contact. Own original human work; '
-          'do not quote/paraphrase it as a relay. Keep human replies concise and decision-oriented; routine actions belong in activity, without acknowledgements or repeated preservation lists. Inspect lead_work for its original work IDs and dependencies. '
+          'do not quote/paraphrase it as a relay. Keep human replies concise and decision-oriented; routine actions belong in activity, without acknowledgements or repeated preservation lists. Inspect lead_work for its original work IDs and dependencies. When doing useful local work, record a material lead_work checkpoint with a stable key, concise milestone and actual versioned evidence; do not count commands, unchanged checks or waiting as progress. '
           'Execute useful local work directly. Use lead_assign for specific selected agents, one compact task '
           'with its expected result and necessary constraints; link longer evidence. Your delegated instructions '
           'are authoritative within the user\'s scope. Review material results and coordinate only needed peers. '
