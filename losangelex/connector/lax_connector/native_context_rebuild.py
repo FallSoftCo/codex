@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from .journal import saved
+from .runtime_files import state_directory
 
 
 def sha_file(path,limit=None):
@@ -68,7 +69,7 @@ def observe_history(path,items,*,start=0):
 async def install(runner,snapshot,operation,actions=None):
     """Requires exclusive caller ownership and a confirmed idle original thread."""
     root=runner.state/"context-rebuild"
-    root.mkdir(mode=0o700,exist_ok=True)
+    state_directory(root,exist_ok=True)
     journal=root/(hashlib.sha256(operation.encode()).hexdigest()+".json")
     items=refill_items(snapshot,operation,actions)
     previous=json.loads(journal.read_text()) if journal.exists() else None

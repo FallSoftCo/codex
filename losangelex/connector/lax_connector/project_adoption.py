@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from .journal import saved
-from .runtime_files import exclusive_lock, private_file
+from .runtime_files import exclusive_lock, private_file, state_directory
 from .room_participation import PROJECT_VERSION, project_policy, instructions_digest, loaded
 from .room_tools import TOOLS
 from .project_tools import PROJECT_TOOLS
@@ -276,7 +276,7 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
         policy_ref={k:policy[k]for k in ('version','mode','leadAgentId','revision','inputAfterSeq')}
         identity=digest(dict(operation=operation,original=expected_config_sha,record=expected_record_sha,
             policy=policy_ref,seedSha256=hashlib.sha256(seed.encode()).hexdigest(),work=work))
-        root=state/'project-adoptions';root.mkdir(mode=0o700,exist_ok=True);journal=root/(identity+'.json')
+        root=state/'project-adoptions';state_directory(root,exist_ok=True);journal=root/(identity+'.json')
         prior=json.loads(journal.read_text())if journal.exists()else None
         if prior and prior['state']=='accepted':
             role_receipt(observed)
