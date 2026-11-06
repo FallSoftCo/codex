@@ -298,8 +298,13 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
         from aiohttp import ClientSession,ClientTimeout
         headers={'Authorization':'Bearer '+original['token'],'X-Hollywood-Authority':original['authorityId'],'X-Hollywood-Agent':agent}
         async with ClientSession(timeout=ClientTimeout(total=15))as session:
-            async with session.get(original['hollywoodUrl'].rstrip('/')+'/hollywood/v3/rooms/'+original['originRoomId'],headers=headers)as response:
-                if response.status!=200:raise ValueError('Canonical lead-policy read is unavailable')
+            # This is the original host owner's maintenance operation. Read
+            # canonical room policy as that actual parent principal, rather
+            # than depending on the stopped worker's runtime authorization.
+            # Retained-work reads below keep the original child's audience.
+            owner_headers={'Authorization':'Bearer '+parent['token'],'X-Hollywood-Authority':parent['authorityId'],'X-Hollywood-Agent':parent['agentId']}
+            async with session.get(original['hollywoodUrl'].rstrip('/')+'/hollywood/v3/rooms/'+original['originRoomId'],headers=owner_headers)as response:
+                if response.status!=200:raise ValueError('Canonical lead-policy read is unavailable (HTTP '+str(response.status)+')')
                 value=await response.json()
             originals=[]
             for item in work:
