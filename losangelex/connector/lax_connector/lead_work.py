@@ -27,7 +27,7 @@ class LeadWork:
         os.close(os.open(path,os.O_CREAT|os.O_RDWR,0o600))
         self.db=sqlite3.connect(path);self.db.row_factory=sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL');self.db.execute('PRAGMA synchronous=FULL')
-        self.agent=str(UUID(agent));self.lead=str(UUID(lead));self.room=str(UUID(room))
+        self.agent=str(UUID(agent));self.lead=str(UUID(lead));self.room=str(UUID(room));self.authority=str(UUID(authority))
         self.is_lead=self.agent==self.lead
         self.db.executescript('''
           CREATE TABLE IF NOT EXISTS binding(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL);
@@ -69,7 +69,7 @@ class LeadWork:
         if not row:raise ValueError('Unknown original human work')
         return dict(row)
 
-    def adopt_original(self, event, state, reason):
+    def adopt_original(self, event, state, reason, *, handover=None):
         """Import a reviewed obligation; never deliver its human text again.
 
         The operator verifies the original event against canonical Hollywood.
@@ -82,8 +82,8 @@ class LeadWork:
             raise ValueError('Review original dependencies before marking work ready; unknown work remains faulted')
         if not isinstance(reason,str) or not reason.strip() or len(reason.encode())>2048:
             raise ValueError('A bounded reviewed work disposition is required')
-        if self.agent not in event.get('data',{}).get('conversationRecipients',[]):
-            raise ValueError('The original request did not address this lead')
+        from .project_handover_source import verify_retained_source
+        verify_retained_source(event,authority=self.authority,room=self.room,lead=self.agent,handover=handover)
         identity=str(uuid5(UUID(self.agent),'human:'+event['id']))
         with self.db:
             old=self.db.execute('SELECT * FROM work WHERE id=?',(identity,)).fetchone()

@@ -115,3 +115,16 @@ observation before creating an assignment. Previously dispatched/accepted work
 reconciles its original publication independently of later status availability.
 No worker is contacted to check readiness, and no message or model wake is added.
 Legacy status observations retain their exact original retry fingerprint.
+
+## Original public work and a new lead
+
+Reviewed handover manifests may include the original `eventSeq` alongside the
+canonical event ID/hash. The importer verifies that exact message through normal
+room-history authorization before changing native context. A current lead may
+inherit a pre-policy shared human request that originally addressed another agent.
+This requires the reviewed canonical lead revision and an explicit original-work
+disposition. Reading old messages alone never creates work. Old private requests,
+controls and sources outside the room are not inherited by this public path.
+Original recipient snapshots and acceptance receipts remain unchanged. Only
+explicitly ready work emits one agent-authored continuation with its old source;
+no human input is submitted again. Unknown effects stay faulted for reconciliation.

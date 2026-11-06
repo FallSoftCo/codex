@@ -219,6 +219,27 @@ async def checkpoint(rpc, config, state, snapshot, operation, *, reviewed_instru
     return receipt
 
 
+async def read_retained_event(session, config, item):
+    """Read an exact reviewed source using its existing audience authorization."""
+    room=config['originRoomId']
+    if 'eventSeq' in item:
+        path='rooms/'+room+'/history?view=all&after='+str(item['eventSeq']-1)+'&limit=1'
+    else:path='inbox/events/'+item['eventId']
+    headers={'Authorization':'Bearer '+config['token'],'X-Hollywood-Authority':config['authorityId'],
+             'X-Hollywood-Agent':config['agentId']}
+    async with session.get(config['hollywoodUrl'].rstrip('/')+'/hollywood/v3/'+path,headers=headers)as response:
+        if response.status!=200:raise ValueError('Original work is not canonically readable; do not substitute another request')
+        payload=await response.json()
+    events=payload.get('events',[]) if 'eventSeq' in item else [payload.get('event')]
+    event=events[0] if len(events)==1 else None
+    if (not isinstance(event,dict) or event.get('id')!=item['eventId'] or event.get('room')!=room
+            or event.get('authority')!=config['authorityId'] or event.get('data',{}).get('authorKind')!='human' or event.get('kind') not in ('message','request')
+            or 'eventSeq' in item and event.get('seq')!=item['eventSeq']
+            or digest(event)!=item['canonicalSha256']):
+        raise ValueError('Reviewed canonical original work changed or is not visible')
+    return event
+
+
 async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, policy, seed, operation, *, work=()):
     """Write a reviewed immutable configuration, then atomically switch its pointer.
 
@@ -231,12 +252,14 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
     if not isinstance(work,(tuple,list)) or len(work)>50:
         raise ValueError('Use a bounded explicitly reviewed original-work manifest')
     for item in work:
-        if (not isinstance(item,dict) or set(item)!={'eventId','canonicalSha256','state','reason'}
+        if (not isinstance(item,dict) or not {'eventId','canonicalSha256','state','reason'}<=set(item) or set(item)-{'eventId','canonicalSha256','state','reason','eventSeq'}
                 or item['state']not in ('ready','paused','cancelled','complete','fault')
                 or not isinstance(item['reason'],str) or not item['reason'].strip()
                 or len(item['reason'].encode())>2048):
             raise ValueError('Each retained work item needs canonical identity/hash and an explicit disposition')
         UUID(item['eventId'])
+        if 'eventSeq' in item and (type(item['eventSeq']) is not int or not 1<=item['eventSeq']<=9007199254740991):
+            raise ValueError('Original event sequence must be a positive safe integer')
     if len({v['eventId']for v in work})!=len(work):raise ValueError('Duplicate original work in handover')
     parent_path=Path(parent_path);private_file(parent_path)
     parent=json.loads(parent_path.read_text());agent=str(UUID(agent))
@@ -280,16 +303,10 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
                 value=await response.json()
             originals=[]
             for item in work:
-                async with session.get(original['hollywoodUrl'].rstrip('/')+'/hollywood/v3/inbox/events/'+item['eventId'],headers=headers)as response:
-                    if response.status!=200:raise ValueError('Original work is not canonically readable; do not substitute another request')
-                    observed_work=(await response.json()).get('event')
-                if (not isinstance(observed_work,dict) or observed_work.get('id')!=item['eventId']
-                        or observed_work.get('room')!=original['originRoomId']
-                        or observed_work.get('authority')!=original['authorityId']
-                        or observed_work.get('data',{}).get('authorKind')!='human'
-                        or digest(observed_work)!=item['canonicalSha256']):
-                    raise ValueError('Reviewed canonical original work changed')
+                observed_work=await read_retained_event(session,original,item)
                 if agent!=policy_ref['leadAgentId']:raise ValueError('Only the project lead inherits human obligations')
+                from .project_handover_source import verify_retained_source
+                verify_retained_source(observed_work,authority=original['authorityId'],room=original['originRoomId'],lead=agent,handover={**policy_ref,'roomId':original['originRoomId']})
                 originals.append({**item,'event':observed_work})
         actual=value.get('room',{}).get('leadPolicy',{})
         if (value.get('authorityId')!=original['authorityId'] or value.get('room',{}).get('id')!=original['originRoomId']
@@ -334,7 +351,7 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
         from .lead_work import LeadWork
         ledger=LeadWork(state/'project-work.sqlite',authority=original['authorityId'],room=original['originRoomId'],agent=agent,lead=policy_ref['leadAgentId'])
         try:
-            imported=[dict(eventId=item['eventId'],workId=ledger.adopt_original(item['event'],item['state'],item['reason']),state=item['state'])for item in originals]
+            imported=[dict(eventId=item['eventId'],workId=ledger.adopt_original(item['event'],item['state'],item['reason'],handover={**policy_ref,'roomId':original['originRoomId']}),state=item['state'])for item in originals]
         finally:ledger.close()
         # A single atomic registry pointer publishes the immutable config. Both
         # pending forms remain held until the accepted receipt is durable.
