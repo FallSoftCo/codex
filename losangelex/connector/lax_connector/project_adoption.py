@@ -292,7 +292,7 @@ async def adopt(parent_path, agent, expected_config_sha, expected_record_sha, po
             raise ValueError('Reviewed original logical binding changed')
         from .room_session_supervisor import RoomSessionSupervisor
         supervisor=RoomSessionSupervisor(SimpleNamespace(config=parent,thread=parent['nativeThreadId']))
-        supervisor._validate(original_record)
+        supervisor._validate(original_record,for_role_handover=True)
         if not prior and hashlib.sha256(registry.read_bytes()).hexdigest()!=expected_record_sha:
             raise ValueError('Reviewed original registry CAS changed')
         from aiohttp import ClientSession,ClientTimeout

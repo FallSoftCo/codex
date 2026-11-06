@@ -139,10 +139,14 @@ class RoomSessionSupervisor:
             saved(file,record)
         self._attach(record)
 
-    def _validate(self,record):
+    def _validate(self,record,*,for_role_handover=False):
         from .project_adoption import role_receipt
         role_receipt(record)
-        policy,_=host_policy(self.config);file=Path(record['sessionConfigPath']);private_file(file)
+        if os.name=='nt' and for_role_handover:
+            from .room_session_files import windows_host_policy
+            policy,_=windows_host_policy(self.config,resident=False,role_handover=True)
+        else:policy,_=host_policy(self.config)
+        file=Path(record['sessionConfigPath']);private_file(file)
         if digest_file(file)!=record['sessionConfigSha256']:raise ValueError('Original logical session config changed')
         config=json.loads(file.read_text())
         if (config['agentId']!=record['agentId'] or config['originRoomId']!=record['originRoomId'] or

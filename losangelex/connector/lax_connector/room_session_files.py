@@ -67,7 +67,7 @@ def validate_spec(spec_path,expected_spec_sha256):
     return spec
 
 
-def windows_host_policy(config,*,resident=True):
+def windows_host_policy(config,*,resident=True,role_handover=False):
     """Normalize the OS owner's actual parent/ACL/native policy, not Linux UID."""
     from . import room_factory_windows_state as platform
     import sys
@@ -75,13 +75,18 @@ def windows_host_policy(config,*,resident=True):
     if not isinstance(selection,dict) or set(selection)!={'path','sha256'}:
         raise PermissionError('Protected Windows parent room-session policy is missing')
     raw=platform.read(selection['path'],selection['sha256'])
-    proof=platform.inspect_parent(Path(selection['path']),expected_policy_sha256=selection['sha256'])
-    if resident:platform.require(proof['parentRuntime']['pid']==os.getpid(),'Factory must run inside accepted resident host runtime')
-    acceptance=platform.read_parent_acceptance(raw,expected_policy_sha256=selection['sha256'])
-    platform.require(acceptance.get('state')=='running' and acceptance.get('admissionAllowed') is True
-        and acceptance['runtimeIdentity']==proof['parentRuntime'] and acceptance['nativeIdentity']==proof['sharedNative'],
-        'Owner parent acceptance closed or changed during inspection')
-    if resident:platform.require(platform.argv_digest(sys.orig_argv)==acceptance['parentArgvSha256'],'Accepted resident parent argv differs')
+    if role_handover:
+        if resident:raise ValueError('Role maintenance is an explicit stopped-parent operator path')
+        from .room_role_maintenance_windows import inspect_stopped_parent
+        proof=inspect_stopped_parent(Path(selection['path']),expected_policy_sha256=selection['sha256'])
+    else:
+        proof=platform.inspect_parent(Path(selection['path']),expected_policy_sha256=selection['sha256'])
+        if resident:platform.require(proof['parentRuntime']['pid']==os.getpid(),'Factory must run inside accepted resident host runtime')
+        acceptance=platform.read_parent_acceptance(raw,expected_policy_sha256=selection['sha256'])
+        platform.require(acceptance.get('state')=='running' and acceptance.get('admissionAllowed') is True
+            and acceptance['runtimeIdentity']==proof['parentRuntime'] and acceptance['nativeIdentity']==proof['sharedNative'],
+            'Owner parent acceptance closed or changed during inspection')
+        if resident:platform.require(platform.argv_digest(sys.orig_argv)==acceptance['parentArgvSha256'],'Accepted resident parent argv differs')
     platform.require(all(raw[k]==config[k] for k in ('authorityId','hostId')) and raw['parentAgentId']==config['agentId'],
                      'Original Windows parent authority/host/agent binding differs')
     platform.require(config['nativeServer']=={'manifest':raw['nativeHostManifest']},'Original Windows shared manifest required')
