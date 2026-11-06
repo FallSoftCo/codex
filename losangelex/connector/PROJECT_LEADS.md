@@ -95,3 +95,12 @@ The journal survives connector restart; a material milestone permits continued
 useful work after native turn end without a new user command. The existing
 no-progress bound, original-output settlement, stops and unknown-action guards
 remain in force. A checkpoint never creates a human message or model timer.
+
+Native-only hosts use their existing protected `native-node.json` enrollment for
+SDK-only client upgrades. This path pins authority, physical host and original
+native-manifest digest, authenticates the original messaging principal, and
+requires identical semantic configuration/native image plus the existing quiet
+service/context/I/O boundary. It creates no legacy execution controller and
+changes no placement or delivery state. Existing legacy-controller releases and
+accepted records retain their original path and checks. Engine/route/instruction
+changes cannot use the native-node SDK-only path.

@@ -12,6 +12,14 @@ from . import service_observer as observer
 from .service_restart import file_hash, file_identity, settled_definitions
 
 
+def canonical_boundary(config,control,host,agent,plan):
+    if plan.get('nativeNodeRegistration'):
+        from .native_node_release import canonical
+        canonical(config,control,host,agent)
+    else:
+        image._canonical(config,control,host,agent,preserved_unknown=plan.get('transportAdoption',{}).get('historicalUnknown'),**legacy_placement_parameters(plan,config))
+
+
 def optional(fd, name):
     try:
         return image._json(fd, name)
@@ -262,12 +270,19 @@ def _closure_identity(plan, *, require_original_incarnation=True):
             row = files.get(relative)
             if (row is None or observed[:4] + observed[5:] != identity[:4] + identity[5:]):
                 raise ValueError("Reviewed release asset identity changed")
+        row = files.get(relative)
+        if row is not None:
+            # Metadata can repeat within one filesystem clock tick. It cannot
+            # prove unchanged bytes, even when mtime was restored. Check the
+            # reviewed content independently at this release validation boundary.
             checksum, hashed_identity = file_hash(path, 0)
             if checksum != row["sha256"] or hashed_identity != observed:
                 raise ValueError("Reviewed release asset content changed")
     for row in software["entries"]:
-        if row["kind"] == "file-link" and file_identity(Path(row["resolved"])) != row["identity"]:
-            raise ValueError("Reviewed external interpreter dependency changed")
+        if row["kind"] == "file-link":
+            checksum, identity = file_hash(Path(row["resolved"]),0)
+            if identity != row["identity"] or checksum != row["sha256"]:
+                raise ValueError("Reviewed external interpreter dependency changed")
 
 
 def finish(root, fd, intent):
@@ -307,13 +322,18 @@ def finish(root, fd, intent):
         image.fcntl.flock(lock, image.fcntl.LOCK_EX | image.fcntl.LOCK_NB)
         controller_fd = image._open_directory(root.parent.parent)
         stack.callback(os.close, controller_fd)
-        controller = image._json(controller_fd, "controller.json")
         config = image.json.loads(base64.b64decode(intent["targets"][0]["before"]))
-        if (controller["authorityId"], controller["hostId"], controller["machineIdentity"],
-                controller["hollywoodUrl"]) != (authority, host, image.machine_identity(), config["hollywoodUrl"]):
-            raise ValueError("Original controller route or physical machine differs")
-        if observer.digest(controller) != intent["controllerDigest"]:
-            raise ValueError("Reviewed controller configuration changed")
+        from .native_node_release import load as load_host_binding
+        controller = load_host_binding(controller_fd,config,intent)
+        if intent.get('nativeNodeRegistration'):
+            if observer.digest(controller)!=intent['nativeNodeDigest']:
+                raise ValueError('Reviewed native-node registration changed')
+        else:
+            if (controller["authorityId"], controller["hostId"], controller["machineIdentity"],
+                    controller["hollywoodUrl"]) != (authority, host, image.machine_identity(), config["hollywoodUrl"]):
+                raise ValueError("Original controller route or physical machine differs")
+            if observer.digest(controller) != intent["controllerDigest"]:
+                raise ValueError("Reviewed controller configuration changed")
         journals = image._journal_snapshot(state_fd, uid, authority, host, agent, preserve_historical=bool(intent.get("transportAdoption")))
         if observer.digest(journals) != intent["journalSnapshotDigest"]:
             raise ValueError("Original local execution journals changed")
@@ -331,7 +351,7 @@ def finish(root, fd, intent):
             image._offline(authority, host, agent, uid, home,
                            Path(intent["priorEnrollment"]["binary"]),
                            intent["priorEnrollment"], definition, fd)
-            image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"), **legacy_placement_parameters(intent, config))
+            canonical_boundary(config,controller,host,agent,intent)
             _closure_identity(intent)
             if release.physical(home, uid,**physical_args) != intent["physical"]:
                 raise ValueError("Original physical identities changed")
@@ -402,7 +422,9 @@ def approve(authority, host, agent, prepared, expected_preparation):
         controller_fd = image._open_directory(root.parent.parent)
         try:
             journals = image._journal_snapshot(state_fd, plan["uid"], authority, host, agent, preserve_historical=bool(plan.get("transportAdoption")))
-            controller = image._json(controller_fd, "controller.json")
+            from .native_node_release import load as load_host_binding
+            config = image.json.loads(base64.b64decode(plan["targets"][0]["before"]))
+            controller = load_host_binding(controller_fd,config,plan)
         finally:
             os.close(state_fd)
             os.close(controller_fd)
@@ -411,7 +433,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
         intent = {**plan, "state": "intent", "operationId": operation,
                   "priorIndex": prior, "priorRelease": prior_reference(optional(fd, release.CURRENT)),
                   "journalSnapshotDigest": observer.digest(journals),
-                  "controllerDigest": observer.digest(controller)}
+                  **({'nativeNodeDigest':observer.digest(controller)} if plan.get('nativeNodeRegistration') else {'controllerDigest':observer.digest(controller)})}
         if plan.get('sharedNativeUpgrade'):
             from .shared_native_release import offline as shared_offline
             shared_offline(plan)
@@ -422,7 +444,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
                        Path(old["binary"]), old,
                        hashlib.sha256(base64.b64decode(plan["targets"][1]["before"])).hexdigest(), fd)
         config = image.json.loads(base64.b64decode(plan["targets"][0]["before"]))
-        image._canonical(config, controller, host, agent, preserved_unknown=intent.get("transportAdoption",{}).get("historicalUnknown"), **legacy_placement_parameters(intent, config))
+        canonical_boundary(config,controller,host,agent,intent)
         image._write(fd, "image-" + operation + "-before.json", old)
         image._write(fd, "image-" + operation + "-intent.json", intent)
         image._write(fd, image.INDEX, intent, replace=True)
