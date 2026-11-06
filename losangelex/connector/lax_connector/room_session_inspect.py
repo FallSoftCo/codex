@@ -26,7 +26,15 @@ def journal_counts(config):
         file=root/'rooms'/room['roomId']/'receive.sqlite'
         if not file.exists():continue
         db=sqlite3.connect(file.as_uri()+'?mode=ro',uri=True)
-        try:counts['uncertainHandoffs']+=db.execute("SELECT count(*) FROM room_input WHERE state IN ('received','handoff')").fetchone()[0]
+        try:
+            # Observation-only is explicitly recorded BEFORE native admission.
+            # It is not an unknown send. A handoff or ACK can never be waived
+            # by an old observation row; keep all original journals unchanged.
+            has_observations=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_input_observation'").fetchone()
+            observed=""" AND NOT (i.state='received' AND i.acknowledgement IS NULL AND EXISTS (
+                SELECT 1 FROM room_input_observation o
+                WHERE o.authority=i.authority AND o.agent=i.agent AND o.event=i.event))""" if has_observations else ''
+            counts['uncertainHandoffs']+=db.execute("SELECT count(*) FROM room_input i WHERE i.state IN ('received','handoff')"+observed).fetchone()[0]
         finally:db.close()
     return counts
 

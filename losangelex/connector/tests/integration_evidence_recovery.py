@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 from lax_connector.project_runtime import ProjectRuntime
 from lax_connector.conversation_io import ConversationIO
+from lax_connector.room_receive import RoomReceiveJournal
+from lax_connector.room_session_inspect import journal_counts
 
 
 def rejected(fn):
@@ -59,6 +61,14 @@ async def main():
                 if method=='thread/backgroundTerminals/list':return {'data':[],'nextCursor':None}
                 if method=='thread/turns/list':return {'data':[{'id':'failed-turn','status':'failed','error':error}]}
                 raise AssertionError('Execution attempted')
+        config['rooms']=[{'roomId':room}]
+        receives=RoomReceiveJournal(state/'rooms'/room/'receive.sqlite')
+        observed=str(uuid4());receives.stage(authority=authority,agent=lead,event=observed,thread=owner.thread,seq=1,payload={'method':'turn/start'})
+        assert journal_counts(config)['uncertainHandoffs']==1
+        receives.observe_only(authority,lead,observed,'Attributable observation, not an assignment')
+        assert journal_counts(config)['uncertainHandoffs']==0
+        receives.close();receives=RoomReceiveJournal(state/'rooms'/room/'receive.sqlite')
+        assert journal_counts(config)['uncertainHandoffs']==0
         owner.rpc=RPC();owner.conversation_io.db.execute("INSERT INTO publication VALUES('failed-turn',NULL,'uncertain','r','attempting')");owner.conversation_io.db.commit()
         await l.recovery.inspect_due(owner,now=due+1);assert l.work(recovering)['state']=='recovering' and l.recovery.next_due()>due
         for _ in range(12):
@@ -66,6 +76,10 @@ async def main():
         owner.conversation_io.db.execute("UPDATE publication SET state='accepted'");owner.conversation_io.db.commit()
         await l.recovery.inspect_due(owner,now=l.recovery.next_due()+1);assert l.work(recovering)['state']=='ready'
         wake=l.db.execute("SELECT count(*) FROM outbox WHERE id LIKE ?",('ready:'+recovering+':%',)).fetchone()[0];await l.recovery.inspect_due(owner,now=due+10000);assert l.db.execute("SELECT count(*) FROM outbox WHERE id LIKE ?",('ready:'+recovering+':%',)).fetchone()[0]==wake==1
+        # A later uncertain handoff must not inherit the observation exemption.
+        receives.begin_handoff(authority,lead,observed)
+        assert journal_counts(config)['uncertainHandoffs']==1
+        receives.close()
         # No model retry for deliberate interruption, usage stop or actual revocation.
         for turn,code,status in [('stop',None,'interrupted'),('usage','usageLimitExceeded','failed'),('permission','unauthorized','failed')]:
             wid=original(turn);l.ended(turn,status,{'codexErrorInfo':code});assert l.work(wid)['state'] in ('paused','fault')
@@ -80,6 +94,6 @@ async def main():
         l.ended('diagnostic','completed');assert l.work(wid)['state']=='fault'
         assert all(method.startswith('thread/') and method not in ('thread/resume','thread/start') for method in calls)
         l.close();owner.conversation_io.close()
-    print(json.dumps({'passed':True,'durableEvidenceAndCompletion':True,'restartPreservesRecovery':True,'unknownPublicationNotReplayed':True,'stopsPreserved':True,'sameRecoveryWakeOnce':True,'unchangedDiagnosticBounded':True,'nativeModelCalls':0}))
+    print(json.dumps({'passed':True,'durableEvidenceAndCompletion':True,'restartPreservesRecovery':True,'unknownPublicationNotReplayed':True,'stopsPreserved':True,'sameRecoveryWakeOnce':True,'observationNeverWaivesActualHandoff':True,'unchangedDiagnosticBounded':True,'nativeModelCalls':0}))
 
 if __name__=='__main__':asyncio.run(main())
