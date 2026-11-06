@@ -13,8 +13,8 @@ from .service_restart import file_hash, file_identity, settled_definitions
 
 
 def canonical_boundary(config,control,host,agent,plan):
-    if plan.get('nativeNodeRegistration'):
-        from .native_node_release import canonical
+    if plan.get('nativeClientBoundary'):
+        from .native_client_release import canonical
         canonical(config,control,host,agent)
     else:
         image._canonical(config,control,host,agent,preserved_unknown=plan.get('transportAdoption',{}).get('historicalUnknown'),**legacy_placement_parameters(plan,config))
@@ -323,11 +323,11 @@ def finish(root, fd, intent):
         controller_fd = image._open_directory(root.parent.parent)
         stack.callback(os.close, controller_fd)
         config = image.json.loads(base64.b64decode(intent["targets"][0]["before"]))
-        from .native_node_release import load as load_host_binding
+        from .native_client_release import load as load_host_binding
         controller = load_host_binding(controller_fd,config,intent)
-        if intent.get('nativeNodeRegistration'):
-            if observer.digest(controller)!=intent['nativeNodeDigest']:
-                raise ValueError('Reviewed native-node registration changed')
+        if intent.get('nativeClientBoundary'):
+            if observer.digest(controller)!=intent['nativeClientDigest']:
+                raise ValueError('Reviewed managed native-client boundary changed')
         else:
             if (controller["authorityId"], controller["hostId"], controller["machineIdentity"],
                     controller["hollywoodUrl"]) != (authority, host, image.machine_identity(), config["hollywoodUrl"]):
@@ -422,7 +422,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
         controller_fd = image._open_directory(root.parent.parent)
         try:
             journals = image._journal_snapshot(state_fd, plan["uid"], authority, host, agent, preserve_historical=bool(plan.get("transportAdoption")))
-            from .native_node_release import load as load_host_binding
+            from .native_client_release import load as load_host_binding
             config = image.json.loads(base64.b64decode(plan["targets"][0]["before"]))
             controller = load_host_binding(controller_fd,config,plan)
         finally:
@@ -433,7 +433,7 @@ def approve(authority, host, agent, prepared, expected_preparation):
         intent = {**plan, "state": "intent", "operationId": operation,
                   "priorIndex": prior, "priorRelease": prior_reference(optional(fd, release.CURRENT)),
                   "journalSnapshotDigest": observer.digest(journals),
-                  **({'nativeNodeDigest':observer.digest(controller)} if plan.get('nativeNodeRegistration') else {'controllerDigest':observer.digest(controller)})}
+                  **({'nativeClientDigest':observer.digest(controller)} if plan.get('nativeClientBoundary') else {'controllerDigest':observer.digest(controller)})}
         if plan.get('sharedNativeUpgrade'):
             from .shared_native_release import offline as shared_offline
             shared_offline(plan)

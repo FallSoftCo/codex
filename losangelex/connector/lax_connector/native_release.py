@@ -370,9 +370,9 @@ def prepare(authority, host, agent, request, output):
         if shared:prepared['sharedAgentIdentity']=shared['identity']
         if retained_native is not None:prepared['retainedNative']=retained_native
         if retained_native is not None:
-            from .native_node_release import prepare as native_node_binding
-            binding=native_node_binding(root,config,prepared)
-            if binding:prepared['nativeNodeRegistration']=binding
+            from .native_client_release import prepare as native_client_binding
+            binding=native_client_binding(prepared)
+            if binding:prepared['nativeClientBoundary']=binding
         if Path(output).is_relative_to(new_root) or Path(output).is_relative_to(home):
             raise ValueError("Review output cannot modify release or private state")
         target = protected_tree(output, 0o700)
