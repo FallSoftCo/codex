@@ -64,6 +64,8 @@ class LeadWork:
         from .work_evidence import WorkEvidence
         from .work_recovery import WorkRecovery
         self.evidence=WorkEvidence(self);self.recovery=WorkRecovery(self)
+        from .work_obligations import WorkObligations
+        self.obligations=WorkObligations(self)
 
     def close(self):self.db.close()
 
@@ -193,6 +195,7 @@ class LeadWork:
             if row['work']:
                 record=self.work(row['work'])
                 self.db.execute('INSERT INTO turn_work VALUES(?,?,?) ON CONFLICT DO NOTHING',(turn,record['id'],record['progress_revision']))
+                if record['state']=='ready':self.obligations.release(record['id'])
                 self.db.execute("UPDATE work SET state='working' WHERE id=? AND state='ready'",(record['id'],))
 
     def queue(self,key,payload):
@@ -238,6 +241,7 @@ class LeadWork:
             from .team_dialogue import accepted as dialogue_accepted
             dialogue_accepted(self.db,key,event)
             self.db.execute("UPDATE outbox SET state='accepted',receipt=?,reason=NULL WHERE id=?",(encoded(receipt),key))
+            self.obligations.accepted(key)
             if coord.get('type')=='task':
                 self.db.execute("UPDATE assignment SET state='queued',event=? WHERE id=? AND state='prepared'",(event['id'],coord['taskId']))
                 step=self.db.execute('SELECT * FROM assignment WHERE id=?',(coord['taskId'],)).fetchone()
@@ -288,7 +292,7 @@ class LeadWork:
         questions=question['accepted']
         admitting=question['admitting']+self.db.execute("SELECT count(*) FROM assignment a JOIN outbox o ON o.id='assign:'||a.id WHERE a.work=? AND a.event IS NULL AND o.state='ready'",(work,)).fetchone()[0]
         source=self.work(work)['source']
-        human=self.db.execute("SELECT count(*) FROM outbox WHERE state='accepted' AND json_extract(payload,'$.sourceEventId')=? AND json_extract(payload,'$.responsePhase')='blocked'",(source,)).fetchone()[0]
+        human=self.obligations.human_count(work)
         return dict(assignments=assignments,questions=questions,admitting=admitting,human=human)
 
     def rejected(self,key,reason):
@@ -328,6 +332,8 @@ class LeadWork:
         if state=='waiting' and not any(self.dependencies(work).values()):raise ValueError('No accepted peer, original unsettled send or delivered human question exists to wait for. Continue useful work or report its actual dependency.')
         with self.db:
             if state=='complete':self.evidence.seal(work)
+            if state=='waiting' and not self.obligations.human_count(work):self.obligations.bind_peer_wait(work)
+            if state!='waiting':self.obligations.release(work)
             self.db.execute('UPDATE work SET state=?,reason=?,revision=revision+1 WHERE id=?',(state,reason,work))
             if state in ('cancelled','paused'):
                 for step in self.db.execute("SELECT * FROM assignment WHERE work=? AND state NOT IN ('done','cancelled','failed')",(work,)).fetchall():
@@ -345,6 +351,7 @@ class LeadWork:
                 pending=self.dependencies(row['id'])
                 if any(pending[k] for k in ('assignments','questions','admitting')):
                     reason='Waiting for original communication delivery' if pending['admitting'] else 'Waiting for addressed worker results'
+                    self.obligations.bind_peer_wait(row['id'])
                     self.db.execute("UPDATE work SET state='waiting',reason=? WHERE id=?",(reason,row['id']));continue
                 if status!='completed':
                     from .work_recovery import category
@@ -368,6 +375,7 @@ class LeadWork:
         if selected:
             result['originalWork']={**selected,'human':json.loads(selected['human'])}
             result['dependencies']=self.dependencies(selected['id'])
+            result['obligation']=self.obligations.snapshot(selected['id'])
             result['acceptance']=self.evidence.snapshot(selected['id'])
             result['recovery']=self.recovery.snapshot(selected['id'])
             result['communicationBlocked']=[dict(r) for r in self.db.execute("SELECT o.id,o.reason FROM outbox o WHERE o.state='blocked' AND (EXISTS(SELECT 1 FROM team_question_intent i WHERE i.work=? AND i.key=o.id) OR EXISTS(SELECT 1 FROM assignment a WHERE a.work=? AND 'assign:'||a.id=o.id)) ORDER BY o.rowid DESC LIMIT 8",(selected['id'],selected['id']))]

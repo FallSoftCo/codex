@@ -108,6 +108,7 @@ class ProjectRuntime:
 
     def start(self):
         self.ledger.reconcile_waiting()
+        self.ledger.obligations.reconcile()
         self.task=asyncio.create_task(self.run());self.wake.set()
 
     async def send(self,key):
@@ -159,14 +160,36 @@ class ProjectRuntime:
             self.ledger.accepted(key,receipt)
             return receipt
 
+    async def audit_native_ends(self):
+        """Cheap owner metadata reconciliation; never infer success or start work."""
+        if not hasattr(self.owner,'rpc'):return
+        missing={r['turn'] for r in self.ledger.db.execute("SELECT DISTINCT i.turn FROM input i WHERE i.admit=1 AND i.turn IS NOT NULL AND NOT EXISTS(SELECT 1 FROM native_end_notice n WHERE n.turn=i.turn)")}
+        if not missing:return
+        try:
+            page=await self.owner.rpc.call('thread/turns/list',{'threadId':self.owner.thread,'limit':100,'sortDirection':'desc','itemsView':'summary'})
+            for turn in page.get('data',[]):
+                if turn['id'] in missing and turn['status'] in ('completed','failed','interrupted'):
+                    if self.ledger.db.execute('SELECT 1 FROM native_end_notice WHERE turn=?',(turn['id'],)).fetchone():continue
+                    if hasattr(self.owner,'event'):
+                        await self.owner.event('turn/completed',{'threadId':self.owner.thread,'turn':turn,'reconciledFromNativeRead':True})
+                    else:
+                        self.owner.conversation_io.ended(turn['id'],turn['status'])
+                        self.ended(turn['id'],turn['status'],turn.get('error'))
+        except Exception:
+            logging.getLogger(__name__).warning('Original native end evidence unavailable; no recovery inferred')
+
     async def run(self):
         attempts=0
         while True:
             due=self.ledger.recovery.next_due()
-            try:await asyncio.wait_for(self.wake.wait(),timeout=max(0,due-time.time()) if due is not None else None)
+            unfinished=self.ledger.db.execute("SELECT 1 FROM work WHERE state IN ('ready','working','waiting','recovering') UNION ALL SELECT 1 FROM assignment WHERE source IS NOT NULL AND state IN ('ready','progress','waiting','question','cancel_requested') LIMIT 1").fetchone()
+            timeout=min(60,max(0,due-time.time())) if due is not None else 60 if unfinished else None
+            try:await asyncio.wait_for(self.wake.wait(),timeout=timeout)
             except asyncio.TimeoutError:pass
             self.wake.clear();retry=False
+            await self.audit_native_ends()
             await self.settle_ends()
+            self.ledger.obligations.reconcile()
             await self.ledger.recovery.inspect_due(self.owner)
             rows=self.ledger.db.execute("SELECT id FROM outbox WHERE state='ready' ORDER BY rowid").fetchall()
             for row in rows:
@@ -282,8 +305,9 @@ class ProjectRuntime:
         with self.ledger.db:
             if disposition=='complete':self.ledger.evidence.seal(work['id'])
             self.ledger.queue(key,payload)
+            if disposition=='needs_input':self.ledger.obligations.human_intent(key,work['id'],turn)
         receipt=await self.send(key)
-        if disposition!='progress' and self.ledger.work(work['id'])['state'] not in ('paused','cancelled'):self.ledger.disposition(work['id'],'complete' if disposition=='complete' else 'waiting','Human response '+disposition)
+        if disposition=='complete' and self.ledger.work(work['id'])['state'] not in ('paused','cancelled'):self.ledger.disposition(work['id'],'complete','Human response complete')
         # Canonical receipt registration suppresses any normal native copy.
         return {'state':'delivered','eventId':receipt['event']['id'],'workState':self.ledger.work(work['id'])['state']}
 

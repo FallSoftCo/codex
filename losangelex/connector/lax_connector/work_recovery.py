@@ -61,6 +61,7 @@ class WorkRecovery:
                 proof['latestTurn']={k:latest[0].get(k) for k in ('id','status','error')} if latest else None
                 proof['pendingAttention']=bool(owner.attention.pending);proof['dependencies']=self.ledger.dependencies(row['work'])
                 proof['eligible']=(status['id']==owner.thread and status['status']['type'] in ('idle','systemError') and not any(proof['io'].values()) and not proof['backgroundCommands'] and not proof['backgroundTruncated'] and not proof['pendingAttention'] and bool(latest) and latest[0]['id']==row['turn'] and latest[0]['status'] in ('completed','failed') and not any(proof['dependencies'][k] for k in ('assignments','questions','admitting')))
+                if row['kind']=='dependency_settled' and latest:proof['eligible']=proof['eligible'] and latest[0]['status']=='completed'
                 if row['kind']=='transient' and latest:proof['eligible']=proof['eligible'] and category(latest[0].get('error'))=='transient'
             except Exception as error:
                 proof['readErrorType']=type(error).__name__  # no secrets or raw transport exceptions
@@ -71,6 +72,7 @@ class WorkRecovery:
                 self.db.execute('INSERT INTO recovery_observation(work,turn,observed,body) VALUES(?,?,?,?)',(row['work'],row['turn'],now,json.dumps(proof,sort_keys=True)))
                 if proof['eligible']:
                     revision=work['revision']+1;reason=('Diagnose the retained no-progress turns, inspect acceptance/evidence and change the approach before useful continuation. Do not repeat unchanged steps.' if row['kind']=='stalled' else 'Confirmed terminal transient failure; resume retained original context and checkpoints. Reconcile external effects before any action; never resend the original request.')
+                    if row['kind']=='dependency_settled':reason='All current peer dependencies have settled. Inspect retained results and continue the original unfinished work; historical questions are not current wait ownership.'
                     self.db.execute("UPDATE work SET state='ready',revision=?,reason=? WHERE id=?",(revision,reason,row['work']))
                     self.ledger.ready_event(row['work'],revision)
                     self.db.execute("UPDATE work_recovery SET state='released' WHERE work=? AND turn=?",(row['work'],row['turn']))

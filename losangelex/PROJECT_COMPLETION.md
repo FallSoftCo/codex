@@ -48,3 +48,38 @@ journey. The native journey rejects unsupported completion, executes verificatio
 continues after a private final, and publishes one evidence-backed human result.
 Production release requires matching lead tool declarations and instructions at
 the existing idle role-handover boundary; source tests do not establish activation.
+
+## Autonomous obligation lifecycle
+
+Every admitted request retains its original work ID, source, owning lead and
+completion contract. A native turn finishing is not a project finishing. The
+runtime owns continuation; conversational phrasing cannot create or settle an
+execution dependency.
+
+Current waits have typed, durable bindings. Peer waits name current assignment,
+question or original-send receipts. Human waits bind a delivered need-input
+intent to its work revision; they are not a count of historical blocked messages.
+An acknowledged old question cannot override a newer independent-work decision.
+Releasing a wait does not fabricate an answer or erase its original record.
+
+The existing project event loop reconciles these obligations on startup and
+relevant events. While unfinished work exists, a bounded one-minute metadata
+audit covers a missed native end callback. It reads native turn metadata only;
+it does not ask a model whether to continue. No audit runs for completed/stopped
+work alone. Missing or contradictory evidence remains unavailable, not success.
+
+When a peer wait loses its last actual dependency after a completed native turn,
+reconciliation enters the same durable recovery path. The original thread,
+background commands, pending callbacks, input/output and delivery identities must
+settle before exactly one readiness event is released. Stops and real current
+human-input waits remain stopped. Completed, blocked and failed worker results
+are retained for the lead's next decision; none is misrepresented as an active
+worker.
+
+`lead_work.obligation` exposes current reference identities and a persisted
+coverage snapshot. Evidence-backed completion and bounded no-progress recovery
+remain separate requirements. This contract does not promise that models can
+solve every task or that disconnected hardware is available. Its purpose is
+accountability and recoverable continuation, without duplicate external actions
+or perpetual model polling. Host availability, provider availability, sufficient
+resources and actual human decisions remain explicit operating dependencies.

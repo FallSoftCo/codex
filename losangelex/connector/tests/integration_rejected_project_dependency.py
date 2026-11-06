@@ -61,7 +61,9 @@ async def main():
   assert r.ledger.candidate(answer)[0] and r.ledger.work(work)['state']=='ready'
   # A delivered real human question remains a legitimate wait.
   source=r.ledger.work(work)['source'];payload=dict(body='Which device should be used?',audience='room',sourceEventId=source,responsePhase='blocked')
-  with r.ledger.db:r.ledger.queue('human-question',payload)
+  with r.ledger.db:
+   r.ledger.queue('human-question',payload)
+   r.ledger.obligations.human_intent('human-question',work,'turn-unknown')
   r.ledger.accepted('human-question',dict(event=dict(id=str(uuid4()),data=dict(responsePhase='blocked'))))
   r.ledger.disposition(work,'waiting','Human response needs_input');r.ledger.reconcile_waiting();assert r.ledger.work(work)['state']=='waiting';r.ledger.close()
   # The same rejection must not trap a worker in waiting or suppress its answer.
