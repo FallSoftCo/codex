@@ -288,8 +288,8 @@ class ProjectRuntime:
         questions=[]
         for task in tasks:
             if not task:continue
-            outgoing=self.ledger.db.execute("SELECT 1 FROM team_question_intent i LEFT JOIN team_question q ON q.event=i.event WHERE i.task=? AND (i.event IS NULL OR q.state='pending')",(task,)).fetchone()
-            if outgoing:continue  # Actual directed dependency, not completion.
+            from .team_dialogue import dependencies
+            if any(dependencies(self.ledger.db,task=task).values()):continue  # Actual directed dependency, not completion.
             questions.extend(self.ledger.db.execute("SELECT q.* FROM team_question q JOIN input i ON i.event=q.event WHERE q.task=? AND q.direction='in' AND q.state='pending' AND i.turn IS NOT NULL AND i.admit=1",(task,)).fetchall())
         for question in questions:
             concise=only_questions and len(questions)==1 and row['body'].strip() and len(row['body'].encode())<=1024

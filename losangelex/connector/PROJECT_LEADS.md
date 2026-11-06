@@ -142,3 +142,8 @@ On loading an older ledger, an automatic wait on a proven rejected send receives
 one durable work-ready revision, retaining its original human source. Reopening
 the connector cannot repeat that repair. Genuine questions, accepted/uncertain
 deliveries, pauses, cancellations and completed work remain unchanged.
+
+Lead and worker question completion use the same durable dependency projection.
+A rejected worker question returns its assignment to actionable progress, so
+its actual result or failure reaches the lead instead of disappearing behind
+an impossible reply wait.

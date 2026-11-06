@@ -47,3 +47,15 @@ def answer_payload(db,identity,summary):
     source=json.loads(row['canonical']);coord=source['data']['coordination']
     return dict(body=summary,audience=source['audience'],recipientId=source['author'],sourceEventId=source['id'],responsePhase='message',
         coordination=dict(type='answer',taskId=coord['taskId'],revision=coord['revision']))
+
+
+def dependencies(db, *, work=None, task=None):
+    """Accepted questions and original sends awaiting transport reconciliation.
+
+    A rejected intent cannot become an outstanding reply on either side.
+    """
+    if (work is None)==(task is None):raise ValueError('Select one original work or assignment')
+    field='work' if work is not None else 'task';identity=work if work is not None else task
+    accepted=db.execute("SELECT count(*) FROM team_question WHERE "+field+"=? AND direction='out' AND state='pending'",(identity,)).fetchone()[0]
+    admitting=db.execute("SELECT count(*) FROM team_question_intent i JOIN outbox o ON o.id=i.key WHERE i."+field+"=? AND i.event IS NULL AND o.state='ready'",(identity,)).fetchone()[0]
+    return dict(accepted=accepted,admitting=admitting)

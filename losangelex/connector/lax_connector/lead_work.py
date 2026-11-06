@@ -279,8 +279,10 @@ class LeadWork:
     def dependencies(self,work):
         """Only accepted peers or unsettled original sends can hold work waiting."""
         assignments=self.db.execute("SELECT count(*) FROM assignment WHERE work=? AND event IS NOT NULL AND state IN ('queued','ready','progress','waiting','question','cancel_requested')",(work,)).fetchone()[0]
-        questions=self.db.execute("SELECT count(*) FROM team_question WHERE work=? AND direction='out' AND state='pending'",(work,)).fetchone()[0]
-        admitting=self.db.execute("SELECT count(*) FROM outbox o WHERE o.state='ready' AND (EXISTS(SELECT 1 FROM assignment a WHERE a.work=? AND o.id='assign:'||a.id AND a.event IS NULL) OR EXISTS(SELECT 1 FROM team_question_intent i WHERE i.work=? AND i.key=o.id AND i.event IS NULL))",(work,work)).fetchone()[0]
+        from .team_dialogue import dependencies
+        question=dependencies(self.db,work=work)
+        questions=question['accepted']
+        admitting=question['admitting']+self.db.execute("SELECT count(*) FROM assignment a JOIN outbox o ON o.id='assign:'||a.id WHERE a.work=? AND a.event IS NULL AND o.state='ready'",(work,)).fetchone()[0]
         source=self.work(work)['source']
         human=self.db.execute("SELECT count(*) FROM outbox WHERE state='accepted' AND json_extract(payload,'$.sourceEventId')=? AND json_extract(payload,'$.responsePhase')='blocked'",(source,)).fetchone()[0]
         return dict(assignments=assignments,questions=questions,admitting=admitting,human=human)
@@ -290,6 +292,11 @@ class LeadWork:
         with self.db:
             self.db.execute("UPDATE outbox SET state='blocked',reason=? WHERE id=? AND state!='accepted'",(reason,key))
             self.db.execute("UPDATE assignment SET state='rejected' WHERE event IS NULL AND 'assign:'||id=?",(key,))
+            if not self.is_lead:
+                from .team_dialogue import dependencies
+                intent=self.db.execute('SELECT task FROM team_question_intent WHERE key=?',(key,)).fetchone()
+                if intent and not any(dependencies(self.db,task=intent['task']).values()):
+                    self.db.execute("UPDATE assignment SET state='progress' WHERE id=? AND state='waiting'",(intent['task'],))
             self.reconcile_waiting()
 
     def reconcile_waiting(self):

@@ -64,6 +64,27 @@ async def main():
   with r.ledger.db:r.ledger.queue('human-question',payload)
   r.ledger.accepted('human-question',dict(event=dict(id=str(uuid4()),data=dict(responsePhase='blocked'))))
   r.ledger.disposition(work,'waiting','Human response needs_input');r.ledger.reconcile_waiting();assert r.ledger.work(work)['state']=='waiting';r.ledger.close()
- print(json.dumps(dict(passed=True,actualSQLiteRestart=True,actualPublicationLedger=True,rejectedQuestionWaits=False,legacyRepairOnce=True,uncertainPostReplayed=False,originalAnswerResumes=True,genuineHumanQuestionAndStopPreserved=True,nativeTurns=0,providerCalls=0)))
+  # The same rejection must not trap a worker in waiting or suppress its answer.
+  worker_calls=[];worker_reject=True
+  async def worker_http(method,path,payload=None):
+   worker_calls.append(method)
+   if worker_reject:raise HttpFailure(403,'Selected peer is outside this project',may_apply=False)
+   return dict(accepted=True,deliveries=[],event=dict(id=str(uuid4()),authority=authority,room=room,author=peer,recipient=payload.get('recipientId'),kind='message',body=payload['body'],audience=payload['audience'],source=payload.get('sourceEventId'),data=dict(coordination=payload['coordination'],responsePhase=payload['responsePhase'])))
+  owner=SimpleNamespace(state=root/'worker',config=dict(agentId=peer,authorityId=authority))
+  owner.tools=RoomTools(authority_id=authority,agent_id=peer,thread_id='worker-fixture',request=worker_http,state=owner.state/'publications')
+  worker=ProjectRuntime(owner,policy);owner.tools.project=worker;task=str(uuid4())
+  event=dict(id=str(uuid4()),room=room,author=lead,recipient=peer,body='Synthetic selected task',audience='room',data=dict(roomMode='lead',leadAgentId=lead,leadRevision=1,coordination=dict(type='task',taskId=task,revision=1)))
+  assert worker.ledger.candidate(event)[0];worker.ledger.admitted(event,'worker-turn')
+  try:await worker.call('team_question',dict(taskId=task,recipientId=str(uuid4()),questionKey='technical-question',question='Synthetic bounded dependency?'),'worker-call','worker-turn');assert False
+  except HttpFailure:pass
+  assert worker.ledger.db.execute('SELECT state FROM assignment WHERE id=?',(task,)).fetchone()[0]=='progress'
+  worker_reject=False;await worker.worker_missing_result('worker-turn','original-output')
+  assert worker.ledger.db.execute('SELECT state FROM assignment WHERE id=?',(task,)).fetchone()[0]=='failed'
+  question=dict(id=str(uuid4()),room=room,author=lead,recipient=peer,body='Explain the actual rejection?',audience='direct',data=dict(roomMode='lead',leadAgentId=lead,leadRevision=1,coordination=dict(type='question',taskId=task,revision=1)))
+  assert worker.ledger.candidate(question)[0];worker.ledger.admitted(question,'question-turn')
+  await worker.peer_final(dict(turn='question-turn',body='The peer rejected admission; no task was dispatched.'))
+  assert worker.ledger.db.execute('SELECT state FROM team_question WHERE event=?',(question['id'],)).fetchone()[0]=='answered'
+  assert worker_calls==['POST','POST','POST'];worker.ledger.close()
+ print(json.dumps(dict(passed=True,actualSQLiteRestart=True,actualPublicationLedger=True,rejectedQuestionWaits=False,legacyRepairOnce=True,uncertainPostReplayed=False,originalAnswerResumes=True,genuineHumanQuestionAndStopPreserved=True,workerRejectionReturnsToLead=True,workerAnswerNotSuppressed=True,nativeTurns=0,providerCalls=0)))
 
 if __name__=='__main__':asyncio.run(main())
