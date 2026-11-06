@@ -164,7 +164,7 @@ class SharedAppServer(AppServer):
                     elif (future := self.pending.get(message.get("id"))) and not future.done():
                         if "error" in message:
                             error = message["error"]
-                            future.set_exception(RpcError(str(error), code=error.get("code")))
+                            future.set_exception(RpcError(str(error), code=error.get("code"), detail=error))
                         else:
                             future.set_result(message.get("result", {}))
                 elif frame.type == WSMsgType.ERROR:

@@ -202,11 +202,10 @@ class ConversationalAgent:
                     active_overrides = self.resume_instructions
                 resume={'threadId':self.thread,'excludeTurns':True,
                         'config':{'features.default_mode_request_user_input':True},**active_overrides}
-                # Transport startup need not be a cold native context.
-                # Preserve installed tools on warm ownership handoff.
-                from .room_resume import configured_resume
-                resume=await configured_resume(self.rpc,resume,self.config['conversationDynamicTools'])
-                result=await self.rpc.call('thread/resume',resume)
+                # Bind the exact accepted tools across warm and cold transport startup.
+                from .room_resume import resume_configured
+                result,tool_binding=await resume_configured(self.rpc,resume,self.config['conversationDynamicTools'],
+                    reviewed_instructions=self.resume_instructions if self.project else None)
                 effective_permissions=observed(result)
                 self.native_state.update(result['thread'].get('status',{'type':'unavailable','activeFlags':[]}),None)
                 if result['thread']['id']!=self.thread:
@@ -218,6 +217,7 @@ class ConversationalAgent:
                     raise ValueError('Selected conversation is not on the original transport')
             resume_receipt = {'threadId':self.thread,'resumed':cold_start,'attachedLoaded':not cold_start,
                 'effectivePermissions':effective_permissions if cold_start else None,
+                'nativeToolBinding':tool_binding if cold_start else None,
                 'instructionOverridesSha256':hashlib.sha256(json.dumps(self.resume_instructions,sort_keys=True,
                     **({'separators':(',',':')} if instruction_adoption else {})).encode()).hexdigest() if self.resume_instructions else None,
                 'participationPolicy':self.participation_adoption,

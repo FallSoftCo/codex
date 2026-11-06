@@ -8,10 +8,10 @@ class Rpc:
  def bind_thread(self,thread):self.bound.append(thread)
  async def call(self,method,params):self.calls.append((method,params));return {'thread':{'id':self.identity,'status':{'type':self.status}}}
 class Resume(unittest.IsolatedAsyncioTestCase):
- async def test_warm_keeps_tools_without_history(self):
-  r=Rpc('idle');p={'threadId':'original','excludeTurns':True};self.assertEqual(await configured_resume(r,p,TOOLS),p);self.assertEqual(r.calls,[('thread/read',{'threadId':'original','includeTurns':False})]);self.assertEqual(r.bound,['original'])
+ async def test_warm_validates_tools_without_reconfiguring_idle_cache(self):
+  r=Rpc('idle');p={'threadId':'original','excludeTurns':True,'config':{'features.default_mode_request_user_input':True}};self.assertEqual(await configured_resume(r,p,TOOLS),{'threadId':'original','excludeTurns':True,'dynamicTools':TOOLS});self.assertEqual(r.calls,[('thread/read',{'threadId':'original','includeTurns':False})]);self.assertEqual(r.bound,['original'])
  async def test_active_reconnect_preserves_tools_and_turn(self):
-  r=Rpc('active');self.assertNotIn('dynamicTools',await configured_resume(r,{'threadId':'original'},TOOLS));self.assertEqual(len(r.calls),1)
+  r=Rpc('active');self.assertEqual(await configured_resume(r,{'threadId':'original'},TOOLS),{'threadId':'original','dynamicTools':TOOLS});self.assertEqual(len(r.calls),1)
  async def test_cold_uses_reviewed_tools(self):
   self.assertEqual((await configured_resume(Rpc('notLoaded'),{'threadId':'original'},TOOLS))['dynamicTools'],TOOLS)
  async def test_foreign_or_unknown_holds(self):

@@ -10,10 +10,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RpcError(Exception):
-    def __init__(self, message, *, code=None, not_sent=False):
+    def __init__(self, message, *, code=None, not_sent=False, detail=None):
         super().__init__(message)
         self.code = code
         self.not_sent = not_sent
+        self.detail = detail
 
 
 class AppServer:
@@ -196,7 +197,7 @@ class AppServer:
                     if "error" in message:
                         error = message["error"]
                         future.set_exception(
-                            RpcError(str(error), code=error.get("code"))
+                            RpcError(str(error), code=error.get("code"), detail=error)
                         )
                     else:
                         future.set_result(message.get("result", {}))

@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 from aiohttp import web
 from lax_connector.rpc_shared import SharedAppServer
+from lax_connector.room_resume import resume_configured
 
 async def main():
     os.umask(0o077)
@@ -65,6 +66,14 @@ async def main():
         turns=await asyncio.gather(a.call('turn/start',{'threadId':ta,'input':[{'type':'text','text':'ROOM_A'}]}),b.call('turn/start',{'threadId':tb,'input':[{'type':'text','text':'ROOM_B'}]}));turna=turns[0]['turn']['id']
         await asyncio.wait_for(waiting.wait(),30);done_b=await asyncio.wait_for(completed['B'].get(),30);assert done_b['turn']['status']=='completed',done_b
         assert completed['A'].empty(),'Held A callback must not complete before its own response'
+        # A stale binding cannot be repaired by interrupting an active context.
+        changed=dict(tool,description='Different reviewed role binding')
+        try:
+            await resume_configured(a,{'threadId':ta,'excludeTurns':True},[changed],reviewed_instructions={'baseInstructions':'QA active role'})
+        except ValueError as error:assert 'not idle' in str(error)
+        else:raise AssertionError('Active native role was reconfigured')
+        assert completed['A'].empty() and not release.is_set()
+
         await a.call('turn/interrupt',{'threadId':ta,'turnId':turna});done_a=await asyncio.wait_for(completed['A'].get(),30);assert done_a['turn']['status']=='interrupted',done_a
         release.set();await a.close();clients.remove(a);assert process.returncode is None
         again=await b.call('turn/start',{'threadId':tb,'input':[{'type':'text','text':'ROOM_B_AGAIN'}]});again_done=await asyncio.wait_for(completed['B'].get(),30);assert again_done['turn']['id']==again['turn']['id'] and again_done['turn']['status']=='completed'

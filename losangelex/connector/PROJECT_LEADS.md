@@ -147,3 +147,15 @@ Lead and worker question completion use the same durable dependency projection.
 A rejected worker question returns its assignment to actionable progress, so
 its actual result or failure reaches the lead instead of disappearing behind
 an impossible reply wait.
+
+### Native role bindings on transport reconnect
+
+SDK262 validates accepted dynamic declarations on every loaded attachment. It
+omits configuration/instruction overrides on a warm attachment: native may
+otherwise discard an idle cache and restore older rollout tool definitions.
+Cold resume carries the complete reviewed configuration and declarations.
+An exact native tool-mismatch rejection can repair an adopted project's idle
+cache through the established unsubscribe/release boundary. Active turns,
+background commands, unconfirmed release and unknown transport results remain
+held. The shared daemon and original thread identity are never replaced. Local
+resume receipts record the declaration digest and any idle-cache repair.
