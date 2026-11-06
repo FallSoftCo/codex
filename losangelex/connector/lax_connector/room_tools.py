@@ -96,6 +96,7 @@ class RoomTools:
                     'localHost':{'hostname':socket.gethostname(),
                                  'hostId':self.administration.host_config.get('hostId'),
                                  'workspace':self.administration.host_config.get('workspace')}}
+            if self.project:result['nativeState']=value.get('nativeState')
             if self.conversation_io:result['ownReplyState']=self.conversation_io.reply_status(room)
             if self.native_state_view:result['ownNativeState']=self.native_state_view(room)
         elif name=='hollywood_read_room':

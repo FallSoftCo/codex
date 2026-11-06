@@ -104,3 +104,14 @@ and historical optional node annotations are unrelated to this client update.
 The upgrade neither queries execution slots nor changes placement or deliveries.
 Engine, route and instruction changes retain their existing owning release path;
 accepted historical records remain unchanged.
+
+## Mixed-version role readiness
+
+The existing native status observation advertises `projectCommunication` only
+for a context actually loaded with its reviewed project role. The room/lead
+revision is validated by Hollywood; this metadata is not task acceptance or
+proof of execution. New `lead_assign` requests require a current matching worker
+observation before creating an assignment. Previously dispatched/accepted work
+reconciles its original publication independently of later status availability.
+No worker is contacted to check readiness, and no message or model wake is added.
+Legacy status observations retain their exact original retry fingerprint.

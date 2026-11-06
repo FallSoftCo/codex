@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 import random
-from uuid import UUID
+from uuid import UUID, uuid5
 from .lead_work import LeadWork
 from .errors import HttpFailure
 
@@ -29,6 +29,27 @@ class ProjectRuntime:
         if (value.get('authorityId')!=self.owner.config['authorityId'] or policy.get('version')!=1
                 or policy.get('leadAgentId')!=self.lead or policy.get('revision')!=self.policy['revision']):
             raise ValueError('Canonical lead policy differs from reviewed native role binding')
+
+    async def require_worker(self,agent):
+        """Check declared loaded protocol, not inferred work/host availability.
+
+        Uses the existing room-native observation lane. No worker is contacted
+        or woken, and no assignment intent is created on a failed preflight.
+        """
+        agent=str(UUID(agent))
+        if agent==self.agent:raise ValueError('Execute local work directly')
+        value=await self.owner.http('GET','rooms/'+self.room)
+        canonical=value.get('room',{}).get('leadPolicy',{})
+        if (value.get('authorityId')!=self.owner.config['authorityId']
+                or value.get('room',{}).get('id')!=self.room
+                or canonical.get('leadAgentId')!=self.lead
+                or canonical.get('revision')!=self.policy['revision']):
+            raise ValueError('Canonical project binding is unavailable or changed')
+        observations=value.get('nativeState',{}).get('agents',[])
+        loaded=[row for row in observations if row.get('agentId')==agent
+                and row.get('status',{}).get('projectCommunication')==self.policy]
+        if len(loaded)!=1:
+            raise ValueError('Selected worker has no current matching project-role observation; no task was sent. Select an attached worker or leave this dependency waiting.')
 
     async def candidate(self,event):
         data=event.get('data',{})
@@ -165,6 +186,14 @@ class ProjectRuntime:
             if not row:raise ValueError('Unknown original assignment')
             return {k:(json.loads(row[k]) if row[k] else None) if k=='result' else row[k] for k in ('id','work','agent','revision','state','brief','event','result')}
         if name=='lead_assign':
+            # Original dispatched/accepted assignments reconcile independently
+            # of later liveness; never gate their saved receipt on a new GET.
+            identity=str(uuid5(UUID(self.agent),'assignment:'+args['workId']+':'+args['taskKey']))
+            key='assign:'+identity
+            prior=self.ledger.db.execute('SELECT state FROM outbox WHERE id=?',(key,)).fetchone()
+            publication=self.owner.tools.state/(hashlib.sha256(('project:'+key).encode()).hexdigest()+'.json')
+            if not prior or prior['state']!='accepted' and not publication.exists():
+                await self.require_worker(args['agentId'])
             task,key=self.ledger.delegate(args['workId'],args['agentId'],args['brief'],args['taskKey'],args.get('evidence',[]))
             receipt=await self.send(key)
             state=self.ledger.db.execute('SELECT state FROM assignment WHERE id=?',(task,)).fetchone()[0]

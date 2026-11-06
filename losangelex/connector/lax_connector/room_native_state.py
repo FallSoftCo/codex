@@ -6,11 +6,12 @@ from .journal import saved
 from .errors import HttpFailure
 
 class RoomNativeState:
-    def __init__(self,*,state,thread,agent,rooms,send,authority=None,now=time.time):
+    def __init__(self,*,state,thread,agent,rooms,send,authority=None,now=time.time,project=None):
         self.state=Path(state);state_directory(self.state, parents=True,exist_ok=True)
         self.thread,self.agent,self.rooms,self.send=thread,agent,[dict(r) for r in rooms],send
         self.status={'type':'unavailable','activeFlags':[]};self.source=None
         self.authority,self.now=authority,now
+        self.project=dict(project) if project else None
         self.wake=asyncio.Event();self.task=None
         self.inflight={};self.posts=asyncio.Semaphore(4);self.reads=asyncio.Semaphore(2)
 
@@ -154,6 +155,9 @@ class RoomNativeState:
         source=self.source if self.source and self.source['room']==room else None
         shared=any(r['roomId']==room and r.get('sharedThreadStatus') is True for r in self.rooms)
         status=self.status if self.status['type']!='active' or source else {'type':'activeElsewhere' if shared else 'unavailable','activeFlags':[]}
+        status=dict(status)
+        if self.project and self.project['roomId']==room:
+            status['projectCommunication']=dict(self.project)
         return {'sourceEventId':source['id'] if source else None,'status':status}
 
     def start(self):

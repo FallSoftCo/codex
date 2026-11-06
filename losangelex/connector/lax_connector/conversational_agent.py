@@ -50,7 +50,7 @@ class ConversationalAgent:
         from .room_activity import RoomActivity
         self.activity=RoomActivity(state=self.state/'room-activity',thread=self.thread,agent=config['agentId'],send=self.http)
         from .room_native_state import RoomNativeState
-        self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http,authority=config['authorityId'])
+        self.native_state=RoomNativeState(state=self.state/'native-observations',thread=self.thread,agent=config['agentId'],rooms=config['rooms'],send=self.http,authority=config['authorityId'],project=config.get('projectCommunication'))
         from .conversation_io import ConversationIO
         self.conversation_io=ConversationIO(self.state/'conversation-io.sqlite',authority=config['authorityId'],agent=config['agentId'],thread=self.thread)
         self.output=None

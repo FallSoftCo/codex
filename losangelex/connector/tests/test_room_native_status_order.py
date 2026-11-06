@@ -25,7 +25,7 @@ class NativeStatusOrder(unittest.IsolatedAsyncioTestCase):
                     io.stage(event)
                     async def no_send(*args):raise AssertionError('No HTTP/model effect allowed')
                     c=ConversationalAgent.__new__(ConversationalAgent)
-                    c.state=root;c.thread='native-thread';c.native_active_turn=None
+                    c.state=root;c.thread='native-thread';c.native_active_turn=None;c.project=None;c.host_supervisor=None;c.session_supervisor=None
                     c.conversation_io=io;c.output=None;c.turn_sources={};c.turn_input_rooms={}
                     c.activity=SimpleNamespace(record=lambda *args:None)
                     c.native_state=RoomNativeState(state=root/'native',thread=c.thread,agent=agent,
